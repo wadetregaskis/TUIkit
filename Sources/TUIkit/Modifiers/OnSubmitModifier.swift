@@ -9,7 +9,7 @@ import TUIkitView
 
 // MARK: - onSubmit cascade modifier
 
-/// Appends a scoped ``SubmitActionEntry`` to the environment's `submitActions`
+/// Appends a scoped `SubmitActionEntry` to the environment's `submitActions`
 /// for its content's subtree, so descendant text fields run it when they submit.
 ///
 /// The append (rather than replace) is why this mirrors ``StyleCascadeModifier``

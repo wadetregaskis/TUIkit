@@ -198,7 +198,7 @@ extension EnvironmentValues {
     ///
     /// Every built-in control resolves through this, so anything an app builds
     /// keeps step with them and honours
-    /// ``SwiftUICore/View/selectionIndicatorStyle(_:)`` for free. TUI-specific:
+    /// ``View/selectionIndicatorStyle(_:)`` for free. TUI-specific:
     /// SwiftUI has no equivalent, because it has no shared terminal-wide pulse.
     public var selectionEmphasis: SelectionEmphasisClock {
         SelectionEmphasisClock(environment: self)

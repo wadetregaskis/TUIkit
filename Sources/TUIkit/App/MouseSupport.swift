@@ -25,7 +25,7 @@
 /// - **Scroll only**: the wheel scrolls a focused list / table /
 ///   scroll view but clicks and drags fall through to the terminal.
 ///   Note that on most terminals enabling any tracking mode also
-///   captures clicks; users may still need to ``Shift``+click to
+///   captures clicks; users may still need to `Shift`+click to
 ///   start a native text selection.
 ///
 /// - **Standard** (``standard``): clicks, scrolling, and drag
@@ -41,7 +41,7 @@
 ///
 /// View modifiers that genuinely need a higher level than the
 /// configured one can request it on a per-frame basis (see
-/// ``MouseEventDispatcher/requestFeature(_:)``). The dispatcher
+/// `MouseEventDispatcher.requestFeature(_:)`). The dispatcher
 /// takes the union of the configured base and any requested
 /// features each frame, and emits a mode-change escape code only
 /// when the effective set differs from the previous frame.

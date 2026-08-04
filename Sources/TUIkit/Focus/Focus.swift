@@ -151,7 +151,7 @@ public final class FocusManager: @unchecked Sendable {
     /// the controls drawn last frame). Held until a registration with this ID
     /// appears: windowing containers consult it (`renderViewportWindow`) and
     /// render the routed-to row precisely so it registers, resolving the
-    /// intent in the same pass. Expires after ``pendingFocusPassBudget``
+    /// intent in the same pass. Expires after `pendingFocusPassBudget`
     /// render passes so an ID that matches nothing doesn't scan forever; any
     /// other explicit focus change clears it.
     public private(set) var pendingFocusID: String?

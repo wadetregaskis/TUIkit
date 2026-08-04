@@ -48,7 +48,7 @@
 /// }
 /// ```
 ///
-/// - Note: `LazyVStack` shares its rendering core (``_VStackCore``) with
+/// - Note: `LazyVStack` shares its rendering core (`_VStackCore`) with
 ///   ``VStack``; the only difference is the `.window` overflow policy, which
 ///   appends whole children while they fit `availableHeight` and stops at the
 ///   first that would overflow (rather than `VStack`'s `.clip`, which distributes
@@ -110,7 +110,7 @@ public struct LazyVStack<Content: View>: View {
 ///   discussion for the render-window semantics, the `ScrollView` caveat, and
 ///   the documented deviations from SwiftUI.
 ///
-/// - Note: `LazyHStack` shares its rendering core (``_HStackCore``) with
+/// - Note: `LazyHStack` shares its rendering core (`_HStackCore`) with
 ///   ``HStack``; the only difference is the `.window` overflow policy, which
 ///   appends whole children while they fit `availableWidth` and stops at the
 ///   first that would overflow (rather than `HStack`'s `.clip`, which distributes

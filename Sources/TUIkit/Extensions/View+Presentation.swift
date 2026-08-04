@@ -217,6 +217,8 @@ extension View {
     /// - Parameters:
     ///   - isPresented: A binding to a Boolean value that determines whether
     ///     to present the modal.
+    ///   - onDismiss: A closure run after the modal is dismissed, or `nil` for
+    ///     no callback.
     ///   - content: A ViewBuilder returning the modal content.
     /// - Returns: A view that presents a modal overlay conditionally.
     public func modal<Modal: View>(

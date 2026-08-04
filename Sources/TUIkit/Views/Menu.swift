@@ -23,7 +23,7 @@ import TUIkitCore
 /// By default the label is a collapsed control that opens the items as a
 /// floating menu — Enter or a click opens it, Escape or a click outside closes
 /// it, and choosing an item runs its action and closes it. Apply
-/// ``SwiftUICore/View/menuStyle(_:)`` with ``MenuStyle/inline`` to show the
+/// ``View/menuStyle(_:)`` with ``MenuStyle/inline`` to show the
 /// items expanded in place under the label instead, which is what a terminal
 /// app's landing screen usually wants:
 ///

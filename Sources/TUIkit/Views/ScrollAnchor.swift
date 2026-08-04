@@ -12,7 +12,7 @@ import TUIkitCore
 /// `Documentation/Scroll-anchoring.md` §1.1, bound through
 /// ``TUIkit/View/anchorPosition(_:)``.
 ///
-/// Note that ``top`` / ``bottom`` are **positional** policies while ``row`` is
+/// Note that ``top`` / ``bottom`` are **positional** policies while `row` is
 /// an **identity** policy, and they are deliberately not interchangeable: under
 /// a data change at that edge they diverge. `.bottom` follows appends — it
 /// re-targets to whatever the last row now is — whereas `.row(lastID)` pins to

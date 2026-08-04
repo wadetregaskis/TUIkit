@@ -11,7 +11,7 @@ import TUIkitCore
 /// A modifier that subscribes a view to mouse events.
 ///
 /// The modifier registers a handler with the per-frame
-/// ``MouseEventDispatcher`` and emits a ``HitTestRegion`` whose
+/// `MouseEventDispatcher` and emits a ``HitTestRegion`` whose
 /// dimensions match the wrapped content's rendered bounds. When a
 /// mouse event lands inside the region the dispatcher calls the
 /// handler; once the handler claims a button-down event the

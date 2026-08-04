@@ -8,7 +8,7 @@
 
 /// The visual style of a ``Gauge``, mirroring SwiftUI's `GaugeStyle`.
 ///
-/// Apply it with ``SwiftUI/View/gaugeStyle(_:)``, exactly as in SwiftUI:
+/// Apply it with ``View/gaugeStyle(_:)``, exactly as in SwiftUI:
 ///
 /// ```swift
 /// Gauge(value: 0.7) { Text("CPU") }
@@ -73,7 +73,7 @@ private struct GaugeStyleKey: EnvironmentKey {
 
 extension EnvironmentValues {
     /// The style ``Gauge`` views render with. Set via
-    /// ``SwiftUI/View/gaugeStyle(_:)``. Default: ``GaugeStyle/automatic``.
+    /// ``View/gaugeStyle(_:)``. Default: ``GaugeStyle/automatic``.
     public var gaugeStyle: GaugeStyle {
         get { self[GaugeStyleKey.self] }
         set { self[GaugeStyleKey.self] = newValue }

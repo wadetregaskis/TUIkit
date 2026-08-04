@@ -27,7 +27,7 @@
 ///   site). Elsewhere the codepoints render as missing-glyph boxes.
 ///
 /// Because most users won't have that setup, treat symbols as a progressive
-/// enhancement: ``Label(_:systemImage:)`` falls back to showing just its title
+/// enhancement: ``Label/init(_:systemImage:)`` falls back to showing just its title
 /// when a symbol can't be resolved, so code that uses it stays correct
 /// everywhere — the glyph simply appears only where it can.
 ///
@@ -92,7 +92,7 @@ public enum SFSymbol {
     /// missing-glyph box. This probes CoreText's font-substitution cascade with a
     /// known anchor symbol (`star.fill`): if some installed font supplies a real
     /// glyph for its codepoint, symbols are renderable here; otherwise they are
-    /// not, and callers should fall back (``Label(_:systemImage:)`` shows just its
+    /// not, and callers should fall back (``Label/init(_:systemImage:)`` shows just its
     /// title, the example's browser shows a "not available" placeholder).
     ///
     /// Evaluated once and cached. `false` on any platform without CoreText (Linux)

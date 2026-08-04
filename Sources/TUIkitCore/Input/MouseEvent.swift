@@ -124,7 +124,7 @@ public struct MouseEvent: Sendable, Equatable {
     /// Terminals never report this — `MouseEventDispatcher` synthesises it by
     /// timing successive presses/releases of the same button at (near) the same
     /// cell. Parsed events default to `1`; the count is stamped on during
-    /// dispatch. Read it via ``TUIkitView/View/onTapGesture(count:perform:)``.
+    /// dispatch. Read it via ``View/onTapGesture(count:perform:)``.
     public let clickCount: Int
 
     /// Creates a mouse event.
@@ -157,7 +157,7 @@ public struct MouseEvent: Sendable, Equatable {
 
     /// Returns a copy with the ``clickCount`` and modifier flags replaced.
     ///
-    /// Used by ``MouseEventDispatcher`` to stamp a button-*release* with the
+    /// Used by `MouseEventDispatcher` to stamp a button-*release* with the
     /// count and modifier state carried forward from the press it completes.
     /// A click gesture's modifiers are defined at press time; some terminals
     /// report the SGR modifier bits only on the press report (`M`) and drop

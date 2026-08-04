@@ -630,7 +630,7 @@ extension View {
 
 extension Button {
     /// A built-in button visual variant, used to scope styling to a specific
-    /// kind of button via ``SwiftUI/View/buttonTextStyle(_:_:)``.
+    /// kind of button via ``View/buttonTextStyle(_:_:)``.
     public enum Variant: Sendable, Hashable {
         /// The default bracketed style (``DefaultButtonStyle``).
         case automatic

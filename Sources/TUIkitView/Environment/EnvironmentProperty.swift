@@ -52,7 +52,7 @@ import TUIkitCore
 ///
 /// The rendering pipeline resolves each view's environment *at render time*
 /// (after any `.environment()` modifiers applied by parents) and stores it in a
-/// reference box held by this wrapper — see ``resolveEnvironmentProperties(of:in:)``,
+/// reference box held by this wrapper — see `resolveEnvironmentProperties(of:in:)`,
 /// which the renderer calls before evaluating a view's `body`. Because the box
 /// is a reference shared with any closure that captures the view (a `Button`
 /// action, an `.onKeyPress` handler, a `Binding`'s `set:`), `@Environment`
@@ -104,7 +104,7 @@ public struct Environment<Value> {
 
     /// The current environment value.
     ///
-    /// Prefers the environment captured into ``box`` at the owning view's render
+    /// Prefers the environment captured into `box` at the owning view's render
     /// (valid inside closures); falls back to the active render environment, then
     /// the framework defaults.
     public var wrappedValue: Value {

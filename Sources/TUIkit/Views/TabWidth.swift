@@ -20,7 +20,7 @@ import TUIkitCore
 /// ``fixed(_:)`` instead always advances the same number of cells, for the
 /// rare layout where tabs are just wide spaces.
 ///
-/// Set it for a subtree with ``SwiftUICore/View/tabWidth(_:)``; the default is
+/// Set it for a subtree with ``View/tabWidth(_:)``; the default is
 /// `.periodic(4)`.
 public enum TabWidth: Sendable, Equatable, Hashable {
     /// A tab advances to the next multiple of `interval` columns — proper tab

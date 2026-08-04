@@ -47,7 +47,7 @@ public struct FrameBuffer: Sendable, Equatable {
     /// Empty and single-line buffers are trivially uniform. Combining operations
     /// propagate it via cheap width comparisons, never by re-measuring, so it
     /// never reintroduces the cost it exists to remove. It is intentionally
-    /// excluded from ``==`` (see the custom `Equatable` conformance): two buffers
+    /// excluded from `==` (see the custom `Equatable` conformance): two buffers
     /// with identical lines are interchangeable, and `true` is only ever set when
     /// the lines genuinely are uniform.
     public private(set) var linesAreUniformWidth: Bool
@@ -59,7 +59,7 @@ public struct FrameBuffer: Sendable, Equatable {
     /// importantly ``Text``, which gets the widths for free while word-wrapping —
     /// it carries them here so a consumer that pads ragged lines to a target width
     /// (e.g. a `VStack` aligning a column of wrapped text) skips the per-line
-    /// ``Swift/StringProtocol/strippedLength`` re-measure. `nil` means "unknown":
+    /// `Swift.StringProtocol.strippedLength` re-measure. `nil` means "unknown":
     /// every consumer falls back to measuring per line, exactly as before this
     /// field existed.
     ///
@@ -67,12 +67,12 @@ public struct FrameBuffer: Sendable, Equatable {
     /// combining/mutating operations either produce the correct array cheaply
     /// (by concatenation, never by re-measuring) or set it to `nil` — a stale
     /// array is never left behind. Like ``linesAreUniformWidth`` it is excluded
-    /// from ``==`` (a pure function of ``lines``, so it can never distinguish two
+    /// from `==` (a pure function of ``lines``, so it can never distinguish two
     /// buffers with identical lines).
     ///
     /// - Invariant: when non-`nil`, `lineWidths == lines.map(\.strippedLength)`
     ///   and `lineWidths!.count == lines.count`. Checked in debug builds wherever
-    ///   the field is set (see ``assertLineWidthsInvariant(_:file:line:)``).
+    ///   the field is set (see `assertLineWidthsInvariant(_:file:line:)`).
     public private(set) var lineWidths: [Int]?
 
     /// The height of the buffer (number of lines).
@@ -268,7 +268,7 @@ extension FrameBuffer {
     /// holds for `EmptyView()` and any other zero-height child. If
     /// callers want to reserve a row whether or not the conditional
     /// fires, they must opt in with a sized placeholder such as
-    /// ``Color/clear``-with-frame or ``Spacer/init()``-with-frame —
+    /// `Color.clear`-with-frame or `Spacer.init()`-with-frame —
     /// using `EmptyView()` in an `else` branch will NOT reserve the
     /// row, because `EmptyView()` is also empty.
     ///
@@ -359,12 +359,12 @@ extension FrameBuffer {
     /// An empty `other` contributes no width *and* no spacing slot
     /// — the buffers join with the spacing they would have had if
     /// `other` were not in the list at all. This matches SwiftUI's
-    /// `HStack` behaviour (and ``appendVertically``'s mirror of the
+    /// `HStack` behaviour (and `appendVertically`'s mirror of the
     /// same rule): an `Optional<ChildView>.none`, an `EmptyView`,
     /// or any other zero-width child is treated as if it were not
     /// in the children list at all. To reserve a column whether or
     /// not a conditional fires, opt in with a sized placeholder
-    /// such as ``Color/clear``-with-frame or ``Spacer/init()``-
+    /// such as `Color.clear`-with-frame or `Spacer.init()`-
     /// with-frame — `EmptyView()` in an `else` branch will NOT
     /// reserve the column, because `EmptyView()` is also empty.
     ///

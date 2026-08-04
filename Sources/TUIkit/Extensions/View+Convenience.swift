@@ -9,7 +9,7 @@
 extension View {
     /// Presents this view as an always-on modal dialog over dimmed content.
     ///
-    /// The unconditional counterpart to ``modal(isPresented:content:)`` — for
+    /// The unconditional counterpart to ``modal(isPresented:onDismiss:content:)`` — for
     /// content that is *always* modal while it's in the tree. It goes through the
     /// same presentation path: the background is dimmed **and made inert** (its
     /// focusables and key/mouse handlers are isolated), a dedicated focus section
@@ -20,7 +20,7 @@ extension View {
     /// > Important: Do **not** present a `Dialog` with bare `.dimmed().overlay()`.
     /// > That only dims the *look* of the background; it leaves the background
     /// > focusable and clickable, and the dialog never captures focus. Use this
-    /// > modifier (or ``modal(isPresented:content:)`` / `alert(_:isPresented:actions:message:)`).
+    /// > modifier (or ``modal(isPresented:onDismiss:content:)`` / `alert(_:isPresented:actions:message:)`).
     ///
     /// ## Example
     ///

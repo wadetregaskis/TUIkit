@@ -17,7 +17,7 @@ import TUIkitCore
 ///
 /// The `AppRunner` subscribes to state changes and re-renders when notified.
 /// Property wrappers like ``State`` and ``AppStorage`` access the shared instance
-/// via ``AppState.shared``.
+/// via `AppState.shared`.
 ///
 /// - Important: This is framework infrastructure. Prefer using ``State`` for reactive state
 ///   management in your views. Direct use of `AppState` is only necessary in advanced scenarios
@@ -188,7 +188,7 @@ public protocol RenderInvalidationSink: AnyObject, Sendable {
 ///
 /// `@State` no longer self-hydrates here: it binds to its view's *own* render
 /// identity in `renderToBuffer` / `measureChild` (see
-/// ``bindStateProperties(of:identity:storage:)``), not by construction order in
+/// `bindStateProperties(of:identity:storage:)`), not by construction order in
 /// an enclosing scope. Single-threaded (`@MainActor` render), so a plain
 /// `static var` is safe.
 public enum StateRegistration {
@@ -326,7 +326,7 @@ public struct Binding<Value> {
 ///
 /// `@State` binds to persistent storage at **render time, by the view's own
 /// structural identity** — not at construction. When `renderToBuffer` (or
-/// `measureChild`) processes a view, ``bindStateProperties(of:identity:storage:)``
+/// `measureChild`) processes a view, `bindStateProperties(of:identity:storage:)`
 /// walks its `@State` properties (in declaration order) and points each at the
 /// `StateStorage` slot keyed by `(this view's identity, property index)`.
 ///
@@ -415,9 +415,9 @@ extension State: StateBindable {
 /// `FocusManager`, keyed by an id that must stay the same across frames so a
 /// control's focusID and the "which value is focused?" reverse-lookup remain
 /// stable. The id is derived from the owning view's identity + the property's
-/// declaration order, exactly like a ``StateBindable`` slot key. Public so a
+/// declaration order, exactly like a `StateBindable` slot key. Public so a
 /// type in a module layered above `TUIkitView` can participate in the same
-/// ``bindStateProperties(of:identity:storage:)`` walk that binds `@State`.
+/// `bindStateProperties(of:identity:storage:)` walk that binds `@State`.
 public protocol RenderIdentityBindable {
     /// Binds this property to a stable id derived from its view's render
     /// `path` and declaration `propertyIndex`.

@@ -58,7 +58,7 @@ public enum ViewConstants {
     /// the cursor is hovering over it (not focused, not pressed).
     /// Sits between the static unfocused tint
     /// (``focusBorderDim`` = 0.20) and the focused max-pulse
-    /// (``buttonCapPulseBright`` = 0.45) so the affordance is
+    /// (`buttonCapPulseBright` = 0.45) so the affordance is
     /// visible without competing with focus itself.
     public static let hoverBackground: Double = 0.32
 

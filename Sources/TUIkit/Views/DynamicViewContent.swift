@@ -41,27 +41,6 @@ extension ForEach: DynamicViewContentActions {
 // MARK: - ForEach modifiers
 
 extension ForEach {
-    /// Sets the deletion action for the dynamic view's rows — mirrors SwiftUI's
-    /// `onDelete(perform:)`.
-    ///
-    /// Inside an editable `List`, pressing **Delete** (or Backspace) on the
-    /// focused row calls this action with that row's offset; the closure mutates
-    /// the backing collection (typically via ``remove(atOffsets:)``). Passing
-    /// `nil` makes the rows non-deletable again.
-    ///
-    /// ```swift
-    /// List {
-    ///     ForEach(items, id: \.self) { Text($0) }
-    ///         .onDelete { items.remove(atOffsets: $0) }
-    /// }
-    /// ```
-    ///
-    /// - Note: SwiftUI returns `some DynamicViewContent`; TUIkit returns the
-    ///   concrete `ForEach` (it has no `DynamicViewContent` protocol), which
-    ///   still chains with ``onMove(perform:)`` since both live on `ForEach`.
-    ///
-    /// - Parameter action: The delete action, or `nil` to disable deletion.
-    /// - Returns: A `ForEach` that reports the delete action to its `List`.
     /// Makes the rows a drop destination that reports WHERE the drop landed —
     /// mirrors SwiftUI's `DynamicViewContent.dropDestination(for:action:)`.
     ///
@@ -100,6 +79,27 @@ extension ForEach {
         return copy
     }
 
+    /// Sets the deletion action for the dynamic view's rows — mirrors SwiftUI's
+    /// `onDelete(perform:)`.
+    ///
+    /// Inside an editable `List`, pressing **Delete** (or Backspace) on the
+    /// focused row calls this action with that row's offset; the closure mutates
+    /// the backing collection (typically via `remove(atOffsets:)`). Passing
+    /// `nil` makes the rows non-deletable again.
+    ///
+    /// ```swift
+    /// List {
+    ///     ForEach(items, id: \.self) { Text($0) }
+    ///         .onDelete { items.remove(atOffsets: $0) }
+    /// }
+    /// ```
+    ///
+    /// - Note: SwiftUI returns `some DynamicViewContent`; TUIkit returns the
+    ///   concrete `ForEach` (it has no `DynamicViewContent` protocol), which
+    ///   still chains with ``onMove(perform:)`` since both live on `ForEach`.
+    ///
+    /// - Parameter action: The delete action, or `nil` to disable deletion.
+    /// - Returns: A `ForEach` that reports the delete action to its `List`.
     public func onDelete(perform action: ((IndexSet) -> Void)?) -> ForEach {
         var copy = self
         copy.onDeleteAction = action
@@ -112,7 +112,7 @@ extension ForEach {
     /// Inside an editable `List`, dragging a row with the mouse reorders it,
     /// committing through this action with the dragged row's source offset and
     /// the destination offset; the closure mutates the backing collection
-    /// (typically via ``move(fromOffsets:toOffset:)``).
+    /// (typically via `move(fromOffsets:toOffset:)`).
     ///
     /// ```swift
     /// List {

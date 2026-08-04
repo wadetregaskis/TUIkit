@@ -48,7 +48,7 @@ extension EnvironmentValues {
     /// ``RadioButtonGroupEdgeBehavior``. Defaults to
     /// ``RadioButtonGroupEdgeBehavior/contain``.
     ///
-    /// Set with ``TUIkitView/View/radioButtonGroupEdgeBehavior(_:)``.
+    /// Set with ``View/radioButtonGroupEdgeBehavior(_:)``.
     public var radioButtonGroupEdgeBehavior: RadioButtonGroupEdgeBehavior {
         get { self[RadioButtonGroupEdgeBehaviorKey.self] }
         set { self[RadioButtonGroupEdgeBehaviorKey.self] = newValue }

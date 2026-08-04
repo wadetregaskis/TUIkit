@@ -6,11 +6,11 @@
 
 // MARK: - SubmitTriggers
 
-/// The kinds of submit an ``SwiftUICore/View/onSubmit(of:_:)`` action responds
+/// The kinds of submit an ``View/onSubmit(of:_:)`` action responds
 /// to — mirrors SwiftUI's `SubmitTriggers`.
 ///
 /// A plain ``TextField`` / ``SecureField`` submits with ``text``; the field
-/// inside a ``SwiftUICore/View/searchable(text:placement:prompt:)`` search
+/// inside a ``View/searchable(text:placement:prompt:)-(_,_,Text?)`` search
 /// affordance submits with ``search``. An `.onSubmit` scoped to `[.text,
 /// .search]` fires for both.
 public struct SubmitTriggers: OptionSet, Sendable, Hashable {

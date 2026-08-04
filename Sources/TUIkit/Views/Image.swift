@@ -193,7 +193,7 @@ extension EnvironmentValues {
     }
 
     /// Whether image glyphs are shape-matched — see
-    /// ``SwiftUICore/View/imageShapeAware(_:)``.
+    /// ``View/imageShapeAware(_:)``.
     var imageShapeAware: Bool {
         get { self[ImageShapeAwareKey.self] }
         set { self[ImageShapeAwareKey.self] = newValue }
@@ -206,14 +206,14 @@ extension EnvironmentValues {
     }
 
     /// The supersampling factor for brightness-mapping character sets —
-    /// see ``SwiftUICore/View/imageSupersampling(_:)``.
+    /// see ``View/imageSupersampling(_:)``.
     var imageSupersampling: Int? {
         get { self[ImageSupersamplingKey.self] }
         set { self[ImageSupersamplingKey.self] = newValue }
     }
 
     /// The shape-mode edge-glyph threshold — see
-    /// ``SwiftUICore/View/imageEdgeThreshold(_:)``.
+    /// ``View/imageEdgeThreshold(_:)``.
     var imageEdgeThreshold: Double? {
         get { self[ImageEdgeThresholdKey.self] }
         set { self[ImageEdgeThresholdKey.self] = newValue }

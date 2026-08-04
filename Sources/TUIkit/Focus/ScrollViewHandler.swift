@@ -10,7 +10,7 @@
 ///
 /// `ScrollViewHandler` owns the scroll-position state and the
 /// keyboard-driven scroll navigation for a `ScrollView`. It is a
-/// peer of ``ItemListHandler`` for the no-selection,
+/// peer of `ItemListHandler` for the no-selection,
 /// no-row-structure case: there is just a viewport over a taller
 /// content area, and the keys and the wheel move where that
 /// viewport lands.
@@ -20,7 +20,7 @@
 /// - **Mouse wheel** scrolls by ``ViewConstants/mouseWheelScrollLines``
 ///   lines per tick. Wheel scrolling is independent of focus —
 ///   the wheel works whether or not the scroll view itself has
-///   focus, matching the rest of TUIkit (see ``ItemListHandler``).
+///   focus, matching the rest of TUIkit (see `ItemListHandler`).
 /// - **Arrow keys** scroll by one line at a time. **Page Up** /
 ///   **Page Down** scroll by one viewport height. **Home** /
 ///   **End** jump to the very top / bottom. All keyboard
@@ -29,7 +29,7 @@
 /// The handler does not track selection — there is no
 /// "currently focused row" concept in a generic scroll view.
 ///
-/// > Note: Like ``ItemListHandler`` and ``TextFieldHandler``,
+/// > Note: Like `ItemListHandler` and `TextFieldHandler`,
 ///   `ScrollViewHandler` isn't marked `@MainActor`. The
 ///   framework guarantees handlers are only touched from the
 ///   render loop / event dispatch (both `@MainActor`), so the

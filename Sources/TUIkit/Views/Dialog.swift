@@ -74,6 +74,8 @@ public struct Dialog<Content: View, Footer: View>: View {
     ///   - titleColor: The title color (default: theme foreground).
     ///   - padding: The inner padding (default: horizontal 2, vertical 1).
     ///   - showFooterSeparator: Whether to show separator before footer (default: true).
+    ///   - footerAlignment: How the footer content is aligned within the
+    ///     dialog's width (default: leading).
     ///   - content: The dialog content.
     ///   - footer: The footer content.
     public init(

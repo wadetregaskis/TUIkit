@@ -8,7 +8,7 @@
 
 /// The appearance and layout of a ``Form``.
 ///
-/// Set it with the ``SwiftUICore/View/formStyle(_:)`` modifier:
+/// Set it with the ``View/formStyle(_:)`` modifier:
 ///
 /// ```swift
 /// Form {
@@ -124,7 +124,7 @@ extension EnvironmentValues {
     /// The form style for this environment.
     ///
     /// Controls how ``Form`` views render. Set via the
-    /// ``SwiftUICore/View/formStyle(_:)`` modifier. Default: ``AutomaticFormStyle``
+    /// ``View/formStyle(_:)`` modifier. Default: ``AutomaticFormStyle``
     /// (columns).
     public var formStyle: any FormStyle {
         get { self[FormStyleKey.self] }

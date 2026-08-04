@@ -10,7 +10,7 @@
 /// `SubmitLabel`.
 ///
 /// In SwiftUI this renders on the on-screen keyboard's Return key ("Go", "Send",
-/// "Search", …). A terminal has no such key, so ``SwiftUICore/View/submitLabel(_:)``
+/// "Search", …). A terminal has no such key, so ``View/submitLabel(_:)``
 /// stores the value for source-compatibility and future affordances (e.g. a
 /// status-bar "Return  Send" hint) rather than drawing anything by default.
 ///

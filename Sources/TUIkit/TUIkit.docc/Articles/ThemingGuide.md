@@ -131,7 +131,7 @@ Two controls edit a `Binding<Color>`, mirroring SwiftUI's `ColorPicker`:
   **Named**, **Web Safe** and **Crayons** tabs for picking from those curated
   sets.
 
-  Present it with ``View/modal(isPresented:content:)``. The modal is centred and
+  Present it with ``View/modal(isPresented:onDismiss:content:)``. The modal is centred and
   dims the whole screen no matter where it is attached, so you can hang it off any
   subtree — there is no need to host it from a special root:
 

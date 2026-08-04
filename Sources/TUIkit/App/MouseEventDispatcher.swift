@@ -14,7 +14,7 @@ import TUIkitCore
 ///
 /// The dispatcher resets its state at the start of every render pass.
 /// During render, modifiers register their handlers and the
-/// ``RenderLoop`` collects the absolute-coordinate
+/// `RenderLoop` collects the absolute-coordinate
 /// ``HitTestRegion``s from the root buffer. When a mouse event arrives
 /// the dispatcher looks up the topmost region containing the cursor's
 /// position and forwards the event to its handler.
@@ -25,7 +25,7 @@ import TUIkitCore
 /// where the cursor ended up — exactly the way GUI toolkits treat a
 /// drag once it has captured a control.
 /// A single mouse feature that view modifiers can ask for on a
-/// per-frame basis (see ``MouseEventDispatcher/requestFeature(_:)``).
+/// per-frame basis (see `MouseEventDispatcher.requestFeature(_:)`).
 public enum MouseFeature: Sendable {
     case clicks
     case scrolling

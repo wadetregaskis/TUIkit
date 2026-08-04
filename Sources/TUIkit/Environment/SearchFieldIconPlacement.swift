@@ -6,7 +6,7 @@
 
 // MARK: - Search field icon placement
 
-/// Which side of a ``TUIkit/View/searchable(text:placement:prompt:)`` field its
+/// Which side of a ``TUIkit/View/searchable(text:placement:prompt:)-(_,_,Text?)`` field its
 /// magnifier icon is drawn on.
 ///
 /// TUI-specific. SwiftUI always draws the icon leading and has no equivalent,
@@ -20,7 +20,7 @@
 /// every terminal model TUIkit knows, so switching sides never shifts the row.
 ///
 /// > Note: On terminals outside the emoji-chrome allowlist no icon is drawn at
-///   all (see ``EnvironmentValues/supportsEmojiChrome``), so this has no visible
+///   all (see `EnvironmentValues.supportsEmojiChrome`), so this has no visible
 ///   effect there — a mis-drawn glyph is worse than none.
 public enum SearchFieldIconPlacement: Sendable, Hashable {
     /// The icon precedes the field, drawn as 🔎.

@@ -80,7 +80,7 @@ public final class StateStorage: @unchecked Sendable {
     private var retainedSubtreeRoots: [ViewIdentity] = []
 
     /// The render cache that state changes should invalidate — the cache of the
-    /// ``TUIContext`` this storage belongs to. Wired by the context at creation and
+    /// `TUIContext` this storage belongs to. Wired by the context at creation and
     /// stamped onto each ``StateBox`` at hydration, so a state change clears only
     /// its own context's cache (no process-wide singleton → no cross-test bleed).
     public weak var renderCache: RenderCache?
@@ -177,7 +177,7 @@ extension StateStorage {
     /// the conditional left the tree), so its `invalidateDescendants` would be a
     /// no-op and can be skipped.
     ///
-    /// The identity is marked active so its entry survives ``endRenderPass``'s
+    /// The identity is marked active so its entry survives `endRenderPass`'s
     /// prune; entries for conditionals no longer in the tree are dropped there.
     ///
     /// - Parameters:

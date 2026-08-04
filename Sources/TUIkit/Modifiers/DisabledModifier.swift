@@ -20,7 +20,7 @@ private struct IsEnabledKey: EnvironmentKey {
 
 extension EnvironmentValues {
     /// Whether interactive controls in this subtree are enabled. Set via
-    /// ``SwiftUI/View/disabled(_:)`` on a container; read by each control, which
+    /// ``View/disabled(_:)`` on a container; read by each control, which
     /// combines it with its own `disabled` state.
     public var isEnabled: Bool {
         get { self[IsEnabledKey.self] }

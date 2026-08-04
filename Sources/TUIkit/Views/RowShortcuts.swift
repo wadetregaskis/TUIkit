@@ -138,9 +138,11 @@ public struct RowShortcuts: Hashable, Sendable {
     /// The keys bound to `action`, in ``KeyboardShortcut``'s own order so every
     /// caller that lists them — a help section, a status-bar hint — agrees.
     ///
-    /// - Parameter commandKey: What ⌘ stands in for here; a shortcut written
-    ///   the SwiftUI way (`KeyboardShortcut("g")`, i.e. ⌘G) is resolved through
-    ///   it, exactly as a `Button`'s shortcut is.
+    /// - Parameters:
+    ///   - action: The row action whose bound keys are wanted.
+    ///   - commandKey: What ⌘ stands in for here; a shortcut written
+    ///     the SwiftUI way (`KeyboardShortcut("g")`, i.e. ⌘G) is resolved
+    ///     through it, exactly as a `Button`'s shortcut is.
     public func shortcuts(
         for action: RowAction, commandKey: CommandKeyBinding = .control
     ) -> [KeyboardShortcut] {

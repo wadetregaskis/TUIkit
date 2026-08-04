@@ -15,7 +15,7 @@ extension EnvironmentValues {
     /// The locale for the view subtree.
     ///
     /// Matches SwiftUI's `\.locale`. It is populated each frame from the app's
-    /// localization service (``applyRuntimeServices(from:)``), so by default it
+    /// localization service (`applyRuntimeServices(from:)`), so by default it
     /// tracks the app language — but because it's a stored, settable key, a
     /// subtree can override it with `.environment(\.locale, _)` to format its
     /// numbers and dates in a different locale than the surrounding UI.

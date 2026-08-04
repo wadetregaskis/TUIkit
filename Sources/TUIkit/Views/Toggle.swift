@@ -23,7 +23,7 @@
 /// > terminal constraints; the API matches SwiftUI for compatibility. The
 /// > *glyphs* of that checkbox (■/□ or ⬛︎/⬜︎ or `[x]`/`[ ]` — see `ToggleCharacterSet`) are a separate,
 /// > TUI-specific choice — see ``ToggleCharacterSet`` and
-/// > ``SwiftUICore/View/toggleCharacterSet(_:)``.
+/// > ``View/toggleCharacterSet(_:)``.
 ///
 /// ## Custom styles
 ///

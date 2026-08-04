@@ -9,7 +9,7 @@ import TUIkitCore
 // MARK: - onMenuOpen
 
 /// The action a subtree's menus run when they open — see
-/// ``SwiftUICore/View/onMenuOpen(_:)``.
+/// ``View/onMenuOpen(_:)``.
 ///
 /// `@unchecked Sendable` on the same terms as every other action closure here:
 /// it is created and invoked only on the render loop's single thread.
@@ -33,7 +33,7 @@ extension EnvironmentValues {
 
 extension View {
     /// Runs `action` each time a pop-up menu in this subtree opens: a `Menu`'s
-    /// items appearing, or a ``SwiftUICore/View/contextMenu(menuItems:)``
+    /// items appearing, or a ``View/contextMenu(menuItems:)``
     /// popping up.
     ///
     /// The use it exists for is clearing whatever the LAST choice from that menu

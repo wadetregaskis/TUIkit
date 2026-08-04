@@ -10,7 +10,7 @@ import Foundation
 ///
 /// Detected automatically from `TERM` and `COLORTERM` environment
 /// variables. The detected value is cached and used by
-/// ``ANSIRenderer`` to downsample colors that exceed the terminal's
+/// `ANSIRenderer` to downsample colors that exceed the terminal's
 /// capabilities.
 ///
 /// ## Detection Order
@@ -41,7 +41,7 @@ public enum ColorDepth: Int, Sendable, Comparable {
     ///
     /// Detected when `TERM` is `dumb`. Can also be set manually
     /// to disable color output programmatically.
-    /// ``ANSIRenderer`` emits no color escape codes at this level;
+    /// `ANSIRenderer` emits no color escape codes at this level;
     /// text attributes (bold, underline, etc.) are still emitted.
     case noColor = 0
 
@@ -70,7 +70,7 @@ extension ColorDepth {
     /// starts.
     nonisolated(unsafe) private static var processCurrent: ColorDepth = detect()
 
-    /// A task-scoped pin of ``current``, bound by ``withCurrent(_:operation:)``.
+    /// A task-scoped pin of ``current``, bound by ``withCurrent(_:operation:)-8j0jn``.
     ///
     /// Task-local rather than a plain global so a scoped pin — a test
     /// asserting on rendered colour, a subtree deliberately rendered at a
@@ -84,7 +84,7 @@ extension ColorDepth {
     ///
     /// Automatically detected from environment variables at launch.
     /// Assign a value to override detection process-wide (expected before
-    /// rendering starts); use ``withCurrent(_:operation:)`` for a scoped,
+    /// rendering starts); use ``withCurrent(_:operation:)-8j0jn`` for a scoped,
     /// task-local pin.
     public static var current: ColorDepth {
         get { taskCurrent ?? processCurrent }
@@ -103,7 +103,7 @@ extension ColorDepth {
         try $taskCurrent.withValue(depth, operation: operation)
     }
 
-    /// Async variant of ``withCurrent(_:operation:)`` — the pin covers the
+    /// Async variant of ``withCurrent(_:operation:)-8j0jn`` — the pin covers the
     /// whole async operation, including its suspensions (task-locals are
     /// inherited across awaits and by child tasks, but not by detached ones).
     @discardableResult

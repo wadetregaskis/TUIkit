@@ -15,7 +15,7 @@ import Foundation
 /// the environment's ``OpenURLAction`` (the system opener by default). The
 /// label is tinted with the accent colour and underlined so it reads as a link
 /// — regardless of the label form. Turn the underline off for a subtree with
-/// ``SwiftUI/View/linkUnderline(_:)``.
+/// ``View/linkUnderline(_:)``.
 ///
 /// ```swift
 /// Link("Documentation", destination: URL(string: "https://example.com")!)
@@ -78,7 +78,7 @@ private struct LinkUnderlineKey: EnvironmentKey {
 
 extension EnvironmentValues {
     /// Whether ``Link`` labels are underlined. Set via
-    /// ``SwiftUI/View/linkUnderline(_:)``. Default: `true` — an intentional
+    /// ``View/linkUnderline(_:)``. Default: `true` — an intentional
     /// deviation from SwiftUI (whose links are accent-coloured only) so links
     /// read as links without a pointer/hover affordance.
     public var linkUnderline: Bool {

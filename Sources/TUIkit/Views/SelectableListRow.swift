@@ -87,7 +87,7 @@ final class LazyListRowContent {
 /// - Whether the row ID participates in selection binding
 ///
 /// The row's ``buffer`` and ``badge`` are rendered lazily (see
-/// ``LazyListRowContent``): a `List` builds one row per item but only the rows
+/// `LazyListRowContent`): a `List` builds one row per item but only the rows
 /// in the visible window are ever rendered. ``type``/``id``/``isSelectable``
 /// are resolved eagerly and cheaply, which is all the scroll/selection handler
 /// needs for off-screen rows.

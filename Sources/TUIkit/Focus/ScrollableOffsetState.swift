@@ -9,14 +9,14 @@ import Dispatch
 // MARK: - ScrollableOffsetState
 
 /// The scroll-position arithmetic shared by
-/// ``ScrollViewHandler`` and ``ItemListHandler``.
+/// ``ScrollViewHandler`` and `ItemListHandler`.
 ///
 /// The two handlers track the same shape of state — a scroll
 /// offset, a viewport size, an extent that the offset is
 /// clamped against — but measure that extent differently:
 ///
 /// - ``ScrollViewHandler`` counts lines (`contentHeight`).
-/// - ``ItemListHandler`` counts rows (`itemCount`).
+/// - `ItemListHandler` counts rows (`itemCount`).
 ///
 /// This protocol abstracts over the difference by asking each
 /// conformer to expose its extent via ``extent``. The
@@ -40,7 +40,7 @@ public protocol ScrollableOffsetState: AnyObject {
     var viewportHeight: Int { get }
 
     /// The total extent: row count for
-    /// ``ItemListHandler``, line count for
+    /// `ItemListHandler`, line count for
     /// ``ScrollViewHandler``. Read by every predicate below.
     var extent: Int { get }
 
@@ -104,7 +104,7 @@ public protocol ScrollableOffsetState: AnyObject {
     ///
     /// A protocol *requirement* (with the obvious `extent - viewportHeight`
     /// default below) so a conformer whose rows and viewport are measured in
-    /// different units can supply the exact bound — ``ItemListHandler`` counts
+    /// different units can supply the exact bound — `ItemListHandler` counts
     /// its extent in rows but its viewport can be lines when rows span
     /// multiple lines, and the default's mixed-unit subtraction caps the
     /// offset far short of the true bottom. Every helper in the extension
@@ -118,7 +118,7 @@ public protocol ScrollableOffsetState: AnyObject {
     ///
     /// A requirement (defaulted to ``scroll(by:)``, one row/line per step) so
     /// a conformer with a finer unit than its offset can interpose:
-    /// ``ItemListHandler`` under ``ScrollGranularity/line`` steps by terminal
+    /// `ItemListHandler` under ``ScrollGranularity/line`` steps by terminal
     /// LINES through multi-line rows — its row-based ``scrollOffset`` plus a
     /// top clip — while offset, extent and ``maxOffset`` stay row-based (an
     /// O(1) model even for 50k-row lists). The wheel path dispatches through
@@ -189,8 +189,8 @@ public final class ScrollAxis: ScrollableOffsetState {
 /// Hitting a nested scroller's edge mid-scroll used to chain the very next
 /// wheel tick to the parent — so finishing a scroll to the bottom of an inner
 /// list would fling the whole page. Instead, the first blocked tick at an
-/// edge starts a grace period (``delayNanos``, from the
-/// ``SwiftUICore/View/scrollChainingDelay(_:)`` environment; default 500 ms):
+/// edge starts a grace period (`delayNanos`, from the
+/// ``View/scrollChainingDelay(_:)`` environment; default 500 ms):
 /// blocked ticks within it are consumed silently, and only once it expires do
 /// they chain to the enclosing scroller. Any successful scroll re-arms the
 /// grace for the next edge hit. A scroller with nothing to scroll never
@@ -245,7 +245,7 @@ extension ScrollableOffsetState {
     }
 
     /// The half-open range of indices currently visible — rows
-    /// for ``ItemListHandler``, lines for ``ScrollViewHandler``.
+    /// for `ItemListHandler`, lines for ``ScrollViewHandler``.
     ///
     /// Total for ANY state, not just clamped state: the persistent
     /// ``scrollOffset`` outlives the data it was clamped against (rows can be
@@ -286,7 +286,7 @@ extension ScrollableOffsetState {
     /// narrows the visible items doesn't leave the viewport
     /// pointing past the end of the new shorter list. This is
     /// a bounds check, not a focus-tracking clamp — see
-    /// ``ItemListHandler/ensureFocusedItemVisible()`` for the
+    /// `ItemListHandler.ensureFocusedItemVisible()` for the
     /// focus-driven variant.
     public func clampScrollOffset() {
         scrollOffset = max(0, min(maxOffset, scrollOffset))

@@ -61,7 +61,7 @@ extension MenuStyleConfiguration.Content: ChildViewProvider {
 /// A type that applies a standard appearance to all menus within a view
 /// hierarchy — mirrors SwiftUI's `MenuStyle`.
 ///
-/// Set it with ``SwiftUICore/View/menuStyle(_:)``:
+/// Set it with ``View/menuStyle(_:)``:
 ///
 /// ```swift
 /// Menu("Actions") {
@@ -156,7 +156,7 @@ private struct MenuStyleKey: EnvironmentKey {
 
 extension EnvironmentValues {
     /// The menu style for this environment — see ``MenuStyle``. Set via
-    /// ``SwiftUICore/View/menuStyle(_:)``. Default: ``DefaultMenuStyle``.
+    /// ``View/menuStyle(_:)``. Default: ``DefaultMenuStyle``.
     public var menuStyle: any MenuStyle {
         get { self[MenuStyleKey.self] }
         set { self[MenuStyleKey.self] = newValue }

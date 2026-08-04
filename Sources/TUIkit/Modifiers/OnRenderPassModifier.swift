@@ -7,7 +7,7 @@
 // MARK: - RenderPass
 
 /// The kinds of per-frame work a view can participate in, reported by
-/// ``SwiftUICore/View/onRenderPass(_:)``.
+/// ``View/onRenderPass(_:)``.
 public enum RenderPass: Sendable, Equatable {
     /// The view was *measured* — its size was computed (`sizeThatFits`, or a
     /// measuring render), during the layout pass or by a parent sizing its
@@ -21,7 +21,7 @@ public enum RenderPass: Sendable, Equatable {
 
 // MARK: - OnRenderPass Modifier
 
-/// Instrumentation wrapper behind ``SwiftUICore/View/onRenderPass(_:)``:
+/// Instrumentation wrapper behind ``View/onRenderPass(_:)``:
 /// reports every measurement and every real render of its content.
 struct OnRenderPassModifier<Content: View>: View {
     let content: Content

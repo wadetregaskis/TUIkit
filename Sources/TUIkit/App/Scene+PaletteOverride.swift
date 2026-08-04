@@ -75,7 +75,7 @@ extension Scene {
     ///
     /// Applying `.palette(_:)` to the root *view* inside the `WindowGroup`
     /// remains equivalent and is honoured identically (see
-    /// ``RootPaletteOverrideProvidingScene``).
+    /// `RootPaletteOverrideProvidingScene`).
     ///
     /// - Parameter palette: The palette to apply.
     /// - Returns: A scene that applies the palette.

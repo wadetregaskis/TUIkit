@@ -278,7 +278,7 @@ extension FlexibleFrameView: Layoutable {
     /// common `VStack`/`HStack`/`Text` case) gives the height, and the width is
     /// the available width. Every other constraint shape measures analytically
     /// too, by mirroring `renderToBuffer`'s sizing math around one content
-    /// measure — see ``measureAnalytically(proposal:context:)``.
+    /// measure — see `measureAnalytically(proposal:context:)`.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         guard hasInfiniteMaxWidth else {
             return measureAnalytically(proposal: proposal, context: context)

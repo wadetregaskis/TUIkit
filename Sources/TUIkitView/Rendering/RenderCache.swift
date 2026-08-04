@@ -17,7 +17,7 @@ import TUIkitCore
 ///
 /// ## How It Works
 ///
-/// When an ``EquatableView<V>`` renders, it:
+/// When an `EquatableView<V>` renders, it:
 /// 1. Looks up a cached entry by the current `ViewIdentity`
 /// 2. Compares the new view value with the stored snapshot (`Equatable.==`)
 /// 3. Checks that the available size hasn't changed
@@ -54,7 +54,7 @@ public final class RenderCache: @unchecked Sendable {
     /// Aggregated cache performance statistics.
     ///
     /// Tracks hit/miss/store/clear counts. Use ``stats`` for cumulative
-    /// totals, or ``frameStats`` (after ``logFrameStats()``) for the
+    /// totals, or `frameStats` (after ``logFrameStats()``) for the
     /// delta since the last ``beginRenderPass()``.
     public struct Stats: Equatable {
         /// Number of successful cache lookups (view and size matched).
@@ -445,9 +445,9 @@ extension RenderCache: RenderInvalidationSink {
     /// Records a `@State`-driven invalidation and requests a re-render.
     ///
     /// This is the seam ``StateBox`` calls on every value change. It only
-    /// *enqueues* the work behind ``pendingInvalidations``' lock — the actual
+    /// *enqueues* the work behind `pendingInvalidations`' lock — the actual
     /// `entries`/`sizeEntries` mutation happens later, on the main actor, in
-    /// ``drainPendingInvalidations()`` at frame start. That indirection is what
+    /// `drainPendingInvalidations()` at frame start. That indirection is what
     /// makes a `@State` written from a background `Task` race-free: the cache is
     /// otherwise single-threaded, so it must never be mutated from the writer's
     /// thread. The re-render request goes through the retained `AppState`

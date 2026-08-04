@@ -61,7 +61,7 @@ private struct TintKey: EnvironmentKey {
 
 extension EnvironmentValues {
     /// The tint colour applied to this subtree, if any (set via
-    /// ``SwiftUI/View/tint(_:)``). The accent affordance of controls follows it.
+    /// ``View/tint(_:)``). The accent affordance of controls follows it.
     public var tint: Color? {
         get { self[TintKey.self] }
         set { self[TintKey.self] = newValue }
@@ -71,7 +71,7 @@ extension EnvironmentValues {
 // MARK: - Tint modifier
 
 /// Applies a tint to its content's subtree by overriding the environment
-/// palette's accent (see ``TintedPalette``). A read-modify-write at render, so
+/// palette's accent (see `TintedPalette`). A read-modify-write at render, so
 /// it composes with the surrounding palette like the other style modifiers.
 public struct TintModifier<Content: View>: View {
     public let content: Content

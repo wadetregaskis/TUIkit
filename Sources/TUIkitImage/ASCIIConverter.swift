@@ -255,7 +255,7 @@ extension ASCIIColorMode {
     /// output — for example, a `\e[38;2;R;G;B m` sequence on a 256-color
     /// terminal is partially interpreted and garbles the image. This
     /// helper downgrades the requested mode to one the terminal can
-    /// handle, mirroring the downsampling that ``ANSIRenderer`` performs
+    /// handle, mirroring the downsampling that `ANSIRenderer` performs
     /// for non-image colors.
     public func effective(for depth: ColorDepth) -> ASCIIColorMode {
         switch (self, depth) {
@@ -569,7 +569,7 @@ extension ASCIIConverter {
     ///     cell); iTerm2 and other terminals differ with the font/line spacing,
     ///     which is why the image looked horizontally squished when this was
     ///     hard-coded. Supply the real ratio (measured, or via
-    ///     ``TUIkitView/View/imageCellAspect(_:)``) to correct it.
+    ///     ``View/imageCellAspect(_:)``) to correct it.
     /// - Returns: The target width and height in characters.
     public static func targetSize(
         imageWidth: Int,

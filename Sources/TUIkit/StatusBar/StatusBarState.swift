@@ -157,7 +157,7 @@ public final class StatusBarState: @unchecked Sendable {
     /// currently hovering over, or `nil` if the cursor isn't on
     /// any item.
     ///
-    /// Flipped by ``_StatusBarCore``'s per-item mouse handler in
+    /// Flipped by `_StatusBarCore`'s per-item mouse handler in
     /// response to the dispatcher's synthetic `.entered` /
     /// `.exited` events. The renderer reads it to apply a
     /// hover-bumped tint on the matching item.

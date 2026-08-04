@@ -30,7 +30,7 @@
 ///   left-aligned, the current-value label right-aligned.
 /// - **Line 2**: the minimum-value label, the bar, and the maximum-value label.
 ///
-/// Other styles are selected with ``SwiftUI/View/gaugeStyle(_:)`` — see
+/// Other styles are selected with ``View/gaugeStyle(_:)`` — see
 /// ``GaugeStyle`` for the linear, accessory-linear and circular variants.
 ///
 /// ## Examples

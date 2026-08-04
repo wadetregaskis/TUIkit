@@ -9,7 +9,7 @@
 /// What a `List` shows while a row is being dragged to a new position.
 ///
 /// Reordering is offered by an editable `ForEach` — one carrying
-/// ``DynamicViewContent/onMove(perform:)`` — and is driven by dragging a row
+/// ``ForEach/onMove(perform:)`` — and is driven by dragging a row
 /// with the mouse. This chooses what the drag *looks* like; where the row ends
 /// up is the same either way.
 ///
@@ -66,7 +66,7 @@ extension View {
     /// Chooses what a drag-to-reorder gesture shows in this subtree.
     ///
     /// Rows become draggable when their `ForEach` carries
-    /// ``DynamicViewContent/onMove(perform:)``; this only changes the feedback
+    /// ``ForEach/onMove(perform:)``; this only changes the feedback
     /// while the drag is in flight.
     ///
     /// ```swift

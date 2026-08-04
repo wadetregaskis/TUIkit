@@ -153,7 +153,7 @@ extension View {
     ///
     /// Mirrors SwiftUI's `onTapGesture(count:perform:)`. The dispatcher
     /// synthesises the click count by timing successive left-button clicks at
-    /// (near) the same cell (see ``TUIkitCore/MouseEvent/clickCount``); the
+    /// (near) the same cell (see ``MouseEvent/clickCount``); the
     /// action runs on the release of the `count`-th click. A `count: 1` tap
     /// behaves like ``onTapGesture(_:)`` but without the `(x, y)` arguments.
     ///
@@ -461,7 +461,7 @@ extension View {
     ///   - action: The async action to execute.
     /// - Returns: A view that (re)starts the task when `id` changes.
     public func task<ID: Equatable>(
-        id value: ID,
+        id: ID,
         priority: TaskPriority = .userInitiated,
         @_inheritActorContext _ action: sending @escaping @isolated(any) @Sendable () async -> Void
     ) -> some View {
@@ -469,7 +469,7 @@ extension View {
             content: self,
             task: action,
             priority: priority,
-            idToken: "\(value)"
+            idToken: "\(id)"
         )
     }
 }

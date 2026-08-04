@@ -12,7 +12,7 @@ import TUIkitCore
 /// leaves the wrapped view's hit region.
 ///
 /// `OnHoverModifier` participates in TUIkit's hover state
-/// machine, which lives in ``MouseEventDispatcher``: bare
+/// machine, which lives in `MouseEventDispatcher`: bare
 /// `.moved` events on the dispatcher synthesise `.entered` /
 /// `.exited` transitions whenever the cursor crosses a region
 /// boundary. The modifier registers a handler that reacts to
@@ -20,7 +20,7 @@ import TUIkitCore
 /// surfaces them through a SwiftUI-compatible callback shape.
 ///
 /// The modifier also calls
-/// ``MouseEventDispatcher/requestFeature(_:)`` every frame with
+/// `MouseEventDispatcher.requestFeature(_:)` every frame with
 /// `.motion`, so the terminal switches into any-event
 /// mouse-tracking mode while the view is on screen. Once the
 /// view disappears the request is no longer made and the

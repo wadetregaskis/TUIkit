@@ -8,7 +8,7 @@
 
 /// A container that lays out labelled controls in a consistent, aligned form.
 ///
-/// Mirrors SwiftUI's `Form`. Choose the layout with ``SwiftUICore/View/formStyle(_:)``:
+/// Mirrors SwiftUI's `Form`. Choose the layout with ``View/formStyle(_:)``:
 ///
 /// - ``FormStyle/columns`` (and ``FormStyle/automatic``, the default) — the
 ///   classic macOS layout: field labels right-aligned to a shared pillar, controls
@@ -70,7 +70,7 @@ enum _FormRowKind {
 }
 
 /// A form row: its kind plus an optional explicit horizontal alignment from
-/// ``SwiftUICore/View/formRowAlignment(_:)``, which overrides the kind's default
+/// ``View/formRowAlignment(_:)``, which overrides the kind's default
 /// (e.g. a button's right-alignment).
 struct _FormRow {
     var kind: _FormRowKind
@@ -131,7 +131,7 @@ extension View {
     }
 }
 
-/// Carries a ``SwiftUICore/View/formRowAlignment(_:)`` override; transparent
+/// Carries a ``View/formRowAlignment(_:)`` override; transparent
 /// outside a form (it just renders its content).
 struct _FormRowAlignmentModifier<Content: View>: View {
     let content: Content
@@ -275,7 +275,7 @@ private func baseRowView(_ kind: _FormRowKind, pillar: Int) -> some View {
     }
 }
 
-/// Builds one row's view. An explicit ``SwiftUICore/View/formRowAlignment(_:)``
+/// Builds one row's view. An explicit ``View/formRowAlignment(_:)``
 /// frames the row to `contentWidth` at that alignment (columns only); otherwise a
 /// button defaults to right-aligned and every other kind keeps its natural width.
 /// `contentWidth` is 0 in grouped, where row-level horizontal alignment doesn't

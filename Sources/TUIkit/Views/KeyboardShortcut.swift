@@ -118,7 +118,7 @@ public struct EventModifiers: OptionSet, Hashable, Sendable {
 /// `KeyboardShortcut`: either a key equivalent (``init(_:modifiers:)``) or one
 /// of the two semantic roles.
 ///
-/// Attach with ``SwiftUICore/View/keyboardShortcut(_:)``:
+/// Attach with ``View/keyboardShortcut(_:)``:
 ///
 /// ```swift
 /// Dialog("Sign in") {
@@ -211,7 +211,7 @@ public struct KeyboardShortcut: Hashable, Sendable {
     /// Escape — `KeyEvent.parse` matches those *before* the Ctrl-letter range,
     /// so they never arrive as a modified letter and never can. Ctrl-C and
     /// Ctrl-Z are taken by the shell's job control. Consult it after
-    /// ``resolved(commandKey:)`` — that is where a ⌘ shortcut becomes a
+    /// `resolved(commandKey:)` — that is where a ⌘ shortcut becomes a
     /// Control one and can collide.
     public var isDeliverableInTerminal: Bool {
         guard case .key(let key, let modifiers) = trigger else { return true }
@@ -272,7 +272,7 @@ public struct KeyboardShortcut: Hashable, Sendable {
     /// characters, so a CJK-configured terminal would advance two cells and
     /// shear the column they are aligned in.
     ///
-    /// Call it on a *resolved* shortcut (see ``resolved(commandKey:)``);
+    /// Call it on a *resolved* shortcut (see `resolved(commandKey:)`);
     /// `.command` has no printable form here because it is never what actually
     /// fires.
     public var displayString: String? {
@@ -414,7 +414,7 @@ final class KeyboardShortcutRegistry: @unchecked Sendable {
 
 // MARK: - Assignment
 
-/// The per-frame, claimable carrier ``SwiftUICore/View/keyboardShortcut(_:)``
+/// The per-frame, claimable carrier ``View/keyboardShortcut(_:)``
 /// plants in the environment.
 ///
 /// A plain environment *value* would cascade to every button in the subtree —
@@ -465,7 +465,7 @@ extension EnvironmentValues {
     }
 
     /// The shortcut assignment awaiting a control, planted by
-    /// ``SwiftUICore/View/keyboardShortcut(_:)``.
+    /// ``View/keyboardShortcut(_:)``.
     var assignedKeyboardShortcut: KeyboardShortcutAssignment? {
         get { self[AssignedKeyboardShortcutKey.self] }
         set { self[AssignedKeyboardShortcutKey.self] = newValue }

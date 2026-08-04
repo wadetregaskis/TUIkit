@@ -8,7 +8,7 @@ import TUIkitCore
 
 // MARK: - Submit action entry
 
-/// One ``SwiftUICore/View/onSubmit(of:_:)`` registration cascading through the
+/// One ``View/onSubmit(of:_:)`` registration cascading through the
 /// environment: the triggers it responds to plus the action to run. It wraps a
 /// plain (non-`Sendable`) closure; `@unchecked Sendable` is sound because the
 /// action is only ever created and invoked on the render loop's single thread —

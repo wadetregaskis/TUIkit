@@ -183,7 +183,7 @@ terminal), and `textCase(_:)`.
 
 ### Scoped styling
 
-``View/style(_:_:)`` targets a subset of views by ``StyleScope`` — including a
+``View/style(_:_:)-(_,StyleAttributes)`` targets a subset of views by ``StyleScope`` — including a
 semantic colour role, so you can, for example, dim every secondary-coloured text
 app-wide without touching primary text:
 

@@ -24,7 +24,7 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// Monotonic count of volatile-value reads. Only ever compared as a delta
     /// (before vs. after a scoped render), so the absolute value is irrelevant.
     ///
-    /// Kept separate from ``animationRequests`` because the run loop derives
+    /// Kept separate from `animationRequests` because the run loop derives
     /// its *pulse-timer* demand from this count alone; folding animation
     /// requests in would spin the pulse clock whenever any scheduler-driven
     /// animation (a Spinner, say) is on screen.

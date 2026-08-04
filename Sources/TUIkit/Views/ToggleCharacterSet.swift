@@ -25,7 +25,7 @@ import TUIkitCore
 ///
 /// A running app defaults to ``automatic`` — ``emoji`` under Apple's
 /// Terminal.app, ``unicode`` everywhere else. Override for a whole subtree
-/// with ``SwiftUICore/View/toggleCharacterSet(_:)``:
+/// with ``View/toggleCharacterSet(_:)``:
 ///
 /// ```swift
 /// SettingsForm()
@@ -117,12 +117,12 @@ public struct ToggleCharacterSet: Sendable, Equatable {
     /// shears the row (issue #9) — so they get the universally-correct
     /// ``unicode`` squares.
     ///
-    /// This is what a running app uses when no ``SwiftUICore/View/toggleCharacterSet(_:)``
+    /// This is what a running app uses when no ``View/toggleCharacterSet(_:)``
     /// modifier applies. (The bare `EnvironmentValues` default — what headless
     /// renders and tests see — is the terminal-independent ``unicode``.)
     ///
     /// **Resolved at render, not here.** This returns a marker
-    /// (``resolvesFromTerminal``), and the render loop supplies the answer for
+    /// (`resolvesFromTerminal`), and the render loop supplies the answer for
     /// the terminal in front of the user *this frame*. That matters because the
     /// answer can change while the app runs: under tmux it depends on the
     /// attached CLIENT's font, and detaching and re-attaching from a different
@@ -189,7 +189,7 @@ extension EnvironmentValues {
     /// The glyph repertoire for ``Toggle``s in this environment.
     ///
     /// May be ``ToggleCharacterSet/automatic``, which is a marker rather than a
-    /// decided set of glyphs — read ``effectiveToggleCharacterSet`` to draw with.
+    /// decided set of glyphs — read `effectiveToggleCharacterSet` to draw with.
     public var toggleCharacterSet: ToggleCharacterSet {
         get { self[ToggleCharacterSetKey.self] }
         set { self[ToggleCharacterSetKey.self] = newValue }

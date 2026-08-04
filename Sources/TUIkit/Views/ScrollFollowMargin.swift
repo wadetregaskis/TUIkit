@@ -15,7 +15,7 @@
 ///
 /// - ``none``: scrolling starts only when the selection reaches the edge —
 ///   the classic terminal behaviour, and the default everywhere.
-/// - ``lines(_:)`` / ``rows(_:)``: scrolling starts once fewer than that many
+/// - `lines(_:)` / `rows(_:)`: scrolling starts once fewer than that many
 ///   lines (terminal rows) / rows (logical items — a multi-line row counts
 ///   once) remain visible beyond the selection. For single-line items the two
 ///   are identical.

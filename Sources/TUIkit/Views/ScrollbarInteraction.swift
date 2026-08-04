@@ -43,7 +43,7 @@ extension View {
 
 /// A scroll action that repeats while a scrollbar arrow (or a `.page`-mode track)
 /// is held down. Terminals send no key/button auto-repeat, so the bar's owner
-/// drives it from the render loop (see ``ScrollbarRenderer/driveAutoRepeat``).
+/// drives it from the render loop (see `ScrollbarRenderer.driveAutoRepeat`).
 public struct ScrollbarRepeat: Sendable, Equatable {
     /// The offset delta applied on each repeat tick (±1 for an arrow, ±viewport
     /// for a page-track hold). Its **sign is the fixed direction** of the hold —

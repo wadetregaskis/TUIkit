@@ -129,7 +129,7 @@ public final class LocalizationService: @unchecked Sendable {
     ///
     /// The framework only bundles translations for its own strings; an app uses
     /// this to localize its own UI through the same service. The outer dictionary
-    /// is keyed by language code (``Language/rawValue`` — e.g. `"en"`, `"de"`,
+    /// is keyed by language code (`Language.rawValue` — e.g. `"en"`, `"de"`,
     /// `"zh"`); the inner dictionary maps dot-notation keys to localized strings.
     /// Registrations merge across calls and take precedence over the bundled
     /// framework strings for the same key. A re-render is requested so visible

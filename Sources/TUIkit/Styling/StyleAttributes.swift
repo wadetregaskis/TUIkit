@@ -53,8 +53,8 @@ public enum FontWeight: Sendable, Hashable {
 /// every field is optional, where `nil` means "inherit / not set at this level".
 ///
 /// `StyleAttributes` is the value carried by the scoped style cascade
-/// (``StyleCascade``). Container-level modifiers like ``SwiftUI/View/bold(_:)``
-/// and ``SwiftUI/View/style(_:_:)`` contribute these; ``Text`` merges the
+/// (``StyleCascade``). Container-level modifiers like ``View/bold(_:)``
+/// and ``View/style(_:_:)-(_,StyleAttributes)`` contribute these; ``Text`` merges the
 /// resolved result beneath its own explicit attributes when it renders.
 ///
 /// The tri-state (`Bool?`) lets a subtree turn an attribute **on** and a

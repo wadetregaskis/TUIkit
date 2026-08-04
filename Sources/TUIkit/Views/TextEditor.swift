@@ -40,7 +40,7 @@
 /// (a tab advances to the next multiple of 4, so its visual width varies),
 /// matching how the macOS text system, terminals and code editors treat tabs.
 /// Configure the interval, or switch to a constant advance, for a subtree with
-/// ``SwiftUICore/View/tabWidth(_:)``:
+/// ``View/tabWidth(_:)``:
 ///
 /// ```swift
 /// TextEditor(text: $source)

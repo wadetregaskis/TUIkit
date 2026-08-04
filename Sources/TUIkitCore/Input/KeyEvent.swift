@@ -69,7 +69,7 @@ public enum Key: Hashable, Sendable {
     /// Real keys on DEC and full-size PC keyboards. On a Mac they are also
     /// what Apple Terminal sends for **Shift+F5…Shift+F12**, because it has no
     /// modifier encoding for function keys at all and re-codes the chord as a
-    /// different key — see ``normalizingLegacyShiftedFunctionKeys()`` and
+    /// different key — see ``KeyEvent/normalizingLegacyShiftedFunctionKeys()`` and
     /// `Documentation/Terminal-compatibility.md`.
     case f13, f14, f15, f16, f17, f18, f19, f20
 

@@ -14,7 +14,7 @@ import TUIkitCore
 /// SwiftUI's `@Environment(\.dismiss)` dismisses the current presentation
 /// context (sheet, popover, …). A TUIkit app has one top-level scene that
 /// fills the whole terminal, so dismissing it is equivalent to quitting:
-/// the run loop falls out naturally, ``AppRunner`` restores the terminal,
+/// the run loop falls out naturally, `AppRunner` restores the terminal,
 /// and `App.main()` returns. Unlike calling `exit(0)`, this lets normal
 /// Swift cleanup run.
 ///

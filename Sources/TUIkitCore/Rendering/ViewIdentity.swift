@@ -16,7 +16,7 @@
 /// ## Representation
 ///
 /// The identity is stored as a **parent-linked chain of nodes** (see
-/// ``IdentityNode``), one node per descent — a node holds its view's *type*
+/// `IdentityNode`), one node per descent — a node holds its view's *type*
 /// (an 8-byte metatype) and child index, not a string. The human-readable
 /// path (`"ContentView/VStack.1/Menu"`) is rendered **on demand** by
 /// ``path``, so descending the tree — which happens hundreds of times per

@@ -11,7 +11,7 @@ import TUIkitStyling
 /// A modal gradient editor — ``ColorPickerPanel``'s sibling for the `[Color]`
 /// stop lists TUIkit's gradients are made of (``TrackConfiguration``'s
 /// `fillGradient`, `.threeSegment`'s ``SegmentColoring/gradient(_:)``, and the
-/// indeterminate ``IndeterminateStyle/gradient(colors:period:)`` sweep).
+/// indeterminate `IndeterminateStyle.gradient(colors:period:)` sweep).
 ///
 /// TUIkit gradients are evenly-spaced colour stops interpolated piecewise
 /// (`TrackRenderer.gradientColor`); the editor shows that exact interpolation
