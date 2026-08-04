@@ -276,6 +276,67 @@ struct OverlaysPage: View {
         .frame(width: 55)
     }
 
+    // MARK: - The two dialog demos
+
+    /// "Dialog": deliberately FOOTERLESS — `Dialog(title:) { content }`, the
+    /// convenience init nothing else on this page reaches.
+    ///
+    /// That absence is the whole point of the demo: no separator rule, no
+    /// button row, nothing below the body. With a lone Dismiss in each, this
+    /// and ``confirmDialog`` rendered as the same dialog with different words
+    /// in it, and the second demo's entire subject went unseen.
+    ///
+    /// A read-only panel needs no button, and Esc closes it (the status bar
+    /// says so while it is open, and the body says so too, so the absence reads
+    /// as deliberate). Note where the button ISN'T: a dialog's body scrolls on
+    /// a short terminal, so a control put in the body can be scrolled out of
+    /// reach. That is what footers are for — and what the demo below shows.
+    private var settingsDialog: some View {
+        Dialog(
+            title: L("page.overlays.dialog.settingsTitle"),
+            borderColor: .palette.border, titleColor: .palette.accent
+        ) {
+            VStack(alignment: .leading) {
+                Text(L("page.overlays.dialog.themeDark")).foregroundStyle(.palette.foreground)
+                Text(L("page.overlays.dialog.languageEnglish")).foregroundStyle(.palette.foreground)
+                Text(L("page.overlays.dialog.notificationsOn")).foregroundStyle(.palette.foreground)
+                Text("")
+                Text(L("page.overlays.dialog.noFooterHint"))
+                    .foregroundStyle(.palette.foregroundSecondary)
+            }
+        }
+    }
+
+    /// "Dialog with Footer": the counterpart to ``settingsDialog`` — a divider,
+    /// then a ROW of actions pinned beneath the body.
+    ///
+    /// Two buttons, not one. A single button reads as one more line of content;
+    /// Cancel / Proceed reads unmistakably as a footer bar. A confirmation is
+    /// also the case that genuinely needs one, which is why this is the demo
+    /// that has it.
+    private var confirmDialog: some View {
+        Dialog(
+            title: L("page.overlays.dialog.confirmTitle"),
+            borderColor: .palette.border, titleColor: .palette.accent,
+            footerAlignment: .trailing
+        ) {
+            Text(L("page.overlays.dialog.confirmBody")).foregroundStyle(.palette.foreground)
+            Text(L("page.overlays.dialog.confirmUndone")).foregroundStyle(.palette.foregroundSecondary)
+        } footer: {
+            HStack {
+                Button(L("page.overlays.button.cancel")) {
+                    showOverlay = false
+                }
+                .keyboardShortcut(.cancelAction)
+                Button(L("page.overlays.button.proceed")) {
+                    showOverlay = false
+                }
+                .buttonStyle(.primary)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+
     // MARK: - Overlay Content
 
     /// Builds the overlay content for the selected demo variant.
@@ -287,35 +348,10 @@ struct OverlaysPage: View {
             alertContent(for: demo)
 
         case .dialog:
-            // The button belongs in the FOOTER, not at the bottom of the body.
-            // A dialog's body scrolls when the terminal is too short; its footer
-            // is pinned. With the button in the body it could be scrolled out of
-            // view — the one control the user always needs.
-            Dialog(
-                title: L("page.overlays.dialog.settingsTitle"),
-                borderColor: .palette.border, titleColor: .palette.accent,
-                footerAlignment: .trailing
-            ) {
-                VStack(alignment: .leading) {
-                    Text(L("page.overlays.dialog.themeDark")).foregroundStyle(.palette.foreground)
-                    Text(L("page.overlays.dialog.languageEnglish")).foregroundStyle(.palette.foreground)
-                    Text(L("page.overlays.dialog.notificationsOn")).foregroundStyle(.palette.foreground)
-                }
-            } footer: {
-                dismissButton
-            }
+            settingsDialog
 
         case .dialogWithFooter:
-            Dialog(
-                title: L("page.overlays.dialog.confirmTitle"),
-                borderColor: .palette.border, titleColor: .palette.accent,
-                footerAlignment: .trailing
-            ) {
-                Text(L("page.overlays.dialog.confirmBody")).foregroundStyle(.palette.foreground)
-                Text(L("page.overlays.dialog.confirmUndone")).foregroundStyle(.palette.foregroundSecondary)
-            } footer: {
-                dismissButton
-            }
+            confirmDialog
 
         case .dialogProse:
             // Deliberately NO `.frame(width:)`: the point of this demo is the
