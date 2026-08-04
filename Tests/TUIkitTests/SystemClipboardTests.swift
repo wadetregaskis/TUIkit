@@ -22,6 +22,24 @@ struct SystemClipboardTests {
     /// forces the writer into the would-block path.
     private static let bigPayload = Data(repeating: 0x41, count: 1_000_000)
 
+    /// The deadline for exchanges that are supposed to SUCCEED.
+    ///
+    /// Those tests assert the data path — every byte written, every byte read
+    /// back — and not that it happens quickly. `defaultDeadline` (2 s) is the
+    /// right bound for a *real* clipboard helper, but using it here makes the
+    /// assertion a race against the wall clock: this suite runs alongside 530
+    /// others, and on a saturated machine a `/bin/sh` spawn, a pipe exchange
+    /// and the reap can exceed 2 s with nothing wrong at all. Measured: these
+    /// failed about one run in three, always as `result == nil` a hair past
+    /// the deadline (2.156 s against 2 s), and that is what turned CI red on
+    /// whichever lane lost the lottery.
+    ///
+    /// Promptness is still covered, by the deadline tests above: they assert a
+    /// timeout *does* happen, and load only makes those more certain, never
+    /// less. So the timing assertions live where load helps them, and the
+    /// correctness assertions no longer depend on the scheduler.
+    private static let generousDeadline: TimeInterval = 60
+
     /// Wall-clock guard: generous enough for a loaded machine, tight enough
     /// to prove nothing waited on a 30-second child.
     private func expectPrompt(_ start: DispatchTime, within seconds: Double = 5) {
@@ -66,7 +84,7 @@ struct SystemClipboardTests {
     func largeWriteSucceeds() {
         let result = SystemClipboard.run(
             tool: "/bin/sh", arguments: ["-c", "cat > /dev/null"],
-            writing: Self.bigPayload, readsOutput: false
+            writing: Self.bigPayload, readsOutput: false, deadline: Self.generousDeadline
         )
         #expect(result != nil)
     }
@@ -75,7 +93,7 @@ struct SystemClipboardTests {
     func largeReadSucceeds() {
         let result = SystemClipboard.run(
             tool: "/bin/sh", arguments: ["-c", "head -c 200000 /dev/zero"],
-            writing: nil, readsOutput: true
+            writing: nil, readsOutput: true, deadline: Self.generousDeadline
         )
         #expect(result?.count == 200_000)
     }
@@ -88,7 +106,7 @@ struct SystemClipboardTests {
         let payload = Data("hello clipboard ✂️".utf8)
         let result = SystemClipboard.run(
             tool: "/bin/sh", arguments: ["-c", "cat"],
-            writing: payload, readsOutput: true
+            writing: payload, readsOutput: true, deadline: Self.generousDeadline
         )
         #expect(result == payload)
     }
