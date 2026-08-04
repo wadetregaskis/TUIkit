@@ -358,7 +358,11 @@ struct ListPage: View {
                 }
             }
         }
-        .frame(height: 8)
+        // Five rows of content: 5 × 2 lines, plus the border's two. Four would
+        // do to show scrolling, but not to show the follow margin — in a
+        // three-row viewport "one row of margin" and "centred" pick the same
+        // row, so the picker above looked inert between those two settings.
+        .frame(height: 12)
         .scrollbarVisibility(.visible)
         .scrollGranularity(multiLineByLine ? .line : .row)
         .scrollFollowMargin(
