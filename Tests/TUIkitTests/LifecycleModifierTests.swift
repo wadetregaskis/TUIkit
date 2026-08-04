@@ -218,10 +218,21 @@ struct LifecycleModifierTests {
     }
 }
 
-/// Records where a lifecycle closure actually ran. `Thread.isMainThread` is
-/// unavailable *directly* in an async context, so the reading is taken through
-/// a synchronous nonisolated function.
-nonisolated private func runningOnMain() -> Bool { Thread.isMainThread }
+/// Whether the caller is isolated to the main actor.
+///
+/// Asks about the *actor*, via `#isolation` as a default argument — which
+/// resolves to the calling context's isolation — rather than about the thread.
+/// `Thread.isMainThread` was the obvious reading and is the wrong one: it
+/// answers a question the main actor does not promise. On Linux the main
+/// actor is drained by a cooperative pool thread after the first suspension
+/// point, so a `.task` that correctly inherited `@MainActor` still reported
+/// `isMainThread == false` and failed this test. `#isolation` distinguishes
+/// the three cases the test cares about exactly — inherited `@MainActor`,
+/// `@concurrent` (nonisolated, so `nil`), and a custom global actor — on
+/// every platform, because it is the isolation itself and not a proxy for it.
+private func runningOnMain(isolation: (any Actor)? = #isolation) -> Bool {
+    isolation === MainActor.shared
+}
 
 /// A custom global actor, standing in for an app's own — the isolation a
 /// `@MainActor`-typed parameter could not accept.
