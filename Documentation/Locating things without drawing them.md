@@ -909,9 +909,12 @@ becoming §5 with ceremony. Its inner-first cascade is adopted (§5b).
 
 **7f. Just don't window (status quo).** **Why it loses:** it's what makes
 plain `VStack` "work", and it's ruled out. It isn't even cheap:
-`contentExtents` measures 100% of content at `max(viewportHeight*64, 4096)`
-rows (`ScrollView.swift:589`), up to three times per frame, plus a fourth
-call in `renderedContent`. **Every frame.** The status quo is an expensive
+`contentExtents` measures 100% of content against a budget that starts at
+`max(viewportHeight*64, 4096)` rows and grows from there while the content
+keeps filling it (`measureNaturalExtent` — the budget is a starting rung,
+not a ceiling, so content taller than it costs additional whole-content
+measures), up to three times per frame, plus a fourth call in
+`renderedContent`. **Every frame.** The status quo is an expensive
 baseline, not a cheap correct one.
 
 ---

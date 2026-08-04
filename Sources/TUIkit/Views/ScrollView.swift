@@ -55,6 +55,18 @@ import TUIkitCore
 /// }
 /// ```
 ///
+/// # Very tall content
+///
+/// There is no ceiling on how tall the content may be: it is measured
+/// against a budget that grows until the content stops filling it, so a
+/// hundred thousand rows scroll as readily as ten.
+///
+/// What that costs is a buffer as tall as the content, rebuilt every
+/// frame. Past a few thousand rows, reach for ``LazyVStack`` — inside a
+/// `ScrollView` it reports its extent without laying every row out and
+/// renders only the band the viewport shows, so the per-frame cost stops
+/// tracking the row count.
+///
 /// > Note: Both axes are supported. Pass `.vertical` (the default),
 ///   `.horizontal`, or `[.horizontal, .vertical]`. When horizontal
 ///   scrolling is enabled the view also renders a bottom scrollbar and
@@ -663,14 +675,16 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// scrollbar-reservation decision matches what will actually be drawn.
     ///
     /// `height` is the rendered buffer's height, `max(viewportHeight,
-    /// naturalHeight)`: the natural height is measured with a generous height budget
-    /// (a stack's measure clamps its report to `availableHeight`, so a small budget
-    /// would cap tall content) and an unspecified height proposal, which collapses a
-    /// flexible filler such as `Spacer()` to its minimum. (Rendering into a fixed
-    /// tall canvas would instead let a Spacer expand to thousands of lines and
-    /// report a phantom overflow.) `width` is the render width: the content's
-    /// natural width when horizontal scrolling is on — so it can be wider than the
-    /// viewport and scroll, rather than wrapping to fit — else `contentWidth`.
+    /// naturalHeight)`: the natural height comes from ``measureNaturalExtent`` — a
+    /// stack's measure clamps its report to `availableHeight`, so any FIXED budget
+    /// is a ceiling on how tall content can be, and the ladder grows the budget
+    /// until the content stops filling it instead of guessing one — under an
+    /// unspecified height proposal, which collapses a flexible filler such as
+    /// `Spacer()` to its minimum. (Rendering into a fixed tall canvas would instead
+    /// let a Spacer expand to thousands of lines and report a phantom overflow.)
+    /// `width` is the render width: the content's natural width when horizontal
+    /// scrolling is on — so it can be wider than the viewport and scroll, rather
+    /// than wrapping to fit — else `contentWidth`.
     ///
     /// Measures under the content's OWN child identity, distinct from the
     /// ScrollView's: otherwise a directly-stateful content view would bind its
@@ -685,26 +699,27 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // (unbounded, below) measure canvas — e.g. Image's `.imageFitTarget(.viewport)`.
         measureContext.environment.scrollViewportSize = ScrollViewportSize(
             width: contentWidth, height: viewportHeight)
-        measureContext.availableHeight = max(viewportHeight * 64, 4096)
+        measureContext.availableHeight = naturalExtentStartingBudget(forVisible: viewportHeight)
 
         let renderWidth: Int
         if horizontal {
-            measureContext.availableWidth = max(contentWidth * 64, 4096)
-            let naturalWidth = measureChild(
-                content, proposal: ProposedSize(width: nil, height: nil), context: measureContext
-            ).width
-            renderWidth = max(contentWidth, naturalWidth)
+            let natural = measureNaturalExtent(
+                content, along: .horizontal,
+                proposal: ProposedSize(width: nil, height: nil),
+                context: measureContext,
+                startingBudget: naturalExtentStartingBudget(forVisible: contentWidth))
+            renderWidth = max(contentWidth, natural.width)
         } else {
             renderWidth = contentWidth
         }
 
         measureContext.availableWidth = renderWidth
-        let naturalHeight = measureChild(
-            content,
+        let natural = measureNaturalExtent(
+            content, along: .vertical,
             proposal: ProposedSize(width: renderWidth, height: nil),
-            context: measureContext
-        ).height
-        return (width: renderWidth, height: max(viewportHeight, naturalHeight))
+            context: measureContext,
+            startingBudget: naturalExtentStartingBudget(forVisible: viewportHeight))
+        return (width: renderWidth, height: max(viewportHeight, natural.height))
     }
 
     /// Renders the content to its full (unwindowed) buffer, sized via

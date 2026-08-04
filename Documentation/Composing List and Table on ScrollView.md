@@ -75,16 +75,18 @@ frame, not 1900. The factor-of-N win is invisible in the
 benchmark output for the small cases but dominant for any
 realistic scrolling list.
 
-``ScrollView``, by contrast, renders its content to a tall
-canvas:
+``ScrollView``, by contrast, renders its content to a canvas as
+tall as the content measures — and that measure is deliberately
+unbounded, growing its budget while the content keeps filling it
+(``measureNaturalExtent``) rather than capping at any constant:
 
 ```swift
 var measureContext = context.withChildIdentity(type: Content.self)
-measureContext.availableHeight = max(viewportHeight * 64, 4096)
-if horizontal {
-    // Horizontal scrolling inflates the width axis the same way.
-    measureContext.availableWidth = max(contentWidth * 64, 4096)
-}
+let extents = contentExtents(
+    contentWidth: contentWidth, viewportHeight: viewportHeight,
+    horizontal: horizontal, context: context)
+measureContext.availableWidth = extents.width
+measureContext.availableHeight = extents.height
 let fullBuffer = TUIkit.renderToBuffer(content, context: measureContext)
 ```
 

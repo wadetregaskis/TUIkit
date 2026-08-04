@@ -69,4 +69,25 @@ struct DialogImplicitScrollTests {
             !lines.contains(where: { $0.contains("row 29") }),
             "the last row is initially off-screen (scrollable into view)")
     }
+
+    @Test("A dialog taller than the old measure ceiling still counts every line")
+    func dialogPastTheOldMeasureCeiling() {
+        // The sibling of `ScrollContentExtentTests`: the dialog decides its own
+        // size against a budget of its own (`scrollableBodySize`) that is still
+        // capped, so the question is whether the cap reaches the user. It does
+        // not — the dialog's outer size is bounded by the screen either way, and
+        // the content itself is measured by the implicit ScrollView, which no
+        // longer has a ceiling. Pinned here because the two paths look alike
+        // enough that a future "consistency" edit could break this one quietly.
+        let tui = TUIContext()
+        let ctx = context(width: 40, height: 20, tui: tui)
+        tui.stateStorage.beginRenderPass()
+        let buffer = renderPresentedDialog(rows(6_000), context: ctx, capHeight: 10)
+        tui.stateStorage.endRenderPass()
+
+        let indicator = buffer.lines.map { $0.stripped }.first { $0.contains("more lines below") }
+        #expect(
+            Int(String((indicator ?? "").filter(\.isNumber))) == 6_000 - 10,
+            "the whole dialog body is scrollable, not the first 4,096 lines: \(indicator ?? "none")")
+    }
 }
