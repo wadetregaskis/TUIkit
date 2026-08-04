@@ -242,17 +242,42 @@ struct StackGuardExtentCacheTests {
     }
 
     /// The guard doing its job: on the thread the bound belongs to, a stack
-    /// pointer at or below the floor means stop descending.
+    /// pointer at or below the floor means stop descending — and the trip is
+    /// counted, which is the only way a harness can tell a truncated render
+    /// from a complete one (the `"⋯"` marker is clamped away to nothing when
+    /// the truncated child was already measured at zero size).
     @Test("Inside the known stack but below its floor means no headroom")
     func belowTheFloorOnTheKnownStackTrips() {
         let saved = StackGuard.cachedExtent
-        defer { StackGuard.cachedExtent = saved }
+        let savedCount = StackGuard.truncationCount
+        defer {
+            StackGuard.cachedExtent = saved
+            StackGuard.truncationCount = savedCount
+        }
 
         let stackPointer = currentStackPointer()
         // The running stack pointer sits inside [low, high) but under floor.
         StackGuard.cachedExtent = StackGuard.StackExtent(
             low: stackPointer - 4096, floor: stackPointer + 4096, high: stackPointer + 8192)
         #expect(!StackGuard.hasHeadroom())
+        #expect(StackGuard.truncationCount == savedCount + 1, "a trip is counted")
+    }
+
+    /// The counter must not move when the guard is simply doing nothing, or a
+    /// harness would read a healthy render as truncated.
+    @Test("A render with headroom to spare counts no truncations")
+    func headroomCountsNoTruncation() {
+        let saved = StackGuard.cachedExtent
+        let savedCount = StackGuard.truncationCount
+        defer {
+            StackGuard.cachedExtent = saved
+            StackGuard.truncationCount = savedCount
+        }
+
+        StackGuard.cachedExtent = .unseeded
+        #expect(StackGuard.hasHeadroom())
+        #expect(StackGuard.hasHeadroom())
+        #expect(StackGuard.truncationCount == savedCount)
     }
 
     /// `disabled` spans the whole address space, so a containment test would

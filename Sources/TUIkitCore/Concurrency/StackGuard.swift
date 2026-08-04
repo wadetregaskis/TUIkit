@@ -125,6 +125,21 @@ public enum StackGuard {
     @MainActor
     static var cachedExtent: StackExtent = .unseeded
 
+    /// How many times the guard has stopped a descent since the process
+    /// started.
+    ///
+    /// Diagnostic, for harnesses that need to know whether the tree they just
+    /// rendered is the whole tree — a profile or a benchmark of a truncated
+    /// tree is not a measurement of the scenario, and is otherwise very hard to
+    /// notice: a truncated child is measured at zero size first, so the `"⋯"`
+    /// marker `renderChild` substitutes is immediately clamped away to nothing.
+    /// The frame just quietly comes back emptier, and faster.
+    ///
+    /// Costs the hot path nothing: ``hasHeadroom()`` only ever answers `false`
+    /// from its out-of-line slow path, so the counter lives there.
+    @MainActor
+    public static var truncationCount = 0
+
     /// Consecutive failures to establish bounds. Reset by any success.
     @MainActor
     static var derivationFailures = 0
@@ -173,7 +188,10 @@ public enum StackGuard {
         if cachedExtent == .disabled { return true }
         // Inside the extent we already know about, but at or below its floor:
         // this is the guard doing its job on the expected thread.
-        if stackPointer >= cachedExtent.low && stackPointer < cachedExtent.high { return false }
+        if stackPointer >= cachedExtent.low && stackPointer < cachedExtent.high {
+            truncationCount += 1
+            return false
+        }
         // Outside it — a different thread than last time (or the very first
         // ask). Establish this thread's bounds and answer against those.
         guard let extent = currentThreadExtent(stackPointer: stackPointer) else {
@@ -187,7 +205,9 @@ public enum StackGuard {
         }
         derivationFailures = 0
         cachedExtent = extent
-        return stackPointer > extent.floor && stackPointer < extent.high
+        let headroom = stackPointer > extent.floor && stackPointer < extent.high
+        if !headroom { truncationCount += 1 }
+        return headroom
     }
 
     /// The stack bounds of the thread `stackPointer` was taken on, or `nil`
