@@ -475,7 +475,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         applyScrollChrome(
             to: &visibleBuffer, handler: handler, contentWidth: contentWidth,
             wantsScrollbar: wantsScrollbar, wantsHorizontalBar: wantsHorizontalBar,
-            isFocused: isFocused, context: context)
+            isFocused: isFocused, focusID: persistedFocusID, context: context)
 
         attachViewportMouseHandler(
             to: &visibleBuffer, context: context, handler: handler,
@@ -522,7 +522,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// track / thumb drag).
     private func applyScrollChrome(
         to visibleBuffer: inout FrameBuffer, handler: ScrollViewHandler, contentWidth: Int,
-        wantsScrollbar: Bool, wantsHorizontalBar: Bool, isFocused: Bool, context: RenderContext
+        wantsScrollbar: Bool, wantsHorizontalBar: Bool, isFocused: Bool,
+        focusID persistedFocusID: String, context: RenderContext
     ) {
         // Indicators REPLACE viewport lines, so a 1-2 line viewport scrolled
         // mid-content would be 100% chrome — "▼ N more below" as the entire
@@ -544,7 +545,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 to: visibleBuffer, contentWidth: contentWidth, handler: handler,
                 isFocused: isFocused, context: context)
             attachScrollbarMouseHandler(
-                to: &visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
+                to: &visibleBuffer, contentWidth: contentWidth, handler: handler,
+                focusID: persistedFocusID, context: context)
         }
         if wantsHorizontalBar {
             visibleBuffer = appendHorizontalScrollbar(
@@ -552,7 +554,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 hasVerticalBar: wantsScrollbar, handler: handler,
                 isFocused: isFocused, context: context)
             attachHorizontalScrollbarMouseHandler(
-                to: &visibleBuffer, contentWidth: contentWidth, handler: handler, context: context)
+                to: &visibleBuffer, contentWidth: contentWidth, handler: handler,
+                focusID: persistedFocusID, context: context)
         }
     }
 

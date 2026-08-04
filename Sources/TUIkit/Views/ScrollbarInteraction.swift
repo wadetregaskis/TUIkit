@@ -344,4 +344,35 @@ extension ScrollbarRenderer {
             for: state, length: length, vertical: false,
             arrows: arrows, proportional: proportional, behavior: behavior)
     }
+
+    /// Wraps a scrollbar's mouse handler so operating the bar also focuses the
+    /// scrollable it belongs to.
+    ///
+    /// A scrollbar is not a control in its own right — it is its scrollable's
+    /// visible handle, and (via `ScrollbarColors.focusIndicating`) that
+    /// scrollable's focus indicator. So clicking the bar had the odd result of
+    /// driving a view without focusing it: the arrows scrolled, the thumb
+    /// dragged, and the bar stayed unlit, while a click one column left — on
+    /// the content — lit it up.
+    ///
+    /// On **press**, not release, unlike the viewport's own handler. Pressing an
+    /// arrow or the track starts an auto-repeat hold that can run for seconds
+    /// before the button comes up, and the bar it is lighting should be lit for
+    /// that whole time, not from the end of it.
+    ///
+    /// Only when the underlying handler claimed the event, so the inert cells a
+    /// bar may contain (a corner where two bars meet) do not steal focus.
+    static func focusing(
+        _ handler: @escaping (MouseEvent) -> Bool,
+        focusID: String, focusManager: FocusManager?
+    ) -> (MouseEvent) -> Bool {
+        guard let focusManager else { return handler }
+        return { event in
+            let handled = handler(event)
+            if handled, event.button == .left, event.phase == .pressed {
+                focusManager.focus(id: focusID)
+            }
+            return handled
+        }
+    }
 }

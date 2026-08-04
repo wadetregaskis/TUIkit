@@ -1153,7 +1153,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 arrows: context.environment.scrollbarArrows,
                 proportional: context.environment.scrollbarProportionalThumb,
                 behavior: context.environment.scrollbarClickBehavior)
-            let barHandlerID = mouseDispatcher.register(barHandler)
+            let barHandlerID = mouseDispatcher.register(
+                ScrollbarRenderer.focusing(
+                    barHandler, focusID: state.focusID,
+                    focusManager: context.environment.focusManager))
             // A bordered list's bar sits against the right border: widen the
             // bar's region over that border column too — a click there is
             // almost certainly aimed at the bar, not at "select whatever row

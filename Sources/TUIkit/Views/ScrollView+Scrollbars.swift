@@ -19,7 +19,7 @@ extension _ScrollViewCore {
     /// viewport for its column (the viewport still wins everywhere else).
     func attachScrollbarMouseHandler(
         to buffer: inout FrameBuffer, contentWidth: Int,
-        handler: ScrollViewHandler, context: RenderContext
+        handler: ScrollViewHandler, focusID persistedFocusID: String, context: RenderContext
     ) {
         guard !context.isMeasuring,
               let mouseDispatcher = context.environment.mouseEventDispatcher,
@@ -30,7 +30,10 @@ extension _ScrollViewCore {
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             behavior: context.environment.scrollbarClickBehavior)
-        let barHandlerID = mouseDispatcher.register(barHandler)
+        let barHandlerID = mouseDispatcher.register(
+            ScrollbarRenderer.focusing(
+                barHandler, focusID: persistedFocusID,
+                focusManager: context.environment.focusManager))
         buffer.hitTestRegions.insert(
             HitTestRegion(
                 offsetX: contentWidth, offsetY: 0, width: 1, height: buffer.height,
@@ -50,7 +53,7 @@ extension _ScrollViewCore {
     /// inert. A distinct repeat token lets both axes auto-repeat independently.
     func attachHorizontalScrollbarMouseHandler(
         to buffer: inout FrameBuffer, contentWidth: Int,
-        handler: ScrollViewHandler, context: RenderContext
+        handler: ScrollViewHandler, focusID persistedFocusID: String, context: RenderContext
     ) {
         guard !context.isMeasuring,
               let mouseDispatcher = context.environment.mouseEventDispatcher,
@@ -61,7 +64,10 @@ extension _ScrollViewCore {
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             behavior: context.environment.scrollbarClickBehavior)
-        let barHandlerID = mouseDispatcher.register(barHandler)
+        let barHandlerID = mouseDispatcher.register(
+            ScrollbarRenderer.focusing(
+                barHandler, focusID: persistedFocusID,
+                focusManager: context.environment.focusManager))
         buffer.hitTestRegions.insert(
             HitTestRegion(
                 offsetX: 0, offsetY: max(0, buffer.height - 1), width: contentWidth, height: 1,

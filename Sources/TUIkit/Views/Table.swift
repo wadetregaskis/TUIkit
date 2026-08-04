@@ -1744,6 +1744,42 @@ where Value.ID: Hashable {
     ///   …             data rows, one per line
     ///   y=N           bottom scroll indicator / bottom border
     /// ```
+    /// The scrollbar's own mouse handler, registered BEFORE the container's so
+    /// the container's later `insert(at: 0)` pushes this one to a higher index —
+    /// hit-tested ahead of the container (reverse iteration) for its single
+    /// column, while the container still wins everywhere else. The bar is the
+    /// rightmost interior column (availableWidth − 3: border + padding each
+    /// side, minus the bar) over the content rows; it is row-exact (one cell per
+    /// row) for the single-line path.
+    private func attachScrollbarMouseHandler(
+        to buffer: inout FrameBuffer,
+        context: RenderContext,
+        state: PopulatedRenderState,
+        mouseDispatcher: MouseEventDispatcher,
+        firstRowY: Int
+    ) {
+        guard state.hasScrollbar else { return }
+        let barHeight = max(1, context.availableHeight - 3)
+        let barHandler = ScrollbarRenderer.verticalMouseHandler(
+            for: state.handler, length: barHeight,
+            arrows: context.environment.scrollbarArrows,
+            proportional: context.environment.scrollbarProportionalThumb,
+            behavior: context.environment.scrollbarClickBehavior)
+        let barHandlerID = mouseDispatcher.register(
+            ScrollbarRenderer.focusing(
+                barHandler, focusID: state.focusID,
+                focusManager: context.environment.focusManager))
+        buffer.hitTestRegions.insert(
+            HitTestRegion(
+                offsetX: max(0, context.availableWidth - 3), offsetY: firstRowY,
+                width: 1, height: barHeight, handlerID: barHandlerID),
+            at: 0
+        )
+        ScrollbarRenderer.driveAutoRepeat(
+            state: state.handler,
+            token: "table-scrollbar-repeat-\(context.identity.path)", context: context)
+    }
+
     private func attachMouseHandlers(
         to buffer: inout FrameBuffer,
         context: RenderContext,
@@ -1761,24 +1797,9 @@ where Value.ID: Hashable {
         // still wins everywhere else. The bar is the rightmost interior column
         // (availableWidth − 3: border + padding each side, minus the bar) over the
         // content rows; it is row-exact (one cell per row) for the single-line path.
-        if state.hasScrollbar {
-            let barHeight = max(1, context.availableHeight - 3)
-            let barHandler = ScrollbarRenderer.verticalMouseHandler(
-                for: state.handler, length: barHeight,
-                arrows: context.environment.scrollbarArrows,
-                proportional: context.environment.scrollbarProportionalThumb,
-                behavior: context.environment.scrollbarClickBehavior)
-            let barHandlerID = mouseDispatcher.register(barHandler)
-            buffer.hitTestRegions.insert(
-                HitTestRegion(
-                    offsetX: max(0, context.availableWidth - 3), offsetY: firstRowY,
-                    width: 1, height: barHeight, handlerID: barHandlerID),
-                at: 0
-            )
-            ScrollbarRenderer.driveAutoRepeat(
-                state: state.handler,
-                token: "table-scrollbar-repeat-\(context.identity.path)", context: context)
-        }
+        attachScrollbarMouseHandler(
+            to: &buffer, context: context, state: state,
+            mouseDispatcher: mouseDispatcher, firstRowY: firstRowY)
 
         // The border columns are chrome: a click there (however row-aligned its
         // y) must not select — see the x-guard in the handler. Tables always
