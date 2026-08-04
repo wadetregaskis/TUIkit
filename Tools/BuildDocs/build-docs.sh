@@ -59,9 +59,32 @@ fi
 echo "==> Emitting symbol graphs for every target"
 # `dump-symbol-graph` prints the directory it wrote to; capture it rather than
 # guessing, since the path carries the build triple.
+#
+# Its exit status is deliberately NOT the check here. The command takes no
+# target selector — it walks every target in the package, test targets
+# included — and a test target's module cannot be loaded by
+# swift-symbolgraph-extract:
+#
+#     error: Failed to emit symbol graph for 'TUIkitPackageTests':
+#            Couldn't load module 'TUIkitPackageTests' in the current SDK …
+#
+# so it exits non-zero having already written every library graph this script
+# actually wants. Only a CLEAN checkout hits it: once the test bundle has been
+# built its module loads, which is why this passed locally for anyone who had
+# run `swift test`, and failed in CI on every run.
+#
+# Those test graphs are unwanted regardless — unify_symbol_graphs.py keeps only
+# the five library modules. What matters is that each of those five produced a
+# graph, and that is precisely what unify_symbol_graphs.py asserts (it errors
+# with "no symbol graph for …" if any is missing), backed by the required-pages
+# check at the end of this script. Both are stronger than an exit code, so the
+# failure is reported and stepped over rather than being fatal here.
 DUMP_LOG="$(mktemp)"
 trap 'rm -f "$DUMP_LOG"' EXIT
-swift package dump-symbol-graph --minimum-access-level public | tee "$DUMP_LOG"
+if ! swift package dump-symbol-graph --minimum-access-level public | tee "$DUMP_LOG"; then
+    echo "note: dump-symbol-graph reported errors (above); continuing — the" >&2
+    echo "      library modules are verified individually in the next step." >&2
+fi
 SYMBOL_GRAPHS="$(sed -n 's/^Files written to //p' "$DUMP_LOG" | tail -1)"
 if [ ! -d "${SYMBOL_GRAPHS:-}" ]; then
     echo "error: could not determine the symbol-graph directory" >&2
