@@ -6,6 +6,14 @@
 
 import Dispatch
 
+#if canImport(Glibc)
+    import Glibc
+#elseif canImport(Musl)
+    import Musl
+#elseif canImport(Darwin)
+    import Darwin
+#endif
+
 /// Whether the backtick frame-dump debug shortcut is armed — opt-in via
 /// `TUIKIT_DEBUG_FRAME_DUMP=1`, same convention as `TUIKIT_DEBUG_FOCUS`.
 /// File-scope (the runner is generic, which forbids static stored properties)
