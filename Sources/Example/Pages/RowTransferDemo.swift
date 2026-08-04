@@ -50,12 +50,28 @@ struct RowTransferDemoSection: View {
     @State private var queue = ["Aurora", "Bloom", "Cinder"].map(Track.init)
     @State private var backlog = ["Drift", "Ember", "Fathom", "Glass"].map(Track.init)
     @State private var status = "—"
+    /// A selection binding per list — which is what gives each one a row
+    /// CURSOR. Keyboard reordering picks up the cursor row, so a `List` with no
+    /// selection has nothing to pick up: Ctrl-R and the Ctrl/⌥-arrow shortcuts
+    /// were inert here purely for want of these two lines, while the `.onMove`
+    /// demo above (which does bind a selection) responded to them.
+    @State private var queueSelection: String?
+    @State private var backlogSelection: String?
 
     var body: some View {
         DemoSection(L("page.list.transferSection")) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(L("page.list.transferHint"))
                     .foregroundStyle(.palette.foregroundSecondary)
+                // The same keyboard-reorder hint the `.onMove` demo carries —
+                // the shortcuts are identical because they ARE the same
+                // mechanism. Reaching a row here needs Tab rather than a click:
+                // a click on a row is claimed by its `.draggable` (see the type
+                // comment above), so it starts a drag instead of moving the
+                // cursor. Tab, or a click on the list's empty area, focuses it.
+                Text(L("page.rows.keyboardMoveHint"))
+                    .foregroundStyle(.palette.foregroundTertiary)
+                    .dim()
                 HStack(alignment: .top, spacing: 3) {
                     list(.queue, title: L("page.list.transferQueue"))
                     list(.backlog, title: L("page.list.transferBacklog"))
@@ -74,7 +90,7 @@ struct RowTransferDemoSection: View {
     @ViewBuilder private func list(_ side: Side, title: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title).bold()
-            List {
+            List(selection: selection(side)) {
                 ForEach(tracks(side)) { track in
                     HStack(spacing: 1) {
                         Text(track.name)
@@ -90,6 +106,26 @@ struct RowTransferDemoSection: View {
                 .dropDestination(for: TrackDrag.self) { index, drops in
                     for drop in drops { perform(drop, to: side, at: index) }
                 }
+                // `.onMove` alongside `.draggable`, for the KEYBOARD. The two
+                // cannot share a mouse gesture — `.draggable`'s region is inside
+                // the row, so it claims the press and owns the rest — but
+                // keyboard reordering never involves a press: Ctrl-R and the
+                // Ctrl/⌥-arrow shortcuts go through the List's own key handling,
+                // which is `.onMove`'s. Without this the rows here could only be
+                // reordered with a mouse, while the `.onMove` demo above did it
+                // from the keyboard, and nothing on screen explained why.
+                //
+                // Within-list only, which is what the keyboard can express: a
+                // row still needs the mouse to change LISTS, because a list has
+                // no way to name the other one.
+                .onMove { source, destination in
+                    var items = tracks(side)
+                    items.move(fromOffsets: source, toOffset: destination)
+                    setTracks(side, items)
+                    // `self.` because this closure sits inside `list(_:title:)`,
+                    // whose `title` parameter shadows the method of that name.
+                    status = "\(L("page.list.transferReordered")) \(self.title(side))"
+                }
             }
             .frame(width: 22, height: 7)
         }
@@ -99,6 +135,10 @@ struct RowTransferDemoSection: View {
 
     private func tracks(_ side: Side) -> [Track] {
         side == .queue ? queue : backlog
+    }
+
+    private func selection(_ side: Side) -> Binding<String?> {
+        side == .queue ? $queueSelection : $backlogSelection
     }
 
     private func setTracks(_ side: Side, _ tracks: [Track]) {
