@@ -139,9 +139,17 @@ struct ScrollViewPage: View {
                     .scrollFollowMargin(
                         FollowMarginChoice(rawValue: revealFollowMargin)?.margin ?? .none)
                     .scrollDisabled(scrollPinned)
+                    // The same allowance at both ends. `.viewport(minus: 2)`
+                    // used to sit on the bottom to show off the other spelling,
+                    // but against a 10-line viewport it resolves to EIGHT lines
+                    // — so pushing down opened eight blank rows beside the top's
+                    // two, and the demo read as a bug rather than as a second
+                    // idiom. `.viewport(minus:)` is covered by
+                    // `ScrollOverscrollTests` and `ListTableOverscrollTests`;
+                    // what this toggle is for is showing what overscroll IS.
                     .scrollOverscroll(
                         top: overscroll ? .rows(2) : .none,
-                        bottom: overscroll ? .viewport(minus: 2) : .none)
+                        bottom: overscroll ? .rows(2) : .none)
 
                     Text(L("page.scrollView.scrollbarInteractive"))
                     .foregroundStyle(.palette.foregroundSecondary)
