@@ -367,7 +367,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
             seek: pendingSeek, edgeInset: edgeInset(wantsScrollbar: wantsScrollbar),
-            context: context)
+            context: context, settledExtents: bars.settled)
         if !context.isMeasuring { handler.pendingScrollTo = nil }
         // A sliced reply (Stage 6): the buffer holds only the rendered band;
         // the content height comes from the metadata (estimated suffixes and
@@ -643,15 +643,25 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// side-effect-free (`measureChild`), so this never double-fires the content's
     /// effects; the content is rendered once, afterwards, at the resolved size.
     /// `.visible` forces both bars on, `.hidden` forces them off.
+    ///
+    /// Also returns the extents it settled on, when they were measured against
+    /// the dimensions the reservation finally chose. That is the same question
+    /// `renderedContent` asks next, at the same numbers, and answering it is a
+    /// walk of ``measureNaturalExtent``'s budget ladder over the whole content
+    /// — the single most expensive thing a scrolling page does. `nil` when the
+    /// loop ran out of rounds with the flags still moving (its extents then
+    /// describe dimensions that are no longer the answer), and on the
+    /// non-`.automatic` path, which measures nothing.
     private func resolveScrollbars(
         viewportWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
-    ) -> (vertical: Bool, horizontal: Bool) {
+    ) -> (vertical: Bool, horizontal: Bool, settled: (width: Int, height: Int)?) {
         let barVisibility = context.environment.scrollbarVisibility
         var wantsScrollbar = barVisibility == .visible
         var wantsHorizontalBar = horizontal && barVisibility == .visible
         guard barVisibility == .automatic else {
-            return (wantsScrollbar, wantsHorizontalBar)
+            return (wantsScrollbar, wantsHorizontalBar, nil)
         }
+        var settled: (width: Int, height: Int)?
         // ≤2 reservations (one per axis) ⇒ converges in ≤3 measure rounds.
         for _ in 0..<3 {
             let probeWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
@@ -668,9 +678,14 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 wantsHorizontalBar = true
                 changed = true
             }
-            if !changed { break }
+            // Only a round that changed nothing measured the dimensions the
+            // caller is about to render at.
+            if !changed {
+                settled = extents
+                break
+            }
         }
-        return (wantsScrollbar, wantsHorizontalBar)
+        return (wantsScrollbar, wantsHorizontalBar, settled)
     }
 
     /// The content's natural extents at a candidate viewport, WITHOUT building a
@@ -732,18 +747,28 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// `VStack { Text; Spacer; Text }` puts the two at top and bottom) and collapses
     /// when the content is taller, so it scrolls without the filler forcing extra
     /// height.
+    ///
+    /// - Parameter settledExtents: The extents `resolveScrollbars` already
+    ///   measured at these exact dimensions, when it has them. Handed down
+    ///   rather than re-derived: both this and the reservation loop's final
+    ///   round ask ``contentExtents`` the same question with the same numbers,
+    ///   and each answer is a walk of the natural-extent budget ladder over the
+    ///   whole content. `nil` re-measures, which is what the direct callers
+    ///   (tests, and the non-`.automatic` scrollbar path) get.
     func renderedContent(
         contentWidth: Int, viewportHeight: Int, horizontal: Bool,
         verticalScrollOffset: Int, seek: ScrollToRequest? = nil, edgeInset: Int = 0,
-        context: RenderContext
+        context: RenderContext, settledExtents: (width: Int, height: Int)? = nil
     ) -> (
         buffer: FrameBuffer,
         slice: (originY: Int, totalHeight: Int, totalIsEstimate: Bool)?,
         seekOffset: Int?
     ) {
-        let extents = contentExtents(
-            contentWidth: contentWidth, viewportHeight: viewportHeight,
-            horizontal: horizontal, context: context)
+        let extents =
+            settledExtents
+            ?? contentExtents(
+                contentWidth: contentWidth, viewportHeight: viewportHeight,
+                horizontal: horizontal, context: context)
         var measureContext = context.withChildIdentity(type: Content.self)
         measureContext.environment.scrollViewportSize = ScrollViewportSize(
             width: contentWidth, height: viewportHeight)
