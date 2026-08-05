@@ -139,6 +139,35 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// row-height). With this set, that reservation is skipped.
     var showsScrollbar = false
 
+    /// Whether a drag hovering this control is drawing a landing slot that
+    /// NOTHING left the control to make room for — so the rows plus the slot
+    /// need one line more than the rows alone.
+    ///
+    /// True only for a drag that came from elsewhere. A reorder takes its rows
+    /// out of the list before opening the slot, and a `.draggable` row of this
+    /// list's own is dropped from the drawing for the same reason (see
+    /// `_ListCore.decorateForReorder`) — both are one row out, one slot in, no
+    /// net change. Set by the owning view every render, because only it knows
+    /// where the drag started and whether a slot is open here at all.
+    ///
+    /// The line is granted as CONTENT, not as height: the control cannot grow
+    /// mid-drag without shifting the page under the pointer. So an
+    /// exactly-full list overflows by one, which is a state the scroll
+    /// machinery already knows how to express — the "▼ N more below" indicator
+    /// or the scrollbar appears, and ``maxOffset`` rises by one so the wheel,
+    /// the mid-drag navigators and the edge auto-scroll can all reach the
+    /// position after the last row. Without it the extent says the rows fit
+    /// exactly, ``maxOffset`` is zero, nothing can scroll, and the slot's line
+    /// is silently clipped off the bottom — taking a real row with it, and
+    /// leaving "drop at the end" impossible to point at.
+    ///
+    /// Deliberately NOT folded into ``itemCount``: that is the DATA count, and
+    /// every piece of reorder index arithmetic — ``reorderInsertionOffset``,
+    /// the `externalDropSlot` clamp, the keyboard-move clamps — is defined
+    /// against it. A phantom row there would let a drop name an index the data
+    /// has no room for.
+    var dropSlotAddsRow = false
+
     /// Whether this frame's render spends content lines on "▲/▼ N more"
     /// indicators. Synced by the owning view, because only it knows: a `List`
     /// swaps its indicators for a scrollbar, while a `Table` draws both (the bar
@@ -187,16 +216,19 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
         // scrollbar's denominator is off by at most a viewport — and returning
         // it early avoids materialising tail rows' heights every frame on
         // large lists.
-        let floor = max(0, itemCount - contentHeight)
+        let floor = max(0, extent - contentHeight)
         guard scrollOffset >= floor else { return floor }
         var used = 0
-        var top = itemCount
+        var top = extent
         while top > 0 {
             // Reserve the "above" indicator's line only when there IS one — a
             // scrollbar draws no such line, so its rows fill the full height.
             let budget =
                 (showsScrollbar || top - 1 == 0) ? contentHeight : contentHeight - 1
-            let height = max(1, rowHeight(top - 1))
+            // The row a hovering drag borrows (``dropSlotAddsRow``) sits past
+            // the last real one and has no data to measure: it is the slot,
+            // one blank line. Asking `rowHeight` for it indexes past the data.
+            let height = top - 1 < itemCount ? max(1, rowHeight(top - 1)) : 1
             if used + height > budget { break }
             used += height
             top -= 1
@@ -835,7 +867,23 @@ extension ItemListHandler {
     /// handled by the protocol's ``handleWheelEvent(_:
     /// linesPerTick:)``. See the protocol comment for why
     /// these moved out of this class.)
-    var extent: Int { itemCount }
+    var extent: Int { itemCount + (dropSlotAddsRow ? 1 : 0) }
+
+    /// The "▼ N more rows below" indicator's subject, which is ROWS THE USER
+    /// CANNOT SEE — so it counts the data, never the line a hovering drag
+    /// borrowed (``dropSlotAddsRow``). That line is the landing slot, which is
+    /// on screen and is not a row.
+    ///
+    /// The split is deliberate and is the whole shape of the feature: the
+    /// SCROLL BOUNDS (``extent``, ``maxOffset``) describe everything drawable,
+    /// so the viewport can reach the slot past the last row; the INDICATORS
+    /// describe the data, so they never promise a row that isn't one. Deriving
+    /// both from `extent` says "▼ 0 more rows below" at the bottom of a
+    /// hovering list, and deriving both from `itemCount` puts the end out of
+    /// reach again.
+    var hasContentBelow: Bool { scrollOffset + viewportHeight < itemCount }
+
+    var rowsBelow: Int { max(0, itemCount - (scrollOffset + viewportHeight)) }
 
     /// The wheel/arrow step (``ScrollableOffsetState`` requirement). Under
     /// ``ScrollGranularity/line`` with multi-line rows, each step moves one

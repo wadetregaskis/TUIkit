@@ -203,6 +203,17 @@ goes blank rather than vanishing from the layout: the space is still the view's,
 and a list closing up mid-drag would move the very rows the drop is aimed
 between.
 
+A list whose rows fill it exactly borrows a row's worth of scrolling while a
+drag hovers it, because the landing slot needs a line and nothing left the list
+to free one. It does not grow — the page must not shift under the pointer —
+so instead it overflows by one and says so, with its "▼ N more rows below"
+indicator or its scrollbar, and can be scrolled (by wheel, by the mid-drag
+navigators, or by holding the pointer at its edge) one further than usual. That
+last position is the one after the final row: without the borrowed line a full
+list could not draw every row AND the slot, so "drop at the very end" could not
+be pointed at. The indicators still count only real rows — the borrowed line is
+the slot, which is on screen and is not a row.
+
 The one place it does close up is the list the row is being dropped back into.
 A `List` whose rows are `.draggable` opens a landing slot while the drag hovers
 it, and a slot plus a blank would be two gaps for one row — the list would grow

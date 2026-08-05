@@ -400,34 +400,28 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         style: any ListStyle,
         targetContentHeight: Int
     ) -> (lines: [String], state: PopulatedRenderState) {
-        // A list only scrolls (and shows indicators) when its rows
-        // don't all fit in the content area.
-        let overflowing = rowsOverflow(source, targetContentHeight: targetContentHeight)
-
-        // A scrollbar (opt-in via `.scrollbarVisibility`) supersedes the "N more"
-        // text indicators: it marks the off-screen rows itself, so the rows then
-        // fill the whole content area with no reserved indicator line. Decided up
-        // front so the handler resolver can skip the offset-1 snap (which only
-        // saves an indicator line a bar doesn't have — see resolvePopulatedHandler).
-        let barVisibility = context.environment.scrollbarVisibility
-        let wantsScrollbar =
-            barVisibility != .hidden && (barVisibility == .visible || overflowing)
-
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
             explicitFocusID: focusID,
             defaultPrefix: "list",
             propertyIndex: 1  // focusID
         )
-        let handler = resolvePopulatedHandler(
+        // Whether the rows overflow — and so whether a scrollbar or an
+        // indicator line is wanted — cannot be settled before the handler is in
+        // hand: a drag hovering this list borrows a row's worth of content for
+        // its landing slot, and only the handler knows a drag is hovering.
+        let (handler, overflowing, wantsScrollbar) = resolvePopulatedHandler(
             source: source,
             persistedFocusID: persistedFocusID,
             stateStorage: stateStorage,
             context: context,
-            contentHeight: targetContentHeight,
-            overflowing: overflowing,
-            showsScrollbar: wantsScrollbar
+            contentHeight: targetContentHeight
         )
+        // The slot is drawn among the rows and takes a line of the same content
+        // area, so the rows get one less to walk. Reserved HERE, once, rather
+        // than inside each window rule: the two rules disagree about indicator
+        // lines but not about this.
+        let rowBudget = max(1, targetContentHeight - (handler.dropSlotAddsRow ? 1 : 0))
         FocusRegistration.register(context: context, handler: handler)
         let listHasFocus = FocusRegistration.isFocused(
             context: context, focusID: persistedFocusID)
@@ -448,13 +442,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let lineGranularity = context.environment.scrollGranularity == .line
         if wantsScrollbar {
             visibleRows = calculateVisibleRows(
-                source: source, origin: origin, viewportHeight: targetContentHeight,
+                source: source, origin: origin, viewportHeight: rowBudget,
                 lineGranularity: lineGranularity)
         } else {
             visibleRows = resolveVisibleWindow(
                 source: source,
                 origin: origin,
-                contentHeight: targetContentHeight,
+                contentHeight: rowBudget,
                 overflowing: overflowing,
                 lineGranularity: lineGranularity
             )
@@ -561,13 +555,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             defaultPrefix: "list",
             propertyIndex: 1  // focusID
         )
-        let handler = resolvePopulatedHandler(
+        let (handler, _, _) = resolvePopulatedHandler(
             source: source,
             persistedFocusID: persistedFocusID,
             stateStorage: stateStorage,
             context: context,
-            contentHeight: targetContentHeight,
-            overflowing: false
+            contentHeight: targetContentHeight
         )
         FocusRegistration.register(context: context, handler: handler)
         let listHasFocus = FocusRegistration.isFocused(
@@ -596,9 +589,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// whose buffers ``LazyListRowContent`` memoises (no re-render downstream).
     /// It walks all rows only when their total height genuinely fits the area
     /// (a short list, which is rendered in full anyway).
+    /// - Parameter plusLines: Lines the rows must share the area with — the
+    ///   landing slot a hovering drag borrows (see
+    ///   ``ItemListHandler/dropSlotAddsRow``). Counted here rather than
+    ///   subtracted from the height by each caller, so every consumer of
+    ///   `overflowing` sees one answer.
     private func rowsOverflow(
         _ source: RowSource<SelectionValue>,
-        targetContentHeight: Int
+        targetContentHeight: Int,
+        plusLines: Int = 0
     ) -> Bool {
         // More rows than target lines is overflow by counting alone — every
         // row renders at least its own line. This matters: the walk below
@@ -606,13 +605,34 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // `buffer` resolves (renders) it — so a deep-scrolled list resolved
         // ~a viewport of rows it wasn't even showing, every frame, just to
         // answer this predicate (~25% of a megalist frame).
-        if source.count > targetContentHeight { return true }
-        var totalRowLines = 0
+        if source.count + plusLines > targetContentHeight { return true }
+        var totalRowLines = plusLines
         for index in 0..<source.count {
             totalRowLines += source.row(at: index).buffer.height
             if totalRowLines > targetContentHeight { return true }
         }
         return false
+    }
+
+    /// Whether a drag hovering this list is opening a landing slot that no row
+    /// of ours left to make room for — the condition
+    /// ``ItemListHandler/dropSlotAddsRow`` names.
+    ///
+    /// Gated on a slot being OPEN here, not merely on a compatible drag being
+    /// in flight somewhere. Granting the row for the whole drag would need no
+    /// handler at all — and would not have forced the resolver to answer three
+    /// things at once — but a list the pointer is nowhere near would then
+    /// advertise "▼ 1 more row below" with nothing below it, which is the
+    /// phantom indicator this renderer has already been fixed for once.
+    private func borrowsDropRow(
+        handler: ItemListHandler<SelectionValue>, context: RenderContext
+    ) -> Bool {
+        guard handler.externalDropSlot != nil else { return false }
+        // A drag that started HERE has already had its row taken out of the
+        // drawing (see `decorateForReorder`), so its slot replaces a line
+        // rather than adding one.
+        guard let session = context.environment.dragAndDropSession else { return true }
+        return !session.isDragSource(within: context.identity)
     }
 
     /// Fetches (or creates) the persistent ``ItemListHandler``
@@ -625,20 +645,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// scrolling is independent of the focused row (matches
     /// Finder / Explorer / VS Code), and the focus-changing
     /// paths inside the handler already call it themselves.
+    /// Also decides `overflowing` and `showsScrollbar`, which it cannot be
+    /// handed: both depend on ``ItemListHandler/dropSlotAddsRow``, a question
+    /// about the handler's own drag state. That ordering — box, row count,
+    /// borrowed drop row, and only then "do the rows fit" — is the whole reason
+    /// this returns three things.
     private func resolvePopulatedHandler(
         source: RowSource<SelectionValue>,
         persistedFocusID: String,
         stateStorage: StateStorage,
         context: RenderContext,
-        contentHeight: Int,
-        overflowing: Bool,
-        showsScrollbar: Bool = false
-    ) -> ItemListHandler<SelectionValue> {
-        // Clamp the offset against the largest possible visible-row
-        // count (one indicator, at an end); the exact viewport is
-        // finalised in resolveVisibleWindow once the offset is known.
-        let provisionalViewport =
-            overflowing ? max(1, contentHeight - 1) : contentHeight
+        contentHeight: Int
+    ) -> (handler: ItemListHandler<SelectionValue>, overflowing: Bool, showsScrollbar: Bool) {
         let handlerKey = StateStorage.StateKey(
             identity: context.identity, propertyIndex: 0)
         let handlerBox: StateBox<ItemListHandler<SelectionValue>> = stateStorage.storage(
@@ -646,13 +664,39 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             default: ItemListHandler(
                 focusID: persistedFocusID,
                 itemCount: source.count,
-                viewportHeight: provisionalViewport,
+                // Provisional twice over: replaced below once the real overflow
+                // answer exists, and again by the window walk. A freshly created
+                // list has no drag hovering it, so this can never be the value
+                // anything decides on.
+                viewportHeight: contentHeight,
                 selectionMode: selectionMode,
                 canBeFocused: !isDisabled
             )
         )
         let handler = handlerBox.value
         handler.itemCount = source.count
+        // A drag from elsewhere draws its landing slot as an extra line —
+        // nothing left this list to make room for it — so while one is hovering
+        // the list has a row's worth of content more than it has rows.
+        handler.dropSlotAddsRow = borrowsDropRow(handler: handler, context: context)
+        // A list only scrolls (and shows indicators) when its rows — plus that
+        // borrowed line — don't all fit in the content area.
+        let overflowing = rowsOverflow(
+            source, targetContentHeight: contentHeight,
+            plusLines: handler.dropSlotAddsRow ? 1 : 0)
+        // A scrollbar (opt-in via `.scrollbarVisibility`) supersedes the "N more"
+        // text indicators: it marks the off-screen rows itself, so the rows then
+        // fill the whole content area with no reserved indicator line. Decided
+        // before the offset-1 snap below, which only saves an indicator line a
+        // bar doesn't have.
+        let barVisibility = context.environment.scrollbarVisibility
+        let showsScrollbar =
+            barVisibility != .hidden && (barVisibility == .visible || overflowing)
+        // Clamp the offset against the largest possible visible-row
+        // count (one indicator, at an end); the exact viewport is
+        // finalised in resolveVisibleWindow once the offset is known.
+        let provisionalViewport =
+            overflowing ? max(1, contentHeight - 1) : contentHeight
         handler.contentHeight = contentHeight
         // A scrollbar draws no "N more" indicator line, so the scroll-bound
         // arithmetic must not reserve one (else the bottom over-scrolls, leaving
@@ -777,7 +821,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if !context.isMeasuring {
             handler.applyAnchorHold()
         }
-        return handler
+        return (handler, overflowing, showsScrollbar)
     }
 
     /// Stitches together the row content with top / bottom

@@ -278,7 +278,7 @@ struct ListRowDropDestinationTests {
     /// One list of draggable rows that also accepts them — used twice by the
     /// cross-list test above, where the two must be separate `List`s (and so
     /// separate identities) for the source match to mean anything.
-    @ViewBuilder private func sideList(_ names: [String]) -> some View {
+    @ViewBuilder private func sideList(_ names: [String], height: Int = 8) -> some View {
         List {
             ForEach(names, id: \.self) { name in
                 HStack(spacing: 1) {
@@ -289,7 +289,143 @@ struct ListRowDropDestinationTests {
             }
             .dropDestination(for: String.self) { _, _ in }
         }
-        .frame(width: 14, height: 8)
+        .frame(width: 14, height: height)
+    }
+
+    /// A list whose rows fill its viewport exactly had nowhere to put the
+    /// landing slot, and lost a row to it silently.
+    ///
+    /// The slot is drawn among the rows and takes one of their lines, but
+    /// nothing left the list to make room — so rows + slot need N+1 lines in an
+    /// N-line viewport, and the last line simply fell off the bottom. No
+    /// scrollbar, no "▼ N more", just a row gone. And because reaching "after
+    /// the last row" means drawing every row AND the slot, the append position
+    /// could not be pointed at either: hovering the last row pushed it onto the
+    /// clipped line, leaving the pointer over the slot, whose target is its own
+    /// value — a fixed point one short of the end.
+    ///
+    /// Granting the list one row of EXTENT while a drag hovers (see
+    /// ``ItemListHandler/dropSlotAddsRow``) settles both: the list overflows by
+    /// one, which it already knows how to say and to scroll.
+    @Test("A full list makes room for the landing slot instead of losing a row")
+    func aFullListMakesRoomForTheLandingSlot() {
+        final class Log: @unchecked Sendable {
+            var inserted: [(Int, [String])] = []
+        }
+        let log = Log()
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+        let context = RenderContext(
+            availableWidth: 24, availableHeight: 14, environment: env, tuiContext: tui)
+
+        func render() -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let view = List {
+                ForEach(["a", "b", "c"], id: \.self) { Text($0) }
+                    .dropDestination(for: String.self) { index, values in
+                        log.inserted.append((index, values))
+                    }
+            }
+            // Three rows plus two borders: the viewport is exactly full, with
+            // not one spare line for a slot.
+            .frame(height: 5)
+            var inner = context
+            inner.hasExplicitHeight = true
+            let buffer = renderToBuffer(view, context: inner)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        let atRest = render()
+        #expect(
+            atRest.lines.contains { $0.stripped.contains("c") },
+            "all three rows fit when nothing is dragging: \(atRest.lines.map(\.stripped))")
+        #expect(
+            !atRest.lines.contains { $0.stripped.contains("more rows") },
+            "and the list says nothing about rows below, because there are none")
+
+        // A drag from elsewhere, over the first row.
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 2, y: 1)
+        tui.dragAndDropSession.begin(payload: "zzz", preview: FrameBuffer(text: "zzz"))
+        let hovering = render()
+
+        // The row that no longer fits is REPORTED, not dropped on the floor —
+        // and reported as DATA: two rows are off screen, not three. The
+        // borrowed line is the slot, which is on screen and is not a row.
+        #expect(
+            hovering.lines.contains { $0.stripped.contains("▼ 2 more rows below") },
+            """
+            the list says which rows it cannot show: \(hovering.lines.map(\.stripped))
+            """)
+        #expect(
+            hovering.height == atRest.height,
+            "and it did not grow to fit the slot — the page must not shift mid-drag")
+
+        // The end is now nameable. Dropping past the last row appends, which
+        // before this could not be pointed at from a full viewport at all.
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 2, y: 3)
+        tui.dragAndDropSession.dragMoved()
+        _ = render()
+        _ = tui.dragAndDropSession.performDrop()
+        #expect(log.inserted.first?.0 == 3, "appended after the last row: \(log.inserted)")
+    }
+
+    /// The borrowed row is granted only while a slot is actually open here.
+    ///
+    /// Granting it for the whole drag would be simpler to wire, and wrong in a
+    /// way this project has already paid for once: a list the pointer is
+    /// nowhere near would advertise rows below that it is perfectly able to
+    /// show.
+    @Test("A list with no drag over it keeps its own shape")
+    func aListWithNoDragOverItKeepsItsShape() {
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 12, environment: env, tuiContext: tui)
+
+        func render() -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let view = HStack(alignment: .top, spacing: 2) {
+                sideList(["AAA", "BBB"], height: 4)
+                sideList(["YYY", "ZZZ"], height: 4)
+            }
+            var inner = context
+            inner.hasExplicitHeight = true
+            let buffer = renderToBuffer(view, context: inner)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        let atRest = render()
+        let restA = atRest.lines.firstIndex { $0.stripped.contains("AAA") } ?? -1
+        #expect(restA >= 0, "the lists are drawn")
+
+        // Pick AAA up out of the LEFT list and hold it over the left list's own
+        // rows: the right one is untouched by any of this.
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: restA))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: restA + 1))
+        let during = render()
+
+        #expect(
+            during.lines.contains { $0.stripped.contains("ZZZ") },
+            """
+            the far list still shows both its rows and claims nothing is hidden: \
+            \(during.lines.map(\.stripped))
+            """)
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 2, y: restA + 1))
     }
 
     /// Emptying a list used to make it permanently unfillable: the empty branch
