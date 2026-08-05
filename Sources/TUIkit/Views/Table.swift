@@ -348,16 +348,21 @@ where Value.ID: Hashable {
             measureContext.availableHeight = height
         }
 
-        // A single-line table's dimensions are analytic — every row is one
-        // line, so the height is a row count and the width is column
-        // arithmetic. Rendering the whole table (styled cells, ANSI-aware
-        // padding) just to read the buffer's size dominated the measure
-        // pass of large tables. Multi-line tables keep the render-based
-        // measure: their height is the sum of per-row wrapped heights.
+        // A table's dimensions are arithmetic, not something to be discovered
+        // by building the thing and measuring the result. Rendering the whole
+        // table — styled cells, ANSI-aware padding, scrollbar, chrome — just to
+        // read its buffer's size back off it dominated the measure pass of
+        // large tables, and the sizing passes ask far more often than the
+        // render does. Single-line tables are answered outright; multi-line
+        // ones in every shape but one (see `analyticMultiLineSize`).
         let size: (width: Int, height: Int)
         if columns.contains(where: { $0.lineLimit > 1 }) {
-            let buffer = renderToBuffer(context: measureContext)
-            size = (buffer.width, buffer.height)
+            size =
+                analyticMultiLineSize(context: measureContext)
+                ?? {
+                    let buffer = renderToBuffer(context: measureContext)
+                    return (buffer.width, buffer.height)
+                }()
         } else {
             size = analyticSingleLineSize(context: measureContext)
         }
@@ -452,6 +457,96 @@ where Value.ID: Hashable {
             contentSize = (widest, min(data.count, rowArea))
         }
 
+        return analyticSize(headerLine: headerLine, content: contentSize, context: context)
+    }
+
+    /// A multi-line table's size, computed rather than rendered — or `nil` for
+    /// the one shape that cannot be, which falls back to the render.
+    ///
+    /// Two of the three shapes are pure arithmetic:
+    ///
+    /// * **A bar is drawn.** The bar costs a column, not a line, and
+    ///   ``composeMultiLineRows`` pads its output to the content area before
+    ///   merging the bar in as the rightmost cell. The block is therefore the
+    ///   content area exactly, whatever the rows do — not one row need be
+    ///   wrapped to know the size.
+    /// * **The rows fit.** No indicator, no clip, so the block is the sum of
+    ///   their heights. Bounded work: rows that fit are at most a viewport's
+    ///   worth.
+    ///
+    /// The third — overflowing with no bar — has the content area for a height
+    /// but a *width* that a "▼ N more rows below" line can exceed on a narrow
+    /// table, and that N comes from the scroll window. Reimplementing the
+    /// window here would put a second copy of that arithmetic in this file, the
+    /// mistake that keeps `List` and `Table` drifting apart, so it renders.
+    ///
+    /// This matters because the *sizing* passes ask far more often than the
+    /// render does: `measureNaturalExtent` walks a ladder of ever-larger height
+    /// budgets looking for the content's natural extent (see the ScrollView
+    /// extent ladder), and every rung was building the whole table to read
+    /// `buffer.height` back off it.
+    ///
+    /// `TableAnalyticMeasureTests` holds this equal to the rendered size across
+    /// the multi-line configuration matrix, including the ladder's tall budgets.
+    private func analyticMultiLineSize(
+        context: RenderContext
+    ) -> (width: Int, height: Int)? {
+        // Empty is a placeholder line, not rows — the render's business.
+        guard !data.isEmpty else { return nil }
+        let palette = context.environment.palette
+        let innerWidth = max(0, context.availableWidth - 4)
+        let rowArea = max(1, context.availableHeight - 3)
+        // Decide the bar exactly as `renderToBuffer` does — at the width a bar
+        // WOULD leave, where rows wrap taller and so overflow soonest.
+        let barVisibility = context.environment.scrollbarVisibility
+        let overflows = multiLineOverflows(rowArea: rowArea, innerWidth: innerWidth - 1)
+        let wantsScrollbar =
+            barVisibility != .hidden && (barVisibility == .visible || overflows)
+        let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
+        let columnWidths = calculateColumnWidths(
+            availableWidth: contentInnerWidth, spacing: columnSpacing)
+        let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
+
+        let content: (width: Int, height: Int)
+        if wantsScrollbar {
+            // A bar costs a column, not a line, and ``composeMultiLineRows``
+            // pads its output to the content area before merging the bar in as
+            // the rightmost cell. So the block is the area, exactly, whatever
+            // the rows do — no row need be wrapped at all to know this.
+            content = (contentWidth + 1, rowArea)
+        } else if !overflows {
+            // Rows that fit draw no indicator and take no clip, so the block is
+            // exactly their lines, each padded to the row content width.
+            var totalLines = 0
+            for item in data {
+                totalLines += rowHeight(of: item, columnWidths: columnWidths)
+            }
+            content = (contentWidth, totalLines)
+        } else {
+            // Overflowing without a bar: the height is the content area, but a
+            // "▼ N more rows below" line can be WIDER than the rows on a narrow
+            // table, and that N comes from the scroll window. Declined rather
+            // than reimplemented — see above.
+            return nil
+        }
+        // The chrome is then *measured* for real, exactly as the single-line
+        // analytic does, so border/padding semantics stay the render path's
+        // rather than being duplicated as arithmetic here.
+        var headerLine = renderHeader(columnWidths: columnWidths, palette: palette)
+        if wantsScrollbar {
+            headerLine += String(
+                repeating: " ", count: max(0, innerWidth - headerLine.strippedLength))
+        }
+        return analyticSize(headerLine: headerLine, content: content, context: context)
+    }
+
+    /// The table's outer size, given the header line and the content block's
+    /// dimensions: the shared ``ContainerView`` chrome measured around a
+    /// fixed-size stand-in for the rows. Both analytic paths end here so
+    /// neither can drift from the container `renderToBuffer` builds.
+    private func analyticSize(
+        headerLine: String, content: (width: Int, height: Int), context: RenderContext
+    ) -> (width: Int, height: Int) {
         let container = ContainerView(
             title: nil,
             style: ContainerStyle(showHeaderSeparator: true, showFooterSeparator: false),
@@ -459,7 +554,7 @@ where Value.ID: Hashable {
         ) {
             VStack(alignment: .leading, spacing: 0) {
                 _TableHeaderView(line: headerLine)
-                _TableSizeStub(width: contentSize.width, height: contentSize.height)
+                _TableSizeStub(width: content.width, height: content.height)
             }
         }
         let measured = measureChild(
