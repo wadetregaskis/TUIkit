@@ -15,6 +15,7 @@ import TUIkitCore
 /// boundaries; and a line budget keeps the lines that fit, folding the remainder
 /// into the last visible line truncated with an ellipsis so the loss is shown
 /// rather than silently dropped.
+@MainActor
 enum TextWrapping {
     /// Wrapped text paired with each line's visible width in terminal cells.
     ///
@@ -50,6 +51,42 @@ enum TextWrapping {
     /// per-line `strippedLength` the width already needs. For the `width <= 0`
     /// passthrough the widths are measured once from the (unwrapped) paragraphs.
     static func wrapMeasured(_ text: String, width: Int) -> Wrapped {
+        // Memoized, because the same (text, width) is wrapped many times per
+        // frame. Profiling the Example's Table page (Instruments, 4,745
+        // samples): `TextWrapping.fit` was 68.3% of the frame inclusive,
+        // `fitMeasured` 58.0%, `wrapMeasured` 47.6% — reached over and over
+        // through `heightOf` in `_TableCore.buildMultiLineContent`, because a
+        // Table asks each cell's height during EVERY measure pass and then
+        // wraps the same text again to draw it. Nothing about the answer
+        // changes between those calls: wrapping is a pure function of the text
+        // and the width, so the repeats are pure waste.
+        //
+        // Purity is also why this can be a plain memo with no invalidation —
+        // there is no state to go stale, only memory to bound.
+        if let hit = cache[WrapKey(text: text, width: width)] { return hit }
+        let wrapped = uncachedWrapMeasured(text, width: width)
+        // A flat cap rather than an LRU: entries are small, a frame's working
+        // set is far below this, and a cliff-edge flush costs one re-wrap of
+        // whatever is still on screen. Tracking recency would cost more than
+        // it saves at this size.
+        if cache.count >= cacheLimit { cache.removeAll(keepingCapacity: true) }
+        cache[WrapKey(text: text, width: width)] = wrapped
+        return wrapped
+    }
+
+    /// The identity of a wrap: its inputs, and nothing else.
+    private struct WrapKey: Hashable {
+        let text: String
+        let width: Int
+    }
+
+    private static let cacheLimit = 4096
+    private static var cache: [WrapKey: Wrapped] = [:]
+
+    /// Clears the wrap memo. For tests that want to measure a cold wrap.
+    static func clearWrapCache() { cache.removeAll() }
+
+    private static func uncachedWrapMeasured(_ text: String, width: Int) -> Wrapped {
         let paragraphs = text.split(
             omittingEmptySubsequences: false,
             whereSeparator: { $0 == "\n" || $0 == "\r\n" || $0 == "\r" }
