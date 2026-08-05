@@ -583,6 +583,83 @@ struct TableReorderDragTests {
             region.width > 1 && region.height > 1,
             "and covers the box, not a sliver: \(region.width)x\(region.height)")
     }
+    /// The `Table` half of the rule `ListRowDropDestinationTests` pins for
+    /// `List`: a control whose rows fill it exactly has no line for a hovering
+    /// drag's landing slot, so the slot's line was clipped — silently taking a
+    /// real row with it — and "drop after the last row" could not be pointed
+    /// at, because reaching it means drawing every row AND the slot.
+    ///
+    /// The table now borrows one row of ``ItemListHandler/extent`` while such a
+    /// drag hovers: it overflows by one instead, which it can say and can
+    /// scroll. `Table` has no same-table case to exclude — its rows are values
+    /// built from `data`, so they cannot be `.draggable`.
+    @Test("A full table makes room for the landing slot instead of losing a row")
+    func aFullTableMakesRoomForTheLandingSlot() throws {
+        final class Log: @unchecked Sendable { var got: [(Int, [String])] = [] }
+        let log = Log()
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+
+        // Four rows, and a frame with room for exactly four: two borders and
+        // the column header are the table's fixed chrome.
+        func render() -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let view = Table(
+                ["a", "b", "c", "d"].map(Row.init), selection: .constant(String?.none)
+            ) {
+                TableColumn<Row>("Name", value: \.name)
+            }
+            .dropDestination(for: String.self) { index, values in log.got.append((index, values)) }
+            .frame(width: 20, height: 7)
+            var context = RenderContext(
+                availableWidth: 20, availableHeight: 9, environment: env, tuiContext: tui)
+            context.hasExplicitHeight = true
+            let buffer = renderToBuffer(view, context: context)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        func rowLine(_ name: String, in buffer: FrameBuffer) -> Int? {
+            buffer.lines.firstIndex { $0.stripped.filter(\.isLetter) == name }
+        }
+
+        let atRest = render()
+        #expect(rowLine("d", in: atRest) != nil, "all four rows fit at rest")
+
+        let rowY = try #require(rowLine("a", in: atRest))
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 3, y: rowY)
+        tui.dragAndDropSession.begin(payload: "zzz", preview: FrameBuffer(text: "zzz"))
+        let hovering = render()
+
+        // Rows are still shown — the slot's line comes out of the budget, not
+        // out of the rows, which is what clipping to the row count did.
+        #expect(
+            rowLine("a", in: hovering) != nil,
+            "the rows that still fit are still drawn: \(hovering.lines.map(\.stripped))")
+        // And the ones that no longer fit are REPORTED, as data: two rows are
+        // off screen, not three. The borrowed line is the slot, not a row.
+        #expect(
+            hovering.lines.contains { $0.stripped.contains("2 rows below") },
+            "the table says which rows it cannot show: \(hovering.lines.map(\.stripped))")
+        #expect(
+            hovering.height == atRest.height,
+            "and it did not grow — the page must not shift mid-drag")
+
+        // Below the last drawn row appends — the position a full table could
+        // not name before, because it could not draw every row AND the slot.
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 3, y: rowY + 3)
+        tui.dragAndDropSession.dragMoved()
+        _ = render()
+        _ = tui.dragAndDropSession.performDrop()
+        #expect(log.got.first?.0 == 4, "appended after the last row: \(log.got)")
+    }
+
     /// `Table.dropDestination(for:action:)` — the row-level counterpart of
     /// `ForEach.dropDestination`, which a Table cannot have because its rows are
     /// values with no `ForEach` to attach one to. It opens the same landing slot

@@ -885,6 +885,18 @@ extension ItemListHandler {
 
     var rowsBelow: Int { max(0, itemCount - (scrollOffset + viewportHeight)) }
 
+    /// The rows on screen, and therefore DATA indices — `Table` subscripts
+    /// `data` with them directly. The protocol's default bounds this by
+    /// ``extent``, which while a drag hovers is one past the last row: that
+    /// borrowed line is the landing slot, and there is nothing to subscript
+    /// for it. (`List` never exposed this — it reads rows through a window it
+    /// computed itself — so the trap only bites the `Table`.)
+    var visibleRange: Range<Int> {
+        guard itemCount > 0 else { return 0..<0 }
+        let start = max(0, min(scrollOffset, itemCount - 1))
+        return start..<min(itemCount, start + max(0, viewportHeight))
+    }
+
     /// The wheel/arrow step (``ScrollableOffsetState`` requirement). Under
     /// ``ScrollGranularity/line`` with multi-line rows, each step moves one
     /// terminal LINE: the top clip advances within the top row and rolls into

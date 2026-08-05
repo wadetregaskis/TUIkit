@@ -426,10 +426,10 @@ where Value.ID: Hashable {
                 let persistedFocusID = FocusRegistration.persistFocusID(
                     context: context, explicitFocusID: focusID,
                     defaultPrefix: "table", propertyIndex: 1)
-                let handler = resolveHandler(
+                let (handler, _) = resolveHandler(
                     persistedFocusID: persistedFocusID,
                     stateStorage: context.environment.stateStorage!,
-                    context: context, contentHeight: rowArea, overflowing: true)
+                    context: context, contentHeight: rowArea, overflows: { _ in true })
                 reserveIndicatorLines(handler: handler, contentHeight: rowArea)
                 // Measure with the SAME locale the display path uses, or a
                 // grouped "12,000" would be measured as "12000" and the column
@@ -716,7 +716,6 @@ where Value.ID: Hashable {
         let availableHeight = context.availableHeight
         let chromeRows = 3
         let contentHeight = max(1, availableHeight - chromeRows)
-        let overflowing = data.count > contentHeight
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
@@ -724,12 +723,12 @@ where Value.ID: Hashable {
             defaultPrefix: "table",
             propertyIndex: 1  // focusID
         )
-        let handler = resolveHandler(
+        let (handler, overflowing) = resolveHandler(
             persistedFocusID: persistedFocusID,
             stateStorage: stateStorage,
             context: context,
             contentHeight: contentHeight,
-            overflowing: overflowing
+            overflows: { data.count + $0 > contentHeight }
         )
         FocusRegistration.register(context: context, handler: handler)
         let tableHasFocus = FocusRegistration.isFocused(
@@ -737,7 +736,11 @@ where Value.ID: Hashable {
         handler.publishEscapeClaim(context: context, isFocused: tableHasFocus)
 
         if overflowing {
-            reserveIndicatorLines(handler: handler, contentHeight: contentHeight)
+            // The landing slot is drawn among the rows and takes one of their
+            // lines, so the rows are budgeted the content area minus it.
+            reserveIndicatorLines(
+                handler: handler,
+                contentHeight: contentHeight - (handler.dropSlotAddsRow ? 1 : 0))
         }
 
         let composed = composeRowLines(
@@ -782,13 +785,14 @@ where Value.ID: Hashable {
         let contentHeight = max(1, context.availableHeight - 3)
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context, explicitFocusID: focusID, defaultPrefix: "table", propertyIndex: 1)
-        let handler = resolveHandler(
+        let (handler, _) = resolveHandler(
             persistedFocusID: persistedFocusID, stateStorage: stateStorage, context: context,
-            contentHeight: contentHeight, overflowing: data.count > contentHeight,
+            contentHeight: contentHeight, overflows: { data.count + $0 > contentHeight },
             showsScrollbar: true)
         // The whole row area is visible — the bar, not a text indicator, marks the
-        // off-screen rows — so the viewport is the full content height.
-        handler.viewportHeight = contentHeight
+        // off-screen rows — so the viewport is the full content height, less the
+        // line a hovering drag's landing slot takes from the rows.
+        handler.viewportHeight = max(1, contentHeight - (handler.dropSlotAddsRow ? 1 : 0))
         if !context.isMeasuring {
             handler.clampScrollOffset()
         }
@@ -914,7 +918,13 @@ where Value.ID: Hashable {
                 selectionMode: selectionMode, canBeFocused: !isDisabled))
         let handler = handlerBox.value
         handler.itemCount = data.count
-        handler.contentHeight = contentHeight
+        // As on the single-line path: a hovering drag's landing slot is a line
+        // nothing left to make room for, so the rows are budgeted the content
+        // area minus it and ``ItemListHandler/extent`` gains the row that lets
+        // the viewport reach past the last one.
+        handler.dropSlotAddsRow = handler.externalDropSlot != nil
+        let rowArea = max(1, contentHeight - (handler.dropSlotAddsRow ? 1 : 0))
+        handler.contentHeight = rowArea
         handler.canBeFocused = !isDisabled
         handler.primaryAction = primaryAction
         handler.onMove = moveAction
@@ -955,7 +965,7 @@ where Value.ID: Hashable {
         // Choose viewportHeight so the handler's row-based maxOffset
         // (itemCount − viewportHeight) equals the height-aware furthest scroll.
         let furthest = maxScrollOffset(
-            count: data.count, contentHeight: contentHeight,
+            count: data.count, contentHeight: rowArea,
             showsScrollbar: showsScrollbar, height: heightOf)
         handler.viewportHeight = max(1, data.count - furthest)
         // Sync both chrome flags in case the rows switch between the
@@ -1363,19 +1373,21 @@ where Value.ID: Hashable {
 
     /// Fetches (or creates) the persistent ``ItemListHandler``
     /// and syncs its per-frame inputs.
+    /// - Parameter overflows: Whether the rows overflow `contentHeight`, given
+    ///   the extra lines they must share it with — 1 while a hovering drag is
+    ///   drawing a landing slot, 0 otherwise. A closure rather than a `Bool`
+    ///   because the answer depends on ``ItemListHandler/dropSlotAddsRow``,
+    ///   which is a question about the handler this call is still resolving.
+    /// - Returns: The handler and the overflow answer, which the caller needs
+    ///   for its indicator reservation and cannot compute itself.
     private func resolveHandler(
         persistedFocusID: String,
         stateStorage: StateStorage,
         context: RenderContext,
         contentHeight: Int,
-        overflowing: Bool,
+        overflows: (Int) -> Bool,
         showsScrollbar: Bool = false
-    ) -> ItemListHandler<Value.ID> {
-        // Clamp against the largest possible visible-row count (one
-        // indicator, at an end); the exact viewport is finalised by
-        // the caller once the offset is known.
-        let provisionalViewport =
-            overflowing ? max(1, contentHeight - 1) : contentHeight
+    ) -> (handler: ItemListHandler<Value.ID>, overflowing: Bool) {
         let handlerKey = StateStorage.StateKey(
             identity: context.identity, propertyIndex: 0)
         let handlerBox: StateBox<ItemListHandler<Value.ID>> = stateStorage.storage(
@@ -1383,13 +1395,26 @@ where Value.ID: Hashable {
             default: ItemListHandler(
                 focusID: persistedFocusID,
                 itemCount: data.count,
-                viewportHeight: provisionalViewport,
+                // Provisional: replaced below once the overflow answer exists,
+                // and again by the caller once the offset is known.
+                viewportHeight: contentHeight,
                 selectionMode: selectionMode,
                 canBeFocused: !isDisabled
             )
         )
         let handler = handlerBox.value
         handler.itemCount = data.count
+        // A drag from elsewhere draws its landing slot as an extra line —
+        // nothing left this table to make room for it. `Table` has no
+        // same-table case to exclude: its rows are built from `data`, so they
+        // cannot be `.draggable`.
+        handler.dropSlotAddsRow = handler.externalDropSlot != nil
+        let overflowing = overflows(handler.dropSlotAddsRow ? 1 : 0)
+        // Clamp against the largest possible visible-row count (one
+        // indicator, at an end); the exact viewport is finalised by
+        // the caller once the offset is known.
+        let provisionalViewport =
+            overflowing ? max(1, contentHeight - 1) : contentHeight
         handler.contentHeight = contentHeight
         // A scrollbar reserves no indicator line, so the focus-reveal / offset
         // arithmetic must claim the full content height (matches the List path).
@@ -1472,7 +1497,7 @@ where Value.ID: Hashable {
         }
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
-        return handler
+        return (handler, overflowing)
     }
 
     /// The table's content width: the selection gutter plus the columns and their
@@ -1525,12 +1550,12 @@ where Value.ID: Hashable {
             defaultPrefix: "table",
             propertyIndex: 1  // focusID
         )
-        let handler = resolveHandler(
+        let (handler, _) = resolveHandler(
             persistedFocusID: persistedFocusID,
             stateStorage: stateStorage,
             context: context,
             contentHeight: contentHeight,
-            overflowing: false
+            overflows: { _ in false }
         )
         FocusRegistration.register(context: context, handler: handler)
         let hasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
@@ -1614,8 +1639,14 @@ where Value.ID: Hashable {
         // the selection falling off the bottom of the table.
         // Negated excursion for the same reason as the scrollbar path above:
         // bands must travel WITH the slid rows, not mirror them.
+        // Rows PLUS the line the slot borrowed (``dropSlotAddsRow``). Clipping
+        // to the row count alone dropped a real row instead: the slot is
+        // deliberately never the thing clipped, so the overrun came out of the
+        // rows — a full table showed the slot and the indicator and no rows at
+        // all, while the reserve arithmetic said one should be visible.
+        let drawnBudget = visibleRange.count + (handler.dropSlotAddsRow ? 1 : 0)
         let slide =
-            clipOverrun(&rowLines, to: visibleRange.count, drawn: drawnHeights)
+            clipOverrun(&rowLines, to: drawnBudget, drawn: drawnHeights)
             - handler.overscrollState.excursion
         publishRowBands(handler: handler, drawn: drawnHeights, slide: slide)
         lines.append(contentsOf: handler.overscrollState.slid(
