@@ -203,6 +203,15 @@ goes blank rather than vanishing from the layout: the space is still the view's,
 and a list closing up mid-drag would move the very rows the drop is aimed
 between.
 
+The one place it does close up is the list the row is being dropped back into.
+A `List` whose rows are `.draggable` opens a landing slot while the drag hovers
+it, and a slot plus a blank would be two gaps for one row — the list would grow
+by a line for the duration of every same-list drag. So the row that the slot is
+*for* is dropped from the drawing instead: one row out, one slot in, and the
+list keeps its length, exactly as an ``View/onMove(perform:)`` reorder has
+always drawn it. Move the pointer to a different list and the blank comes back,
+because that list has no slot of its own and nothing there should shift.
+
 ## Abandoning a Drag
 
 Let go with nowhere to land and the drag is abandoned: the floating preview

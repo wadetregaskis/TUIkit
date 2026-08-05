@@ -114,23 +114,28 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
 
     func makeListRowContent(at index: Int, context: RenderContext) -> LazyListRowContent {
         let element = self.element(at: index)
+        // A per-row child identity (matching ForEach.childViews) so each row's
+        // @State / focus / cache entry is distinct — and keyed by the element's
+        // ID, not its position, so the row's state follows the element across
+        // reorders/insertions (and across List scrolling, where the window's
+        // indices shift).
+        //
+        // Built HERE rather than inside the closure so the box can carry it: a
+        // `List` needs to know a row's identity to recognise it as the source of
+        // a `.draggable` drag, and that question is asked of rows whose content
+        // has not been rendered. It costs nothing extra — a box is only built
+        // for a row that is about to be shown, and every such row renders.
+        let rowContext = context.withChildIdentity(
+            erasedType: Content.self,
+            key: String(describing: element[keyPath: idKeyPath]))
         // Defer view construction, badge extraction, and rendering until the row
         // enters the visible window (see ``LazyListRowContent``).
-        return LazyListRowContent { [content] in
+        return LazyListRowContent(identity: rowContext.identity) { [content] in
             let view = content(element)
 
             // Extract badge if the view is wrapped in a BadgeModifier. Done on
             // the bare view, before any memo wrapper, so the modifier is found.
             let badge = extractBadgeValue(from: view)
-
-            // Render the view under a per-row child identity (matching
-            // ForEach.childViews) so each row's @State / focus / cache entry is
-            // distinct — and keyed by the element's ID, not its position, so
-            // the row's state follows the element across reorders/insertions
-            // (and across List scrolling, where the window's indices shift).
-            let rowContext = context.withChildIdentity(
-                erasedType: Content.self,
-                key: String(describing: element[keyPath: idKeyPath]))
 
             // When the element is Equatable, wrap the row in a value-memo keyed
             // by the element, so an unchanged row is served from the render cache

@@ -151,12 +151,14 @@ struct RowTransferDemoSection: View {
 
     /// Puts the dragged row at `index` in `side`'s list.
     ///
-    /// `index` is a DISPLAY position: the row the landing slot sits in front of,
-    /// counted against the list as it is drawn — which, for a move inside one
-    /// list, still includes the row being dragged. So the same-list case takes
-    /// the row out first and then steps the index back past the hole it left;
-    /// the cross-list case needs no such adjustment, the destination never
-    /// having held the row.
+    /// `index` names the row the landing slot sits in front of, counted against
+    /// the destination's DATA before anything moves — the same currency
+    /// `onMove`'s `toOffset` takes. The dragged row is still counted there even
+    /// though it is no longer DRAWN (a drag inside one list collapses its row,
+    /// so the slot is the only gap), which is why the same-list case takes the
+    /// row out first and then steps the index back past the hole it left; the
+    /// cross-list case needs no such adjustment, the destination never having
+    /// held the row.
     private func perform(_ drag: TrackDrag, to side: Side, at index: Int) {
         var source = tracks(drag.side)
         guard let from = source.firstIndex(where: { $0.id == drag.id }) else { return }

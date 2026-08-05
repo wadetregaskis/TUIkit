@@ -432,12 +432,23 @@ extension ItemListHandler {
     /// Shared by `List` and `Table`: the index arithmetic is the same for both,
     /// and it is subtle enough (every index here is CLOSED-UP, which is also what
     /// `move(from:to:)` produces) that having it twice is how the two drift.
-    func reorderDrawnRows(_ visible: some Sequence<Int>) -> [DrawnRow] {
+    ///
+    /// `excluding` names a row that has left the list without the list owning
+    /// the gesture: a `.draggable` row whose drag started HERE, which the drag
+    /// is already carrying at the cursor. It only arises on the external-drag
+    /// path, and only for a `List` — a `Table` builds its rows from `data`, so
+    /// they cannot be `.draggable` and there is no such row to leave.
+    func reorderDrawnRows(
+        _ visible: some Sequence<Int>, excluding excluded: Int? = nil
+    ) -> [DrawnRow] {
         let removed = reorderRemovedRows
         guard !removed.isEmpty else {
-            // No reorder — but a drag from another list may be hovering, and it
-            // opens the same gap for the same reason.
-            let rows = Array(visible)
+            // No reorder of our own — but a drag may be hovering, and it opens
+            // the same gap for the same reason. When that drag STARTED here the
+            // row it took is dropped as well, so the list keeps its length: one
+            // row out, one slot in. Drawn AND slotted, it gained a line — the
+            // gap the drop opens plus the blank the row left behind.
+            let rows = Array(visible).filter { $0 != excluded }
             guard let slot = externalDropSlot else { return rows.map { .row($0) } }
             var drawn = rows.map { DrawnRow.row($0) }
             let at = rows.firstIndex { $0 >= slot } ?? drawn.count

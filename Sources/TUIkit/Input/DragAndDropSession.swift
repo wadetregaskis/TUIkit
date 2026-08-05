@@ -290,6 +290,31 @@ final class DragAndDropSession: @unchecked Sendable {
         autoScrollZones.append(zone)
     }
 
+    /// The view that started the drag in flight, by its structural identity.
+    ///
+    /// A `ViewIdentity` rather than its rendered `path`: the comparisons below
+    /// happen on every draggable's every render, and the path is a string
+    /// materialised on demand from the node chain (see `ViewIdentity.path`).
+    /// Structural comparison also answers ``isDragSource(within:)`` exactly,
+    /// where a path prefix could not — row 1's path is a prefix of row 11's.
+    private(set) var source: ViewIdentity?
+
+    /// Whether `identity` names the view whose drag is in flight.
+    func isDragSource(_ identity: ViewIdentity) -> Bool {
+        active != nil && source == identity
+    }
+
+    /// Whether the drag in flight started *inside* `identity` — at it, or
+    /// anywhere below it.
+    ///
+    /// What a container asks about its own children: a `List` row is not itself
+    /// the `.draggable`, it merely contains one, so the row that has left is the
+    /// one whose identity the drag's source descends from.
+    func isDragSource(within identity: ViewIdentity) -> Bool {
+        guard active != nil, let source else { return false }
+        return source == identity || identity.isAncestor(of: source)
+    }
+
     /// Starts a drag. The cursor position is taken from the triggering
     /// (absolute) event; targeting is resolved immediately.
     ///
@@ -298,21 +323,17 @@ final class DragAndDropSession: @unchecked Sendable {
     ///     the grab point `.grabPoint` keeps under the cursor.
     ///   - grabY: The press row within the dragged view.
     ///   - anchor: How the preview anchors to the cursor.
-    /// The view that started the drag in flight, by its structural identity —
-    /// so that view can render itself as gone while it is in the user's hand.
-    private(set) var sourceToken: String?
-
-    /// Whether `token` names the view whose drag is in flight.
-    func isDragSource(_ token: String) -> Bool { active != nil && sourceToken == token }
-
+    ///   - source: The identity of the view the gesture started in, so that
+    ///     view — and any container holding it — can render it as gone while
+    ///     it is in the user's hand.
     func begin(
         payload: Any, preview: FrameBuffer,
         grabX: Int = 0, grabY: Int = 0,
         anchor: DragPreviewAnchor = .grabPoint,
-        sourceToken: String? = nil
+        source: ViewIdentity? = nil
     ) {
         guard let event = lastAbsoluteEvent else { return }
-        self.sourceToken = sourceToken
+        self.source = source
         // The preview rides above everything and paints every cell it has, so
         // a row padded to its list's width would erase a column of the screen
         // per blank. Trimmed HERE rather than at each producer, so all three
@@ -579,7 +600,7 @@ final class DragAndDropSession: @unchecked Sendable {
     func end() {
         active?.targeted?.setTargeted(false)
         active = nil
-        sourceToken = nil
+        source = nil
         autoScrollArmed = false
         autoScrollOwner = nil
         autoScrollEngagedSinceNanos = nil

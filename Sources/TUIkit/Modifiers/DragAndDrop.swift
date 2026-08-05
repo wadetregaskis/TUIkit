@@ -94,9 +94,11 @@ extension DraggableModifier: Renderable, Layoutable {
         //
         // Blank rather than absent: the view owns this space in the layout,
         // and a list closing up under the pointer mid-drag would move the very
-        // rows the drop is aimed between.
-        let token = context.identity.path
-        if session.isDragSource(token) {
+        // rows the drop is aimed between. A `List` drawing a landing SLOT for
+        // this same drag collapses the row around the blank instead, so the
+        // list keeps its length — see `_ListCore.decorateForReorder`.
+        let identity = context.identity
+        if session.isDragSource(identity) {
             buffer = FrameBuffer(
                 lines: Array(
                     repeating: String(repeating: " ", count: max(0, buffer.width)),
@@ -124,7 +126,7 @@ extension DraggableModifier: Renderable, Layoutable {
             onDragBegin: { _, grab in
                 session.begin(
                     payload: payload(), preview: capturedPreview,
-                    grabX: grab.x, grabY: grab.y, anchor: anchor, sourceToken: token)
+                    grabX: grab.x, grabY: grab.y, anchor: anchor, source: identity)
             },
             onDragMove: { _ in session.dragMoved() },
             onDragEnd: { _ in

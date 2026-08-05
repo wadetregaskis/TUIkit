@@ -48,8 +48,28 @@ final class LazyListRowContent {
     private var thunk: (() -> (buffer: FrameBuffer, badge: BadgeValue?))?
     private var cached: (buffer: FrameBuffer, badge: BadgeValue?)?
 
+    /// The identity the row's content is rendered under, when the row came from
+    /// a `ForEach` (`nil` for chrome and the eager fallbacks, which have no
+    /// per-element identity to speak of).
+    ///
+    /// Carried here rather than on ``SelectableListRow`` because this is a
+    /// class: a new stored property on the struct would change its layout, and
+    /// a dependent module built against the old one fails in ways that look
+    /// nothing like the cause. It is what lets a `List` recognise a row of its
+    /// own as the source of a `.draggable` drag — the drag names the identity of
+    /// the view that started it, which is this row's identity or a descendant.
+    ///
+    /// `nonisolated` because it is an immutable `Sendable` fixed at
+    /// construction: reading it must not force the main actor the way reading
+    /// the (rendered) buffer does.
+    nonisolated let rowIdentity: ViewIdentity?
+
     /// Defers rendering until the buffer (or badge) is first read.
-    init(_ render: @escaping () -> (buffer: FrameBuffer, badge: BadgeValue?)) {
+    init(
+        identity: ViewIdentity? = nil,
+        _ render: @escaping () -> (buffer: FrameBuffer, badge: BadgeValue?)
+    ) {
+        self.rowIdentity = identity
         self.thunk = render
     }
 
@@ -61,6 +81,7 @@ final class LazyListRowContent {
     /// buffer initializers can wrap an already-rendered buffer without hopping
     /// to the main actor — it only stores a `Sendable` tuple, runs no pipeline.
     nonisolated init(buffer: FrameBuffer, badge: BadgeValue?) {
+        self.rowIdentity = nil
         self.cached = (buffer, badge)
     }
 
@@ -115,6 +136,11 @@ public struct SelectableListRow<SelectionValue: Hashable & Sendable>: Sendable {
 
     /// The badge value for this row (from environment). Forces the lazy render.
     @MainActor public var badge: BadgeValue? { content.badge }
+
+    /// The identity this row's content renders under, or `nil` for chrome and
+    /// the eager fallbacks. Computed, not stored — see
+    /// ``LazyListRowContent/rowIdentity``. Forces nothing.
+    var rowIdentity: ViewIdentity? { content.rowIdentity }
 
     /// Creates a selectable list row with type, buffer, and optional badge.
     ///

@@ -1392,7 +1392,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             handler: handler, context: context, palette: palette)
         // Which rows to draw, and where the slot goes among them, is the shared
         // arithmetic — `Table` asks the same question of the same handler.
-        return handler.reorderDrawnRows(visibleRows.map(\.index)).compactMap { drawn in
+        return handler.reorderDrawnRows(
+            visibleRows.map(\.index), excluding: carriedRow(visibleRows, context: context)
+        ).compactMap { drawn in
             switch drawn {
             case .row(let index):
                 return byIndex[index].map { (index: index, row: $0) }
@@ -1402,6 +1404,32 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 return (Self.reorderSlotRowIndex, slot)
             }
         }
+    }
+
+    /// The visible row a `.draggable` drag took out of THIS list, or `nil` when
+    /// the drag started anywhere else.
+    ///
+    /// Such a row is in the user's hand: `DraggableModifier` already renders it
+    /// blank, because a view that is floating at the cursor must not also be
+    /// sitting in place. That is right for a chip in a plain container, and one
+    /// line too many in a list that is ALSO opening a landing slot for the same
+    /// drag — the blank and the gap are both "where the row would go". So the
+    /// row is dropped from the drawing entirely and the slot is the only gap,
+    /// exactly as `.onMove`'s own reorder has always drawn it.
+    ///
+    /// Matched by IDENTITY rather than by the rendered path: the drag names the
+    /// `.draggable` view, which lives INSIDE the row, so the row is an ancestor
+    /// of it — and comparing path strings by prefix would let row 1 answer for
+    /// row 11.
+    private func carriedRow(
+        _ visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)],
+        context: RenderContext
+    ) -> Int? {
+        guard let session = context.environment.dragAndDropSession else { return nil }
+        return visibleRows.first { entry in
+            guard let identity = entry.row.rowIdentity else { return false }
+            return session.isDragSource(within: identity)
+        }?.index
     }
 
     /// The colour that marks the slot as the row you are steering — the same
