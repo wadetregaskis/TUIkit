@@ -959,6 +959,12 @@ where Value.ID: Hashable {
     /// This is the one place that needs the table's TOTAL wrapped height, which
     /// is why it is reached only when a bar is drawn: everything else here works
     /// from a screenful of memoised heights.
+    ///
+    /// And it doesn't need that total *exactly*. The off-screen rows reach the
+    /// screen only as a thumb position and a thumb size, so under the default
+    /// ``ScrollExtentPrecision/approximate`` they are sampled rather than
+    /// wrapped — the shared ``ScrollExtentEstimator`` does the arithmetic for
+    /// both twins, and pins both ends of the travel either way.
     private func multiLineScrollbarCells(
         window: (range: Range<Int>, showAbove: Bool, showBelow: Bool, topClip: Int),
         contentHeight: Int,
@@ -966,13 +972,12 @@ where Value.ID: Hashable {
         context: RenderContext,
         palette: any Palette
     ) -> [String] {
-        var extentLines = 0
-        for index in data.indices { extentLines += height(index) }
-        var offsetLines = window.topClip
-        for index in 0..<window.range.lowerBound { offsetLines += height(index) }
+        let metrics = ScrollExtentEstimator.lineMetrics(
+            visible: window.range, count: data.count, topClip: window.topClip,
+            precision: context.environment.scrollExtentPrecision, height: height)
         return ScrollbarRenderer.verticalScrollbar(
-            height: contentHeight, extent: extentLines, viewport: contentHeight,
-            offset: offsetLines,
+            height: contentHeight, extent: metrics.extent, viewport: contentHeight,
+            offset: metrics.offset,
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             colors: ScrollbarColors(

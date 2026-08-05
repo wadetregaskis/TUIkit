@@ -391,6 +391,7 @@ SwiftUI API (the CLAUDE.md rule).
 | `formRowAlignment(_:)` | per-row override of a `Form`'s column alignment |
 | `.scrollChainingDelay(_:)` | grace period before wheel ticks blocked at a nested scroller's edge chain to the parent (default 500 ms; `.zero` chains immediately) |
 | `.scrollGranularity(_:)` (`ScrollGranularity.line`/`.row`) | how finely `List`/`Table` viewports move through multi-line rows — by terminal line (default: tall rows scroll in gradually, partially clipped at the top) or by whole row (classic TUI jumps). Selection/focus stay row-based; SwiftUI scrolls by pixels so the question doesn't arise there |
+| `.scrollExtentPrecision(_:)` (`ScrollExtentPrecision.approximate`/`.exact`) | how precisely a `List`/`Table` measures the rows outside its viewport. Off-screen rows only feed the scroll indicators, so by default they are sampled rather than wrapped (O(1) rather than O(rows) per frame); `.exact` measures every row where a proportionally exact thumb is worth the cost. No effect on single-line rows, where the extent is already exact for free |
 | `.onRenderPass(_:)` (`RenderPass.measure`/`.render`) | instrumentation hook: observe a view's participation in measurement vs real rendering (e.g. what a lazy container measures but never draws) |
 | `.maxFrameRate` (App) | cap redraw rate |
 

@@ -943,12 +943,24 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             extentLines = source.count
             offsetLines = origin.offset
         } else {
-            // A line-granularity top clip adds its hidden lines to the
-            // offset, so the thumb tracks fine wheel steps exactly.
-            extentLines = (0..<source.count).reduce(0) { $0 + source.row(at: $1).buffer.height }
-            offsetLines =
-                (0..<origin.offset).reduce(0) { $0 + source.row(at: $1).buffer.height }
-                + origin.topClip
+            // Reading an off-screen row's height means MATERIALISING and
+            // rendering it — far dearer than the Table twin's wrap, and needed
+            // only to place a thumb. So the visible rows (already rendered,
+            // free to read) are exact and the rest follow
+            // ``ScrollExtentPrecision``. A line-granularity top clip adds its
+            // hidden lines to the offset, so the thumb tracks fine wheel steps
+            // exactly at the top of the travel.
+            var onScreen: [Int: Int] = [:]
+            onScreen.reserveCapacity(visibleRows.count)
+            for entry in visibleRows { onScreen[entry.index] = entry.row.buffer.height }
+            let visible =
+                (visibleRows.first?.index ?? origin.offset)
+                ..< ((visibleRows.last?.index).map { $0 + 1 } ?? origin.offset)
+            let metrics = ScrollExtentEstimator.lineMetrics(
+                visible: visible, count: source.count, topClip: origin.topClip,
+                precision: context.environment.scrollExtentPrecision,
+                height: { onScreen[$0] ?? source.row(at: $0).buffer.height })
+            (extentLines, offsetLines) = (metrics.extent, metrics.offset)
         }
 
         return ScrollbarRenderer.verticalScrollbar(

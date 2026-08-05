@@ -179,6 +179,23 @@ List("Notes", selection: $selected) { ... }
     .scrollGranularity(.row)
 ```
 
+Multi-line rows also have a *height*, and a scrollbar metered in lines needs
+the total. Measuring every row to find it means wrapping the text of rows
+nobody can see, on every frame — so by default they are sampled instead
+(``ScrollExtentPrecision/approximate``). The visible rows are always exact,
+and both ends of the travel are pinned: an unscrolled view puts the thumb at
+the top of its track, and the furthest scroll puts it flush at the bottom.
+Only the middle can drift, and only when rows differ wildly in height. Where
+a proportionally exact thumb matters more than the cost, opt in:
+
+```swift
+Table(logEntries) { ... }
+    .scrollExtentPrecision(.exact)
+```
+
+Single-line rows are unaffected — there a line *is* a row, so the extent is
+already exact at no cost.
+
 ## Keyboard Navigation
 
 Both List and Table support the same keyboard shortcuts:
