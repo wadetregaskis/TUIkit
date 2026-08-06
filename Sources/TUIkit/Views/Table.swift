@@ -928,6 +928,8 @@ where Value.ID: Hashable {
         handler.canBeFocused = !isDisabled
         handler.primaryAction = primaryAction
         handler.onMove = moveAction
+        // BEFORE the rows are composed — see the List's twin call site.
+        handler.carryReorderTargetThroughAutoScroll()
         // Multi-line rows reorder with `.live` feedback only: a drop slot would
         // have to take part in the line-budget arithmetic below that lets a tall
         // row be partially clipped, and moving the rows themselves needs no slot.
@@ -1427,6 +1429,8 @@ where Value.ID: Hashable {
         handler.canBeFocused = !isDisabled
         handler.primaryAction = primaryAction
         handler.onMove = moveAction
+        // BEFORE the rows are composed — see the List's twin call site.
+        handler.carryReorderTargetThroughAutoScroll()
         handler.reorderFeedback = context.environment.rowReorderFeedback
         handler.rowHeight = nil  // single-line path: uniform-height scroll math
         // With uniform rows lines == rows, so granularity is moot here — but

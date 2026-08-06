@@ -297,6 +297,15 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// — and a wheel tick can scroll them under any mode.
     var visibleRowBands: [RowBand] = []
 
+    /// The ``scrollOffset`` ``visibleRowBands`` were published against.
+    ///
+    /// A band says "this LINE holds that row", which stops being true the
+    /// moment the viewport scrolls — the line is still there, a different row
+    /// is on it. Keeping the offset alongside is what lets
+    /// ``carryReorderTargetThroughAutoScroll()`` tell how far the rows have
+    /// moved under a pointer that has not.
+    var visibleRowBandsOffset: Int = 0
+
     /// One visible row's extent within the list's rendered content, in lines
     /// measured from the first content line (i.e. below the border and padding,
     /// and below the "N more above" indicator when one is drawn).

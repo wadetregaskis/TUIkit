@@ -570,8 +570,35 @@ extension ItemListHandler {
     /// copy: a ``RowReorderFeedback/live`` drag reorders the rows underneath the
     /// cursor, so press-frame bands would describe an order that no longer
     /// exists (and a wheel tick can scroll them out from under any mode).
+    /// Keeps the drop target under a MOTIONLESS pointer while auto-scroll moves
+    /// the rows beneath it. Call BEFORE the rows are composed — that is the
+    /// whole point of it.
+    ///
+    /// ``retargetForAutoScroll()`` re-resolves the target from the drawn bands,
+    /// and ``publishRowBands(_:)`` defers that until after the rows are
+    /// composed. Standing still, drawing from the previous frame's answer is
+    /// invisible. Under auto-scroll it is not: the content has moved a row in
+    /// between, so every frame draws the slot one row above the pointer, for as
+    /// long as the scroll runs. It never catches up, because the rows keep
+    /// moving — only a mouse event, which resolves before a render, does. That
+    /// is what "wiggle the mouse and it snaps into place" was.
+    ///
+    /// The pointer is not moving, so the slot must not either. Advance the
+    /// target by however far the rows have scrolled since the bands were
+    /// published, which is exactly what keeps it on the same line.
+    func carryReorderTargetThroughAutoScroll() {
+        guard isAutoScrolling, var reorder, reorder.active, let target = reorder.targetOffset
+        else { return }
+        let delta = scrollOffset - visibleRowBandsOffset
+        guard delta != 0 else { return }
+        reorder.targetOffset = max(0, min(itemCount, target + delta))
+        self.reorder = reorder
+        visibleRowBandsOffset = scrollOffset
+    }
+
     func publishRowBands(_ bands: [DrawnBand]) {
         defer { retargetForAutoScroll() }
+        visibleRowBandsOffset = scrollOffset
         let placeholder = reorderPlaceholder
         visibleRowBands = bands.map { band in
             switch band.entry {

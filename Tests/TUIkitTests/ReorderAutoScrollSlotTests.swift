@@ -89,6 +89,58 @@ struct ReorderAutoScrollSlotTests {
         func lastRowLine(_ buffer: FrameBuffer) -> Int? {
             buffer.lines.indices.last { self.label(buffer, onLine: $0) != nil }
         }
+
+        /// The landing slot: the one blank line among the drawn content.
+        func slotLine(_ buffer: FrameBuffer) -> Int? {
+            buffer.lines.indices.first { line in
+                let content = buffer.lines[line].stripped.filter { !" │".contains($0) }
+                return content.isEmpty && line > 0 && line < buffer.lines.count - 1
+            }
+        }
+    }
+
+    /// The slot must ride the pointer, not trail the rows streaming under it.
+    ///
+    /// With the pointer parked in the bottom hot margin — on the "▼ N more rows
+    /// below" chrome — the slot belongs on the last droppable row, the line
+    /// directly above. It used to sit one line above THAT, frozen, for as long
+    /// as the scroll ran: every frame drew it from a target resolved against
+    /// the previous frame's rows, and the rows had moved on by one since.
+    @Test("The landing slot rides the pointer while the rows scroll under it")
+    func slotStaysOnTheLastRowWhileScrolling() {
+        let names = "abcdefghijklmnopqrst".map(String.init)
+        let fixture = Fixture(rows: names, feedback: .cursor)
+
+        var buffer = fixture.render()
+        guard let start = fixture.lineOf(buffer, "a") else {
+            Issue.record("row a is drawn: \(buffer.lines.map(\.stripped))")
+            return
+        }
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: start))
+        buffer = fixture.render()
+        let edge = max(0, buffer.lines.count - 2)
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: edge))
+        buffer = fixture.render()
+
+        var offenders: [String] = []
+        for tick in 0...8 {
+            fixture.session.driveAutoScroll(nowNanos: UInt64(tick) &* 1_000_000_000)
+            buffer = fixture.render()
+            guard tick >= 2 else { continue }  // the dwell delay, then the first step
+            let slot = fixture.slotLine(buffer)
+            let lastRow = fixture.lastRowLine(buffer)
+            // The pointer is past the last row, so the slot belongs directly
+            // AFTER it — the landing place for "drop at the end". Trailing the
+            // rows put it above instead, so the drawn order read row, slot,
+            // row rather than rows, slot.
+            if slot != lastRow.map({ $0 + 1 }) {
+                offenders.append("t=\(tick) slot=\(slot.map(String.init) ?? "—") "
+                    + "lastRow=\(lastRow.map(String.init) ?? "—")")
+            }
+        }
+        #expect(
+            offenders.isEmpty,
+            "the slot follows the last drawn row every frame: \(offenders)")
     }
 
     @Test("Auto-scrolling under a held pointer still drops where the pointer is")

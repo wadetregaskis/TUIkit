@@ -264,6 +264,11 @@ Its rows leave the list and are drawn as the landing slot, which pulses to say
 row the cursor is on stays at full strength while the others travel faint: an
 indicator every row wears is an indicator none of them wears.
 
+The landing slot rides the pointer, not the rows: hold still near a scrollable's
+edge and it auto-scrolls, and the slot stays where you are pointing while the
+rows stream past underneath. It is a place in the list you are aiming at, and
+you have not moved.
+
 A **row reorder** is carriable in the same way, with one limit that follows from
 what it is: a reorder can only land in the list it came from, so leaving that
 list's page and coming back resumes the gesture, and releasing anywhere else

@@ -713,6 +713,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // nothing left this list to make room for it — so while one is hovering
         // the list has a row's worth of content more than it has rows.
         handler.dropSlotAddsRow = borrowsDropRow(source, handler: handler, context: context)
+        // BEFORE the rows are composed: the slot's position is decided down
+        // there, and under auto-scroll the answer it would otherwise use was
+        // resolved against the previous frame's rows.
+        handler.carryReorderTargetThroughAutoScroll()
         // A list only scrolls (and shows indicators) when its rows — plus that
         // borrowed line — don't all fit in the content area.
         let overflowing = rowsOverflow(
