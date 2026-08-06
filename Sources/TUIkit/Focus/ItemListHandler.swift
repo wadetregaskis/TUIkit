@@ -194,7 +194,15 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// lines/rows of context stay visible beyond the cursor.
     var followMargin: ScrollFollowMargin = .none
 
-    /// The largest valid scroll offset, in rows.
+    /// The largest valid scroll offset, in rows, **as it applies to where the
+    /// viewport currently sits** — see ``resolvedMaxOffset(reaching:)``, which
+    /// this asks with ``scrollOffset``. A mover that wants to go somewhere else
+    /// must ask about *that* offset, or it will be clamped by a bound computed
+    /// for the position it is leaving.
+    var maxOffset: Int { resolvedMaxOffset(reaching: scrollOffset) }
+
+    /// The largest valid scroll offset, in rows, resolved precisely enough to
+    /// clamp `offset`.
     ///
     /// With variable-height rows (``rowHeight`` set) the default
     /// `extent - viewportHeight` mixes units — the extent is rows but the
@@ -205,19 +213,27 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// smallest top row for which everything below fits the content area
     /// (reserving the "above" indicator's line whenever that top isn't row
     /// zero). O(viewport) closure calls, on rows the frame renders anyway.
-    var maxOffset: Int {
+    ///
+    /// The walk is skipped for an `offset` that cannot reach the tail, which is
+    /// why this takes a parameter at all: materialising tail rows' heights is
+    /// the expensive part on a large lazy list, and an offset short of the
+    /// cheap floor below is clamped by neither bound, so which one it is
+    /// cannot matter. Asking about the WRONG offset is a real bug, though —
+    /// the floor is a strict UNDER-estimate whenever an indicator line is
+    /// reserved, so a jump that clamps against it lands a row short of the
+    /// bottom and needs a second press to arrive. That is what
+    /// ``settledMaxOffset`` and the `offset`-driven clamps exist to prevent.
+    func resolvedMaxOffset(reaching offset: Int) -> Int {
         guard let rowHeight, let contentHeight, contentHeight > 0 else {
             return max(0, extent - viewportHeight)
         }
         // Every row is at least one line, so at most `contentHeight` rows fit:
-        // the true bound is never below this floor. Until the viewport is
-        // actually within reach of the tail, the floor is exact enough for
-        // every consumer — the clamp can't bite (offset ≤ floor ≤ max) and the
-        // scrollbar's denominator is off by at most a viewport — and returning
-        // it early avoids materialising tail rows' heights every frame on
-        // large lists.
+        // the true bound is never below this floor, and an offset short of it
+        // is inside every candidate answer. Landing exactly ON the floor does
+        // need the walk, though — `maxOffset` asks about ``scrollOffset``, and
+        // "am I at the bottom?" is answerable only by the exact bound.
         let floor = max(0, extent - contentHeight)
-        guard scrollOffset >= floor else { return floor }
+        guard offset >= floor else { return floor }
         var used = 0
         var top = extent
         while top > 0 {
@@ -963,7 +979,7 @@ extension ItemListHandler {
     /// but left ``scrollTopClipLines`` where the wheel had put it, showing
     /// row 0 with its first lines still scrolled off at the very top.
     func scrollToOffset(_ offset: Int) {
-        scrollOffset = max(0, min(maxOffset, offset))
+        scrollOffset = max(0, min(resolvedMaxOffset(reaching: offset), offset))
         scrollTopClipLines = 0
     }
 

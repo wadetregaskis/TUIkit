@@ -562,6 +562,72 @@ struct ItemListHandlerScrollTests {
         #expect(handler.scrollOffset == expectedOffset)
     }
 
+    // MARK: - Reaching the bottom in one move
+
+    /// A handler whose exact bottom is one row past the cheap floor
+    /// `maxOffset` short-circuits to: `contentHeight` lines of rows, one of
+    /// which the "▲ N more above" indicator claims once the top isn't row 0.
+    private func makeTailHandler(itemCount: Int, contentHeight: Int) -> ItemListHandler<Int> {
+        let handler = ItemListHandler<Int>(
+            focusID: "tail", itemCount: itemCount,
+            viewportHeight: contentHeight - 1, selectionMode: .single)
+        handler.contentHeight = contentHeight
+        handler.rowHeight = { _ in 1 }
+        handler.itemIDs = Array(0..<itemCount)
+        return handler
+    }
+
+    // 8 rows in 5 lines: the cheap floor is 3, the real bottom is 4 (the
+    // top row's line is spent on "▲ N more above"). A page is 3 rows, so from
+    // offset 2 both Page Down and End must arrive in a single press — and
+    // clamping either against the floor lands them on 3, one short, which is
+    // exactly the "it takes two presses, and the first shows rows still below"
+    // report.
+    @Test("The bottom is one row past the cheap floor, and settledMaxOffset says so")
+    func settledMaxOffsetOutrunsTheFloor() {
+        let handler = makeTailHandler(itemCount: 8, contentHeight: 5)
+
+        #expect(handler.maxOffset == 3, "at the top, the cheap floor is all that is on offer")
+        #expect(handler.settledMaxOffset == 4, "…but the last row-aligned top is one further")
+    }
+
+    @Test("End reaches the bottom in ONE press, not two")
+    func endJumpsAllTheWayDown() {
+        let handler = makeTailHandler(itemCount: 8, contentHeight: 5)
+        handler.scrollOffset = 2
+
+        // What the End key does — mid-drag, and through the focus system's
+        // section scroll.
+        handler.scrollToOffset(handler.settledMaxOffset)
+
+        #expect(handler.scrollOffset == 4)
+        #expect(!handler.hasContentBelow, "one press must leave nothing below")
+    }
+
+    @Test("A page-sized step reaches the bottom in ONE press, not two")
+    func pageDownReachesTheBottom() {
+        let handler = makeTailHandler(itemCount: 8, contentHeight: 5)
+        handler.scrollOffset = 2
+
+        handler.scrollFine(by: handler.pageStep)
+
+        #expect(handler.scrollOffset == 4)
+        #expect(!handler.hasContentBelow)
+    }
+
+    @Test("Home is still free — no tail walk to reach offset zero")
+    func homeNeedsNoTailWalk() {
+        var asked: [Int] = []
+        let handler = makeTailHandler(itemCount: 8, contentHeight: 5)
+        handler.scrollOffset = 4
+        handler.rowHeight = { asked.append($0); return 1 }
+
+        handler.scrollToOffset(0)
+
+        #expect(handler.scrollOffset == 0)
+        #expect(asked.isEmpty, "an offset that cannot reach the tail must not materialise it")
+    }
+
     // MARK: - clampScrollOffset() — bounds check after data changes
 
     @Test(

@@ -112,6 +112,22 @@ public protocol ScrollableOffsetState: AnyObject {
     /// dispatches through this requirement, so an override applies uniformly.
     var maxOffset: Int { get }
 
+    /// ``maxOffset``, resolved precisely enough to clamp `offset`.
+    ///
+    /// A requirement for the one conformer whose bound is expensive to know
+    /// exactly: `ItemListHandler` finds the last row-aligned top by walking
+    /// real row heights back from the tail, and short-circuits to a cheap
+    /// UNDER-estimate for any offset that could not reach it — so a *jump* has
+    /// to say where it is going, or it is clamped by a bound computed for
+    /// somewhere else and lands short of the bottom. (That was End and Page
+    /// Down needing two presses to arrive.) Every other conformer's bound is
+    /// arithmetic, and takes the default: ``maxOffset``, whatever was asked.
+    ///
+    /// A requirement rather than an extension method so it dispatches through
+    /// `any ScrollableOffsetState` — the mid-drag navigators move whatever the
+    /// pointer is over, which is resolved as an existential.
+    func resolvedMaxOffset(reaching offset: Int) -> Int
+
     /// Moves the scroll position by `delta` *fine* steps — the unit a wheel
     /// tick or scrollbar arrow click moves — returning whether the viewport
     /// actually moved.
@@ -220,6 +236,17 @@ extension ScrollableOffsetState {
         max(0, extent - viewportHeight)
     }
 
+    /// The default ``resolvedMaxOffset(reaching:)``: the bound is arithmetic,
+    /// so where the caller is headed makes no difference to it.
+    public func resolvedMaxOffset(reaching offset: Int) -> Int { maxOffset }
+
+    /// ``maxOffset``, resolved exactly — the bottom, whatever it costs to find.
+    ///
+    /// What "scroll to the end" means, and the value to clamp against when a
+    /// mover has no particular target short of the tail. On every conformer but
+    /// `ItemListHandler` this is just ``maxOffset``.
+    public var settledMaxOffset: Int { resolvedMaxOffset(reaching: .max) }
+
     /// Whether there is content above the visible viewport —
     /// equivalent to "is the up-arrow indicator warranted right
     /// now?".
@@ -270,13 +297,17 @@ extension ScrollableOffsetState {
               viewportHeight > 0,
               extent > viewportHeight
         else { return }
-        scrollOffset = max(0, min(maxOffset, scrollOffset + delta))
+        // Clamped against the bound *at the destination*, not at the departure
+        // — a page-sized step reaches the tail in one go, and asking about
+        // where it started would stop it short of the bottom.
+        let target = scrollOffset + delta
+        scrollOffset = max(0, min(resolvedMaxOffset(reaching: target), target))
     }
 
     /// Jumps to an absolute offset, clamped to the valid range. A conformer
     /// with a sub-row scroll unit overrides this to discard it too.
     public func scrollToOffset(_ offset: Int) {
-        scrollOffset = max(0, min(maxOffset, offset))
+        scrollOffset = max(0, min(resolvedMaxOffset(reaching: offset), offset))
     }
 
     /// Clamps ``scrollOffset`` to the current valid range.
@@ -380,7 +411,7 @@ extension ScrollableOffsetState {
     /// The default user End jump — the bottom-edge counterpart.
     public func userScrollToBottom() {
         engageEdgeAnchor(.bottom)
-        scrollToOffset(maxOffset)
+        scrollToOffset(settledMaxOffset)
         clearOverscroll()
     }
 

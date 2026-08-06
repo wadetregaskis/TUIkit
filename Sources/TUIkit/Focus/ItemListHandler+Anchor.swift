@@ -59,7 +59,7 @@ extension ItemListHandler {
             scrollOffset = 0
             scrollTopClipLines = 0
         case .bottom:
-            scrollOffset = maxOffset
+            scrollOffset = settledMaxOffset
             scrollTopClipLines = 0
         default:
             break
@@ -98,16 +98,13 @@ extension ItemListHandler {
     private func followBottomEdge() {
         guard scrollOffset >= bottomFollowBound else { return }
         let offsetBefore = scrollOffset
-        scrollOffset = maxOffset
-        // `maxOffset` deliberately early-outs to a cheap floor (`itemCount -
-        // contentHeight`) while the offset is nowhere near the tail, so as not
-        // to materialise tail row heights every frame on a huge list. That floor
-        // is a LOWER bound, so the first assignment can land a row or two short
-        // — visible as the last rows still being cut off after an append. The
-        // assignment itself brings the offset within reach, which is exactly the
-        // condition for the exact walk, so reading it once more converges. One
-        // extra read, by construction — not a loop.
-        scrollOffset = maxOffset
+        // `settledMaxOffset`, not `maxOffset`: the latter early-outs to a cheap
+        // LOWER bound while the offset is nowhere near the tail (so as not to
+        // materialise tail row heights every frame on a huge list), which would
+        // leave the follow a row or two short — visible as the last rows still
+        // being cut off after an append. Following the tail is exactly the case
+        // that has to pay for the exact answer.
+        scrollOffset = settledMaxOffset
         // Offsets alone can't detect an advance: a list shorter than its
         // viewport appends at offset 0 forever, and the cursor must still
         // chase its tail.
@@ -171,20 +168,12 @@ extension ItemListHandler {
         // held line inside it.
         anchorHeldRow = min(anchorHeldRow, lastRow)
         let desired = ordinal - anchorHeldRow
-        // `maxOffset` deliberately early-outs to a cheap floor
-        // (`itemCount - contentHeight`) while the offset is nowhere near the
-        // tail, so as not to materialise tail row heights every frame on a huge
-        // list. That floor is a LOWER bound, so a hold that jumps a long way
-        // down — designating a row far below the current viewport — was clamped
-        // to it and still left the anchored row short of view.
-        //
-        // Assigning it brings the offset within reach of the tail, which is
-        // exactly the condition for the exact walk, so reading it once more
-        // converges. One extra read, by construction — not a loop. Same
-        // two-step `followBottomEdge` uses a few lines above, for the same
-        // reason.
-        scrollOffset = min(max(desired, 0), maxOffset)
-        let clamped = min(max(desired, 0), maxOffset)
+        // Clamped against the bound at the DESTINATION: `maxOffset` early-outs
+        // to a cheap lower bound for offsets that cannot reach the tail, and a
+        // hold that jumps a long way down — designating a row far below the
+        // current viewport — would be clamped to it and still leave the
+        // anchored row short of view.
+        let clamped = min(max(desired, 0), resolvedMaxOffset(reaching: desired))
         if clamped != desired { anchorHeldRow = held(landingAt: ordinal - clamped) }
         scrollOffset = clamped
         // Holding pins the row on a whole-row boundary; any line-granularity

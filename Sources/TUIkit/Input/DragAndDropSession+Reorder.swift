@@ -227,7 +227,7 @@ extension DragAndDropSession {
         case .pageUp: target.scrollFine(by: -page)
         case .pageDown: target.scrollFine(by: page)
         case .home: target.scrollToOffset(0)
-        case .end: target.scrollToOffset(target.maxOffset)
+        case .end: target.scrollToOffset(target.settledMaxOffset)
         default: return false
         }
         target.releaseAnchorOnUserScroll()
