@@ -230,6 +230,13 @@ list keeps its length, exactly as an ``View/onMove(perform:)`` reorder has
 always drawn it. Move the pointer to a different list and the blank comes back,
 because that list has no slot of its own and nothing there should shift.
 
+Only a row that is **on screen** can pay for the slot that way. Carry it far
+enough — dragging to the bottom edge scrolls the list, and the row it came from
+goes off the top — and nothing has left the drawing any more, so the list
+borrows a line exactly as it would for a drag from elsewhere. Without that, the
+end of a scrolled list could not be pointed at: the furthest the pointer could
+reach was the position *before* the last row.
+
 ## Abandoning a Drag
 
 Let go with nowhere to land and the drag is abandoned: the floating preview

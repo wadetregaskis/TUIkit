@@ -211,6 +211,95 @@ struct ListRowDropDestinationTests {
     /// row out of this one, so every row of ours stays drawn and the slot is a
     /// genuine extra line. Matching the drag's source by identity is what tells
     /// the two apart.
+    @Test("Scrolled past its own source row, the end of the list is still reachable")
+    func aScrolledListStillReachesTheEnd() {
+        // A same-list drag normally needs no borrowed line: the row that left
+        // the drawing pays for the slot. That only holds while the row is ON
+        // SCREEN — auto-scrolling toward the end takes it away, and from there
+        // the slot needs a line of its own or the position AFTER the last row
+        // cannot be pointed at. That was the reported "the furthest I can go is
+        // the second last line".
+        final class Log: @unchecked Sendable {
+            var inserted: [(Int, [String])] = []
+        }
+        let log = Log()
+        let names = (0..<8).map { "R\($0)" }
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+        let context = RenderContext(
+            availableWidth: 20, availableHeight: 12, environment: env, tuiContext: tui)
+
+        func render() -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let view = List {
+                ForEach(names, id: \.self) { name in
+                    HStack(spacing: 1) {
+                        Text(name)
+                        Spacer()
+                    }
+                    .draggable(name)
+                }
+                .dropDestination(for: String.self) { index, values in
+                    log.inserted.append((index, values))
+                }
+            }
+            .frame(height: 9)
+            var inner = context
+            inner.hasExplicitHeight = true
+            let buffer = renderToBuffer(view, context: inner)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+        func lineOf(_ name: String, in buffer: FrameBuffer) -> Int? {
+            buffer.lines.firstIndex { $0.stripped.contains(name) }
+        }
+
+        let atRest = render()
+        guard let firstRowLine = lineOf("R0", in: atRest) else {
+            Issue.record("R0 is drawn at rest: \(atRest.lines.map(\.stripped))")
+            return
+        }
+
+        // Pick R0 up, then do what the gesture does: carry it to the bottom
+        // edge, where auto-scroll runs, and keep the pointer there.
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: firstRowLine))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: firstRowLine + 1))
+        var frame = render()
+        for _ in 0..<20 {
+            let lowestRow =
+                frame.lines.lastIndex { line in
+                    names.contains { line.stripped.contains($0) }
+                } ?? firstRowLine
+            tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+                button: .left, phase: .dragged, x: 2, y: lowestRow)
+            tui.dragAndDropSession.dragMoved()
+            _ = tui.mouseEventDispatcher.dispatch(
+                MouseEvent(button: .scrollDown, phase: .pressed, x: 2, y: lowestRow))
+            frame = render()
+        }
+        let drawn = frame.lines.map(\.stripped)
+        #expect(lineOf("R0", in: frame) == nil, "the source row has scrolled away: \(drawn)")
+        #expect(lineOf("R7", in: frame) != nil, "the last row is reachable: \(drawn)")
+
+        // The pointer is below the last row: that names the append position.
+        if let lastRowLine = lineOf("R7", in: frame) {
+            tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+                button: .left, phase: .dragged, x: 2, y: lastRowLine + 1)
+            tui.dragAndDropSession.dragMoved()
+            _ = render()
+        }
+        _ = tui.dragAndDropSession.performDrop()
+        #expect(
+            log.inserted.first?.0 == names.count,
+            "the drop lands PAST the last row, not before it: \(log.inserted)")
+    }
+
     @Test("A drag from another list still opens a gap without losing a row")
     func aDragFromAnotherListKeepsEveryRow() {
         let tui = TUIContext()
