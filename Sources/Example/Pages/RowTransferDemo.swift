@@ -65,10 +65,10 @@ struct RowTransferDemoSection: View {
                     .foregroundStyle(.palette.foregroundSecondary)
                 // The same keyboard-reorder hint the `.onMove` demo carries —
                 // the shortcuts are identical because they ARE the same
-                // mechanism. Reaching a row here needs Tab rather than a click:
-                // a click on a row is claimed by its `.draggable` (see the type
-                // comment above), so it starts a drag instead of moving the
-                // cursor. Tab, or a click on the list's empty area, focuses it.
+                // mechanism. A row's `.draggable` claims the press here, but a
+                // press released without moving is a click and passes through
+                // to the List, so clicking a row selects it exactly as it does
+                // in the demo above.
                 Text(L("page.rows.keyboardMoveHint"))
                     .foregroundStyle(.palette.foregroundTertiary)
                     .dim()

@@ -245,12 +245,21 @@ enum _DragHandle {
                     // a Button inside a drag handle still clicks.
                     forward(event, phase: .pressed, to: child)
                     forward(event, phase: .released, to: child)
+                } else if let handlerID = scratch.handlerID {
+                    // Nothing interactive INSIDE wanted it, so the click was
+                    // never this handle's: hand it to whatever the handle is
+                    // sitting on. A `List` row is the case that matters — a
+                    // row of plain `Text` has no child to forward to, so a
+                    // list of `.draggable` rows swallowed every click and
+                    // could only be selected from the keyboard.
+                    dispatcher.passClickThrough(from: handlerID, event: event)
                 }
                 return true
             default:
                 return false
             }
         }
+        scratch.handlerID = id
         buffer.hitTestRegions.append(
             HitTestRegion(
                 offsetX: 0,
@@ -271,6 +280,11 @@ enum _DragHandle {
 private final class DragScratch {
     var isDragging = false
     var grab: (x: Int, y: Int) = (0, 0)
+    /// This handle's own handler id, stored back once registration returns it
+    /// (the closure needs it, and cannot capture a `let` it is being assigned
+    /// to). A click the handle turns out not to want is passed through from
+    /// here to the region behind it.
+    var handlerID: HitTestRegion.HandlerID?
 }
 
 // MARK: - Drop Destination

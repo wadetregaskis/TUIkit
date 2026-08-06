@@ -463,6 +463,47 @@ struct DragAndDropTests {
         #expect(tui.dragAndDropSession.active == nil)
     }
 
+    @Test("A press released without movement clicks the view BEHIND the source")
+    func clickPassesThroughToWhatIsBehind() {
+        // The row content of a draggable List row is plain Text — no
+        // interactive child for the click to fall into — so the click has to
+        // reach the region the drag handle is sitting on instead. Without it a
+        // List of `.draggable` rows swallows every click and can only be
+        // driven from the keyboard.
+        final class Counter { var behind = 0 }
+        let counter = Counter()
+        let (context, tui) = makeContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+        tui.dragAndDropSession.beginFrame()
+
+        // A draggable with nothing interactive inside it, and — standing in for
+        // the List row underneath — a region registered BEFORE it, so the
+        // draggable is the innermost match and takes the press.
+        let buffer = renderToBuffer(Text("row").draggable("apple"), context: context)
+        let behindID = dispatcher.register { event in
+            if event.phase == .pressed { counter.behind += 1 }
+            return true
+        }
+        var regions = [
+            HitTestRegion(
+                offsetX: 0, offsetY: 0, width: buffer.width, height: buffer.height,
+                handlerID: behindID)
+        ]
+        regions.append(contentsOf: buffer.hitTestRegions)
+        dispatcher.setRegions(regions)
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 1, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 1, y: 0))
+        #expect(counter.behind == 1, "the click passes through to the row behind")
+
+        // A genuine drag is the source's own, and must not click through.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 1, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 6, y: 2))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 6, y: 2))
+        #expect(counter.behind == 1, "a drag is not a click")
+    }
+
     @Test("Hover transitions ride through to the interactive child")
     func hoverForwardsToChildren() {
         // The draggable's innermost region receives the synthetic

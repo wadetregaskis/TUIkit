@@ -655,6 +655,47 @@ extension MouseEventDispatcher {
         matchingRegions(at: x, y: y).map(\.handlerID)
     }
 
+    /// Delivers a click — a synthetic press, then its release — to the
+    /// front-most region **behind** `handlerID`, and reports whether anything
+    /// took it. `event` is in `handlerID`'s own local space, as the handler
+    /// received it.
+    ///
+    /// For a handler that claimed the press *speculatively*. `.draggable` has
+    /// to take the press to find out whether it becomes a drag; when it does
+    /// not, the click was never its to keep and belongs to whatever it is
+    /// sitting on. A `List` whose rows are draggable could otherwise not be
+    /// selected with the mouse at all — every click on a row was swallowed by
+    /// that row's own drag handle, which had no use for it.
+    ///
+    /// Both halves go to the same handler, and only if it takes the press: a
+    /// region that declines is skipped and the search continues behind it, so
+    /// an inert backdrop between the handle and the real target — a drop
+    /// zone's fronted region, a container's fallback — cannot strand the click.
+    @discardableResult
+    func passClickThrough(from handlerID: HitTestRegion.HandlerID, event: MouseEvent) -> Bool {
+        guard let origin = regionOffset(for: handlerID) else { return false }
+        let (x, y) = (event.x + origin.x, event.y + origin.y)
+        var reachedSelf = false
+        for region in matchingRegions(at: x, y: y) {
+            guard reachedSelf else {
+                reachedSelf = region.handlerID == handlerID
+                continue
+            }
+            guard let handler = handlers[region.handlerID] else { continue }
+            func synthesised(_ phase: MousePhase) -> MouseEvent {
+                MouseEvent(
+                    button: event.button, phase: phase,
+                    x: x - region.offsetX, y: y - region.offsetY,
+                    shift: event.shift, ctrl: event.ctrl, meta: event.meta,
+                    clickCount: event.clickCount)
+            }
+            guard handler(synthesised(.pressed)) else { continue }
+            _ = handler(synthesised(.released))
+            return true
+        }
+        return false
+    }
+
     /// The absolute top-left offset of the region registered with `id`, or
     /// `nil` when no current region carries it. Lets a drop destination
     /// translate an absolute drop point into its local space.

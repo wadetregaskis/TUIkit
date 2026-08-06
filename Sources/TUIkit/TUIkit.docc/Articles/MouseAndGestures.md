@@ -155,6 +155,13 @@ Dragging requires drag tracking (`.standard` or `.full`). The floating
 preview's grab-point anchoring is configurable via
 `dragPreviewAnchor(_:)`.
 
+A drag source has to take the press to find out whether it becomes a drag, but
+it keeps only the ones that do: a press released without moving is a **click**,
+and goes wherever it would have gone had the source not been there — to an
+interactive view inside it, or failing that to whatever it sits on. So a
+``List`` whose rows are `draggable(_:)` still selects a row when you click it,
+and still starts a drag when you move.
+
 ## Raw Events
 
 For full control, handle the raw event and return whether you consumed it.
