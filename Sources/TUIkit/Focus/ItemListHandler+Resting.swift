@@ -48,7 +48,15 @@ extension ItemListHandler {
         showsScrollbar: Bool,
         firstRowHeight: @autoclosure () -> Int
     ) {
-        guard overflowing, !showsScrollbar, scrollOffset == 1, !isAutoScrolling else { return }
+        // Not while the user is STEERING this control. The rule is about where
+        // a viewport comes to REST; offset 1 is a position a drag passes
+        // through, and snapping it back made the mid-drag Down key look dead —
+        // it stepped 0 → 1 and the very next render put it back. Auto-scroll
+        // was already excluded for exactly this reason; a keyboard scroll and a
+        // hovering drag's landing slot are the same situation.
+        guard overflowing, !showsScrollbar, scrollOffset == 1,
+            !isAutoScrolling, !isReordering, externalDropSlot == nil
+        else { return }
         let restingMidRow =
             scrollGranularity == .line && (scrollTopClipLines > 0 || firstRowHeight() > 1)
         guard !restingMidRow else { return }
