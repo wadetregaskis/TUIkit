@@ -76,6 +76,23 @@ public struct HitTestRegion: Sendable, Equatable {
     /// ``revealOutsetTop``.
     public var revealOutsetBottom: Int = 0
 
+    /// Rows clipped off this region's top by an ancestor's viewport — a
+    /// `ScrollView` the region has been scrolled up inside of.
+    ///
+    /// Hit-testing wants the CLIPPED rectangle: a control half-scrolled off the
+    /// top must not be clickable on the rows it no longer occupies. But a
+    /// coordinate space begins where the region begins, clipped or not, and one
+    /// field cannot be both. So ``offsetY`` stays the clipped top — every
+    /// existing consumer keeps the rectangle it expects — and this records how
+    /// far above it the region really starts.
+    ///
+    /// Read by `MouseEventDispatcher.regionOffset(for:)` to answer "where does
+    /// this view's local space begin?", which is what turns an absolute drop
+    /// point into ``DropInfo``'s destination-local one. Without it a drop
+    /// destination that wraps a scrolled page reported points short by the
+    /// scroll offset, and anything drawn at them landed that far up the screen.
+    public var topClip: Int = 0
+
     /// Creates a hit-test region.
     public init(
         offsetX: Int,

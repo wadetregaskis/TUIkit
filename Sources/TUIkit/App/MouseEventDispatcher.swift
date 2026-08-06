@@ -701,7 +701,10 @@ extension MouseEventDispatcher {
     /// translate an absolute drop point into its local space.
     func regionOffset(for id: HitTestRegion.HandlerID) -> (x: Int, y: Int)? {
         guard let region = regions.first(where: { $0.handlerID == id }) else { return nil }
-        return (region.offsetX, region.offsetY)
+        // The UNCLIPPED origin: a view scrolled up inside a `ScrollView` has its
+        // rectangle cut at the viewport, but its coordinate space still starts
+        // where the view starts. See ``HitTestRegion/topClip``.
+        return (region.offsetX, region.offsetY - region.topClip)
     }
 
     /// The full absolute rectangle of the region registered with `id`, or `nil`

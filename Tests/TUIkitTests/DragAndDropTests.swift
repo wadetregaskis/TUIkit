@@ -433,6 +433,74 @@ struct DragAndDropTests {
         #expect(log.info?.previewWidth == 4 && log.info?.previewHeight == 1)
     }
 
+    @Test("A destination scrolled up inside a ScrollView still localises drops")
+    func dropInfoSurvivesBeingScrolled() {
+        // The Mouse page's shape: the drop destination wraps the WHOLE page,
+        // which is inside a ScrollView. Scroll down and the destination starts
+        // ABOVE the viewport, so the ScrollView clips its region — right for
+        // hit-testing, but the clip used to take the region's ORIGIN with it,
+        // and a point localised against the clipped top came out short by the
+        // scroll offset. Anything drawn there (the poof puff) landed that far
+        // up the screen, and further up the more the page was scrolled.
+        let log = DropLog()
+        let (context, tui) = makeContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+        tui.dragAndDropSession.beginFrame()
+
+        let tree = ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<20, id: \.self) { Text("row \($0)") }
+            }
+            .dropDestination(for: String.self) { items, info in
+                log.dropped.append(contentsOf: items)
+                log.info = info
+                return true
+            }
+        }
+        .frame(height: 5)
+
+        func render() -> FrameBuffer {
+            dispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            var inner = context
+            inner.hasExplicitHeight = true
+            let buffer = renderToBuffer(tree, context: inner)
+            dispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        _ = render()
+        for _ in 0..<3 {
+            _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .pressed, x: 1, y: 1))
+        }
+        let scrolled = render()
+
+        // Whatever row happens to be on the viewport's second line names the
+        // answer: rows are one line each and start at the destination's own
+        // origin, so "row K" sits K rows into its local space.
+        let releaseY = 1
+        let onThatLine = scrolled.lines[releaseY].stripped.trimmingCharacters(in: .whitespaces)
+        guard let expected = Int(onThatLine.replacingOccurrences(of: "row ", with: "")),
+            expected > 0
+        else {
+            Issue.record("the page scrolled: \(scrolled.lines.map(\.stripped))")
+            return
+        }
+
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 1, y: releaseY)
+        tui.dragAndDropSession.begin(payload: "apple", preview: FrameBuffer(text: "x"))
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .released, x: 1, y: releaseY)
+        _ = tui.dragAndDropSession.performDrop()
+
+        #expect(log.dropped == ["apple"], "the drop was taken")
+        #expect(
+            log.info?.y == expected,
+            "the drop point counts from the destination's origin, not the viewport's")
+    }
+
     @Test("A press released without movement clicks the interactive child")
     func clickFallsThroughToChildren() {
         // The draggable's region is innermost and claims every press as a

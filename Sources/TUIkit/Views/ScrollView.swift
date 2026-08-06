@@ -888,7 +888,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             guard bottomY > viewportTop, topY < viewportBottom else { return nil }
             let clippedTop = max(topY, viewportTop)
             let clippedBottom = min(bottomY, viewportBottom)
-            return HitTestRegion(
+            var clipped = HitTestRegion(
                 offsetX: region.offsetX + dx,
                 offsetY: clippedTop - scrollOffset,
                 width: region.width,
@@ -903,6 +903,16 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 // reason.
                 focusID: region.focusID
             )
+            // The clip above throws away where the region BEGINS, which is not
+            // the same question as where it can be clicked. A destination that
+            // wraps a scrolled page starts above the viewport, and a drop point
+            // localised against its clipped top came out short by exactly the
+            // scroll offset — the poof puff drawn that far up the screen.
+            // Accumulated, so nesting composes.
+            clipped.topClip = region.topClip + (clippedTop - topY)
+            clipped.revealOutsetTop = region.revealOutsetTop
+            clipped.revealOutsetBottom = region.revealOutsetBottom
+            return clipped
         }
 
         var result = FrameBuffer(lines: visibleLines, width: viewportWidth)
