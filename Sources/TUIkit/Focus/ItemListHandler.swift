@@ -306,6 +306,9 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// moved under a pointer that has not.
     var visibleRowBandsOffset: Int = 0
 
+    /// Backing storage for ``drawnOffset``; see there.
+    var drawnWindowOffset: Int?
+
     /// One visible row's extent within the list's rendered content, in lines
     /// measured from the first content line (i.e. below the border and padding,
     /// and below the "N more above" indicator when one is drawn).
@@ -906,9 +909,30 @@ extension ItemListHandler {
     /// both from `extent` says "▼ 0 more rows below" at the bottom of a
     /// hovering list, and deriving both from `itemCount` puts the end out of
     /// reach again.
-    var hasContentBelow: Bool { scrollOffset + viewportHeight < itemCount }
+    var hasContentBelow: Bool { drawnOffset + viewportHeight < itemCount }
 
-    var rowsBelow: Int { max(0, itemCount - (scrollOffset + viewportHeight)) }
+    var rowsBelow: Int { max(0, itemCount - (drawnOffset + viewportHeight)) }
+
+    /// The offset the viewport was actually DRAWN from, which the indicators
+    /// count from — `nil` until a frame publishes one, and then
+    /// ``scrollOffset``.
+    ///
+    /// ``ScrollWindowOrigin/absorbing(offset:topClip:firstRowHeight:)`` draws a
+    /// one-line-hidden offset from the line above instead, because announcing
+    /// it would cost the very line it hides. That is a resolution, not a state
+    /// change, so the two disagree — and the indicators must follow the
+    /// drawing, exactly as the rows, the bands and the click mapping do.
+    ///
+    /// Normally the disagreement cannot be seen, because
+    /// ``settleRestingOffset(overflowing:showsScrollbar:firstRowHeight:)``
+    /// snaps a resting offset of 1 down to 0. It deliberately does not while a
+    /// drop slot hovers — a viewport being steered is not resting — and there
+    /// two frames drawing identical rows disagreed about how many were below,
+    /// one of them by counting a row the user could plainly see.
+    var drawnOffset: Int {
+        get { drawnWindowOffset ?? scrollOffset }
+        set { drawnWindowOffset = newValue }
+    }
 
     /// The rows on screen, and therefore DATA indices — `Table` subscripts
     /// `data` with them directly. The protocol's default bounds this by

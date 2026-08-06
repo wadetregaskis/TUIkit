@@ -793,6 +793,10 @@ where Value.ID: Hashable {
         // off-screen rows — so the viewport is the full content height, less the
         // line a hovering drag's landing slot takes from the rows.
         handler.viewportHeight = max(1, contentHeight - (handler.dropSlotAddsRow ? 1 : 0))
+        // A bar spends no indicator line, so this path absorbs nothing: the
+        // rows are drawn from the offset itself. Published anyway, so a frame
+        // that took another path cannot leave a stale origin behind.
+        handler.drawnOffset = handler.scrollOffset
         if !context.isMeasuring {
             handler.clampScrollOffset()
         }
@@ -1018,6 +1022,8 @@ where Value.ID: Hashable {
         // an indicator would otherwise have announced — the rows are drawn
         // from ITS position, so the mouse mapping must measure from it too.
         let topClip = window.topClip
+        // …and so must the indicators. See ``ItemListHandler/drawnOffset``.
+        handler.drawnOffset = window.range.lowerBound
         // The bar is metered in LINES, like the `List`'s over multi-line rows:
         // its extent is the whole wrapped height and its offset the lines
         // above the window. That total is the one thing this path otherwise
@@ -1534,6 +1540,9 @@ where Value.ID: Hashable {
             ? max(1, contentHeight - aboveLines - 1)
             : rowsWithoutBelow
         handler.viewportHeight = max(1, min(visibleRowCount, remaining))
+        // Uniform single-line rows: nothing to absorb, so the drawn origin is
+        // the offset. Published for the same reason the scrollbar path does.
+        handler.drawnOffset = handler.scrollOffset
     }
 
     /// The interaction state of a table with no rows: a real handler (its

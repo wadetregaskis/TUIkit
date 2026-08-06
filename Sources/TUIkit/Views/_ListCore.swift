@@ -460,6 +460,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // at all. Counting either makes the indicator predicates disagree with
         // the extent and invent a "1 more row below".
         handler.viewportHeight = max(1, visibleRows.count)
+        // …and the offset they were drawn FROM, which is the resolved origin,
+        // not `scrollOffset`. See ``ItemListHandler/drawnOffset``.
+        handler.drawnOffset = origin.offset
         // A `.dimmed` / `.cursor` drag rewrites the rows here, AFTER the
         // window walk: the drag shows an extra row that is not in the data, so
         // it must not take part in choosing which data rows are visible.

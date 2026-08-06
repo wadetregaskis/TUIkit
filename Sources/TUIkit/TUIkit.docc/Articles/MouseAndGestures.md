@@ -221,6 +221,15 @@ list could not draw every row AND the slot, so "drop at the very end" could not
 be pointed at. The indicators still count only real rows — the borrowed line is
 the slot, which is on screen and is not a row.
 
+They count from where the rows were **drawn**, too, which near the top is not
+always where the scroll offset stands. A viewport one line down draws from the
+line above instead, because saying "▲ 1 more row above" costs the very line it
+would be reporting; normally the offset is then settled down to match, but not
+while a drag is being steered — a viewport in motion is not resting anywhere.
+So the two disagree, harmlessly, and only for as long as the drag lasts. What
+must never differ is what the user is told: two frames that draw the same rows
+say the same thing about what is off screen.
+
 The one place it does close up is the list the row is being dropped back into.
 A `List` whose rows are `.draggable` opens a landing slot while the drag hovers
 it, and a slot plus a blank would be two gaps for one row — the list would grow
