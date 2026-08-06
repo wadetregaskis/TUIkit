@@ -929,6 +929,11 @@ extension ItemListHandler {
     /// drop slot hovers — a viewport being steered is not resting — and there
     /// two frames drawing identical rows disagreed about how many were below,
     /// one of them by counting a row the user could plainly see.
+    ///
+    /// The indicators are not the only consumer: a PAGE is also measured from
+    /// here, via ``ScrollableOffsetState/pageDelta(_:)``, so that one Page Down
+    /// from two identical-looking screens goes to the same place. Steps are
+    /// not, and must not be — see that method.
     var drawnOffset: Int {
         get { drawnWindowOffset ?? scrollOffset }
         set { drawnWindowOffset = newValue }

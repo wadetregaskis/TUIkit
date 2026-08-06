@@ -227,8 +227,13 @@ line above instead, because saying "▲ 1 more row above" costs the very line it
 would be reporting; normally the offset is then settled down to match, but not
 while a drag is being steered — a viewport in motion is not resting anywhere.
 So the two disagree, harmlessly, and only for as long as the drag lasts. What
-must never differ is what the user is told: two frames that draw the same rows
-say the same thing about what is off screen.
+must never differ is what the user is *told*: two frames that draw the same rows
+say the same thing about what is off screen, and one <kbd>Page Down</kbd> from
+either takes you to the same place. A page moves the picture by a page.
+
+The movement keys are the exception, and have to be: a step moves the position
+itself, so it measures from the position, which is the only way it can ever
+leave a spot that looks like the one above it.
 
 The one place it does close up is the list the row is being dropped back into.
 A `List` whose rows are `.draggable` opens a landing slot while the drag hovers

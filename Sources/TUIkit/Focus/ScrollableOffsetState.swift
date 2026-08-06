@@ -34,7 +34,35 @@ public protocol ScrollableOffsetState: AnyObject {
     /// The first visible row (`ItemListHandler`) or line
     /// (`ScrollViewHandler`). Always in `0...maxOffset` after
     /// any of the helpers below have run.
+    ///
+    /// Not necessarily the offset the rows were DRAWN from — see
+    /// ``drawnOffset``, and use that for anything the user is told or shown.
     var scrollOffset: Int { get set }
+
+    /// The offset the viewport was last drawn FROM, which near the top edge is
+    /// not always ``scrollOffset``.
+    ///
+    /// A viewport one line down from the top draws from the top anyway, because
+    /// announcing that one hidden line ("▲ 1 more row above") costs the very
+    /// line it reports. `ScrollWindowOrigin.absorbing` resolves that per frame
+    /// without touching the offset, so offsets 0 and 1 can draw the SAME
+    /// PICTURE. `ItemListHandler.settleRestingOffset` normally collapses the
+    /// duplicate by snapping 1 down to 0 — but not while a drag is being
+    /// steered, because stepping needs 1 to be a distinct position it can pass
+    /// through (snapping it back stalled a mid-drag Down key at 0↔1 forever).
+    ///
+    /// So for the length of a drag, two offsets mean one picture, and anything
+    /// derived from the offset must choose which it means:
+    ///
+    /// - **Counting and paging** describe what the user SEES → ``drawnOffset``.
+    ///   See ``pageDelta(_:)``, and `ItemListHandler.rowsBelow`.
+    /// - **Stepping** moves the position itself → ``scrollOffset``. A step
+    ///   measured from the drawn origin could never leave the phantom.
+    ///
+    /// Defaults to ``scrollOffset`` for conformers that never absorb, which is
+    /// every one of them but `ItemListHandler` — a `ScrollView` scrolls by
+    /// line, so it has no whole row to hide in the first place.
+    var drawnOffset: Int { get }
 
     /// The number of rows / lines visible in the viewport.
     var viewportHeight: Int { get }
@@ -292,6 +320,33 @@ extension ScrollableOffsetState {
     /// up, positive scrolls down. Clamped to `0...maxOffset`,
     /// no-op when the content already fits the viewport
     /// entirely.
+    /// The offset the rows were drawn from — ``scrollOffset`` unless the
+    /// conformer overrides it. See the protocol requirement for why they can
+    /// differ.
+    public var drawnOffset: Int { scrollOffset }
+
+    /// Re-bases a **page-sized** delta on ``drawnOffset``, so a page moves the
+    /// PICTURE by a page rather than the offset by a page.
+    ///
+    /// Near the top edge those differ. Offsets 0 and 1 can draw identically
+    /// (see ``drawnOffset``), and during a drag both are reachable — Home lands
+    /// on 0, Page Up lands on 1. Without this, one Page Down from a screen that
+    /// LOOKS like the top went two rows or three depending on which key got you
+    /// there, which is indistinguishable from a bug because the two screens are
+    /// indistinguishable, full stop.
+    ///
+    /// `scrollOffset + pageDelta(d) == drawnOffset + d`, and outside the absorb
+    /// window that is just `scrollOffset + d`.
+    ///
+    /// **Only for page-sized jumps.** A single step must NOT be re-based: from
+    /// a phantom offset of 1 it would compute `0 + 1 = 1` and never move, which
+    /// is precisely the stall that keeping 1 reachable exists to avoid. Home
+    /// and End need it no more than steps do — they name absolute positions, so
+    /// there is no departure point to re-base.
+    public func pageDelta(_ delta: Int) -> Int {
+        delta + (drawnOffset - scrollOffset)
+    }
+
     public func scroll(by delta: Int) {
         guard delta != 0,
               viewportHeight > 0,

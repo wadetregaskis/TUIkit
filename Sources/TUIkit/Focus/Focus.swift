@@ -762,8 +762,13 @@ extension FocusManager {
         // all of which the scroller's OWN key handler gets right.
         let page = max(1, scroller.viewportHeight)
         switch key {
-        case .pageUp: scroller.userScrollFine(by: -page)
-        case .pageDown: scroller.userScrollFine(by: page)
+        // A page moves the PICTURE by a page — `pageDelta(_:)` re-bases it on
+        // the offset the rows were drawn from, which near the top edge is not
+        // always `scrollOffset`. Home/End below name absolute positions and so
+        // need no re-basing; a single step must never be re-based at all (see
+        // `ScrollableOffsetState.pageDelta(_:)`).
+        case .pageUp: scroller.userScrollFine(by: scroller.pageDelta(-page))
+        case .pageDown: scroller.userScrollFine(by: scroller.pageDelta(page))
         case .home: scroller.userScrollToTop()
         case .end: scroller.userScrollToBottom()
         default: return false

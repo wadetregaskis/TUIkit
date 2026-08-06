@@ -126,6 +126,33 @@ struct DrawnOriginIndicatorTests {
         #expect(offenders.isEmpty, "every frame counts what it drew: \(offenders)")
     }
 
+    /// Two screens that look identical must PAGE identically too.
+    ///
+    /// Home lands on offset 0 and Page Up lands on offset 1, and near the top
+    /// edge those draw the same picture — so before `pageDelta(_:)` re-based
+    /// the jump, one Page Down from what looked like the very same place went
+    /// two rows or three depending on which key got you there.
+    @Test("Two routes to the top page to the same place")
+    func pagingDoesNotDependOnHowYouReachedTheTop() {
+        func topThenPageDown(viaHome: Bool) -> [String] {
+            let fixture = Fixture()
+            fixture.hoverDrag()
+            fixture.navigator(.end)
+            fixture.navigator(viaHome ? .home : .pageUp)
+            let atTop = fixture.drawnRows
+            fixture.navigator(.pageDown)
+            return atTop + ["|"] + fixture.drawnRows
+        }
+        let viaHome = topThenPageDown(viaHome: true)
+        let viaPageUp = topThenPageDown(viaHome: false)
+        // Guard the premise: if the two routes did not both reach a top that
+        // draws the same rows, this test proves nothing about paging.
+        #expect(
+            viaHome.prefix(while: { $0 != "|" }) == viaPageUp.prefix(while: { $0 != "|" }),
+            "both routes reach the same-looking top: \(viaHome) vs \(viaPageUp)")
+        #expect(viaHome == viaPageUp, "and page to the same place: \(viaHome) vs \(viaPageUp)")
+    }
+
     /// The owner's invariant, and the symptom as reported: an arrow key that
     /// changes no visible row must not change how many are said to be below.
     @Test("A key that moves no row changes no count")

@@ -54,6 +54,14 @@ extension ItemListHandler {
         // it stepped 0 → 1 and the very next render put it back. Auto-scroll
         // was already excluded for exactly this reason; a keyboard scroll and a
         // hovering drag's landing slot are the same situation.
+        //
+        // The cost of the exclusion is that offsets 0 and 1 are then BOTH
+        // reachable while drawing the same picture (`resolvedWindowOrigin`
+        // absorbs the difference). Everything derived from the offset has to
+        // pick a side: the indicators count from `drawnOffset` and a page is
+        // measured from it, while steps stay on `scrollOffset` — which is what
+        // makes them able to leave the duplicate at all. See
+        // ``ScrollableOffsetState/drawnOffset``.
         guard overflowing, !showsScrollbar, scrollOffset == 1,
             !isAutoScrolling, !isReordering, externalDropSlot == nil
         else { return }
@@ -92,6 +100,10 @@ extension ItemListHandler {
     ///   for the rows, the indicators, the published bands and the click
     ///   mapping — a renderer that draws from the absorbed origin while the
     ///   hit test measures from the raw one puts every row a line off its band.
+    ///   Publish the result to ``ItemListHandler/drawnOffset`` as well: the
+    ///   indicator counts and the page-sized jumps are measured from it, and
+    ///   they cannot see this call. The `List` and `Table` both do, right where
+    ///   they sync `viewportHeight`.
     func resolvedWindowOrigin(
         firstRowHeight: @autoclosure () -> Int
     ) -> (offset: Int, topClip: Int) {

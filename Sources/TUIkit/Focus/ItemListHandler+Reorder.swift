@@ -345,8 +345,14 @@ extension ItemListHandler {
         switch event.key {
         case .up: target.scrollFine(by: -step)
         case .down: target.scrollFine(by: step)
-        case .pageUp: target.scrollFine(by: -page)
-        case .pageDown: target.scrollFine(by: page)
+        // Pages are re-based on what the target DREW (``pageDelta(_:)``): near
+        // the top edge a viewport at offset 1 draws from 0, and mid-drag that
+        // duplicate is reachable — Home leaves you on 0, Page Up on 1 — so
+        // without this one Page Down from two identical-looking screens went
+        // two rows or three. The steps above deliberately do NOT re-base:
+        // stepping is how the offset gets past the duplicate at all.
+        case .pageUp: target.scrollFine(by: target.pageDelta(-page))
+        case .pageDown: target.scrollFine(by: target.pageDelta(page))
         case .home: target.scrollToOffset(0)
         case .end: target.scrollToOffset(target.settledMaxOffset)
         default: return nil
