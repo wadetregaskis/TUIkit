@@ -931,18 +931,6 @@ extension String {
         return result
     }
 
-    /// Returns a copy with ANSI escape sequences removed, suitable for rendering user-provided content.
-    ///
-    /// Use this to sanitize user input before passing it to ``Text`` or other views
-    /// to prevent terminal escape sequence injection (cursor manipulation, color changes, etc.).
-    ///
-    /// ```swift
-    /// Text(userInput.sanitizedForTerminal)
-    /// ```
-    public var sanitizedForTerminal: String {
-        stripped
-    }
-
     /// Pads the string to the specified visible width using spaces.
     ///
     /// ANSI codes and wide characters are handled correctly.
