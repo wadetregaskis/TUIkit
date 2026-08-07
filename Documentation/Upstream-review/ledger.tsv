@@ -157,3 +157,10 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 156	acdbf7dd60bf	e8361438ed51	2026-07-22	63	queued	-	Refactor: Read image task dependencies from the render context
 157	21f140ab20c1	-	2026-07-22	63	noise	-	Merge pull request #63 from phranck/issue/27-image-placeholder-derivation
 158	3461927ccaca	794d3c59b93b	2026-07-22	-	noise	-	Chore: Update test count badge to 1317 tests [skip ci]
+159	d4f7d3aaf7a4	bbb8bb399f5c	2026-07-22	64	queued	-	Test: Characterize effect loss across cache hits
+160	1053ce852677	1618d6a86e73	2026-07-22	64	noise	-	Chore: Drop a stray blank line left by the marker-test migration
+161	3b6f99d4223d	92e89c59085a	2026-07-22	64	have	-	Fix: Bypass subtree caching for effect-bearing content
+162	e84738728c6d	d6303d51ebd6	2026-07-22	64	queued	-	Fix: Keep nested cache entries alive across outer hits
+163	c867446f5693	6387812a5632	2026-07-22	64	n-a	-	Fix: Count staged sections in the focus registration probe
+164	c48e35d78de2	016004321dae	2026-07-22	64	queued	-	Fix: Include style environment in cache invalidation
+165	fbb126486df3	8bce80136217	2026-07-22	64	n-a	-	Docs: Describe cache bypass, liveness, and fingerprint invalidation

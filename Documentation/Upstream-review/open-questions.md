@@ -40,6 +40,26 @@ and shipping the trivial half without the measurement would be a guess.
 
 ---
 
+## 1. Two `EquatableView` cache contracts, unverified
+
+**From** `e84738728c` and `c48e35d78d` (PR #64) · **ledger verdict** `queued`
+
+Both are plausible live defects here and neither has been checked. Written up in
+`notes/PR-64.md`; the short version:
+
+- **Nested cache entries below a cached root may be collected while live.**
+  Upstream added `RenderCache.markSubtreeActive`; ours marks the subtree in
+  `StateStorage` but only the *root* identity in the cache. Symptom would be a
+  miss storm, not wrong pixels.
+- **Our cache key has no environment component**, so a `.foregroundStyle` change
+  *above* an `.equatable()` boundary, with the view value unchanged, has nothing
+  to miss on. Symptom would be **wrong pixels**. This is the one that matters.
+
+Each needs a written repro before a fix. If either reproduces, the fix shape is
+upstream's and the design is done.
+
+---
+
 ## Upstream branches not on `main`
 
 Not part of the numbered backlog: an unmerged branch is a proposal, and may
