@@ -26,7 +26,7 @@ extension ASCIIConverter {
     ///   cell along a row, so the hot loop is one add + one read per
     ///   pixel rather than two adds, a multiply, and a bounds check.
     /// - Luminance is computed inline with the same 0.299/0.587/0.114
-    ///   coefficients ``RGBA.luminance`` uses, but as integer arithmetic
+    ///   coefficients ``RGBA/luminance`` uses, but as integer arithmetic
     ///   against a scaled threshold — comparing `r*299 + g*587 + b*114`
     ///   to `128_000` matches the Double form bit-for-bit at this
     ///   precision and avoids the per-pixel `Double` conversions.

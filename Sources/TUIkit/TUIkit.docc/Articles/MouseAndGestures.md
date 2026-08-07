@@ -240,7 +240,7 @@ A `List` whose rows are `.draggable` opens a landing slot while the drag hovers
 it, and a slot plus a blank would be two gaps for one row — the list would grow
 by a line for the duration of every same-list drag. So the row that the slot is
 *for* is dropped from the drawing instead: one row out, one slot in, and the
-list keeps its length, exactly as an ``View/onMove(perform:)`` reorder has
+list keeps its length, exactly as a ``ForEach/onMove(perform:)`` reorder has
 always drawn it. Move the pointer to a different list and the blank comes back,
 because that list has no slot of its own and nothing there should shift.
 

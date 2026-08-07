@@ -1130,7 +1130,7 @@ extension String {
     /// non-SGR ANSI sequences (cursor movement, erase, etc.) stripped from both the
     /// context scan *and* the returned suffix.
     ///
-    /// Used by ``FrameDiffWriter.repaintRightEdge`` to re-emit the last few cells of a
+    /// Used by `FrameDiffWriter.repaintRightEdge` to re-emit the last few cells of a
     /// line with the correct SGR context: the caller positions the terminal cursor
     /// explicitly before writing the result, so any CUF / EL / other cursor-movement
     /// sequence left in the string would displace the cursor from where the caller put
