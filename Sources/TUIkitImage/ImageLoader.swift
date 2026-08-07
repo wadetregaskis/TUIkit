@@ -424,6 +424,19 @@ extension PlatformImageLoader {
         maxPixelCount: Int? = nil
     ) async throws -> RGBAImage {
         if let cached = cache.get(urlString) {
+            // A cache hit still has to clear the caller's limit. The cache is
+            // keyed by URL alone and shared across the process, but
+            // `maxPixelCount` comes from the environment and so differs from
+            // one view to the next — so without this, the FIRST load decides
+            // for everyone. A view with no limit warms the cache; a later view
+            // that asked for a strict one is handed the oversized image anyway,
+            // its limit not applying precisely because something else got there
+            // first. Whether an image is too big cannot depend on who arrived
+            // before you.
+            let pixelCount = cached.width * cached.height
+            if let limit = maxPixelCount, pixelCount > limit {
+                throw ImageLoadError.imageTooLarge(pixelCount: pixelCount, limit: limit)
+            }
             return cached
         }
 

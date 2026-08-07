@@ -226,4 +226,50 @@ struct URLImageDownloadTests {
                 "ten stalled downloads must not starve the pool (took \(elapsed))")
         }
     }
+
+    /// A pixel limit has to hold on a cache HIT, not only on a decode.
+    ///
+    /// The cache is keyed by URL and shared; the limit comes from the
+    /// environment and varies per view. So a generous first load could warm the
+    /// cache and every stricter caller after it would be handed the oversized
+    /// image — the limit silently not applying because it lost a race it never
+    /// entered. Noticed reviewing upstream f8655103, which added the same check.
+    ///
+    /// No network: the cache is pre-warmed, and the limit is checked before the
+    /// URL is even parsed, so nothing reaches the (unroutable) host.
+    @Test("A cached image still has to fit the caller's pixel limit")
+    func cachedImageIsRevalidatedAgainstTheLimit() async throws {
+        let cache = URLImageCache()
+        let url = "http://127.0.0.1:1/cached.png"
+        let big = RGBAImage(
+            width: 4, height: 4,
+            pixels: Array(repeating: RGBA(r: 0, g: 0, b: 0, a: 255), count: 16))
+        cache.set(url, image: big)
+
+        let loader = PlatformImageLoader()
+
+        // Generous limit: the cached image comes back.
+        let generous = try await loader.loadImage(fromURL: url, cache: cache, maxPixelCount: 64)
+        #expect(generous.width == 4 && generous.height == 4)
+
+        // No limit at all: likewise.
+        let unlimited = try await loader.loadImage(fromURL: url, cache: cache)
+        #expect(unlimited.width == 4)
+
+        // Strict limit: refused, and named as too large rather than as a
+        // download failure — nothing was downloaded.
+        await #expect(throws: ImageLoadError.self) {
+            _ = try await loader.loadImage(fromURL: url, cache: cache, maxPixelCount: 4)
+        }
+        do {
+            _ = try await loader.loadImage(fromURL: url, cache: cache, maxPixelCount: 4)
+            Issue.record("the oversized cache hit was served")
+        } catch let error as ImageLoadError {
+            guard case .imageTooLarge(let pixelCount, let limit) = error else {
+                Issue.record("expected .imageTooLarge, got \(error)")
+                return
+            }
+            #expect(pixelCount == 16 && limit == 4, "reports the real numbers")
+        }
+    }
 }
