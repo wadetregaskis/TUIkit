@@ -134,3 +134,26 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 133	0cbeb9a052e3	c0c73edcf0e5	2026-07-21	59	adapt	cdea2eec	Fix: Mark first-frame header sizing as measure phase
 134	ab58e228acde	-	2026-07-21	59	noise	-	Merge pull request #59 from phranck/issue/55-render-phase-foundation
 135	6a1234a4053f	eb573b27ec6d	2026-07-21	-	noise	-	Chore: Update test count badge to 1305 tests [skip ci]
+136	b5350d24147b	e525f15bad04	2026-07-21	60	defer	-	Test: Specify pass-collector adoption semantics
+137	f7baf7905720	b2213f4e65ce	2026-07-21	60	defer	-	Feat: Add per-pass effect collectors
+138	857fb9357053	4c5a580b3b42	2026-07-21	60	defer	-	Refactor: Stage focus registrations per pass
+139	21699e84f330	46579c11527a	2026-07-21	60	defer	-	Fix: Adopt only the final pass into live managers
+140	c63034dc8a28	c40e69d3d152	2026-07-21	60	defer	-	Fix: Keep per-pass preference adoption out of the public API
+141	079f7d9155d6	-	2026-07-22	60	noise	-	Merge pull request #60 from phranck/issue/56-pass-collectors
+142	22947dad3c48	fe6fa5512aa7	2026-07-21	61	defer	-	Test: Specify pending effect commit semantics
+143	3214b0fd5c83	8ed8358ff366	2026-07-21	61	defer	-	Fix: Commit lifecycle and task effects from the final tree
+144	bbf6902a82c4	6958f01481b1	2026-07-21	61	defer	-	Fix: Defer onChange and preference actions to commit
+145	bce3171ef692	27d4e1971a5a	2026-07-21	61	defer	-	Fix: Run runtime GC on the committed tree only
+146	5d394e636586	cb3f30a81ddb	2026-07-21	61	defer	-	Refactor: Remove token lifecycle and hydration legacy
+147	618e0c3f751b	-	2026-07-22	61	noise	-	Merge pull request #61 from phranck/issue/57-pending-effect-diff
+148	7fc40a758aa4	ea5c98b48804	2026-07-21	-	noise	-	Chore: Update test count badge to 1312 tests [skip ci]
+149	71629a9c12e4	82ebd0fa729e	2026-07-22	62	defer	-	Feat: Diagnose state mutation during body evaluation
+150	8b5a098138c7	7bc26291fabd	2026-07-22	62	n-a	-	Docs: Describe the phase-separated render cycle
+151	83507d081b98	46f7854091c3	2026-07-22	62	n-a	-	Docs: Mark the render phase OpenSpec as implemented
+152	8d63dadf3db0	a16c3e13f396	2026-07-22	62	n-a	-	Fix: Key the traversal window to the traversing thread
+153	da0c247c30e3	-	2026-07-22	62	noise	-	Merge pull request #62 from phranck/issue/58-render-phase-docs
+154	e2d1cb7bffce	344adb33517f	2026-07-21	-	noise	-	Chore: Update test count badge to 1315 tests [skip ci]
+155	39270268f72f	dbe9dd6691de	2026-07-22	63	queued	-	Fix: Derive the image placeholder instead of mutating state in traversal
+156	acdbf7dd60bf	e8361438ed51	2026-07-22	63	queued	-	Refactor: Read image task dependencies from the render context
+157	21f140ab20c1	-	2026-07-22	63	noise	-	Merge pull request #63 from phranck/issue/27-image-placeholder-derivation
+158	3461927ccaca	794d3c59b93b	2026-07-22	-	noise	-	Chore: Update test count badge to 1317 tests [skip ci]
