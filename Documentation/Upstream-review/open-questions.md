@@ -10,48 +10,7 @@ Empty is the healthy state.
 
 ---
 
-## 1. Cap an image download at an encoded byte limit
-
-**From** `f8655103` (PR #44) · **ledger verdict** `adapt` (half done)
-
-`loadImage(fromURL:)` buffers the entire HTTP response into `Data` before
-anything looks at it. `maxPixelCount` protects the *decoded* size; nothing
-protects the *encoded* one, so a server that hands us a 2 GB body — hostile,
-misconfigured, or just a wrong URL — gets 2 GB of resident memory before we
-decide we did not want it.
-
-Upstream's fix is a `URLSessionDataDelegate` that refuses on
-`expectedContentLength`, counts bytes as they arrive, and cancels the task on
-overflow. Correct in substance. But it drives that delegate with a
-`DispatchSemaphore`, which is exactly the blocking design we deliberately
-removed: ours suspends rather than parking a cooperative-pool thread, and
-cancels promptly. `URLImageDownloadTests` has two tests guarding that. Porting
-upstream's code as written would trade one real problem for a worse one.
-
-**Options**
-
-1. **`URLSession.bytes(for:)`** — an `AsyncSequence` of bytes; accumulate with a
-   running cap and throw the moment it is exceeded. About fifteen lines, keeps
-   `async` and cancellation for free, no delegate object at all. The risk is
-   Linux: `bytes(for:)` exists in swift-corelibs-foundation but is less
-   exercised there than on Darwin, so this wants a CI run on both before it is
-   trusted. *Recommended.*
-2. **A delegate, driven by a continuation rather than a semaphore.** Upstream's
-   logic, our concurrency model — including the `expectedContentLength`
-   pre-check, which refuses an oversized body before a single byte arrives.
-   More code, one more `@unchecked Sendable` box to get right, but no doubt
-   about platform support.
-3. **Leave it.** The exposure needs an untrusted or broken URL, and the app
-   chose that URL. Not nothing, but not urgent either.
-
-**What is needed from you:** which of those, and what the default limit should
-be (upstream ties it to the decoder's `maxInputBytes`; we have no encoded-size
-limit at all today, so either a new environment value alongside
-`imageMaxPixelCount` or a fixed ceiling would be new API surface).
-
----
-
-## 2. Verify the package still works as a dependency
+## 1. Verify the package still works as a dependency
 
 **From** `178cf604` (PR #44) · **ledger verdict** `queued`
 
