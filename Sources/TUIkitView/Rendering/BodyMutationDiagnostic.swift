@@ -85,6 +85,32 @@ public final class BodyMutationDiagnostic: @unchecked Sendable {
         lock.withLock { collected }
     }
 
+    /// Where reports go. `TUIKIT_DIAGNOSTICS_FILE` names a file; otherwise
+    /// stderr, matching `TUIKIT_DEBUG_RENDER`.
+    ///
+    /// A file is the better channel and the reason is the same one that makes
+    /// this whole area awkward: a TUI owns the terminal, so stderr lands on the
+    /// screen it is drawing unless the caller redirects — and under a PTY probe
+    /// there is nothing to redirect *to*, since stderr and stdout are the same
+    /// pseudo-terminal. A path sidesteps that entirely.
+    public static let destination: String? =
+        ProcessInfo.processInfo.environment["TUIKIT_DIAGNOSTICS_FILE"]
+
+    /// Appends `text` wherever reports are configured to go.
+    public static func emit(_ text: String) {
+        guard let path = destination else {
+            FileHandle.standardError.write(Data(text.utf8))
+            return
+        }
+        if let handle = FileHandle(forWritingAtPath: path) {
+            handle.seekToEndOfFile()
+            handle.write(Data(text.utf8))
+            try? handle.close()
+        } else {
+            try? text.write(toFile: path, atomically: true, encoding: .utf8)
+        }
+    }
+
     public init() {}
 
     /// Opens the window: writes from this thread now count as body mutations.
@@ -94,7 +120,9 @@ public final class BodyMutationDiagnostic: @unchecked Sendable {
     /// closes it whoever opened it.
     public func beginTraversal() {
         let thread = ObjectIdentifier(Thread.current)
-        lock.withLock { traversingThread = thread }
+        lock.withLock {
+            traversingThread = thread
+        }
     }
 
     /// Closes the window. Nothing is reported until the next ``beginTraversal()``.
@@ -127,14 +155,14 @@ public final class BodyMutationDiagnostic: @unchecked Sendable {
             return report
         }
         guard let report else { return }
-        FileHandle.standardError.write(
-            Data(
+        Self.emit(
+            (
                 """
                 [TUIkit] state written during a tree walk, frame \(report.frame): \
                 \(report.identity)
                   A write during the walk asks for another frame. If this repeats \
                 every frame the run loop can never idle.
 
-                """.utf8))
+                """))
     }
 }
