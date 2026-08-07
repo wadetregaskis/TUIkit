@@ -47,7 +47,7 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 46	bb81a3b0a519	44a0261722a5	2026-07-19	46	adapt	a268ac63	Test: Import core state identity
 47	dcd3e6ce1833	43e629f4271e	2026-07-19	46	n-a	-	Docs: Refresh isolated test count
 48	54299a7abdc7	e7180cc2424d	2026-07-19	46	adapt	a268ac63	Test: Reject scoped upward imports
-49	f75e9ae4b2cf	e264ae0e466b	2026-07-19	46	queued	-	Test: Reject native linker dependencies
+49	f75e9ae4b2cf	e264ae0e466b	2026-07-19	46	inspired	e20e2d94,ac22b9c6	Test: Reject native linker dependencies
 50	dfefa76b20bc	d7eb8adfe81e	2026-07-19	46	adapt	a268ac63	Test: Reject access-level upward imports
 51	1640a27066e1	e8227e134d17	2026-07-19	46	n-a	-	Test: Preserve boundary diagnostics under load
 52	d681069c93bc	86b4dfc95602	2026-07-19	46	noise	-	Chore: Fix state test whitespace
