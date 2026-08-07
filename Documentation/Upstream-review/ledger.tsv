@@ -164,3 +164,43 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 163	c867446f5693	6387812a5632	2026-07-22	64	n-a	-	Fix: Count staged sections in the focus registration probe
 164	c48e35d78de2	016004321dae	2026-07-22	64	queued	-	Fix: Include style environment in cache invalidation
 165	fbb126486df3	8bce80136217	2026-07-22	64	n-a	-	Docs: Describe cache bypass, liveness, and fingerprint invalidation
+166	b8f98e166f92	-	2026-07-22	64	noise	-	Merge pull request #64 from phranck/issue/14-cache-liveness
+167	fb9dea0f93a7	d4241ea12669	2026-07-22	-	noise	-	Chore: Update test count badge to 1322 tests [skip ci]
+168	c2ff99fea569	49fedd0da34c	2026-07-22	-	n-a	-	Docs: Rebuild outdated DocC diagrams and add Typst sources
+169	b207e9eae333	9af7b3de76eb	2026-07-22	65	have	-	Fix: Serialize JSONFileStorage writes through an ordered writer
+170	830900361cd5	801298ea022d	2026-07-22	65	defer	-	Fix: Report storage persistence failures instead of dropping them
+171	a2bef92c1e25	0ee15a9e8ef9	2026-07-22	65	n-a	-	Fix: Remove the global storage fallback and bind storage per runtime
+172	c5d84947e552	b7ee1cf7d069	2026-07-22	65	n-a	-	Chore: Regenerate the API compatibility manifest for storage changes
+173	370451484d9c	022a1a643b8e	2026-07-22	65	n-a	-	Docs: Describe AppStorage persistence guarantees
+174	0c7dba3597fa	-	2026-07-22	65	noise	-	Merge pull request #65 from phranck/issue/15-appstorage-writer
+175	dec071790034	49546f191e5a	2026-07-22	-	noise	-	Chore: Update test count badge to 1331 tests [skip ci]
+176	884612f55689	a0ae1ecc3263	2026-07-22	66	n-a	-	Fix: Restore subtle arrows and overlap-free layout in DocC diagrams
+177	f17fbae3eb2a	-	2026-07-22	66	noise	-	Merge pull request #66 from phranck/fix/diagram-polish
+178	db12959b996b	3ce9603e0360	2026-07-22	67	defer	-	Fix: Align ViewBuilder result surface with SwiftUI
+179	fcc7204d66eb	ab2fb439c1f9	2026-07-22	67	defer	-	Fix: Adopt SwiftUI's ViewModifier contract with ModifiedContent
+180	8a73ec32bcc9	c594959f7e09	2026-07-22	67	n-a	-	Chore: Allow SwiftUI-parity underscore type names in SwiftLint
+181	82de831d7cbf	437d2ae13517	2026-07-22	67	defer	-	Fix: Match SwiftUI's Swift 6.0 isolation contract on core protocols
+182	88b263a85ecb	e08fab7ae159	2026-07-22	67	n-a	-	Docs: Describe the SwiftUI modifier contract and fix symbol links
+183	8e2d1414c6bc	76c6ea69c07a	2026-07-22	67	n-a	-	Chore: Regenerate the API compatibility manifest for the view contracts
+184	428ce3a61327	-	2026-07-22	67	noise	-	Merge pull request #67 from phranck/issue/17-view-modifier-alignment
+185	0f68e58642a9	8322b289d5ce	2026-07-22	-	noise	-	Chore: Update test count badge to 1348 tests [skip ci]
+186	2320a50d3e81	693f04d97a5f	2026-07-22	68	n-a	-	Docs: Update the dispatch diagram example to ModifiedContent
+187	bba315e754ed	-	2026-07-22	68	noise	-	Merge pull request #68 from phranck/docs/dispatch-diagram-modifiedcontent
+188	583e47c3180c	3f926f7e17e9	2026-07-22	69	defer	-	Feat: Add the SwiftUI DynamicProperty contract with nested hydration
+189	1d4e34aa2873	64e16f8e9ae3	2026-07-22	69	defer	-	Feat: Align Binding with SwiftUI's projection and conformance surface
+190	c2ada4f7afa0	dceea1e6b024	2026-07-22	69	defer	-	Feat: Complete the State initializer surface
+191	82705313f661	0ef37cadea2a	2026-07-22	69	defer	-	Feat: Align AppStorage with SwiftUI's typed initializer families
+192	d53aebc5cbaa	66a5b1260ddb	2026-07-22	69	defer	-	Feat: Add Bindable for deriving bindings from observable objects
+193	119536a301d1	2f74f8172a90	2026-07-22	69	n-a	-	Fix: Suppress Bindable's synthesized memberwise initializer
+194	9f6ee3b3cb01	ab42f71a12b4	2026-07-22	69	n-a	-	Docs: Document Bindable, DynamicProperty, and the AppStorage families
+195	941f44ad0fb4	89066683df64	2026-07-22	69	n-a	-	Test: Recharacterize the Binding sendability contracts
+196	f472ad7fa323	6499bd6c70e8	2026-07-22	69	n-a	-	Test: Prove DynamicProperty conformances without tautological casts
+197	258eb0b5e9a9	6d68e66db305	2026-07-22	69	n-a	-	Chore: Satisfy the Self-reference lint rule in the conformance test
+198	6fcd8c851af0	fe041ff79b87	2026-07-22	69	n-a	-	Chore: Regenerate the API compatibility manifest for the data-flow surface
+199	a87a43fad052	-	2026-07-22	69	noise	-	Merge pull request #69 from phranck/issue/18-data-flow-alignment
+200	3f4c93e1a93f	1b54c70a7cad	2026-07-22	-	noise	-	Chore: Update test count badge to 1366 tests [skip ci]
+201	d406bfda718e	9faf8fe4c220	2026-07-22	70	defer	-	Feat: Add composable Scene modifiers with environment propagation
+202	25dce3a7467f	10d2f6a58f61	2026-07-22	70	n-a	-	Docs: Cover scene-level palettes and extend the scene compile fixture
+203	921e2d9d81a7	b50b0b56805e	2026-07-22	70	n-a	-	Chore: Regenerate the API compatibility manifest for the scene surface
+204	618039aeab87	-	2026-07-22	70	noise	-	Merge pull request #70 from phranck/issue/19-scene-composition
+205	9a0b278d8105	6a78e51d448a	2026-07-22	-	noise	-	Chore: Update test count badge to 1372 tests [skip ci]

@@ -1,3 +1,7 @@
+> **Backlog complete, 2026-08-07.** All 205 upstream commits since the fork
+> point are recorded. `upstream-review.sh status` reports "backlog clear";
+> re-run `fetch` then `next` to pick up anything new.
+
 # Reviewing upstream
 
 This fork diverged from [phranck/TUIkit](https://github.com/phranck/TUIkit) at
