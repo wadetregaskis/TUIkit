@@ -73,7 +73,7 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 72	d1027d2741e5	e1243c9e65f9	2026-07-20	?	have	-	Fix: Bind State at committed view identities
 73	d656c1cf32e2	7bfb6f8eadbe	2026-07-20	?	defer	-	Fix: Scope Observation to view identities
 74	f26d7c1dd292	77edd1b76a25	2026-07-20	?	have	-	Test: Cover structural effect reconstruction
-75	a0e4c389998c	0e04bf6d306f	2026-07-20	?	queued	-	Refactor: Scope render hydration with TaskLocal
+75	a0e4c389998c	0e04bf6d306f	2026-07-20	?	adapt	7b2b7af4	Refactor: Scope render hydration with TaskLocal
 76	6c34d98470ac	8196d772b8f3	2026-07-20	?	n-a	-	Docs: Explain structural runtime identity
 77	9579f57cb93e	2316d2dbf087	2026-07-20	?	n-a	-	Fix: Isolate State locations by runtime
 78	12390d3f2018	691a049f97e5	2026-07-20	?	have	-	Fix: Preserve Observation across cache hits
