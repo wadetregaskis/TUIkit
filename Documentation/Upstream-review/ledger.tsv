@@ -34,3 +34,22 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 33	f1ca2fe9f969	0f4c0032407f	2026-07-19	45	n-a	-	Fix: Bind AppStorage projections to runtime
 34	9adb6be247d0	f8c0df94746b	2026-07-19	45	n-a	-	Fix: End one-shot runtime lifecycle
 35	37fea050eb28	-	2026-07-19	45	noise	-	Merge pull request #45 from phranck/codex/issue-8-runtime
+36	6925a27bb9e5	194eab07e59b	2026-07-19	-	noise	-	Chore: Update test count badge to 1225 tests [skip ci]
+37	98d32482c77c	15114385b8d5	2026-07-19	46	adapt	a268ac63	Test: Define module test boundaries
+38	25adfdb84e31	42397a0e6b8f	2026-07-19	46	adapt	a268ac63	Test: Isolate core module coverage
+39	ddfd74db50d2	f7bb639db871	2026-07-19	46	adapt	a268ac63	Test: Isolate styling module coverage
+40	95254316d3ff	17ee5f36a5cf	2026-07-19	46	adapt	a268ac63	Test: Isolate view infrastructure coverage
+41	fb6c79ce542e	b17e0f106bda	2026-07-19	46	adapt	a268ac63	Test: Isolate image module coverage
+42	1a0f7054080b	ae6b56f73707	2026-07-19	46	n-a	-	Test: Run state coverage on Linux
+43	ae2c789d8e6c	499a0aaac359	2026-07-19	46	adapt	a268ac63	Test: Enforce module boundaries in quality gates
+44	cc009bed252b	fb5beccb49d7	2026-07-19	46	adapt	a268ac63	Test: Verify discovery across isolated targets
+45	f017989be569	85c4553aecd7	2026-07-19	46	adapt	a268ac63	Docs: Explain isolated test targets
+46	bb81a3b0a519	44a0261722a5	2026-07-19	46	adapt	a268ac63	Test: Import core state identity
+47	dcd3e6ce1833	43e629f4271e	2026-07-19	46	n-a	-	Docs: Refresh isolated test count
+48	54299a7abdc7	e7180cc2424d	2026-07-19	46	adapt	a268ac63	Test: Reject scoped upward imports
+49	f75e9ae4b2cf	e264ae0e466b	2026-07-19	46	queued	-	Test: Reject native linker dependencies
+50	dfefa76b20bc	d7eb8adfe81e	2026-07-19	46	adapt	a268ac63	Test: Reject access-level upward imports
+51	1640a27066e1	e8227e134d17	2026-07-19	46	n-a	-	Test: Preserve boundary diagnostics under load
+52	d681069c93bc	86b4dfc95602	2026-07-19	46	noise	-	Chore: Fix state test whitespace
+53	48bfe2cc4765	7141ea61fb7b	2026-07-19	46	n-a	-	Fix: Make native boundary fixture deterministic
+54	7d72c38f92dc	-	2026-07-19	46	noise	-	Merge pull request #46 from phranck/codex/issue-29-module-tests

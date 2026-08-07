@@ -10,7 +10,30 @@ Empty is the healthy state.
 
 ---
 
-*(none — everything raised so far is decided)*
+## 1. Guard the four lower modules against POSIX-only APIs
+
+**From** `f75e9ae4` (PR #46) · **ledger verdict** `queued`
+
+`CLAUDE.md` holds a non-negotiable rule: POSIX-only APIs — `termios`, `ioctl`,
+signals, `DispatchSource` on stdin — stay inside the `TUIkit` umbrella, so
+`TUIkitCore`, `TUIkitStyling`, `TUIkitView` and `TUIkitImage` keep building on
+Windows.
+
+The rule holds today; I checked, and none of those symbols appear in the lower
+modules. What is missing is anything that would *notice* a violation. The
+Windows lanes build exactly those four modules — and they are
+`continue-on-error: true`, deliberately advisory until the port lands, so they
+never block. A commit moving `termios` into `TUIkitCore` would land with CI
+fully green, and be found whenever someone next read the Windows lane.
+
+Upstream's version of this (`f75e9ae4`) bans C targets and platform frameworks
+package-wide, which would outlaw `CSTBImage` and `NSImage` — an architecture we
+chose. The scoped version bans only the specific POSIX terminal APIs, only in
+the four modules the rule already names.
+
+Roughly twenty lines beside `Tools/validate-test-boundaries.sh`, one step in the
+`lint` job, milliseconds. Recommended, but it adds CI surface, so it is yours to
+say.
 
 ---
 
