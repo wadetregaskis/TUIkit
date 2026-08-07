@@ -78,3 +78,14 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 77	9579f57cb93e	2316d2dbf087	2026-07-20	?	n-a	-	Fix: Isolate State locations by runtime
 78	12390d3f2018	691a049f97e5	2026-07-20	?	have	-	Fix: Preserve Observation across cache hits
 79	240391004e0c	8d2257b7b13d	2026-07-20	?	have	-	Fix: Preserve State across cached subtrees
+80	94a0de75505f	-	2026-07-20	?	noise	-	Merge pull request #52 from phranck/issue/10-stable-structural-identity
+81	f8211303ea6e	6385ac177e14	2026-07-20	?	have	-	Refactor: Drive app runtime from async events
+82	9ca8fecd8287	2cb987d13340	2026-07-20	?	have	-	Refactor: Schedule animations from runtime deadlines
+83	6c882614eb4f	bbaf4f84784a	2026-07-20	?	have	-	Refactor: Inject terminal system calls
+84	7cd7c15ade08	e07d2b214a73	2026-07-20	?	have	-	Fix: Handle interrupted terminal I/O
+85	831b0bd2448e	a974b6575b68	2026-07-20	?	defer	-	Fix: Surface terminal failures from app runtime
+86	cfb6afbac063	b1b5b68dd282	2026-07-20	?	defer	-	Test: Verify deterministic runtime shutdown
+87	bd1e42936736	962ac50c8e87	2026-07-20	?	n-a	-	Docs: Describe the async app runtime
+88	033c026a10ad	56d958ee0f28	2026-07-20	?	have	-	Fix: Preserve the synchronous App entry point
+89	9f9aaed5ba33	-	2026-07-20	?	noise	-	Merge pull request #51 from phranck/issue/9-async-event-loop
+90	2ff4dd363ed1	de975daa2dc2	2026-07-20	-	noise	-	Chore: Update test count badge to 1255 tests [skip ci]
