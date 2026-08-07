@@ -116,11 +116,62 @@ render loop last published.
 path too, resolve `App`'s properties before `app.body`, and let `FocusState`
 conform to `EnvironmentResolvable` (today `Environment` is its only conformer,
 and `FocusState` uses a different seam, `RenderIdentityBindable`). Then the
-global has no readers and can be deleted, which moots (a) entirely and removes a
-concept that has no SwiftUI analogue. Bigger, but it ends with *less* API rather
-than differently-shaped API. The measure-path piece needs care — `Mirror`
-reflection per measure is a real cost, though `EnvironmentResolutionCache`
-already memoises types with no `@Environment` properties.
+global has no readers and can be deleted, removing a concept with no SwiftUI
+analogue and ending with *less* API rather than differently-shaped API.
+
+### What (b) costs beyond the work
+
+Worth stating plainly, because the shape of it is worse than "same change, more
+of it".
+
+1. **The global is load-bearing for measure-time correctness, not a nicety.**
+   `measureCompositeBody` hydrates but never populates boxes, so during measure
+   *every* composite view's `@Environment` resolves through the global. Retire
+   it without replacing it there and those reads silently become framework
+   defaults — `\.terminalWidth` would answer `80`
+   ([ViewEnvironmentKeys.swift:36](../../Sources/TUIkit/Environment/ViewEnvironmentKeys.swift:36))
+   instead of the real width. `EmojiPage` and `ProgressViewPage` both branch on
+   it, the former through `ViewThatFits`, so they would choose a different
+   subtree at measure than at render: measured size ≠ rendered size, the
+   divergence class the whole `Layoutable` effort exists to prevent.
+
+   So resolving boxes on the measure path is **mandatory**, which forces (2).
+
+2. **Reflection on the hottest path in layout.** `measureCompositeBody` is
+   deliberately `@inline(never)`, with a comment about keeping the measure frame
+   small "under deep nesting, where each level contributes a frame". A
+   `Mirror(reflecting:)` walk there lands in the most-repeated operation in the
+   pipeline. `EnvironmentResolutionCache` only memoises types *without*
+   `@Environment`; the 21 files that have them would reflect on every measure of
+   every instance. This needs a profile *before*, not after.
+
+3. **Boxes would start holding measure-pass environments, and they persist.**
+   `RenderCache.Entry.viewSnapshot` retains view values across frames, and their
+   boxes with them. Today a box only ever holds a *render*-pass environment — a
+   clean invariant. Writing measure environments in means a view measured but
+   never rendered (an off-band lazy row, a losing `ViewThatFits` candidate, a
+   hidden `TabView` tab) keeps one where `isMeasuring` is true.
+
+4. **It converts a soft failure into a silent one.** Today any body-evaluating
+   path that forgets to resolve still gets the right `@Environment` by the slow
+   route. Afterwards it gets the default palette, `isEnabled`, locale `en`,
+   width 80 — plausible-looking and hard to spot. Two such paths exist already;
+   the change is only safe if every one has been found, and any *future* one
+   becomes a silent wrong value instead of a slower right one. Mitigable with a
+   debug assertion on an unpopulated box, but that is extra design.
+
+5. **`@FocusState` has a precedence subtlety.** Today it is
+   `focusManager ?? global` — the modifier-wired manager **wins**. Resolving from
+   the environment at body-top would take the manager visible to the *owning
+   view*, which is not always the one at the control: `isolatedForBackground()`
+   injects a different `FocusManager` for a modal's background. Any conformance
+   has to preserve that precedence.
+
+6. **The test seam moves.** The call sites are in `TUIkitTests`, which
+   `@testable import TUIkit` — that exposes TUIkit's internals, not
+   TUIkitView's, which is *why* the property is `public`.
+   `resolveEnvironmentProperties` would need `package` access, or those tests
+   move to `TUIkitViewTests`.
 
 ### Why it is worth doing at all
 
@@ -140,9 +191,15 @@ task. Retiring the global does too, by leaving nothing to race on.
 **Evidence it is latent, not active:** fifteen consecutive full-suite runs, all
 green; the window is a few instructions wide.
 
-My recommendation is **(b) if you want it done properly, (a) if you want it done
-now** — and (a) does not block (b) later. Either way it touches public surface,
-so it is yours to say.
+**Revised recommendation: (a).** An earlier draft of this note preferred (b) as
+"the proper fix". Looking harder at what it touches — the measure path, focus
+manager precedence, and App startup, three load-bearing areas — that is the
+*riskier* option, taken on to close a hazard that has never fired outside a
+thought experiment. (a) is mechanical and behaviour-preserving, and it does not
+block (b) later: if the render pipeline is ever reworked with profiling in hand,
+retiring the global belongs in that pass, not ahead of it.
+
+Either way it touches public surface, so it is yours to say.
 
 ---
 
