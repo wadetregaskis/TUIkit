@@ -552,7 +552,7 @@ extension RenderLoop {
         // `evaluateAppBody` hydrates `@State` under (see that property's note).
         let appHeaderHeight: Int
         if isFirstFrame {
-            let measureContext = RenderContext(
+            var measureContext = RenderContext(
                 availableWidth: terminalWidth,
                 // Clamped: a terminal shorter than its own chrome makes this
                 // subtraction negative, and a negative available height is not a
@@ -563,6 +563,20 @@ extension RenderLoop {
                 environment: environment,
                 identity: rootIdentity
             )
+            // This walk's buffer is thrown away — only `appHeader.height`
+            // survives it — so it is a measurement, and every guard written as
+            // `!context.isMeasuring` must apply: `onAppear`, `.task`, focus and
+            // mouse registration, `onChange`. Without this the discarded walk
+            // was indistinguishable from a real render, so a view present here
+            // and NOT in the drawn walk (the two see different heights, since
+            // this one has not subtracted the header yet) would appear, mount a
+            // task, and then be told it disappeared, having never been drawn.
+            //
+            // `AppHeaderModifier` is deliberately NOT guarded that way, which is
+            // what lets this walk still do its one job. Anything that guards
+            // itself on the measure phase must not be load-bearing for the
+            // header's height.
+            measureContext.isMeasuring = true
             _ = renderScene(scene, context: measureContext.withChildIdentity(type: type(of: scene)))
             appHeaderHeight = appHeader.height
             isFirstFrame = false

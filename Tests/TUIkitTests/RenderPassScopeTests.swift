@@ -35,10 +35,17 @@ private final class ProbeState: @unchecked Sendable {
     /// Drives the header's height, so a test can make it change between frames.
     var headerLines = 1
 
+    /// `isMeasuring` as seen by each walk of the scene, in order.
+    var walkPhases: [Bool] = []
+    /// How many walks had begun when `.onAppear` fired, or `nil` if it never did.
+    var appearedDuringWalk: Int?
+
     func reset() {
         onChangeFires = 0
         keyTaps = 0
         headerLines = 1
+        walkPhases = []
+        appearedDuringWalk = nil
     }
 }
 
@@ -62,6 +69,35 @@ private struct ProbeApp: App {
                     return false
                 }
         }
+    }
+}
+
+/// Records the phase of every walk, and when `.onAppear` fired relative to them.
+private struct PhaseProbeApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            VStack(spacing: 0) {
+                WalkPhaseProbe()
+                Text("content")
+                    .onAppear {
+                        ProbeState.shared.appearedDuringWalk = ProbeState.shared.walkPhases.count
+                    }
+            }
+            .appHeader { ProbeHeader() }
+        }
+    }
+}
+
+/// A leaf that records `context.isMeasuring` each time it is walked. Renderable
+/// rather than composed, because the phase is only visible from a `RenderContext`.
+private struct WalkPhaseProbe: View, Renderable {
+    var body: Never { fatalError("WalkPhaseProbe renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        ProbeState.shared.walkPhases.append(context.isMeasuring)
+        return FrameBuffer(lines: [""])
     }
 }
 
@@ -164,5 +200,48 @@ struct RenderPassScopeTests {
         let tapsBefore = ProbeState.shared.keyTaps
         _ = harness.tuiContext.keyEventDispatcher.dispatch(KeyEvent(key: .character("x")))
         #expect(ProbeState.shared.keyTaps == tapsBefore + 1, "one keypress, one side effect")
+    }
+
+    /// The registration half of the throwaway walk was fixed by resetting the
+    /// per-frame registries per WALK. The lifecycle half was not: the walk still
+    /// ran with `isMeasuring == false`, so every guard written as
+    /// `!context.isMeasuring` — `onAppear`, `.task`, `onChange`, focus and mouse
+    /// registration — treated a walk whose buffer is thrown away as a real
+    /// render.
+    ///
+    /// Counting fires cannot catch that: `recordAppear` is idempotent, so
+    /// `onAppear` still fires exactly once either way. What differs is *which*
+    /// walk it fires in — and that matters because the two walks see different
+    /// heights (the throwaway one has not subtracted the header yet), so a tree
+    /// that branches on available space can contain a view in the first walk and
+    /// not the second. That view would appear, mount a `.task`, and then be told
+    /// it disappeared, having never been drawn.
+    @Test("The first-frame header measurement is a measure pass")
+    func firstFrameMeasurementWalkIsMarkedMeasuring() {
+        ProbeState.shared.reset()
+        let harness = Harness()
+        let loop = harness.loop(PhaseProbeApp())
+
+        _ = loop.render()
+
+        // Deliberately not asserting an exact sequence: two-pass layout means a
+        // leaf is walked more than once per walk of the SCENE, and pinning that
+        // count would fail on any layout change without a defect. The contract
+        // is only about the last one.
+        let phases = ProbeState.shared.walkPhases
+        #expect(!phases.isEmpty)
+        #expect(
+            phases.last == false,
+            "the drawn walk is a render pass")
+        #expect(
+            phases.dropLast().allSatisfy { $0 },
+            "every walk before the drawn one is a measurement. Saw \(phases)")
+        // `appearedDuringWalk` is how many walks had been recorded when the
+        // effect ran; the probe is the drawn walk's first child, so a fire in
+        // that walk lands after every recording. Anything less means it fired
+        // in a walk that was thrown away — it was 2 of 4 before this was fixed.
+        #expect(
+            ProbeState.shared.appearedDuringWalk == phases.count,
+            "onAppear belongs to the drawn walk, not a discarded one")
     }
 }
