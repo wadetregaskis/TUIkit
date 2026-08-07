@@ -103,6 +103,13 @@ jobs:
       - name: Validate test module boundaries
         run: ./Tools/validate-test-boundaries.sh
 
+      # Milliseconds, and it guards a failure nothing else can see: a manifest
+      # using unsafeFlags — or a path/branch/revision dependency — builds and
+      # tests perfectly here while being impossible for anyone to depend on.
+      # The expensive half of that question is the `consumer` job below.
+      - name: Validate package manifest is consumable
+        run: ./Tools/validate-package-manifest.sh
+
   # ── macOS ──────────────────────────────────────────────────────────────────
   macos:
     name: ${{ matrix.name }}
@@ -451,6 +458,36 @@ jobs:
       - name: Build DocC documentation
         run: ./Tools/BuildDocs/build-docs.sh --output docc-output --static-hosting
 
+  # ── Versioned consumer ─────────────────────────────────────────────────────
+  # Tags only. Everything else in this file builds the package as ITSELF; this
+  # builds it as somebody else's dependency, resolved by exact version, and
+  # RUNS the result so that the two resources read through `Bundle.module` —
+  # VERSION and the localization tables — have to actually resolve. Both fail
+  # silently in a real app (wrong version in a status bar, every framework
+  # string falling back to its dotted key), which is what makes them worth a
+  # gate rather than a test.
+  #
+  # A tag is the right moment: it is the last point before something is
+  # published, and a couple of minutes there costs nothing. The cheap half —
+  # the manifest constructs that make resolution outright impossible — runs on
+  # every push, in `lint`.
+  consumer:
+    name: Versioned consumer
+    needs: lint
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Select Xcode 26 (Swift 6.2+)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26'
+
+      - name: Resolve, build and run a versioned consumer
+        run: ./Tools/verify-versioned-consumer.sh
+
   # ── Gate ───────────────────────────────────────────────────────────────────
   # The single job to mark "required" in branch protection. Matrix job names
   # move whenever the matrix changes, so requiring them directly would mean
@@ -461,7 +498,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [lint, macos, linux, windows_container, windows_native, docs]
+    needs: [lint, macos, linux, windows_container, windows_native, docs, consumer]
     runs-on: ubuntu-24.04
     steps:
       - name: Check required lanes
@@ -473,6 +510,15 @@ jobs:
           macos:${{ needs.macos.result }}
           linux:${{ needs.linux.result }}
           docs:${{ needs.docs.result }}"
+
+          # The consumer lane runs on tags only, so it is required exactly when
+          # it runs. Adding it to the list unconditionally would make every
+          # ordinary push fail on its skip — and leaving it out entirely would
+          # mean the one build that gates a RELEASE could go red unnoticed.
+          if [ "${{ startsWith(github.ref, 'refs/tags/') }}" = "true" ]; then
+            required="$required
+            consumer:${{ needs.consumer.result }}"
+          fi
 
           echo "Advisory lanes (never block):"
           echo "  windows_container: ${{ needs.windows_container.result }}"

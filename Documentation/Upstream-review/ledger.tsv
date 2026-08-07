@@ -10,7 +10,7 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 9	f8655103eee0	09a0e33eb473	2026-07-19	44	adapt	25635228,24bbba32	Fix: Bound image URL loading
 10	cec8d2f38b03	891ce138cddf	2026-07-19	44	have	-	Docs: Make DocC generation warning-free
 11	7c8c3a528597	0c4e40b58136	2026-07-19	44	n-a	-	Docs: Explain pure Swift image decoding
-12	178cf6044705	7d94679e6a03	2026-07-19	44	queued	-	Test: Verify versioned SwiftPM consumers
+12	178cf6044705	7d94679e6a03	2026-07-19	44	adapt	18c6cc6c	Test: Verify versioned SwiftPM consumers
 13	fd0c2e89d816	deb6ecd92b14	2026-07-19	44	n-a	-	Chore: Derive test counts from discovery
 14	569d7f27ce68	d02a76874a2b	2026-07-19	44	n-a	-	Chore: Enforce deterministic SDK gates
 15	9ee86bacbc6c	3cacff6ad9c3	2026-07-19	44	n-a	-	Docs: Update SDK development guarantees

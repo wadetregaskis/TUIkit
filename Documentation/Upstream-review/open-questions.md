@@ -10,22 +10,7 @@ Empty is the healthy state.
 
 ---
 
-## 1. Verify the package still works as a dependency
-
-**From** `178cf604` (PR #44) · **ledger verdict** `queued`
-
-A 59-line script that tags a throwaway local release, resolves TUIkit through
-it as an *exact external dependency*, and builds a minimal executable that
-imports it. It catches the class of failure a normal `swift build` cannot see:
-something public by accident, a resource bundle that only resolves in-tree, a
-platform gate that only holds for the package itself.
-
-We have nothing equivalent, and we do ship tagged releases (v0.6.0 is the
-current tag). The cost is a CI job of a minute or two per run.
-
-**What is needed from you:** whether to add it, and whether it should run on
-every push or only on tags. Adding CI surface is not something I will do on my
-own initiative.
+*(none — everything raised so far is decided)*
 
 ---
 
