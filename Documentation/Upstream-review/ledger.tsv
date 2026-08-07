@@ -128,3 +128,9 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 127	6197d3178529	f189f3227d1c	2026-07-21	54	n-a	-	Fix: Correct ForEach API compatibility symbols
 128	884a2e0ac6e1	-	2026-07-21	54	noise	-	Merge pull request #54 from phranck/issue/12-keyed-dynamic-collections
 129	3219f2e2ba18	59b54ec59e3b	2026-07-21	-	noise	-	Chore: Update test count badge to 1301 tests [skip ci]
+130	008a5d7f5129	f82897f00c39	2026-07-21	59	n-a	-	Docs: Add OpenSpec for render phase separation
+131	834e65fa9bd7	cdde4af35f58	2026-07-21	59	inspired	cdea2eec	Test: Characterize render pass effect leaks
+132	09bf0e54e5ce	3215a43258ee	2026-07-21	59	reject	-	Refactor: Replace isMeasuring with RenderPhase
+133	0cbeb9a052e3	c0c73edcf0e5	2026-07-21	59	adapt	cdea2eec	Fix: Mark first-frame header sizing as measure phase
+134	ab58e228acde	-	2026-07-21	59	noise	-	Merge pull request #59 from phranck/issue/55-render-phase-foundation
+135	6a1234a4053f	eb573b27ec6d	2026-07-21	-	noise	-	Chore: Update test count badge to 1305 tests [skip ci]
