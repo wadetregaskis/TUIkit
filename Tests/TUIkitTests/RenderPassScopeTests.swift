@@ -244,4 +244,43 @@ struct RenderPassScopeTests {
             ProbeState.shared.appearedDuringWalk == phases.count,
             "onAppear belongs to the drawn walk, not a discarded one")
     }
+
+    /// The same leak on the OTHER multi-walk path — and the half that cannot be
+    /// closed the same way.
+    ///
+    /// Frame 1's extra walk is known to be throwaway *before* it runs, so it can
+    /// simply be marked as a measurement. A header-height correction cannot be:
+    /// the loop renders at the estimated height, discovers afterwards that the
+    /// real height differs, and only then re-renders. Marking the first walk
+    /// would suppress effects on every frame where the height turns out
+    /// unchanged — which is nearly all of them.
+    ///
+    /// Closing it needs effects staged per walk and adopted from the last one,
+    /// which is upstream's PR #60/#61 and a `defer` here; see
+    /// `Documentation/Upstream-review/notes/PR-60.md`. Until then this pins the
+    /// gap, and flips to a plain failure the moment it is fixed.
+    @Test("KNOWN GAP: a header correction re-render still walks twice as a render")
+    func correctionRerenderLeaksEffects() {
+        ProbeState.shared.reset()
+        let harness = Harness()
+        let loop = harness.loop(PhaseProbeApp())
+
+        _ = loop.render()
+        let heightAfterFirstFrame = harness.appHeader.height
+
+        ProbeState.shared.headerLines = 3
+        ProbeState.shared.walkPhases = []
+        _ = loop.render()
+
+        #expect(
+            harness.appHeader.height != heightAfterFirstFrame,
+            "the header must actually change height, or no correction happens")
+
+        withKnownIssue("effects are not yet staged per walk and adopted from the last") {
+            let phases = ProbeState.shared.walkPhases
+            #expect(
+                phases.dropLast().allSatisfy { $0 },
+                "the discarded walk should be a measurement. Saw \(phases)")
+        }
+    }
 }
