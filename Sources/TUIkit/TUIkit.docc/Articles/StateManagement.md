@@ -49,6 +49,35 @@ Create constant bindings for previews or static values:
 let binding = Binding.constant(42)
 ```
 
+### Binding to something that might not be there
+
+`$model.field` derives a binding to any property, including an optional one —
+and a dictionary entry derives the same way, because a key that isn't there has
+no value:
+
+```swift
+@State private var enabled: [String: Bool] = [:]
+
+var body: some View {
+    ForEach(features, id: \.self) { feature in
+        Toggle(feature, isOn: $enabled[feature].defaulted(to: false))
+    }
+}
+```
+
+`$enabled[feature]` is a `Binding<Bool?>`, which ``Toggle`` cannot take: it has
+to draw a checkbox one way or the other, and "absent" is not a third way to draw
+it. `defaulted(to:)` decides which way absent means, at the call site where the
+answer is known.
+
+Writing through such a binding **creates** the entry — including a write of the
+fallback itself, so a feature toggled on and then off leaves `[feature: false]`
+rather than nothing. That is usually what "which of these are chosen" wants; a
+collection that should hold *only* what was chosen is better modelled as a `Set`.
+
+`defaulted(to:)` is TUIkit-only. The portable spelling is the longhand it saves:
+`Binding(get: { enabled[feature] ?? false }, set: { enabled[feature] = $0 })`.
+
 ## @Environment
 
 ``EnvironmentValues`` provides values propagated down the view hierarchy:

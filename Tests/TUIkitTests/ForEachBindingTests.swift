@@ -100,4 +100,39 @@ struct ForEachBindingTests {
         #expect(text.contains("one"), "first row drawn: \(text)")
         #expect(text.contains("two"), "second row drawn: \(text)")
     }
+
+    /// The other half of issue #15: the reporter's rows were not a collection
+    /// of models but a `[String: Bool]` keyed by name, iterated with a plain
+    /// value-based `ForEach`. `$selected[feature]` is a `Binding<Bool?>` — a
+    /// key that isn't there has no value — and `Toggle` cannot take that, so
+    /// `defaulted(to:)` decides what absent means at the call site.
+    @Test("A dictionary-keyed row binds through defaulted(to:)")
+    func dictionaryKeyedTogglesRender() {
+        nonisolated(unsafe) var selected: [String: Bool] = ["colour": true]
+        let features = ["verbose", "colour"]
+        let binding = Binding(get: { selected }, set: { selected = $0 })
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        let view = VStack {
+            ForEach(features, id: \.self) { feature in
+                Toggle(feature, isOn: binding[feature].defaulted(to: false))
+            }
+        }
+        let context = RenderContext(
+            availableWidth: 30, availableHeight: 10, environment: env, tuiContext: tui)
+        let buffer = renderToBuffer(view, context: context)
+        let text = buffer.lines.map(\.stripped).joined(separator: "\n")
+
+        #expect(text.contains("verbose"), "the absent row still draws: \(text)")
+        #expect(text.contains("colour"), "the present row draws: \(text)")
+        // The absent key reads as off and the present one as on, so the two
+        // rows must not draw the same checkbox.
+        let states = buffer.lines.map(\.stripped).filter { $0.contains("verbose") || $0.contains("colour") }
+        #expect(states.count == 2, "one line each: \(states)")
+        #expect(
+            states[0].prefix(3) != states[1].prefix(3),
+            "off and on draw differently: \(states)")
+    }
 }
