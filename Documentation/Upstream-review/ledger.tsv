@@ -108,3 +108,23 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 107	132d25c9b206	3758b12fdc22	2026-07-20	53	noise	-	Chore: Merge main into issue 11
 108	c514d8351d99	-	2026-07-20	53	noise	-	Merge pull request #53 from phranck/issue/11-terminal-cell-surface
 109	9a068f96fb01	b2ee70943175	2026-07-20	-	noise	-	Chore: Update test count badge to 1286 tests [skip ci]
+110	e357c1a72d1c	f2fa2e81f18e	2026-07-20	54	have	-	Fix: Render ForEach dynamic children
+111	9e140571dc8f	2a295b5c0987	2026-07-20	54	have	-	Fix: Flatten dynamic children in tuple layouts
+112	522c6ac60ca3	f59cf9058ef3	2026-07-20	54	have	-	Test: Verify keyed ForEach state lifecycle
+113	43f9d049c59f	3540b67c388f	2026-07-20	54	have	-	Fix: Propagate dynamic children through builders
+114	a0634cc494e9	ea52b294863f	2026-07-20	54	have	-	Fix: Render list rows at keyed identities
+115	94b532e5a725	5464e99586da	2026-07-20	54	have	-	Fix: Preserve collection focus by item ID
+116	cbf2c24f566e	03c446c1c78d	2026-07-20	54	defer	-	Fix: Diagnose duplicate collection IDs
+117	1faa6e6b9ac5	852cc9ca09e9	2026-07-20	54	have	-	Fix: Key table data by row identity
+118	e35ba46310ce	812a6c2cbbf5	2026-07-20	54	have	-	Test: Verify keyed lifecycle and focus
+119	8b56ca9af05f	c191e263e8f1	2026-07-20	54	have	-	Fix: Keep keyed runtime effects single-mounted
+120	c5d1db9ef92b	17fc1b51fc06	2026-07-20	54	have	-	Test: Validate ForEach benchmark output
+121	3b76b4004529	1cd75134dbbe	2026-07-20	54	have	-	Test: Render empty ForEach directly
+122	0b08ca40e845	7b08c6ceba45	2026-07-20	54	have	-	Test: Cover keyed collection insertion
+123	6ebe4a012afc	9f4e8a80c7cb	2026-07-20	54	have	-	Test: Cover nested ForEach rendering through stack builders
+124	482cc149beec	da37b9c07913	2026-07-20	54	have	-	Test: Cover Table selection following ForEach IDs
+125	f9ba1f209297	dc1a2e8ade1e	2026-07-20	54	n-a	-	Fix: Record keyed task cancellation off the main actor
+126	baa5b28a47b3	9d7dadbe8db8	2026-07-20	54	n-a	-	Fix: Update API compatibility config for ForEach child-provider surface
+127	6197d3178529	f189f3227d1c	2026-07-21	54	n-a	-	Fix: Correct ForEach API compatibility symbols
+128	884a2e0ac6e1	-	2026-07-21	54	noise	-	Merge pull request #54 from phranck/issue/12-keyed-dynamic-collections
+129	3219f2e2ba18	59b54ec59e3b	2026-07-21	-	noise	-	Chore: Update test count badge to 1301 tests [skip ci]
