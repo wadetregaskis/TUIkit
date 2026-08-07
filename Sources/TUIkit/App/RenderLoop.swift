@@ -805,13 +805,12 @@ extension RenderLoop {
     /// reads from it. (`@State` binds to each view's render identity later, in
     /// `renderToBuffer` — not at construction here.)
     fileprivate func evaluateAppBody(environment: EnvironmentValues) -> A.Body {
-        StateRegistration.activeEnvironment = environment
-
-        let scene = app.body
-
-        StateRegistration.activeEnvironment = nil
+        // An `App` is not a `View`, so nothing populates its `@Environment`
+        // boxes — publishing the environment around `body` is the only way its
+        // reads resolve. The scope ends with the call, so nothing outside it
+        // ever sees this value.
+        let scene = StateRegistration.withHydration(environment: environment) { app.body }
         tuiContext.stateStorage.markActive(rootIdentity)
-
         return scene
     }
 

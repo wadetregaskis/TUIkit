@@ -189,22 +189,52 @@ public protocol RenderInvalidationSink: AnyObject, Sendable {
 /// `@State` no longer self-hydrates here: it binds to its view's *own* render
 /// identity in `renderToBuffer` / `measureChild` (see
 /// `bindStateProperties(of:identity:storage:)`), not by construction order in
-/// an enclosing scope. Single-threaded (`@MainActor` render), so a plain
-/// `static var` is safe.
+/// an enclosing scope.
 public enum StateRegistration {
-    /// The active environment, set during composite view body evaluation and
-    /// read by `@Environment` (and its event-closure fallback).
-    nonisolated(unsafe) public static var activeEnvironment: EnvironmentValues?
+    /// The environment of the `body` currently being evaluated, or `nil`
+    /// outside one.
+    ///
+    /// This is a **fallback**, not the mechanism. `@Environment` resolves
+    /// primarily from a per-view reference box that
+    /// `resolveEnvironmentProperties(of:in:)` fills immediately before `body` —
+    /// the equivalent of SwiftUI updating a `DynamicProperty` before its view's
+    /// body runs, and what makes an `@Environment` read work inside a captured
+    /// closure. This value covers only the paths that publish an environment
+    /// without running that resolution: the measure pass
+    /// (`measureCompositeBody`), `App.body` (an `App` is not a `View`, so
+    /// nothing populates its boxes), and `@FocusState` reaching for a
+    /// `FocusManager` before a `.focused` modifier has wired one.
+    ///
+    /// It is a `@TaskLocal` rather than a mutable global because the scoping is
+    /// what the render pipeline actually wants — a value that exists for the
+    /// duration of one `body` evaluation and nests — and because a global
+    /// cannot express that safely under concurrency. Rendering is
+    /// single-threaded on the run loop, so this is not fixing a production
+    /// race; it removes one that the *tests* could hit, since suites run in
+    /// parallel and more than one of them publishes an environment. A task
+    /// local is per-task, so no test can write into another's scope.
+    ///
+    /// Only readable directly; publish it with ``withHydration(context:_:)`` or
+    /// ``withHydration(environment:_:)``.
+    @TaskLocal public static var activeEnvironment: EnvironmentValues?
 
     /// Evaluates `block` with `context`'s environment published as
-    /// ``activeEnvironment`` (saved/restored for nesting). Needed whenever
-    /// `view.body` is evaluated outside the normal `renderToBuffer` dispatch
-    /// (e.g. in `measureChild`). The name is retained for its existing call sites.
+    /// ``activeEnvironment``. Needed whenever `view.body` is evaluated outside
+    /// the normal `renderToBuffer` dispatch (e.g. in `measureChild`). The name
+    /// is retained for its existing call sites.
+    ///
+    /// Nesting works by construction: an inner scope shadows an outer one and
+    /// the outer value is restored when it returns.
     public static func withHydration<R>(context: RenderContext, _ block: () -> R) -> R {
-        let previous = activeEnvironment
-        activeEnvironment = context.environment
-        defer { activeEnvironment = previous }
-        return block()
+        withHydration(environment: context.environment, block)
+    }
+
+    /// The environment-only form, for publishers that have no `RenderContext` —
+    /// `App.body`, and tests exercising the fallback directly.
+    public static func withHydration<R>(
+        environment: EnvironmentValues?, _ block: () -> R
+    ) -> R {
+        $activeEnvironment.withValue(environment, operation: block)
     }
 }
 

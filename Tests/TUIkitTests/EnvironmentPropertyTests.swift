@@ -36,10 +36,14 @@ extension EnvironmentValues {
 @Suite("@Environment Property Wrapper Tests")
 struct EnvironmentPropertyTests {
 
+    /// The active environment is a `@TaskLocal`, so each test body starts with
+    /// it unset no matter what any concurrently-running suite is doing —
+    /// asserting that, rather than assigning `nil` to arrange it, is both the
+    /// stronger check and the only one available now that publishing goes
+    /// through `withHydration`.
     @Test("Reads default value outside render context")
     func readsDefaultOutsideRenderContext() {
-        // Ensure no active environment
-        StateRegistration.activeEnvironment = nil
+        #expect(StateRegistration.activeEnvironment == nil)
 
         let wrapper = Environment(\.testColor)
         #expect(wrapper.wrappedValue == "blue")
@@ -47,7 +51,7 @@ struct EnvironmentPropertyTests {
 
     @Test("Reads default int value outside render context")
     func readsDefaultIntOutsideRenderContext() {
-        StateRegistration.activeEnvironment = nil
+        #expect(StateRegistration.activeEnvironment == nil)
 
         let wrapper = Environment(\.testSize)
         #expect(wrapper.wrappedValue == 42)
@@ -57,12 +61,12 @@ struct EnvironmentPropertyTests {
     func readsFromActiveEnvironment() {
         var env = EnvironmentValues()
         env.testColor = "red"
-        StateRegistration.activeEnvironment = env
 
         let wrapper = Environment(\.testColor)
-        #expect(wrapper.wrappedValue == "red")
-
-        StateRegistration.activeEnvironment = nil
+        StateRegistration.withHydration(environment: env) {
+            #expect(wrapper.wrappedValue == "red")
+        }
+        #expect(wrapper.wrappedValue == "blue", "the scope must not outlive the call")
     }
 
     @Test("Multiple @Environment properties read independently")
@@ -70,14 +74,13 @@ struct EnvironmentPropertyTests {
         var env = EnvironmentValues()
         env.testColor = "green"
         env.testSize = 100
-        StateRegistration.activeEnvironment = env
 
         let colorWrapper = Environment(\.testColor)
         let sizeWrapper = Environment(\.testSize)
-        #expect(colorWrapper.wrappedValue == "green")
-        #expect(sizeWrapper.wrappedValue == 100)
-
-        StateRegistration.activeEnvironment = nil
+        StateRegistration.withHydration(environment: env) {
+            #expect(colorWrapper.wrappedValue == "green")
+            #expect(sizeWrapper.wrappedValue == 100)
+        }
     }
 
     @Test("Reads dynamically from current active environment")
@@ -90,13 +93,12 @@ struct EnvironmentPropertyTests {
 
         let wrapper = Environment(\.testColor)
 
-        StateRegistration.activeEnvironment = env1
-        #expect(wrapper.wrappedValue == "red")
-
-        StateRegistration.activeEnvironment = env2
-        #expect(wrapper.wrappedValue == "yellow")
-
-        StateRegistration.activeEnvironment = nil
+        StateRegistration.withHydration(environment: env1) {
+            #expect(wrapper.wrappedValue == "red")
+        }
+        StateRegistration.withHydration(environment: env2) {
+            #expect(wrapper.wrappedValue == "yellow")
+        }
         #expect(wrapper.wrappedValue == "blue")  // default
     }
 
@@ -128,19 +130,19 @@ struct EnvironmentPropertyTests {
 
         let wrapper = Environment(\.testColor)
 
-        // Simulate nested render: outer sets env, inner overrides
-        StateRegistration.activeEnvironment = outerEnv
-        #expect(wrapper.wrappedValue == "outer")
+        // Genuine nesting, not a simulation of it: the inner scope shadows the
+        // outer and the outer comes back on its own when the inner returns —
+        // which is exactly what a composite view's `body` does to its parent's.
+        StateRegistration.withHydration(environment: outerEnv) {
+            #expect(wrapper.wrappedValue == "outer")
 
-        // Inner override
-        StateRegistration.activeEnvironment = innerEnv
-        #expect(wrapper.wrappedValue == "inner")
+            StateRegistration.withHydration(environment: innerEnv) {
+                #expect(wrapper.wrappedValue == "inner")
+            }
 
-        // Restore outer (like render pipeline does)
-        StateRegistration.activeEnvironment = outerEnv
-        #expect(wrapper.wrappedValue == "outer")
-
-        StateRegistration.activeEnvironment = nil
+            #expect(wrapper.wrappedValue == "outer", "the inner scope must not leak")
+        }
+        #expect(wrapper.wrappedValue == "blue")
     }
 
     @Test("@Environment resolves inside a closure created during body (event-handler parity)")
@@ -160,14 +162,56 @@ struct EnvironmentPropertyTests {
             }
         }
 
-        StateRegistration.activeEnvironment = nil
+        #expect(StateRegistration.activeEnvironment == nil)
         let context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         _ = renderToBuffer(ProbeView(sink: sink).environment(\.testColor, "teal"), context: context)
 
-        // Render finished → the active environment is nil, exactly as when an
-        // event handler runs. The captured closure must still read the value
-        // resolved at render (via the wrapper's box), not the default.
-        StateRegistration.activeEnvironment = nil
+        // Render finished → the active environment is nil again, exactly as
+        // when an event handler runs. The captured closure must still read the
+        // value resolved at render (via the wrapper's box), not the default.
+        #expect(StateRegistration.activeEnvironment == nil)
         #expect(sink.read?() == "teal")
+    }
+
+    /// The reason the active environment is a task local rather than a plain
+    /// global, stated as a test.
+    ///
+    /// Two suites in this target publish an environment, swift-testing runs
+    /// suites in parallel, and the old implementation saved and restored one
+    /// process-wide `var` — so a concurrent publisher could capture another's
+    /// value as its "previous" and restore it over the top. Latent rather than
+    /// active (the window is a few instructions wide, and fifteen consecutive
+    /// full-suite runs never hit it), but it is the class already fixed twice
+    /// here by deleting shared mutable defaults.
+    ///
+    /// Two tasks, interleaved deliberately by yielding inside each scope. On
+    /// the old global this fails: whichever task publishes second wins, and the
+    /// first sees the other's value. On a task local each scope is private to
+    /// its own task, so neither can observe the other at all.
+    @Test("Concurrent publishers cannot see each other's environment")
+    func concurrentPublishersAreIsolated() async {
+        func publish(_ color: String) async -> [String] {
+            var env = EnvironmentValues()
+            env.testColor = color
+            let wrapper = Environment(\.testColor)
+            return await StateRegistration.withHydration(environment: env) {
+                // Suspend inside the scope so the other task interleaves here.
+                Task { [wrapper] in
+                    var seen = [wrapper.wrappedValue]
+                    await Task.yield()
+                    seen.append(wrapper.wrappedValue)
+                    return seen
+                }
+            }.value
+        }
+
+        async let first = publish("first")
+        async let second = publish("second")
+        let (firstSeen, secondSeen) = await (first, second)
+
+        // Each task's inner Task inherits its own parent's scope and nothing
+        // else — including across the suspension point in the middle.
+        #expect(firstSeen == ["first", "first"], "saw \(firstSeen)")
+        #expect(secondSeen == ["second", "second"], "saw \(secondSeen)")
     }
 }
