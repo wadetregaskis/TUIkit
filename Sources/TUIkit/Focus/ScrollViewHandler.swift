@@ -229,10 +229,13 @@ extension ScrollViewHandler {
             return userScroll(by: -step)
         case .down:
             return userScroll(by: step)
+        // `pageDistance` rather than `viewportHeight` directly: same value
+        // here (a ScrollView scrolls by line, and its viewport is lines), but
+        // a page has exactly one definition — see `ScrollableOffsetState`.
         case .pageUp:
-            return userScroll(by: -max(1, viewportHeight))
+            return userScroll(by: -pageDistance)
         case .pageDown:
-            return userScroll(by: max(1, viewportHeight))
+            return userScroll(by: pageDistance)
         case .home:
             // §1.3: Home restores the anchor-to-top default (and End
             // anchor-to-bottom). Note this ENGAGES an edge rather than

@@ -39,6 +39,37 @@ public protocol ScrollableOffsetState: AnyObject {
     /// ``drawnOffset``, and use that for anything the user is told or shown.
     var scrollOffset: Int { get set }
 
+    /// How far one page-sized jump moves, in whatever unit this conformer's
+    /// ``scrollFine(by:)`` steps in.
+    ///
+    /// **One screenful, no overlap**: the row that was one past the bottom
+    /// becomes the top. Every pager in TUIkit uses this — the focused-scrollable
+    /// keys, a `ScrollView`'s own keys, the List/Table focus cursor, and both
+    /// mid-drag navigators. They are deliberately not allowed their own idea of
+    /// a page; two of them once carried a `viewportHeight - 1` of their own and
+    /// the only thing it produced was a Backlog that needed two Page Downs to
+    /// cross six rows.
+    ///
+    /// Two traps live here, which is why this is a member rather than arithmetic
+    /// at the call sites:
+    ///
+    /// - **Unit.** ``scrollFine(by:)`` steps ROWS under `.row` granularity and
+    ///   LINES under `.line`. A page expressed in rows and handed to the line
+    ///   stepper moves a fraction of a screen over multi-line rows. Conformers
+    ///   answer in their own unit.
+    /// - **Staleness.** `viewportHeight` is written during render, and the app
+    ///   drains up to 128 input events between renders (see `App.swift`), so a
+    ///   held Page Down sees one value for every repeat. The visible row count
+    ///   is not constant — it shrinks by a line when an "▲ N more" indicator
+    ///   appears — so a page measured from a stale viewport SKIPS a row on the
+    ///   press that leaves the top edge. Conformers whose count varies must
+    ///   compute it from the current offset, not read the last frame's.
+    ///
+    /// The default is ``viewportHeight``, which is correct for a conformer whose
+    /// viewport does not change size as it scrolls — every one of them but
+    /// `ItemListHandler`.
+    var pageDistance: Int { get }
+
     /// The offset the viewport was last drawn FROM, which near the top edge is
     /// not always ``scrollOffset``.
     ///
@@ -320,6 +351,11 @@ extension ScrollableOffsetState {
     /// up, positive scrolls down. Clamped to `0...maxOffset`,
     /// no-op when the content already fits the viewport
     /// entirely.
+    /// One screenful, in this conformer's own stepping unit. See the protocol
+    /// requirement — overriding is for viewports that change size as they
+    /// scroll, or that step lines rather than rows.
+    public var pageDistance: Int { max(1, viewportHeight) }
+
     /// The offset the rows were drawn from — ``scrollOffset`` unless the
     /// conformer overrides it. See the protocol requirement for why they can
     /// differ.
@@ -344,7 +380,12 @@ extension ScrollableOffsetState {
     /// and End need it no more than steps do — they name absolute positions, so
     /// there is no departure point to re-base.
     public func pageDelta(_ delta: Int) -> Int {
-        delta + (drawnOffset - scrollOffset)
+        let rebased = delta + (drawnOffset - scrollOffset)
+        // Never re-base a jump into a no-op or a reversal. In a viewport with
+        // room for one row the page IS one, and subtracting the absorbed row
+        // left zero — Page Down went dead one row from the top, forever. A
+        // page that cannot be honoured exactly still has to move.
+        return rebased.signum() == delta.signum() ? rebased : delta
     }
 
     public func scroll(by delta: Int) {

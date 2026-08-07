@@ -340,8 +340,10 @@ extension ItemListHandler {
     func handleDragScrollKey(_ event: KeyEvent) -> Bool? {
         let target: any ScrollableOffsetState = dragSession?.scrollableUnderCursor() ?? self
         let step = event.shift ? max(1, shiftStepMultiplier) : 1
-        // A screenful of the view being MOVED, not of this one.
-        let page = max(1, target.viewportHeight - 1)
+        // A screenful of the view being MOVED, not of this one — and its own
+        // idea of a screenful, since the unit and the indicator reservation
+        // are the target's. See `ScrollableOffsetState.pageDistance`.
+        let page = target.pageDistance
         switch event.key {
         case .up: target.scrollFine(by: -step)
         case .down: target.scrollFine(by: step)

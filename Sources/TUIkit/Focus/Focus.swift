@@ -760,7 +760,8 @@ extension FocusManager {
         // dead), Home left a wheel's partial top clip in place, and End
         // neither engaged bottom-follow nor set a ScrollView's tail seek —
         // all of which the scroller's OWN key handler gets right.
-        let page = max(1, scroller.viewportHeight)
+        // The one definition of a page, in the scroller's own stepping unit.
+        let page = scroller.pageDistance
         switch key {
         // A page moves the PICTURE by a page — `pageDelta(_:)` re-bases it on
         // the offset the rows were drawn from, which near the top edge is not

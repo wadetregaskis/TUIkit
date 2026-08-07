@@ -220,7 +220,11 @@ extension DragAndDropSession {
         guard active != nil || autoScrollArmed, let zone = zoneUnderCursor() else { return false }
         let target = zone.vertical
         let step = event.shift ? max(1, zone.shiftStep) : 1
-        let page = max(1, target.viewportHeight - 1)
+        // One screenful of the view under the pointer, in its own stepping
+        // unit and measured from where it is NOW — see
+        // `ScrollableOffsetState.pageDistance`, which is the only place a
+        // page is defined.
+        let page = target.pageDistance
         switch event.key {
         case .up: target.scrollFine(by: -step)
         case .down: target.scrollFine(by: step)

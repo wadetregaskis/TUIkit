@@ -364,7 +364,19 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     var isExtendingSelection = false
 
     /// The scroll offset (first visible item index).
-    var scrollOffset: Int = 0
+    ///
+    /// Moving it retires ``drawnOffset``: that answer describes the frame the
+    /// rows were last drawn in, and once the viewport has moved there is no
+    /// drawn origin again until something draws. Leaving it behind is not a
+    /// stale-by-a-bit problem but a wrong-sign one — the app drains a burst of
+    /// auto-repeated keys before it renders, and `pageDelta(_:)` subtracting a
+    /// several-page-old origin turned the second Page Down of a held key into
+    /// a scroll UP, pinning the viewport one page from the top.
+    var scrollOffset: Int = 0 {
+        didSet {
+            if scrollOffset != oldValue { drawnWindowOffset = nil }
+        }
+    }
 
     /// How many LINES of the top visible row (``scrollOffset``) are scrolled
     /// off the top edge — the sub-row position that makes
@@ -674,6 +686,13 @@ extension ItemListHandler {
             ensureFocusedItemVisible()
             return true
 
+        // The CURSOR moves by the rows on screen, which is what
+        // `viewportHeight` already is — deliberately NOT `pageDistance`, whose
+        // job is the SCROLL OFFSET's unit (lines under line granularity) and
+        // whose walk starts at the viewport, not at the focused row. A cursor
+        // page that overshoots is corrected by `ensureFocusedItemVisible`
+        // anyway, so the staleness that forces `pageDistance` to recompute
+        // does not bite here.
         case .pageUp:
             moveFocus(by: -viewportHeight, wrap: false)
             return true
@@ -909,6 +928,69 @@ extension ItemListHandler {
     /// both from `extent` says "▼ 0 more rows below" at the bottom of a
     /// hovering list, and deriving both from `itemCount` puts the end out of
     /// reach again.
+    /// One screenful of rows from where the viewport is NOW — recomputed per
+    /// press rather than read from ``viewportHeight``.
+    ///
+    /// A list's visible row count is not a constant: it shrinks by a line for
+    /// each "N more" indicator on screen, and an indicator appears the moment
+    /// you leave an edge. `viewportHeight` is last render's answer, and the app
+    /// drains a burst of auto-repeated keys before rendering again — so paging
+    /// by it means a held Page Down measures the second jump with the first
+    /// jump's viewport and steps over a row nobody saw. The walk below is
+    /// bounded by one viewport, and only runs on a page key.
+    ///
+    /// Answers in ``scrollFine(by:)``'s unit for this granularity: LINES under
+    /// `.line` (where the offset advances a line at a time and a row may
+    /// straddle the edge), whole ROWS otherwise.
+    ///
+    /// **This is a third statement of the window rule**, after
+    /// `_ListCore.resolveVisibleWindow` and `Table.reserveIndicatorLines`, and
+    /// the three must agree — `PageDistanceTests` renders a real list and
+    /// checks this against the rows actually drawn, at every offset, so a
+    /// change to one of the others cannot quietly drift from this.
+    var pageDistance: Int {
+        // No content height means the owner reserves indicator lines itself and
+        // `viewportHeight` is the literal visible count (the handler's own unit
+        // tests, and any caller following that contract).
+        guard let contentHeight, contentHeight > 0 else { return max(1, viewportHeight) }
+        // The landing slot is drawn among the rows and takes one of their
+        // lines — the same subtraction `_ListCore` makes before its walk.
+        var budget = contentHeight - (dropSlotAddsRow ? 1 : 0)
+        if !showsScrollbar, drawsScrollIndicators {
+            // A scrollbar spends a column, not a line, so it reserves nothing.
+            // Otherwise: a line for "▲ N more" whenever anything is hidden
+            // above…
+            if drawnOffset > 0 || scrollTopClipLines > 0 { budget -= 1 }
+            // …and one for "▼ N more" if the fill leaves rows over, resolved
+            // the way the window walk resolves it — fill assuming none, then
+            // look to see whether any remain.
+            if drawnOffset + rowsFitting(in: budget) < itemCount { budget -= 1 }
+        }
+        budget = max(1, budget)
+        return scrollGranularity == .line ? budget : max(1, rowsFitting(in: budget))
+    }
+
+    /// How many whole rows fit in `lines`, starting at ``drawnOffset``.
+    ///
+    /// At least one: a row taller than the viewport still has to be pageable,
+    /// or Page Down would sit on it forever. The top clip is not subtracted —
+    /// a row-granularity step clears it (see ``scrollFine(by:)``), and under
+    /// line granularity this result is not used as the distance.
+    private func rowsFitting(in lines: Int) -> Int {
+        guard let rowHeight else { return max(1, lines) }
+        var used = 0
+        var count = 0
+        var index = drawnOffset
+        while index < itemCount {
+            let height = max(1, rowHeight(index))
+            if used + height > lines, count > 0 { break }
+            used += height
+            count += 1
+            index += 1
+        }
+        return count
+    }
+
     var hasContentBelow: Bool { drawnOffset + viewportHeight < itemCount }
 
     var rowsBelow: Int { max(0, itemCount - (drawnOffset + viewportHeight)) }
