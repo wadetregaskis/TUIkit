@@ -64,3 +64,7 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 63	a8bc2a61be5e	cdb139761d1b	2026-07-19	47	reject	-	Fix: Correct compatibility portability decisions
 64	03c1bcb0da5a	c3f515665555	2026-07-19	47	have	-	Fix: Avoid Linux compiler process deadlocks
 65	e777c7508830	-	2026-07-19	47	noise	-	Merge pull request #47 from phranck/codex/issue-7-compatibility-manifest
+66	8017b93bd36d	56198ff58060	2026-07-19	49	n-a	-	Refactor: Centralize POSIX subprocess execution
+67	216c691dc587	38aef2fbee80	2026-07-19	49	n-a	-	Fix: Stabilize symbol graph subprocess execution
+68	98336b5a6dd7	fc7a28eb48bf	2026-07-19	49	n-a	-	Test: Synchronize runtime image requests
+69	48ae5984937b	-	2026-07-19	49	noise	-	Merge pull request #49 from phranck/codex/issue-48-posix-subprocess
