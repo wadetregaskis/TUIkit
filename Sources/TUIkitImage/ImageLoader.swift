@@ -364,7 +364,14 @@ public final class URLImageCache: @unchecked Sendable {
     private var cache: [String: RGBAImage] = [:]
     private let lock = NSLock()
 
-    private init() {}
+    /// Creates an empty cache.
+    ///
+    /// `loadImage(fromURL:cache:…)` takes the cache to use, which was always
+    /// the point — an app that wants its own, or a test that wants one nobody
+    /// else can see, should not be reaching into a process-wide singleton. The
+    /// initializer being private made that parameter accept exactly one value,
+    /// so the seam existed on paper only.
+    public init() {}
 
     /// Returns a cached image for the given URL string, or nil.
     public func get(_ urlString: String) -> RGBAImage? {
