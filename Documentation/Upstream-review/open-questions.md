@@ -37,98 +37,112 @@ say.
 
 ---
 
-## 2. Make the render-hydration environment a `@TaskLocal`
+## 2. `StateRegistration.activeEnvironment` — `@TaskLocal`, or retire it?
 
 **From** `a0e4c389` (PR #52) · **ledger verdict** `queued`
-
-`StateRegistration.activeEnvironment` is an ambient mutable global, saved and
-restored around body evaluation:
 
 ```swift
 nonisolated(unsafe) public static var activeEnvironment: EnvironmentValues?
 ```
 
-Upstream replaced theirs with a `@TaskLocal`. Production here is single-threaded
-on the render loop, so **no production hazard is demonstrated** — this is not a
-bug report.
+An ambient mutable global holding "the environment of the body currently being
+evaluated", saved and restored for nesting by
+`StateRegistration.withHydration(context:)`. Upstream replaced theirs with a
+`@TaskLocal`.
 
-The reason to consider it is our **test suite**. `EnvironmentPropertyTests` and
-`ObservableEnvironmentTests` assign this global directly — they must, because
-they exercise the fallback path that reads it — neither suite is `.serialized`,
-and swift-testing runs suites in parallel. A render test entering
-`withHydration` concurrently will save the other suite's value and restore it
-back over the top. That is the class already fixed twice here: the render-cache
-shared-defaults flakes, and the StepperOverflow colour-depth flake.
+### What it is, and how it relates to SwiftUI
+
+**It has no SwiftUI counterpart, and it is not our primary mechanism.**
+
+In SwiftUI, `@Environment` is a `DynamicProperty`: before evaluating a view's
+`body`, the attribute graph calls `update()` on each of the view's dynamic
+properties, and the wrapper stores the resolved value in its *own* storage. That
+is why a SwiftUI `Button` action closure can read `@Environment(\.dismiss)` and
+get the right value — the value was written into the wrapper at update time and
+captured with the view. There is no ambient "the environment currently
+rendering" for anything to read.
+
+We have exactly that mechanism, and it is the one that runs:
+`Environment` holds a reference `EnvironmentBox`, and
+`resolveEnvironmentProperties(of:in:)` walks the view's `Mirror` and populates
+every box immediately before `body`
+([Renderable.swift:189](../../Sources/TUIkitView/Rendering/Renderable.swift:189)).
+Its doc comment records why it exists: reading an ambient environment lazily at
+access time — the old behaviour — "returned defaults in deferred closures".
+
+So `wrappedValue` resolves in three steps
+([EnvironmentProperty.swift:111](../../Sources/TUIkitView/Environment/EnvironmentProperty.swift:111)):
+
+```swift
+let env = box.environment            // the SwiftUI-equivalent path
+       ?? StateRegistration.activeEnvironment   // ← the ambient fallback
+       ?? EnvironmentValues()        // framework defaults
+```
+
+`activeEnvironment` is the middle line: a TUIkit-only fallback for the places
+that publish an environment but never run the box resolution.
+
+### Who actually still depends on it
+
+Written in two places — `withHydration`, and `RenderLoop.evaluateAppBody`
+([RenderLoop.swift:808](../../Sources/TUIkit/App/RenderLoop.swift:808)). Read in
+three:
+
+1. **The measure pass.** `measureCompositeBody`
+   ([ChildInfo.swift:425](../../Sources/TUIkitView/Rendering/ChildInfo.swift:425))
+   calls `withHydration` but **not** `resolveEnvironmentProperties` — so during
+   measure, `@Environment` resolves through the global. On the *render* path
+   both are set and the box wins, which makes the global dead weight there.
+2. **`App.body`.** `App` is not a `View` and never goes through
+   `renderToBuffer`, so nothing populates its boxes; `evaluateAppBody` publishes
+   the environment around `app.body` and clears it after.
+3. **`@FocusState`**, twice
+   ([FocusState.swift:114](../../Sources/TUIkit/Focus/FocusState.swift:114) and
+   [:177](../../Sources/TUIkit/Focus/FocusState.swift:177)) —
+   `focusManager ?? StateRegistration.activeEnvironment?.focusManager`, so a
+   read at body-top works before a `.focused` modifier has wired the store, and
+   `$field` captures a manager while projecting.
+
+### The two ways forward
+
+**(a) Make it a `@TaskLocal`**, as upstream did. Fixes the test-isolation hazard
+below. Costs a public-API change (a `@TaskLocal` is settable only inside
+`withValue`), ~20 test call sites, and a restructure of `evaluateAppBody`.
+Behaviour changes in exactly one way, in the right direction: a detached `Task`
+reading `@Environment` would see framework defaults rather than whatever the
+render loop last published.
+
+**(b) Retire it.** Close the three gaps instead — resolve boxes on the measure
+path too, resolve `App`'s properties before `app.body`, and let `FocusState`
+conform to `EnvironmentResolvable` (today `Environment` is its only conformer,
+and `FocusState` uses a different seam, `RenderIdentityBindable`). Then the
+global has no readers and can be deleted, which moots (a) entirely and removes a
+concept that has no SwiftUI analogue. Bigger, but it ends with *less* API rather
+than differently-shaped API. The measure-path piece needs care — `Mirror`
+reflection per measure is a real cost, though `EnvironmentResolutionCache`
+already memoises types with no `@Environment` properties.
+
+### Why it is worth doing at all
+
+The **test suite**. `EnvironmentPropertyTests` and `ObservableEnvironmentTests`
+assign the global directly — they must, because they exercise the fallback path
+that reads it — neither is `.serialized`, and swift-testing runs suites in
+parallel. A render test entering `withHydration` concurrently saves the other
+suite's value and restores it back over the top. That is the class already fixed
+twice here: the render-cache shared-defaults flakes, and the StepperOverflow
+colour-depth flake.
 
 `.serialized` does **not** fix it — that trait orders tests *within* a suite,
 not against other suites. A `@TaskLocal` does, because each test body is its own
-task and no other task can write into its scope.
+task. Retiring the global does too, by leaving nothing to race on.
 
-**Cost.** The property is `public`, and a `@TaskLocal` is settable only inside
-`withValue` — so this is a public API change plus about twenty test call sites
-and one restructure of `evaluateAppBody`. Behaviour changes in exactly one way,
-and in the right direction: a detached `Task` reading `@Environment` would see
-the framework defaults instead of whatever the render loop happened to have
-published.
-
+**Production is not affected:** rendering is single-threaded on the render loop.
 **Evidence it is latent, not active:** fifteen consecutive full-suite runs, all
-green. The window is a few instructions wide.
+green; the window is a few instructions wide.
 
-Recommended, but it is a public-surface change, so it is yours to say.
-
----
-
-## 3. Back `FrameBuffer` with a terminal-cell grid?
-
-**From** `3e0db22c` / `cd52b8a5` and six refits (PR #53) · **ledger verdict**
-`queued` · the largest architectural divergence in the review so far
-
-**What upstream did.** `TerminalCell` is
-`{ content: .empty | .grapheme(String, width: Int) | .continuation,
-style: TerminalStyle, isTransparent: Bool }`; `TerminalSurface` is
-`[[TerminalCell]]`. `FrameBuffer` stores one of those and keeps its `lines`
-array as an adapter over a cached, sanitised encoding. Clipping, compositing,
-transparency and vertical stacking then work in cell space, without reparsing
-ANSI out of strings. Six follow-up commits repair what that broke — ZStack
-alignment, text layout, diff clipping, background painting, notification
-measuring, blank cells under foreground styling.
-
-**Why it is tempting.** [[cells-not-characters-class]] is a standing bug class
-here, fixed instance by instance over many commits. A cell grid makes half of it
-— clipping a wide grapheme in half — *structurally* impossible, because the
-second cell is an explicit `.continuation` rather than a byte you might slice.
-
-**My recommendation: decline**, on three grounds, weakest first.
-
-1. **It fights a profiling-driven design.** `linesAreUniformWidth` and
-   `lineWidths` exist on our `FrameBuffer` because per-line `strippedLength` was
-   the dominant cost in deeply-nested bordered layouts — the same lines
-   re-measured at every enclosing level, O(depth²). A cell grid replaces that
-   cost model wholesale, and the honest answer to "what does it cost?" is that
-   nobody knows until `Tools/Profiling/` is re-run against it.
-
-2. **Upstream's version does not escape strings either.** It keeps the `lines`
-   adapter and parses strings *into* cells at the boundary — paying the parse
-   **and** the per-cell allocation. It is a different point on the trade-off,
-   not a strictly better one.
-
-3. **It does not fix the hard part.** Nearly every bug we have had in this class
-   was *width arithmetic*: is 〰️ two cells, is a lone Fitzpatrick modifier two,
-   does Terminal.app under-advance VS-16 (see
-   [[terminal-compatibility-doc]]). `TerminalCell.grapheme(_, width:)` still has
-   to compute that number, from the same `terminalWidth`. The grid fixes
-   splitting, which we already handle by padding the shortfall.
-
-**The narrower alternative**, if the safety is wanted without the rewrite:
-adopt cell-space **clip and composite primitives** for the handful of operations
-that actually straddle graphemes — `ansiAwarePrefix`, the overlay compositor,
-the diff writer's row clipping — and leave `FrameBuffer` as an array of strings.
-That captures the structural guarantee where the straddling happens, at a
-fraction of the blast radius, and can be profiled in isolation.
-
-**If you would rather take the whole thing**, say so and the six refits come
-with it; they have no meaning apart from the refactor, which is why they carry
-the same `queued` verdict rather than a decision of their own.
+My recommendation is **(b) if you want it done properly, (a) if you want it done
+now** — and (a) does not block (b) later. Either way it touches public surface,
+so it is yours to say.
 
 ---
 

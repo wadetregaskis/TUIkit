@@ -90,14 +90,14 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 89	9f9aaed5ba33	-	2026-07-20	?	noise	-	Merge pull request #51 from phranck/issue/9-async-event-loop
 90	2ff4dd363ed1	de975daa2dc2	2026-07-20	-	noise	-	Chore: Update test count badge to 1255 tests [skip ci]
 91	2fc51b7c50a4	5ea4e14deb13	2026-07-20	53	inspired	edea634a	Fix: harden terminal text parsing
-92	3e0db22c0cbc	424984227ed0	2026-07-20	53	queued	-	Feat: add terminal cell surface model
-93	cd52b8a56736	0238a3a4c647	2026-07-20	53	queued	-	Refactor: back FrameBuffer with terminal cells
-94	95511b4abf30	d479d1542c27	2026-07-20	53	queued	-	Fix: preserve blank cells beneath foreground styling
-95	ecbca7ee9d9f	150bacad5ebe	2026-07-20	53	queued	-	Fix: honor ZStack alignment on cell surfaces
-96	6265690a814a	b0b748b5dffe	2026-07-20	53	queued	-	Fix: lay out text in terminal cells
-97	e77ff7661e19	51d87008b3b8	2026-07-20	53	queued	-	Fix: clip diff output on cell boundaries
-98	635c7ac23d36	ca5f7653f677	2026-07-20	53	queued	-	Fix: paint backgrounds on terminal cells
-99	b7580bb2939b	438afc027ad3	2026-07-20	53	queued	-	Fix: measure notification text in terminal cells
+92	3e0db22c0cbc	424984227ed0	2026-07-20	53	defer	-	Feat: add terminal cell surface model
+93	cd52b8a56736	0238a3a4c647	2026-07-20	53	defer	-	Refactor: back FrameBuffer with terminal cells
+94	95511b4abf30	d479d1542c27	2026-07-20	53	defer	-	Fix: preserve blank cells beneath foreground styling
+95	ecbca7ee9d9f	150bacad5ebe	2026-07-20	53	defer	-	Fix: honor ZStack alignment on cell surfaces
+96	6265690a814a	b0b748b5dffe	2026-07-20	53	defer	-	Fix: lay out text in terminal cells
+97	e77ff7661e19	51d87008b3b8	2026-07-20	53	defer	-	Fix: clip diff output on cell boundaries
+98	635c7ac23d36	ca5f7653f677	2026-07-20	53	defer	-	Fix: paint backgrounds on terminal cells
+99	b7580bb2939b	438afc027ad3	2026-07-20	53	defer	-	Fix: measure notification text in terminal cells
 100	f61324bfca2c	32d5cdef50c0	2026-07-20	53	n-a	-	Docs: describe cell-based rendering
 101	f082e2baeb9a	904bdd3afef2	2026-07-20	53	have	-	Fix: sanitize multiline terminal text atomically
 102	c153cd602811	a61f0be61c0f	2026-07-20	53	n-a	-	Refactor: streamline terminal text scanning
