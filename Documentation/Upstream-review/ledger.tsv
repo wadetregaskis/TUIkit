@@ -53,3 +53,14 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 52	d681069c93bc	86b4dfc95602	2026-07-19	46	noise	-	Chore: Fix state test whitespace
 53	48bfe2cc4765	7141ea61fb7b	2026-07-19	46	n-a	-	Fix: Make native boundary fixture deterministic
 54	7d72c38f92dc	-	2026-07-19	46	noise	-	Merge pull request #46 from phranck/codex/issue-29-module-tests
+55	1adcf2b62aed	51294144f83b	2026-07-19	47	reject	-	Feat: Add compatibility mapping discovery
+56	ee0fc63d79d1	585fa34b6501	2026-07-19	47	reject	-	Fix: Reuse compatibility relationship indexes
+57	02149645b1c8	e5f718cf86ba	2026-07-19	47	reject	-	Test: Add compatibility compile contracts
+58	90bec93e92fc	a15008eab614	2026-07-19	47	reject	-	Feat: Establish the SwiftUI compatibility manifest
+59	03e8f7421c27	10a274c44439	2026-07-19	47	reject	-	Feat: Add compatibility manifest drift gate
+60	aad4fdb2d449	e40975bbd630	2026-07-19	47	reject	-	Test: Enforce compatibility contracts in quality gates
+61	b26e5fcb6c69	c02f40d0246e	2026-07-19	47	reject	-	Test: Gate CI on compatibility manifest drift
+62	8561535bd314	05a77e229c23	2026-07-19	47	reject	-	Docs: Document compatibility review workflow
+63	a8bc2a61be5e	cdb139761d1b	2026-07-19	47	reject	-	Fix: Correct compatibility portability decisions
+64	03c1bcb0da5a	c3f515665555	2026-07-19	47	have	-	Fix: Avoid Linux compiler process deadlocks
+65	e777c7508830	-	2026-07-19	47	noise	-	Merge pull request #47 from phranck/codex/issue-7-compatibility-manifest
