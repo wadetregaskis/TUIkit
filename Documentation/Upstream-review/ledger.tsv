@@ -22,3 +22,15 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 21	0916a4062fef	bc51ae560418	2026-07-19	44	reject	-	Test: Make performance benchmarks opt-in
 22	ef5f15a75690	dbe6d5a35c02	2026-07-19	44	n-a	-	Fix: Archive DocC CI artifacts
 23	6b752fd87721	-	2026-07-19	44	noise	-	Merge pull request #44 from phranck/codex/ready-foundation
+24	7c6309db5f52	a7582a50b782	2026-07-19	45	have	-	Refactor: Isolate runtime render caches
+25	744ef091c4ae	6042101d0c4c	2026-07-19	45	adapt	44660d87	Refactor: Route invalidation to owning runtime
+26	021d12934cb4	a4086e574700	2026-07-19	45	defer	-	Refactor: Own application services per runtime
+27	ded58c117d8b	2942ad5f051f	2026-07-19	45	adapt	24bbba32	Refactor: Isolate image loading per runtime
+28	3fa8b235e43f	79231bdece03	2026-07-19	45	n-a	-	Fix: Complete standalone render runtime
+29	2cd1d634ae87	43286d117ae5	2026-07-19	45	n-a	-	Docs: Explain per-app runtime migration
+30	f93dc8d6ca95	375af47e5ae9	2026-07-19	45	defer	-	Test: Cover alternating runtime isolation
+31	340250ffac0e	9ceb4744d7d1	2026-07-19	45	have	-	Docs: Correct localization key examples
+32	f42b92f84cf5	61d12e7d6c18	2026-07-19	45	n-a	-	Test: Use owning runtime for split focus
+33	f1ca2fe9f969	0f4c0032407f	2026-07-19	45	n-a	-	Fix: Bind AppStorage projections to runtime
+34	9adb6be247d0	f8c0df94746b	2026-07-19	45	n-a	-	Fix: End one-shot runtime lifecycle
+35	37fea050eb28	-	2026-07-19	45	noise	-	Merge pull request #45 from phranck/codex/issue-8-runtime
