@@ -123,6 +123,17 @@ let package = Package(
             dependencies: ["TUIkit"],
             path: "Tools/Profiling/RenderHarness"
         ),
+
+        // The smallest app that can be asked "does this view cost anything when
+        // nothing is happening?" — one view, nothing focusable, no timers. Every
+        // Example page carrying an Image also carries focusable controls, whose
+        // focus pulse keeps the loop legitimately awake and makes the reading
+        // meaningless. Driven by `Tools/Profiling/idle-image.sh`.
+        .executableTarget(
+            name: "IdleProbe",
+            dependencies: ["TUIkit"],
+            path: "Tools/Profiling/IdleProbe"
+        ),
     ]
 )
 

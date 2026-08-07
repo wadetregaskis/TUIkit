@@ -278,7 +278,17 @@ extension _ImageCore {
             lifecycle.resetAppearance(token: token)
             phaseBox.value = .loading
         }
-        lastSourceBox.value = source
+        // Only on an actual change. `StateBox.value.didSet` invalidates
+        // unconditionally — it cannot compare, since `Value` is not constrained
+        // to `Equatable` — so re-recording the same source every render asked
+        // for a frame that would be identical to the one being drawn. The loop
+        // is demand-driven, so that request is honoured: an on-screen `Image`
+        // held it at 2% CPU forever, writing zero bytes, because the diff
+        // writer correctly found nothing to say. Measured with
+        // `Tools/Profiling/idle-image.sh`.
+        if lastSourceBox.value != source {
+            lastSourceBox.value = source
+        }
 
         // Start loading on first appearance
         if !lifecycle.hasAppeared(token: token) {
