@@ -78,6 +78,60 @@ Recommended, but it is a public-surface change, so it is yours to say.
 
 ---
 
+## 3. Back `FrameBuffer` with a terminal-cell grid?
+
+**From** `3e0db22c` / `cd52b8a5` and six refits (PR #53) · **ledger verdict**
+`queued` · the largest architectural divergence in the review so far
+
+**What upstream did.** `TerminalCell` is
+`{ content: .empty | .grapheme(String, width: Int) | .continuation,
+style: TerminalStyle, isTransparent: Bool }`; `TerminalSurface` is
+`[[TerminalCell]]`. `FrameBuffer` stores one of those and keeps its `lines`
+array as an adapter over a cached, sanitised encoding. Clipping, compositing,
+transparency and vertical stacking then work in cell space, without reparsing
+ANSI out of strings. Six follow-up commits repair what that broke — ZStack
+alignment, text layout, diff clipping, background painting, notification
+measuring, blank cells under foreground styling.
+
+**Why it is tempting.** [[cells-not-characters-class]] is a standing bug class
+here, fixed instance by instance over many commits. A cell grid makes half of it
+— clipping a wide grapheme in half — *structurally* impossible, because the
+second cell is an explicit `.continuation` rather than a byte you might slice.
+
+**My recommendation: decline**, on three grounds, weakest first.
+
+1. **It fights a profiling-driven design.** `linesAreUniformWidth` and
+   `lineWidths` exist on our `FrameBuffer` because per-line `strippedLength` was
+   the dominant cost in deeply-nested bordered layouts — the same lines
+   re-measured at every enclosing level, O(depth²). A cell grid replaces that
+   cost model wholesale, and the honest answer to "what does it cost?" is that
+   nobody knows until `Tools/Profiling/` is re-run against it.
+
+2. **Upstream's version does not escape strings either.** It keeps the `lines`
+   adapter and parses strings *into* cells at the boundary — paying the parse
+   **and** the per-cell allocation. It is a different point on the trade-off,
+   not a strictly better one.
+
+3. **It does not fix the hard part.** Nearly every bug we have had in this class
+   was *width arithmetic*: is 〰️ two cells, is a lone Fitzpatrick modifier two,
+   does Terminal.app under-advance VS-16 (see
+   [[terminal-compatibility-doc]]). `TerminalCell.grapheme(_, width:)` still has
+   to compute that number, from the same `terminalWidth`. The grid fixes
+   splitting, which we already handle by padding the shortfall.
+
+**The narrower alternative**, if the safety is wanted without the rewrite:
+adopt cell-space **clip and composite primitives** for the handful of operations
+that actually straddle graphemes — `ansiAwarePrefix`, the overlay compositor,
+the diff writer's row clipping — and leave `FrameBuffer` as an array of strings.
+That captures the structural guarantee where the straddling happens, at a
+fraction of the blast radius, and can be profiled in isolation.
+
+**If you would rather take the whole thing**, say so and the six refits come
+with it; they have no meaning apart from the refactor, which is why they carry
+the same `queued` verdict rather than a decision of their own.
+
+---
+
 ## Upstream branches not on `main`
 
 Not part of the numbered backlog: an unmerged branch is a proposal, and may
