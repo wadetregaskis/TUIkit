@@ -16,10 +16,19 @@
 //  identically inside TUIkitImage (every platform) and inside the standalone
 //  macOS tool.
 
+// `cos`/`sin` below are C library functions, so this ladder has to name every
+// platform's C module — unlike `StackGuard`'s, where a missing arm is harmless
+// because every *use* sits behind the same conditions. Here the uses are
+// unconditional, so an unnamed platform gets no `cos` at all: that is why
+// `TUIkitImage` failed to build on Windows while `TUIkitCore` succeeded.
 #if canImport(Glibc)
 import Glibc
 #elseif canImport(Darwin)
 import Darwin
+#elseif canImport(Musl)
+import Musl
+#elseif canImport(ucrt)
+import ucrt
 #endif
 
 /// The six staggered "sampling circles" that make up a cell's 6-D shape
