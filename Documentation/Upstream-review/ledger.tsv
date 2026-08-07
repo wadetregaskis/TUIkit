@@ -1,1 +1,24 @@
 seq	sha	patch_id	date	pr	verdict	ours	subject
+1	65f243c53b24	a91cd91c27f3	2026-07-19	44	inspired	2b58983d	Refactor: Reduce diagnostic hotspots
+2	713a11c3a88b	218a9fad14d4	2026-07-19	44	have	-	Test: Add deterministic runtime harness
+3	9c75f3faa2ad	9863993560e3	2026-07-19	44	n-a	-	Chore: Pin quality toolchain
+4	4ebe6c064d91	4db4c902b89e	2026-07-19	44	reject	-	Feat: Add API compatibility engine
+5	370f51431260	0969f320274c	2026-07-19	44	reject	-	Test: Cover API compatibility contracts
+6	9f3066072c59	a804881af15e	2026-07-19	44	reject	-	Feat: Add API snapshot orchestration
+7	b8810f10816c	0e25d1fd784d	2026-07-19	44	reject	-	Chore: Vendor pure Swift image codecs
+8	b6aea725e030	a122c9677f3d	2026-07-19	44	reject	-	Feat: Replace C decoder with pure Swift
+9	f8655103eee0	09a0e33eb473	2026-07-19	44	adapt	25635228,24bbba32	Fix: Bound image URL loading
+10	cec8d2f38b03	891ce138cddf	2026-07-19	44	have	-	Docs: Make DocC generation warning-free
+11	7c8c3a528597	0c4e40b58136	2026-07-19	44	n-a	-	Docs: Explain pure Swift image decoding
+12	178cf6044705	7d94679e6a03	2026-07-19	44	queued	-	Test: Verify versioned SwiftPM consumers
+13	fd0c2e89d816	deb6ecd92b14	2026-07-19	44	n-a	-	Chore: Derive test counts from discovery
+14	569d7f27ce68	d02a76874a2b	2026-07-19	44	n-a	-	Chore: Enforce deterministic SDK gates
+15	9ee86bacbc6c	3cacff6ad9c3	2026-07-19	44	n-a	-	Docs: Update SDK development guarantees
+16	a7391a04aa62	2831b937c835	2026-07-19	44	n-a	-	Fix: Pin API tool deployment target
+17	a6d94a51fa84	a4f352bb4cd3	2026-07-19	44	n-a	-	Fix: Support legacy macOS Bash
+18	a2f3dcf87aa4	b1f1fe7fbe9a	2026-07-19	44	n-a	-	Fix: Keep macOS gate arguments nonempty
+19	6fbad3f3f6b3	3aba33f3718e	2026-07-19	44	n-a	-	Test: Isolate optional gate inputs
+20	6ac3d49f64c8	39e609ba603a	2026-07-19	44	have	-	Test: Isolate observation render state
+21	0916a4062fef	bc51ae560418	2026-07-19	44	reject	-	Test: Make performance benchmarks opt-in
+22	ef5f15a75690	dbe6d5a35c02	2026-07-19	44	n-a	-	Fix: Archive DocC CI artifacts
+23	6b752fd87721	-	2026-07-19	44	noise	-	Merge pull request #44 from phranck/codex/ready-foundation

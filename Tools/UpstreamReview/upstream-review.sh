@@ -99,7 +99,17 @@ pr_map() {
 pr_of() {
     local sha
     sha="$(git rev-parse "$1")"
-    pr_map | awk -v s="$sha" '$1 == s { print $2; found = 1; exit } END { if (!found) print "-" }'
+    # `awk … exit` stops reading as soon as it has the answer, which leaves
+    # pr_map writing into a closed pipe: SIGPIPE, 141, and under `pipefail` an
+    # abort. How early awk stops depends on where the commit sits in pr_map's
+    # output, so the same call succeeded or died depending on which commit it
+    # was asked about. Run the pipeline where pipefail cannot see it.
+    (
+        set +o pipefail
+        pr_map | awk -v s="$sha" '
+            $1 == s { print $2; found = 1; exit }
+            END { if (!found) print "-" }'
+    )
 }
 
 # Commits already recorded, one hash per line.
@@ -108,8 +118,18 @@ reviewed_shas() {
     awk -F'\t' 'NR > 1 && $2 != "" { print $2 }' "$LEDGER"
 }
 
+# The patch id is a convenience for re-anchoring a row after upstream rebases,
+# never load-bearing — so this must not be able to abort a recording.
+#
+# It could, before this: `git patch-id` stops reading once it has hashed what it
+# needs, `git show` then takes SIGPIPE writing the rest, and under `pipefail`
+# that is a 141 exit that `set -e` turns into a silent abort. Large commits hit
+# it and small ones did not, so seven rows of a batch vanished without a word.
 patch_id_of() {
-    git show "$1" 2>/dev/null | git patch-id --stable 2>/dev/null | cut -c1-12
+    (
+        set +o pipefail
+        git show "$1" 2>/dev/null | git patch-id --stable 2>/dev/null | cut -c1-12
+    ) || true
 }
 
 cmd_fetch() {
