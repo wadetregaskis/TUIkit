@@ -36,6 +36,9 @@ import Foundation
             do {
                 return try JSONDecoder().decode(T.self, from: data)
             } catch {
+                // Not reported — see the matching note in `JSONFileStorage`:
+                // the default-value fallback is defined behaviour and this is a
+                // per-frame read path.
                 return nil
             }
         }
@@ -45,7 +48,8 @@ import Foundation
                 let data = try JSONEncoder().encode(value)
                 defaults.set(data, forKey: key)
             } catch {
-                // Encoding failed
+                StorageDiagnostics.report(
+                    StorageFailure(operation: .encode, key: key, underlying: error))
             }
         }
 
@@ -206,7 +210,14 @@ import Foundation
             let appDir = dataHome.appendingPathComponent(appName)
 
             // Create directory if needed
-            try? FileManager.default.createDirectory(at: appDir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(
+                    at: appDir, withIntermediateDirectories: true)
+            } catch {
+                StorageDiagnostics.report(
+                    StorageFailure(
+                        operation: .createDirectory, path: appDir.path, underlying: error))
+            }
 
             // Use suite name in filename if provided
             let filename: String

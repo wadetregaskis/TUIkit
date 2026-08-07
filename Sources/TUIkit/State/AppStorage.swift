@@ -130,8 +130,17 @@ public final class JSONFileStorage: StorageBackend, @unchecked Sendable {
     public init() {
         let configDir = appConfigDirectory()
 
-        // Create directory if needed
-        try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        // Create directory if needed. A failure here is not fatal — the write
+        // may still succeed if the directory already exists — but it is the
+        // usual first sign that the config path is unwritable, so it is
+        // reported rather than dropped.
+        do {
+            try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        } catch {
+            StorageDiagnostics.report(
+                StorageFailure(
+                    operation: .createDirectory, path: configDir.path, underlying: error))
+        }
 
         self.fileURL = configDir.appendingPathComponent("settings.json")
         loadFromDisk()
@@ -156,6 +165,11 @@ extension JSONFileStorage {
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
+            // Deliberately NOT reported: falling back to the default value is
+            // this API's defined behaviour, it happens legitimately whenever a
+            // stored value predates a type change, and this sits on the
+            // per-frame read path — reporting would fire every frame for as
+            // long as the value stayed in the file. See ``StorageDiagnostics``.
             return nil
         }
     }
@@ -169,7 +183,8 @@ extension JSONFileStorage {
             cache[key] = data
             saveToDiskAsync()
         } catch {
-            // Encoding failed - ignore silently
+            StorageDiagnostics.report(
+                StorageFailure(operation: .encode, key: key, path: fileURL.path, underlying: error))
         }
     }
 
@@ -208,7 +223,10 @@ extension JSONFileStorage {
                 }
             }
         } catch {
-            // Failed to load - start fresh
+            // Starting fresh is the right recovery, but the app has just lost
+            // every stored setting and should be able to say so.
+            StorageDiagnostics.report(
+                StorageFailure(operation: .load, path: fileURL.path, underlying: error))
         }
     }
 
@@ -244,7 +262,11 @@ extension JSONFileStorage {
             let data = try JSONSerialization.data(withJSONObject: serializable, options: .prettyPrinted)
             try data.write(to: fileURL, options: .atomic)
         } catch {
-            // Failed to save - ignore silently
+            // The write that just failed is the whole point of the API: without
+            // this report the app shows a saved setting that will not survive
+            // the next launch.
+            StorageDiagnostics.report(
+                StorageFailure(operation: .save, path: fileURL.path, underlying: error))
         }
     }
 }

@@ -130,6 +130,30 @@ struct SettingsView: View {
 }
 ```
 
+### When a save fails
+
+SwiftUI's `@AppStorage` is backed by `UserDefaults`, which for practical purposes
+cannot fail. Ours falls back to a JSON file off Apple platforms — and a file in a
+user-owned directory genuinely can fail to write: read-only mount, full disk, a
+sandbox that denies the path.
+
+The wrapper's signature is SwiftUI's, so its setter cannot throw. The failure
+surfaces beside the API instead, through ``StorageDiagnostics``:
+
+```swift
+StorageDiagnostics.onFailure = { failure in
+    Task { @MainActor in showBanner("Couldn't save settings: \(failure)") }
+}
+```
+
+With no handler installed the failure is still recorded rather than dropped —
+``StorageDiagnostics/lastFailure`` and ``StorageDiagnostics/failureCount`` always
+reflect what happened, so an app can check after a `synchronize()`.
+
+Reads are deliberately quieter: a value that fails to *decode* falls back to the
+declared default, which is defined behaviour and sits on the per-frame render
+path. Directory creation, loads, encodes and writes are all reported.
+
 ## How State Survives Re-Rendering
 
 TUIkit re-evaluates the entire view tree on every frame. When `body` is called, views are

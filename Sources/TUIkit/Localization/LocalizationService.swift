@@ -287,7 +287,8 @@ public final class LocalizationService: @unchecked Sendable {
                 attributes: nil
             )
         } catch {
-            // Ignore creation errors, will fail on write anyway
+            StorageDiagnostics.report(
+                StorageFailure(operation: .createDirectory, path: dirPath, underlying: error))
         }
 
         // Write language code
@@ -298,7 +299,12 @@ public final class LocalizationService: @unchecked Sendable {
                 encoding: .utf8
             )
         } catch {
-            // Silently fail if write unsuccessful
+            // Same contract as `@AppStorage`: a language the user chose that
+            // does not reach the disk is a setting silently lost at the next
+            // launch, so it goes through the one storage-failure channel.
+            StorageDiagnostics.report(
+                StorageFailure(
+                    operation: .save, key: "language", path: path, underlying: error))
         }
     }
 
