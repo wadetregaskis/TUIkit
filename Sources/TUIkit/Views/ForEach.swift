@@ -208,3 +208,92 @@ extension ForEach where Data == Range<Int>, ID == Int {
         self.content = content
     }
 }
+
+// MARK: - ForEach over a Binding
+
+extension ForEach {
+    /// One `Binding` per element of `data`, each writing back through the
+    /// collection binding at its own index.
+    ///
+    /// Materialised as an array because ``ForEach`` iterates a
+    /// `RandomAccessCollection` of elements, and here the ELEMENT is the
+    /// binding. That is one small struct per row rather than per visible row —
+    /// SwiftUI maps the indices for the same reason — so it costs a walk of the
+    /// collection, not a render of it.
+    ///
+    /// Both accessors re-check the index. A row's binding outlives the frame it
+    /// was made in: an `onDelete`, a `.task` reload, or a sibling row's own
+    /// setter can shorten the collection first, and an unguarded
+    /// `collection[index]` would then trap inside a getter the caller has no
+    /// way to see coming. The captured `fallback` answers reads past the end
+    /// with what the row last held, and writes past the end are dropped.
+    static func elementBindings<C>(_ data: Binding<C>) -> [Binding<C.Element>]
+    where C: MutableCollection, C: RandomAccessCollection {
+        data.wrappedValue.indices.map { index in
+            let fallback = data.wrappedValue[index]
+            return Binding(
+                get: {
+                    let collection = data.wrappedValue
+                    return collection.indices.contains(index) ? collection[index] : fallback
+                },
+                set: { newValue in
+                    guard data.wrappedValue.indices.contains(index) else { return }
+                    data.wrappedValue[index] = newValue
+                })
+        }
+    }
+}
+
+extension ForEach {
+    /// Creates a ForEach over a *binding* to a collection, handing each element
+    /// to `content` as a `Binding` — SwiftUI's `ForEach($items) { $item in … }`.
+    ///
+    /// This is what a row of editable controls needs. A `Toggle` takes a
+    /// `Binding<Bool>`, so a row built from a plain element value has nothing
+    /// to bind to; the alternatives are an index-keyed lookup (`$flags[i]`,
+    /// which works but re-couples the row to its position) or a hand-rolled
+    /// `Binding(get:set:)` per row.
+    ///
+    /// ```swift
+    /// @State private var options = [Option(name: "Verbose", enabled: false)]
+    ///
+    /// ForEach($options) { $option in
+    ///     Toggle(option.name, isOn: $option.enabled)
+    /// }
+    /// ```
+    ///
+    /// Note what this does NOT rescue: `$dictionary[key]` is a
+    /// `Binding<Value?>`, and `$dictionary[key, default: x]` cannot form a key
+    /// path at all, because the `default:` parameter is an autoclosure and key
+    /// path subscripts need `Hashable` arguments. Both are true of SwiftUI too,
+    /// verbatim — for a dictionary, build the `Binding(get:set:)` explicitly.
+    public init<C>(
+        _ data: Binding<C>,
+        @ViewBuilder content: @escaping (Binding<C.Element>) -> Content
+    )
+    where
+        C: MutableCollection, C: RandomAccessCollection, C.Element: Identifiable,
+        Data == [Binding<C.Element>], ID == C.Element.ID
+    {
+        self.init(Self.elementBindings(data), id: \.wrappedValue.id, content: content)
+    }
+
+    /// Creates a ForEach over a binding to a collection whose elements are
+    /// identified by a key path rather than `Identifiable` — SwiftUI's
+    /// `ForEach($items, id: \.name) { $item in … }`.
+    ///
+    /// The key path names a property of the ELEMENT, as it does in SwiftUI, not
+    /// of the binding; it is rebased through `wrappedValue` here so callers
+    /// never write `\.wrappedValue.something`.
+    public init<C>(
+        _ data: Binding<C>,
+        id: KeyPath<C.Element, ID>,
+        @ViewBuilder content: @escaping (Binding<C.Element>) -> Content
+    )
+    where C: MutableCollection, C: RandomAccessCollection, Data == [Binding<C.Element>] {
+        self.init(
+            Self.elementBindings(data),
+            id: (\Binding<C.Element>.wrappedValue).appending(path: id),
+            content: content)
+    }
+}
