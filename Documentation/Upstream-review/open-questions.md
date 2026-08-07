@@ -10,30 +10,69 @@ Empty is the healthy state.
 
 ---
 
-## 1. Guard the four lower modules against POSIX-only APIs
+## 1. Stop Windows progress from silently regressing
 
 **From** `f75e9ae4` (PR #46) · **ledger verdict** `queued`
 
-`CLAUDE.md` holds a non-negotiable rule: POSIX-only APIs — `termios`, `ioctl`,
-signals, `DispatchSource` on stdin — stay inside the `TUIkit` umbrella, so
-`TUIkitCore`, `TUIkitStyling`, `TUIkitView` and `TUIkitImage` keep building on
-Windows.
+### The real gap
 
-The rule holds today; I checked, and none of those symbols appear in the lower
-modules. What is missing is anything that would *notice* a violation. The
-Windows lanes build exactly those four modules — and they are
-`continue-on-error: true`, deliberately advisory until the port lands, so they
-never block. A commit moving `termios` into `TUIkitCore` would land with CI
-fully green, and be found whenever someone next read the Windows lane.
+`TUIkitCore`, `TUIkitStyling`, `TUIkitView` and `TUIkitImage` build on Windows
+today. Nothing stops that from breaking: `windows_container` carries a
+**job-level** `continue-on-error: true`, and the `CI` gate job lists it under
+"Advisory lanes (never block)" and never reads its result. A commit that broke
+`TUIkitCore` on Windows would land with CI fully green.
 
-Upstream's version of this (`f75e9ae4`) bans C targets and platform frameworks
-package-wide, which would outlaw `CSTBImage` and `NSImage` — an architecture we
-chose. The scoped version bans only the specific POSIX terminal APIs, only in
-the four modules the rule already names.
+### What I originally proposed, and why it was the wrong shape
 
-Roughly twenty lines beside `Tools/validate-test-boundaries.sh`, one step in the
-`lint` job, milliseconds. Recommended, but it adds CI surface, so it is yours to
-say.
+A lint banning `termios` / `ioctl` / signals / `DispatchSource` outside the
+`TUIkit` umbrella — a cheap proxy, run on macOS and Linux in milliseconds.
+
+The owner's objection lands: **we do not actually care which module holds the
+Windows-incompatible code.** The end state is every module building and working
+on Windows, so a rule that blesses POSIX in one module and forbids it in four
+encodes a staging line that is supposed to be moving, and will be wrong the day
+the port lands. It also tests a proxy for portability rather than portability.
+
+### What to do instead — a ratchet on the real platform
+
+The lane is **already structured for this** and nobody noticed. Its steps
+already split into two groups:
+
+- four module builds with *no* per-step flag — "expected to pass";
+- `Build TUIkit`, `Build everything`, `Test`, `Smoke`, each with its own
+  `continue-on-error: true` — "expected to fail until the console layer lands",
+  each separate so all four can be watched going green independently.
+
+That is exactly the right design. The only thing defeating it is the *job*-level
+flag sitting above it, which makes the four "expected to pass" steps
+unenforceable. So the change is two edits, not twenty lines of new tooling:
+
+1. Make the job-level flag conditional instead of unconditional, so released
+   toolchains are binding and nightlies stay advisory for the same reason they
+   are everywhere else:
+   ```yaml
+   continue-on-error: ${{ startsWith(matrix.swift, 'nightly') }}
+   ```
+2. Move `windows_container` from the gate's advisory list into `required`.
+
+Then the guarantee is "what builds on Windows today still builds on Windows
+tomorrow", checked on Windows — and it ratchets by construction: each blocker
+fixed is one per-step `continue-on-error` deleted, and when the port lands the
+last flag goes and the file is simply correct with no staging left in it.
+
+### What to weigh
+
+- **Merge latency and flakiness.** This lane pulls a
+  `windowsservercore-ltsc2022` container; if that is ever slow or flaky, it now
+  blocks merges. It runs three matrix entries, two of which would become
+  binding.
+- **`windows_native`** is separately advisory; the same reasoning may or may not
+  apply — I have not examined what it covers.
+- The `CLAUDE.md` rule about keeping POSIX inside the umbrella is still worth
+  *stating* as guidance. It just should not be the thing enforced, because it is
+  a description of where the port has got to, not of what correct looks like.
+
+Recommended, but it changes what can block a merge, so it is yours to say.
 
 ---
 
