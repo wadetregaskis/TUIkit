@@ -924,6 +924,14 @@ extension RenderLoop {
     /// per-walk registries are reset here — see ``beginSceneRender()``.
     fileprivate func renderScene<S: Scene>(_ scene: S, context: RenderContext) -> FrameBuffer {
         beginSceneRender()
+        // The walk window. A `@State` write reaching the invalidation funnel
+        // from THIS thread while this is open is a body mutation — it asks for
+        // another frame from inside the frame being built. Opened and closed
+        // here because this is the one funnel, so every walk is covered and no
+        // walk is covered twice.
+        let diagnostic = tuiContext.renderCache.bodyMutationDiagnostic
+        diagnostic?.beginTraversal()
+        defer { diagnostic?.endTraversal() }
         if let renderable = scene as? SceneRenderable {
             return renderable.renderScene(context: context)
         }

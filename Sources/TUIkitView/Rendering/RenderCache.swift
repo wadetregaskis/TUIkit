@@ -194,6 +194,11 @@ public final class RenderCache: @unchecked Sendable {
     /// Cumulative cache performance statistics.
     public private(set) var stats = Stats()
 
+    /// Reports `@State` written mid-walk, when `TUIKIT_DIAGNOSE_BODY_MUTATION=1`
+    /// asked for it. `nil` otherwise, which is the whole of its cost.
+    public var bodyMutationDiagnostic: BodyMutationDiagnostic? =
+        BodyMutationDiagnostic.isEnabled ? BodyMutationDiagnostic() : nil
+
     /// Stats snapshot taken at the start of each render pass (for per-frame deltas).
     private var statsAtFrameStart = Stats()
 
@@ -330,6 +335,9 @@ extension RenderCache {
         // — by `@State` writes since the last frame, on the main actor, before
         // this frame reads the cache.
         statsAtFrameStart = stats
+        // Before the drain: the drain's own invalidations belong to the frame
+        // that requested them, not to this one.
+        bodyMutationDiagnostic?.beginFrame()
         drainPendingInvalidations()
         activeIdentities.removeAll(keepingCapacity: true)
     }
@@ -456,6 +464,11 @@ extension RenderCache: RenderInvalidationSink {
     /// - Parameter identity: the subtree whose cached buffers are now stale, or
     ///   `nil` to drop the whole cache.
     public func invalidateRender(for identity: ViewIdentity?) {
+        // Opt-in, and free when off: one optional test. See
+        // `BodyMutationDiagnostic` for why a write during the walk is worth
+        // naming — this is the single funnel every `@State` write reaches, so
+        // it is the only place that needs to ask.
+        bodyMutationDiagnostic?.note(identity)
         pendingInvalidations.withLock { state in
             if let identity {
                 if !state.clearAll { state.identities.insert(identity) }
