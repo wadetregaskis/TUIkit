@@ -37,6 +37,47 @@ say.
 
 ---
 
+## 2. Make the render-hydration environment a `@TaskLocal`
+
+**From** `a0e4c389` (PR #52) · **ledger verdict** `queued`
+
+`StateRegistration.activeEnvironment` is an ambient mutable global, saved and
+restored around body evaluation:
+
+```swift
+nonisolated(unsafe) public static var activeEnvironment: EnvironmentValues?
+```
+
+Upstream replaced theirs with a `@TaskLocal`. Production here is single-threaded
+on the render loop, so **no production hazard is demonstrated** — this is not a
+bug report.
+
+The reason to consider it is our **test suite**. `EnvironmentPropertyTests` and
+`ObservableEnvironmentTests` assign this global directly — they must, because
+they exercise the fallback path that reads it — neither suite is `.serialized`,
+and swift-testing runs suites in parallel. A render test entering
+`withHydration` concurrently will save the other suite's value and restore it
+back over the top. That is the class already fixed twice here: the render-cache
+shared-defaults flakes, and the StepperOverflow colour-depth flake.
+
+`.serialized` does **not** fix it — that trait orders tests *within* a suite,
+not against other suites. A `@TaskLocal` does, because each test body is its own
+task and no other task can write into its scope.
+
+**Cost.** The property is `public`, and a `@TaskLocal` is settable only inside
+`withValue` — so this is a public API change plus about twenty test call sites
+and one restructure of `evaluateAppBody`. Behaviour changes in exactly one way,
+and in the right direction: a detached `Task` reading `@Environment` would see
+the framework defaults instead of whatever the render loop happened to have
+published.
+
+**Evidence it is latent, not active:** fifteen consecutive full-suite runs, all
+green. The window is a few instructions wide.
+
+Recommended, but it is a public-surface change, so it is yours to say.
+
+---
+
 ## Upstream branches not on `main`
 
 Not part of the numbered backlog: an unmerged branch is a proposal, and may

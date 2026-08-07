@@ -68,3 +68,13 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 67	216c691dc587	38aef2fbee80	2026-07-19	49	n-a	-	Fix: Stabilize symbol graph subprocess execution
 68	98336b5a6dd7	fc7a28eb48bf	2026-07-19	49	n-a	-	Test: Synchronize runtime image requests
 69	48ae5984937b	-	2026-07-19	49	noise	-	Merge pull request #49 from phranck/codex/issue-48-posix-subprocess
+70	1f75c4c86c69	ee202673757f	2026-07-20	?	have	-	Feat: Add stable runtime identity scopes
+71	d0fdf0f2366d	934047b70dc6	2026-07-20	?	have	-	Fix: Preserve lifecycle and task slots
+72	d1027d2741e5	e1243c9e65f9	2026-07-20	?	have	-	Fix: Bind State at committed view identities
+73	d656c1cf32e2	7bfb6f8eadbe	2026-07-20	?	defer	-	Fix: Scope Observation to view identities
+74	f26d7c1dd292	77edd1b76a25	2026-07-20	?	have	-	Test: Cover structural effect reconstruction
+75	a0e4c389998c	0e04bf6d306f	2026-07-20	?	queued	-	Refactor: Scope render hydration with TaskLocal
+76	6c34d98470ac	8196d772b8f3	2026-07-20	?	n-a	-	Docs: Explain structural runtime identity
+77	9579f57cb93e	2316d2dbf087	2026-07-20	?	n-a	-	Fix: Isolate State locations by runtime
+78	12390d3f2018	691a049f97e5	2026-07-20	?	have	-	Fix: Preserve Observation across cache hits
+79	240391004e0c	8d2257b7b13d	2026-07-20	?	have	-	Fix: Preserve State across cached subtrees
