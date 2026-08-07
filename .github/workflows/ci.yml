@@ -16,11 +16,14 @@ name: CI
 #   Linux   — the cheapest axis to widen, because the official `swift:` images
 #             pin the toolchain exactly. No setup action is involved or wanted.
 #
-#   Windows — NOT YET SUPPORTED BY THE PACKAGE. This lane exists to make the
-#             port's progress visible, so it is advisory (never blocks a merge)
-#             and staged: the four lower modules are already portable and are
-#             expected to stay green, while the umbrella module is expected to
-#             fail until the console layer is written. See the `windows_*` jobs.
+#   Windows — the port is IN PROGRESS, and the lane is a ratchet rather than a
+#             progress report. Each step declares for itself whether it may
+#             fail, so the job as a whole promises exactly "everything that
+#             builds on Windows today still builds". It is therefore REQUIRED
+#             on released toolchains — a step that has gone green cannot
+#             silently go back. Making a step binding is one deleted
+#             `continue-on-error`; when the console layer lands, the last of
+#             them goes and nothing staged is left. See the `windows_*` jobs.
 #
 # Swift version coverage. 6.2.4 and 6.3.3 are the shipped 6.x releases as of
 # 2026-08-04; 6.4 has no release yet, only `release/6.4.x` snapshots and the
@@ -299,7 +302,10 @@ jobs:
     name: "Windows Server 2022 · Swift ${{ matrix.swift }}"
     needs: lint
     runs-on: windows-2022
-    continue-on-error: true
+    # Binding on released toolchains: what builds on Windows today must keep
+    # building. Nightlies stay advisory for the same reason they are everywhere
+    # else — they break for reasons that have nothing to do with this package.
+    continue-on-error: ${{ startsWith(matrix.swift, 'nightly') }}
     strategy:
       fail-fast: false
       matrix:
@@ -347,25 +353,35 @@ jobs:
       - name: Toolchain version
         run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "--version"
 
-      # ── Expected to pass: the portable modules ──
-      # Of 345 Swift files, only 8 touch POSIX-only APIs and 7 of those are in
-      # the umbrella module. These four are the part of the package that should
-      # already build anywhere — a regression here is a real Windows regression.
+      # ── Binding: what already builds on Windows ──
+      # This list is what CI has been observed to do, not what we would like it
+      # to do — the point of binding it is that it can only ever grow. When a
+      # step below goes green, delete its `continue-on-error` and it joins this
+      # group permanently.
       - name: "Build TUIkitCore"
         run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitCore"
 
       - name: "Build TUIkitStyling"
         run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitStyling"
 
+      # Passes on 6.3 and later; fails on 6.2 for reasons not yet diagnosed
+      # (the lane was advisory, so nobody had to look). Binding everywhere the
+      # evidence supports, advisory exactly where it does not.
       - name: "Build TUIkitView"
+        continue-on-error: ${{ matrix.swift == '6.2' }}
         run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitView"
 
+      # ── Expected to fail until the port lands ──
+      # `continue-on-error` per step, so one red stage does not hide the ones
+      # after it: the whole point is to watch them go green over time.
+
+      # `ShapeSampling` imported Glibc-or-Darwin and called `cos`/`sin`
+      # unconditionally, so Windows got no `cos` at all. Fixed; this stays
+      # advisory only until CI confirms nothing else in the module follows it.
       - name: "Build TUIkitImage"
+        continue-on-error: true
         run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitImage"
 
-      # ── Expected to fail until the console layer is ported ──
-      # `continue-on-error` per step, so one red stage does not hide the ones
-      # after it: the whole point is to watch all four go green over time.
       - name: "Build TUIkit (umbrella)"
         continue-on-error: true
         run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkit"
@@ -390,7 +406,8 @@ jobs:
     name: "${{ matrix.name }} · Swift 6.3"
     needs: lint
     runs-on: ${{ matrix.runner }}
-    continue-on-error: true
+    # Binding: Swift 6.3 is a release, and the steps below say individually
+    # which ones are allowed to fail.
     strategy:
       fail-fast: false
       matrix:
@@ -422,7 +439,10 @@ jobs:
         run: swift build --target TUIkitStyling
       - name: "Build TUIkitView"
         run: swift build --target TUIkitView
+
+      # Advisory until CI confirms the ShapeSampling fix is the whole story.
       - name: "Build TUIkitImage"
+        continue-on-error: true
         run: swift build --target TUIkitImage
 
       - name: "Build everything"
@@ -493,8 +513,7 @@ jobs:
   # move whenever the matrix changes, so requiring them directly would mean
   # editing branch protection on every matrix edit; and a job that is *skipped*
   # reports as success to branch protection, which this makes impossible to
-  # miss. Windows is deliberately not asserted on — it is a progress report
-  # until the port lands, at which point it moves into the required list.
+  # miss. Windows IS asserted on: see the note beside the required list.
   gate:
     name: CI
     if: always()
@@ -509,7 +528,9 @@ jobs:
           required="lint:${{ needs.lint.result }}
           macos:${{ needs.macos.result }}
           linux:${{ needs.linux.result }}
-          docs:${{ needs.docs.result }}"
+          docs:${{ needs.docs.result }}
+          windows_container:${{ needs.windows_container.result }}
+          windows_native:${{ needs.windows_native.result }}"
 
           # The consumer lane runs on tags only, so it is required exactly when
           # it runs. Adding it to the list unconditionally would make every
@@ -520,10 +541,12 @@ jobs:
             consumer:${{ needs.consumer.result }}"
           fi
 
-          echo "Advisory lanes (never block):"
-          echo "  windows_container: ${{ needs.windows_container.result }}"
-          echo "  windows_native   : ${{ needs.windows_native.result }}"
-          echo
+          # The Windows lanes are required now. Not because the port is done —
+          # it is not — but because each of their steps says for itself whether
+          # it is allowed to fail, so the job as a whole is exactly the promise
+          # "everything that builds on Windows today still does". That set only
+          # grows: a step going green loses its `continue-on-error` and can
+          # never silently go back.
           echo "Required lanes:"
 
           failed=""

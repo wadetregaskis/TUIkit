@@ -34,10 +34,10 @@ Linux additionally runs Swift 6.3 on arm64, and lint runs on Linux only — it
 gates everything else, so a style slip fails in a minute rather than after
 seventeen builds.
 
-Everything except the 6.2/6.3 macOS and Linux lanes is **advisory**
-(`continue-on-error`): visible, but unable to block a merge. Nightly toolchains
-break for reasons that have nothing to do with this package, and Windows does
-not build yet.
+Nightly-toolchain lanes are **advisory** (`continue-on-error`): visible, but
+unable to block a merge, because they break for reasons that have nothing to do
+with this package. Everything on a released toolchain — including Windows —
+blocks.
 
 There is no macOS 27 runner image yet — macOS 27 is still a developer preview.
 When one appears it should be added as a required lane alongside `macos-15` and
@@ -64,16 +64,32 @@ Requiring it rather than the individual jobs matters for two reasons:
 
 ### Windows
 
-Windows is **not supported yet** — the package does not build there. The CI
-lane exists to make the port's progress visible, and is staged accordingly:
+Windows is **not supported yet** — the package does not build there in full.
+The CI lane is a **ratchet**: every step says for itself whether it is allowed
+to fail, so the job as a whole promises exactly *"everything that builds on
+Windows today still builds"*. That set can only grow — when a step goes green,
+delete its `continue-on-error` and it is binding from then on. When the console
+layer lands, the last flag goes and nothing staged is left in the file.
 
-- `TUIkitCore`, `TUIkitStyling`, `TUIkitView` and `TUIkitImage` are expected to
-  **pass**. Of 345 source files only 8 touch POSIX-only APIs, and 7 of those
-  are in the umbrella module. Breaking one of these four is a real regression,
-  so keep them free of `termios`/`ioctl`/signal dependencies.
-- Building `TUIkit`, testing, and smoking are expected to **fail** until the
-  console layer is ported. Each is its own CI step so all four can be watched
-  going green independently.
+The lane is therefore **required** on released toolchains. Observed state:
+
+| Step | Status |
+|---|---|
+| `TUIkitCore`, `TUIkitStyling` | pass everywhere — **binding** |
+| `TUIkitView` | passes on 6.3+; **fails on 6.2**, cause not yet diagnosed — binding except there |
+| `TUIkitImage` | failed everywhere until 2026-08-07; advisory pending confirmation |
+| `TUIkit`, build-tests, test, smoke | fail until the console layer is ported |
+
+Do not take the table on trust — it is a record of what CI did, and the whole
+point of binding the lane is that it stays true. `TUIkitImage`'s failure went
+unnoticed for as long as the lane was advisory, and this file previously claimed
+it passed.
+
+That failure, for the record, was `ShapeSampling.swift` importing
+`Glibc`-or-`Darwin` and then calling `cos`/`sin` unconditionally: on Windows
+neither module exists, so there was no `cos` to call. `StackGuard.swift` has the
+same two-armed ladder and builds fine, because every *use* there sits behind the
+same conditions — which is the distinction to check when adding one.
 
 The known blockers, in rough order of difficulty:
 
