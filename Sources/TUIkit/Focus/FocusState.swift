@@ -351,7 +351,7 @@ extension FocusState: EnvironmentResolvable {
     /// renders in — the same reflection pass that fills the `@Environment`
     /// boxes, for the same reason.
     ///
-    /// Kept separate from ``FocusStateStore/focusManager`` so the precedence the
+    /// Kept separate from the store's `focusManager` so the precedence the
     /// `.focused` / `.defaultFocus` modifiers rely on is unchanged: a
     /// modifier-wired manager still wins, which is what lets
     /// `isolatedForBackground()` hand a modal backdrop a different one.

@@ -415,9 +415,51 @@ Cache invalidation is **identity-scoped** where possible, with full clears as th
 |---------|-----------|
 | A `@State` change | `StateBox.value.didSet` calls `renderCache.clearAffected(by: identity)` — only the affected subtree's cached buffers are invalidated. `clearAll()` is the fallback when the box has no identity yet |
 | An `@Observable` change | `AppState.setNeedsRenderWithCacheClear()`; `RenderLoop` consumes the flag (`consumeNeedsCacheClear`) and calls `clearAll()` |
-| Environment change | `RenderLoop` compares an `EnvironmentSnapshot` (palette ID + appearance ID) each frame and clears on mismatch |
+| A global environment change | `RenderLoop` compares an `EnvironmentSnapshot` (palette ID + appearance ID) each frame and clears on mismatch |
+| A **scoped** environment change | `EnvironmentModifier` compares the value it applied at its identity last pass; on a change it calls `clearAffected(by: identity)`, dropping the subtree below it |
+
+The scoped case is why the cache key carries no environment. A
+`.foregroundStyle(x)` applied *above* an `.equatable()` boundary leaves the view
+value identical, so a key of identity + value + size cannot see the difference
+and would hand back the buffer rendered under the old `x`. Detecting the change
+where it is applied costs one comparison per environment modifier per pass
+rather than a fingerprint per memoized view per lookup.
+
+A value that is **not** `Equatable` cannot be compared, so the subtree below it
+declines to cache. Memoization is lost there, which is a performance cost rather
+than a correctness one.
 
 Between these events — for example during ``Spinner`` animation frames — the cache is fully active. Static subtrees are rendered once and reused for every subsequent frame (the run loop renders only when a frame is actually due, capped at `App.maxFrameRate`).
+
+### What Declines the Cache
+
+A buffer is only *stored* when serving it again would be safe. The render
+declines when it:
+
+- was produced by a **measure pass** (incomplete: interactive controls suppress
+  their hit-test regions while measuring, and it was produced at a different
+  size);
+- contains **hit-test regions or overlays** (they capture per-frame handler
+  state);
+- **read a time-varying value** or requested an animation (a cached ``Spinner``
+  would freeze);
+- **registered an effect** — `onAppear`, `.task`, `onChange`, a key handler, a
+  focus registration, a preference write. A cache hit skips the body that
+  registers them, so the frame the cache answers is a frame on which the effect
+  does not exist.
+
+The last one turns on *placement*. `Leaf().equatable().onAppear { … }` puts the
+effect **above** the boundary, where it re-registers every frame and caching the
+leaf below it is perfectly correct. Only an effect **inside** the memoized
+subtree declines the cache.
+
+### Keeping Nested Entries Alive
+
+A hit at an outer `.equatable()` skips the subtree entirely, so a *nested*
+`.equatable()` never marks itself active and would be garbage-collected while
+still live — costing a full re-render of the inner subtree the moment the outer
+value finally changes. The hit therefore declares `retainSubtree`, to both
+`RenderCache` and `StateStorage`, protecting everything below it for that pass.
 
 ### When to Use `.equatable()`
 
