@@ -139,12 +139,12 @@ final class EnvironmentBox {
 ///
 /// Existential over the wrapper's `Value` so the renderer can populate every
 /// `@Environment` on a view without knowing each one's type.
-protocol EnvironmentResolvable {
+public protocol EnvironmentResolvable {
     func resolveEnvironment(_ environment: EnvironmentValues)
 }
 
 extension Environment: EnvironmentResolvable {
-    func resolveEnvironment(_ environment: EnvironmentValues) {
+    public func resolveEnvironment(_ environment: EnvironmentValues) {
         box.environment = environment
     }
 }
@@ -159,7 +159,7 @@ extension Environment: EnvironmentResolvable {
 /// types that have none (the overwhelming majority of leaf/layout views) skip
 /// reflection entirely after the first sighting.
 @MainActor
-func resolveEnvironmentProperties<V>(of view: V, in environment: EnvironmentValues) {
+public func resolveEnvironmentProperties<V>(of view: V, in environment: EnvironmentValues) {
     let typeID = ObjectIdentifier(V.self)
     if EnvironmentResolutionCache.typesWithoutEnvironment.contains(typeID) { return }
 

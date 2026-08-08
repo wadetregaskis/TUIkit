@@ -420,12 +420,17 @@ private func measureCompositeBody<V: View>(
     _ view: V, proposal: ProposedSize, context: RenderContext
 ) -> ViewSize {
     let childContext = context.withChildIdentity(type: V.Body.self)
+    // Resolve `@Environment` into its boxes exactly as the render path does.
+    // This used to be a `StateRegistration.withHydration` task local instead,
+    // which was both slower and *wrong* here: hydration publishes an environment
+    // for the fallback to find but never fills the boxes, so a measure-time
+    // `@Environment` read that happened to consult its box got the default. A
+    // view branching on `\.terminalWidth` would measure the subtree it would
+    // have rendered at 80 columns, whatever the terminal actually was.
+    resolveEnvironmentProperties(of: view, in: context.environment)
     bindStateProperties(
         of: view, identity: context.identity, storage: context.environment.stateStorage!)
-    let body = StateRegistration.withHydration(context: context) {
-        view.body
-    }
-    return measureChild(body, proposal: proposal, context: childContext)
+    return measureChild(view.body, proposal: proposal, context: childContext)
 }
 
 /// Measures a fixed-size view by rendering it ONCE in measuring mode and

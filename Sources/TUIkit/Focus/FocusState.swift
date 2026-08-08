@@ -104,6 +104,17 @@ public final class FocusStateStore<Value: Hashable> {
     /// reach it.
     weak var focusManager: FocusManager?
 
+    /// The manager from the environment this `@FocusState`'s view rendered in,
+    /// filled by `resolveEnvironmentProperties` alongside the `@Environment`
+    /// boxes.
+    ///
+    /// This used to be read live off `StateRegistration.activeEnvironment`,
+    /// which meant the render path had to publish a task local around *every*
+    /// body evaluation for the sake of this one fallback. Resolving it into the
+    /// store instead costs one assignment on the views that actually have a
+    /// `@FocusState`, and nothing at all on the ones that do not.
+    weak var environmentManager: FocusManager?
+
     init(emptyValue: Value) {
         self.emptyValue = emptyValue
     }
@@ -111,7 +122,7 @@ public final class FocusStateStore<Value: Hashable> {
     /// The manager to use: the render-wired one, or the active render
     /// environment's (so a read at body-top works before any modifier wired it).
     private var resolvedManager: FocusManager? {
-        focusManager ?? StateRegistration.activeEnvironment?.focusManager
+        focusManager ?? environmentManager
     }
 
     /// The value whose bound control currently holds focus, or ``emptyValue``.
@@ -174,7 +185,7 @@ public struct FocusState<Value: Hashable>: RenderIdentityBindable {
         // can still move focus even if the bound control did not render this
         // frame (windowed out) and so never wired the store itself.
         if store.focusManager == nil {
-            store.focusManager = StateRegistration.activeEnvironment?.focusManager
+            store.focusManager = store.environmentManager
         }
         return Binding(store: store)
     }
@@ -330,5 +341,21 @@ extension _DefaultFocusModifier: Renderable {
 extension _DefaultFocusModifier: Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureChild(content, proposal: proposal, context: context)
+    }
+}
+
+// MARK: - Environment Resolution
+
+extension FocusState: EnvironmentResolvable {
+    /// Hands this `@FocusState` the focus manager of the environment its view
+    /// renders in — the same reflection pass that fills the `@Environment`
+    /// boxes, for the same reason.
+    ///
+    /// Kept separate from ``FocusStateStore/focusManager`` so the precedence the
+    /// `.focused` / `.defaultFocus` modifiers rely on is unchanged: a
+    /// modifier-wired manager still wins, which is what lets
+    /// `isolatedForBackground()` hand a modal backdrop a different one.
+    public func resolveEnvironment(_ environment: EnvironmentValues) {
+        store.environmentManager = environment.focusManager
     }
 }

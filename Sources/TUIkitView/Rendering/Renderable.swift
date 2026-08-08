@@ -196,12 +196,14 @@ public func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameB
 
         // Wrap body evaluation in observation tracking so that any @Observable
         // property accessed during body triggers a re-render when mutated.
-        let body = StateRegistration.withHydration(context: context) {
-            withObservationTracking {
-                view.body
-            } onChange: {
-                AppState.shared.setNeedsRenderWithCacheClear()
-            }
+        // No environment hydration here: `resolveEnvironmentProperties` above has
+        // already filled every `@Environment` (and `@FocusState`) box on this
+        // view, so publishing the environment as well was pure overhead on the
+        // single most-executed operation in the framework.
+        let body = withObservationTracking {
+            view.body
+        } onChange: {
+            AppState.shared.setNeedsRenderWithCacheClear()
         }
 
         context.environment.stateStorage!.markActive(context.identity)
