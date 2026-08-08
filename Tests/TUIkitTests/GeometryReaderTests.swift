@@ -17,14 +17,14 @@ struct GeometryReaderTests {
     @Test("The proxy reports the offered size")
     func proxyReportsOfferedSize() {
         let context = makeRenderContext(width: 30, height: 8)
-        var seen: ProxySize?
+        var seen: CellSize?
         _ = renderToBuffer(
             GeometryReader { proxy in
                 seen = proxy.size
                 return Text("x")
             }, context: context)
 
-        #expect(seen == ProxySize(width: 30, height: 8))
+        #expect(seen == CellSize(width: 30, height: 8))
     }
 
     @Test("Content can branch on the size it is given")
@@ -61,7 +61,7 @@ struct GeometryReaderTests {
     @Test("A frame around the reader bounds it")
     func frameBoundsTheReader() {
         let context = makeRenderContext(width: 40, height: 10)
-        var seen: ProxySize?
+        var seen: CellSize?
         _ = renderToBuffer(
             GeometryReader { proxy in
                 seen = proxy.size
@@ -100,7 +100,7 @@ struct GeometryReaderTests {
     func localFrame() {
         let proxy = GeometryProxy(width: 20, height: 5)
         let frame = proxy.frame(in: .local)
-        #expect(frame == ProxyRect(x: 0, y: 0, width: 20, height: 5))
+        #expect(frame == CellRect(x: 0, y: 0, width: 20, height: 5))
         #expect(frame.maxX == 20)
         #expect(frame.maxY == 5)
     }
@@ -117,7 +117,7 @@ struct GeometryReaderTests {
 
         let positioned = GeometryProxy(width: 20, height: 5, globalOrigin: (x: 4, y: 2))
         #expect(positioned.hasGlobalPosition)
-        #expect(positioned.frame(in: .global) == ProxyRect(x: 4, y: 2, width: 20, height: 5))
+        #expect(positioned.frame(in: .global) == CellRect(x: 4, y: 2, width: 20, height: 5))
         #expect(positioned.frame(in: .local).x == 0)
     }
 

@@ -24,7 +24,7 @@ import TUIkitView
 /// caller should not be asking.
 public struct GeometryProxy: Equatable, Sendable {
     /// The container's size in cells.
-    public let size: ProxySize
+    public let size: CellSize
 
     /// The container's origin in the terminal's coordinate space, if known.
     let globalOrigin: (x: Int, y: Int)?
@@ -35,7 +35,7 @@ public struct GeometryProxy: Equatable, Sendable {
     }
 
     init(width: Int, height: Int, globalOrigin: (x: Int, y: Int)? = nil) {
-        self.size = ProxySize(width: width, height: height)
+        self.size = CellSize(width: width, height: height)
         self.globalOrigin = globalOrigin
     }
 
@@ -46,13 +46,13 @@ public struct GeometryProxy: Equatable, Sendable {
     /// is composed into its parent afterwards, which is most of them — this
     /// falls back to the local frame rather than inventing a position. Check
     /// ``hasGlobalPosition`` when the difference matters.
-    public func frame(in coordinateSpace: CoordinateSpace) -> ProxyRect {
+    public func frame(in coordinateSpace: CoordinateSpace) -> CellRect {
         switch coordinateSpace {
         case .local:
-            return ProxyRect(x: 0, y: 0, width: size.width, height: size.height)
+            return CellRect(x: 0, y: 0, width: size.width, height: size.height)
         case .global:
             let origin = globalOrigin ?? (x: 0, y: 0)
-            return ProxyRect(
+            return CellRect(
                 x: origin.x, y: origin.y, width: size.width, height: size.height)
         }
     }
@@ -63,9 +63,9 @@ public struct GeometryProxy: Equatable, Sendable {
 
 /// A size in whole terminal cells.
 ///
-/// The counterpart of `CGSize` in `GeometryProxy`, spelled in cells for the
-/// reason recorded on ``AlignmentID``: this framework's geometry is integral.
-public struct ProxySize: Equatable, Sendable {
+/// The counterpart of `CGSize`, spelled in cells for the reason recorded on
+/// ``AlignmentID``: this framework's geometry is integral.
+public struct CellSize: Equatable, Sendable {
     /// The width in cells.
     public let width: Int
 
@@ -73,8 +73,8 @@ public struct ProxySize: Equatable, Sendable {
     public let height: Int
 }
 
-/// A rectangle in whole terminal cells.
-public struct ProxyRect: Equatable, Sendable {
+/// A rectangle in whole terminal cells — the counterpart of `CGRect`.
+public struct CellRect: Equatable, Sendable {
     /// The leading edge, in cells from the coordinate space's origin.
     public let x: Int
 
