@@ -178,6 +178,10 @@ public final class RenderCache: @unchecked Sendable {
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
+    /// Subtree roots whose descendants must survive this pass's collection even
+    /// though nothing below them was visited. See ``retainSubtree(_:)``.
+    private var retainedSubtreeRoots: [ViewIdentity] = []
+
     /// Invalidations enqueued by ``invalidateRender(for:)`` — a `@State` write —
     /// since the last frame, drained on the main actor at ``beginRenderPass()``.
     private struct PendingInvalidations: Sendable {
@@ -325,6 +329,36 @@ extension RenderCache {
         activeIdentities.insert(identity)
     }
 
+    /// Declares that everything cached *below* `root` is still live, without
+    /// visiting it.
+    ///
+    /// A cache hit at an `.equatable()` view returns its stored buffer and skips
+    /// the subtree entirely, so no view inside ever reaches ``markActive(_:)``.
+    /// Without this the nested entries look absent from the tree and
+    /// ``removeInactive()`` collects them — so the first frame the *outer* value
+    /// changes, every inner entry has to be rendered from scratch even though
+    /// none of them changed. The steady state was one entry where there should
+    /// have been two.
+    ///
+    /// The twin of `StateStorage.retainSubtree(_:)`, which already protects the
+    /// `@State` inside a cached subtree for exactly the same reason; per-pass in
+    /// the same way, so a subtree that stops being declared becomes collectable
+    /// on the next frame.
+    ///
+    /// - Parameter root: The cached view's own identity.
+    public func retainSubtree(_ root: ViewIdentity) {
+        retainedSubtreeRoots.append(root)
+    }
+
+    /// Whether a retained subtree protects this identity from collection.
+    ///
+    /// O(roots × depth) via the structural ancestor walk, paid only for entries
+    /// that were *not* visited this pass — the roots are the handful of
+    /// `.equatable()` views that hit, so this stays cheap.
+    private func isRetained(_ identity: ViewIdentity) -> Bool {
+        retainedSubtreeRoots.contains { $0.isAncestor(of: identity) }
+    }
+
     /// Begins a new render pass by draining any deferred `@State` invalidations,
     /// clearing the active identity set, and snapshotting the current stats for
     /// per-frame delta calculation.
@@ -340,6 +374,7 @@ extension RenderCache {
         bodyMutationDiagnostic?.beginFrame()
         drainPendingInvalidations()
         activeIdentities.removeAll(keepingCapacity: true)
+        retainedSubtreeRoots.removeAll(keepingCapacity: true)
     }
 
     /// Applies the invalidations enqueued by ``invalidateRender(for:)`` since the
@@ -366,11 +401,14 @@ extension RenderCache {
     /// Any entry whose identity was not marked active during this render pass
     /// is removed. Prevents memory leaks from permanently removed views.
     public func removeInactive() {
-        let staleKeys = entries.keys.filter { !activeIdentities.contains($0) }
+        func isLive(_ identity: ViewIdentity) -> Bool {
+            activeIdentities.contains(identity) || isRetained(identity)
+        }
+        let staleKeys = entries.keys.filter { !isLive($0) }
         for key in staleKeys {
             entries.removeValue(forKey: key)
         }
-        for key in sizeEntries.keys where !activeIdentities.contains(key.identity) {
+        for key in sizeEntries.keys where !isLive(key.identity) {
             sizeEntries.removeValue(forKey: key)
         }
     }
@@ -417,6 +455,7 @@ extension RenderCache {
         entries.removeAll()
         sizeEntries.removeAll()
         activeIdentities.removeAll()
+        retainedSubtreeRoots.removeAll()
         stats = Stats()
         statsAtFrameStart = Stats()
     }

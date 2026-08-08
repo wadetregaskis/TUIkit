@@ -216,6 +216,12 @@ extension EquatableView {
         let storage = context.environment.stateStorage!
         storage.markActive(context.identity)
         storage.retainSubtree(context.identity)
+        // And the same declaration to the render cache, for the same reason one
+        // layer over: a *nested* `.equatable()` below this one never reaches
+        // `markActive` on a hit frame, so without this its entry is collected
+        // while still live and has to re-render the moment this view's value
+        // finally changes.
+        context.renderCache?.retainSubtree(context.identity)
     }
 }
 
