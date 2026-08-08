@@ -147,7 +147,7 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 146	5d394e636586	cb3f30a81ddb	2026-07-21	61	defer	-	Refactor: Remove token lifecycle and hydration legacy
 147	618e0c3f751b	-	2026-07-22	61	noise	-	Merge pull request #61 from phranck/issue/57-pending-effect-diff
 148	7fc40a758aa4	ea5c98b48804	2026-07-21	-	noise	-	Chore: Update test count badge to 1312 tests [skip ci]
-149	71629a9c12e4	82ebd0fa729e	2026-07-22	62	defer	-	Feat: Diagnose state mutation during body evaluation
+149	71629a9c12e4	82ebd0fa729e	2026-07-22	62	adapt	-	Feat: Diagnose state mutation during body evaluation
 150	8b5a098138c7	7bc26291fabd	2026-07-22	62	n-a	-	Docs: Describe the phase-separated render cycle
 151	83507d081b98	46f7854091c3	2026-07-22	62	n-a	-	Docs: Mark the render phase OpenSpec as implemented
 152	8d63dadf3db0	a16c3e13f396	2026-07-22	62	n-a	-	Fix: Key the traversal window to the traversing thread
@@ -168,7 +168,7 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 167	fb9dea0f93a7	d4241ea12669	2026-07-22	-	noise	-	Chore: Update test count badge to 1322 tests [skip ci]
 168	c2ff99fea569	49fedd0da34c	2026-07-22	-	n-a	-	Docs: Rebuild outdated DocC diagrams and add Typst sources
 169	b207e9eae333	9af7b3de76eb	2026-07-22	65	have	-	Fix: Serialize JSONFileStorage writes through an ordered writer
-170	830900361cd5	801298ea022d	2026-07-22	65	defer	-	Fix: Report storage persistence failures instead of dropping them
+170	830900361cd5	801298ea022d	2026-07-22	65	adapt	-	Fix: Report storage persistence failures instead of dropping them
 171	a2bef92c1e25	0ee15a9e8ef9	2026-07-22	65	n-a	-	Fix: Remove the global storage fallback and bind storage per runtime
 172	c5d84947e552	b7ee1cf7d069	2026-07-22	65	n-a	-	Chore: Regenerate the API compatibility manifest for storage changes
 173	370451484d9c	022a1a643b8e	2026-07-22	65	n-a	-	Docs: Describe AppStorage persistence guarantees
