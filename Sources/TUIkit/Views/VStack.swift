@@ -621,15 +621,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
         var alignedLines: [String] = []
 
-        let bufferOffset: Int
-        switch alignment {
-        case .leading:
-            bufferOffset = 0
-        case .center:
-            bufferOffset = (width - buffer.width) / 2
-        case .trailing:
-            bufferOffset = width - buffer.width
-        }
+        let bufferOffset = alignment.childOffset(childWidth: buffer.width, in: width)
 
         let leftCount = bufferOffset
         let rightCount = max(0, width - bufferOffset - buffer.width)

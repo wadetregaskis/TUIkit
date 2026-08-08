@@ -171,15 +171,8 @@ extension FlexibleFrameView: Renderable {
         var result: [String] = []
 
         // Calculate vertical offset for alignment
-        let verticalOffset: Int
-        switch alignment.vertical {
-        case .top:
-            verticalOffset = 0
-        case .center:
-            verticalOffset = max(0, (targetHeight - buffer.height) / 2)
-        case .bottom:
-            verticalOffset = max(0, targetHeight - buffer.height)
-        }
+        let verticalOffset = alignment.vertical.childOffset(
+            childHeight: buffer.height, in: targetHeight)
 
         // Track the aligned result's width as we build it — `alignHorizontally`
         // measures each line for its padding decision anyway, so threading that
@@ -203,15 +196,8 @@ extension FlexibleFrameView: Renderable {
         // The content shifted within the frame; carry overlay layers by the
         // same amount. The horizontal shift matches the widest line — exact
         // for the common uniform-width buffer.
-        let horizontalOffset: Int
-        switch alignment.horizontal {
-        case .leading:
-            horizontalOffset = 0
-        case .center:
-            horizontalOffset = max(0, (targetWidth - buffer.width) / 2)
-        case .trailing:
-            horizontalOffset = max(0, targetWidth - buffer.width)
-        }
+        let horizontalOffset = alignment.horizontal.childOffset(
+            childWidth: buffer.width, in: targetWidth)
         // Pass the now-known width so `replacingLines` doesn't re-measure every
         // padded line. When nothing overflowed the frame, every line is exactly
         // `targetWidth` — flag that so the buffer can skip per-line work too.
@@ -239,19 +225,11 @@ extension FlexibleFrameView: Renderable {
         // without the per-line spaces temporaries or `+`-chain intermediates. This
         // runs once per line of every `.frame(...)` (e.g. the `modifiers`
         // scenario, two framed-and-padded chains per row).
-        let leftPad: Int
-        let rightPad: Int
-        switch alignment.horizontal {
-        case .leading:
-            leftPad = 0
-            rightPad = padding
-        case .center:
-            leftPad = padding / 2
-            rightPad = padding - leftPad
-        case .trailing:
-            leftPad = padding
-            rightPad = 0
-        }
+        // The same guide arithmetic as every other placement: a `padding`-wide
+        // gap is a child of width `lineWidth` inside `targetWidth`.
+        let leftPad = alignment.horizontal.childOffset(
+            childWidth: targetWidth - padding, in: targetWidth)
+        let rightPad = padding - leftPad
         var aligned = ""
         aligned.reserveCapacity(line.utf8.count + padding)
         if leftPad > 0 { aligned += asciiSpaces(leftPad) }

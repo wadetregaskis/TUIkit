@@ -2479,16 +2479,12 @@ where Value.ID: Hashable {
         let visibleLength = clipped.strippedLength
         let padding = max(0, width - visibleLength)
 
-        switch alignment {
-        case .leading:
-            return clipped + String(repeating: " ", count: padding)
-        case .center:
-            let leftPad = padding / 2
-            let rightPad = padding - leftPad
-            return String(repeating: " ", count: leftPad) + clipped + String(repeating: " ", count: rightPad)
-        case .trailing:
-            return String(repeating: " ", count: padding) + clipped
-        }
+        // Guide arithmetic, same as every other placement: the cell's visible
+        // text is a `visibleLength`-wide child inside a `width`-wide column.
+        let leftPad = alignment.childOffset(childWidth: visibleLength, in: width)
+        let rightPad = padding - leftPad
+        return String(repeating: " ", count: leftPad) + clipped
+            + String(repeating: " ", count: rightPad)
     }
 }
 
