@@ -76,7 +76,8 @@ Code that uses them compiles and behaves the same.
 | Data | `List` — content-closure **and** data-driven `List(_:id:selection:rowContent:)`, `Table` | ✓ | data-driven `List` routes through the windowed `ForEach` path (O(visible)) |
 | Scrolling | `ScrollView(_:content:)`, `ScrollViewReader` / `ScrollViewProxy.scrollTo(_:anchor:)`, `defaultScrollAnchor(_:)` | ✓ | the `showsIndicators:` variant mirrors a soft-deprecated SwiftUI init; `scrollTo` targets `ForEach` row identities (no `.id(_:)` tagging yet) and vertical-only scroll views, resolving in O(window) even at millions of rows |
 | Adaptive | `ViewThatFits(in:content:)` | ✓ | |
-| Layout | `GeometryReader` / `GeometryProxy` / `CoordinateSpace`, `AlignmentID` / `ViewDimensions` / `HorizontalAlignment(_:)` / `VerticalAlignment(_:)`, `.alignmentGuide(_:computeValue:)` | ✓ | sizes are whole cells → §2.2 (`ProxySize`/`ProxyRect`, no `CGSize`); `GeometryProxy` omits `safeAreaInsets` and the `Anchor` subscript (§4b), and `frame(in: .global)` falls back to the local frame where the renderer does not know the on-screen position — `hasGlobalPosition` says which. Guide *values* are `Double` even though sizes are `Int`, because a guide is only ever subtracted from another guide and then floored; see `AlignmentID`. Read `.alignmentGuide` as the **outermost** modifier on a child, as with `.zIndex` |
+| Layout | `GeometryReader` / `GeometryProxy` / `CoordinateSpace`, `AlignmentID` / `ViewDimensions` / `HorizontalAlignment(_:)` / `VerticalAlignment(_:)`, `.alignmentGuide(_:computeValue:)` | ✓ | sizes are whole cells → §2.2 (`CellSize`/`CellRect`, no `CGSize`); `GeometryProxy` omits `safeAreaInsets` and the `Anchor` subscript (§4b), and `frame(in: .global)` falls back to the local frame where the renderer does not know the on-screen position — `hasGlobalPosition` says which. Guide *values* are `Double` even though sizes are `Int`, because a guide is only ever subtracted from another guide and then floored; see `AlignmentID`. Read `.alignmentGuide` as the **outermost** modifier on a child, as with `.zIndex` |
+| Custom layout | `Layout` (+ `Cache`, `makeCache`/`updateCache`, `sizeThatFits`, `placeSubviews`, `callAsFunction`), `LayoutSubviews` / `LayoutSubview`, `LayoutValueKey` + `.layoutValue(key:value:)`, `.layoutPriority(_:)`, `AnyLayout` | ✓ | integer geometry throughout → §2.2: `placeSubviews(in: CellRect …)`, `sizeThatFits` answers `ViewSize`. `LayoutSubview.sizeThatFits` returns `ViewSize` (a superset of `CGSize` — it carries the flexibility SwiftUI makes you infer by probing with `.infinity`, which `ProposedSize` therefore has no need to encode). The cache lives one pass, not across them (`updateCache` still runs, so conformances behave identically). **Omitted**, each for a stated reason on `Layout`: `ViewSpacing`/`spacing(subviews:cache:)`, `LayoutProperties`, `explicitAlignment(of:in:…)`, `Animatable`. **Added**: `LayoutSubview.place(in:anchor:proposal:)` — the region form, which resolves the anchor in a single flooring step (see §2.2) |
 | Nav | `NavigationSplitView` (2/3-column, `columnVisibility:`), `navigationTitle` (`StringProtocol` / `Text`) | ✓ | a `Text` title renders as a plain string (its styling isn't carried) |
 | Containers | `TabView` / `Tab`, `Form`, `LabeledContent`, `Label` (incl. `Label(_:systemImage:)`) | ✓ | `Label(_:systemImage:)` renders an SF Symbol glyph on Apple terminals → §2.4; `formStyle(.columns)` (default) / `.grouped` |
 | Presentation | `sheet(isPresented:onDismiss:content:)`, `sheet(item:onDismiss:content:)`, `alert`, `confirmationDialog(_:isPresented:titleVisibility:actions:message:)` | ✓ | presented as a centred, dimming overlay. An `alert`/`confirmationDialog` dismisses when any of its actions is chosen (SwiftUI's behaviour — the action closure does not flip the binding itself), and claims Escape on the status bar while it is up, so a page's own `⎋ back` cannot navigate out from under it. Escape *is* the `.cancel`-role button (macOS gives Cancel the Escape key equivalent): it runs that action if there is one — a disabled one is skipped — and closes the dialog either way. A `sheet`/`modal` deliberately does NOT auto-dismiss: its content owns its own close button. |
@@ -142,8 +143,19 @@ integer fields). The same goes for `UnitPoint` anchors — there is no sub-cell
 anchor to express.
 
 The same rule shapes the layout read-back API: `GeometryProxy.size` is a
-`ProxySize` of `Int` cells and `frame(in:)` returns a `ProxyRect`, not `CGSize`
-and `CGRect`.
+`CellSize` of `Int` cells and `frame(in:)` returns a `CellRect`, not `CGSize`
+and `CGRect`. A custom `Layout` sees the same pair — `placeSubviews(in:)` takes
+a `CellRect`. Two consequences a layout author should know, both of which
+floating point used to hide:
+
+- **Divide last.** `let each = total / count` then `i * each` silently drops up
+  to `count - 1` cells (2 of them for an ordinary 80-wide, 3-column split);
+  `i * total / count` drops none and stays within one cell of even.
+- **`CellRect` has no `midX` / `midY`.** A midpoint is fractional whenever the
+  extent is odd, so flooring it to a cell *before* subtracting the subview's
+  half-size floors twice — and that moves a centred placement by a cell in
+  **210 of 861** (extent, size) combinations. `place(in:anchor:proposal:)` does
+  the whole thing in one step instead.
 
 The one deliberate exception is an **alignment guide's value**, which is
 `Double`. A guide is not a size — it is a reference line *inside* a view, and it

@@ -21,6 +21,16 @@ public protocol AlignmentGuideProviding {
     /// The explicit value this view sets for `key`, evaluated against the size
     /// the view laid out at — or `nil` when it sets no value for that guide.
     func explicitAlignmentGuide(for key: AlignmentKey, in dimensions: ViewDimensions) -> Double?
+
+    /// Every guide this view sets, including any set by wrappers it contains.
+    ///
+    /// A container that aligns on ONE guide only ever asks about that one, so
+    /// it uses ``explicitAlignmentGuide(for:in:)``. A ``Layout`` handed the
+    /// subview through ``LayoutSubview/dimensions(in:)`` has to hand back a
+    /// whole ``ViewDimensions``, which means knowing what to fill it with —
+    /// guides are keyed by arbitrary `AlignmentID` types, so there is nothing
+    /// to enumerate unless the view that set them says so.
+    var explicitAlignmentGuideKeys: [AlignmentKey] { get }
 }
 
 // MARK: - Guide View
@@ -54,6 +64,16 @@ public struct _AlignmentGuideView<Content: View>: View {
 }
 
 extension _AlignmentGuideView: AlignmentGuideProviding {
+    public var explicitAlignmentGuideKeys: [AlignmentKey] {
+        guard Content._providesAlignmentGuide,
+            let inner = (content as? AlignmentGuideProviding)?.explicitAlignmentGuideKeys
+        else { return [key] }
+        // This wrapper's own guide first: a repeated key resolves to the
+        // outermost value, and building the dictionary in this order lets the
+        // later (inner) write be the one that loses.
+        return [key] + inner.filter { $0 != key }
+    }
+
     public func explicitAlignmentGuide(
         for key: AlignmentKey, in dimensions: ViewDimensions
     ) -> Double? {

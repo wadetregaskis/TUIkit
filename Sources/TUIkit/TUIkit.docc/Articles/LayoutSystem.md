@@ -165,6 +165,41 @@ content — that is what makes the reported size meaningful — so bound it with
 Pass 1: measuring would mean building it, which needs a proxy, which needs the
 size Pass 1 is computing.
 
+## Writing Your Own Layout
+
+When neither a stack nor a frame expresses the arrangement, conform to
+``Layout`` and call it like a function:
+
+```swift
+struct Diagonal: Layout {
+    func sizeThatFits(proposal: ProposedSize, subviews: Subviews, cache: inout ()) -> ViewSize { … }
+    func placeSubviews(in bounds: CellRect, proposal: ProposedSize, subviews: Subviews, cache: inout ()) {
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: (x: bounds.x + index, y: bounds.y + index), proposal: .unspecified)
+        }
+    }
+}
+
+Diagonal { Text("one"); Text("two") }
+```
+
+A subview that is never placed is not drawn, and placement order is draw order.
+``AnyLayout`` erases the type so a view can switch arrangements without the two
+branches tearing down each other's state.
+
+Two things bite layout authors here that do not bite them in SwiftUI, both
+because the geometry is integral rather than floating point:
+
+- **Divide last.** `let each = total / count` then `i * each` silently drops up
+  to `count - 1` cells; `i * total / count` drops none and stays within one cell
+  of even. Floating point hid this by rounding at placement time.
+- **Centring is one subtraction, not two.** ``CellRect`` deliberately has no
+  `midX` / `midY`, because flooring a midpoint before subtracting half the
+  subview's size floors twice and lands a cell off in 210 of 861 (extent, size)
+  combinations — the arithmetic ``AlignmentID`` sets out. Reach for
+  ``LayoutSubview/place(in:anchor:proposal:)``, which does it in one step and
+  clamps the result inside the region.
+
 ## Which Views Are Layoutable?
 
 | View | Layoutable? | Flexibility |
@@ -188,6 +223,9 @@ Views that are not `Layoutable` use the default implementation which renders fir
 - ``GeometryReader``
 - ``AlignmentID``
 - ``ViewDimensions``
+- ``Layout``
+- ``LayoutSubview``
+- ``AnyLayout``
 - ``VStack``
 - ``HStack``
 - ``Spacer``

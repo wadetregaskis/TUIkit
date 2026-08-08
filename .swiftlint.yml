@@ -178,6 +178,10 @@ type_name:
     - _TaggedView
     - _ZIndexView
     - _AlignmentGuideView
+    - _LayoutValueView
+    # Drives a custom `Layout`; internal-but-public because `callAsFunction`
+    # returns it opaquely.
+    - _LayoutCore
     # @FocusState modifier helpers created by .focused / .defaultFocus.
     - _FocusedModifier
     - _DefaultFocusModifier
