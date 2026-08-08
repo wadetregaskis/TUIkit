@@ -35,6 +35,89 @@ private final class LazyMeasureSink {
     }
 }
 
+/// Wraps its subviews onto as many lines as they need, like text — the layout a
+/// terminal has no built-in for, and the one that shows what ``Layout`` is for.
+///
+/// Both passes route through `lines(of:in:)` so the size reported and the
+/// arrangement drawn cannot disagree. Note the widths accumulate per line
+/// rather than being divided up front: dividing first is what silently loses
+/// cells when the geometry is integers.
+private struct Flow: Layout {
+    var spacing = 1
+
+    func sizeThatFits(proposal: ProposedSize, subviews: Subviews, cache: inout ()) -> ViewSize {
+        let limit = proposal.width ?? 40
+        let rows = lines(of: subviews, in: limit)
+        return ViewSize(
+            width: rows.map(\.width).max() ?? 0,
+            height: rows.count)
+    }
+
+    func placeSubviews(
+        in bounds: CellRect, proposal: ProposedSize, subviews: Subviews, cache: inout ()
+    ) {
+        for (row, line) in lines(of: subviews, in: bounds.width).enumerated() {
+            var x = bounds.x
+            for index in line.indices {
+                subviews[index].place(at: (x: x, y: bounds.y + row), proposal: .unspecified)
+                x += subviews[index].sizeThatFits(.unspecified).width + spacing
+            }
+        }
+    }
+
+    /// Greedily packs subviews into lines no wider than `limit`.
+    private func lines(
+        of subviews: Subviews, in limit: Int
+    ) -> [(indices: [Int], width: Int)] {
+        var rows: [(indices: [Int], width: Int)] = []
+        var current: [Int] = []
+        var width = 0
+        for index in subviews.indices {
+            let itemWidth = subviews[index].sizeThatFits(.unspecified).width
+            let advance = current.isEmpty ? itemWidth : spacing + itemWidth
+            if !current.isEmpty, width + advance > limit {
+                rows.append((current, width))
+                current = [index]
+                width = itemWidth
+            } else {
+                current.append(index)
+                width += advance
+            }
+        }
+        if !current.isEmpty { rows.append((current, width)) }
+        return rows
+    }
+}
+
+/// One subview per line — the other half of the ``AnyLayout`` switch, so the
+/// same chips can be re-arranged without their identities (and state) being
+/// torn down.
+private struct Column: Layout {
+    func sizeThatFits(proposal: ProposedSize, subviews: Subviews, cache: inout ()) -> ViewSize {
+        ViewSize(
+            width: subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0,
+            height: subviews.count)
+    }
+
+    func placeSubviews(
+        in bounds: CellRect, proposal: ProposedSize, subviews: Subviews, cache: inout ()
+    ) {
+        for (row, subview) in subviews.enumerated() {
+            subview.place(at: (x: bounds.x, y: bounds.y + row), proposal: .unspecified)
+        }
+    }
+}
+
+/// Sample data for the custom-layout demo, deliberately of varied widths so the
+/// wrap points move as the terminal resizes. Tokens, not chrome — they are the
+/// demo's *content*, so they are not translated (as file names in the browser
+/// demo are not).
+private let flowChips = [
+    "swift", "terminal", "layout", "cells", "unicode", "ansi", "focus",
+    "scroll", "render", "cache", "guides", "measure", "place", "anchor",
+    "wrap", "flow", "column", "cell grid", "proposal", "subview",
+]
+
 /// Layout system demo page.
 ///
 /// Shows various layout options including:
@@ -43,7 +126,14 @@ private final class LazyMeasureSink {
 /// - Spacer (flexible space)
 /// - Padding and frame modifiers
 /// - Lazy stacks windowing to a ScrollView's viewport (live rendered-row set)
+/// - Alignment guides, GeometryReader, and a custom `Layout`
 struct LayoutPage: View {
+    /// Whether the bullet hangs off the stack's alignment line.
+    @State private var hangBullet = true
+
+    /// Whether the chips flow onto wrapped lines or stack in one column.
+    @State private var flowChipsLayout = true
+
     /// The rows the windowed `LazyVStack` rendered in the last frame.
     @State private var renderedRows: Set<Int> = []
 
@@ -130,6 +220,84 @@ struct LayoutPage: View {
                     Text(" \(L("page.layout.onTop")) ").bold().inverted()
                 }
                 .border(color: .brightBlack)
+            }
+
+            DemoSection(L("page.layout.section.alignmentGuide")) {
+                // `.alignmentGuide` moves the line the stack aligns on. With the
+                // bullet's guide at its own TRAILING edge, the bullet hangs to
+                // the left of that line and everything else shifts right to meet
+                // it — so the column ends up WIDER than its widest child, which
+                // the border makes visible.
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.layout.guideExplain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Toggle(L("page.layout.guideToggle"), isOn: $hangBullet)
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        if hangBullet {
+                            Text("•")
+                                .foregroundStyle(.palette.accent)
+                                .alignmentGuide(.leading) { $0[.trailing] }
+                        } else {
+                            Text("•").foregroundStyle(.palette.accent)
+                        }
+                        Text(L("page.layout.guideItem"))
+                        Text(L("page.layout.guideItem2"))
+                    }
+                    .border(color: .brightBlack)
+                }
+            }
+
+            DemoSection(L("page.layout.section.geometryReader")) {
+                // The one thing an app could not work around before: reading the
+                // space it was actually given. Resize the terminal and watch both
+                // the numbers and the chosen arrangement change.
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.layout.geometryExplain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+
+                    GeometryReader { proxy in
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack(spacing: 1) {
+                                Text(L("page.layout.geometryOffered"))
+                                    .foregroundStyle(.palette.foregroundSecondary)
+                                Text("\(proxy.size.width)×\(proxy.size.height)")
+                                    .foregroundStyle(.palette.accent)
+                                    .bold()
+                                Text(L("page.layout.geometryCells"))
+                                    .foregroundStyle(.palette.foregroundTertiary)
+                            }
+                            if proxy.size.width >= 60 {
+                                Text(L("page.layout.geometryWide"))
+                                    .foregroundStyle(.palette.success)
+                            } else {
+                                Text(L("page.layout.geometryNarrow"))
+                                    .foregroundStyle(.palette.warning)
+                            }
+                        }
+                    }
+                    .frame(height: 2)
+                    .border(color: .brightBlack)
+                }
+            }
+
+            DemoSection(L("page.layout.section.customLayout")) {
+                // `Flow` is a real custom Layout — no stack arranges things this
+                // way. `AnyLayout` erases the two so the switch keeps ONE
+                // identity, and the chips are not rebuilt when it flips.
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.layout.flowExplain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Toggle(L("page.layout.flowToggle"), isOn: $flowChipsLayout)
+
+                    let layout = flowChipsLayout ? AnyLayout(Flow()) : AnyLayout(Column())
+                    layout {
+                        ForEach(flowChips, id: \.self) { chip in
+                            Text(" \(chip) ").inverted()
+                        }
+                    }
+                    .border(color: .brightBlack)
+                }
             }
 
             DemoSection(L("page.layout.section.divider")) {
