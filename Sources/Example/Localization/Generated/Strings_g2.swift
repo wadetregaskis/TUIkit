@@ -291,6 +291,8 @@ extension ExampleStrings {
             "page.radioButton.section.focusNav": "Fokus-Navigation",
             "page.radioButton.help.navVertical": "Mit [↑/↓] vertikal navigieren",
             "page.radioButton.help.navHorizontal": "Mit [←/→] horizontal navigieren",
+            "page.radioButton.help.jump": "[Pos1]/[Ende] oder [Bild↑]/[Bild↓] springen zur ersten/letzten Option",
+            "page.radioButton.help.fast": "[Umschalt]+Pfeil springt mehrere Optionen auf einmal (entlang der Gruppenachse)",
             "page.radioButton.help.select": "Mit [Enter] oder [Leertaste] auswählen",
         ],
         "fr": [
@@ -430,6 +432,8 @@ extension ExampleStrings {
             "page.radioButton.section.focusNav": "Navigation au focus",
             "page.radioButton.help.navVertical": "Utilisez [↑/↓] pour naviguer verticalement",
             "page.radioButton.help.navHorizontal": "Utilisez [←/→] pour naviguer horizontalement",
+            "page.radioButton.help.jump": "[Début]/[Fin] ou [Page préc.]/[Page suiv.] vont à la première/dernière option",
+            "page.radioButton.help.fast": "[Maj]+flèche déplace de plusieurs options à la fois (sur l'axe du groupe)",
             "page.radioButton.help.select": "Utilisez [Entrée] ou [Espace] pour sélectionner",
         ],
         "it": [
@@ -569,6 +573,8 @@ extension ExampleStrings {
             "page.radioButton.section.focusNav": "Navigazione del focus",
             "page.radioButton.help.navVertical": "Usa [↑/↓] per navigare verticalmente",
             "page.radioButton.help.navHorizontal": "Usa [←/→] per navigare orizzontalmente",
+            "page.radioButton.help.jump": "[Inizio]/[Fine] o [PagSu]/[PagGiù] saltano alla prima/ultima opzione",
+            "page.radioButton.help.fast": "[Maiusc]+freccia sposta di più opzioni alla volta (sull'asse del gruppo)",
             "page.radioButton.help.select": "Usa [Invio] o [Spazio] per selezionare",
         ],
         "es": [
@@ -708,6 +714,8 @@ extension ExampleStrings {
             "page.radioButton.section.focusNav": "Navegación del foco",
             "page.radioButton.help.navVertical": "Usa [↑/↓] para navegar verticalmente",
             "page.radioButton.help.navHorizontal": "Usa [←/→] para navegar horizontalmente",
+            "page.radioButton.help.jump": "[Inicio]/[Fin] o [RePág]/[AvPág] saltan a la primera/última opción",
+            "page.radioButton.help.fast": "[Mayús]+flecha avanza varias opciones a la vez (en el eje del grupo)",
             "page.radioButton.help.select": "Usa [Intro] o [Espacio] para seleccionar",
         ],
         "zh": [
@@ -847,6 +855,8 @@ extension ExampleStrings {
             "page.radioButton.section.focusNav": "焦点导航",
             "page.radioButton.help.navVertical": "使用 [↑/↓] 进行垂直导航",
             "page.radioButton.help.navHorizontal": "使用 [←/→] 进行水平导航",
+            "page.radioButton.help.jump": "[Home]/[End] 或 [PageUp]/[PageDown] 跳到第一个/最后一个选项",
+            "page.radioButton.help.fast": "[Shift]+方向键沿分组轴一次移动多个选项",
             "page.radioButton.help.select": "使用 [Enter] 或 [Space] 进行选择",
         ],
         "ja": [
@@ -986,6 +996,8 @@ extension ExampleStrings {
             "page.radioButton.section.focusNav": "フォーカスナビゲーション",
             "page.radioButton.help.navVertical": "[↑/↓] で垂直方向に移動します",
             "page.radioButton.help.navHorizontal": "[←/→] で水平方向に移動します",
+            "page.radioButton.help.jump": "[Home]/[End] または [PageUp]/[PageDown] で最初/最後の選択肢へ移動します",
+            "page.radioButton.help.fast": "[Shift]+矢印でグループの軸方向に複数の選択肢を一度に移動します",
             "page.radioButton.help.select": "[Enter] または [Space] で選択します",
         ],
     ]

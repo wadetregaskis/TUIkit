@@ -10,6 +10,8 @@
 //  key) for anything they omit. Merged into the example app's translation
 //  tables alongside the chrome/menu strings.
 
+// swiftlint:disable line_length
+
 extension ExampleStrings {
     static let g4: [String: [String: String]] = [
         // MARK: - English (source of truth)
@@ -125,6 +127,7 @@ extension ExampleStrings {
             "page.splitView.styleProminentDetail": "Detail betont",
             "page.splitView.styleSizeToFit": "An Inhalt anpassen (von links)",
             "page.splitView.resizable": "Verstellbare Trenner",
+            "page.splitView.resetWidths": "Breiten zurücksetzen",
             "page.splitView.folders": "Ordner",
             "page.splitView.folderInbox": "Posteingang",
             "page.splitView.folderStarred": "Markiert",
@@ -172,6 +175,9 @@ extension ExampleStrings {
             "page.emoji.emojiCountSuffix": "Emoji",
             "page.emoji.sfSymbolsCountSuffix": "SF Symbols",
             "page.emoji.sfSymbolsEmpty": "SF Symbols erscheinen nur unter macOS, in einem Terminal mit passender Schrift (SF Mono).",
+            "page.emoji.sfSymbolsUnavailableTitle": "SF Symbols nicht verfügbar",
+            "page.emoji.sfSymbolsUnavailablePlatform": "SF Symbols sind eine Apple-Plattform-Funktion; dieses System kann sie nicht darstellen.",
+            "page.emoji.sfSymbolsUnavailableFont": "Die SF-Symbols-Schrift ist nicht installiert; hol sie von Apples Entwickler-Website und nutze Terminal.app mit SF Mono.",
         ],
         // MARK: - French
         "fr": [
@@ -201,6 +207,7 @@ extension ExampleStrings {
             "page.splitView.styleProminentDetail": "Détail proéminent",
             "page.splitView.styleSizeToFit": "Ajuster au contenu (depuis la gauche)",
             "page.splitView.resizable": "Séparateurs redimensionnables",
+            "page.splitView.resetWidths": "Réinitialiser les largeurs",
             "page.splitView.folders": "Dossiers",
             "page.splitView.folderInbox": "Boîte de réception",
             "page.splitView.folderStarred": "Suivis",
@@ -248,6 +255,9 @@ extension ExampleStrings {
             "page.emoji.emojiCountSuffix": "émoji",
             "page.emoji.sfSymbolsCountSuffix": "SF Symbols",
             "page.emoji.sfSymbolsEmpty": "Les SF Symbols ne s'affichent que sur macOS, dans un terminal doté de la police adéquate (SF Mono).",
+            "page.emoji.sfSymbolsUnavailableTitle": "SF Symbols indisponibles",
+            "page.emoji.sfSymbolsUnavailablePlatform": "Les SF Symbols sont une fonctionnalité des plateformes Apple ; ce système ne peut pas les afficher.",
+            "page.emoji.sfSymbolsUnavailableFont": "La police SF Symbols n'est pas installée ; récupérez-la sur le site développeur d'Apple et utilisez Terminal.app avec SF Mono.",
         ],
         // MARK: - Italian
         "it": [
@@ -277,6 +287,7 @@ extension ExampleStrings {
             "page.splitView.styleProminentDetail": "Dettaglio prominente",
             "page.splitView.styleSizeToFit": "Adatta al contenuto (da sinistra)",
             "page.splitView.resizable": "Divisori ridimensionabili",
+            "page.splitView.resetWidths": "Ripristina larghezze",
             "page.splitView.folders": "Cartelle",
             "page.splitView.folderInbox": "In arrivo",
             "page.splitView.folderStarred": "Speciali",
@@ -324,6 +335,9 @@ extension ExampleStrings {
             "page.emoji.emojiCountSuffix": "emoji",
             "page.emoji.sfSymbolsCountSuffix": "SF Symbols",
             "page.emoji.sfSymbolsEmpty": "Gli SF Symbols vengono mostrati solo su macOS, in un terminale con il font adatto (SF Mono).",
+            "page.emoji.sfSymbolsUnavailableTitle": "SF Symbols non disponibili",
+            "page.emoji.sfSymbolsUnavailablePlatform": "SF Symbols è una funzionalità delle piattaforme Apple; questo sistema non può visualizzarli.",
+            "page.emoji.sfSymbolsUnavailableFont": "Il font SF Symbols non è installato; scaricalo dal sito per sviluppatori di Apple e usa Terminal.app con SF Mono.",
         ],
         // MARK: - Spanish
         "es": [
@@ -353,6 +367,7 @@ extension ExampleStrings {
             "page.splitView.styleProminentDetail": "Detalle prominente",
             "page.splitView.styleSizeToFit": "Ajustar al contenido (desde la izquierda)",
             "page.splitView.resizable": "Divisores redimensionables",
+            "page.splitView.resetWidths": "Restablecer anchos",
             "page.splitView.folders": "Carpetas",
             "page.splitView.folderInbox": "Entrada",
             "page.splitView.folderStarred": "Destacados",
@@ -400,6 +415,9 @@ extension ExampleStrings {
             "page.emoji.emojiCountSuffix": "emoji",
             "page.emoji.sfSymbolsCountSuffix": "SF Symbols",
             "page.emoji.sfSymbolsEmpty": "Los SF Symbols solo se muestran en macOS, en un terminal con la fuente adecuada (SF Mono).",
+            "page.emoji.sfSymbolsUnavailableTitle": "SF Symbols no disponibles",
+            "page.emoji.sfSymbolsUnavailablePlatform": "SF Symbols es una función de las plataformas de Apple; este sistema no puede mostrarlos.",
+            "page.emoji.sfSymbolsUnavailableFont": "La tipografía SF Symbols no está instalada; descárgala del sitio para desarrolladores de Apple y usa Terminal.app con SF Mono.",
         ],
         // MARK: - Simplified Chinese
         "zh": [
@@ -429,6 +447,7 @@ extension ExampleStrings {
             "page.splitView.styleProminentDetail": "突出详情",
             "page.splitView.styleSizeToFit": "适应内容（从左）",
             "page.splitView.resizable": "可调整分隔条",
+            "page.splitView.resetWidths": "重置宽度",
             "page.splitView.folders": "文件夹",
             "page.splitView.folderInbox": "收件箱",
             "page.splitView.folderStarred": "已加星标",
@@ -476,6 +495,9 @@ extension ExampleStrings {
             "page.emoji.emojiCountSuffix": "个表情",
             "page.emoji.sfSymbolsCountSuffix": "个 SF Symbols",
             "page.emoji.sfSymbolsEmpty": "SF Symbols 仅在 macOS 上、使用包含相应字形的字体（SF Mono）的终端中显示。",
+            "page.emoji.sfSymbolsUnavailableTitle": "SF Symbols 不可用",
+            "page.emoji.sfSymbolsUnavailablePlatform": "SF Symbols 是 Apple 平台的功能；本系统无法渲染。",
+            "page.emoji.sfSymbolsUnavailableFont": "未安装 SF Symbols 字体；请从 Apple 开发者网站获取，并在 Terminal.app 中搭配 SF Mono 使用。",
         ],
         // MARK: - Japanese
         "ja": [
@@ -505,6 +527,7 @@ extension ExampleStrings {
             "page.splitView.styleProminentDetail": "詳細を強調",
             "page.splitView.styleSizeToFit": "内容に合わせる（左から）",
             "page.splitView.resizable": "サイズ変更可能な仕切り",
+            "page.splitView.resetWidths": "幅をリセット",
             "page.splitView.folders": "フォルダ",
             "page.splitView.folderInbox": "受信",
             "page.splitView.folderStarred": "スター付き",
@@ -552,6 +575,11 @@ extension ExampleStrings {
             "page.emoji.emojiCountSuffix": "個の絵文字",
             "page.emoji.sfSymbolsCountSuffix": "個の SF Symbols",
             "page.emoji.sfSymbolsEmpty": "SF Symbols は macOS で、対応するフォント（SF Mono）を備えたターミナルでのみ表示されます。",
+            "page.emoji.sfSymbolsUnavailableTitle": "SF Symbols を利用できません",
+            "page.emoji.sfSymbolsUnavailablePlatform": "SF Symbols は Apple プラットフォームの機能です。このシステムでは描画できません。",
+            "page.emoji.sfSymbolsUnavailableFont": "SF Symbols フォントが未インストールです。Apple の開発者サイトから入手し、Terminal.app で SF Mono と併用してください。",
         ],
     ]
 }
+
+// swiftlint:enable line_length
