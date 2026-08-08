@@ -200,6 +200,25 @@ because the geometry is integral rather than floating point:
   ``LayoutSubview/place(in:anchor:proposal:)``, which does it in one step and
   clamps the result inside the region.
 
+## Rows That Line Up: Grid
+
+``Grid`` sizes each column to its widest cell *across every row*, so cells line
+up without any of them being given a width — the thing a column of `HStack`s
+cannot do, because each of those rows sizes on its own:
+
+```swift
+Grid(alignment: .leading) {
+    GridRow { Text("Name");   Text("Size"); Text("Kind") }
+    Divider()                                  // spans every column
+    GridRow { Text("README"); Text("2 KB"); Text("Markdown") }
+}
+```
+
+Spacings are whole cells, defaulting to one column and no rows. A cell can span
+with ``View/gridCellColumns(_:)``, and placement precedence runs
+``View/gridCellAnchor(_:)`` → ``View/gridColumnAlignment(_:)`` → the row's
+alignment → the grid's.
+
 ## Which Views Are Layoutable?
 
 | View | Layoutable? | Flexibility |
@@ -226,6 +245,8 @@ Views that are not `Layoutable` use the default implementation which renders fir
 - ``Layout``
 - ``LayoutSubview``
 - ``AnyLayout``
+- ``Grid``
+- ``GridRow``
 - ``VStack``
 - ``HStack``
 - ``Spacer``

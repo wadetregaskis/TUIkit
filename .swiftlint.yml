@@ -182,6 +182,7 @@ type_name:
     # Drives a custom `Layout`; internal-but-public because `callAsFunction`
     # returns it opaquely.
     - _LayoutCore
+    - _GridCore
     # @FocusState modifier helpers created by .focused / .defaultFocus.
     - _FocusedModifier
     - _DefaultFocusModifier

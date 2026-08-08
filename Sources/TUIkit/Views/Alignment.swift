@@ -40,7 +40,13 @@
 ///
 /// So the fraction exists only between two guides and never survives to a
 /// coordinate.
-public protocol AlignmentID {
+///
+/// - Note: Refines `Sendable` because ``HorizontalAlignment`` and
+///   ``VerticalAlignment`` store the conforming *metatype* and are themselves
+///   `Sendable`; an existential metatype is only `Sendable` when its protocol
+///   is. Costless in practice — an `AlignmentID` is a caseless enum or empty
+///   struct, which is trivially `Sendable`.
+public protocol AlignmentID: Sendable {
     /// The value of the corresponding guide when a view does not set it
     /// explicitly, measured from the view's leading or top edge.
     ///
