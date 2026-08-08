@@ -27,26 +27,33 @@ private struct Unencodable: Codable {
 /// arrives at the handler.
 ///
 /// Serialized because ``StorageDiagnostics`` is a process-wide channel (the same
-/// shape as `StorageDefaults.backend` beside it).
+/// shape as `StorageDefaults.backend` beside it). `.serialized` orders this
+/// suite internally but not against the others, which run in parallel and now
+/// also report — so every assertion below is scoped to *this* test's own
+/// unique temporary directory or key, never to the global counters. A shared
+/// mutable default is exactly how the render-cache flakes happened.
 @Suite("Storage failure reporting", .serialized)
 struct StorageFailureTests {
 
-    /// Runs `body` with a capturing handler installed, restoring whatever was
-    /// there before. Assertions use the captured array rather than
-    /// ``StorageDiagnostics/lastFailure`` so a concurrent suite cannot perturb
-    /// them.
+    /// Runs `body` against a private temporary directory with a capturing
+    /// handler installed, restoring whatever was there before.
+    ///
+    /// Returns only the failures raised *under that directory*: another suite's
+    /// storage work reaches this handler too, and counting it would make these
+    /// assertions depend on unrelated tests.
     private func capturingFailures(_ body: (URL) throws -> Void) rethrows -> [StorageFailure] {
-        let box = Lock(initialState: [StorageFailure]())
-        let previous = StorageDiagnostics.onFailure
-        StorageDiagnostics.onFailure = { failure in
-            box.withLock { $0.append(failure) }
-        }
-        defer { StorageDiagnostics.onFailure = previous }
-
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("tuikit-storage-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
+
+        let box = Lock(initialState: [StorageFailure]())
+        let previous = StorageDiagnostics.onFailure
+        StorageDiagnostics.onFailure = { failure in
+            guard failure.path?.hasPrefix(root.path) == true else { return }
+            box.withLock { $0.append(failure) }
+        }
+        defer { StorageDiagnostics.onFailure = previous }
 
         try body(root)
         return box.withLock { $0 }
@@ -100,23 +107,26 @@ struct StorageFailureTests {
         StorageDiagnostics.onFailure = nil
         defer { StorageDiagnostics.onFailure = previous }
 
-        StorageDiagnostics.reset()
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("tuikit-storage-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
+        // A key no other suite can produce, so `lastFailure` is identifiable
+        // even if a parallel suite reports in the same instant.
+        let key = "doomed-\(UUID().uuidString)"
         let storage = JSONFileStorage(fileURL: root.appendingPathComponent("settings.json"))
-        storage.setValue(Unencodable(), forKey: "doomed")
+        storage.setValue(Unencodable(), forKey: key)
 
         // The whole point of retaining it: silence at the handler is not the
         // same as losing the failure.
-        #expect(StorageDiagnostics.failureCount >= 1)
+        #expect(StorageDiagnostics.lastFailure?.key == key)
         #expect(StorageDiagnostics.lastFailure?.operation == .encode)
 
+        // And `reset()` clears it. Asserted as "no longer mine" rather than
+        // "nil", which a concurrent suite's report would falsify.
         StorageDiagnostics.reset()
-        #expect(StorageDiagnostics.lastFailure == nil)
-        #expect(StorageDiagnostics.failureCount == 0)
+        #expect(StorageDiagnostics.lastFailure?.key != key)
     }
 
     @Test("Reading back an undecodable value stays silent")
