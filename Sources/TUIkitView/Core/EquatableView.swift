@@ -132,6 +132,7 @@ extension EquatableView: Renderable {
         let readVolatile = tracker.cacheUnsafeCount > unsafeBefore
         if !context.isMeasuring && buffer.hitTestRegions.isEmpty && buffer.overlays.isEmpty
             && !readVolatile && cache.stats.subtreeClears == clearsBefore
+            && !context.environment.hasUncomparableEnvironmentValue
         {
             cache.store(
                 identity: identity,
@@ -193,7 +194,9 @@ extension EquatableView: Layoutable {
             : context
         let unsafeBefore = tracker.cacheUnsafeCount
         let size = measureChild(content, proposal: proposal, context: measureContext)
-        if tracker.cacheUnsafeCount == unsafeBefore {
+        if tracker.cacheUnsafeCount == unsafeBefore
+            && !context.environment.hasUncomparableEnvironmentValue
+        {
             cache.storeSize(key: key, view: content, size: size)
         }
         return size

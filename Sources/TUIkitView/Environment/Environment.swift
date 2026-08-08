@@ -42,9 +42,61 @@ extension EnvironmentModifier: Renderable {
         // Create modified environment and render content with it.
         // The modified context carries the environment through the render tree —
         // no global state sync needed.
-        let modifiedEnvironment = context.environment.setting(keyPath, to: value)
+        let uncomparable = noteEnvironmentChange(context: context)
+        var modifiedEnvironment = context.environment.setting(keyPath, to: value)
+        if uncomparable { modifiedEnvironment.hasUncomparableEnvironmentValue = true }
         let modifiedContext = context.withEnvironment(modifiedEnvironment)
         return TUIkitView.renderToBuffer(content, context: modifiedContext)
+    }
+}
+
+// MARK: - Cache Coherency
+
+extension EnvironmentModifier {
+    /// Drops cached buffers below this modifier when the value it injects has
+    /// changed since the last pass.
+    ///
+    /// The render cache keys on identity, view value and size — not on the
+    /// environment. That is what makes it cheap, and it is why a **scoped**
+    /// style change is invisible to it: `.foregroundStyle(x)` applied *above* an
+    /// `.equatable()` boundary leaves the view value identical, so the lookup
+    /// hits and hands back the buffer rendered under the old style. Wrong
+    /// pixels, not merely stale work.
+    ///
+    /// Detecting it here rather than in the key is the cheaper half of the
+    /// trade: one comparison per environment modifier per pass, against a
+    /// dictionary walk per memoized view per pass. The `@State`-driven case was
+    /// already covered by accident (the declaring view's identity is an ancestor
+    /// of the cached one, so `clearAffected(by:)` reaches it); this covers the
+    /// rest — a preference written by a sibling, an `@AppStorage` value, a
+    /// binding threaded down from somewhere that is not an ancestor.
+    ///
+    /// A value that is not `Equatable` cannot be compared at all, so the subtree
+    /// declares itself cache-unsafe instead: `EquatableView` already refuses to
+    /// store a buffer whose render tripped the tracker. Memoization is lost
+    /// under such a modifier, which is a performance cost rather than a
+    /// correctness one — the right way round.
+    ///
+    /// - Returns: `true` when the injected value is uncomparable, so the caller
+    ///   marks the environment it passes down.
+    fileprivate func noteEnvironmentChange(context: RenderContext) -> Bool {
+        guard let cache = context.renderCache else { return false }
+        switch cache.noteAppliedEnvironment(value, identity: context.identity, keyPath: keyPath) {
+        case .changed:
+            cache.clearAffected(by: context.identity)
+        case .incomparable:
+            // Two routes, because a memoizing view can sit on either side of
+            // this modifier. Below it: the tracker exists by then, and
+            // `EquatableView` already declines to store when it is tripped.
+            // Above it — the usual arrangement, `.equatable().foregroundStyle(…)`
+            // — there is no tracker here yet, so the signal has to travel *down*
+            // the environment instead. Hence the flag as well.
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
+            return true
+        case .first, .unchanged:
+            break
+        }
+        return false
     }
 }
 
@@ -71,8 +123,38 @@ extension EnvironmentModifier: Layoutable {
     /// environment matches the semantics of the render path and skips
     /// rendering the (possibly expensive) content to measure it.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let modifiedEnvironment = context.environment.setting(keyPath, to: value)
+        // Also on the measure walk. The measure memo has the same environment
+        // blind spot as the buffer cache, and measurement runs first, so a
+        // change noticed only on the render walk would already have served a
+        // stale size. The once-per-pass short circuit in
+        // `noteAppliedEnvironment` is what makes this affordable: two-pass
+        // layout visits the same modifier many times per frame.
+        let uncomparable = noteEnvironmentChange(context: context)
+        var modifiedEnvironment = context.environment.setting(keyPath, to: value)
+        if uncomparable { modifiedEnvironment.hasUncomparableEnvironmentValue = true }
         let modifiedContext = context.withEnvironment(modifiedEnvironment)
         return measureChild(content, proposal: proposal, context: modifiedContext)
+    }
+}
+
+// MARK: - Uncomparable Environment Values
+
+private struct UncomparableEnvironmentKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether some ancestor injected an environment value that is not
+    /// `Equatable`.
+    ///
+    /// Change detection at the modifier is what lets the render cache key stay
+    /// free of the environment (see `EnvironmentModifier.noteEnvironmentChange`),
+    /// and it needs a comparison. A value that cannot be compared could change
+    /// under a memoized subtree with nothing to notice, so subtrees below one
+    /// decline to cache — losing memoization there, rather than serving pixels
+    /// rendered under a value that has since changed.
+    public var hasUncomparableEnvironmentValue: Bool {
+        get { self[UncomparableEnvironmentKey.self] }
+        set { self[UncomparableEnvironmentKey.self] = newValue }
     }
 }

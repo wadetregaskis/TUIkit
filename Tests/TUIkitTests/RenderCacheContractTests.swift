@@ -35,6 +35,23 @@ private struct CacheOuter: View, Equatable {
     }
 }
 
+/// A value with no `Equatable` conformance, so a change under it is
+/// undetectable by construction.
+private struct Incomparable {
+    let token = 0
+}
+
+private struct IncomparableProbeKey: EnvironmentKey {
+    static let defaultValue: Incomparable? = nil
+}
+
+extension EnvironmentValues {
+    fileprivate var incomparableProbe: Incomparable? {
+        get { self[IncomparableProbeKey.self] }
+        set { self[IncomparableProbeKey.self] = newValue }
+    }
+}
+
 // MARK: - Tests
 
 /// The two `EquatableView`/`RenderCache` contracts upstream fixed in PR #64
@@ -43,11 +60,11 @@ private struct CacheOuter: View, Equatable {
 /// - **Nested entry liveness** — fixed. These assert the contract, and every one
 ///   of them fails on the pre-fix code, where an outer hit left the cache with
 ///   one entry instead of two.
-/// - **Environment in the cache key** — *not* fixed, and the last two tests are
-///   deliberate **characterizations**: they assert that a scoped style change
-///   serves the wrong buffer, so they fail the day it is fixed rather than
-///   passing quietly either way. See
-///   `Documentation/Upstream-review/open-questions.md` for the design fork.
+/// - **Environment in the cache key** — fixed, but not by putting the
+///   environment in the key. `EnvironmentModifier` compares the value it applied
+///   here last pass and clears the subtree when it differs, which costs one
+///   comparison per modifier instead of a fingerprint per lookup. A value that
+///   is not `Equatable` cannot be compared, so it declines caching instead.
 @MainActor
 @Suite("RenderCache contracts", .serialized)
 struct RenderCacheContractTests {
@@ -138,61 +155,82 @@ struct RenderCacheContractTests {
 
     // MARK: - Environment in the cache key (upstream `c48e35d78d`)
 
-    @Test("A scoped .foregroundStyle change above an .equatable() serves a stale buffer")
-    func scopedStyleChangeServesStaleBuffer() {
+    @Test("A scoped .foregroundStyle change above an .equatable() re-renders it")
+    func scopedStyleChangeIsNotServedStale() {
         let base = context()
-        let red = base.withEnvironment(base.environment.setting(\.foregroundStyle, to: .red))
-        let blue = base.withEnvironment(base.environment.setting(\.foregroundStyle, to: .blue))
 
-        // Precondition: the two styles must actually render differently, or the
-        // test proves nothing. Rendered with separate caches so neither can
-        // answer for the other.
-        let redTruth = frame(red.isolatingRenderCache(), CacheLeaf(text: "hi").equatable())
-        let blueTruth = frame(blue.isolatingRenderCache(), CacheLeaf(text: "hi").equatable())
+        // The truth for each style, rendered with its own cache so neither can
+        // answer for the other. If these two matched, the test below would prove
+        // nothing — which is the precondition, asserted rather than assumed.
+        let redTruth = frame(
+            base.isolatingRenderCache(), CacheLeaf(text: "hi").equatable().foregroundStyle(.red))
+        let blueTruth = frame(
+            base.isolatingRenderCache(), CacheLeaf(text: "hi").equatable().foregroundStyle(.blue))
         #expect(
             redTruth.lines != blueTruth.lines,
             "precondition: .foregroundStyle must change the rendered output"
         )
 
-        // Now the real sequence, sharing one cache: render red, then render the
-        // *same view value* under blue. Identity, value and size all match, and
-        // the key carries nothing else — so the red buffer is served.
+        // One cache, same view value, style changed above the memoization
+        // boundary. Nothing in the cache key sees the difference — the modifier
+        // has to notice and clear.
         let shared = context()
-        let sharedRed = shared.withEnvironment(shared.environment.setting(\.foregroundStyle, to: .red))
-        let sharedBlue = shared.withEnvironment(shared.environment.setting(\.foregroundStyle, to: .blue))
+        frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.red))
+        let served = frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.blue))
 
-        frame(sharedRed, CacheLeaf(text: "hi").equatable())
-        let served = frame(sharedBlue, CacheLeaf(text: "hi").equatable())
-
-        #expect(
-            served.lines == redTruth.lines,
-            "characterization: the buffer rendered under .red is served for a .blue render"
-        )
-        #expect(
-            served.lines != blueTruth.lines,
-            "which is to say: the wrong pixels. An environment component in the key would flip both expectations"
-        )
+        #expect(served.lines == blueTruth.lines, "the new style must be rendered")
+        #expect(served.lines != redTruth.lines, "not the buffer from the old one")
     }
 
-    @Test("The measure memo has the same environment blind spot")
-    func scopedStyleChangeServesStaleSize() {
-        // The size twin: `sizeThatFits` keys on identity + proposal + extent,
-        // with no environment either. A style that changes *size* rather than
-        // colour would therefore memoize across the change.
+    @Test("An unchanged style still memoizes")
+    func unchangedStyleStillHits() {
         let shared = context()
         let cache = shared.environment.renderCache!
 
-        let wide = shared.withEnvironment(shared.environment.setting(\.foregroundStyle, to: .red))
-        let narrow = shared.withEnvironment(shared.environment.setting(\.foregroundStyle, to: .blue))
-
-        let view = CacheLeaf(text: "hi").equatable()
-        _ = view.sizeThatFits(proposal: ProposedSize(width: nil, height: nil), context: wide)
+        frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.red))
         let before = cache.stats
-        _ = view.sizeThatFits(proposal: ProposedSize(width: nil, height: nil), context: narrow)
+        frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.red))
 
-        #expect(
-            cache.stats.delta(since: before).hits == 1,
-            "characterization: the memoized size answers across an environment change"
-        )
+        // The point of detecting the *change* rather than keying on the
+        // environment: a stable style costs a comparison, not a miss.
+        #expect(cache.stats.delta(since: before).hits >= 1)
+    }
+
+    @Test("The measure memo sees the change too")
+    func scopedStyleChangeClearsTheSizeMemo() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+        let proposal = ProposedSize(width: nil, height: nil)
+
+        // A pass per measurement, as the real loop does. Change detection short
+        // circuits after the first visit *within* a pass — two-pass layout
+        // visits one modifier many times per frame and the value it applies
+        // cannot change between those visits, since structural identity gives
+        // one modifier one value. Measuring twice inside a single pass would be
+        // testing something that cannot happen.
+        cache.beginRenderPass()
+        _ = measureChild(
+            CacheLeaf(text: "hi").equatable().foregroundStyle(.red),
+            proposal: proposal, context: shared)
+        let before = cache.stats
+        cache.beginRenderPass()
+        _ = measureChild(
+            CacheLeaf(text: "hi").equatable().foregroundStyle(.blue),
+            proposal: proposal, context: shared)
+
+        // Measurement runs before rendering, so if only the render walk noticed,
+        // a style that changed the *size* would already have been laid out wrong.
+        #expect(cache.stats.delta(since: before).hits == 0)
+    }
+
+    @Test("A non-Equatable environment value declines caching rather than risking it")
+    func incomparableEnvironmentDeclinesCaching() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+
+        // `Incomparable` cannot be compared, so no change can ever be detected
+        // below it — the only sound answer is not to memoize there.
+        frame(shared, CacheLeaf(text: "hi").equatable().environment(\.incomparableProbe, Incomparable()))
+        #expect(cache.isEmpty, "nothing may be stored under an uncomparable environment value")
     }
 }
