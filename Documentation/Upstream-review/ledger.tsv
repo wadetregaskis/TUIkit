@@ -153,14 +153,14 @@ seq	sha	patch_id	date	pr	verdict	ours	subject
 152	8d63dadf3db0	a16c3e13f396	2026-07-22	62	n-a	-	Fix: Key the traversal window to the traversing thread
 153	da0c247c30e3	-	2026-07-22	62	noise	-	Merge pull request #62 from phranck/issue/58-render-phase-docs
 154	e2d1cb7bffce	344adb33517f	2026-07-21	-	noise	-	Chore: Update test count badge to 1315 tests [skip ci]
-155	39270268f72f	dbe9dd6691de	2026-07-22	63	queued	-	Fix: Derive the image placeholder instead of mutating state in traversal
+155	39270268f72f	dbe9dd6691de	2026-07-22	63	adapt	-	Fix: Derive the image placeholder instead of mutating state in traversal
 156	acdbf7dd60bf	e8361438ed51	2026-07-22	63	queued	-	Refactor: Read image task dependencies from the render context
 157	21f140ab20c1	-	2026-07-22	63	noise	-	Merge pull request #63 from phranck/issue/27-image-placeholder-derivation
 158	3461927ccaca	794d3c59b93b	2026-07-22	-	noise	-	Chore: Update test count badge to 1317 tests [skip ci]
 159	d4f7d3aaf7a4	bbb8bb399f5c	2026-07-22	64	queued	-	Test: Characterize effect loss across cache hits
 160	1053ce852677	1618d6a86e73	2026-07-22	64	noise	-	Chore: Drop a stray blank line left by the marker-test migration
 161	3b6f99d4223d	92e89c59085a	2026-07-22	64	have	-	Fix: Bypass subtree caching for effect-bearing content
-162	e84738728c6d	d6303d51ebd6	2026-07-22	64	queued	-	Fix: Keep nested cache entries alive across outer hits
+162	e84738728c6d	d6303d51ebd6	2026-07-22	64	adapt	-	Fix: Keep nested cache entries alive across outer hits
 163	c867446f5693	6387812a5632	2026-07-22	64	n-a	-	Fix: Count staged sections in the focus registration probe
 164	c48e35d78de2	016004321dae	2026-07-22	64	queued	-	Fix: Include style environment in cache invalidation
 165	fbb126486df3	8bce80136217	2026-07-22	64	n-a	-	Docs: Describe cache bypass, liveness, and fingerprint invalidation
