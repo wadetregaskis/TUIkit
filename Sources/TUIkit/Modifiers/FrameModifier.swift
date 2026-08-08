@@ -170,9 +170,20 @@ extension FlexibleFrameView: Renderable {
     private func alignBuffer(_ buffer: FrameBuffer, toWidth targetWidth: Int, height targetHeight: Int) -> FrameBuffer {
         var result: [String] = []
 
+        // The content's own explicit `.alignmentGuide`, when it set one. The
+        // frame is a fixed region holding one child, so there is no run to
+        // merge — the child's guide meets the frame's. A guided child shifts as
+        // a BLOCK (one offset for every line) rather than per-line, which is
+        // what the ragged-line arithmetic below does by default.
+        let contentSize = (width: buffer.width, height: buffer.height)
+        let horizontalGuide = horizontalGuidePlacement(
+            of: content, size: contentSize, alignment: alignment.horizontal, in: targetWidth)
+
         // Calculate vertical offset for alignment
-        let verticalOffset = alignment.vertical.childOffset(
-            childHeight: buffer.height, in: targetHeight)
+        let verticalOffset =
+            verticalGuidePlacement(
+                of: content, size: contentSize, alignment: alignment.vertical, in: targetHeight)
+            ?? alignment.vertical.childOffset(childHeight: buffer.height, in: targetHeight)
 
         // Track the aligned result's width as we build it — `alignHorizontally`
         // measures each line for its padding decision anyway, so threading that
@@ -188,7 +199,8 @@ extension FlexibleFrameView: Renderable {
             }
 
             // Align horizontally within the frame
-            let (aligned, alignedWidth) = alignHorizontally(line, toWidth: targetWidth)
+            let (aligned, alignedWidth) = alignHorizontally(
+                line, toWidth: targetWidth, guideOffset: horizontalGuide)
             result.append(aligned)
             resultWidth = max(resultWidth, alignedWidth)
         }
@@ -196,8 +208,9 @@ extension FlexibleFrameView: Renderable {
         // The content shifted within the frame; carry overlay layers by the
         // same amount. The horizontal shift matches the widest line — exact
         // for the common uniform-width buffer.
-        let horizontalOffset = alignment.horizontal.childOffset(
-            childWidth: buffer.width, in: targetWidth)
+        let horizontalOffset =
+            horizontalGuide
+            ?? alignment.horizontal.childOffset(childWidth: buffer.width, in: targetWidth)
         // Pass the now-known width so `replacingLines` doesn't re-measure every
         // padded line. When nothing overflowed the frame, every line is exactly
         // `targetWidth` — flag that so the buffer can skip per-line work too.
@@ -209,7 +222,9 @@ extension FlexibleFrameView: Renderable {
     /// Aligns a single line within the given width, returning the aligned line
     /// and its visible width — `max(targetWidth, the line's own width)` — so the
     /// caller can total the result width without a second `strippedLength` pass.
-    private func alignHorizontally(_ line: String, toWidth targetWidth: Int) -> (line: String, width: Int) {
+    private func alignHorizontally(
+        _ line: String, toWidth targetWidth: Int, guideOffset: Int?
+    ) -> (line: String, width: Int) {
         let visibleWidth = line.strippedLength
 
         if visibleWidth >= targetWidth {
@@ -227,8 +242,12 @@ extension FlexibleFrameView: Renderable {
         // scenario, two framed-and-padded chains per row).
         // The same guide arithmetic as every other placement: a `padding`-wide
         // gap is a child of width `lineWidth` inside `targetWidth`.
-        let leftPad = alignment.horizontal.childOffset(
-            childWidth: targetWidth - padding, in: targetWidth)
+        // A guide shifts the whole block by one offset; without one, each line
+        // is padded on its own width (the long-standing ragged behaviour).
+        let leftPad =
+            guideOffset.map { min($0, padding) }
+            ?? alignment.horizontal.childOffset(
+                childWidth: targetWidth - padding, in: targetWidth)
         let rightPad = padding - leftPad
         var aligned = ""
         aligned.reserveCapacity(line.utf8.count + padding)

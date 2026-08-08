@@ -98,9 +98,16 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         var maxWidth = 0
         var hasFlexibleHeight = false
         var hasFlexibleWidth = false
+        // Sized as the render sizes them, so a guide resolved here lands where
+        // the render puts it: a spacer has no visual box, so it contributes
+        // nothing (`renderClip` gives it no buffer either).
+        var guideSizes: [(width: Int, height: Int)] = []
+        guideSizes.reserveCapacity(children.count)
 
         for child in children {
             let size = child.measure(proposal: proposal, context: context)
+            guideSizes.append(
+                child.isSpacer ? (width: 0, height: 0) : (width: size.width, height: size.height))
             totalHeight += size.height
             maxWidth = max(maxWidth, size.width)
             if child.isSpacer || size.isHeightFlexible {
@@ -123,6 +130,14 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // exist and let content overlap.
         let widthLimit = proposal.width ?? context.availableWidth
         let heightLimit = proposal.height ?? context.availableHeight
+        // A guide can make the column wider than its widest child; the report
+        // has to say so or the parent reserves too little and clips it.
+        if let run = horizontalGuideRun(
+            children, sizes: guideSizes, alignment: alignment,
+            fixedExtent: hasFlexibleWidth ? max(0, widthLimit) : nil, minimumExtent: maxWidth)
+        {
+            maxWidth = run.extent
+        }
         return ViewSize(
             width: min(maxWidth, max(0, widthLimit)),
             height: min(totalHeight, max(0, heightLimit)),
@@ -274,6 +289,18 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // otherwise it shrinks to its widest child.
         let alignmentWidth = hasFlexible ? context.availableWidth : maxChildWidth
 
+        // Explicit guides, when any child set one: the run's placement replaces
+        // the per-child centring below, and can make the column WIDER than its
+        // widest child (a child hanging left of the alignment line pushes every
+        // other one right). Spacers have no visual box, so they place at the
+        // leading edge and take no part in the run.
+        let guideRun = horizontalGuideRun(
+            children,
+            sizes: buffers.map { (width: $0?.width ?? 0, height: $0?.height ?? 0) },
+            alignment: alignment,
+            fixedExtent: hasFlexible ? context.availableWidth : nil,
+            minimumExtent: maxChildWidth)
+
         // === PASS 3: Assemble vertically ===
         // Empty children (e.g. `if false { ChildView() }`, which
         // ViewBuilder lowers to `Optional<ChildView>.none`, and
@@ -293,7 +320,10 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 result.appendVertically(
                     FrameBuffer(emptyWithHeight: finalHeights[index]), spacing: spacingToApply)
             } else if let buffer = buffers[index] {
-                let alignedBuffer = alignBuffer(buffer, toWidth: alignmentWidth, alignment: alignment)
+                let alignedBuffer =
+                    guideRun.map {
+                        placeBuffer(buffer, toWidth: $0.extent, offset: $0.offsets[index])
+                    } ?? alignBuffer(buffer, toWidth: alignmentWidth, alignment: alignment)
                 result.appendVertically(alignedBuffer, spacing: spacingToApply)
             }
         }
@@ -374,7 +404,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
         // === PASS 1: Collect the children that fit, rendering on demand ===
         // The walk stops at the first child that would overflow.
-        var collected: [(buffer: FrameBuffer, spacingBefore: Int, isSpacer: Bool)] = []
+        var collected: [(buffer: FrameBuffer, spacingBefore: Int, child: ChildView?)] = []
         var currentHeight = 0
         var spacerIndex = 0
         for (index, child) in children.enumerated() {
@@ -386,7 +416,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 if currentHeight + spacingToApply + height > availableHeight {
                     break
                 }
-                collected.append((FrameBuffer(emptyWithHeight: height), spacingToApply, true))
+                collected.append((FrameBuffer(emptyWithHeight: height), spacingToApply, nil))
                 currentHeight += spacingToApply + height
                 spacerIndex += 1
             } else if spacerCount > 0 {
@@ -394,7 +424,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 if currentHeight + spacingToApply + buffer.height > availableHeight {
                     break
                 }
-                collected.append((buffer, spacingToApply, false))
+                collected.append((buffer, spacingToApply, child))
                 currentHeight += spacingToApply + buffer.height
             } else {
                 // Fit-check on a (side-effect-free) measure BEFORE rendering:
@@ -410,22 +440,51 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 if currentHeight + spacingToApply + buffer.height > availableHeight {
                     break  // a child whose render exceeds its measure still can't overflow the window
                 }
-                collected.append((buffer, spacingToApply, false))
+                collected.append((buffer, spacingToApply, child))
                 currentHeight += spacingToApply + buffer.height
             }
         }
 
-        // === PASS 2: Align to the placed children's width and assemble ===
-        // With a Spacer the column fills the available width (as the eager
-        // stack does); otherwise it hugs its widest *placed* child.
+        return assembleWindow(collected, fillsWidth: spacerCount > 0, context: context)
+    }
+
+    /// `.window` PASS 2: align the collected children and stack them.
+    ///
+    /// With a Spacer the column fills the available width (as the eager stack
+    /// does); otherwise it hugs its widest *placed* child. A `nil` child marks a
+    /// spacer's blank slot, which is never aligned.
+    private func assembleWindow(
+        _ collected: [(buffer: FrameBuffer, spacingBefore: Int, child: ChildView?)],
+        fillsWidth: Bool,
+        context: RenderContext
+    ) -> FrameBuffer {
         let maxWidth =
-            spacerCount > 0
-            ? context.availableWidth
-            : collected.map(\.buffer.width).max() ?? 0
+            fillsWidth ? context.availableWidth : collected.map(\.buffer.width).max() ?? 0
+
+        // Explicit guides resolve over the children this stack actually PLACED.
+        // A lazy stack stops at the first row that will not fit, so the run is
+        // the realized rows — the same limit SwiftUI has, and the reason a guide
+        // is best used on content whose realized set is stable.
+        let placed = collected.compactMap { entry in entry.child.map { ($0, entry.buffer) } }
+        let guideRun = horizontalGuideRun(
+            placed.map(\.0),
+            sizes: placed.map { (width: $0.1.width, height: $0.1.height) },
+            alignment: alignment,
+            fixedExtent: fillsWidth ? context.availableWidth : nil,
+            minimumExtent: maxWidth)
+
         var result = FrameBuffer()
-        for (buffer, spacingToApply, isSpacer) in collected {
+        var placedIndex = 0
+        for (buffer, spacingToApply, child) in collected {
+            guard child != nil else {
+                result.appendVertically(buffer, spacing: spacingToApply)
+                continue
+            }
+            defer { placedIndex += 1 }
             let alignedBuffer =
-                isSpacer ? buffer : alignBuffer(buffer, toWidth: maxWidth, alignment: alignment)
+                guideRun.map {
+                    placeBuffer(buffer, toWidth: $0.extent, offset: $0.offsets[placedIndex])
+                } ?? alignBuffer(buffer, toWidth: maxWidth, alignment: alignment)
             result.appendVertically(alignedBuffer, spacing: spacingToApply)
         }
 
@@ -560,6 +619,16 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             }
         }
 
+        // Explicit guides, resolved from the slot walk's measured sizes so an
+        // off-window row still contributes its guide — the alignment column
+        // must not shift as rows scroll in and out. Costs nothing (one stored
+        // `Bool` per row) unless a row actually set a guide.
+        let guideRun = horizontalGuideRun(
+            slots.map(\.child),
+            sizes: slots.map { (width: $0.width, height: $0.height) },
+            alignment: alignment,
+            fixedExtent: width)
+
         var result = FrameBuffer()
         for (index, slot) in slots.enumerated() {
             let slotHeight = slot.spacingBefore + slot.height
@@ -583,7 +652,11 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             if spacingBefore > 0 {
                 slot.appendVertically(FrameBuffer(emptyWithHeight: spacingBefore), spacing: 0)
             }
-            slot.appendVertically(alignBuffer(rendered, toWidth: width, alignment: alignment), spacing: 0)
+            let placed =
+                guideRun.map {
+                    placeBuffer(rendered, toWidth: width, offset: $0.offsets[index])
+                } ?? alignBuffer(rendered, toWidth: width, alignment: alignment)
+            slot.appendVertically(placed, spacing: 0)
             // Keep the slot exactly `slotHeight` tall so later rows stay at their
             // true `y` even if a row rendered a different height than it measured.
             if slot.height < slotHeight {
@@ -618,10 +691,27 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     /// Aligns a buffer horizontally within the given width.
     func alignBuffer(_ buffer: FrameBuffer, toWidth width: Int, alignment: HorizontalAlignment) -> FrameBuffer {
         guard buffer.width < width else { return buffer }
+        return placeBuffer(
+            buffer, toWidth: width,
+            offset: alignment.childOffset(childWidth: buffer.width, in: width))
+    }
+
+    /// Places a buffer at an explicit horizontal offset within the given width.
+    ///
+    /// The arithmetic ``alignBuffer(_:toWidth:alignment:)`` performs, split out
+    /// so a container that resolved the offset from an explicit
+    /// ``View/alignmentGuide(_:computeValue:)-(HorizontalAlignment,_)`` can reuse the same padding
+    /// (and the same overlay/hit-region carry) instead of a second copy of it.
+    func placeBuffer(_ buffer: FrameBuffer, toWidth width: Int, offset: Int) -> FrameBuffer {
+        guard offset > 0 || buffer.width < width else { return buffer }
 
         var alignedLines: [String] = []
 
-        let bufferOffset = alignment.childOffset(childWidth: buffer.width, in: width)
+        let bufferOffset = offset
+        // A guide can push a child past the nominal width; the buffer must
+        // still describe its own true extent, or `replacingLines`' uniform-width
+        // promise below would be a lie the whole pipeline then trusts.
+        let width = max(width, offset + buffer.width)
 
         let leftCount = bufferOffset
         let rightCount = max(0, width - bufferOffset - buffer.width)

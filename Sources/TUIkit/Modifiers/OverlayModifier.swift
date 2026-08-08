@@ -65,13 +65,20 @@ extension OverlayModifier: Renderable {
         let overlayWidth = overlayBuffer.width
         let overlayHeight = overlayBuffer.height
 
-        // Calculate horizontal position
-        let horizontalOffset = alignment.horizontal.childOffset(
-            childWidth: overlayWidth, in: baseWidth)
+        // Calculate horizontal position — from the overlay's own explicit
+        // `.alignmentGuide` when it set one, so a badge can hang off the corner
+        // it is aligned to rather than sit squarely on it.
+        let overlaySize = (width: overlayWidth, height: overlayHeight)
+        let horizontalOffset =
+            horizontalGuidePlacement(
+                of: overlay, size: overlaySize, alignment: alignment.horizontal, in: baseWidth)
+            ?? alignment.horizontal.childOffset(childWidth: overlayWidth, in: baseWidth)
 
         // Calculate vertical position
-        let verticalOffset = alignment.vertical.childOffset(
-            childHeight: overlayHeight, in: baseHeight)
+        let verticalOffset =
+            verticalGuidePlacement(
+                of: overlay, size: overlaySize, alignment: alignment.vertical, in: baseHeight)
+            ?? alignment.vertical.childOffset(childHeight: overlayHeight, in: baseHeight)
 
         // Composite the overlay onto the base
         return baseBuffer.composited(with: overlayBuffer, at: (x: horizontalOffset, y: verticalOffset))

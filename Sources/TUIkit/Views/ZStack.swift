@@ -93,12 +93,24 @@ private struct _ZStackCore<Content: View>: View, Renderable {
         // The stack's frame is the union of its children's sizes (like SwiftUI,
         // a ZStack is as wide/tall as its widest/tallest child). Spacers have
         // no visual box in a ZStack.
-        let buffers = ordered.filter { !$0.isSpacer }.map {
+        let drawn = ordered.filter { !$0.isSpacer }
+        let buffers = drawn.map {
             $0.render(
                 width: context.availableWidth, height: context.availableHeight, context: context)
         }
-        let frameWidth = buffers.map(\.width).max() ?? 0
-        let frameHeight = buffers.map(\.height).max() ?? 0
+        // Explicit guides on either axis, when any layer set one. They can grow
+        // the frame past the largest layer — a layer hanging off the alignment
+        // line pushes the others across — so they are resolved before the frame
+        // size is decided.
+        let sizes = buffers.map { (width: $0.width, height: $0.height) }
+        let horizontalRun = horizontalGuideRun(
+            drawn, sizes: sizes, alignment: alignment.horizontal,
+            minimumExtent: buffers.map(\.width).max() ?? 0)
+        let verticalRun = verticalGuideRun(
+            drawn, sizes: sizes, alignment: alignment.vertical,
+            minimumExtent: buffers.map(\.height).max() ?? 0)
+        let frameWidth = horizontalRun?.extent ?? buffers.map(\.width).max() ?? 0
+        let frameHeight = verticalRun?.extent ?? buffers.map(\.height).max() ?? 0
         // A zero-size frame means no child drew anything IN FLOW — but a
         // child can still be carrying the whole point of the view as a
         // free-floating layer: `OffsetView` renders exactly that (no lines, one
@@ -132,9 +144,13 @@ private struct _ZStackCore<Content: View>: View, Renderable {
             lines: Array(
                 repeating: String(repeating: " ", count: frameWidth),
                 count: frameHeight))
-        for buffer in buffers {
-            let dx = alignment.horizontal.childOffset(childWidth: buffer.width, in: frameWidth)
-            let dy = alignment.vertical.childOffset(childHeight: buffer.height, in: frameHeight)
+        for (index, buffer) in buffers.enumerated() {
+            let dx =
+                horizontalRun?.offsets[index]
+                ?? alignment.horizontal.childOffset(childWidth: buffer.width, in: frameWidth)
+            let dy =
+                verticalRun?.offsets[index]
+                ?? alignment.vertical.childOffset(childHeight: buffer.height, in: frameHeight)
             result = result.composited(with: buffer, at: (x: dx, y: dy))
         }
         return result
@@ -157,12 +173,33 @@ extension _ZStackCore: Layoutable {
         var maxHeight = 0
         var hasFlexibleWidth = false
         var hasFlexibleHeight = false
+        var guideSizes: [(width: Int, height: Int)] = []
+        guideSizes.reserveCapacity(children.count)
         for child in children {
             let size = child.measure(proposal: proposal, context: context)
+            // Spacers have no visual box in a ZStack — `renderToBuffer` filters
+            // them — so they must not contribute a guide here either.
+            guideSizes.append(
+                child.isSpacer ? (width: 0, height: 0) : (width: size.width, height: size.height))
             maxWidth = max(maxWidth, size.width)
             maxHeight = max(maxHeight, size.height)
             hasFlexibleWidth = hasFlexibleWidth || size.isWidthFlexible
             hasFlexibleHeight = hasFlexibleHeight || size.isHeightFlexible
+        }
+        // A guide can push a layer off the alignment line and grow the frame
+        // past the largest child; the render does this, so the measure must.
+        let drawn = children.indices.filter { !children[$0].isSpacer }
+        if let run = horizontalGuideRun(
+            drawn.map { children[$0] }, sizes: drawn.map { guideSizes[$0] },
+            alignment: alignment.horizontal, minimumExtent: maxWidth)
+        {
+            maxWidth = run.extent
+        }
+        if let run = verticalGuideRun(
+            drawn.map { children[$0] }, sizes: drawn.map { guideSizes[$0] },
+            alignment: alignment.vertical, minimumExtent: maxHeight)
+        {
+            maxHeight = run.extent
         }
         // Never advertise larger than the constraint (mirrors VStack/HStack).
         let widthLimit = proposal.width ?? context.availableWidth

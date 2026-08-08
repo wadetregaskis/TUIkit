@@ -86,7 +86,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
     /// taller than it rendered.)
     private func resolvedLayout(
         _ children: [ChildView], availableWidth: Int, context: RenderContext
-    ) -> (widths: [Int], totalWidth: Int, height: Int, fills: Bool) {
+    ) -> (widths: [Int], totalWidth: Int, height: Int, fills: Bool, guideRun: AlignmentGuideRun?) {
         let count = children.count
         let totalSpacing = max(0, count - 1) * spacing
 
@@ -123,17 +123,34 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // than its ideal can grow taller, so only those are re-measured. This
         // halves the per-child measures in the common (un-squeezed) case.
         var height = 1
+        var finalHeight = [Int](repeating: 0, count: count)
         for (index, child) in children.enumerated() where !child.isSpacer {
             if widths[index] >= ideal[index] {
-                height = max(height, idealHeight[index])
+                finalHeight[index] = idealHeight[index]
             } else {
                 let size = child.measure(proposal: ProposedSize(width: widths[index], height: nil), context: context)
-                height = max(height, size.height)
+                finalHeight[index] = size.height
             }
+            height = max(height, finalHeight[index])
         }
 
+        // Explicit vertical guides are resolved HERE, off the same measured
+        // heights both passes share, rather than separately off the rendered
+        // buffers — measure and render must not be able to disagree about the
+        // row's height, which a guide can grow past the tallest child. Spacers
+        // have no visual box and take no part.
+        let placed = children.indices.filter { !children[$0].isSpacer }
+        let guideRun = verticalGuideRun(
+            placed.map { children[$0] },
+            sizes: placed.map { (width: widths[$0], height: finalHeight[$0]) },
+            alignment: alignment,
+            minimumExtent: height)
+
         let totalWidth = widths.reduce(0, +) + totalSpacing
-        return (widths, min(totalWidth, max(0, availableWidth)), height, fills.contains(true))
+        return (
+            widths, min(totalWidth, max(0, availableWidth)), guideRun?.extent ?? height,
+            fills.contains(true), guideRun
+        )
     }
 
     /// Measures the HStack without rendering.
@@ -253,22 +270,44 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // placeholder (Color.clear.frame(width: 1), Spacer with an
         // explicit width, etc.) — note that EmptyView() in an else
         // branch will also be filtered.
-        var result = FrameBuffer()
+        // Children render before any of them is placed: an explicit
+        // `.alignmentGuide` is resolved against the size a child actually
+        // rendered at, and the row's height can grow past the tallest child
+        // when a guide pushes one down.
+        var buffers: [FrameBuffer?] = []
+        buffers.reserveCapacity(children.count)
         for (index, child) in children.enumerated() {
-            let spacingToApply = index > 0 ? spacing : 0
-            let finalWidth = finalWidths[index]
+            buffers.append(
+                child.isSpacer
+                    ? nil
+                    : child.render(width: finalWidths[index], height: rowHeight, context: context))
+        }
 
-            if child.isSpacer {
-                let spacerBuffer = FrameBuffer(emptyWithWidth: finalWidth, height: rowHeight)
-                result.appendHorizontally(spacerBuffer, spacing: spacingToApply)
-            } else {
-                // A child shorter than the row is positioned within it by
-                // `alignment` (top/center/bottom). Without this every child is
-                // top-pinned, because `appendHorizontally` only top-aligns.
-                let buffer = child.render(width: finalWidth, height: rowHeight, context: context)
-                    .verticallyAligned(toHeight: rowHeight, alignment: alignment)
-                result.appendHorizontally(buffer, spacing: spacingToApply)
+        // The guide run came from `resolvedLayout`, off the same measured
+        // heights `sizeThatFits` reported — not off these buffers — so the two
+        // passes cannot disagree about where a guided child sits.
+        let guideRun = layout.guideRun
+
+        var result = FrameBuffer()
+        var placedIndex = 0
+        for index in children.indices {
+            let spacingToApply = index > 0 ? spacing : 0
+            guard let buffer = buffers[index] else {
+                result.appendHorizontally(
+                    FrameBuffer(emptyWithWidth: finalWidths[index], height: rowHeight),
+                    spacing: spacingToApply)
+                continue
             }
+            defer { placedIndex += 1 }
+            // A child shorter than the row is positioned within it by
+            // `alignment` (top/center/bottom). Without this every child is
+            // top-pinned, because `appendHorizontally` only top-aligns.
+            let aligned =
+                guideRun.map {
+                    buffer.placedVertically(
+                        inHeight: rowHeight, topPadding: $0.offsets[placedIndex])
+                } ?? buffer.verticallyAligned(toHeight: rowHeight, alignment: alignment)
+            result.appendHorizontally(aligned, spacing: spacingToApply)
         }
 
         // Final guard: the assembled row never exceeds the space we were given,
@@ -321,7 +360,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         //             and compute the max height ===
         // Each entry: (buffer, spacingBefore, isSpacer). The walk stops at the
         // first child that would overflow.
-        var collected: [(FrameBuffer, Int, Bool)] = []
+        var collected: [(FrameBuffer, Int, ChildView?)] = []
         var maxHeight = 1
         var currentWidth = 0
         var spacerIndex = 0
@@ -334,14 +373,14 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 let width = max(child.spacerMinLength ?? 0, spacerWidth + extraWidth)
                 if currentWidth + spacingToApply + width > availableWidth { break }
                 // Spacer height is set to maxHeight in pass 2
-                collected.append((FrameBuffer(emptyWithWidth: width, height: 1), spacingToApply, true))
+                collected.append((FrameBuffer(emptyWithWidth: width, height: 1), spacingToApply, nil))
                 currentWidth += spacingToApply + width
                 spacerIndex += 1
             } else if spacerCount > 0 {
                 let buffer = eagerBuffers[index]!
                 if currentWidth + spacingToApply + buffer.width > availableWidth { break }
                 maxHeight = max(maxHeight, buffer.height)
-                collected.append((buffer, spacingToApply, false))
+                collected.append((buffer, spacingToApply, child))
                 currentWidth += spacingToApply + buffer.width
             } else {
                 // Fit-check on a (side-effect-free) measure BEFORE rendering —
@@ -353,20 +392,37 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                     width: availableWidth, height: context.availableHeight, context: context)
                 if currentWidth + spacingToApply + buffer.width > availableWidth { break }
                 maxHeight = max(maxHeight, buffer.height)
-                collected.append((buffer, spacingToApply, false))
+                collected.append((buffer, spacingToApply, child))
                 currentWidth += spacingToApply + buffer.width
             }
         }
 
         // === PASS 2: Apply vertical alignment and build result ===
+        // Explicit guides resolve over the columns actually placed — a lazy row
+        // stops at the first child that will not fit, so that is the run.
+        let placed = collected.compactMap { entry in entry.2.map { ($0, entry.0) } }
+        let guideRun = verticalGuideRun(
+            placed.map(\.0),
+            sizes: placed.map { (width: $0.1.width, height: $0.1.height) },
+            alignment: alignment,
+            minimumExtent: maxHeight)
+        let finalHeight = guideRun?.extent ?? maxHeight
+
         var result = FrameBuffer()
-        for (buffer, spacingToApply, isSpacer) in collected {
-            let aligned: FrameBuffer
-            if isSpacer {
-                aligned = FrameBuffer(emptyWithWidth: buffer.width, height: maxHeight)
-            } else {
-                aligned = buffer.verticallyAligned(toHeight: maxHeight, alignment: alignment)
+        var placedIndex = 0
+        for (buffer, spacingToApply, child) in collected {
+            guard child != nil else {
+                result.appendHorizontally(
+                    FrameBuffer(emptyWithWidth: buffer.width, height: finalHeight),
+                    spacing: spacingToApply)
+                continue
             }
+            defer { placedIndex += 1 }
+            let aligned =
+                guideRun.map {
+                    buffer.placedVertically(
+                        inHeight: finalHeight, topPadding: $0.offsets[placedIndex])
+                } ?? buffer.verticallyAligned(toHeight: maxHeight, alignment: alignment)
             result.appendHorizontally(aligned, spacing: spacingToApply)
         }
 

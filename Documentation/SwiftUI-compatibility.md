@@ -76,6 +76,7 @@ Code that uses them compiles and behaves the same.
 | Data | `List` — content-closure **and** data-driven `List(_:id:selection:rowContent:)`, `Table` | ✓ | data-driven `List` routes through the windowed `ForEach` path (O(visible)) |
 | Scrolling | `ScrollView(_:content:)`, `ScrollViewReader` / `ScrollViewProxy.scrollTo(_:anchor:)`, `defaultScrollAnchor(_:)` | ✓ | the `showsIndicators:` variant mirrors a soft-deprecated SwiftUI init; `scrollTo` targets `ForEach` row identities (no `.id(_:)` tagging yet) and vertical-only scroll views, resolving in O(window) even at millions of rows |
 | Adaptive | `ViewThatFits(in:content:)` | ✓ | |
+| Layout | `GeometryReader` / `GeometryProxy` / `CoordinateSpace`, `AlignmentID` / `ViewDimensions` / `HorizontalAlignment(_:)` / `VerticalAlignment(_:)`, `.alignmentGuide(_:computeValue:)` | ✓ | sizes are whole cells → §2.2 (`ProxySize`/`ProxyRect`, no `CGSize`); `GeometryProxy` omits `safeAreaInsets` and the `Anchor` subscript (§4b), and `frame(in: .global)` falls back to the local frame where the renderer does not know the on-screen position — `hasGlobalPosition` says which. Guide *values* are `Double` even though sizes are `Int`, because a guide is only ever subtracted from another guide and then floored; see `AlignmentID`. Read `.alignmentGuide` as the **outermost** modifier on a child, as with `.zIndex` |
 | Nav | `NavigationSplitView` (2/3-column, `columnVisibility:`), `navigationTitle` (`StringProtocol` / `Text`) | ✓ | a `Text` title renders as a plain string (its styling isn't carried) |
 | Containers | `TabView` / `Tab`, `Form`, `LabeledContent`, `Label` (incl. `Label(_:systemImage:)`) | ✓ | `Label(_:systemImage:)` renders an SF Symbol glyph on Apple terminals → §2.4; `formStyle(.columns)` (default) / `.grouped` |
 | Presentation | `sheet(isPresented:onDismiss:content:)`, `sheet(item:onDismiss:content:)`, `alert`, `confirmationDialog(_:isPresented:titleVisibility:actions:message:)` | ✓ | presented as a centred, dimming overlay. An `alert`/`confirmationDialog` dismisses when any of its actions is chosen (SwiftUI's behaviour — the action closure does not flip the binding itself), and claims Escape on the status bar while it is up, so a page's own `⎋ back` cannot navigate out from under it. Escape *is* the `.cancel`-role button (macOS gives Cancel the Escape key equivalent): it runs that action if there is one — a disabled one is skipped — and closes the dialog either way. A `sheet`/`modal` deliberately does NOT auto-dismiss: its content owns its own close button. |
@@ -139,6 +140,20 @@ cell, full stop. Surfacing a `CGPoint` of `Double`s would be a fiction. TUIkit
 deliberately exposes integer coordinates (`x`/`y` ints, `DragGestureEvent` with
 integer fields). The same goes for `UnitPoint` anchors — there is no sub-cell
 anchor to express.
+
+The same rule shapes the layout read-back API: `GeometryProxy.size` is a
+`ProxySize` of `Int` cells and `frame(in:)` returns a `ProxyRect`, not `CGSize`
+and `CGRect`.
+
+The one deliberate exception is an **alignment guide's value**, which is
+`Double`. A guide is not a size — it is a reference line *inside* a view, and it
+only ever appears subtracted from another guide before being floored to a cell.
+That distinction is load-bearing rather than pedantic: centring a 3-cell view in
+10 cells has always placed it at `(10 - 3) / 2 == 3`, whereas whole-cell guides
+would compute `10/2 - 3/2 == 4`, because flooring does not distribute over
+subtraction. **190 of 820** width combinations would have shifted by a cell.
+Fractional guides reproduce today's arithmetic in all 820. The fraction exists
+only between two guides and never survives to a coordinate.
 
 ### 2.3 Reactive model is `@Observable` only (no `ObservableObject` family)
 
@@ -359,7 +374,7 @@ reinterpreted, lossy analog, clearly named so no one expects fidelity).
 | **Shapes & vector drawing** (`Shape`, `Path`, `Rectangle`/`Circle`/`RoundedRectangle`, `Canvas`, `GraphicsContext`, `fill`/`stroke`) | Vectors rasterize to pixels. Cells can only approximate with box-drawing/block glyphs (which `.border` already does for rectangles). |
 | **Sub-cell geometry** (`.offset`, `.position`, `.scaleEffect`, `.rotationEffect`, `.rotation3DEffect`) | Positioning/scaling/rotating by fractional points is undefined on a grid. (Integer cell *placement* is done via stacks/frames.) |
 | **Pixel filters** (`.blur`, `.shadow`, `.opacity` blending, `.brightness`/`.contrast`/`.saturation`/`.hueRotation`, `.colorInvert`, `.clipShape`/`.mask`) | These are per-pixel compositing ops. A cell is one glyph + fg/bg color; there's nothing to blur or feather. (`.colorInvert` ≈ TUIkit's `.inverted()` on `Text` is the closest analog.) |
-| **`GeometryReader` / `GeometryProxy` / coordinate spaces / custom alignment guides** | Point-precise geometry read-back. Cell-grid layout uses integer sizes via the two-pass measure system; a coarse, integer "container size reader" *could* be offered, but not SwiftUI's `CGRect`/coordinate-space model. |
+| **`GeometryProxy.safeAreaInsets` and its `Anchor` subscript** | The reader itself and custom alignment guides *did* transfer (§1, Layout) — in whole cells. These two parts did not: a terminal has no safe area (the whole grid is addressable, and TUIkit's chrome is already subtracted from what a view is offered), and anchor geometry resolves points against a coordinate space that does not exist here. A constant zero would be answering a question the caller should not be asking. |
 | **Accessibility (VoiceOver/traits/rotors)** | Not bitmap-inherent, but tied to GUI a11y services; a terminal-native a11y story would be a separate design, not the SwiftUI API. Low priority. |
 
 ### 4c. TUIkit-only (no SwiftUI equivalent)

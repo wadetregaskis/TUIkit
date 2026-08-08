@@ -95,6 +95,17 @@ public protocol View {
     /// rare z-index wrapper is cast to `ZIndexProviding` to read its
     /// `zIndexValue`.
     static var _providesZIndex: Bool { get }
+
+    /// Static witness: whether this view type carries an explicit alignment
+    /// guide (the wrapper `View.alignmentGuide(_:computeValue:)` produces).
+    /// `false` for every view but `_AlignmentGuideView`, which overrides it to
+    /// `true`.
+    ///
+    /// Same shape and same reason as ``_providesZIndex``: the aligning
+    /// containers consult a stored `Bool` per child and only cast the rare
+    /// wrapper. Without it every child of every stack would pay an
+    /// almost-always-failing conformance cast on the hottest path there is.
+    static var _providesAlignmentGuide: Bool { get }
 }
 
 public extension View {
@@ -103,4 +114,8 @@ public extension View {
 
     /// Default: a view carries no explicit z-index. `_ZIndexView` overrides this.
     static var _providesZIndex: Bool { false }
+
+    /// Default: a view sets no alignment guide. `_AlignmentGuideView` overrides
+    /// this.
+    static var _providesAlignmentGuide: Bool { false }
 }

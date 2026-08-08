@@ -17,8 +17,20 @@ extension FrameBuffer {
     /// (`appendHorizontally` itself only ever top-aligns).
     func verticallyAligned(toHeight height: Int, alignment: VerticalAlignment) -> FrameBuffer {
         guard self.height < height else { return self }
-        let topPadding = alignment.childOffset(childHeight: self.height, in: height)
-        let bottomPadding = (height - self.height) - topPadding
+        return placedVertically(
+            inHeight: height,
+            topPadding: alignment.childOffset(childHeight: self.height, in: height))
+    }
+
+    /// Returns a copy placed at an explicit vertical offset within `height`.
+    ///
+    /// The arithmetic ``verticallyAligned(toHeight:alignment:)`` performs, split
+    /// out so a container that resolved the offset from an explicit
+    /// ``View/alignmentGuide(_:computeValue:)-(VerticalAlignment,_)`` reuses the same padding
+    /// and the same overlay/hit-region carry.
+    func placedVertically(inHeight height: Int, topPadding: Int) -> FrameBuffer {
+        guard topPadding > 0 || self.height < height else { return self }
+        let bottomPadding = max(0, height - self.height - topPadding)
         let emptyLine = String(repeating: " ", count: width)
         var lines = Array(repeating: emptyLine, count: topPadding)
         lines += self.lines

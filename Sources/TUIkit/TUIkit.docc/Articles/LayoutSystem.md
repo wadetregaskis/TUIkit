@@ -110,6 +110,61 @@ struct ChildView {
 
 Flexible children share remaining space equally. If multiple spacers exist, they each get an equal portion of the leftover space.
 
+## Alignment Guides
+
+Step 6 above aligns each child on one *guide*: `.leading` sits at a view's
+leading edge, `.center` at its middle, and the container lines those positions
+up. ``View/alignmentGuide(_:computeValue:)-(HorizontalAlignment,_)`` moves a
+child's guide, so it can hang off the alignment line instead of sitting on it:
+
+```swift
+VStack(alignment: .leading) {
+    Text("•").alignmentGuide(.leading) { d in d[.trailing] }
+    Text("bullet hangs left of this")
+}
+```
+
+Two consequences worth knowing before you reach for it:
+
+- **The container can grow past its largest child.** The bullet's guide is now
+  its *trailing* edge, so every sibling shifts right to meet it and the column
+  ends up wider than the widest line in it. Both passes account for this — the
+  measure reports the grown extent, or the parent would reserve too little.
+- **Apply it as the outermost modifier** on the child, exactly as with
+  ``View/zIndex(_:)``. A modifier applied *after* it (`.padding()`, a `.frame`)
+  wraps the guide where the container cannot see it, and the guide has no
+  effect. TUIkit's buffers carry no guide metadata for such a wrapper to
+  translate, so the alternative would be a guide reported from the wrong
+  coordinate space — silently wrong instead of visibly absent.
+
+Guides are read by ``VStack``, ``HStack``, ``ZStack`` and their lazy twins, and
+by the single-child regions `.frame(alignment:)`, `.overlay(alignment:)` and
+`.background(alignment:)`. In a **lazy** stack the run is the realized rows,
+which is the same limit SwiftUI has: prefer guides on content whose realized set
+is stable.
+
+Custom guides come from ``AlignmentID``, whose `defaultValue(in:)` receives the
+view's ``ViewDimensions``. Note that a guide's value is `Double` even though
+every size and position here is a whole cell — see ``AlignmentID`` for why that
+is what preserves TUIkit's long-standing centring rather than shifting it.
+
+## Reading the Space You Were Given
+
+``GeometryReader`` hands its content the size the container was actually
+offered, so a view can branch on it:
+
+```swift
+GeometryReader { proxy in
+    if proxy.size.width >= 60 { HStack { Sidebar(); Detail() } } else { Detail() }
+}
+```
+
+As in SwiftUI it **fills** the space proposed to it rather than hugging its
+content — that is what makes the reported size meaningful — so bound it with a
+`.frame(...)` when you want it smaller. Its content is not measured during
+Pass 1: measuring would mean building it, which needs a proxy, which needs the
+size Pass 1 is computing.
+
 ## Which Views Are Layoutable?
 
 | View | Layoutable? | Flexibility |
@@ -130,6 +185,9 @@ Views that are not `Layoutable` use the default implementation which renders fir
 
 - ``ProposedSize``
 - ``ViewSize``
+- ``GeometryReader``
+- ``AlignmentID``
+- ``ViewDimensions``
 - ``VStack``
 - ``HStack``
 - ``Spacer``

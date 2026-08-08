@@ -365,6 +365,14 @@ extension _VStackCore {
         let state = uniformWindowState(context: context)
         guard !children.isEmpty else { return FrameBuffer() }
 
+        // An explicit `.alignmentGuide` needs the whole run to place a row, and
+        // materialising the whole run is exactly what this arithmetic path
+        // exists to avoid. Decline instead, and let the exact slot walk — which
+        // measures every row anyway — do the placement. Row 0 answers for all of
+        // them: this path only runs over a uniformly keyed collection, whose
+        // rows are built by one closure.
+        guard !children[0].providesAlignmentGuide else { return nil }
+
         // Off-window rows leave the WINDOW, not the tree (§5h).
         context.environment.stateStorage?.retainSubtree(context.identity)
 
@@ -624,6 +632,9 @@ extension _VStackCore {
         let state = uniformWindowState(context: context)
         let count = children.count
         guard count > 0 else { return ViewSize.fixed(0, 0) }
+        // Declined for the same reason the render declines it — see
+        // `renderAnchoredWindow`.
+        guard !children[0].providesAlignmentGuide else { return nil }
 
         var measureContext = context
         measureContext.isMeasuring = true

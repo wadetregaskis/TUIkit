@@ -176,6 +176,14 @@ extension _VStackCore {
         guard !state.broken else { return nil }
         guard !children.isEmpty else { return FrameBuffer() }
 
+        // An explicit `.alignmentGuide` needs the whole run to place a row, and
+        // materialising the whole run is exactly what this arithmetic path
+        // exists to avoid. Decline instead, and let the exact slot walk — which
+        // measures every row anyway — do the placement. Row 0 answers for all of
+        // them: this path only runs over a uniformly keyed collection, whose
+        // rows are built by one closure.
+        guard !children[0].providesAlignmentGuide else { return nil }
+
         // Off-window rows leave the WINDOW, not the tree (§5h).
         context.environment.stateStorage?.retainSubtree(context.identity)
 
@@ -447,6 +455,10 @@ extension _VStackCore {
 
         let count = children.count
         guard count > 0 else { return ViewSize.fixed(0, 0) }
+        // Declined for the same reason the render declines it — the two must
+        // agree on the width, and a guide can widen the stack past its widest
+        // row.
+        guard !children[0].providesAlignmentGuide else { return nil }
         let pitch = extent + spacing
         let widthLimit = proposal.width ?? context.availableWidth
         let heightLimit = proposal.height ?? context.availableHeight

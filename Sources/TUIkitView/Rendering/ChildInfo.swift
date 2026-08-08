@@ -39,6 +39,15 @@ public struct ChildView {
     /// of this value; ties keep their original tree order.
     public let zIndex: Double
 
+    /// Whether this child carries an explicit alignment guide (set via
+    /// `View.alignmentGuide(_:computeValue:)`).
+    ///
+    /// A stored flag rather than a cast: aligning containers ask it of every
+    /// child on every frame, and it is `false` for all of them in almost every
+    /// tree. Only when it is `true` does a container reach for the guide
+    /// itself, through ``wrappedView``.
+    public let providesAlignmentGuide: Bool
+
     /// Resolves a child's spacer flag and minimum length without a speculative
     /// runtime conformance cast on the common (non-spacer) path.
     ///
@@ -60,6 +69,7 @@ public struct ChildView {
     public init<V: View>(_ view: V) {
         (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
         self.zIndex = Self.zIndexInfo(of: view)
+        self.providesAlignmentGuide = V._providesAlignmentGuide
         self.view = view
         self.identityType = nil
         self.childIndex = 0
@@ -78,6 +88,7 @@ public struct ChildView {
     public init<V: View>(_ view: V, childIndex: Int) {
         (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
         self.zIndex = Self.zIndexInfo(of: view)
+        self.providesAlignmentGuide = V._providesAlignmentGuide
         self.view = view
         self.identityType = V.self
         self.childIndex = childIndex
@@ -92,7 +103,8 @@ public struct ChildView {
         identityKey: String?,
         isSpacer: Bool,
         spacerMinLength: Int?,
-        zIndex: Double
+        zIndex: Double,
+        providesAlignmentGuide: Bool
     ) {
         self.view = view
         self.identityType = identityType
@@ -101,6 +113,7 @@ public struct ChildView {
         self.isSpacer = isSpacer
         self.spacerMinLength = spacerMinLength
         self.zIndex = zIndex
+        self.providesAlignmentGuide = providesAlignmentGuide
     }
 
     /// A copy whose positional identity is rebased to `index`.
@@ -123,7 +136,8 @@ public struct ChildView {
             identityKey: nil,
             isSpacer: isSpacer,
             spacerMinLength: spacerMinLength,
-            zIndex: zIndex)
+            zIndex: zIndex,
+            providesAlignmentGuide: providesAlignmentGuide)
     }
 
     /// Creates a child wrapper that renders `view` but derives its per-child
@@ -145,6 +159,7 @@ public struct ChildView {
     ) {
         (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
         self.zIndex = Self.zIndexInfo(of: view)
+        self.providesAlignmentGuide = V._providesAlignmentGuide
         self.view = view
         self.identityType = identityType
         self.childIndex = childIndex
@@ -159,6 +174,7 @@ public struct ChildView {
     ) {
         (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
         self.zIndex = Self.zIndexInfo(of: view)
+        self.providesAlignmentGuide = V._providesAlignmentGuide
         self.view = view
         self.identityType = identityType
         self.childIndex = 0
