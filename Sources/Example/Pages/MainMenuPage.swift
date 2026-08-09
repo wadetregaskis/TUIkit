@@ -89,6 +89,7 @@ struct MainMenuPage: View {
         Entry(page: .preferences, key: "menu.item.preferences", shortcut: "r"),
         Entry(page: .focus, key: "menu.item.focus", shortcut: "k"),
         Entry(page: .menus, key: "menu.item.menus", shortcut: "n"),
+        Entry(page: .navigation, key: "menu.item.navigation", shortcut: "g"),
     ]
 
     /// Subtitle for the SF Symbols feature box: a few thematic glyphs — the

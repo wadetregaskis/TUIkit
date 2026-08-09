@@ -42,6 +42,7 @@ enum DemoPage: Int, CaseIterable {
     case preferences
     case focus
     case menus
+    case navigation
 }
 
 // MARK: - App-wide styling
@@ -185,6 +186,8 @@ struct ContentView: View {
             OverlaysPage(onBack: { pageSetter.wrappedValue = .menu })
         case .layout:
             LayoutPage().statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .navigation:
+            NavigationPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .buttons:
             ButtonsPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .toggles:
@@ -268,6 +271,7 @@ struct ContentView: View {
             "v": .tabViews,
             "p": .statePersistence, "l": .lifecycle,
             "r": .preferences, "k": .focus, "n": .menus,
+            "g": .navigation,
         ]
 
         if case .character(let ch) = key, let page = mapping[ch] {
