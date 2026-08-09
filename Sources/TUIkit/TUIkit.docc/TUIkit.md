@@ -61,6 +61,7 @@ struct MyApp: App {
 - <doc:KeyboardShortcuts>
 - <doc:MouseAndGestures>
 - <doc:Presentation>
+- <doc:Navigation>
 - <doc:PaletteReference>
 - <doc:ListAndTable>
 - <doc:LayoutSystem>
@@ -133,6 +134,9 @@ struct MyApp: App {
 - ``Panel``
 - ``Alert``
 - ``Dialog``
+- ``NavigationStack``
+- ``NavigationLink``
+- ``NavigationPath``
 - ``NavigationSplitView``
 - ``TabView``
 - ``Tab``

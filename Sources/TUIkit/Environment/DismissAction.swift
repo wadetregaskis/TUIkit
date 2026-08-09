@@ -11,12 +11,17 @@ import TUIkitCore
 /// An action that exits the application's run loop, mirroring SwiftUI's
 /// `DismissAction`.
 ///
-/// SwiftUI's `@Environment(\.dismiss)` dismisses the current presentation
-/// context (sheet, popover, …). A TUIkit app has one top-level scene that
-/// fills the whole terminal, so dismissing it is equivalent to quitting:
-/// the run loop falls out naturally, `AppRunner` restores the terminal,
-/// and `App.main()` returns. Unlike calling `exit(0)`, this lets normal
-/// Swift cleanup run.
+/// SwiftUI's `@Environment(\.dismiss)` dismisses whatever presented the view
+/// that reads it. A TUIkit app has one top-level scene that fills the whole
+/// terminal, so at the top level dismissing is equivalent to quitting: the run
+/// loop falls out naturally, `AppRunner` restores the terminal, and
+/// `App.main()` returns. Unlike calling `exit(0)`, this lets normal Swift
+/// cleanup run.
+///
+/// Inside a ``NavigationStack``'s pushed screen it means what SwiftUI means:
+/// go back one screen. The stack installs its own action into the environment
+/// for the screen it presents, so the same `dismiss()` call does the right
+/// thing wherever it is written.
 ///
 /// # Example
 ///
@@ -30,15 +35,32 @@ import TUIkitCore
 /// }
 /// ```
 public struct DismissAction: Sendable {
-    /// Creates a dismiss action.
+    /// What dismissing does here, or `nil` for the top-level meaning (exit).
     ///
-    /// The default action signals the application's shared ``AppState`` to
-    /// exit on its next loop iteration.
-    public init() {}
+    /// A stored closure rather than a subclass or a flag, because the set of
+    /// things that can present a view is open-ended: whatever presents one
+    /// supplies the action that undoes it.
+    private let action: (@MainActor @Sendable () -> Void)?
+
+    /// Creates a dismiss action that exits the application's run loop.
+    public init() {
+        self.action = nil
+    }
+
+    /// Creates a dismiss action that runs `action` — for a presenting view to
+    /// put into the environment of what it presents.
+    public init(_ action: @escaping @MainActor @Sendable () -> Void) {
+        self.action = action
+    }
 
     /// Triggers the action. Equivalent to writing `dismiss()`.
+    @MainActor
     public func callAsFunction() {
-        AppState.shared.requestExit()
+        if let action {
+            action()
+        } else {
+            AppState.shared.requestExit()
+        }
     }
 }
 
