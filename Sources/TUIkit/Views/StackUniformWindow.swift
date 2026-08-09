@@ -289,6 +289,7 @@ extension _VStackCore {
         if let reply = window.reply {
             reply.sliceOriginY = sliceOrigin
             reply.sliceTotalHeight = totalHeight
+            reply.anchorID = sampledID(children, window: window, pitch: pitch)
         } else if cursor < totalHeight {
             result.appendVertically(FrameBuffer(emptyWithHeight: totalHeight - cursor), spacing: 0)
         }
@@ -358,6 +359,18 @@ extension _VStackCore {
             result.append((ordinal, child))
         }
         return result
+    }
+
+    /// The id of the row under the sample line, when one was asked for.
+    ///
+    /// Constant pitch makes this a division rather than a walk: no row is
+    /// built, and no key is compared.
+    private func sampledID(
+        _ children: ChildViewCollection, window: ScrollContentWindow, pitch: Int
+    ) -> AnyHashable? {
+        guard let unit = window.reportsIDAt, pitch > 0, !children.isEmpty else { return nil }
+        let ordinal = min(max(0, window.sampleY(at: unit) / pitch), children.count - 1)
+        return children.anyID(at: ordinal)
     }
 
     /// Resolves a pending scrollTo against uniform geometry — EXACT, the

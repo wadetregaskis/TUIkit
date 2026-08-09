@@ -286,7 +286,13 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     private func consumedSeek(
         handler: ScrollViewHandler, wantsScrollbar: Bool, context: RenderContext
     ) -> ScrollToRequest? {
-        guard !context.isMeasuring, var seek = handler.pendingScrollTo else { return nil }
+        guard !context.isMeasuring else { return nil }
+        // A `.scrollPosition` write is the same request a `scrollTo` makes; it
+        // just arrives as state rather than as a call, so it rides the same
+        // machinery rather than a second one beside it.
+        guard var seek = handler.pendingScrollTo ?? positionSeek(context: context) else {
+            return nil
+        }
         seek.topInset = edgeInset(wantsScrollbar: wantsScrollbar)
         seek.bottomInset = seek.topInset
         return seek
@@ -356,6 +362,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
         // A one-shot End/scrollToBottom intent converges exactly like a
         // glued frame (see ScrollViewHandler.seekingTail).
+        // A bound position's edge/offset target moves the scroll view BEFORE
+        // the content renders, so the frame carrying the request already shows
+        // the destination — `.bottom` by raising the tail-seek flag the End key
+        // uses, so the glue below pins it exactly against the real height.
+        if !context.isMeasuring { applyPositionOffset(handler: handler, context: context) }
         let seekingTail = handler.seekingTail
         if !context.isMeasuring { handler.seekingTail = false }
         let wasGluedToBottom =
@@ -789,12 +800,19 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             reply = contentReply
             measureContext.environment.scrollContentWindow = ScrollContentWindow(
                 offset: verticalScrollOffset, viewportHeight: viewportHeight,
-                contentIdentity: measureContext.identity, reply: contentReply,
-                edgeInset: edgeInset, seek: seek)
+                contentIdentity: measureContext.identity,
+                reply: contentReply, edgeInset: edgeInset,
+                // Only sample when someone is bound to hear it.
+                reportsIDAt: context.isMeasuring
+                    ? nil : context.environment.scrollPositionBinding?.anchor,
+                seek: seek)
         }
         measureContext.availableWidth = extents.width
         measureContext.availableHeight = extents.height
         let buffer = TUIkit.renderToBuffer(content, context: measureContext)
+        if let id = reply?.anchorID, !context.isMeasuring {
+            reportVisibleID(id, context: context)
+        }
         if let reply, let origin = reply.sliceOriginY, let total = reply.sliceTotalHeight {
             return (buffer, (origin, total, reply.sliceTotalIsEstimate), reply.seekResolvedOffset)
         }

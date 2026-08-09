@@ -157,6 +157,7 @@ struct MyApp: App {
 ### Scrolling
 
 - ``ScrollViewReader``
+- ``ScrollPosition``
 - ``ScrollViewProxy``
 - ``ScrollAnchor``
 - ``ScrollFollowMargin``

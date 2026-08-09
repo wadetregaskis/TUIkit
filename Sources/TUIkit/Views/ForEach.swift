@@ -167,6 +167,10 @@ extension ForEach: LazyChildViewProvider {
                 let element = data[data.index(data.startIndex, offsetBy: ordinal)]
                 return String(describing: element[keyPath: idKeyPath])
             },
+            anyID: { ordinal in
+                let element = data[data.index(data.startIndex, offsetBy: ordinal)]
+                return AnyHashable(element[keyPath: idKeyPath])
+            },
             build: { ordinal in
                 makeChild(for: data[data.index(data.startIndex, offsetBy: ordinal)])
             })

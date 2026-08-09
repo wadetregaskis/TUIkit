@@ -506,6 +506,10 @@ extension _VStackCore {
         let sliceOrigin = window.reply != nil ? (sorted.first?.y ?? 0) : 0
         var cursor = sliceOrigin
         var memo: [String: Int] = [:]
+        // Content-space y of the line whose row is reported back, and the row
+        // found there (see ``ScrollContentWindow/reportsIDAt``).
+        let sampleY = window.sampleY(at: window.reportsIDAt ?? .top)
+        var sampledOrdinal: Int?
         for (ordinal, y) in sorted {
             let rowHeight =
                 frame.pitch(of: ordinal)
@@ -526,6 +530,12 @@ extension _VStackCore {
                 slot = slot.clamped(toWidth: max(width, slot.width), height: rowHeight)
             }
             result.appendVertically(slot, spacing: 0)
+            // The sample line falls in exactly one row's span. Rows are
+            // variable-height here, so unlike the uniform path this cannot be
+            // a division — but the spans are being walked anyway.
+            if window.reportsIDAt != nil, sampleY >= slotY, sampleY < slotY + rowHeight {
+                sampledOrdinal = ordinal
+            }
             cursor = slotY + rowHeight
             if let key = frame.children.key(at: ordinal) { memo[key] = ordinal }
         }
@@ -554,6 +564,9 @@ extension _VStackCore {
             // origin itself drifts with past estimates. Even at the tail
             // (remaining == 0) the prefix above is estimated.
             reply.sliceTotalIsEstimate = true
+            if let sampledOrdinal {
+                reply.anchorID = frame.children.anyID(at: sampledOrdinal)
+            }
         } else if total > cursor {
             result.appendVertically(FrameBuffer(emptyWithHeight: total - cursor), spacing: 0)
         }

@@ -41,15 +41,21 @@ public struct ChildViewCollection {
 
     private let build: (Int) -> ChildView
     private let keyAt: ((Int) -> String)?
+    private let anyIDAt: ((Int) -> AnyHashable?)?
     private let eagerChildren: [ChildView]?
 
     /// A lazy collection: `build` constructs the child at an ordinal;
-    /// `key` returns its stable identity key without building it.
-    public init(count: Int, key: ((Int) -> String)?, build: @escaping (Int) -> ChildView) {
+    /// `key` returns its stable identity key without building it, and
+    /// `anyID` the id VALUE that key was derived from.
+    public init(
+        count: Int, key: ((Int) -> String)?, anyID: ((Int) -> AnyHashable?)? = nil,
+        build: @escaping (Int) -> ChildView
+    ) {
         self.count = count
         self.isUniformlyKeyed = key != nil
         self.build = build
         self.keyAt = key
+        self.anyIDAt = anyID
         self.eagerChildren = nil
     }
 
@@ -59,6 +65,7 @@ public struct ChildViewCollection {
         self.isUniformlyKeyed = false
         self.build = { children[$0] }
         self.keyAt = nil
+        self.anyIDAt = nil
         self.eagerChildren = children
     }
 
@@ -73,6 +80,18 @@ public struct ChildViewCollection {
     public func key(at ordinal: Int) -> String? {
         if let keyAt { return keyAt(ordinal) }
         return build(ordinal).identityChildKey
+    }
+
+    /// The id VALUE of the child at `ordinal` — what ``key(at:)`` is the
+    /// string of — or `nil` when the provider doesn't supply one.
+    ///
+    /// A key is `String(describing:)` of an id, which is a one-way trip: fine
+    /// for MATCHING a target (that is all a seek needs), useless for REPORTING
+    /// one back to a `Binding<ID?>`, which needs the value itself. Hence this
+    /// parallel accessor, and hence it is optional: only a provider that
+    /// actually has ids (`ForEach`) can answer.
+    public func anyID(at ordinal: Int) -> AnyHashable? {
+        anyIDAt?(ordinal)
     }
 
     /// The first ordinal whose stable key matches, or `nil`.

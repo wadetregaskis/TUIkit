@@ -36,6 +36,28 @@ struct ScrollContentWindow: Sendable, Hashable {
     /// indicator, where it is invisible however correctly it was placed.
     var edgeInset = 0
 
+    /// Where in the viewport to sample the row whose id is reported back
+    /// through ``ScrollContentReply/anchorID``, or `nil` to sample nothing.
+    ///
+    /// Set only when something is actually listening (a `.scrollPosition(id:)`
+    /// binding): the sample costs an `anyID(at:)` per frame, and a scroll view
+    /// nobody is asking should not pay it.
+    var reportsIDAt: UnitPoint?
+
+    /// The content-space y that `unit` names within the VISIBLE band.
+    ///
+    /// Not simply `offset + unit.y × height`: the "N more above/below"
+    /// indicators overwrite the viewport's first and last line, so those rows
+    /// are on the canvas but not on the screen. Reporting one as "the row you
+    /// are looking at" would name a row nobody can see — which is exactly the
+    /// row a `.top` seek deliberately steps past.
+    func sampleY(at unit: UnitPoint) -> Int {
+        let topPad = (edgeInset > 0 && offset > 0) ? 1 : 0
+        let bottomPad = edgeInset > 0 ? 1 : 0
+        let usable = max(1, viewportHeight - topPad - bottomPad)
+        return offset + topPad + Int((Double(usable - 1) * unit.y).rounded(.down))
+    }
+
     /// A pending programmatic scroll (``ScrollViewProxy/scrollTo(_:anchor:)``).
     /// The stack that locates the key renders AT the request's resolved
     /// offset — so the very frame that carries the request shows the target
@@ -61,6 +83,12 @@ final class ScrollContentReply: @unchecked Sendable, Hashable {
     /// assert precision the geometry doesn't have. The uniform path's
     /// arithmetic totals are hypothesis-exact and leave this `false`.
     var sliceTotalIsEstimate = false
+    /// The id of the row under ``ScrollContentWindow/reportsIDAt``, when one
+    /// was asked for and the provider has ids to give. This is the READ half
+    /// of `.scrollPosition(id:)`: the seek machinery matches on stringified
+    /// keys, but a binding has to be handed the value back.
+    var anchorID: AnyHashable?
+
     /// The window offset the stack rendered at in answer to
     /// ``ScrollContentWindow/seek`` — the ScrollView adopts it as its
     /// scroll position. `nil` when there was no request or the key wasn't
