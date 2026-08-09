@@ -18,6 +18,7 @@ struct LifecycleCounters: Equatable {
     var task = 0
     var change = 0
     var tick = 0
+    var refresh = 0
     var lastEvent = "—"
 }
 
@@ -77,6 +78,24 @@ struct LifecyclePage: View {
                 }
             }
 
+            DemoSection(L("page.lifecycle.refreshableSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.lifecycle.refreshableDescription"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        ValueDisplayRow(L("page.lifecycle.refreshCount"), "\(counters.refresh)")
+                        // The same refresh the key runs, reached through the
+                        // environment — which is the point of `\.refresh`.
+                        RefreshButton()
+                    }
+                    .border(color: .brightBlack)
+                    // Ctrl-R anywhere in this section reloads. The spinner
+                    // shows over the top row for as long as it takes.
+                    .refreshable { await reload() }
+                }
+            }
+
             Spacer()
         }
         .scrollableDemoPage()
@@ -87,11 +106,36 @@ struct LifecyclePage: View {
 
     // MARK: - Helpers
 
+    /// The body of the `.refreshable`: slow enough on purpose that the spinner
+    /// is visible, so the in-flight state is something you can watch.
+    private func reload() async {
+        try? await Task.sleep(for: .milliseconds(1200))
+        counters.refresh += 1
+        counters.lastEvent = L("page.lifecycle.evRefresh")
+    }
+
     /// The body of the `.task`: a short delay, then tick the task counter —
     /// mirroring an async load that finishes after the first frame.
     private func runStartupTask() async {
         try? await Task.sleep(for: .milliseconds(250))
         counters.task += 1
         counters.lastEvent = L("page.lifecycle.evTask")
+    }
+}
+
+/// A button that runs whatever refresh it happens to be inside, and disables
+/// itself when it is inside nothing refreshable — which is what makes
+/// ``EnvironmentValues/refresh`` being Optional worth having.
+private struct RefreshButton: View {
+    @Environment(\.refresh) private var refresh
+
+    var body: some View {
+        Button(L("page.lifecycle.refreshNow")) {
+            // `@Environment` is nil outside a render, so the handle is
+            // captured into a local for the action closure to keep.
+            let action = refresh
+            Task { await action?() }
+        }
+        .disabled(refresh == nil)
     }
 }
