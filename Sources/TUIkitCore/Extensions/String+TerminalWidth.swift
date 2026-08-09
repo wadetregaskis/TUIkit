@@ -9,7 +9,7 @@
 /// One segment of a string produced by ``Swift/String/ansiSegments()``:
 /// either a complete ANSI (CSI) escape sequence or a single visible
 /// grapheme cluster.
-enum ANSISegment {
+public enum ANSISegment {
     /// A complete escape sequence; `isSGR` is `true` for colour/style
     /// (`…m`) sequences and `false` for cursor-movement, erase, etc.
     case ansi(String, isSGR: Bool)
@@ -875,7 +875,7 @@ extension String {
     /// that follows. Visible runs between escapes are grapheme-clustered
     /// on their own (escapes always break clusters anyway), so widths come
     /// out the same as for un-styled text.
-    func ansiSegments() -> [ANSISegment] {
+    public func ansiSegments() -> [ANSISegment] {
         var segments: [ANSISegment] = []
         let scalars = unicodeScalars
         var index = scalars.startIndex

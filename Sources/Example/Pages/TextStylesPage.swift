@@ -15,6 +15,10 @@ import TUIkit
 /// - Special effects (blink, inverted)
 /// - Cascading styles (container-level modifiers that apply to a whole subtree)
 struct TextStylesPage: View {
+    /// The live fade for the opacity demo, so it can be watched moving rather
+    /// than only compared at fixed steps.
+    @State private var opacity = 0.5
+
     var body: some View {
         ScrollView {
             content
@@ -139,6 +143,38 @@ struct TextStylesPage: View {
                             .foregroundStyle(.palette.foregroundSecondary)
                     }
                     .style(.semanticColor(.foregroundSecondary)) { $0.dim = true }
+                }
+            }
+
+            DemoSection(L("page.textStyles.section.opacity")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.textStyles.opacityExplain"))
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                    // One modifier fades a whole subtree — text, colours and
+                    // controls alike — with each colour blended toward the
+                    // background rather than replaced by a single grey.
+                    Slider(value: $opacity, in: 0...1)
+                    .frame(width: 40)
+
+                    VStack(alignment: .leading) {
+                        Text(L("page.textStyles.opacityHeading")).bold()
+                        .foregroundStyle(.palette.error)
+                        Text(L("page.textStyles.opacityBody"))
+                        Text(L("page.textStyles.opacityAccent"))
+                        .foregroundStyle(.palette.accent)
+                    }
+                    .opacity(opacity)
+
+                    // A fixed ramp beside it: the same line at four fades, so
+                    // the hues can be compared against each other directly.
+                    HStack(spacing: 2) {
+                        ForEach([1.0, 0.66, 0.33, 0.0], id: \.self) { step in
+                            Text(L("page.textStyles.opacitySwatch"))
+                            .foregroundStyle(.palette.success)
+                            .opacity(step)
+                        }
+                    }
                 }
             }
 

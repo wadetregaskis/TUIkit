@@ -187,6 +187,7 @@ type_name:
     - _ListRowInsetsView
     - _ListRowBackgroundView
     - _ListRowColorView
+    - _OpacityView
     # @FocusState modifier helpers created by .focused / .defaultFocus.
     - _FocusedModifier
     - _DefaultFocusModifier

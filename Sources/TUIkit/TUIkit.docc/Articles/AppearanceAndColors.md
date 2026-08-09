@@ -97,6 +97,31 @@ let lighter = color.lighter(by: 0.2)  // 20% lighter
 let darker = color.darker(by: 0.3)    // 30% darker
 ```
 
+### Fading a Whole View
+
+``SwiftUICore/View/opacity(_:)`` fades everything a subtree draws, without
+your having to reach for each colour in it:
+
+```swift
+VStack {
+    Text("Coming soon").bold()
+    Text("This section is not ready yet.")
+}
+.opacity(0.4)
+```
+
+A cell has no alpha channel, so this is a *blend*, not compositing: every
+colour the subtree names is moved toward the palette background by
+`1 - opacity`. Hue survives — a red heading at `0.4` still reads red rather
+than flattening to grey — and at `0` the subtree reaches the background
+exactly and disappears while keeping its space and its clickable regions,
+which is what SwiftUI's `opacity(0)` does too.
+
+Because there is no layer below a cell, the blend goes toward the palette
+background rather than toward whatever the view is sitting on. The two agree
+everywhere except over a non-background fill: fading a view that sits on a
+coloured panel moves it toward the *page* colour, not the panel's.
+
 ## Semantic Colors
 
 `SemanticColor` provides palette-aware color tokens that resolve at render time. This is the bridge between the color system and the theming system.
