@@ -273,6 +273,13 @@ final class TUIContext: @unchecked Sendable {
     /// Preference value collection during rendering.
     let preferences: PreferenceStorage
 
+    /// The scene's operational state, published to `\.scenePhase` each frame.
+    ///
+    /// Owned here rather than by a view because only the run loop knows it:
+    /// the one transition a terminal can report is suspend/resume, which the
+    /// loop handles between frames. See ``ScenePhase``.
+    var scenePhase: ScenePhase = .active
+
     /// Persistent `@State` value storage indexed by `ViewIdentity`.
     let stateStorage: StateStorage
 

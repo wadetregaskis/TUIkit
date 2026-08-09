@@ -293,7 +293,15 @@ extension AppRunner {
             // not in the signal handler — because only the loop owns the
             // terminal state it has to tear down and rebuild.
             if signals.consumeSuspendFlag() {
+                // The one scene-phase transition a terminal can actually
+                // report. Render a frame at `.background` BEFORE stopping, so
+                // an `onChange(of: scenePhase)` observer gets to run while the
+                // process is still alive — an app that saves on the way down
+                // has no other moment. See ``ScenePhase``.
+                tuiContext.scenePhase = .background
+                renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
                 suspendUntilContinued(renderer: renderer)
+                tuiContext.scenePhase = .active
                 pendingRender = true
             }
 

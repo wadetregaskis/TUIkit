@@ -239,5 +239,8 @@ extension EnvironmentValues {
         // single source of truth), so `\.locale` tracks it by default while a
         // subtree may still override it. See LocaleEnvironment.swift.
         locale = LocalizationService.shared.currentLanguage.locale
+        // …and the scene phase from the run loop, for the same reason: one
+        // source of truth, republished every frame.
+        scenePhase = context.scenePhase
     }
 }

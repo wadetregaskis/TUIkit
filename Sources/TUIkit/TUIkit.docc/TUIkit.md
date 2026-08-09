@@ -135,6 +135,7 @@ struct MyApp: App {
 - ``Alert``
 - ``Dialog``
 - ``PresentationDetent``
+- ``ScenePhase``
 - ``NavigationStack``
 - ``NavigationLink``
 - ``NavigationPath``
