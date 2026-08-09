@@ -295,6 +295,64 @@ extension View {
     }
 }
 
+// MARK: - Full-Screen Cover
+
+extension View {
+    /// Presents content covering the whole screen. Matches SwiftUI's
+    /// `fullScreenCover(isPresented:onDismiss:content:)`.
+    ///
+    /// The difference from ``sheet(isPresented:onDismiss:content:)`` is the same
+    /// one SwiftUI draws: a sheet is a panel over the (dimmed) page, a cover
+    /// replaces it. The cover fills the content area between the app header and
+    /// the status bar, nothing of the page shows through, and it cannot be
+    /// dragged — there is nowhere for it to go.
+    ///
+    /// Escape dismisses it, as with every presentation.
+    ///
+    /// - Parameters:
+    ///   - isPresented: A binding controlling presentation.
+    ///   - onDismiss: An optional closure run when the cover is dismissed.
+    ///   - content: A ViewBuilder returning the cover's content.
+    public func fullScreenCover<Content: View>(
+        isPresented: Binding<Bool>,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        ModalPresentationModifier(
+            content: self,
+            isPresented: isPresented,
+            modal: content(),
+            style: .fullScreen
+        )
+        .onChange(of: isPresented.wrappedValue) { wasPresented, isPresentedNow in
+            if wasPresented, !isPresentedNow { onDismiss?() }
+        }
+    }
+
+    /// Presents a full-screen cover for a currently-selected item. Matches
+    /// SwiftUI's `fullScreenCover(item:onDismiss:content:)`.
+    ///
+    /// - Parameters:
+    ///   - item: A binding to an optional, identifiable item; non-`nil` presents.
+    ///   - onDismiss: An optional closure run when the cover is dismissed.
+    ///   - content: A ViewBuilder building the cover from the unwrapped item.
+    public func fullScreenCover<Item: Identifiable, Content: View>(
+        item: Binding<Item?>,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping (Item) -> Content
+    ) -> some View {
+        let isPresented = Binding<Bool>(
+            get: { item.wrappedValue != nil },
+            set: { presented in if !presented { item.wrappedValue = nil } }
+        )
+        return fullScreenCover(isPresented: isPresented, onDismiss: onDismiss) {
+            if let value = item.wrappedValue {
+                content(value)
+            }
+        }
+    }
+}
+
 // MARK: - Notification Host
 
 extension View {

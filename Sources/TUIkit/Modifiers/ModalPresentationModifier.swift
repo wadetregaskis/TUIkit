@@ -24,6 +24,20 @@
 /// }
 /// ```
 public struct ModalPresentationModifier<Content: View, Modal: View>: View {
+    /// How a presentation fills the screen.
+    ///
+    /// The two shapes SwiftUI distinguishes, and they differ in a terminal for
+    /// the same reasons they differ anywhere: a sheet is a panel over a dimmed
+    /// page, a cover replaces the page outright.
+    enum Style {
+        /// A centred panel sized to its content, over a dimmed page — `.sheet`,
+        /// `.modal`, and every alert.
+        case sheet
+        /// The whole content area, nothing of the page showing through —
+        /// `.fullScreenCover`.
+        case fullScreen
+    }
+
     /// The base content to render.
     let content: Content
 
@@ -32,6 +46,9 @@ public struct ModalPresentationModifier<Content: View, Modal: View>: View {
 
     /// The modal content to present.
     let modal: Modal
+
+    /// Whether this presents as a panel or takes the whole screen.
+    var style: Style = .sheet
 
     public var body: Never {
         fatalError("ModalPresentationModifier renders via Renderable")
@@ -136,21 +153,52 @@ extension ModalPresentationModifier: Renderable {
         // under the status bar". Building against `overlayContentHeight` makes
         // the container reserve its footer within the visible area instead. Width
         // is still the full terminal width (the horizontal clamp already works).
+        let overlayHeight = context.environment.overlayContentHeight
         var modalContext = context
             .withChildIdentity(type: Modal.self, index: 1)
             .withAvailableWidth(context.environment.terminalWidth)
-            .withAvailableHeight(context.environment.overlayContentHeight)
+            .withAvailableHeight(overlayHeight)
         modalContext.environment.activeFocusSectionID = sectionID
-        var modalBuffer = renderPresentedDialog(
-            modal, context: modalContext,
-            capHeight: context.environment.overlayContentHeight)
+
+        // A detent, if the content named one, decides the height instead of the
+        // content's own. It has to be read BEFORE the render — it is the height
+        // being rendered into — which is why it rides a static conformance
+        // rather than a preference (see ``PresentationDetentsProviding``).
+        let detentHeight = (modal as? any PresentationDetentsProviding)?
+            .resolvedHeight(in: overlayHeight)
+
+        var modalBuffer: FrameBuffer
+        switch style {
+        case .sheet:
+            if let detentHeight {
+                modalBuffer = renderPresentedDialog(
+                    modal.frame(height: detentHeight), context: modalContext,
+                    capHeight: detentHeight)
+            } else {
+                modalBuffer = renderPresentedDialog(
+                    modal, context: modalContext, capHeight: overlayHeight)
+            }
+        case .fullScreen:
+            // The cover IS the screen: full width and the whole content area,
+            // so there is nothing of the page left to show through and nothing
+            // to dim.
+            modalBuffer = renderPresentedDialog(
+                modal.frame(
+                    width: context.environment.terminalWidth, height: overlayHeight),
+                context: modalContext, capHeight: overlayHeight)
+        }
 
         guard !modalBuffer.isEmpty else { return baseBuffer }
 
         // Make the dialog draggable by its title/border, and read back the offset
-        // to place it at. The compositor clamps it fully on screen.
-        let dragOffset = DialogDrag.offset(
-            for: &modalBuffer, context: context, propertyIndex: StateIndex.dragHandler)
+        // to place it at. The compositor clamps it fully on screen. A full-screen
+        // cover is not draggable — there is nowhere for it to go, and grabbing
+        // its border would only shift the screen off itself.
+        let dragOffset =
+            style == .fullScreen
+            ? (x: 0, y: 0)
+            : DialogDrag.offset(
+                for: &modalBuffer, context: context, propertyIndex: StateIndex.dragHandler)
 
         // Float the modal to the screen root: it composites centred over the whole
         // screen and dims everything beneath — so it presents over the full screen
@@ -159,7 +207,7 @@ extension ModalPresentationModifier: Renderable {
         baseBuffer.overlays.append(
             OverlayLayer(
                 offsetX: dragOffset.x, offsetY: dragOffset.y, content: modalBuffer,
-                level: .modal, centered: true, dimsBackground: true))
+                level: .modal, centered: true, dimsBackground: style == .sheet))
         return baseBuffer
     }
 }

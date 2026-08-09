@@ -115,6 +115,10 @@ struct OverlaysPage: View {
     @State var authPassword: String = ""
     @State private var showConfirm = false
     @State private var confirmChoice = "—"
+    @State private var showPopover = false
+    @State private var showCover = false
+    @State private var showDetented = false
+    @State private var detent: PresentationDetent = .medium
 
     /// Callback to navigate back to the main menu.
     let onBack: () -> Void
@@ -233,6 +237,36 @@ struct OverlaysPage: View {
                 }
             }
 
+            DemoSection(L("page.overlays.variants.section")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.overlays.variants.explain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    HStack(spacing: 2) {
+                        // A popover anchors to the button that opened it, so
+                        // this one is deliberately not centred on the screen.
+                        Button(L("page.overlays.variants.popover")) { showPopover = true }
+                            .popover(isPresented: $showPopover) {
+                                VStack(alignment: .leading) {
+                                    Text(L("page.overlays.variants.popoverTitle")).bold()
+                                    Text(L("page.overlays.variants.popoverBody"))
+                                        .foregroundStyle(.palette.foregroundSecondary)
+                                }
+                            }
+
+                        Button(L("page.overlays.variants.cover")) { showCover = true }
+
+                        Button(L("page.overlays.variants.sheet")) { showDetented = true }
+                    }
+                    // The terminal's stand-in for dragging a sheet's grabber:
+                    // the bound selection, moved by a control the app owns.
+                    Picker(L("page.overlays.variants.detent"), selection: $detent) {
+                        Text(L("page.overlays.variants.detentMedium")).tag(PresentationDetent.medium)
+                        Text(L("page.overlays.variants.detentLarge")).tag(PresentationDetent.large)
+                        Text("8").tag(PresentationDetent.height(8))
+                    }
+                }
+            }
+
             DemoSection(L("page.overlays.section.howItWorks")) {
                 Text(L("page.overlays.howItWorks.intro"))
                     .foregroundStyle(.palette.foregroundSecondary)
@@ -250,6 +284,26 @@ struct OverlaysPage: View {
             Spacer()
         }
         .scrollableDemoPage()
+        // The cover and the detented sheet are attached at the PAGE, not at
+        // their buttons: both present over the whole screen, so hanging them
+        // off a button inside a scroll view would only make the attachment
+        // point harder to reason about. (A popover is the opposite — it
+        // belongs to its button, and is attached there.)
+        .fullScreenCover(isPresented: $showCover) {
+            VStack(spacing: 1) {
+                Text(L("page.overlays.variants.coverTitle")).bold()
+                Text(L("page.overlays.variants.coverBody"))
+                    .foregroundStyle(.palette.foregroundSecondary)
+                Button(L("button.close")) { showCover = false }
+            }
+        }
+        .sheet(isPresented: $showDetented) {
+            Dialog(title: L("page.overlays.variants.sheetTitle")) {
+                Text(L("page.overlays.variants.sheetBody"))
+                Button(L("button.close")) { showDetented = false }
+            }
+            .presentationDetents([.medium, .large, .height(8)], selection: $detent)
+        }
         .appHeader {
             DemoAppHeader(L("menu.item.overlays"))
         }

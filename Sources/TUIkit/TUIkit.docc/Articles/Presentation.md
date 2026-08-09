@@ -14,6 +14,70 @@ has to claim the key there, or a page carrying its own `⎋ back` item would eat
 it and navigate out from under the dialog. A presented dialog can also be
 dragged by its title or border, and is clamped to stay on screen.
 
+## Popovers
+
+A `sheet(isPresented:onDismiss:content:)` centres a panel over the dimmed
+screen; a **popover** stays next to the thing it belongs to. It is a bordered
+panel anchored to the presenting view, over a page that is *not* dimmed —
+the same presentation `.contextMenu` and the `Picker` drop-down use, with your
+content instead of menu rows. <kbd>Esc</kbd> closes it, and so does a click
+anywhere outside it.
+
+```swift
+Button("Details") { showing = true }
+    .popover(isPresented: $showing) {
+        VStack(alignment: .leading) {
+            Text("Ganymede").bold()
+            Text("Largest moon in the solar system")
+        }
+    }
+```
+
+`arrowEdge` decides which side it sits on — a terminal draws no arrow, but the
+edge still means something: `.bottom` (the default) puts it below the view,
+`.top` above, `.leading` / `.trailing` beside. `attachmentAnchor` decides where
+along that edge: `.rect(.bounds)` centres it on the view, `.point(_:)` puts it
+at a unit point within it.
+
+## Full-screen covers
+
+`fullScreenCover(isPresented:onDismiss:content:)` replaces the page rather than
+floating over it: the content fills the area between the app header and the
+status bar, nothing shows through, and — unlike a sheet — it cannot be dragged,
+because there is nowhere for it to go.
+
+## Sheet heights: detents
+
+By default a sheet is as tall as its content. ``PresentationDetent`` overrides
+that, applied to the sheet's **content**:
+
+```swift
+.sheet(isPresented: $showing) {
+    Settings()
+        .presentationDetents([.medium])
+}
+```
+
+`.medium` is half the available height, `.large` all of it, `.fraction(_:)` a
+share of it, and `.height(_:)` an exact number of **rows** (a terminal has no
+`CGFloat`).
+
+Two things to know. It must be the content's **outermost** modifier — the
+detent is the height the content is rendered *into*, so it has to be readable
+before that render happens, which is why it rides the view's type rather than a
+preference. And a terminal has no grabber to drag: with several detents and no
+`selection:` binding the smallest applies, so bind one if the sheet should be
+able to change size.
+
+```swift
+@State private var detent: PresentationDetent = .medium
+
+.sheet(isPresented: $showing) {
+    Settings()
+        .presentationDetents([.medium, .large], selection: $detent)
+}
+```
+
 ## Alerts
 
 Use `alert(_:isPresented:actions:message:)` for a titled alert with an
@@ -133,6 +197,12 @@ Because the host is independent of the view that posts, a notification survives
 navigation between screens.
 
 ## Topics
+
+### Presentation
+
+- ``PresentationDetent``
+- ``PopoverAttachmentAnchor``
+- ``PopoverAttachmentRect``
 
 ### Notifications
 

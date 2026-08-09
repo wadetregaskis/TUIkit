@@ -134,6 +134,7 @@ struct MyApp: App {
 - ``Panel``
 - ``Alert``
 - ``Dialog``
+- ``PresentationDetent``
 - ``NavigationStack``
 - ``NavigationLink``
 - ``NavigationPath``
