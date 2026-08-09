@@ -184,6 +184,9 @@ type_name:
     - _LayoutCore
     - _GridCore
     - _PresentationDetentsView
+    - _ListRowInsetsView
+    - _ListRowBackgroundView
+    - _ListRowColorView
     # @FocusState modifier helpers created by .focused / .defaultFocus.
     - _FocusedModifier
     - _DefaultFocusModifier
