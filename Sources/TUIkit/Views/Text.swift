@@ -152,7 +152,9 @@ extension Text {
     ///
     /// When the text is wider than the space it is given (or a word is
     /// longer than the wrap boundary), it is truncated and the truncation
-    /// point is marked with an ellipsis (`…`). The default is `.tail`.
+    /// point is marked with an ellipsis (`…`). The default is `.tail`, or
+    /// whatever ``View/truncationMode(_:)`` cascaded from above — this one,
+    /// being about this `Text` specifically, wins over that.
     ///
     /// ```swift
     /// Text("/very/long/path/to/file.txt")
@@ -241,8 +243,13 @@ public struct TextStyle: Sendable, Equatable {
     /// Whether foreground and background colors are inverted.
     public var isInverted: Bool = false
 
-    /// How the text is shortened when it cannot fit its available space.
-    public var truncationMode: TruncationMode = .tail
+    /// How the text is shortened when it cannot fit its available space, or
+    /// `nil` to inherit `\.truncationMode` from the environment.
+    ///
+    /// Optional so "this `Text` was told" and "nobody said" stay
+    /// distinguishable: `View.truncationMode(_:)` cascades a default to a whole
+    /// subtree, and a `Text` that set its own must still win inside it.
+    public var truncationMode: TruncationMode?
 
     /// Whether truncation cuts only at word boundaries rather than at any
     /// character position.
@@ -390,7 +397,7 @@ extension Text: Renderable, Layoutable {
 
         // Word-wrap text to fit available width.
         let maxWidth = context.availableWidth
-        let mode = style.truncationMode
+        let mode = style.truncationMode ?? context.environment.truncationMode
         let atWordBoundary = style.truncatesAtWordBoundary
         // Lay the (cased) content into the available width and height: wrap on
         // word boundaries, honour an explicit line limit, and clip an over-long
