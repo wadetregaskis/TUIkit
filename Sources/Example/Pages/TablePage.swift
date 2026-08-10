@@ -135,15 +135,20 @@ private struct Track: Identifiable, Sendable {
     let id: String
     let title: String
     let artist: String
+    /// What the Time column SHOWS.
     let length: String
+    /// What the Time column SORTS by — "5:12" sorts before "6:03" as a string
+    /// too, but "10:04" would not, which is the whole point of a column that
+    /// displays one property and orders by another.
+    let seconds: Int
 
     static let playlist: [Self] = [
-        Self(id: "1", title: "Aurora", artist: "Kite Season", length: "3:41"),
-        Self(id: "2", title: "Bloom", artist: "Vela", length: "4:07"),
-        Self(id: "3", title: "Cinder", artist: "Low Ceiling", length: "2:58"),
-        Self(id: "4", title: "Drift", artist: "Kite Season", length: "5:12"),
-        Self(id: "5", title: "Ember", artist: "Hollow Coast", length: "3:26"),
-        Self(id: "6", title: "Fathom", artist: "Vela", length: "6:03"),
+        Self(id: "1", title: "Aurora", artist: "Kite Season", length: "3:41", seconds: 221),
+        Self(id: "2", title: "Bloom", artist: "Vela", length: "4:07", seconds: 247),
+        Self(id: "3", title: "Cinder", artist: "Low Ceiling", length: "2:58", seconds: 178),
+        Self(id: "4", title: "Drift", artist: "Kite Season", length: "5:12", seconds: 312),
+        Self(id: "5", title: "Ember", artist: "Hollow Coast", length: "10:04", seconds: 604),
+        Self(id: "6", title: "Fathom", artist: "Vela", length: "6:03", seconds: 363),
     ]
 }
 
@@ -180,6 +185,12 @@ struct TablePage: View {
     @State var reorderFeedback = ReorderFeedbackChoice.live.rawValue
     /// The reorderable table's rows — `@State`, because `onMove` writes to them.
     @State fileprivate var playlist = Track.playlist
+    /// The sortable table's rows. The table publishes the order it was asked
+    /// for; sorting these is the app's job (see the `.onChange` below), which
+    /// is SwiftUI's division of labour too.
+    @State fileprivate var sortedTracks = Track.playlist
+    @State fileprivate var trackSort = [KeyPathComparator(\Track.title, order: .forward)]
+    @State var sortSelection: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -313,6 +324,29 @@ struct TablePage: View {
             // section: same state machine, same feedback modes, and here the
             // modifier goes on the Table (its rows are values, not views, so
             // there is no ForEach to hang it on).
+            DemoSection(L("page.table.sortSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.table.sortInstruction"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Table(sortedTracks, selection: $sortSelection, sortOrder: $trackSort) {
+                        TableColumn(L("page.table.column.track"), value: \Track.title)
+                            .width(.fit)
+                        TableColumn(L("page.table.column.artist"), value: \Track.artist)
+                            .width(.flexible)
+                        // Shows the "m:ss" string, orders by the Int behind it.
+                        TableColumn(L("page.table.column.length"), value: \Track.seconds) {
+                            $0.length
+                        }
+                        .width(.fixed(9))
+                        .alignment(.trailing)
+                    }
+                    .frame(height: 8)
+                    .onChange(of: trackSort, initial: true) {
+                        sortedTracks.sort(using: trackSort)
+                    }
+                }
+            }
+
             DemoSection(L("page.table.reorderSection")) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.table.reorderInstruction"))

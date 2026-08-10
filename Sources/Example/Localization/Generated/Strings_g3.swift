@@ -107,6 +107,9 @@ extension ExampleStrings {
             "page.table.column.elapsed": "Elapsed",
             "page.table.currentSelections": "Current Selections",
 
+            "page.table.sortSection": "Sortable columns · sortOrder",
+            "page.table.sortInstruction": "Click a column header to sort by it; click it again to reverse. Click another and it becomes the primary sort, with the one it displaced kept behind it as the tie-break — so Artist then Track groups each artist's songs by name. Time SHOWS “m:ss” but SORTS by the seconds behind it, which is what TableColumn(_:value:content:) is for. The table publishes the order and this page applies it in .onChange, exactly as in SwiftUI.",
+
             "page.table.reorderSection": "Drag to reorder · .onMove",
             "page.table.reorderInstruction": "Drag a row with the mouse to move it; the picker chooses what the drag shows, exactly as on the Lists page. On a Table the modifier goes on the table itself — its rows are values and its cells are not views, so there is no ForEach to attach it to. Selecting several rows and dragging any of them moves them all — the Table's selection is a Set here.",
             "page.table.column.track": "Track",
@@ -318,6 +321,9 @@ extension ExampleStrings {
             "page.table.column.status": "Status",
             "page.table.column.elapsed": "Verstrichen",
             "page.table.currentSelections": "Aktuelle Auswahl",
+
+            "page.table.sortSection": "Sortierbare Spalten · sortOrder",
+            "page.table.sortInstruction": "Klicken Sie auf eine Spaltenüberschrift, um danach zu sortieren; erneut klicken kehrt die Richtung um. Eine andere Spalte wird zur primären Sortierung, die verdrängte bleibt als Gleichstandsregel dahinter — Interpret, dann Titel gruppiert also die Songs jedes Interpreten nach Namen. Zeit ZEIGT „m:ss“, SORTIERT aber nach den Sekunden dahinter; genau dafür ist TableColumn(_:value:content:) da. Die Tabelle veröffentlicht die Reihenfolge, diese Seite wendet sie in .onChange an — wie in SwiftUI.",
 
             "page.table.reorderSection": "Ziehen zum Umsortieren · .onMove",
             "page.table.reorderInstruction": "Ziehe eine Zeile mit der Maus, um sie zu verschieben; das Auswahlfeld bestimmt, was der Zug zeigt — genau wie auf der Listen-Seite. Bei einer Tabelle sitzt der Modifier an der Tabelle selbst: ihre Zeilen sind Werte und ihre Zellen keine Views, es gibt also kein ForEach dafür. Mehrere ausgewählte Zeilen wandern gemeinsam — die Auswahl der Tabelle ist hier eine Menge.",
@@ -531,6 +537,9 @@ extension ExampleStrings {
             "page.table.column.elapsed": "Écoulé",
             "page.table.currentSelections": "Sélections actuelles",
 
+            "page.table.sortSection": "Colonnes triables · sortOrder",
+            "page.table.sortInstruction": "Cliquez sur un en-tête de colonne pour trier dessus ; recliquez pour inverser. Une autre colonne devient le tri principal, celle qu’elle remplace restant derrière comme départage — Artiste puis Titre regroupe donc les morceaux de chaque artiste par nom. Durée AFFICHE « m:ss » mais TRIE sur les secondes sous-jacentes : c’est à cela que sert TableColumn(_:value:content:). Le tableau publie l’ordre, cette page l’applique dans .onChange, comme dans SwiftUI.",
+
             "page.table.reorderSection": "Glisser pour réordonner · .onMove",
             "page.table.reorderInstruction": "Faites glisser une ligne à la souris pour la déplacer ; le sélecteur choisit ce que montre le glissement, comme sur la page Listes. Sur un Table, le modificateur s’applique au tableau lui-même : ses lignes sont des valeurs et ses cellules ne sont pas des vues, il n’y a donc pas de ForEach auquel l’attacher.",
             "page.table.column.track": "Titre",
@@ -742,6 +751,9 @@ extension ExampleStrings {
             "page.table.column.status": "Stato",
             "page.table.column.elapsed": "Trascorso",
             "page.table.currentSelections": "Selezioni attuali",
+
+            "page.table.sortSection": "Colonne ordinabili · sortOrder",
+            "page.table.sortInstruction": "Fai clic su un’intestazione di colonna per ordinare in base a essa; un altro clic inverte. Un’altra colonna diventa l’ordinamento primario e quella sostituita resta dietro come criterio di parità — Artista e poi Brano raggruppa quindi i brani di ogni artista per nome. Durata MOSTRA “m:ss” ma ORDINA per i secondi sottostanti: è esattamente lo scopo di TableColumn(_:value:content:). La tabella pubblica l’ordine e questa pagina lo applica in .onChange, come in SwiftUI.",
 
             "page.table.reorderSection": "Trascina per riordinare · .onMove",
             "page.table.reorderInstruction": "Trascina una riga col mouse per spostarla; il selettore sceglie cosa mostra il trascinamento, come nella pagina Liste. Su una Table il modificatore sta sulla tabella stessa: le sue righe sono valori e le celle non sono viste, quindi non c’è un ForEach a cui attaccarlo.",
@@ -955,6 +967,9 @@ extension ExampleStrings {
             "page.table.column.elapsed": "Transcurrido",
             "page.table.currentSelections": "Selecciones actuales",
 
+            "page.table.sortSection": "Columnas ordenables · sortOrder",
+            "page.table.sortInstruction": "Haz clic en el encabezado de una columna para ordenar por ella; vuelve a hacer clic para invertir. Otra columna pasa a ser el orden principal y la que desplaza queda detrás como desempate, así que Artista y luego Pista agrupa las canciones de cada artista por nombre. Duración MUESTRA «m:ss» pero ORDENA por los segundos que hay detrás: justo para eso existe TableColumn(_:value:content:). La tabla publica el orden y esta página lo aplica en .onChange, igual que en SwiftUI.",
+
             "page.table.reorderSection": "Arrastrar para reordenar · .onMove",
             "page.table.reorderInstruction": "Arrastra una fila con el ratón para moverla; el selector elige qué muestra el arrastre, igual que en la página Listas. En una Table el modificador va en la tabla misma: sus filas son valores y sus celdas no son vistas, así que no hay ningún ForEach al que asociarlo.",
             "page.table.column.track": "Pista",
@@ -1167,6 +1182,9 @@ extension ExampleStrings {
             "page.table.column.elapsed": "已用时间",
             "page.table.currentSelections": "当前选择",
 
+            "page.table.sortSection": "可排序列 · sortOrder",
+            "page.table.sortInstruction": "点击列标题即可按该列排序，再次点击则反向。点击另一列会使其成为主排序，被替换的一列作为次要条件保留在后，因此先按艺术家再按曲目会将每位艺术家的歌曲按名称分组。时长列显示“m:ss”，但按其背后的秒数排序，这正是 TableColumn(_:value:content:) 的用途。表格发布排序顺序，本页在 .onChange 中应用它——与 SwiftUI 完全一致。",
+
             "page.table.reorderSection": "拖拽重新排序 · .onMove",
             "page.table.reorderInstruction": "用鼠标拖动某一行即可移动它；上面的选择器决定拖拽时显示什么，与列表页相同。在 Table 上，这个修饰器加在表格本身：它的行是值、单元格不是视图，因此没有 ForEach 可以挂载。",
             "page.table.column.track": "曲目",
@@ -1378,6 +1396,9 @@ extension ExampleStrings {
             "page.table.column.status": "状態",
             "page.table.column.elapsed": "経過時間",
             "page.table.currentSelections": "現在の選択",
+
+            "page.table.sortSection": "ソート可能な列 · sortOrder",
+            "page.table.sortInstruction": "列見出しをクリックするとその列で並び替わり、もう一度クリックすると逆順になります。別の列をクリックするとそれが主ソートになり、押しのけられた列は同値時の基準として後ろに残るため、アーティスト→トラックの順に押せば各アーティストの曲が名前順にまとまります。時間列は「m:ss」を表示しながら、背後の秒数でソートします。これが TableColumn(_:value:content:) の用途です。テーブルは順序を公開するだけで、適用はこのページの .onChange が行います——SwiftUI と同じです。",
 
             "page.table.reorderSection": "ドラッグで並べ替え · .onMove",
             "page.table.reorderInstruction": "行をマウスでドラッグすると移動できます。ドラッグ中の表示はピッカーで選べます（リストのページと同じ）。Table ではこの修飾子をテーブル自身に付けます。行は値、セルはビューではないため、付ける先の ForEach がないからです。",
