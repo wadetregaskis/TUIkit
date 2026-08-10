@@ -2409,7 +2409,10 @@ where Value.ID: Hashable {
                 // column. O(rows) per column, but stable as the table scrolls
                 // (all rows are considered, not just the visible ones) — with
                 // the early-out above once the interior is saturated.
-                var fitted = column.title.strippedLength
+                // The header measured here is the one that will be DRAWN, sort
+                // indicator and all: measuring the bare title instead fitted the
+                // column two cells short and truncated its own header ("Track…").
+                var fitted = headerTitle(for: column).strippedLength
                 for item in data {
                     fitted = max(fitted, column.value(for: item).strippedLength)
                     if let cap = fitScanCap, fitted >= cap { break }

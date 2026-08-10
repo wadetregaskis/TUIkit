@@ -53,7 +53,9 @@ struct TableSortOrderTests {
         }
 
         @discardableResult
-        func render(sortableSizeColumn: Bool = true) -> FrameBuffer {
+        func render(sortableSizeColumn: Bool = true, fitFirstColumn: Bool = false)
+            -> FrameBuffer
+        {
             dispatcher.beginRenderPass()
             var env = EnvironmentValues()
             env.mouseEventDispatcher = dispatcher
@@ -68,8 +70,9 @@ struct TableSortOrderTests {
                 sortableSizeColumn
                 ? TableColumn("Size", value: \Row.size) { $0.sizeText }
                 : TableColumn("Size", value: { (row: Row) in row.sizeText })
+            let nameColumn = TableColumn("Name", value: \Row.name)
             let table = Table(rows, selection: .constant(Int?.none), sortOrder: binding) {
-                TableColumn("Name", value: \Row.name)
+                fitFirstColumn ? nameColumn.width(.fit) : nameColumn
                 sizeColumn
             }
             buffer = renderToBuffer(table, context: context)
@@ -150,6 +153,18 @@ struct TableSortOrderTests {
         #expect(bySize.height == forward.height)
         // The rows themselves never moved either.
         #expect(bySize.lines[3].stripped == forward.lines[3].stripped)
+    }
+
+    /// A `.fit` column sizes to the widest of its header and its cells — and
+    /// the header it has to fit is the one that will be DRAWN, indicator and
+    /// all. Measuring the bare title left the column two cells short, so a
+    /// sortable `.fit` column truncated its own header ("Track…").
+    @Test("A .fit column makes room for its own sort indicator")
+    func fitColumnFitsItsIndicator() {
+        let harness = Harness(sortOrder: [KeyPathComparator(\Row.name)])
+        harness.render(fitFirstColumn: true)
+        #expect(harness.headerLine.contains("Name ▲"), "header: \(harness.headerLine)")
+        #expect(!harness.headerLine.contains("…"), "header: \(harness.headerLine)")
     }
 
     // MARK: - What a click does
