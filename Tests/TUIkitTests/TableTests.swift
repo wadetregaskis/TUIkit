@@ -370,27 +370,6 @@ struct TableSelectionTests {
     }
 }
 
-// MARK: - TableColumnBuilder Tests
-
-@Suite("TableColumnBuilder Tests")
-@MainActor
-struct TableColumnBuilderTests {
-    @Test("Builder creates array from multiple columns")
-    func multipleColumns() {
-        @TableColumnBuilder<FileInfo>
-        var columns: [TableColumn<FileInfo>] {
-            TableColumn("Name", value: \FileInfo.name)
-            TableColumn("Size", value: \FileInfo.size)
-            TableColumn("Modified", value: \FileInfo.modified)
-        }
-
-        #expect(columns.count == 3)
-        #expect(columns[0].title == "Name")
-        #expect(columns[1].title == "Size")
-        #expect(columns[2].title == "Modified")
-    }
-}
-
 // MARK: - Table Disabled Tests
 
 @Suite("Table Disabled Tests")

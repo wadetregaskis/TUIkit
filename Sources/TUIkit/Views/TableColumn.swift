@@ -244,17 +244,34 @@ extension TableColumn {
 /// A result builder for composing table columns.
 @resultBuilder
 public struct TableColumnBuilder<Value> {
-    /// Builds an array of columns from a single column.
-    public static func buildBlock(_ columns: TableColumn<Value>...) -> [TableColumn<Value>] {
+    /// Lifts one column into the partial result every other method speaks in.
+    ///
+    /// This is what makes the rest of the builder compose. Without it
+    /// ``buildBlock(_:)`` had to be variadic over single columns, which no
+    /// `buildEither` / `buildOptional` / `buildArray` result could ever be
+    /// passed back into — so an `if` in a column list did not compile at all,
+    /// however much the methods below looked like it should.
+    public static func buildExpression(_ column: TableColumn<Value>) -> [TableColumn<Value>] {
+        [column]
+    }
+
+    /// Accepts a ready-made group of columns — a computed `[TableColumn]`, or
+    /// the result of a nested builder.
+    public static func buildExpression(_ columns: [TableColumn<Value>]) -> [TableColumn<Value>] {
         columns
     }
 
-    /// Builds an array of columns from an array.
+    /// Concatenates the statements of a block.
+    public static func buildBlock(_ components: [TableColumn<Value>]...) -> [TableColumn<Value>] {
+        components.flatMap { $0 }
+    }
+
+    /// Builds the columns produced by a `for` loop.
     public static func buildArray(_ components: [[TableColumn<Value>]]) -> [TableColumn<Value>] {
         components.flatMap { $0 }
     }
 
-    /// Builds an optional column.
+    /// Builds an `if` with no `else` — absent means no columns.
     public static func buildOptional(_ component: [TableColumn<Value>]?) -> [TableColumn<Value>] {
         component ?? []
     }
@@ -266,6 +283,13 @@ public struct TableColumnBuilder<Value> {
 
     /// Builds the second branch of an if-else.
     public static func buildEither(second component: [TableColumn<Value>]) -> [TableColumn<Value>] {
+        component
+    }
+
+    /// Builds the body of an `if #available(…)`.
+    public static func buildLimitedAvailability(
+        _ component: [TableColumn<Value>]
+    ) -> [TableColumn<Value>] {
         component
     }
 }
