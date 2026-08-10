@@ -477,10 +477,16 @@ theming model, and the absence of fonts/animation/shapes/sub-cell-geometry are
 the honest consequences of rendering to a grid of character cells rather than a
 bitmap. §3 is the one remaining documented divergence (`foregroundStyle`), kept
 deliberately. §4a — additive SwiftUI features a terminal can express — is now
-close to clear on the API side: what remains there is `Text + Text` and
-`LocalizedStringKey`, both waiting on a per-run styling model inside `Text`, and
-`pinnedViews:` on the lazy stacks. The roadmap's centre of gravity has moved to
-the *implicit-behaviour* side (the behaviours SwiftUI's built-in views perform
-on their own, not just the API you call), led by
-click-a-column-header-to-sort — that table's former flagship, drag-to-reorder
-rows, now ships.
+**clear on the API side but for one item**: `pinnedViews:` on the lazy stacks,
+which is scroll-interaction work rather than an API gap — the stack has to know
+its section ranges and composite the active header over the viewport top.
+Everything else there has shipped, `Text + Text` and `LocalizedStringKey`
+included. What is deliberately NOT coming back is recorded where the reason
+lives: `.onReceive` in §2.3 (its parameter type is a Combine protocol, and CI
+builds on Linux), full `AttributedString`/Markdown in §4a, and the bitmap-bound
+set in §4b.
+
+The roadmap's centre of gravity has therefore moved to the *implicit-behaviour*
+side (the behaviours SwiftUI's built-in views perform on their own, not just the
+API you call), led by click-a-column-header-to-sort — that table's former
+flagship, drag-to-reorder rows, now ships.
