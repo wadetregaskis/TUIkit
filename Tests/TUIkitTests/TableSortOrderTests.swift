@@ -53,15 +53,18 @@ struct TableSortOrderTests {
         }
 
         @discardableResult
-        func render(sortableSizeColumn: Bool = true, fitFirstColumn: Bool = false)
-            -> FrameBuffer
-        {
+        func render(
+            sortableSizeColumn: Bool = true,
+            fitFirstColumn: Bool = false,
+            width: Int = 40,
+            nameTitle: String = "Name"
+        ) -> FrameBuffer {
             dispatcher.beginRenderPass()
             var env = EnvironmentValues()
             env.mouseEventDispatcher = dispatcher
             env.focusManager = focusManager
             let context = RenderContext(
-                availableWidth: 40, availableHeight: 10, environment: env, tuiContext: tui)
+                availableWidth: width, availableHeight: 10, environment: env, tuiContext: tui)
             // Built as an explicit array: `TableColumnBuilder` cannot compose
             // an `if`/`else` (its `buildEither` yields an array its variadic
             // `buildBlock` will not take), which is its own bug, not this
@@ -70,7 +73,7 @@ struct TableSortOrderTests {
                 sortableSizeColumn
                 ? TableColumn("Size", value: \Row.size) { $0.sizeText }
                 : TableColumn("Size", value: { (row: Row) in row.sizeText })
-            let nameColumn = TableColumn("Name", value: \Row.name)
+            let nameColumn = TableColumn(nameTitle, value: \Row.name)
             let table = Table(rows, selection: .constant(Int?.none), sortOrder: binding) {
                 fitFirstColumn ? nameColumn.width(.fit) : nameColumn
                 sizeColumn
@@ -122,6 +125,23 @@ struct TableSortOrderTests {
         harness.sortOrder = [KeyPathComparator(\Row.name, order: .reverse)]
         harness.render()
         #expect(harness.headerLine.contains("Name ▼"), "header: \(harness.headerLine)")
+    }
+
+    /// A column too narrow for both loses TITLE, not indicator. The arrow is
+    /// the part a reader cannot reconstruct — "Tra…" could be any of several
+    /// columns and says nothing about the order — and a cramped table is
+    /// exactly when you most need to see which column you just sorted by.
+    @Test("A column too narrow for both keeps the indicator and truncates the title")
+    func indicatorOutranksTheTitle() {
+        let harness = Harness(sortOrder: [KeyPathComparator(\Row.name, order: .reverse)])
+        harness.render(width: 20, nameTitle: "Trackname")
+        let header = harness.headerLine
+        #expect(header.contains("▼"), "header: \(header.debugDescription)")
+        #expect(header.contains("…"), "header should be truncated: \(header.debugDescription)")
+        #expect(!header.contains("Trackname"), "header: \(header.debugDescription)")
+        // …and the arrow is still the LAST thing in that column, not stranded
+        // before the ellipsis.
+        #expect(header.contains("… ▼"), "header: \(header.debugDescription)")
     }
 
     /// The indicator slot is reserved on every sortable column, so sorting the

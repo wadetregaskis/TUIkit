@@ -2445,7 +2445,7 @@ where Value.ID: Hashable {
         let cells = zip(columns.indices, columnWidths).map { index, width -> String in
             let column = columns[index]
             let aligned = alignText(
-                headerTitle(for: column),
+                headerTitle(for: column, fittingWidth: width),
                 width: width,
                 alignment: column.alignment,
                 truncationMode: column.truncationMode
@@ -2468,9 +2468,28 @@ where Value.ID: Hashable {
     /// sorted it. Columns that cannot sort — and every column of a table with
     /// no `sortOrder` binding — reserve nothing, so an existing table renders
     /// exactly as it did.
-    private func headerTitle(for column: TableColumn<Value>) -> String {
+    ///
+    /// - Parameter width: The cells the header cell will actually get, when the
+    ///   caller is about to draw it. Pass it and the TITLE gives way first, so a
+    ///   column too narrow for both reads `Tra… ▼` rather than `Track…` — the
+    ///   indicator is the part you cannot reconstruct by guessing, and a sort
+    ///   arrow that vanishes exactly when the table is cramped is the case where
+    ///   you most need to know which column you just sorted by. Omit it (the
+    ///   measuring path) for the natural, untruncated width.
+    private func headerTitle(for column: TableColumn<Value>, fittingWidth width: Int? = nil)
+        -> String
+    {
         guard sortOrder != nil, column.sortComparator != nil else { return column.title }
-        return column.title + " " + sortIndicator(for: column)
+        let suffix = " " + sortIndicator(for: column)
+        guard let width else { return column.title + suffix }
+        let room = width - suffix.strippedLength
+        // Narrower than the indicator's own slot: drop the separating space and
+        // the title, and keep the arrow alone. Truncating `suffix` here would
+        // keep the SPACE and lose the arrow, which is the wrong end.
+        guard room > 0 else {
+            return sortIndicator(for: column).truncatedToWidth(width, mode: .tail)
+        }
+        return column.title.truncatedToWidth(room, mode: column.truncationMode) + suffix
     }
 
     /// `▲` / `▼` for the column the rows are currently ordered by, a space for
