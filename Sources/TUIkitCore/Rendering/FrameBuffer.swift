@@ -19,13 +19,34 @@
 public struct FrameBuffer: Sendable, Equatable {
     /// The lines of rendered content (may contain ANSI escape codes).
     ///
-    /// Mutating `lines` directly recomputes the cached ``width`` and
+    /// Assigning `lines` recomputes the cached ``width`` and
     /// ``linesAreUniformWidth`` and invalidates ``lineWidths`` (it cannot
     /// cheaply produce the per-line widths, so it drops them to `nil` rather
     /// than leave a stale array).
     public var lines: [String] {
-        didSet { recomputeWidth() }
+        // Borrowed rather than returned: `lines` is read constantly (every
+        // `height`, every combine, every consumer walking the rows) and a
+        // plain `get` would hand back a +1 retained array each time. Measured
+        // at ~1% on the `deep` Stress scenario, which is all reads.
+        _read { yield storage }
+        set {
+            storage = newValue
+            recomputeWidth()
+        }
     }
+
+    /// Backing store for ``lines``.
+    ///
+    /// The recompute belongs on the *public* door, not on the storage: it is
+    /// a whole-buffer measure, so a mutator writing rows one at a time through
+    /// an observer pays it once per row. ``composite(with:at:)`` does exactly
+    /// that, and already knows the resulting geometry exactly — an Instruments
+    /// trace of a custom `Layout` placing 160 children spent 29.4% of the run
+    /// re-measuring the canvas per child only to have the answer overwritten.
+    /// Mutators inside this file write `storage` and maintain ``width``,
+    /// ``linesAreUniformWidth`` and ``lineWidths`` themselves; everyone else
+    /// goes through ``lines`` and cannot tell the difference.
+    private var storage: [String]
 
     /// The width of the buffer (the length of the longest line in visible characters).
     ///
@@ -125,7 +146,7 @@ public struct FrameBuffer: Sendable, Equatable {
 
     /// Creates an empty buffer.
     public init() {
-        self.lines = []
+        self.storage = []
         self.width = 0
         self.linesAreUniformWidth = true  // vacuously uniform
         self.lineWidths = nil  // no lines → nothing to carry (uniform covers it)
@@ -135,7 +156,7 @@ public struct FrameBuffer: Sendable, Equatable {
     ///
     /// - Parameter lines: The text lines.
     public init(lines: [String]) {
-        self.lines = lines
+        self.storage = lines
         let measured = Self.measure(lines)
         self.width = measured.width
         self.linesAreUniformWidth = measured.uniform
@@ -166,7 +187,7 @@ public struct FrameBuffer: Sendable, Equatable {
         uniformWidth: Bool = false,
         lineWidths: [Int]? = nil
     ) {
-        self.lines = lines
+        self.storage = lines
         self.width = width
         self.linesAreUniformWidth = uniformWidth
         self.lineWidths = lineWidths
@@ -177,7 +198,7 @@ public struct FrameBuffer: Sendable, Equatable {
     ///
     /// - Parameter text: The text content.
     public init(text: String) {
-        self.lines = [text]
+        self.storage = [text]
         self.width = text.strippedLength
         self.linesAreUniformWidth = true  // a single line is trivially uniform
         // Trivially uniform at `width`; `linesAreUniformWidth` already lets
@@ -197,7 +218,7 @@ public struct FrameBuffer: Sendable, Equatable {
     public init(emptyWithHeight height: Int) {
         // Use a single space instead of empty string so the buffer
         // is not considered "empty" by appendVertically
-        self.lines = Array(repeating: " ", count: height)
+        self.storage = Array(repeating: " ", count: height)
         self.width = 1
         self.linesAreUniformWidth = true  // all lines are a single space
         self.lineWidths = nil  // uniform at width 1; no array needed
@@ -212,7 +233,7 @@ public struct FrameBuffer: Sendable, Equatable {
     ///   - width: The width in characters.
     ///   - height: The number of lines.
     public init(emptyWithWidth width: Int, height: Int) {
-        self.lines = Array(repeating: String(repeating: " ", count: width), count: height)
+        self.storage = Array(repeating: String(repeating: " ", count: width), count: height)
         self.width = width
         self.linesAreUniformWidth = true  // every line is `width` spaces
         self.lineWidths = nil  // uniform at `width`; no array needed
@@ -537,16 +558,10 @@ extension FrameBuffer {
         var result: [String] = []
 
         for row in 0..<resultHeight {
-            // Keep the original (unpadded) line for ANSI state extraction.
-            // padToVisibleWidth appends unstyled spaces that lose the base's
-            // ANSI state, so insertOverlay needs the original to restore it.
-            let originalLine: String? = row < lines.count ? lines[row] : nil
-            var baseLine: String
-            if let original = originalLine {
-                baseLine = original.padToVisibleWidth(resultWidth)
-            } else {
-                baseLine = String(repeating: " ", count: resultWidth)
-            }
+            var baseLine =
+                row < lines.count
+                ? lines[row].padToVisibleWidth(resultWidth)
+                : String(repeating: " ", count: resultWidth)
 
             // Check if this row has overlay content
             let overlayRow = row - position.y
@@ -557,8 +572,7 @@ extension FrameBuffer {
                     baseLine = insertOverlay(
                         base: baseLine,
                         overlay: overlayLine,
-                        atColumn: position.x,
-                        originalBase: originalLine
+                        atColumn: position.x
                     )
                 }
             }
@@ -608,33 +622,36 @@ extension FrameBuffer {
         let resultWidth = Swift.max(width, position.x + overlay.width)
         let resultHeight = Swift.max(height, position.y + overlay.height)
 
+        // Written through `storage`, not `lines`: the row writes below are the
+        // whole point of this method, and each one through the public property
+        // would re-measure the entire canvas to derive a width this method
+        // already knows and overwrites at the end.
+        //
         // Grow to the final size. Rows the overlay does not reach keep their
         // contents; they are re-padded only when the width actually grew, which
         // is what keeps every line the same width (and the bookkeeping below
         // honest) without touching them on the common in-bounds path.
-        if lines.count < resultHeight {
-            lines.append(
+        if storage.count < resultHeight {
+            storage.append(
                 contentsOf: Array(
                     repeating: String(repeating: " ", count: resultWidth),
-                    count: resultHeight - lines.count))
+                    count: resultHeight - storage.count))
         }
         if resultWidth > width {
-            for row in lines.indices {
-                lines[row] = lines[row].padToVisibleWidth(resultWidth)
+            for row in storage.indices {
+                storage[row] = storage[row].padToVisibleWidth(resultWidth)
             }
         }
 
         for overlayRow in overlay.lines.indices {
             let row = position.y + overlayRow
-            guard row >= 0, row < lines.count else { continue }
+            guard row >= 0, row < storage.count else { continue }
             let overlayLine = overlay.lines[overlayRow]
             guard !overlayLine.isEmpty else { continue }
-            let originalLine = lines[row]
-            lines[row] = insertOverlay(
-                base: originalLine.padToVisibleWidth(resultWidth),
+            storage[row] = insertOverlay(
+                base: storage[row].padToVisibleWidth(resultWidth),
                 overlay: overlayLine,
-                atColumn: position.x,
-                originalBase: originalLine)
+                atColumn: position.x)
         }
 
         width = resultWidth
@@ -871,39 +888,45 @@ extension FrameBuffer {
     /// suffix so the dimmed background (or any other base styling) continues
     /// seamlessly to the right of the overlay.
     ///
+    /// Everything it needs about `base` comes from one
+    /// `String.ansiOverlaySplit(prefixColumns:suffixDropColumns:)`. It
+    /// used to come from five separate ANSI-aware walks of the line, which is
+    /// quadratic where it hurts most: a canvas row grows with every styled child
+    /// already composited into it, so placing n children rescanned an
+    /// ever-longer line 5n times.
+    ///
     /// - Parameters:
-    ///   - base: The base text line (may contain ANSI codes).
+    ///   - base: The base text line (may contain ANSI codes), already padded to
+    ///     the width of the row being built.
     ///   - overlay: The overlay text to insert (may contain ANSI codes).
     ///   - column: The column position (0-based, in visible characters).
-    ///   - originalBase: The original base line before padding, used to extract
-    ///     the active ANSI state. If `nil`, the state is extracted from `base`.
     /// - Returns: The composited line with base styling preserved around the overlay.
     fileprivate func insertOverlay(
         base: String,
         overlay: String,
-        atColumn column: Int,
-        originalBase: String? = nil
+        atColumn column: Int
     ) -> String {
         let overlayVisibleWidth = overlay.strippedLength
         let afterOverlayColumn = column + overlayVisibleWidth
 
         // Split the base into prefix (before overlay) and suffix (after overlay),
         // preserving all ANSI codes in both segments.
-        //
+        let split = base.ansiOverlaySplit(
+            prefixColumns: column, suffixDropColumns: afterOverlayColumn)
+
         // Either split point can land in the MIDDLE of a wide character
-        // (emoji, CJK): the splitters drop the straddling character whole, so
+        // (emoji, CJK): the split drops the straddling character whole, so
         // the prefix comes back short and the suffix starts late. Pad each
         // shortfall with spaces (a wide glyph can't be half-drawn — the gap is
         // the standard treatment), otherwise every base row with a straddling
         // wide character composites the overlay one cell left and pulls the
         // rest of the row in behind it — ragged pop-up borders next to emoji.
-        let (rawPrefix, prefixWidth) = base.ansiAwarePrefixWithWidth(visibleCount: column)
-        let prefix = prefixWidth < column
-            ? rawPrefix + String(repeating: " ", count: column - prefixWidth)
-            : rawPrefix
-        var suffix = base.ansiAwareSuffix(droppingVisible: afterOverlayColumn)
-        let expectedSuffixWidth = max(0, base.strippedLength - afterOverlayColumn)
-        let suffixShortfall = expectedSuffixWidth - suffix.strippedLength
+        let prefix = split.prefixWidth < column
+            ? split.prefix + String(repeating: " ", count: column - split.prefixWidth)
+            : split.prefix
+        var suffix = split.suffix
+        let expectedSuffixWidth = max(0, split.totalWidth - afterOverlayColumn)
+        let suffixShortfall = expectedSuffixWidth - split.suffixWidth
         if suffixShortfall > 0 {
             suffix = String(repeating: " ", count: suffixShortfall) + suffix
         }
@@ -914,18 +937,22 @@ extension FrameBuffer {
         // turned on and then RESET (e.g. an underlined `DemoSection` header
         // followed by plain padding) are NOT carried onto the suffix — the bug
         // where the cell just past a composited overlay inherited the underline.
-        // `ansiStateBefore` nets the escapes before the column, so an open+reset
-        // pair leaves nothing while a persistent background (and its lone trailing
-        // BG code) nets to the background.
-        let styleSource = originalBase ?? base
-        let baseStyle = styleSource.ansiStateBefore(visibleColumn: afterOverlayColumn)
+        // The split nets the escapes before the column, so an open+reset pair
+        // leaves nothing while a persistent background (and its lone trailing BG
+        // code) nets to the background.
+        //
+        // Reading that state off the PADDED base rather than the unpadded
+        // original is not a shortcut: padding only ever appends plain spaces
+        // after every escape the line has, so the set of SGRs before any column
+        // is the same in both. (It used to be passed in separately, which cost a
+        // whole extra scan to reach the same answer.)
 
         // Build: [prefix] + [reset] + [overlay] + [reset + base style restore] + [suffix]
         var result = prefix
         result += Self.ansiReset
         result += overlay
         result += Self.ansiReset
-        result += baseStyle
+        result += split.styleBeforeSuffix
         result += suffix
 
         return result
