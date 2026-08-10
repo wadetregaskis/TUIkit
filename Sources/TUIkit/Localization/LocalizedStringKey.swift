@@ -19,10 +19,10 @@ import Foundation
 /// ## Why a string literal is a key and a `String` is not
 ///
 /// This is SwiftUI's rule, and it falls out of overload resolution rather than
-/// from anything magic: ``SwiftUICore/Text`` has one initializer taking a
+/// from anything magic: ``Text`` has one initializer taking a
 /// `LocalizedStringKey` and another generic over `StringProtocol`, and Swift
 /// prefers the concrete one for a literal. So a literal is a key; a `String`
-/// you computed is content. ``SwiftUICore/Text/init(verbatim:)`` opts a literal
+/// you computed is content. ``Text/init(verbatim:)`` opts a literal
 /// out.
 ///
 /// Lookup goes through ``LocalizationService``, which falls back to English and
@@ -44,7 +44,7 @@ import Foundation
 /// ```
 ///
 /// Values are converted to text **eagerly**, at the point of interpolation, the
-/// same way ``SwiftUICore/Text/init(_:format:)`` formats eagerly — so
+/// same way ``Text/init(_:format:)`` formats eagerly — so
 /// `\(value, format: .percent)` works and the result is a plain, `Sendable`
 /// key.
 ///
@@ -187,7 +187,7 @@ extension LocalizedStringKey: ExpressibleByStringInterpolation {
         }
 
         /// Interpolates a value through a format style — the same eager
-        /// formatting ``SwiftUICore/Text/init(_:format:)`` does.
+        /// formatting ``Text/init(_:format:)`` does.
         public mutating func appendInterpolation<F: FormatStyle>(
             _ value: F.FormatInput, format: F
         ) where F.FormatInput: Equatable, F.FormatOutput == String {

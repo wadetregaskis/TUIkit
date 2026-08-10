@@ -78,7 +78,7 @@ extension _OpacityView: Renderable {
     }
 }
 
-/// The colour arithmetic behind ``SwiftUICore/View/opacity(_:)``, kept out of
+/// The colour arithmetic behind ``View/opacity(_:)``, kept out of
 /// the generic view so there is one copy of it and tests can reach it.
 enum OpacityFade {
     /// Rewrites every colour in `line`'s SGR sequences, leaving everything else

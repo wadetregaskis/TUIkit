@@ -6,9 +6,8 @@
 
 // MARK: - ANSI Segment
 
-/// One segment of a string produced by ``Swift/String/ansiSegments()``:
-/// either a complete ANSI (CSI) escape sequence or a single visible
-/// grapheme cluster.
+/// One segment of a string produced by `String.ansiSegments()`: either a
+/// complete ANSI (CSI) escape sequence or a single visible grapheme cluster.
 public enum ANSISegment {
     /// A complete escape sequence; `isSGR` is `true` for colour/style
     /// (`…m`) sequences and `false` for cursor-movement, erase, etc.

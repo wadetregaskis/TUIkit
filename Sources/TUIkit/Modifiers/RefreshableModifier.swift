@@ -25,7 +25,7 @@ import TUIkitView
 /// ```
 ///
 /// The value is `nil` unless an ancestor applied
-/// ``SwiftUICore/View/refreshable(action:)``, which is what makes
+/// ``View/refreshable(action:)``, which is what makes
 /// `refresh == nil` a usable "there is nothing to refresh here" test.
 public struct RefreshAction: Equatable, Sendable {
     /// The action, boxed so two handles to the SAME `.refreshable` compare
@@ -62,7 +62,7 @@ private struct RefreshKey: EnvironmentKey {
 
 extension EnvironmentValues {
     /// The refresh action from the nearest enclosing
-    /// ``SwiftUICore/View/refreshable(action:)``, or `nil` if there is none.
+    /// ``View/refreshable(action:)``, or `nil` if there is none.
     public var refresh: RefreshAction? {
         get { self[RefreshKey.self] }
         set { self[RefreshKey.self] = newValue }

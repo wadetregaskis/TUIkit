@@ -99,7 +99,7 @@ let darker = color.darker(by: 0.3)    // 30% darker
 
 ### Fading a Whole View
 
-``SwiftUICore/View/opacity(_:)`` fades everything a subtree draws, without
+``View/opacity(_:)`` fades everything a subtree draws, without
 your having to reach for each colour in it:
 
 ```swift
