@@ -172,7 +172,13 @@ extension EnvironmentValues {
     }
 
     /// Preference value collection during rendering.
-    var preferenceStorage: PreferenceStorage? {
+    ///
+    /// Public and settable for the same reason ``stateStorage`` is: a headless
+    /// renderer has to be able to wire it. The modifiers that publish a
+    /// preference force-unwrap this, so a tree containing `.preference` cannot
+    /// be rendered at all without it — which is what the `preferences` stress
+    /// scenario ran into.
+    public var preferenceStorage: PreferenceStorage? {
         get { self[PreferenceStorageKey.self] }
         set { self[PreferenceStorageKey.self] = newValue }
     }

@@ -55,6 +55,7 @@ enum Scenarios {
         DeepRecursionScenario.descriptor,
         WideFanoutScenario.descriptor,
         ModifierChainsScenario.descriptor,
+        PreferenceRowsScenario.descriptor,
         TextWallScenario.descriptor,
         AnyViewStormScenario.descriptor,
         DashboardScenario.descriptor,

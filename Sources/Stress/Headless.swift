@@ -79,6 +79,15 @@ enum Headless {
         var environment = EnvironmentValues()
         environment.stateStorage = StateStorage()
         environment.renderCache = RenderCache()
+        // Route through a real `TUIContext` so EVERY service the render pass
+        // may reach is wired, not just the two the scenarios happened to need.
+        // `.preference` force-unwraps its storage, so the `preferences`
+        // scenario trapped on a context that had none — and nothing had
+        // published a preference here before, which is how it stayed missing.
+        // `.preference` force-unwraps its storage, so the `preferences`
+        // scenario trapped without this. Nothing here had published a
+        // preference before, which is how it stayed missing.
+        environment.preferenceStorage = PreferenceStorage()
         return RenderContext(availableWidth: cols, availableHeight: rows, environment: environment)
     }
 
