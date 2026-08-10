@@ -318,7 +318,7 @@ struct TablePage: View {
                     .width(.fixed(8))
                     .alignment(.trailing)
             }
-            .frame(height: 5)
+            .frame(height: 6)
 
             // Drag-to-reorder, the Table half of the Lists page's `.onMove`
             // section: same state machine, same feedback modes, and here the
