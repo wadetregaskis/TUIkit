@@ -50,6 +50,31 @@ import Foundation
 /// }
 /// ```
 ///
+/// ## Sorting
+///
+/// Give the table a `sortOrder` binding and the sortable columns' headers
+/// become clickable, exactly as in SwiftUI. A column is sortable when it was
+/// built from a key path (``TableColumn/init(_:value:)`` /
+/// ``TableColumn/init(_:value:content:)``); one built from a closure is not,
+/// because nothing there says how to order the rows.
+///
+/// ```swift
+/// @State private var sortOrder = [KeyPathComparator(\FileInfo.name)]
+///
+/// Table(files, selection: $selectedID, sortOrder: $sortOrder) {
+///     TableColumn("Name", value: \.name)
+///     TableColumn("Size", value: \.byteCount) { "\($0.byteCount) B" }
+/// }
+/// .onChange(of: sortOrder) { files.sort(using: $0) }
+/// ```
+///
+/// The table publishes the order and the app applies it — SwiftUI's division
+/// of labour, and the reason for that `onChange`. Clicking the column already
+/// sorted by reverses it; clicking another makes it the primary sort and keeps
+/// the previous one behind it as the tie-break. The column being sorted by
+/// carries a `▲` / `▼`, and every sortable column reserves that glyph's width
+/// so the table does not change shape as you sort it.
+///
 /// ## Column Spacing
 ///
 /// Columns are separated by spaces (no vertical lines) for a clean look.
@@ -65,6 +90,15 @@ public struct Table<Value: Identifiable & Sendable>: View where Value.ID: Hashab
 
     /// Binding for multi-selection (Set of IDs).
     let multiSelection: Binding<Set<Value.ID>>?
+
+    /// The sort the table's headers drive, when it was given one.
+    ///
+    /// Its presence is what makes the headers clickable at all — exactly as in
+    /// SwiftUI, where a `Table` without a `sortOrder` binding has inert
+    /// headers. The table never sorts the data itself; it publishes the order
+    /// the user asked for and the app applies it (`data.sort(using:)`), which
+    /// is also SwiftUI's division of labour.
+    let sortOrder: Binding<[KeyPathComparator<Value>]>?
 
     /// The selection mode derived from which binding is set.
     var selectionMode: SelectionMode {
@@ -104,6 +138,7 @@ public struct Table<Value: Identifiable & Sendable>: View where Value.ID: Hashab
             columns: columns,
             singleSelection: singleSelection,
             multiSelection: multiSelection,
+            sortOrder: sortOrder,
             selectionMode: selectionMode,
             focusID: focusID,
             isDisabled: isDisabled,
@@ -202,6 +237,9 @@ extension Table {
     /// - Parameters:
     ///   - data: The data items to display.
     ///   - selection: A binding to the selected item's ID (nil = no selection).
+    ///   - sortOrder: A binding to the sort the column headers drive. Supplying
+    ///     one makes the sortable columns' headers clickable; omitting it
+    ///     leaves them inert, as a SwiftUI `Table` without one has them.
     ///   - focusID: The unique focus identifier (default: auto-generated).
 
     ///   - columnSpacing: Spacing between columns (default: 2).
@@ -210,6 +248,7 @@ extension Table {
     public init(
         _ data: [Value],
         selection: Binding<Value.ID?>,
+        sortOrder: Binding<[KeyPathComparator<Value>]>? = nil,
         focusID: String? = nil,
 
         columnSpacing: Int = 2,
@@ -220,6 +259,7 @@ extension Table {
         self.columns = columns()
         self.singleSelection = selection
         self.multiSelection = nil
+        self.sortOrder = sortOrder
         self.focusID = focusID
         self.isDisabled = false
 
@@ -242,6 +282,9 @@ extension Table {
     /// - Parameters:
     ///   - data: The data items to display.
     ///   - selection: A binding to the set of selected item IDs.
+    ///   - sortOrder: A binding to the sort the column headers drive. Supplying
+    ///     one makes the sortable columns' headers clickable; omitting it
+    ///     leaves them inert, as a SwiftUI `Table` without one has them.
     ///   - focusID: The unique focus identifier (default: auto-generated).
 
     ///   - columnSpacing: Spacing between columns (default: 2).
@@ -250,6 +293,7 @@ extension Table {
     public init(
         _ data: [Value],
         selection: Binding<Set<Value.ID>>,
+        sortOrder: Binding<[KeyPathComparator<Value>]>? = nil,
         focusID: String? = nil,
 
         columnSpacing: Int = 2,
@@ -260,6 +304,7 @@ extension Table {
         self.columns = columns()
         self.singleSelection = nil
         self.multiSelection = selection
+        self.sortOrder = sortOrder
         self.focusID = focusID
         self.isDisabled = false
 
@@ -308,6 +353,7 @@ where Value.ID: Hashable {
     let columns: [TableColumn<Value>]
     let singleSelection: Binding<Value.ID?>?
     let multiSelection: Binding<Set<Value.ID>>?
+    let sortOrder: Binding<[KeyPathComparator<Value>]>?
     let selectionMode: SelectionMode
     let focusID: String?
     let isDisabled: Bool
@@ -1924,6 +1970,51 @@ where Value.ID: Hashable {
             token: "table-scrollbar-repeat-\(context.identity.path)", context: context)
     }
 
+    /// Makes each sortable column's header title a click target that re-sorts.
+    ///
+    /// One region per column rather than one for the whole header line: which
+    /// column was clicked is the entire content of the gesture, and a single
+    /// region would have to re-derive it from an x the dispatcher already knows
+    /// how to route. A column with no comparator registers nothing, so clicks
+    /// there fall through to the table's own handler and simply focus it — the
+    /// header of an unsortable column stays as inert as it looks.
+    ///
+    /// The header line is `y = 1`: the container's top border is `y = 0` and
+    /// the rows start below it (see the layout sketch above).
+    private func attachHeaderSortHandlers(
+        to buffer: inout FrameBuffer,
+        context: RenderContext,
+        state: PopulatedRenderState,
+        mouseDispatcher: MouseEventDispatcher
+    ) {
+        guard sortOrder != nil, !state.columnWidths.isEmpty else { return }
+        let focusManager = context.environment.focusManager
+        let focusID = state.focusID
+        let originX = 1 + Self.containerPadding.leading
+        for (index, xRange) in headerColumnRanges(
+            columnWidths: state.columnWidths, originX: originX)
+        where columns.indices.contains(index) && columns[index].sortComparator != nil {
+            let column = columns[index]
+            let handlerID = mouseDispatcher.register { event in
+                guard event.button == .left else { return false }
+                // Claim the press so the release routes back here, and act on
+                // the release — the same press/release split every other
+                // click target in the framework uses, so sliding off the
+                // header before letting go cancels.
+                guard event.phase == .released else { return event.phase == .pressed }
+                toggleSort(column: column)
+                focusManager?.focus(id: focusID)
+                return true
+            }
+            buffer.hitTestRegions.insert(
+                HitTestRegion(
+                    offsetX: xRange.lowerBound, offsetY: 1,
+                    width: xRange.count, height: 1, handlerID: handlerID),
+                at: 0
+            )
+        }
+    }
+
     private func attachMouseHandlers(
         to buffer: inout FrameBuffer,
         context: RenderContext,
@@ -1944,6 +2035,13 @@ where Value.ID: Hashable {
         attachScrollbarMouseHandler(
             to: &buffer, context: context, state: state,
             mouseDispatcher: mouseDispatcher, firstRowY: firstRowY)
+
+        // Sortable column headers, for the same reason and by the same trick as
+        // the scrollbar above: registered first so the container's later
+        // `insert(at: 0)` leaves these at a higher index, where the reverse
+        // hit-test finds them before the table's own catch-all.
+        attachHeaderSortHandlers(
+            to: &buffer, context: context, state: state, mouseDispatcher: mouseDispatcher)
 
         // The border columns are chrome: a click there (however row-aligned its
         // y) must not select — see the x-guard in the handler. Tables always
@@ -2341,9 +2439,10 @@ where Value.ID: Hashable {
     private func renderHeader(columnWidths: [Int], palette: any Palette) -> String {
         let spacing = String(repeating: " ", count: columnSpacing)
 
-        let cells = zip(columns, columnWidths).map { column, width -> String in
+        let cells = zip(columns.indices, columnWidths).map { index, width -> String in
+            let column = columns[index]
             let aligned = alignText(
-                column.title,
+                headerTitle(for: column),
                 width: width,
                 alignment: column.alignment,
                 truncationMode: column.truncationMode
@@ -2351,7 +2450,76 @@ where Value.ID: Hashable {
             return ANSIRenderer.colorize(aligned, foreground: palette.foregroundSecondary, bold: true)
         }
 
-        return "  " + cells.joined(separator: spacing)
+        return Self.headerIndent + cells.joined(separator: spacing)
+    }
+
+    /// The two cells every row spends on its selection indicator, which the
+    /// header line matches so the titles sit over their columns.
+    static var headerIndent: String { "  " }
+
+    /// A column's header text, with the sort indicator when the table sorts.
+    ///
+    /// Every SORTABLE column reserves the indicator's width, not just the one
+    /// being sorted by: a slot that appeared and disappeared would re-measure
+    /// `.fit` columns on every click, so the table would change width as you
+    /// sorted it. Columns that cannot sort — and every column of a table with
+    /// no `sortOrder` binding — reserve nothing, so an existing table renders
+    /// exactly as it did.
+    private func headerTitle(for column: TableColumn<Value>) -> String {
+        guard sortOrder != nil, column.sortComparator != nil else { return column.title }
+        return column.title + " " + sortIndicator(for: column)
+    }
+
+    /// `▲` / `▼` for the column the rows are currently ordered by, a space for
+    /// any other sortable column.
+    ///
+    /// Only the PRIMARY comparator is marked. Later ones in the sort order are
+    /// real — they break the primary's ties — but marking them would say the
+    /// rows are ordered by them, which they are not, and macOS marks one too.
+    private func sortIndicator(for column: TableColumn<Value>) -> String {
+        guard let comparator = column.sortComparator,
+            let primary = sortOrder?.wrappedValue.first,
+            primary.keyPath == comparator.keyPath
+        else { return " " }
+        return primary.order == .forward ? "▲" : "▼"
+    }
+
+    /// The x range each column's header occupies within the table's buffer,
+    /// paired with the column's index.
+    ///
+    /// Derived from the same widths and spacing `renderHeader` lays the titles
+    /// out with, so a click lands on the title it is under. `originX` is where
+    /// the header line starts inside the buffer: past the border and the
+    /// container's padding, then past the indicator indent.
+    private func headerColumnRanges(columnWidths: [Int], originX: Int) -> [(Int, Range<Int>)] {
+        var ranges: [(Int, Range<Int>)] = []
+        var x = originX + Self.headerIndent.strippedLength
+        for (index, width) in zip(columnWidths.indices, columnWidths) {
+            ranges.append((index, x..<(x + width)))
+            x += width + columnSpacing
+        }
+        return ranges
+    }
+
+    /// Applies a click on `column`'s header to the bound sort order.
+    ///
+    /// Clicking the column already sorted by flips its direction; clicking any
+    /// other sortable column makes it the primary sort, ascending, and pushes
+    /// what was there down behind it — so the previous sort survives as the
+    /// tie-break, which is what a macOS table does and what makes a two-key
+    /// sort reachable by clicking two headers in turn.
+    private func toggleSort(column: TableColumn<Value>) {
+        guard let sortOrder, let comparator = column.sortComparator else { return }
+        var order = sortOrder.wrappedValue
+        if let first = order.first, first.keyPath == comparator.keyPath {
+            order[0].order = first.order == .forward ? .reverse : .forward
+        } else {
+            var promoted = comparator
+            promoted.order = .forward
+            order.removeAll { $0.keyPath == comparator.keyPath }
+            order.insert(promoted, at: 0)
+        }
+        sortOrder.wrappedValue = order
     }
 
     // MARK: - Row Rendering

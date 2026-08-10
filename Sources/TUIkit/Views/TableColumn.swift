@@ -4,6 +4,11 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+// `KeyPathComparator` / `SortOrder` are Foundation's, not SwiftUI's — the same
+// modern-Foundation generation as the `FormatStyle` `Text(_:format:)` already
+// depends on, and present on every platform TUIkit builds for.
+import Foundation
+
 // MARK: - Column Width
 
 /// Defines the width behavior for a table column.
@@ -89,7 +94,23 @@ public struct TableColumn<Value>: Sendable {
     /// Extracts the display value from a data item.
     let valueExtractor: @Sendable (Value) -> String
 
-    /// Creates a table column with a key path to a String property.
+    /// How this column sorts, when it can — the comparator a click on its
+    /// header puts at the head of the table's `sortOrder`.
+    ///
+    /// Non-`nil` exactly for the key-path initializers, which is SwiftUI's own
+    /// rule: a column built from a key path into a `Comparable` property knows
+    /// how to order the rows, and one built from a closure returning a display
+    /// string does not. A column with no comparator has an inert header, and
+    /// none of them sort at all unless the table was given a `sortOrder`
+    /// binding.
+    let sortComparator: KeyPathComparator<Value>?
+
+    /// Creates a table column showing — and sorting by — a `String` property.
+    ///
+    /// The key path makes the column sortable: give the table a `sortOrder`
+    /// binding and clicking this column's header puts this property at the head
+    /// of it. Matches SwiftUI, where the same initializer is what makes a
+    /// column sortable.
     ///
     /// - Parameters:
     ///   - title: The column header title.
@@ -99,9 +120,43 @@ public struct TableColumn<Value>: Sendable {
         self.alignment = .leading
         self.width = .flexible
         self.valueExtractor = { item in item[keyPath: value] }
+        self.sortComparator = KeyPathComparator(value)
+    }
+
+    /// Creates a table column that sorts by one property and displays another
+    /// string built from the row.
+    ///
+    /// The counterpart of SwiftUI's `TableColumn(_:value:content:)`, with a
+    /// string in place of the view builder — a `Table`'s cells are values here,
+    /// not views. Use it for a column whose display form is not its sort form:
+    /// a size shown as "4.2 KB" that sorts by its `Int` byte count, a date
+    /// shown formatted that sorts chronologically.
+    ///
+    /// ```swift
+    /// TableColumn("Size", value: \.byteCount) { "\($0.byteCount.formatted(.byteCount(style: .file)))" }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - title: The column header title.
+    ///   - value: A key path to the `Comparable` property this column sorts by.
+    ///   - content: Builds the cell's display string from a data item.
+    public init<V: Comparable>(
+        _ title: String,
+        value: KeyPath<Value, V> & Sendable,
+        content: @escaping @Sendable (Value) -> String
+    ) where Value: Sendable {
+        self.title = title
+        self.alignment = .leading
+        self.width = .flexible
+        self.valueExtractor = content
+        self.sortComparator = KeyPathComparator(value)
     }
 
     /// Creates a table column with a custom value extractor.
+    ///
+    /// A closure column cannot be sorted — nothing here says how to order the
+    /// rows, only how to render them. Use ``init(_:value:content:)`` for a
+    /// column that is both.
     ///
     /// - Parameters:
     ///   - title: The column header title.
@@ -111,6 +166,7 @@ public struct TableColumn<Value>: Sendable {
         self.alignment = .leading
         self.width = .flexible
         self.valueExtractor = value
+        self.sortComparator = nil
     }
 }
 
