@@ -27,7 +27,17 @@ public struct Text: View, Equatable {
     let content: String
 
     /// The style of the text (color, formatting, etc.).
+    ///
+    /// For a concatenated text this is the *base* beneath every run's own
+    /// attributes — see ``Text/+(_:_:)``.
     var style: TextStyle
+
+    /// The runs this text is made of, or `nil` when it is a single fragment.
+    ///
+    /// `nil` is not an empty list: it is the overwhelmingly common case, and it
+    /// takes the original render path untouched — no re-attribution, no extra
+    /// allocation, byte-identical output. See ``Text/+(_:_:)``.
+    var runs: [Run]?
 
     /// Creates a text view displaying a localized string.
     ///
@@ -49,6 +59,7 @@ public struct Text: View, Equatable {
     public init(_ key: LocalizedStringKey) {
         self.content = key.resolved(with: LocalizationService.shared)
         self.style = TextStyle()
+        self.runs = nil
     }
 
     /// Creates a text view with the specified string, displayed as-is.
@@ -68,6 +79,7 @@ public struct Text: View, Equatable {
     public init<S: StringProtocol>(_ content: S) {
         self.content = String(content)
         self.style = TextStyle()
+        self.runs = nil
     }
 
     /// Creates a text view with a verbatim string.
@@ -76,6 +88,7 @@ public struct Text: View, Equatable {
     public init(verbatim: String) {
         self.content = verbatim
         self.style = TextStyle()
+        self.runs = nil
     }
 
     /// Creates a text view that displays a value formatted with the given
@@ -476,7 +489,32 @@ extension Text: Renderable, Layoutable {
         // (possibly alignment-padded) lines — carry those widths (and the known
         // max width) into the buffer so neither this construction nor a parent
         // aligning the column re-`strippedLength`s the (now ANSI-laden) lines.
-        let styledLines = plainLines.map { ANSIRenderer.render($0, with: resolvedStyle) }
+        let styledLines: [String]
+        if let runs {
+            // A concatenation: the wrap ran on the plain text (it must, or a
+            // break either side of a fragment boundary would be chosen blind),
+            // so put the per-fragment styling back by walking the same source
+            // the runs describe. See `TextRunAttribution`.
+            let runTexts = runs.map { Self.applyingCase(effectiveCase, to: $0.text) }
+            var resolvedRunStyles: [TextStyle] = []
+            resolvedRunStyles.reserveCapacity(runs.count)
+            for run in runs {
+                var runStyle = effectiveStyle
+                // The run's own attributes sit above the base this Text
+                // resolved (its own style + the cascade); anything the run
+                // left unset falls through to that.
+                runStyle = run.style.merged(over: runStyle)
+                resolvedRunStyles.append(runStyle.resolved(with: context.environment.palette))
+            }
+            var cursor = (run: 0, offset: 0)
+            styledLines = plainLines.map { line in
+                TextRunAttribution.fragments(of: line, runTexts: runTexts, cursor: &cursor)
+                    .map { ANSIRenderer.render($0.text, with: resolvedRunStyles[$0.run]) }
+                    .joined()
+            }
+        } else {
+            styledLines = plainLines.map { ANSIRenderer.render($0, with: resolvedStyle) }
+        }
 
         return FrameBuffer(lines: styledLines, width: knownWidth, lineWidths: lineWidths)
     }

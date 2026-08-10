@@ -146,6 +146,34 @@ struct TextStylesPage: View {
                 }
             }
 
+            DemoSection(L("page.textStyles.section.concatenation")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.textStyles.concatExplain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+
+                    // Three fragments, three styles, one Text.
+                    Text(L("page.textStyles.concatLabel")).bold()
+                        + Text(L("page.textStyles.concatValue"))
+                            .foregroundStyle(.palette.accent)
+                        + Text(L("page.textStyles.concatNote")).dim()
+
+                    // The same thing narrow enough to wrap: the break falls
+                    // wherever the words need it, including inside a fragment,
+                    // and each fragment keeps its styling on every line it
+                    // reaches. An HStack of three Texts could not do that.
+                    (Text(L("page.textStyles.concatLabel")).bold()
+                        + Text(L("page.textStyles.concatLong"))
+                            .foregroundStyle(.palette.accent))
+                        .frame(width: 34)
+
+                    // A modifier on the RESULT is the base beneath each
+                    // fragment's own attributes — the first stays bold.
+                    (Text(L("page.textStyles.concatLabel")).bold()
+                        + Text(L("page.textStyles.concatValue")))
+                        .italic()
+                }
+            }
+
             DemoSection(L("page.textStyles.section.opacity")) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.textStyles.opacityExplain"))
