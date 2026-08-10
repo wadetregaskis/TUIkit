@@ -267,6 +267,6 @@ extension DragAndDropSession {
             let rect = dispatcher?.regionRect(for: host.handlerID)
         else { return nil }
         guard host.contentColumns.contains(event.x - rect.offsetX) else { return nil }
-        return event.y - rect.offsetY - host.topInset
+        return event.y - rect.localOriginY - host.topInset
     }
 }

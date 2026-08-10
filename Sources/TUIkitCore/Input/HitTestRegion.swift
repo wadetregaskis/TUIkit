@@ -86,12 +86,28 @@ public struct HitTestRegion: Sendable, Equatable {
     /// existing consumer keeps the rectangle it expects — and this records how
     /// far above it the region really starts.
     ///
-    /// Read by `MouseEventDispatcher.regionOffset(for:)` to answer "where does
-    /// this view's local space begin?", which is what turns an absolute drop
-    /// point into ``DropInfo``'s destination-local one. Without it a drop
-    /// destination that wraps a scrolled page reported points short by the
-    /// scroll offset, and anything drawn at them landed that far up the screen.
+    /// Read through ``localOriginY``, which is what turns an absolute point
+    /// into a region-local one. Without it a drop destination that wraps a
+    /// scrolled page reported points short by the scroll offset, and anything
+    /// drawn at them landed that far up the screen.
     public var topClip: Int = 0
+
+    /// The absolute screen row this region's local coordinate space starts at:
+    /// its (possibly clipped) top, moved back up past whatever an ancestor
+    /// viewport cut away.
+    ///
+    /// Every conversion of an absolute point into a region-local one — which is
+    /// the form handlers are given — measures from here, because a control's
+    /// rows are numbered from the control, not from the fold it happens to be
+    /// scrolled under. Asking instead *where on screen the region is* — hit
+    /// testing (``contains(x:y:)``), edge proximity, overlap — wants the clipped
+    /// rectangle, so those keep reading ``offsetY`` directly.
+    ///
+    /// The two coincide for everything an ancestor viewport has not clipped,
+    /// which is why mixing them up stays invisible until something is scrolled:
+    /// a Table on a scrolled page reported clicks one row too high per clipped
+    /// row, so a click on row 20 selected row 15.
+    public var localOriginY: Int { offsetY - topClip }
 
     /// Creates a hit-test region.
     public init(

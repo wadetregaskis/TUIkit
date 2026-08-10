@@ -185,6 +185,13 @@ rectangle; the dispatcher routes an incoming report to the front-most region
 that contains the point. See <doc:RenderCycle> for where mouse dispatch sits in
 the frame.
 
+`event.x` / `event.y` are **local to the view**: `(0, 0)` is its own top-left
+cell, not the screen's. That holds when the view has been scrolled partly off
+the top of an enclosing `ScrollView` too — the rows above the fold are hidden,
+not renumbered, so the same cell keeps the same coordinates however the page is
+scrolled. Only the rows still on screen can be clicked, and each reports where
+it sits in the view.
+
 ## Topics
 
 ### Mouse Types

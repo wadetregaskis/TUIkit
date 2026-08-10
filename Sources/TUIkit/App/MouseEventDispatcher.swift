@@ -534,7 +534,7 @@ extension MouseEventDispatcher {
         for region in matching {
             guard let handler = handlers[region.handlerID] else { continue }
             let localized = localize(
-                event, byOffsetX: region.offsetX, offsetY: region.offsetY)
+                event, byOffsetX: region.offsetX, offsetY: region.localOriginY)
             gestureHandedOff = false
             let consumed = handler(localized)
             if consumed {
@@ -550,7 +550,7 @@ extension MouseEventDispatcher {
                         pressedHandlers[event.button] = PressCapture(
                             handler: handler,
                             regionOffsetX: region.offsetX,
-                            regionOffsetY: region.offsetY
+                            regionOffsetY: region.localOriginY
                         )
                     }
                 }
@@ -685,7 +685,7 @@ extension MouseEventDispatcher {
             func synthesised(_ phase: MousePhase) -> MouseEvent {
                 MouseEvent(
                     button: event.button, phase: phase,
-                    x: x - region.offsetX, y: y - region.offsetY,
+                    x: x - region.offsetX, y: y - region.localOriginY,
                     shift: event.shift, ctrl: event.ctrl, meta: event.meta,
                     clickCount: event.clickCount)
             }
@@ -701,10 +701,7 @@ extension MouseEventDispatcher {
     /// translate an absolute drop point into its local space.
     func regionOffset(for id: HitTestRegion.HandlerID) -> (x: Int, y: Int)? {
         guard let region = regions.first(where: { $0.handlerID == id }) else { return nil }
-        // The UNCLIPPED origin: a view scrolled up inside a `ScrollView` has its
-        // rectangle cut at the viewport, but its coordinate space still starts
-        // where the view starts. See ``HitTestRegion/topClip``.
-        return (region.offsetX, region.offsetY - region.topClip)
+        return (region.offsetX, region.localOriginY)
     }
 
     /// The full absolute rectangle of the region registered with `id`, or `nil`
@@ -779,7 +776,7 @@ extension MouseEventDispatcher {
         if let newID = currentID, let newHandler = handlers[newID], let region = currentRegion {
             let enter = MouseEvent(
                 button: .none, phase: .entered,
-                x: event.x - region.offsetX, y: event.y - region.offsetY,
+                x: event.x - region.offsetX, y: event.y - region.localOriginY,
                 shift: event.shift, ctrl: event.ctrl, meta: event.meta
             )
             _ = newHandler(enter)

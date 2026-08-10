@@ -407,7 +407,7 @@ final class DragAndDropSession: @unchecked Sendable {
         if let target = newTarget, let hovering = target.hovering,
             let rect = dispatcher?.regionRect(for: target.handlerID)
         {
-            hovering(event.x - rect.offsetX, event.y - rect.offsetY)
+            hovering(event.x - rect.offsetX, event.y - rect.localOriginY)
         }
     }
 
