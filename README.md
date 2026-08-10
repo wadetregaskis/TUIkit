@@ -344,11 +344,8 @@ The package also vends each library as an individual product. `import TUIkit` re
 
 ## Developer notes
 
-- Tests use Swift Testing (`@Test`, `#expect`): run with `swift test`. The suite is ~3,350 tests across ~510 suites in 341 files.
-- Most tests run in parallel; a small subset that mutates global state is serialised, so the whole suite runs in a few seconds.
 - Benchmarks: `TUIKIT_BENCHMARKS=1 swift package benchmark` (full suite) — see `Benchmarks/TUIkitBenchmarks`. The `TUIKIT_BENCHMARKS` flag opts the `ordo-one/benchmark` dependency into the graph; without it the default build/test stays benchmark-free (no jemalloc requirement, no plugin deprecation warnings).
 - Profiling: see [Tools/Profiling/README.md](Tools/Profiling/README.md) (Instruments Time Profiler via a PTY, plus the no-PTY `RenderHarness` for `xctrace --launch`).
-- The `Terminal` class handles raw mode and cursor control via POSIX `termios`.
 
 ## License
 
