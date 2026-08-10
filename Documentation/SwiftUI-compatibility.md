@@ -353,6 +353,32 @@ for a `LazyVStack` that is the direct scroll content; the remaining gaps
 
 ---
 
+
+**Why `pinnedViews:` is not just an init parameter.** A pinned section header
+has to keep drawing at the viewport top while its section scrolls under it, so
+the stack must know three things it currently cannot see:
+
+1. **Where the sections are.** `Section` renders through a *private*
+   `_SectionCore` that composes header + content + footer into one buffer, so
+   an enclosing stack sees one child of some height and cannot say which rows
+   are header. Pinning needs a channel out of that core carrying the header's
+   own buffer and height.
+2. **Which section owns the viewport top.** That is a function of the scroll
+   offset and the section ranges, and the offset lives in the `ScrollView` —
+   the lazy stack windows against a slice the scroll machinery hands it
+   (`ScrollContentWindow`), it does not own the offset.
+3. **Where to composite.** The header has to be drawn over the slice's first
+   row *after* windowing, without changing the slice's height — the same
+   overlay-don't-inset rule `.refreshable`'s spinner follows, and for the same
+   reason: anything that changes height while scrolling reflows the content
+   under the cursor.
+
+So it touches `Section`, the windowing path in `VStack`, and `ScrollView` /
+`ScrollContentWindow` together. That is the scroll subsystem, which is under a
+standing no-speculative-changes rule here, so it wants a session of its own with
+a PTY sweep rather than a corner of one — not because the feature is large, but
+because the places it reaches are load-bearing for everything else that scrolls.
+
 ## 3. Open divergence
 
 One divergence is known and documented but currently kept as-is.
@@ -477,9 +503,9 @@ theming model, and the absence of fonts/animation/shapes/sub-cell-geometry are
 the honest consequences of rendering to a grid of character cells rather than a
 bitmap. §3 is the one remaining documented divergence (`foregroundStyle`), kept
 deliberately. §4a — additive SwiftUI features a terminal can express — is now
-**clear on the API side but for one item**: `pinnedViews:` on the lazy stacks,
-which is scroll-interaction work rather than an API gap — the stack has to know
-its section ranges and composite the active header over the viewport top.
+**clear on the API side but for one item**: `pinnedViews:` on the lazy stacks.
+It reads like an init parameter and is not one — see §2.8 for what it actually
+costs.
 Everything else there has shipped, `Text + Text` and `LocalizedStringKey`
 included. What is deliberately NOT coming back is recorded where the reason
 lives: `.onReceive` in §2.3 (its parameter type is a Combine protocol, and CI
