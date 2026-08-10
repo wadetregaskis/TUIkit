@@ -100,6 +100,32 @@ struct PresentationVariantsTests {
         #expect(overlay.content.width == 30)
     }
 
+    /// Content smaller than the screen sits in the MIDDLE of it. The fixed
+    /// `frame(width:height:)` the cover is built on defaults to `.topLeading`
+    /// — deliberately, for fixed-width columns — so the cover has to ask for
+    /// centring, and did not: a short message huddled in the top-left corner
+    /// of an otherwise empty terminal.
+    @Test("A cover centres content smaller than the screen")
+    func coverCentresItsContent() {
+        let height = 11
+        let width = 21
+        let buffer = renderToBuffer(
+            Text("page").fullScreenCover(isPresented: .constant(true)) { Text("hi") },
+            context: context(width: width, height: height))
+
+        let lines = buffer.overlays[0].content.lines.map(\.stripped)
+        let row = lines.firstIndex { $0.contains("hi") }
+        #expect(row != nil, "cover content missing: \(lines)")
+        guard let row else { return }
+        let line = lines[row]
+        // 11 rows, 1 of content → 5 above and 5 below; "hi" is 2 cells in 21 →
+        // 9 before and 10 after (the odd cell falls to the trailing side, as
+        // every centring here floors once).
+        #expect(row == 5, "content row \(row), lines: \(lines)")
+        let leading = line.prefix { $0 == " " }.count
+        #expect(leading == 9, "leading spaces \(leading) in \(line.debugDescription)")
+    }
+
     @Test("A sheet still dims and centres — the cover did not change it")
     func sheetIsUnchanged() {
         let buffer = renderToBuffer(

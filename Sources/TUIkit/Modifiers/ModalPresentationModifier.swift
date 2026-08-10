@@ -182,9 +182,17 @@ extension ModalPresentationModifier: Renderable {
             // The cover IS the screen: full width and the whole content area,
             // so there is nothing of the page left to show through and nothing
             // to dim.
+            //
+            // Centred, explicitly. `frame(width:height:)` defaults to
+            // `.topLeading` — deliberately, because a fixed frame is usually a
+            // left-aligned column — but a cover is the opposite case: content
+            // smaller than the screen, with the whole screen as its stage, and
+            // SwiftUI centres it. Left at the default, a three-line message
+            // huddles in the top-left corner of an otherwise empty terminal.
             modalBuffer = renderPresentedDialog(
                 modal.frame(
-                    width: context.environment.terminalWidth, height: overlayHeight),
+                    width: context.environment.terminalWidth, height: overlayHeight,
+                    alignment: .center),
                 context: modalContext, capHeight: overlayHeight)
         }
 
