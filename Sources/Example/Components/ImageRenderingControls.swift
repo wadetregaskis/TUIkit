@@ -173,22 +173,35 @@ struct ImageRenderingControls: View {
             guard !Self.ramps.contains(customRamp) else { return }
             recentRampsJSON = RecentValues.recording(customRamp, in: recentRampsJSON)
         }
-        // Label above the field, matching the pickers' label-above shape.
-        VStack(alignment: .leading, spacing: 0) {
-            Text(L("component.imageControls.customRamp")).dim()
-            TextField(L("component.imageControls.customRamp"), text: $customRamp)
-                .onSubmit(record)
-                .onEditingChanged { began in
-                    if !began { record() }
+        let label = Text(L("component.imageControls.customRamp")).dim()
+        let field = TextField(L("component.imageControls.customRamp"), text: $customRamp)
+            .onSubmit(record)
+            .onEditingChanged { began in
+                if !began { record() }
+            }
+            .textInputSuggestions {
+                ForEach(Self.ramps, id: \.self) { Text($0) }
+                if !recents.isEmpty {
+                    Divider()
+                    ForEach(recents, id: \.self) { Text($0) }
                 }
-                .textInputSuggestions {
-                    ForEach(Self.ramps, id: \.self) { Text($0) }
-                    if !recents.isEmpty {
-                        Divider()
-                        ForEach(recents, id: \.self) { Text($0) }
-                    }
-                }
-                .frame(width: 16)
+            }
+            .frame(width: 16)
+        // Beside the label when the row is wide enough, stacked under it when
+        // it is not — the field is 16 cells and this is the last control on a
+        // crowded row, so which one fits depends on the terminal. Only the
+        // HORIZONTAL axis is evaluated: both candidates are within a row-height
+        // budget, and asking about vertical fit inside an HStack that is still
+        // negotiating widths is what makes a `ViewThatFits` flip-flop.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 1) {
+                label
+                field
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                label
+                field
+            }
         }
     }
 }
