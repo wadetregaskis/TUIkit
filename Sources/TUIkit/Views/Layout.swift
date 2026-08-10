@@ -188,7 +188,10 @@ public struct _LayoutCore<L: Layout, Content: View>: View, Renderable, Layoutabl
                 width: entry.proposal.width ?? childSize.width,
                 height: entry.proposal.height ?? childSize.height,
                 context: context)
-            result = result.composited(with: rendered, at: (x: entry.x, y: entry.y))
+            // In place: `composited` rebuilds every line of the canvas per
+            // call, so folding n children through it is n × canvas even though
+            // each child covers a couple of rows.
+            result.composite(with: rendered, at: (x: entry.x, y: entry.y))
         }
         return result
     }

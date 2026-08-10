@@ -577,6 +577,74 @@ extension FrameBuffer {
         return composited
     }
 
+    /// Composites `overlay` on top at `position`, **in place**, touching only
+    /// the rows the overlay actually covers.
+    ///
+    /// Identical in result to ``composited(with:at:)``, and there for the case
+    /// that method is quadratic in: compositing many small children into one
+    /// canvas. `composited` rebuilds — and re-pads — *every* line of the whole
+    /// buffer per call, so folding n children through it costs n × canvas even
+    /// when each child covers two rows. A custom `Layout` placing 160 subviews
+    /// paid 160 full-canvas rebuilds, which is most of what made it slow.
+    ///
+    /// Only valid while the receiver's lines are uniform width, which is what
+    /// lets the width bookkeeping stay incremental; otherwise it falls back to
+    /// the copying path, so callers need not check.
+    public mutating func composite(with overlay: Self, at position: (x: Int, y: Int)) {
+        guard !overlay.isEmpty else {
+            // No visible cells, but nested layers and hit regions still lift.
+            guard !overlay.overlays.isEmpty || !overlay.hitTestRegions.isEmpty else { return }
+            overlays.append(
+                contentsOf: overlay.shiftedOverlays(byX: position.x, y: position.y))
+            hitTestRegions.append(
+                contentsOf: overlay.shiftedHitTestRegions(byX: position.x, y: position.y))
+            return
+        }
+        guard linesAreUniformWidth else {
+            self = composited(with: overlay, at: position)
+            return
+        }
+
+        let resultWidth = Swift.max(width, position.x + overlay.width)
+        let resultHeight = Swift.max(height, position.y + overlay.height)
+
+        // Grow to the final size. Rows the overlay does not reach keep their
+        // contents; they are re-padded only when the width actually grew, which
+        // is what keeps every line the same width (and the bookkeeping below
+        // honest) without touching them on the common in-bounds path.
+        if lines.count < resultHeight {
+            lines.append(
+                contentsOf: Array(
+                    repeating: String(repeating: " ", count: resultWidth),
+                    count: resultHeight - lines.count))
+        }
+        if resultWidth > width {
+            for row in lines.indices {
+                lines[row] = lines[row].padToVisibleWidth(resultWidth)
+            }
+        }
+
+        for overlayRow in overlay.lines.indices {
+            let row = position.y + overlayRow
+            guard row >= 0, row < lines.count else { continue }
+            let overlayLine = overlay.lines[overlayRow]
+            guard !overlayLine.isEmpty else { continue }
+            let originalLine = lines[row]
+            lines[row] = insertOverlay(
+                base: originalLine.padToVisibleWidth(resultWidth),
+                overlay: overlayLine,
+                atColumn: position.x,
+                originalBase: originalLine)
+        }
+
+        width = resultWidth
+        linesAreUniformWidth = true
+        lineWidths = nil
+        overlays.append(contentsOf: overlay.shiftedOverlays(byX: position.x, y: position.y))
+        hitTestRegions.append(
+            contentsOf: overlay.shiftedHitTestRegions(byX: position.x, y: position.y))
+    }
+
     /// Returns a copy of this buffer guaranteed to fit within the given bounds.
     ///
     /// Lines wider than `width` are truncated to `width` visible cells
