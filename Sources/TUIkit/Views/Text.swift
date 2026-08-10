@@ -29,11 +29,44 @@ public struct Text: View, Equatable {
     /// The style of the text (color, formatting, etc.).
     var style: TextStyle
 
-    /// Creates a text view with the specified string.
+    /// Creates a text view displaying a localized string.
+    ///
+    /// A string **literal** binds here, so it is treated as a lookup key and
+    /// resolved through ``LocalizationService`` — falling back to English and
+    /// then to the literal itself, which is why adopting this changes nothing
+    /// for an app that registers no translations. A `String` you computed
+    /// binds to ``init(_:)-(S)`` instead and is displayed as-is. That split is
+    /// SwiftUI's, and it is plain overload resolution: Swift prefers the
+    /// concrete ``LocalizedStringKey`` over the generic one for a literal.
+    ///
+    /// ```swift
+    /// Text("button.save")           // looked up
+    /// Text("Rows: \(count)")        // key "Rows: %@", then substituted
+    /// Text(verbatim: "button.save") // opted out — shown as written
+    /// ```
+    ///
+    /// - Parameter key: The key to look up.
+    public init(_ key: LocalizedStringKey) {
+        self.content = key.resolved(with: LocalizationService.shared)
+        self.style = TextStyle()
+    }
+
+    /// Creates a text view with the specified string, displayed as-is.
+    ///
+    /// This is the overload a non-literal `String` binds to, so text you
+    /// computed — a name, a file path, a value already localized — is never
+    /// used as a lookup key.
     ///
     /// - Parameter content: The text to display.
-    public init(_ content: String) {
-        self.content = content
+    ///
+    /// - Note: `@_disfavoredOverload` is what makes a *literal* choose
+    ///   ``init(_:)-(LocalizedStringKey)`` instead of this one. Without it Swift
+    ///   picks `String` — the default type for a string literal — and no literal
+    ///   would ever be looked up. SwiftUI marks its own `StringProtocol`
+    ///   initializer the same way, for the same reason.
+    @_disfavoredOverload
+    public init<S: StringProtocol>(_ content: S) {
+        self.content = String(content)
         self.style = TextStyle()
     }
 

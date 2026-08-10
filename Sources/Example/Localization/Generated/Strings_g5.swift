@@ -139,6 +139,7 @@ extension ExampleStrings {
             "page.mouse.plainRightClick": "(plain right-click)",
             "page.mouse.plainLeftClick": "(plain left-click)",
             // Theme
+            "page.theme.keyDemoExplain": "A string literal is a lookup key; a String you computed is not. All three below say the same thing in source — only the first two move when you switch language, and only the first is a literal.",
             "page.theme.languageLabel": "Language",
             "page.theme.presetPalette": "Preset Palette",
             "page.theme.presetLabel": "Preset",
@@ -311,6 +312,7 @@ extension ExampleStrings {
             "page.mouse.plainRightClick": "(einfacher Rechtsklick)",
             "page.mouse.plainLeftClick": "(einfacher Linksklick)",
             // Theme
+            "page.theme.keyDemoExplain": "Ein String-Literal ist ein Nachschlageschlüssel, ein berechneter String nicht. Alle drei unten stehen im Quelltext für dasselbe — nur die ersten beiden ändern sich beim Sprachwechsel, und nur das erste ist ein Literal.",
             "page.theme.languageLabel": "Sprache",
             "page.theme.presetPalette": "Vorgegebene Palette",
             "page.theme.presetLabel": "Vorlage",
@@ -483,6 +485,7 @@ extension ExampleStrings {
             "page.mouse.plainRightClick": "(simple clic droit)",
             "page.mouse.plainLeftClick": "(simple clic gauche)",
             // Theme
+            "page.theme.keyDemoExplain": "Un littéral de chaîne est une clé de recherche ; une String que vous avez calculée ne l’est pas. Les trois ci-dessous disent la même chose dans le code — seuls les deux premiers changent avec la langue, et seul le premier est un littéral.",
             "page.theme.languageLabel": "Langue",
             "page.theme.presetPalette": "Palette prédéfinie",
             "page.theme.presetLabel": "Préréglage",
@@ -655,6 +658,7 @@ extension ExampleStrings {
             "page.mouse.plainRightClick": "(semplice clic destro)",
             "page.mouse.plainLeftClick": "(semplice clic sinistro)",
             // Theme
+            "page.theme.keyDemoExplain": "Un letterale di stringa è una chiave di ricerca; una String calcolata no. I tre qui sotto dicono la stessa cosa nel codice — solo i primi due cambiano al cambio di lingua, e solo il primo è un letterale.",
             "page.theme.languageLabel": "Lingua",
             "page.theme.presetPalette": "Palette preimpostata",
             "page.theme.presetLabel": "Preimpostazione",
@@ -827,6 +831,7 @@ extension ExampleStrings {
             "page.mouse.plainRightClick": "(clic derecho simple)",
             "page.mouse.plainLeftClick": "(clic izquierdo simple)",
             // Theme
+            "page.theme.keyDemoExplain": "Un literal de cadena es una clave de búsqueda; una String que calculaste no lo es. Los tres de abajo dicen lo mismo en el código: solo los dos primeros cambian al cambiar de idioma, y solo el primero es un literal.",
             "page.theme.languageLabel": "Idioma",
             "page.theme.presetPalette": "Paleta predefinida",
             "page.theme.presetLabel": "Predefinido",
@@ -999,6 +1004,7 @@ extension ExampleStrings {
             "page.mouse.plainRightClick": "（普通右键）",
             "page.mouse.plainLeftClick": "（普通左键）",
             // Theme
+            "page.theme.keyDemoExplain": "字符串字面量就是查找键，而你计算出来的 String 不是。下面三行在源代码里说的是同一件事 — 但只有前两行会随语言切换而变化，且只有第一行是字面量。",
             "page.theme.languageLabel": "语言",
             "page.theme.presetPalette": "预设调色板",
             "page.theme.presetLabel": "预设",
@@ -1171,6 +1177,7 @@ extension ExampleStrings {
             "page.mouse.plainRightClick": "（通常の右クリック）",
             "page.mouse.plainLeftClick": "（通常の左クリック）",
             // Theme
+            "page.theme.keyDemoExplain": "文字列リテラルは検索キーですが、計算した String は違います。下の三つはソース上は同じことを書いていますが、言語を切り替えて変わるのは最初の二つだけで、リテラルなのは最初の一つだけです。",
             "page.theme.languageLabel": "言語",
             "page.theme.presetPalette": "プリセットパレット",
             "page.theme.presetLabel": "プリセット",

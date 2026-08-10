@@ -37,6 +37,40 @@ Or use the `Text(localized:)` convenience initializer:
 Text(localized: LocalizationKey.Button.save)
 ```
 
+### A String Literal Is Already a Key
+
+``Text`` also takes a ``LocalizedStringKey``, and a string **literal** binds
+there — so the plainest spelling is already localized:
+
+```swift
+Text("button.save")       // looked up
+Text(fileName)            // NOT looked up — a computed String is content
+Text(verbatim: "literal") // opted out explicitly
+```
+
+This is SwiftUI's rule, and nothing about it is magic: ``Text`` has one
+initializer taking a `LocalizedStringKey` and another generic over
+`StringProtocol`, and the generic one is marked `@_disfavoredOverload` so a
+literal picks the key. A `String` you computed cannot become a key, so a file
+path or a person's name is never looked up by accident.
+
+Nothing breaks if a key is missing. Lookup falls back to English and then to
+the key itself, so an app that registers no translations displays exactly the
+literals it wrote.
+
+Interpolation builds one key for every value, with `%@` where each value went:
+
+```swift
+Text("Moved \(count) rows to \(destination)")
+// key: "Moved %@ rows to %@"
+```
+
+Register that key once and every value reuses it. A translation may reorder
+the values with `%2$@`, since word order differs between languages, and values
+are converted eagerly — `\(value, format: .percent)` works. A key with **no**
+interpolations is never scanned for placeholders, so `Text("100% done")` says
+100% done.
+
 ### Switch Language at Runtime
 
 ```swift

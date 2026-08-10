@@ -77,6 +77,23 @@ struct ThemePage: View {
         ("Border", \.border),
     ]
 
+    /// The same text as the literal above, but reaching `Text` as a *value*, so
+    /// the `StringProtocol` overload takes it and no lookup happens.
+    private var savedKeyAsVariable: String { "button.save" }
+
+    /// One row of the key demo: the source spelling on the left (verbatim, or
+    /// the snippet itself would be looked up), what it renders on the right.
+    @ViewBuilder private func keyDemoRow<V: View>(
+        _ spelling: String, @ViewBuilder result: () -> V
+    ) -> some View {
+        HStack(spacing: 2) {
+            Text(verbatim: spelling)
+                .foregroundStyle(.palette.foregroundSecondary)
+                .frame(width: 24)
+            result()
+        }
+    }
+
     var body: some View {
         let appearances = AppearanceRegistry.all
         let presetSelection = Binding(
@@ -147,6 +164,19 @@ struct ThemePage: View {
                         }
                     }
                     .pickerStyle(.radioGroup)
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(L("page.theme.keyDemoExplain"))
+                            .foregroundStyle(.palette.foregroundSecondary)
+                        // Three spellings, three behaviours — and the first two
+                        // are the SAME source text, distinguished only by
+                        // whether it is a literal. Switch language above and
+                        // watch which of them move.
+                        keyDemoRow("Text(\"button.save\")") { Text("button.save") }
+                        keyDemoRow("Text(key)") { Text(savedKeyAsVariable) }
+                        keyDemoRow("Text(verbatim:)") { Text(verbatim: "button.save") }
+                    }
+                    .border(color: .brightBlack)
                 }
 
                 DemoSection(L("page.theme.presetPalette")) {

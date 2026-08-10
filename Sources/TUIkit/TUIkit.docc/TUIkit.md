@@ -78,6 +78,7 @@ struct MyApp: App {
 
 - ``View``
 - ``Text``
+- ``LocalizedStringKey``
 - ``Image``
 - ``ImageSource``
 - ``Label``
