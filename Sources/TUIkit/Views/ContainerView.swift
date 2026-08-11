@@ -1014,6 +1014,15 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         }
         result.overlays = carriedOverlays
         result.hitTestRegions = carriedRegions
+        // Animated runs move with their cells, like the regions above. Dropping
+        // them here does not merely stop an animation, it FREEZES one: the run
+        // loop keeps the clock alive from the runs on the final buffer.
+        var carriedRuns = bodyBuffer.shiftedAnimatedCells(byX: 1, y: 1)
+        if let footerBuf = footerBuffer, !footerBuf.isEmpty {
+            let footerRow = 1 + bodyBuffer.lines.count + (style.showFooterSeparator ? 1 : 0)
+            carriedRuns += footerBuf.shiftedAnimatedCells(byX: 1, y: footerRow)
+        }
+        result.animatedCells = carriedRuns
         return result
     }
 
@@ -1073,14 +1082,17 @@ private struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable
         var result = FrameBuffer(lines: lines, width: innerWidth, uniformWidth: true)
         // Content sits at column 0 (no wall), shifted down by the title rows.
         var carriedOverlays = bodyBuffer.shiftedOverlays(byX: 0, y: titleRows)
+        var carriedRuns = bodyBuffer.shiftedAnimatedCells(byX: 0, y: titleRows)
         var carriedRegions = bodyBuffer.shiftedHitTestRegions(byX: 0, y: titleRows)
         if let footerBuf = footerBuffer, !footerBuf.isEmpty {
             let footerRow = titleRows + bodyBuffer.lines.count + footerSeparatorRows
             carriedOverlays += footerBuf.shiftedOverlays(byX: 0, y: footerRow)
             carriedRegions += footerBuf.shiftedHitTestRegions(byX: 0, y: footerRow)
+            carriedRuns += footerBuf.shiftedAnimatedCells(byX: 0, y: footerRow)
         }
         result.overlays = carriedOverlays
         result.hitTestRegions = carriedRegions
+        result.animatedCells = carriedRuns
         return result
     }
 }

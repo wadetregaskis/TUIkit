@@ -824,6 +824,12 @@ extension FrameBuffer {
         result.overlays = shiftedOverlays(byX: overlayShiftX, y: overlayShiftY)
         result.hitTestRegions = shiftedHitTestRegions(
             byX: overlayShiftX, y: overlayShiftY)
+        // Runs move with the cells they describe, exactly like the regions
+        // above. Omitting them here is not a missing animation but a FROZEN one:
+        // the run loop keeps the clock alive on the strength of the runs it
+        // finds on the final buffer, so a run lost on the way up stops the clock
+        // for everything (see `AnimatedRunPropagationTests`).
+        result.animatedCells = shiftedAnimatedCells(byX: overlayShiftX, y: overlayShiftY)
         return result
     }
 }

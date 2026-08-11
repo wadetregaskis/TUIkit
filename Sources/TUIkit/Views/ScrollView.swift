@@ -933,9 +933,20 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             return clipped
         }
 
+        // Animated runs are a claim about single rows, so unlike a region they
+        // are not clipped but kept or dropped whole: a run scrolled out of the
+        // viewport must stop, or it would repaint on a clock over whatever row
+        // took its place. Survivors move into viewport coordinates with the
+        // lines they describe.
+        let visibleRuns = full.animatedCells.compactMap { run -> AnimatedCellRun? in
+            guard run.offsetY >= viewportTop, run.offsetY < viewportBottom else { return nil }
+            return run.shifted(byX: dx, y: -scrollOffset)
+        }
+
         var result = FrameBuffer(lines: visibleLines, width: viewportWidth)
         result.overlays = visibleOverlays
         result.hitTestRegions = visibleRegions
+        result.animatedCells = visibleRuns
         return result
     }
 
