@@ -252,6 +252,46 @@ struct HuePreservingQuantisationTests {
             "cream keeps its warm channel ordering; got (\(rgb.red),\(rgb.green),\(rgb.blue))")
     }
 
+    /// The Colors page's six-stop rainbow, quantised at 60 cells, used to
+    /// contain single-cell washed-out interlopers — `FFAF5F` between `FF8700`
+    /// and `FFAF00`, and three more like it. A duller candidate can win on
+    /// lightness because the hue term shrinks as a colour approaches the
+    /// neutral axis, so the weighting that is meant to keep hues intact does
+    /// least where it matters most. The result read as dithering noise in a
+    /// ramp that should be smooth.
+    @Test("A gradient does not pick up washed-out speckles")
+    func gradientHasNoDesaturatedSpeckles() {
+        let stops: [Color] = [
+            .rgb(255, 0, 0), .rgb(255, 165, 0), .rgb(255, 255, 0),
+            .rgb(0, 200, 0), .rgb(0, 100, 255), .rgb(140, 0, 200),
+        ]
+        let width = 60
+        var chroma: [Double] = []
+        for cell in 0..<width {
+            let t = Double(cell) / Double(width - 1)
+            // Piecewise-linear across the stops, as TrackRenderer does.
+            let scaled = t * Double(stops.count - 1)
+            let index = min(stops.count - 2, Int(scaled))
+            let mixed = Color.lerp(stops[index], stops[index + 1], phase: scaled - Double(index))
+            let quantised = mixed.downsampledToPalette256()
+            guard let (red, green, blue) = quantised.rgbComponents else {
+                Issue.record("unresolved at cell \(cell)")
+                return
+            }
+            // Saturation stands in for "did it stay in its family": a speckle is
+            // a cell markedly duller than BOTH of its neighbours.
+            let maxC = Double(max(red, max(green, blue)))
+            let minC = Double(min(red, min(green, blue)))
+            chroma.append(maxC <= 0 ? 0 : (maxC - minC) / maxC)
+        }
+        for cell in 1..<(width - 1) {
+            let dip = min(chroma[cell - 1], chroma[cell + 1]) - chroma[cell]
+            #expect(
+                dip < 0.2,
+                "cell \(cell) is a desaturation speckle: \(chroma[cell - 1]) → \(chroma[cell]) → \(chroma[cell + 1])")
+        }
+    }
+
     @Test("Greys still take the grayscale ramp")
     func greysUnaffected() {
         let quantised = Color.rgb(146, 146, 146).downsampledToPalette256()

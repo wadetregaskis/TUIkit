@@ -125,9 +125,24 @@ extension Color {
         )
     }
 
-    /// OKLab distance with the lightness/chroma/hue components split and hue
-    /// weighted ×2 (à la CIEDE2000's spirit: staying in the right colour
-    /// family matters more than exact chroma).
+    /// OKLab distance with the lightness/chroma/hue components split, hue
+    /// weighted ×4, and chroma LOSS weighted ×4 (à la CIEDE2000's spirit:
+    /// staying in the right colour family matters more than exact chroma).
+    ///
+    /// The asymmetry on chroma is not decoration. A duller candidate can win on
+    /// lightness alone, because a colour with less chroma than the target has a
+    /// SMALLER ΔH² by construction — ΔH² = Δa² + Δb² − ΔC² shrinks as the
+    /// candidate moves toward the neutral axis, and vanishes entirely for a
+    /// grey. So the ×4 hue weight, which is supposed to keep a colour in its
+    /// family, does the least work exactly where the family is most at risk.
+    ///
+    /// Measured on the Colors page's six-stop rainbow at 60 cells: the red-to-
+    /// yellow run came out `FF8700 FF8700 FFAF5F FFAF00 …` — a single washed-out
+    /// cell wedged between two saturated neighbours, and three more like it
+    /// further along. Those speckles read as dithering noise in what should be a
+    /// smooth ramp. Charging chroma loss removes all four and leaves an even
+    /// `FF8700×3 FFAF00×4 FFD700×5 FFFF00×4`. Gaining chroma is charged as
+    /// before, and a neutral target has none to lose, so greys are untouched.
     private static func hueWeightedDistanceSquared(
         _ lhs: (l: Double, a: Double, b: Double),
         _ rhs: (l: Double, a: Double, b: Double)
@@ -140,7 +155,8 @@ extension Color {
         let deltaB = lhs.b - rhs.b
         // Standard decomposition: ΔH² = Δa² + Δb² − ΔC² (tangential part).
         let deltaH2 = max(0, deltaA * deltaA + deltaB * deltaB - deltaC * deltaC)
-        return deltaL * deltaL + deltaC * deltaC + 4 * deltaH2
+        let chromaWeight = deltaC > 0 ? 4.0 : 1.0  // > 0 ⇒ the candidate is duller
+        return deltaL * deltaL + chromaWeight * deltaC * deltaC + 4 * deltaH2
     }
 
     /// Squared Euclidean distance between two RGB colors.
