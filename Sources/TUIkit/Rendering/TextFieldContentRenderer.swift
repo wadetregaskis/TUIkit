@@ -44,6 +44,23 @@ struct TextFieldContentRenderer {
 
     // MARK: - Content Building
 
+    /// A field's rendered line, plus the caret cells the run loop can advance
+    /// on its own.
+    ///
+    /// `caret` is positioned relative to the *content* — column 0 is the first
+    /// content cell — so the caller shifts it by whatever chrome it draws
+    /// around the field before attaching it to a buffer. It is `nil` when there
+    /// is nothing to animate: an unfocused field, or `.textCursor(.none)`.
+    struct FieldContent {
+        let line: String
+        let caret: AnimatedCellRun?
+
+        init(line: String, caret: AnimatedCellRun? = nil) {
+            self.line = line
+            self.caret = caret
+        }
+    }
+
     /// Builds the complete field content based on current state.
     func buildContent(
         text: String,
@@ -54,7 +71,7 @@ struct TextFieldContentRenderer {
         cursorStyle: TextCursorStyle,
         cursorTimer: CursorTimer?,
         contentWidth: Int
-    ) -> String {
+    ) -> FieldContent {
         let isEmpty = text.isEmpty
         // The palette's field surface (the tab-strip tone): palette-aware, so
         // light palettes get a light field. The old fixed accent-dim tint
@@ -67,7 +84,9 @@ struct TextFieldContentRenderer {
             // read. So the focused-and-empty case renders the prompt too, just
             // with the caret sitting on it; only typing displaces it.
             guard isFocused else {
-                return buildPromptContent(palette: palette, background: backgroundColor, width: contentWidth)
+                return FieldContent(
+                    line: buildPromptContent(
+                        palette: palette, background: backgroundColor, width: contentWidth))
             }
             return buildTextWithCursor(
                 text: promptString(),
@@ -95,12 +114,13 @@ struct TextFieldContentRenderer {
                 width: contentWidth
             )
         } else {
-            return buildTextContent(
-                text: text,
-                palette: palette,
-                background: backgroundColor,
-                width: contentWidth
-            )
+            return FieldContent(
+                line: buildTextContent(
+                    text: text,
+                    palette: palette,
+                    background: backgroundColor,
+                    width: contentWidth
+                ))
         }
     }
 
@@ -208,7 +228,7 @@ struct TextFieldContentRenderer {
         width: Int,
         foregroundOverride: Color? = nil,
         displayOverride: ((_ index: Int, _ text: String) -> Character)? = nil
-    ) -> String {
+    ) -> FieldContent {
         // A SecureField masks its CONTENT, never its prompt — a placeholder
         // rendered as bullets tells the user nothing.
         let displayCharacter = displayOverride ?? self.displayCharacter
@@ -217,8 +237,11 @@ struct TextFieldContentRenderer {
         let (widths, scrollStart, windowEnd) = scrollWindow(
             text: text, clampedPosition: clampedPosition, width: width)
 
-        // Compute cursor visibility and color based on animation style
-        let (cursorVisible, cursorColor) = Self.computeCursorState(
+        // The whole cycle, not just this tick's frame: the caret's cells are the
+        // only thing that changes while a focused field sits still, and
+        // re-rendering the screen 20 times a second to blink one cell is what
+        // made an idle form cost 41% of a core. See ``CursorCycle``.
+        let cycle = Self.computeCursorCycle(
             baseColor: palette.cursorColor,
             animation: cursorStyle.animation,
             speed: cursorStyle.speed,
@@ -286,62 +309,59 @@ struct TextFieldContentRenderer {
             }
         }
 
-        // Keeps the character beneath the caret readable wherever the shape
-        // allows:
-        // - `.block`: the character itself, in the field's background colour
-        //   on a caret-coloured block (covering a wide character whole) —
-        //   explicit palette colours, never SGR 7.
-        // - `.underscore`: the character itself, underlined (SGR 4), in the
-        //   cursor colour — universally supported.
-        // - `.bar` (and `.underscore` over a space or a WIDE character,
-        //   whose underline support is poor): the shape's standalone glyph
-        //   replaces the first cell; the remainder of a wide character pads
-        //   with spaces so nothing after it shifts. A bar caret reads as
-        //   sitting BEFORE the character, so it deliberately draws the same
-        //   left-edge glyph for every character — a combining-overlay
-        //   approach was tried and rejected: terminals compose the overlay
-        //   differently per base glyph, often near-invisibly.
-        // (The caret's own cell never clips: the scroll window is anchored
-        // so the caret is always fully inside it.)
-        func emitCaret(cells: Int) {
-            let underlying: Character =
-                clampedPosition < characterCount ? displayCharacter(clampedPosition, text) : " "
-            switch cursorStyle.shape {
-            case .block:
+        // The caret's cells are emitted as their own self-contained styled
+        // chunk — including when the blink is OFF, where they used to coalesce
+        // with their neighbours. They are handed to the run loop to repaint on
+        // a clock, and a frame that leaned on an escape earlier in the line
+        // would take its colour from whatever the line happened to look like
+        // when it was spliced in. Costs one escape pair; buys the whole cheap
+        // animation path. See ``AnimatedCellRun``.
+        let colors = CaretColors(
+            background: background, text: textForeground, selectionText: selectionForeground,
+            selectionBackground: selectionBackground)
+        var caret: AnimatedCellRun?
+
+        func emitCaret(cells: Int, underlying: Character, isSelected: Bool) {
+            // The scroll window is anchored so the caret is always fully inside
+            // it. If that ever stops holding, fall back to the ordinary clipped
+            // character rather than leave a run describing cells that are not
+            // on screen — a run outliving its cells repaints, on a clock, over
+            // whatever took their place.
+            guard cellX >= scrollStart, cellX + cells <= windowEnd else {
                 emitClipped(
-                    underlying, cells: cells, foreground: background, background: cursorColor)
-            case .underscore where cells == 1 && underlying != " ":
-                flushRun()
-                result += ANSIRenderer.colorize(
-                    String(underlying), foreground: cursorColor, background: background, underline: true)
-                (cellX, outputCells) = (cellX + 1, outputCells + 1)
-            default:
-                emitClipped(
-                    cursorStyle.shape.character, cells: 1, foreground: cursorColor, background: background)
-                if cells > 1 {
-                    emitClipped(" ", cells: cells - 1, foreground: textForeground, background: background)
-                }
+                    underlying, cells: cells,
+                    foreground: isSelected ? selectionForeground : textForeground,
+                    background: isSelected ? selectionBackground : background)
+                return
             }
+            let frames = Self.caretFrames(
+                cycle, shape: cursorStyle.shape, cells: cells,
+                underlying: underlying, isSelected: isSelected, colors: colors)
+            flushRun()
+            result += frames[cycle.step % frames.count]
+            if cycle.isAnimating {
+                caret = AnimatedCellRun(
+                    offsetX: outputCells, offsetY: 0, width: cells,
+                    frames: frames, clock: .cursor)
+            }
+            (cellX, outputCells) = (cellX + cells, outputCells + cells)
         }
 
         for index in 0..<characterCount {
-            if index == clampedPosition && cursorVisible {
-                emitCaret(cells: widths[index])
+            let isSelected = selectionRange.map { index >= $0.lowerBound && index < $0.upperBound } ?? false
+            let char = displayCharacter(index, text)
+            if index == clampedPosition {
+                emitCaret(cells: widths[index], underlying: char, isSelected: isSelected)
                 continue
             }
-            // Blink-off at the caret shows the underlying character, styled
-            // like its neighbours.
-            let char = displayCharacter(index, text)
-            let isSelected =
-                selectionRange.map { index >= $0.lowerBound && index < $0.upperBound } ?? false
             emitClipped(
                 char, cells: widths[index],
                 foreground: isSelected ? selectionForeground : textForeground,
                 background: isSelected ? selectionBackground : background)
         }
         // The caret past the last character sits on its own cell.
-        if clampedPosition == characterCount && cursorVisible {
-            emitCaret(cells: 1)
+        if clampedPosition == characterCount {
+            emitCaret(cells: 1, underlying: " ", isSelected: false)
         }
         // Pad to exactly `width` cells.
         while outputCells < width {
@@ -350,7 +370,87 @@ struct TextFieldContentRenderer {
         }
         flushRun()
 
-        return result
+        return FieldContent(line: result, caret: caret)
+    }
+
+    // MARK: - The caret's cells
+
+    /// The four colours the caret picks between, gathered so the frame builder
+    /// takes one parameter rather than four.
+    struct CaretColors {
+        let background: Color
+        let text: Color
+        let selectionText: Color
+        let selectionBackground: Color
+    }
+
+    /// Every frame of the caret's cycle, ready to hand to the run loop.
+    static func caretFrames(
+        _ cycle: CursorCycle,
+        shape: TextCursorStyle.Shape,
+        cells: Int,
+        underlying: Character,
+        isSelected: Bool,
+        colors: CaretColors
+    ) -> [String] {
+        cycle.states.map {
+            caretCells(
+                $0, shape: shape, cells: cells,
+                underlying: underlying, isSelected: isSelected, colors: colors)
+        }
+    }
+
+    /// One frame of the caret: its cells, styled, standing alone.
+    ///
+    /// Keeps the character beneath the caret readable wherever the shape allows:
+    /// - `.block`: the character itself, in the field's background colour on a
+    ///   caret-coloured block (covering a wide character whole) — explicit
+    ///   palette colours, never SGR 7.
+    /// - `.underscore`: the character itself, underlined (SGR 4), in the cursor
+    ///   colour — universally supported.
+    /// - `.bar` (and `.underscore` over a space or a WIDE character, whose
+    ///   underline support is poor): the shape's standalone glyph replaces the
+    ///   first cell; the remainder of a wide character pads with spaces so
+    ///   nothing after it shifts. A bar caret reads as sitting BEFORE the
+    ///   character, so it deliberately draws the same left-edge glyph for every
+    ///   character — a combining-overlay approach was tried and rejected:
+    ///   terminals compose the overlay differently per base glyph, often
+    ///   near-invisibly.
+    ///
+    /// A blink-off frame shows the underlying character styled like its
+    /// neighbours, so the cycle covers both halves of a blink and the run loop
+    /// needs to know nothing about carets.
+    static func caretCells(
+        _ state: (visible: Bool, color: Color),
+        shape: TextCursorStyle.Shape,
+        cells: Int,
+        underlying: Character,
+        isSelected: Bool,
+        colors: CaretColors
+    ) -> String {
+        guard state.visible else {
+            return ANSIRenderer.colorize(
+                String(underlying),
+                foreground: isSelected ? colors.selectionText : colors.text,
+                background: isSelected ? colors.selectionBackground : colors.background)
+        }
+        switch shape {
+        case .block:
+            return ANSIRenderer.colorize(
+                String(underlying), foreground: colors.background, background: state.color)
+        case .underscore where cells == 1 && underlying != " ":
+            return ANSIRenderer.colorize(
+                String(underlying), foreground: state.color, background: colors.background,
+                underline: true)
+        default:
+            let glyph = ANSIRenderer.colorize(
+                String(shape.character), foreground: state.color, background: colors.background)
+            guard cells > 1 else { return glyph }
+            return glyph
+                + ANSIRenderer.colorize(
+                    String(repeating: " ", count: cells - 1),
+                    foreground: colors.text, background: colors.background)
+        }
     }
 
     // MARK: - Cursor State
@@ -359,6 +459,69 @@ struct TextFieldContentRenderer {
     /// and cursor timer. Shared by every text-input caret (``TextField``,
     /// ``SecureField``, ``TextEditor``) so one `.textCursor(_:)` setting
     /// animates identically across all of them.
+    /// Every frame of the caret's animation, plus where the clock is now.
+    ///
+    /// The counterpart to ``computeCursorState(baseColor:animation:speed:cursorTimer:)``,
+    /// which is one frame. Building this deliberately does **not** consult the
+    /// live clock — each state comes from `CursorTimer`'s static formula — which
+    /// is what lets the caret's cells be handed to the run loop and advanced
+    /// without rendering. See ``AnimatedCellRun``.
+    ///
+    /// A focused text field is the most expensive idle control there is: it used
+    /// to re-render the whole screen 20 times a second to blink one cell. On the
+    /// Example's Forms page that was 41% of a core to emit two writes per second
+    /// (`Documentation/Performance-profile-2026-08.md` §9).
+    struct CursorCycle {
+        /// One caret state per tick of a full cycle.
+        let states: [(visible: Bool, color: Color)]
+
+        /// Where the clock is now — the state to draw immediately.
+        let step: Int
+
+        /// Whether the caret actually moves. A `.none` animation is one frame:
+        /// a still picture the ordinary render already drew.
+        var isAnimating: Bool { states.count > 1 }
+
+        /// The state to draw right now.
+        var now: (visible: Bool, color: Color) { states[step % states.count] }
+    }
+
+    /// The caret's whole cycle, without reading the clock. See ``CursorCycle``.
+    static func computeCursorCycle(
+        baseColor: Color,
+        animation: TextCursorStyle.Animation,
+        speed: TextCursorStyle.Speed,
+        cursorTimer: CursorTimer?
+    ) -> CursorCycle {
+        let states = (0..<CursorTimer.cycleTicks(for: speed, animation: animation)).map { tick in
+            caretState(atTick: tick, baseColor: baseColor, animation: animation, speed: speed)
+        }
+        // `elapsedTicks` is a plain read: unlike `blinkVisible(for:)` it does not
+        // mark the frame as having consulted the clock, so a producer that uses
+        // it stays replayable.
+        return CursorCycle(states: states, step: cursorTimer?.elapsedTicks ?? 0)
+    }
+
+    /// The caret's visibility and colour at one tick of the cycle, from the
+    /// static formulas rather than the live clock.
+    private static func caretState(
+        atTick tick: Int, baseColor: Color,
+        animation: TextCursorStyle.Animation, speed: TextCursorStyle.Speed
+    ) -> (visible: Bool, color: Color) {
+        switch animation {
+        case .none:
+            return (true, baseColor)
+        case .blink:
+            return (CursorTimer.blinkVisible(atTick: tick, speed: speed), baseColor)
+        case .pulse:
+            let phase = CursorTimer.pulsePhase(atTick: tick, speed: speed)
+            return (
+                true,
+                Color.lerp(baseColor.opacity(ViewConstants.focusPulseMin), baseColor, phase: phase)
+            )
+        }
+    }
+
     static func computeCursorState(
         baseColor: Color,
         animation: TextCursorStyle.Animation,

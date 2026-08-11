@@ -415,17 +415,17 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
 
         // The ▾/▴ combo-box affordance sits inside the field surface, against
         // the trailing cap.
-        let disclosure: String
-        if let suggestionMenu {
-            let caret = suggestionMenu.isOpen ? DropdownMenu.openCaret : DropdownMenu.closedCaret
-            disclosure = ANSIRenderer.colorize(
-                " " + caret,
-                foreground: palette.foregroundSecondary,
-                background: surface)
-        } else {
-            disclosure = ""
+        let disclosure = Self.disclosureGlyph(
+            isOpen: suggestionMenu?.isOpen, palette: palette, surface: surface)
+        var buffer = FrameBuffer(text: openCap + fieldContent.line + disclosure + closeCap)
+
+        // The caret animates itself: its cells go to the run loop, which
+        // repaints them on the cursor clock without re-rendering anything. Past
+        // the opening cap, which is the only chrome before the content. See
+        // ``AnimatedCellRun``.
+        if !context.isMeasuring, let caret = fieldContent.caret {
+            buffer.animatedCells = [caret.shifted(byX: 1, y: 0)]
         }
-        var buffer = FrameBuffer(text: openCap + fieldContent + disclosure + closeCap)
 
         // Mouse: click focuses the field and drops the caret at the clicked
         // column; dragging selects. Hover rides on the same region. Shared with
@@ -457,6 +457,16 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
     /// Fetches (or creates) the persistent editing handler from StateStorage
     /// — it maintains the cursor position across renders — and syncs the
     /// per-frame bindings on it.
+    /// The combo box's ▾/▴ affordance, drawn inside the field surface against
+    /// the trailing cap, or `""` when the field has no suggestion menu.
+    private static func disclosureGlyph(
+        isOpen: Bool?, palette: any Palette, surface: Color
+    ) -> String {
+        guard let isOpen else { return "" }
+        let caret = isOpen ? DropdownMenu.openCaret : DropdownMenu.closedCaret
+        return ANSIRenderer.colorize(
+            " " + caret, foreground: palette.foregroundSecondary, background: surface)
+    }
     private func resolveHandler(
         persistedFocusID: String,
         stateStorage: StateStorage,

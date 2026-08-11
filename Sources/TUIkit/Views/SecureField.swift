@@ -352,7 +352,13 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
             : surface
         let openCap = ANSIRenderer.colorize(String(TerminalSymbols.openCap), foreground: capColor)
         let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
-        var buffer = FrameBuffer(text: openCap + fieldContent + closeCap)
+        var buffer = FrameBuffer(text: openCap + fieldContent.line + closeCap)
+
+        // The caret animates itself — see the note in TextField. Past the
+        // opening cap, which is the only chrome before the content.
+        if !context.isMeasuring, let caret = fieldContent.caret {
+            buffer.animatedCells = [caret.shifted(byX: 1, y: 0)]
+        }
 
         // Mouse: click focuses the field and drops the caret at the clicked
         // column (masked cells map to indices just like TextField); dragging

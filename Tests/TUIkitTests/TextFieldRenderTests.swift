@@ -201,7 +201,7 @@ struct TextFieldRenderTests {
             cursorStyle: TextCursorStyle(),
             cursorTimer: nil,
             contentWidth: 10
-        )
+        ).line
         let content = raw.stripped
         #expect(content.strippedLength == 10, "|\(content)|")
         #expect(content.hasPrefix("😃ab"), "caret keeps the wide char legible: |\(content)|")

@@ -142,6 +142,108 @@ struct FocusIndicatorAnimationTests {
         }
     }
 
+    // MARK: - Text cursor
+
+    /// A focused field needs a real handler in state storage, so these build a
+    /// context the field can register into and render it focused.
+    private func focusedField(_ view: some View, width: Int = 30) -> FrameBuffer {
+        renderToBuffer(view, context: makeRenderContext(width: width, height: 6))
+    }
+
+    @Test("A focused text field hands over its caret cells")
+    func textFieldCaret() {
+        let text = Binding.constant("Ada")
+        let buffer = focusedField(TextField("Name", text: text))
+        expectAnimates(buffer, runs: 1, "text field caret")
+        // Past the opening cap, and one cell wide for a narrow character.
+        #expect(buffer.animatedCells[0].offsetX >= 1)
+        #expect(buffer.animatedCells[0].width == 1)
+    }
+
+    @Test("A secure field's caret animates too, over the mask")
+    func secureFieldCaret() {
+        let text = Binding.constant("hunter2")
+        expectAnimates(focusedField(SecureField("Password", text: text)), runs: 1, "secure field")
+    }
+
+    @Test("An unfocused text field animates nothing")
+    func unfocusedFieldIsStill() {
+        let context = makeRenderContext(width: 30, height: 6)
+        context.environment.focusManager!.register(FocusSentinel())
+        let buffer = renderToBuffer(
+            TextField("Name", text: Binding.constant("Ada")), context: context)
+        #expect(buffer.animatedCells.isEmpty)
+    }
+
+    @Test("A steady cursor style hands over nothing")
+    func steadyCursorIsStill() {
+        // `.textCursor(.none)` shows the caret without animating it. One frame
+        // is a still picture the render already drew.
+        let buffer = focusedField(
+            TextField("Name", text: Binding.constant("Ada"))
+                .textCursor(TextCursorStyle(shape: .block, animation: .none)))
+        #expect(buffer.animatedCells.isEmpty)
+    }
+
+    @Test("Every caret shape and animation keeps a constant cell width")
+    func caretFramesAreUniformWidth() {
+        // A frame that did not occupy exactly `width` cells would shove the
+        // rest of the field sideways on some ticks and not others — and a text
+        // field is the one control where that would be unmissable.
+        for shape in [TextCursorStyle.Shape.block, .bar, .underscore] {
+            for animation in [TextCursorStyle.Animation.blink, .pulse] {
+                let buffer = focusedField(
+                    TextField("Name", text: Binding.constant("Ada"))
+                        .textCursor(TextCursorStyle(shape: shape, animation: animation)))
+                for run in buffer.animatedCells {
+                    #expect(
+                        run.frames.allSatisfy { $0.strippedLength == run.width },
+                        "\(shape)/\(animation): \(run)")
+                }
+                expectReplayIsIdentity(buffer, "\(shape)/\(animation)")
+            }
+        }
+    }
+
+    @Test("A caret over a WIDE character covers it whole")
+    func caretOverWideCharacter() {
+        // The caret's cells and the character's cells have to agree, or the
+        // replay repaints one cell of a two-cell glyph and splits it.
+        //
+        // Driven through the renderer rather than a live field because a field
+        // opens with its caret at the END of the text; putting it over the
+        // emoji is the whole point of the test.
+        let renderer = TextFieldContentRenderer(
+            prompt: nil,
+            isDisabled: false,
+            displayCharacter: { index, text in text[text.index(text.startIndex, offsetBy: index)] },
+            contentForeground: nil)
+        let content = renderer.buildContent(
+            text: "😃ab",
+            cursorPosition: 0,
+            selectionRange: nil,
+            isFocused: true,
+            palette: SystemPalette(.green),
+            cursorStyle: TextCursorStyle(),
+            cursorTimer: nil,
+            contentWidth: 10)
+
+        #expect(content.caret?.width == 2, "got: \(String(describing: content.caret))")
+        // And every frame still fills exactly those two cells.
+        #expect(content.caret?.frames.allSatisfy { $0.strippedLength == 2 } ?? false)
+    }
+
+    @Test("A blink cycle really does blink")
+    func blinkCycleHasBothHalves() {
+        // The whole point of pre-rendering the cycle: it has to contain the
+        // caret-on AND caret-off pictures, or the field renders a frozen block.
+        let buffer = focusedField(
+            TextField("Name", text: Binding.constant("Ada"))
+                .textCursor(TextCursorStyle(shape: .block, animation: .blink)))
+        let distinct = Set(buffer.animatedCells.first?.frames ?? [])
+        #expect(distinct.count == 2, "a blink has exactly two pictures, got \(distinct.count)")
+    }
+
     @Test("A button keeps its runs through the tree a page wraps it in")
     func capsSurviveRealChrome() {
         // The producer and the propagation both have to hold for the page to
