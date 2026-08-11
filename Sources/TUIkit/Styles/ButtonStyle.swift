@@ -472,33 +472,20 @@ private struct _ButtonStyleBody: View, Renderable {
                 .ensuringContrast(atLeast: 3.0, against: buttonBg)
         }
 
-        // Caps match the background normally, pulsing to accent when focused.
-        let resolvedCapColor: Color
-        if isDisabled {
-            resolvedCapColor = buttonBg
-        } else if isFocused {
-            // The cap is a half-block GLYPH, not a fill behind text, so it has
-            // no readability ceiling: it breathes all the way to the full
-            // accent, which is also the widest ramp the terminal's palette can
-            // give it. It used to stop at 45% accent, which on a 256-colour
-            // terminal quantised to two or three indices, several of them
-            // off-hue greys. Through the shared clock, so it keeps step with
-            // list cursors and menu rows and honours `.selectionIndicatorStyle`.
-            resolvedCapColor = SelectionIndicator.resolve(isFocused: true, context: context)
-                .color(
-                    dim: buttonBg,
-                    bright: palette.accent)
-        } else {
-            resolvedCapColor = buttonBg
-        }
+        // Caps match the background normally, pulsing to accent when focused —
+        // as a whole cycle, so the run loop can breathe those two cells without
+        // re-rendering the screen. See ``ButtonCapCycle``.
+        let caps = ButtonCapCycle(
+            isFocused: isFocused && !isDisabled,
+            background: buttonBg, accent: palette.accent, context: context)
 
         let openCap = ANSIRenderer.colorize(
             String(TerminalSymbols.openCap),
-            foreground: resolvedCapColor
+            foreground: caps.colorNow
         )
         let closeCap = ANSIRenderer.colorize(
             String(TerminalSymbols.closeCap),
-            foreground: resolvedCapColor
+            foreground: caps.colorNow
         )
         let styledLabel = ANSIRenderer.colorize(
             paddedLabel,
@@ -507,7 +494,11 @@ private struct _ButtonStyleBody: View, Renderable {
             bold: isBold && !isDisabled
         )
 
-        return FrameBuffer(lines: [openCap + styledLabel + closeCap])
+        var buffer = FrameBuffer(lines: [openCap + styledLabel + closeCap])
+        if !context.isMeasuring {
+            buffer.animatedCells = caps.runs(width: 2 + paddedLabel.strippedLength)
+        }
+        return buffer
     }
 
     /// Renders a `@ViewBuilder` button label (``ButtonStyleConfiguration/labelView``)
@@ -551,36 +542,62 @@ private struct _ButtonStyleBody: View, Renderable {
 
         // Plain: focus-indicator prefix + the label, no caps or background.
         if appearance.isPlain {
-            let focusPrefix = BorderRenderer.focusIndicatorPrefix(
-                isFocused: isFocused && !isDisabled,
-                emphasis: SelectionIndicator.resolve(
-                    isFocused: isFocused && !isDisabled, context: context),
-                palette: palette)
+            let indicating = isFocused && !isDisabled
+            let cycle = context.environment.selectionEmphasis.cycle(indicating)
+            let prefixes = cycle.frames.map {
+                BorderRenderer.focusIndicatorPrefix(
+                    isFocused: indicating, emphasis: $0, palette: palette)
+            }
             let body = TUIkit.renderToBuffer(labelView.foregroundStyle(labelFg), context: context)
-            return FrameBuffer(lines: body.lines.map { focusPrefix + $0 })
+            var buffer = FrameBuffer(
+                lines: body.lines.map { prefixes[cycle.step % prefixes.count] + $0 })
+            guard !context.isMeasuring else { return buffer }
+            // The label's own runs ride the prefix's width to the right; the
+            // prefix repeats on every row of a multi-line label, so each row is
+            // its own run.
+            buffer.animatedCells = body.shiftedAnimatedCells(
+                byX: BorderRenderer.focusIndicatorWidth, y: 0)
+            if cycle.isAnimating {
+                buffer.animatedCells += body.lines.indices.map { row in
+                    AnimatedCellRun(
+                        offsetX: 0, offsetY: row,
+                        width: BorderRenderer.focusIndicatorWidth,
+                        frames: prefixes, clock: .cursor)
+                }
+            }
+            return buffer
         }
 
         // Standard: half-block caps around the background-tinted, padded label.
         // Full accent at the bright end — see the note on the compact
         // variant's cap above.
-        let capColor =
-            isFocused && !isDisabled
-            ? SelectionIndicator.resolve(isFocused: true, context: context)
-                .color(
-                    dim: buttonBg,
-                    bright: palette.accent)
-
-            : buttonBg
+        let caps = ButtonCapCycle(
+            isFocused: isFocused && !isDisabled,
+            background: buttonBg, accent: palette.accent, context: context)
 
         let composed = HStack(spacing: 0) {
-            Text(String(TerminalSymbols.openCap)).foregroundStyle(capColor)
+            Text(String(TerminalSymbols.openCap)).foregroundStyle(caps.colorNow)
             labelView
                 .foregroundStyle(labelFg)
                 .padding(.horizontal, appearance.horizontalPadding)
                 .background(buttonBg)
-            Text(String(TerminalSymbols.closeCap)).foregroundStyle(capColor)
+            Text(String(TerminalSymbols.closeCap)).foregroundStyle(caps.colorNow)
         }
-        return TUIkit.renderToBuffer(composed, context: context)
+        var buffer = TUIkit.renderToBuffer(composed, context: context)
+        guard !context.isMeasuring, caps.isAnimating else { return buffer }
+
+        // A run has to name the row it sits on, and these caps are single-line
+        // `Text`s that the HStack centres against whatever height the label
+        // turns out to be — so only a one-row button can hand them over. A
+        // taller label (rare, and never from the string path) keeps the old
+        // cost: say the frame consulted the clock, and the loop goes on
+        // rendering every tick exactly as it does today.
+        if buffer.lines.count == 1 {
+            buffer.animatedCells += caps.runs(width: buffer.lines[0].strippedLength)
+        } else {
+            context.environment.volatileReadTracker?.recordVolatileRead()
+        }
+        return buffer
     }
 
     /// Truncates a button label so it fits in `availableWidth` after
