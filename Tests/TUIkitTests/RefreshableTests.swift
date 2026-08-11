@@ -196,6 +196,70 @@ struct RefreshableTests {
         await settle()
     }
 
+    // MARK: - The indicator
+
+    /// Renders a refreshable mid-flight and returns its top row, stripped.
+    private func busyTopRow<V: View>(
+        _ view: V, harness: Harness, release: @escaping () -> Bool
+    ) async -> String {
+        _ = harness.frame(view)
+        harness.press(.character("r"), ctrl: true)
+        await settle()
+        let busy = harness.frame(view)
+        _ = release()
+        await settle()
+        return busy.lines.first?.stripped ?? ""
+    }
+
+    @Test("The indicator has a blank cell on each side")
+    func indicatorIsPadded() async {
+        let harness = Harness()
+        nonisolated(unsafe) var release = false
+        let view = Text("abcdefghij").refreshable { while !release { await Task.yield() } }
+
+        let row = await busyTopRow(view, harness: harness) {
+            release = true
+            return release
+        }
+        // "abcdefghij" with a three-cell badge over its middle (`.top` centres
+        // horizontally): blank, glyph, blank. Without the padding the glyph
+        // replaces one letter and reads as part of the word.
+        let cells = Array(row)
+        let at = cells.firstIndex { SpinnerStyle.dots.frames.contains(String($0)) }
+        #expect(at != nil, "no spinner glyph in \(row.debugDescription)")
+        guard let at else { return }
+        #expect(at > 0 && cells[at - 1] == " ", "row: \(row.debugDescription)")
+        #expect(at + 1 < cells.count && cells[at + 1] == " ", "row: \(row.debugDescription)")
+        // …and it is an OVERLAY: the content it does not cover is still there,
+        // and the row did not get wider.
+        #expect(cells.count == 10, "row: \(row.debugDescription)")
+        #expect(row.hasPrefix("abc"), "row: \(row.debugDescription)")
+        #expect(row.hasSuffix("ghij"), "row: \(row.debugDescription)")
+    }
+
+    @Test("refreshIndicator chooses the spinner")
+    func indicatorIsCustomisable() async {
+        let harness = Harness()
+        nonisolated(unsafe) var release = false
+        let view = Text("abcdefghij")
+            .refreshable { while !release { await Task.yield() } }
+            .refreshIndicator(style: .line)
+
+        let row = await busyTopRow(view, harness: harness) {
+            release = true
+            return release
+        }
+        let cells = Array(row).map(String.init)
+        #expect(
+            cells.contains { SpinnerStyle.line.frames.contains($0) },
+            "row: \(row.debugDescription)")
+        // The default's glyphs and `.line`'s share nothing, so this genuinely
+        // distinguishes them rather than passing on a coincidence.
+        #expect(
+            !cells.contains { SpinnerStyle.dots.frames.contains($0) },
+            "row: \(row.debugDescription)")
+    }
+
     @Test("A render-to-measure pass registers no handler of its own")
     func measurePassDoesNotDuplicate() async {
         // A view that cannot be measured analytically is RENDERED to measure

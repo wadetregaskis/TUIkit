@@ -170,10 +170,20 @@ extension RefreshableModifier: Renderable {
         // glyph fits over anything at all, and one cell of content is enough
         // to put it on.
         guard refreshing.value, buffer.width >= 1 else { return buffer }
+        let indicator = context.environment.refreshIndicator
         // Composed, not hand-composited: `.overlay` already lays a view over
         // another without disturbing what is underneath it.
+        //
+        // A blank cell either side, so the indicator reads as a badge sitting
+        // ON the content rather than as a glyph that has crashed into the word
+        // beside it — an overlay paints over what it covers, and a lone spinner
+        // butted up against text is hard to tell from part of the text.
         return TUIkitView.renderToBuffer(
-            content.overlay(alignment: .top) { Spinner() }, context: childContext)
+            content.overlay(alignment: .top) {
+                Spinner(style: indicator.style, color: indicator.color)
+                    .padding(.horizontal, 1)
+            },
+            context: childContext)
     }
 }
 

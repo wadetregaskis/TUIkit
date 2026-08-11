@@ -91,8 +91,15 @@ struct LifecyclePage: View {
                     }
                     .border(color: .brightBlack)
                     // Ctrl-R anywhere in this section reloads. The spinner
-                    // shows over the top row for as long as it takes.
+                    // shows over the top row for as long as it takes, with a
+                    // blank cell either side so it reads as a badge.
                     .refreshable { await reload() }
+                    // TUI-specific, and shown here because it has no SwiftUI
+                    // counterpart: which spinner the indicator uses is a
+                    // subtree setting. `.line` is pure ASCII, so it animates
+                    // even on a font with no Braille coverage — which is the
+                    // reason to want the choice. Omit it for `.dots`.
+                    .refreshIndicator(style: .line)
                 }
             }
 
