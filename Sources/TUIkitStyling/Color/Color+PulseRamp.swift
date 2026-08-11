@@ -46,12 +46,21 @@ extension Color {
         let wantsHue = dim.hasHue(depth: depth) || bright.hasHue(depth: depth)
 
         var ramp: [Color] = []
-        var lastRendered: Color?
+        var seen: [Color] = []
         for step in 0...max(1, samples) {
             let candidate = Color.lerp(dim, bright, phase: Double(step) / Double(max(1, samples)))
             let rendered = candidate.rendered(at: depth)
-            guard rendered != lastRendered else { continue }
-            lastRendered = rendered
+            // Skipped if this colour has been shown ALREADY, not merely if it
+            // repeats the previous step. A continuous lerp does not have to
+            // quantise monotonically: rounding two channels at different rates
+            // makes the chosen entry step forward, back, and forward again.
+            // Novel's accent does exactly that — #D7AF87, #D7875F, #AF875F,
+            // #D7875F, #AF875F — and comparing only against the last step let
+            // the bounce through, so the "breath" visibly wobbled instead of
+            // fading. Each distinct shade appears once, in the order first
+            // reached; `samples` is small (64) so the linear scan is nothing.
+            guard !seen.contains(rendered) else { continue }
+            seen.append(rendered)
             if wantsHue && rendered.isAchromatic { continue }
             ramp.append(candidate)
         }
