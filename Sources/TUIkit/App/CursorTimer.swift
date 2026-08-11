@@ -41,7 +41,8 @@ import Foundation
 final class CursorTimer {
     /// Base tick interval in milliseconds.
     /// We use a fast tick (50ms) and derive phases from elapsed time.
-    private let tickIntervalMs = 50
+    private static let tickIntervalMs = 50
+    private var tickIntervalMs: Int { Self.tickIntervalMs }
 
     /// Elapsed ticks since timer started.
     /// Readable so a cell-run replay indexes a cycle by the same tick the blink
@@ -89,11 +90,30 @@ extension CursorTimer {
     /// - Returns: `true` if cursor should be visible, `false` if hidden.
     func blinkVisible(for speed: TextCursorStyle.Speed) -> Bool {
         didReadThisFrame = true
+        return Self.blinkVisible(atTick: elapsedTicks, speed: speed)
+    }
+
+    /// The blink state at an arbitrary tick.
+    ///
+    /// Static, and the instance method above defers to it, so a producer that
+    /// pre-renders its whole cycle (see ``AnimatedCellRun``) computes exactly
+    /// what a live render would — one formula, not two that can drift apart.
+    /// Reading it does NOT mark the frame as having consulted the clock, which
+    /// is what lets such a producer be replayed rather than re-rendered.
+    static func blinkVisible(atTick tick: Int, speed: TextCursorStyle.Speed) -> Bool {
         let cycleMs = speed.blinkCycleMs
-        let elapsedMs = elapsedTicks * tickIntervalMs
-        let positionInCycle = elapsedMs % cycleMs
-        // Visible for first half of cycle
-        return positionInCycle < (cycleMs / 2)
+        // Visible for the first half of the cycle.
+        return (tick * tickIntervalMs) % cycleMs < (cycleMs / 2)
+    }
+
+    /// How many ticks a full cycle of `animation` takes at `speed` — the number
+    /// of frames a pre-rendered run needs.
+    static func cycleTicks(for speed: TextCursorStyle.Speed, animation: TextCursorStyle.Animation) -> Int {
+        switch animation {
+        case .none: return 1
+        case .blink: return max(1, speed.blinkCycleMs / tickIntervalMs)
+        case .pulse: return max(1, speed.pulseCycleMs / tickIntervalMs)
+        }
     }
 
     /// Returns the pulse phase (0-1) for smooth cursor animation.
@@ -106,11 +126,15 @@ extension CursorTimer {
     /// - Returns: Phase value between 0 and 1.
     func pulsePhase(for speed: TextCursorStyle.Speed) -> Double {
         didReadThisFrame = true
+        return Self.pulsePhase(atTick: elapsedTicks, speed: speed)
+    }
+
+    /// The pulse phase at an arbitrary tick. See ``blinkVisible(atTick:speed:)``
+    /// for why this is static and why reading it is not a volatile read.
+    static func pulsePhase(atTick tick: Int, speed: TextCursorStyle.Speed) -> Double {
         let cycleMs = speed.pulseCycleMs
-        let elapsedMs = elapsedTicks * tickIntervalMs
-        let positionInCycle = elapsedMs % cycleMs
-        let normalized = Double(positionInCycle) / Double(cycleMs)
-        // Sine wave: 0 → 1 → 0 over the cycle
+        let normalized = Double((tick * tickIntervalMs) % cycleMs) / Double(cycleMs)
+        // Sine wave: 0 → 1 → 0 over the cycle.
         return sin(normalized * .pi)
     }
 }

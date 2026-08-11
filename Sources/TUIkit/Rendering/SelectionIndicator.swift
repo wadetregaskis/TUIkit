@@ -192,6 +192,71 @@ public struct SelectionEmphasisClock {
     }
 }
 
+// MARK: - The whole cycle
+
+/// Every frame of the focus emphasis, plus where it is right now.
+///
+/// The counterpart to ``SelectionEmphasis``, which is one frame. A view that
+/// draws a focus indicator has two ways to animate it:
+///
+/// - Ask for the emphasis and colour with it. Simple, and it costs a full
+///   re-render of the screen on every tick of the clock.
+/// - Ask for the cycle, draw `frames[step]` now, and leave an
+///   ``AnimatedCellRun`` behind. The run loop then advances those cells alone,
+///   with no view involved at all.
+///
+/// Building the cycle does **not** consult the live clock (it computes each
+/// frame from `CursorTimer`'s static formula), which is exactly what makes the
+/// second route legal: nothing about this frame's appearance depends on *when*
+/// it was rendered, so it can be reproduced without rendering.
+public struct SelectionEmphasisCycle: Sendable {
+    /// One emphasis per tick of a full cycle.
+    public let frames: [SelectionEmphasis]
+
+    /// Where the clock is now — the index to draw immediately.
+    public let step: Int
+
+    /// Whether this actually animates. A `.none` style, or an unfocused
+    /// element, is a single frame: a still picture, not an animation.
+    public var isAnimating: Bool { frames.count > 1 }
+
+    /// The colour at each frame, for an element with these two endpoints.
+    @MainActor
+    public func colors(dim: Color, bright: Color) -> [Color] {
+        frames.map { $0.color(dim: dim, bright: bright) }
+    }
+}
+
+extension SelectionEmphasisClock {
+    /// Every frame of the cycle for an element that is (or isn't) focused.
+    ///
+    /// See ``SelectionEmphasisCycle``.
+    @MainActor
+    public func cycle(_ isFocused: Bool) -> SelectionEmphasisCycle {
+        let style = environment.selectionIndicatorStyle
+        guard isFocused, style.animation != .none else {
+            return SelectionEmphasisCycle(
+                frames: [
+                    SelectionEmphasis(
+                        isFocused: isFocused, animation: style.animation, phase: 1, blinkOn: true)
+                ],
+                step: 0)
+        }
+        let ticks = CursorTimer.cycleTicks(for: style.speed, animation: style.animation)
+        let frames = (0..<ticks).map { tick in
+            SelectionEmphasis(
+                isFocused: true,
+                animation: style.animation,
+                phase: CursorTimer.pulsePhase(atTick: tick, speed: style.speed),
+                blinkOn: CursorTimer.blinkVisible(atTick: tick, speed: style.speed))
+        }
+        // `elapsedTicks` is a plain read: unlike `pulsePhase(for:)` it does not
+        // mark the frame as having consulted the clock, so a producer that uses
+        // it stays replayable.
+        return SelectionEmphasisCycle(frames: frames, step: environment.cursorTimer?.elapsedTicks ?? 0)
+    }
+}
+
 extension EnvironmentValues {
     /// The shared focus-emphasis clock — the one place that decides how a
     /// focused element breathes, blinks, or simply sits bright.
