@@ -326,3 +326,61 @@ For the attribution pass see `Tools/Profiling/README.md`; `xctrace record
 --launch` works on `Stress` with no PTY, which matters in environments where
 debugger attach is denied. Traces are git-ignored and must stay that way —
 ~15 MB each.
+
+---
+
+## 9. Follow-up: the first two producers converted (2026-08-11)
+
+`AnimatedCellRun` (§6, §7) is now shipped *and* delivering on the pages whose
+only animating control is a button. Re-measured with `pagecost.py` against the
+same binary pair:
+
+| page | idle% before | idle% after |
+|---|---|---|
+| Buttons & Links | 5.8 | **0.5** |
+| Empty State | 2.2 | **0.5** |
+| Text Styles | 4.8 | 4.5 |
+
+Text Styles barely moves, and that is the migration rule reporting honestly:
+its focused control is not a button, so a reader still forces the frame.
+
+**The bug that hid in the mechanism.** The replay spliced each run's next frame
+into the lines it had patched *last* time, and stored the result back.
+Compositing replaces a cell's glyph but keeps the styling around it, so the
+colour code of the frame being replaced stayed behind as an empty run — one
+dead escape accumulated per run per tick, unbounded. Nothing looked wrong: the
+visible text and width never change, so the screen is correct and every
+pyte-style reconstruction agrees. Only the byte count showed it (2.7 KB/s →
+75 KB/s and climbing). Fixed in `450a0c4a` by always patching the last
+*render*'s lines. **Verify a converted producer with CPU *and* a byte/write
+count** — CPU alone reads a frozen indicator as a total win, and a correct
+screen hides an output leak.
+
+### Where the idle cost is now
+
+Full sweep, 150×50, after the two conversions. Pages that legitimately animate
+(Spinners, Progress & Gauges, the Image pages) are not waste; the rest is.
+
+| page | idle% | what animates |
+|---|---|---|
+| Forms | 41.3 | **text cursor** — 2 writes/s against 20 renders/s |
+| Scroll View | 26.9 | scrollbar focus pulse |
+| Picker | 23.9 | scrollbar / menu indicator |
+| Progress & Gauges | 19.0 | indeterminate bars (legitimate) |
+| Lists | 17.9 | scrollbar + list cursor |
+| Theme | 16.4 | — to be identified |
+| Image (File) | 13.0 | — to be identified |
+| Tab Views | 11.4 | — to be identified |
+| Mouse | 10.0 | — to be identified |
+| Overlays & Modals | 8.5 | — to be identified |
+
+Forms is the single biggest remaining item and the clearest: it emits **2 writes
+per second** while burning 41% of a core. Every one of those ~20 renders/s is
+discarded by the diff as byte-identical. The text cursor is the last producer
+listed in §7 and now plainly the most valuable — it is one cell with two
+frames, and it is what every focused text field on every page is paying for.
+
+Remaining producers, by the pages they would quiet: scrollbar +
+`scrollIndicatorEmphasis` (Scroll View, Lists, Tables, Picker), Toggle (Forms,
+Toggles), List/Table row cursors (Lists, Tables), then RadioButton, Slider, the
+grids and the menu renderers.
