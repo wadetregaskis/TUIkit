@@ -112,6 +112,91 @@ struct RefreshableTests {
         #expect(started == 2)
     }
 
+    /// Coalescing must not depend on HOW the refresh was asked for. The
+    /// in-flight guard used to live in the Ctrl-R handler, so a "Reload" button
+    /// reaching the same action through `\.refresh` stacked a second run on the
+    /// first — same refresh, different answer depending on the route.
+    @Test("The environment action coalesces exactly as Ctrl-R does")
+    func environmentRouteCoalesces() async {
+        let harness = Harness()
+        nonisolated(unsafe) var runs = 0
+        nonisolated(unsafe) var release = false
+        let action = RefreshAction {
+            runs += 1
+            while !release { await Task.yield() }
+        }
+
+        // Two calls through the environment, the second while the first is in
+        // flight — the shape a second click on "Refresh Now" makes.
+        let first = Task { @MainActor in await action() }
+        await settle()
+        #expect(runs == 1)
+        // Spawned rather than awaited: if coalescing breaks, this call runs the
+        // action body and blocks on `release`, so awaiting it here would HANG a
+        // regression instead of failing it.
+        let second = Task { @MainActor in await action() }
+        await settle()
+        #expect(runs == 1, "a second request while running started another")
+        #expect(action.isRunning)
+
+        release = true
+        await first.value
+        await second.value
+        await settle()
+        #expect(!action.isRunning)
+
+        // …and once it has finished, it can run again.
+        release = false
+        let third = Task { @MainActor in await action() }
+        await settle()
+        #expect(runs == 2)
+        release = true
+        await third.value
+        _ = harness
+    }
+
+    /// Both routes share one flag, so MIXING them coalesces too — which is the
+    /// case the Example hits: Ctrl-R, then a click on "Refresh Now".
+    @Test("The environment route does not stack onto a Ctrl-R refresh")
+    func mixedRoutesCoalesce() async {
+        struct Reader: View {
+            @Environment(\.refresh) private var refresh
+            let report: (RefreshAction?) -> Void
+            var body: some View {
+                report(refresh)
+                return Text("inner")
+            }
+        }
+
+        let harness = Harness()
+        nonisolated(unsafe) var runs = 0
+        nonisolated(unsafe) var release = false
+        nonisolated(unsafe) var seen: RefreshAction?
+        let view = Reader(report: { seen = $0 }).refreshable {
+            runs += 1
+            while !release { await Task.yield() }
+        }
+
+        _ = harness.frame(view)
+        harness.press(.character("r"), ctrl: true)
+        await settle()
+        #expect(runs == 1)
+
+        guard let action = seen else {
+            Issue.record("the subtree saw no refresh action")
+            return
+        }
+        // Spawned, not awaited: a broken guard would block here forever, and a
+        // hang is a much worse regression signal than a failed expectation.
+        let viaEnvironment = Task { @MainActor in await action() }
+        await settle()
+        #expect(runs == 1, "the environment route stacked onto a running refresh")
+
+        release = true
+        await viaEnvironment.value
+        await settle()
+    }
+
     @Test("The action reaches the subtree through the environment")
     func publishedToDescendants() async {
         // The point of `\.refresh`: a Reload button nested anywhere inside can

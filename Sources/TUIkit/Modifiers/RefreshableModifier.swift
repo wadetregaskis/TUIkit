@@ -4,6 +4,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import TUIkitCore
 import TUIkitStyling
 import TUIkitView
@@ -33,19 +34,66 @@ public struct RefreshAction: Equatable, Sendable {
     /// what SwiftUI's `Equatable` conformance actually means here.
     private let box: ActionBox
 
-    /// Reference identity for the action, and its storage.
+    /// Reference identity for the action, its storage, and whether it is in
+    /// flight.
+    ///
+    /// The in-flight flag lives HERE, not in the modifier, because coalescing
+    /// has to hold for every way of asking. It used to be a `@State` box that
+    /// only the <kbd>Ctrl</kbd>-<kbd>R</kbd> handler consulted, so a "Reload"
+    /// button reaching the same refresh through ``EnvironmentValues/refresh``
+    /// stacked a second run on the first — same action, same refresh, different
+    /// answer depending on how you triggered it.
     private final class ActionBox: @unchecked Sendable {
         let action: @Sendable () async -> Void
+        private let lock = NSLock()
+        private var running = false
+
         init(_ action: @escaping @Sendable () async -> Void) { self.action = action }
+
+        /// Claims the right to run, or reports that someone else already has.
+        func beginIfIdle() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if running { return false }
+            running = true
+            return true
+        }
+
+        func finish() {
+            lock.lock()
+            running = false
+            lock.unlock()
+        }
+
+        var isRunning: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return running
+        }
     }
 
     init(_ action: @escaping @Sendable () async -> Void) {
         self.box = ActionBox(action)
     }
 
+    /// Whether this refresh is currently running.
+    ///
+    /// What the in-flight indicator draws from, and what makes a second request
+    /// a no-op rather than a second run.
+    public var isRunning: Bool { box.isRunning }
+
     /// Runs the refresh action and waits for it to finish.
+    ///
+    /// A call made while one is already in flight returns immediately without
+    /// running the action again — SwiftUI likewise will not start a refresh
+    /// over a running one, and it must not matter whether the request came from
+    /// the key binding or from a button reaching this through the environment.
     public func callAsFunction() async {
+        guard box.beginIfIdle() else { return }
+        await MainActor.run { AppState.shared.setNeedsRender() }
         await box.action()
+        box.finish()
+        await MainActor.run { AppState.shared.setNeedsRender() }
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
@@ -118,11 +166,6 @@ public struct RefreshableModifier<Content: View>: View {
     public var body: some View { content }
 }
 
-/// Where this view's state lives, by name rather than by bare integer.
-private enum StateIndex {
-    static let isRefreshing = 0
-}
-
 extension RefreshableModifier: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let childContext = context.withEnvironment(
@@ -131,14 +174,9 @@ extension RefreshableModifier: Renderable {
         // A measure pass must not register anything: a render-to-measure
         // ancestor would bind a SECOND Ctrl-R handler within the frame, and
         // one keypress would start two refreshes.
-        guard !context.isMeasuring, let stateStorage = context.environment.stateStorage else {
+        guard !context.isMeasuring else {
             return TUIkitView.renderToBuffer(content, context: childContext)
         }
-        stateStorage.markActive(context.identity)
-        let refreshing: StateBox<Bool> = stateStorage.storage(
-            for: StateStorage.StateKey(
-                identity: context.identity, propertyIndex: StateIndex.isRefreshing),
-            default: false)
 
         // Declared to any value-memoizing ancestor: the dispatcher clears its
         // handlers every frame, so a cached subtree would stop re-registering
@@ -150,16 +188,11 @@ extension RefreshableModifier: Renderable {
             guard event.ctrl, case .character(let character) = event.key,
                 character.lowercased() == "r"
             else { return false }
-            // Already running: consume the key rather than stacking a second
-            // refresh on the first.
-            guard !refreshing.value else { return true }
-            refreshing.value = true
-            AppState.shared.setNeedsRender()
-            Task { @MainActor in
-                await action()
-                refreshing.value = false
-                AppState.shared.setNeedsRender()
-            }
+            // The key is consumed either way. Whether it STARTS anything is
+            // the action's business — it coalesces a request made while one is
+            // in flight, so this route and a button reaching the same refresh
+            // through the environment behave identically.
+            Task { @MainActor in await action() }
             return true
         }
 
@@ -169,7 +202,7 @@ extension RefreshableModifier: Renderable {
         // refresh started — the reflow this is trying to avoid. One animated
         // glyph fits over anything at all, and one cell of content is enough
         // to put it on.
-        guard refreshing.value, buffer.width >= 1 else { return buffer }
+        guard action.isRunning, buffer.width >= 1 else { return buffer }
         let indicator = context.environment.refreshIndicator
         // Composed, not hand-composited: `.overlay` already lays a view over
         // another without disturbing what is underneath it.
