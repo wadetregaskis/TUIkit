@@ -318,16 +318,16 @@ extension String {
     /// decorations (bold/underline) onto the suffix. See `FrameBuffer.insertOverlay`.
     public func ansiStateBefore(visibleColumn column: Int) -> String {
         var visible = 0
-        var state = ""
+        var state = SGRState()
         for segment in ansiSegments() {
             switch segment {
             case .ansi(let sequence, let isSGR):
-                if isSGR && visible < column { state += sequence }
+                if isSGR && visible < column { state.apply(sequence) }
             case .visible(let character):
                 visible += character.terminalWidth
             }
         }
-        return state
+        return state.rendered
     }
 
     /// Everything ``FrameBuffer``'s overlay insertion needs about a line, from
@@ -349,9 +349,11 @@ extension String {
     ///   `prefixColumns`, and takes no further ANSI after that point;
     /// - the suffix keeps everything — ANSI included — from the first character
     ///   at or beyond `suffixDropColumns`, and nothing before it;
-    /// - `styleBeforeSuffix` concatenates rather than interprets: the terminal
-    ///   nets an open/reset pair to nothing, so replaying every SGR before the
-    ///   column reproduces the state there without an SGR state machine here.
+    /// - `styleBeforeSuffix` is the NETTED state at that column, not the
+    ///   escapes concatenated. Concatenating is also correct — a terminal nets
+    ///   an open/reset pair itself — but the answer is written back INTO the
+    ///   line, so the next child's replay would contain this one's and the row
+    ///   would double per child. See ``SGRState``.
     ///
     /// - Parameters:
     ///   - prefixColumns: Visible columns to keep at the front.
@@ -367,7 +369,7 @@ extension String {
         var prefixOpen = prefixColumns > 0
         var suffix = ""
         var suffixWidth = 0
-        var style = ""
+        var style = SGRState()
         var total = 0
 
         let scalars = unicodeScalars
@@ -429,11 +431,11 @@ extension String {
             if total >= suffixDropColumns {
                 suffix += text
             } else if isSGR {
-                style += text
+                style.apply(text)
             }
         }
         flushVisible()
 
-        return (prefix, prefixWidth, suffix, suffixWidth, style, total)
+        return (prefix, prefixWidth, suffix, suffixWidth, style.rendered, total)
     }
 }
