@@ -188,6 +188,17 @@ private struct ReplayableFrame {
     var terminalWidth: Int
     var startRow: Int
     var backgroundCode: String
+
+    /// The step each clock was last *written* at, so a tick that lands on the
+    /// same picture can be skipped.
+    ///
+    /// The comparison has to be frame-to-frame, not line-to-line: compositing
+    /// leaves the replaced run's colour code behind as an empty escape, so a
+    /// patched line always differs in bytes from the line it was patched from,
+    /// even when it looks identical. Diffing the lines therefore reports a
+    /// change on every tick — a blinking caret would emit twenty times a second
+    /// to change picture twice.
+    var lastSteps: [AnimationClock: Int] = [:]
 }
 
 @MainActor
@@ -968,6 +979,17 @@ extension RenderLoop {
         let due = frame.runs.filter { steps[$0.clock] != nil }
         guard !due.isEmpty else { return false }
 
+        // Skip a tick that lands on the picture already showing. A blink spends
+        // most of its cycle on the same two frames, and a quantised pulse
+        // repeats shades, so most ticks change nothing. See `lastSteps`.
+        let unchanged = due.allSatisfy { run in
+            guard let last = frame.lastSteps[run.clock], let step = steps[run.clock] else {
+                return false  // nothing written since the render: assume it moved
+            }
+            return run.frame(at: last) == run.frame(at: step)
+        }
+        guard !unchanged else { return true }
+
         // Always patched from the frame the last RENDER produced — never from
         // the last patch. Compositing replaces a cell's glyph but keeps the
         // styling around it, so the colour code of the frame being replaced
@@ -1012,6 +1034,7 @@ extension RenderLoop {
         // `replayable.contentLines` deliberately keeps the RENDER's lines, not
         // these. The diff writer already tracks what is on screen; this is the
         // clean base every future tick patches from. See the note above.
+        for (clock, step) in steps { replayable?.lastSteps[clock] = step }
         return true
     }
 
