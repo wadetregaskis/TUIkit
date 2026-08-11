@@ -363,7 +363,7 @@ Full sweep, 150×50, after the two conversions. Pages that legitimately animate
 
 | page | idle% | what animates |
 |---|---|---|
-| Forms | 41.3 | **text cursor** — 2 writes/s against 20 renders/s |
+| Forms | 41.3 → **16.0** | text cursor (converted); something else still reads a clock |
 | Scroll View | 26.9 | scrollbar focus pulse |
 | Picker | 23.9 | scrollbar / menu indicator |
 | Progress & Gauges | 19.0 | indeterminate bars (legitimate) |
@@ -374,11 +374,15 @@ Full sweep, 150×50, after the two conversions. Pages that legitimately animate
 | Mouse | 10.0 | — to be identified |
 | Overlays & Modals | 8.5 | — to be identified |
 
-Forms is the single biggest remaining item and the clearest: it emits **2 writes
-per second** while burning 41% of a core. Every one of those ~20 renders/s is
-discarded by the diff as byte-identical. The text cursor is the last producer
-listed in §7 and now plainly the most valuable — it is one cell with two
-frames, and it is what every focused text field on every page is paying for.
+Forms was the single biggest remaining item and the clearest: it emitted **2
+writes per second** while burning 41% of a core, every one of those ~20
+renders/s discarded by the diff as byte-identical. That was the text cursor —
+one cell, two frames — and converting it (`6b22ddfd`) took the page to **16.0%**.
+The remaining 16% is a different reader on that page, not the caret.
+
+`TextEditor` is deliberately left on the old path: its caret has multi-line
+geometry. It costs exactly what it cost before, which is the migration rule
+working.
 
 Remaining producers, by the pages they would quiet: scrollbar +
 `scrollIndicatorEmphasis` (Scroll View, Lists, Tables, Picker), Toggle (Forms,
