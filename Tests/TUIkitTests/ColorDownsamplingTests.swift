@@ -292,6 +292,36 @@ struct HuePreservingQuantisationTests {
         }
     }
 
+    /// A fade runs out of in-family cube entries long before it runs out of
+    /// darkness — the 6×6×6 cube's lowest non-zero channel is 0x5F, so olive
+    /// has nothing tinted below OKLab L 0.47. The greyscale ramp used to take
+    /// over there, so a fading red went red, red, red, GREY, grey, black: a
+    /// colour turning neutral partway down, which reads as a glitch. Holding
+    /// the darkest in-family entry and then dropping to black gives fewer
+    /// steps, all of them the right colour.
+    @Test("A fading colour never passes through grey on its way to black")
+    func fadeHoldsItsHueThenGoesBlack() {
+        for (name, base) in [
+            ("error", Color.rgb(220, 50, 47)),
+            ("accent", Color.rgb(38, 139, 210)),
+            ("success", Color.rgb(133, 153, 0)),
+        ] {
+            var sawBlack = false
+            for step in stride(from: 16, through: 0, by: -1) {
+                let quantised = base.opacity(Double(step) / 16).downsampledToPalette256()
+                guard let (red, green, blue) = quantised.rgbComponents else { continue }
+                let isBlack = red == 0 && green == 0 && blue == 0
+                if isBlack { sawBlack = true }
+                #expect(
+                    isBlack || !quantised.isAchromatic,
+                    "\(name) at \(step)/16 went grey: (\(red),\(green),\(blue))")
+            }
+            // …and the fade does reach the bottom rather than stalling on a
+            // colour it can never leave.
+            #expect(sawBlack, "\(name) never reached black")
+        }
+    }
+
     @Test("Greys still take the grayscale ramp")
     func greysUnaffected() {
         let quantised = Color.rgb(146, 146, 146).downsampledToPalette256()

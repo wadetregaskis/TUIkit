@@ -75,10 +75,14 @@ extension Color {
         if let cached { return cached }
 
         let target = oklab(red: red, green: green, blue: blue)
+        // A colour that HAS a hue may only quantise to something that has one
+        // too — or to black. See `keepsItsHue`.
+        let mustKeepHue = (target.a * target.a + target.b * target.b).squareRoot() >= Self.hueFloor
         var bestIndex = 16
         var bestDistance = Double.infinity
         // Deliberate linear scan: n=240, memoised below, and OKLab distance has no ordering to exploit — don't "optimise".
         for index in 16...255 {
+            if mustKeepHue && !Self.keepsItsHue[index - 16] { continue }
             let candidate = palette256Lab[index - 16]
             let distance = hueWeightedDistanceSquared(target, candidate)
             if distance < bestDistance {
@@ -102,6 +106,36 @@ extension Color {
 
     private static let quantiseCacheLock = NSLock()
     nonisolated(unsafe) private static var quantiseCache: [UInt32: UInt8] = [:]
+
+    /// How much OKLab chroma a colour needs before it counts as HAVING a hue,
+    /// and so before it is held to keeping one.
+    ///
+    /// Well above floating-point noise and well below any deliberate tint: the
+    /// palest shipped palette tone (Novel's #DFDBC3) sits at ~0.02.
+    private static let hueFloor = 0.01
+
+    /// Whether each palette entry (16…255) is one a chromatic colour may
+    /// quantise to: it has a hue of its own, or it is black.
+    ///
+    /// The 6×6×6 cube's lowest non-zero channel is 0x5F, so a dimmed colour
+    /// runs out of in-family entries well before it runs out of darkness —
+    /// olive has nothing tinted below OKLab L 0.47. What used to happen there
+    /// is that the greyscale ramp, which matches on lightness and nothing else,
+    /// took over: a fading red stepped red, red, red, GREY, grey, black. The
+    /// grey stretch reads as a glitch, because a colour has no business
+    /// becoming a neutral partway down.
+    ///
+    /// Excluding greys makes the fade hold its darkest in-family entry instead
+    /// — a block of one colour — and then drop to black, which is where the
+    /// fade was going anyway. Fewer distinct steps, but every one of them the
+    /// right colour, which is the trade the terminal's palette actually offers.
+    /// Black stays available precisely so the end of the fade is reachable.
+    private static let keepsItsHue: [Bool] = (16...255).map { index in
+        let rgb = palette256ToRGB(UInt8(index))
+        if rgb.red == 0 && rgb.green == 0 && rgb.blue == 0 { return true }  // black
+        let lab = oklab(red: rgb.red, green: rgb.green, blue: rgb.blue)
+        return (lab.a * lab.a + lab.b * lab.b).squareRoot() >= hueFloor
+    }
 
     /// Converts sRGB bytes to OKLab.
     private static func oklab(red: UInt8, green: UInt8, blue: UInt8) -> (l: Double, a: Double, b: Double) {

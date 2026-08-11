@@ -31,12 +31,19 @@ extension Color {
     ///   - dim: The recessive endpoint.
     ///   - bright: The visible endpoint.
     ///   - depth: The terminal's colour depth.
-    ///   - samples: How finely to look for distinct steps. The default is well
-    ///     past the point of diminishing returns for any 256-colour ramp.
+    ///   - samples: How finely to look for distinct steps. The default exceeds
+    ///     the 240-entry palette, so every entry the segment passes through is
+    ///     found. It used to be 64, which is enough for a typical span and not
+    ///     for a wide one: sampling a LONGER segment at the same count steps
+    ///     further each time and can miss a band a shorter segment catches —
+    ///     Silver Aerogel's near-neutral accent lost `#8787AF` that way, so a
+    ///     full-span ramp came out with FEWER shades than a bounded one drawn
+    ///     from inside it. Quantisation is memoised, so the extra samples cost
+    ///     dictionary hits, not conversions.
     /// - Returns: The distinct rendered colours from `dim` to `bright`, always
     ///   at least `[bright]`.
     public static func pulseRamp(
-        from dim: Color, to bright: Color, depth: ColorDepth, samples: Int = 64
+        from dim: Color, to bright: Color, depth: ColorDepth, samples: Int = 256
     ) -> [Color] {
         guard depth < .truecolor else { return [dim, bright] }
 
