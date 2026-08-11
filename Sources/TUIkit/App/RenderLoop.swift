@@ -137,6 +137,25 @@ struct RenderActivity {
     let usesPulse: Bool
     /// A view read the cursor clock this frame (a text field is focused).
     let usesCursor: Bool
+
+    /// Clocks the frame left ``AnimatedCellRun``s for.
+    ///
+    /// A clock listed here can be advanced by replaying those runs against the
+    /// frame already on screen. A clock in `usesPulse` / `usesCursor` cannot:
+    /// some view built its appearance from the phase *while rendering*, so the
+    /// only way to advance it is to render again. The two are not exclusive —
+    /// a page mid-migration has both — and when they disagree the reader wins,
+    /// because a frozen indicator is worse than a wasted frame.
+    let animatedClocks: Set<AnimationClock>
+
+    /// Whether `clock` can be advanced without walking the view tree.
+    func canReplay(_ clock: AnimationClock) -> Bool {
+        guard animatedClocks.contains(clock) else { return false }
+        switch clock {
+        case .pulse: return !usesPulse
+        case .cursor: return !usesCursor
+        }
+    }
 }
 
 /// The height of the content area: whatever the terminal has left after the
@@ -160,8 +179,27 @@ internal func contentAreaHeight(
     max(0, terminalHeight - statusBarHeight - headerHeight)
 }
 
+/// The last frame written, kept so an animation tick can be served by patching
+/// it instead of by rendering again. See ``AnimatedCellRun``.
+@MainActor
+private struct ReplayableFrame {
+    var contentLines: [String]
+    var runs: [AnimatedCellRun]
+    var terminalWidth: Int
+    var startRow: Int
+    var backgroundCode: String
+}
+
 @MainActor
 internal final class RenderLoop<A: App> {
+    /// The last frame written, for ``replayAnimations(steps:)``.
+    private var replayable: ReplayableFrame?
+
+    /// What the last render reported, so the run loop can decide whether an
+    /// animation tick can be replayed without rendering again.
+    private(set) var lastActivity = RenderActivity(
+        usesPulse: false, usesCursor: false, animatedClocks: [])
+
     /// The user's app instance (provides `body`).
     let app: A
 
@@ -506,7 +544,7 @@ extension RenderLoop {
 
         endRenderPass()
 
-        return RenderActivity(
+        return recordActivity(
             usesPulse: (environment.volatileReadTracker?.reads ?? 0) > 0,
             usesCursor: cursorTimer?.didReadThisFrame ?? false)
     }
@@ -878,6 +916,17 @@ extension RenderLoop {
             reset: reset
         )
 
+        // Keep what an animation tick would need to patch: the lines actually on
+        // screen, the runs composited into absolute positions, and the geometry
+        // the diff was written with. Only runs that ANIMATE are kept — a
+        // one-frame run is a still picture the render above already drew.
+        replayable = ReplayableFrame(
+            contentLines: outputLines,
+            runs: buffer.animatedCells.filter(\.isAnimating),
+            terminalWidth: terminalWidth,
+            startRow: 1 + headerHeight,
+            backgroundCode: backgroundCodes.content)
+
         if let statusBarBuffer {
             writeStatusBarBuffer(
                 statusBarBuffer,
@@ -889,6 +938,71 @@ extension RenderLoop {
         }
 
         terminal.endFrame()
+    }
+
+    /// Stores and returns what this frame reported, so the run loop can decide
+    /// whether the next animation tick needs a render at all.
+    private func recordActivity(usesPulse: Bool, usesCursor: Bool) -> RenderActivity {
+        lastActivity = RenderActivity(
+            usesPulse: usesPulse,
+            usesCursor: usesCursor,
+            animatedClocks: Set((replayable?.runs ?? []).lazy.map(\.clock)))
+        return lastActivity
+    }
+
+    /// Advances the animated cells of the frame already on screen, without
+    /// rendering anything.
+    ///
+    /// The saving is the whole view walk: no measure, no layout, no render, no
+    /// state or lifecycle bookkeeping. Each run's next frame is spliced into the
+    /// line it sits on, and the result goes through the ordinary content diff —
+    /// which, seeing only those cells differ, emits only those cells.
+    ///
+    /// - Parameter steps: The current step of each clock being advanced.
+    /// - Returns: `true` if the tick was served. `false` means the caller must
+    ///   render: there is no frame to patch yet, or nothing on screen animates
+    ///   on those clocks.
+    @discardableResult
+    func replayAnimations(steps: [AnimationClock: Int]) -> Bool {
+        guard let frame = replayable, !frame.runs.isEmpty else { return false }
+        let due = frame.runs.filter { steps[$0.clock] != nil }
+        guard !due.isEmpty else { return false }
+
+        var lines = frame.contentLines
+        var touched = false
+        for run in due {
+            guard let step = steps[run.clock] else { continue }
+            let row = run.offsetY
+            guard lines.indices.contains(row) else { continue }
+            // Spliced through the ordinary compositor rather than by hand: it
+            // already knows how to drop a styled run into a styled line at a
+            // visible column and restore the surrounding state afterwards, and
+            // getting that wrong is how a background stops halfway across a row.
+            let patched = FrameBuffer(lines: [lines[row]])
+                .composited(with: FrameBuffer(lines: [run.frame(at: step)]),
+                            at: (x: run.offsetX, y: 0))
+            if let line = patched.lines.first, line != lines[row] {
+                lines[row] = line
+                touched = true
+            }
+        }
+        // Every run landed on the frame it was already showing. Emitting would
+        // be a no-op the diff would discard anyway, so skip the write and keep
+        // the cached frame as it was.
+        guard touched else { return true }
+
+        terminal.beginFrame()
+        diffWriter.writeContentDiff(
+            newLines: lines,
+            terminal: terminal,
+            startRow: frame.startRow,
+            terminalWidth: frame.terminalWidth,
+            bgCode: frame.backgroundCode,
+            reset: ANSIRenderer.reset
+        )
+        terminal.endFrame()
+        replayable?.contentLines = lines
+        return true
     }
 
     /// Ends lifecycle, state, and cache tracking for this render pass.

@@ -322,12 +322,12 @@ extension AppRunner {
                 pulseTimer: pulseTimer,
                 cursorTimer: cursorTimer)
 
-            // Fold a state-change request (incl. input handled above) into the
-            // pending-render flag.
-            if appState.needsRender {
-                appState.didRender()
-                pendingRender = true
-            }
+            // Fold a state change, and any animation tick the cheap path could
+            // not serve, into the pending-render flag.
+            pendingRender =
+                foldPendingWork(
+                    alreadyPending: pendingRender, renderer: renderer,
+                    pulseTimer: pulseTimer, cursorTimer: cursorTimer)
 
             // One monotonic reading drives every decision this iteration — the
             // animation-fired test, the render-now test, and the wait length all
@@ -397,6 +397,52 @@ extension AppRunner {
     /// exact integer arithmetic, not a clock that drifted between the two. Also
     /// republishes the demand-driven pulse/cursor clocks (kept ticking only while
     /// a frame consumed them) and the mouse-tracking mode.
+    /// Folds this iteration's reasons to render into one flag.
+    ///
+    /// A state change always needs a frame. An animation tick usually does not:
+    /// it is served by advancing the animated cells of the frame already on
+    /// screen. Replay is skipped when a render is due anyway — one is strictly
+    /// better, and replaying first would paint the old frame's cells over
+    /// content about to change.
+    fileprivate func foldPendingWork(
+        alreadyPending: Bool, renderer: RenderLoop<A>,
+        pulseTimer: PulseTimer, cursorTimer: CursorTimer
+    ) -> Bool {
+        var pending = alreadyPending
+        if appState.needsRender {
+            appState.didRender()
+            pending = true
+        }
+        if pending {
+            // A full frame supersedes any tick, so drop them rather than let
+            // them queue up and fire against the frame after next.
+            _ = appState.consumePendingAnimationClocks()
+            return true
+        }
+        return !serveAnimationTicks(
+            renderer: renderer, pulseTimer: pulseTimer, cursorTimer: cursorTimer)
+    }
+
+    /// Advances any clocks that ticked, without rendering, when every one of
+    /// them can be served from the frame already on screen.
+    ///
+    /// - Returns: `false` if a full render is needed instead — either some view
+    ///   still builds its appearance from a phase as it renders, or there is no
+    ///   frame to patch yet. That is the behaviour this replaces, so falling
+    ///   back is always safe.
+    fileprivate func serveAnimationTicks(
+        renderer: RenderLoop<A>, pulseTimer: PulseTimer, cursorTimer: CursorTimer
+    ) -> Bool {
+        let ticked = appState.consumePendingAnimationClocks()
+        guard !ticked.isEmpty else { return true }  // nothing ticked; nothing owed
+        var steps: [AnimationClock: Int] = [:]
+        for clock in ticked where renderer.lastActivity.canReplay(clock) {
+            steps[clock] = clock == .pulse ? pulseTimer.currentStep : cursorTimer.elapsedTicks
+        }
+        guard steps.count == ticked.count else { return false }
+        return renderer.replayAnimations(steps: steps)
+    }
+
     fileprivate func renderFrame(
         renderer: RenderLoop<A>,
         pulseTimer: PulseTimer,
@@ -413,8 +459,13 @@ extension AppRunner {
         scheduler.endFrame()
         // Demand-driven animation clocks: keep each ticking only while a frame
         // actually consumed it, so a static screen drives no further frames.
-        if activity.usesPulse { pulseTimer.start() } else { pulseTimer.stop() }
-        if activity.usesCursor { cursorTimer.start() } else { cursorTimer.stop() }
+        // A clock keeps running while EITHER a view reads it as it renders or
+        // the frame left runs on it — the second is the cheap path, and stopping
+        // the clock because nobody read the phase would freeze it.
+        let pulseLive = activity.usesPulse || activity.animatedClocks.contains(.pulse)
+        let cursorLive = activity.usesCursor || activity.animatedClocks.contains(.cursor)
+        if pulseLive { pulseTimer.start() } else { pulseTimer.stop() }
+        if cursorLive { cursorTimer.start() } else { cursorTimer.stop() }
         let deadline = scheduler.nextFiring(after: frameNow).map { UInt64(bitPattern: $0) }
         // Re-evaluate the mouse-tracking mode (modifiers may elevate it this
         // frame); only re-emitted when it actually changes.

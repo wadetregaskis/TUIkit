@@ -29,6 +29,7 @@ public final class AppState: Sendable {
     /// Internal state protected by a lock.
     private struct StateData: Sendable {
         var needsRender = false
+        var pendingAnimationClocks: Set<AnimationClock> = []
         var needsCacheClear = false
         var shouldExit = false
         var observers: [@Sendable () -> Void] = []
@@ -60,6 +61,38 @@ extension AppState {
         // Call observers outside the lock to avoid potential deadlocks
         for observer in observers {
             observer()
+        }
+    }
+
+    /// Records that an animation clock ticked, WITHOUT asking for a render.
+    ///
+    /// The distinction is the whole point. A state change means the view tree
+    /// now describes something different, so it has to be walked again. A clock
+    /// tick means only that time passed: the tree describes exactly what it did
+    /// a moment ago, and the sole difference on screen is the next frame of
+    /// whatever cells declared themselves animated. Conflating the two is what
+    /// made a blinking cursor cost a full measure-layout-render pass 20 times a
+    /// second — see ``AnimatedCellRun``.
+    ///
+    /// The run loop tries to serve these by replaying the animated cells of the
+    /// frame already on screen. If it cannot — because some view still animates
+    /// the old way, by reading the phase during its own render — it falls back
+    /// to a full render, which is exactly the behaviour this replaces.
+    public func setNeedsAnimationTick(_ clock: AnimationClock) {
+        let observers = lock.withLock { state -> [@Sendable () -> Void] in
+            state.pendingAnimationClocks.insert(clock)
+            return state.observers
+        }
+        for observer in observers {
+            observer()
+        }
+    }
+
+    /// Takes the clocks that have ticked since the last call, clearing them.
+    public func consumePendingAnimationClocks() -> Set<AnimationClock> {
+        lock.withLock { state in
+            defer { state.pendingAnimationClocks = [] }
+            return state.pendingAnimationClocks
         }
     }
 

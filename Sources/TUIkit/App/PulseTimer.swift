@@ -46,7 +46,11 @@ final class PulseTimer {
     private let stepIntervalMs = 100
 
     /// The current step in the full cycle (0 ..< totalHalfSteps * 2).
-    private var currentStep = 0
+    ///
+    /// Readable so a cell-run replay can index a cycle by the same step the
+    /// phase is computed from — the two must agree or a pulse drawn by a run
+    /// would drift against one drawn the old way, mid-migration.
+    private(set) var currentStep = 0
 
     /// The running animation task, or `nil` if stopped.
     private var task: Task<Void, Never>?
@@ -99,7 +103,7 @@ extension PulseTimer {
                 }
                 guard let self else { return }
                 self.currentStep = (self.currentStep + 1) % (self.totalHalfSteps * 2)
-                self.renderNotifier?.setNeedsRender()
+                self.renderNotifier?.setNeedsAnimationTick(.pulse)
             }
         }
     }

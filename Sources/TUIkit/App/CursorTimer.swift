@@ -44,7 +44,9 @@ final class CursorTimer {
     private let tickIntervalMs = 50
 
     /// Elapsed ticks since timer started.
-    private var elapsedTicks = 0
+    /// Readable so a cell-run replay indexes a cycle by the same tick the blink
+    /// state is computed from — see ``PulseTimer/currentStep``.
+    private(set) var elapsedTicks = 0
 
     /// Whether the cursor clock was read during the current render frame.
     ///
@@ -132,7 +134,7 @@ extension CursorTimer {
                 }
                 guard let self else { return }
                 self.elapsedTicks += 1
-                self.renderNotifier?.setNeedsRender()
+                self.renderNotifier?.setNeedsAnimationTick(.cursor)
             }
         }
     }
