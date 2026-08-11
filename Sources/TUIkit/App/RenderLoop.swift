@@ -968,6 +968,14 @@ extension RenderLoop {
         let due = frame.runs.filter { steps[$0.clock] != nil }
         guard !due.isEmpty else { return false }
 
+        // Always patched from the frame the last RENDER produced — never from
+        // the last patch. Compositing replaces a cell's glyph but keeps the
+        // styling around it, so the colour code of the frame being replaced
+        // stays behind as an empty run. Feed a patched line back in and those
+        // dead escapes accumulate, one per tick: the row still looks correct
+        // and never changes width, but it grew without bound and reached the
+        // terminal as ~60 kB/s to animate two cells. Patching the pristine line
+        // is also strictly less work, since it never gets longer.
         var lines = frame.contentLines
         var touched = false
         for run in due {
@@ -1001,7 +1009,9 @@ extension RenderLoop {
             reset: ANSIRenderer.reset
         )
         terminal.endFrame()
-        replayable?.contentLines = lines
+        // `replayable.contentLines` deliberately keeps the RENDER's lines, not
+        // these. The diff writer already tracks what is on screen; this is the
+        // clean base every future tick patches from. See the note above.
         return true
     }
 

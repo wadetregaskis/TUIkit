@@ -93,4 +93,41 @@ struct AnimatedRunSplicingTests {
             offsetX: 0, offsetY: 0, width: 1, frames: ["●", "○"], clock: .pulse)
         #expect([still, moving].filter(\.isAnimating) == [moving])
     }
+
+    @Test("Splicing repeatedly must start from the same line every time")
+    func repeatedSplicesDoNotAccumulate() {
+        // Compositing REPLACES a cell's glyph but keeps the styling context
+        // around it, so the colour code of the frame that was there is left
+        // behind as an empty run. Splice into your own previous output and
+        // those dead escapes pile up — one per tick, forever. The line still
+        // LOOKS right (its visible width never changes), so only its byte
+        // length shows the leak; it reached the terminal as tens of kilobytes
+        // a second to animate two cells.
+        //
+        // Hence the rule the run loop follows: always patch the pristine line
+        // the last render produced, never the patched one.
+        let pristine = "\u{1B}[38;5;34m▐\u{1B}[0m Save \u{1B}[38;5;34m▌\u{1B}[0m"
+        let frames = (30...45).map { "\u{1B}[38;5;\($0)m▐\u{1B}[0m" }
+
+        var fromPristine: [Int] = []
+        var accumulated: [Int] = []
+        var running = pristine
+        for frame in frames {
+            let patch = FrameBuffer(lines: [frame])
+            fromPristine.append(
+                FrameBuffer(lines: [pristine]).composited(with: patch, at: (x: 0, y: 0))
+                    .lines[0].count)
+            running = FrameBuffer(lines: [running]).composited(with: patch, at: (x: 0, y: 0))
+                .lines[0]
+            accumulated.append(running.count)
+        }
+
+        // Patching the pristine line is stable: same work, same size, every tick.
+        #expect(Set(fromPristine).count == 1, "sizes: \(fromPristine)")
+        // Patching your own output is not — and this is the assertion that
+        // fails if the loop ever goes back to storing what it patched.
+        #expect(
+            accumulated.last! > accumulated.first!,
+            "compositing no longer leaves the replaced run's escapes behind; if that is now true by construction, this test can go")
+    }
 }
