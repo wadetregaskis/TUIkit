@@ -403,29 +403,14 @@ private struct _ButtonStyleBody: View, Renderable {
             textStyle.foregroundColor = foregroundColor
             textStyle.isBold = isBold && !isDisabled
 
-            // The focus indicator is handed to the run loop as a finished cycle
-            // rather than re-derived every tick: the two prefix cells are the
-            // ONLY thing that changes while a focused button sits still, and
-            // re-rendering the screen 20 times a second to move them is what
-            // made an idle page cost a third of a core. See ``AnimatedCellRun``.
-            let indicating = isFocused && !isDisabled
-            let cycle = context.environment.selectionEmphasis.cycle(indicating)
-            let prefixes = cycle.frames.map {
-                BorderRenderer.focusIndicatorPrefix(
-                    isFocused: indicating, emphasis: $0, palette: palette)
-            }
+            let focusPrefix = BorderRenderer.focusIndicatorPrefix(
+                isFocused: isFocused && !isDisabled,
+                emphasis: SelectionIndicator.resolve(
+                    isFocused: isFocused && !isDisabled, context: context),
+                palette: palette
+            )
             let styledLabel = ANSIRenderer.render(paddedLabel, with: textStyle)
-            var buffer = FrameBuffer(
-                lines: [prefixes[cycle.step % prefixes.count] + styledLabel])
-            if cycle.isAnimating, !context.isMeasuring {
-                buffer.animatedCells = [
-                    AnimatedCellRun(
-                        offsetX: 0, offsetY: 0,
-                        width: BorderRenderer.focusIndicatorWidth,
-                        frames: prefixes, clock: .cursor)
-                ]
-            }
-            return buffer
+            return FrameBuffer(lines: [focusPrefix + styledLabel])
         }
 
         // The standard variant wraps the label in `▐ … ▌` end caps plus
