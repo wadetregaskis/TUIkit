@@ -57,7 +57,8 @@ struct TableSortOrderTests {
             sortableSizeColumn: Bool = true,
             fitFirstColumn: Bool = false,
             width: Int = 40,
-            nameTitle: String = "Name"
+            nameTitle: String = "Name",
+            trailingSizeColumn: Bool = false
         ) -> FrameBuffer {
             dispatcher.beginRenderPass()
             var env = EnvironmentValues()
@@ -76,7 +77,7 @@ struct TableSortOrderTests {
             let nameColumn = TableColumn(nameTitle, value: \Row.name)
             let table = Table(rows, selection: .constant(Int?.none), sortOrder: binding) {
                 fitFirstColumn ? nameColumn.width(.fit) : nameColumn
-                sizeColumn
+                trailingSizeColumn ? sizeColumn.alignment(.trailing) : sizeColumn
             }
             buffer = renderToBuffer(table, context: context)
             dispatcher.setRegions(buffer.hitTestRegions)
@@ -142,6 +143,45 @@ struct TableSortOrderTests {
         // …and the arrow is still the LAST thing in that column, not stranded
         // before the ellipsis.
         #expect(header.contains("… ▼"), "header: \(header.debugDescription)")
+    }
+
+    /// Reserving the arrow's slot must not cost the COMMON case its alignment.
+    /// A `.trailing` header on an unsorted column has to sit on the column's
+    /// right edge; padding the title into a slot nothing is drawn in pushed it
+    /// two cells in, so a right-aligned column read as misaligned unless it
+    /// happened to be the one being sorted by.
+    @Test("A trailing header keeps its edge until an arrow needs the room")
+    func trailingHeaderStaysRightAligned() {
+        let harness = Harness(sortOrder: [KeyPathComparator(\Row.name, order: .forward)])
+        harness.render(trailingSizeColumn: true)
+        // A row's own trailing-aligned cell marks where the column ends; the
+        // header has to land on the same column, which is the whole complaint.
+        let unsorted = harness.headerLine
+        let cellEnd = harness.buffer.lines[2].stripped.range(of: "30 B")?.upperBound
+        let headerEnd = unsorted.range(of: "Size")?.upperBound
+        guard let cellEnd, let headerEnd else {
+            Issue.record("missing Size header or cell: \(unsorted.debugDescription)")
+            return
+        }
+        let cellColumn = harness.buffer.lines[2].stripped.distance(
+            from: harness.buffer.lines[2].stripped.startIndex, to: cellEnd)
+        let headerColumn = unsorted.distance(from: unsorted.startIndex, to: headerEnd)
+        #expect(
+            headerColumn == cellColumn,
+            "unsorted header ends at \(headerColumn), cells at \(cellColumn): \(unsorted)")
+
+        // Sorting BY Size gives the arrow the room, and the title shifts left
+        // to make it — the arrow now sits where the title's last cell was.
+        harness.sortOrder = [KeyPathComparator(\Row.size, order: .forward)]
+        harness.render(trailingSizeColumn: true)
+        let sorted = harness.headerLine
+        guard let arrowEnd = sorted.range(of: "Size ▲")?.upperBound else {
+            Issue.record("no arrow: \(sorted.debugDescription)")
+            return
+        }
+        #expect(
+            sorted.distance(from: sorted.startIndex, to: arrowEnd) == cellColumn,
+            "sorted header ends at \(sorted.distance(from: sorted.startIndex, to: arrowEnd)), cells at \(cellColumn): \(sorted)")
     }
 
     /// The indicator slot is reserved on every sortable column, so sorting the

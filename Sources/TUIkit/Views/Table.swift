@@ -2470,27 +2470,43 @@ where Value.ID: Hashable {
     /// exactly as it did.
     ///
     /// - Parameter width: The cells the header cell will actually get, when the
-    ///   caller is about to draw it. Pass it and the TITLE gives way first, so a
-    ///   column too narrow for both reads `Tra… ▼` rather than `Track…` — the
-    ///   indicator is the part you cannot reconstruct by guessing, and a sort
-    ///   arrow that vanishes exactly when the table is cramped is the case where
-    ///   you most need to know which column you just sorted by. Omit it (the
-    ///   measuring path) for the natural, untruncated width.
+    ///   caller is about to draw it. Omit it (the measuring path) for the
+    ///   natural width, which ALWAYS reserves the slot — that reservation is
+    ///   what keeps a column from resizing when you sort it.
+    ///
+    /// Passing the width changes two things, both about what is DRAWN rather
+    /// than how wide the column is:
+    ///
+    /// - An unsorted column draws its bare title, with no trailing blank. The
+    ///   slot is still reserved in the width, but padding the text into it
+    ///   pushed a `.trailing` header two cells off its column's right edge —
+    ///   misaligning the common case (no sort on this column) to reserve room
+    ///   for the rare one. The text shifts left when an arrow actually appears.
+    /// - When there is an arrow and the column is too narrow for both, the TITLE
+    ///   gives way first: `Tra… ▼`, not `Track…`. The arrow is the part you
+    ///   cannot reconstruct by guessing, and one that vanishes exactly when the
+    ///   table is cramped hides which column you just sorted by.
     private func headerTitle(for column: TableColumn<Value>, fittingWidth width: Int? = nil)
         -> String
     {
         guard sortOrder != nil, column.sortComparator != nil else { return column.title }
-        let suffix = " " + sortIndicator(for: column)
+        let indicator = sortIndicator(for: column)
+        let suffix = " " + indicator
         guard let width else { return column.title + suffix }
+        guard indicator != Self.noSortIndicator else {
+            return column.title.truncatedToWidth(width, mode: column.truncationMode)
+        }
         let room = width - suffix.strippedLength
         // Narrower than the indicator's own slot: drop the separating space and
         // the title, and keep the arrow alone. Truncating `suffix` here would
         // keep the SPACE and lose the arrow, which is the wrong end.
-        guard room > 0 else {
-            return sortIndicator(for: column).truncatedToWidth(width, mode: .tail)
-        }
+        guard room > 0 else { return indicator.truncatedToWidth(width, mode: .tail) }
         return column.title.truncatedToWidth(room, mode: column.truncationMode) + suffix
     }
+
+    /// What ``sortIndicator(for:)`` returns for a sortable column that is not
+    /// the one being sorted by — a blank the width calculation still reserves.
+    private static var noSortIndicator: String { " " }
 
     /// `▲` / `▼` for the column the rows are currently ordered by, a space for
     /// any other sortable column.
@@ -2502,7 +2518,7 @@ where Value.ID: Hashable {
         guard let comparator = column.sortComparator,
             let primary = sortOrder?.wrappedValue.first,
             primary.keyPath == comparator.keyPath
-        else { return " " }
+        else { return Self.noSortIndicator }
         return primary.order == .forward ? "▲" : "▼"
     }
 
