@@ -144,6 +144,11 @@ public struct FrameBuffer: Sendable, Equatable {
     /// composite time and uses them for hit-testing.
     public var hitTestRegions: [HitTestRegion] = []
 
+    /// Short runs of cells that animate on their own — a breathing focus ring,
+    /// a blinking cursor — carried and shifted exactly like ``hitTestRegions``,
+    /// because a run *is* a claim about particular cells. See ``AnimatedCellRun``.
+    public var animatedCells: [AnimatedCellRun] = []
+
     /// Creates an empty buffer.
     public init() {
         self.storage = []
@@ -272,6 +277,7 @@ extension FrameBuffer {
         lhs.lines == rhs.lines
             && lhs.overlays == rhs.overlays
             && lhs.hitTestRegions == rhs.hitTestRegions
+            && lhs.animatedCells == rhs.animatedCells
     }
 }
 
@@ -312,6 +318,10 @@ extension FrameBuffer {
             if !other.hitTestRegions.isEmpty {
                 hitTestRegions.append(
                     contentsOf: other.shiftedHitTestRegions(byX: 0, y: priorHeight))
+            }
+            if !other.animatedCells.isEmpty {
+                animatedCells.append(
+                    contentsOf: other.shiftedAnimatedCells(byX: 0, y: priorHeight))
             }
             return
         }
@@ -366,6 +376,8 @@ extension FrameBuffer {
         let carriedOverlays = overlays + other.shiftedOverlays(byX: 0, y: verticalShift)
         let carriedRegions =
             hitTestRegions + other.shiftedHitTestRegions(byX: 0, y: verticalShift)
+        let carriedAnimations =
+            animatedCells + other.shiftedAnimatedCells(byX: 0, y: verticalShift)
 
         // Replace self with new buffer using pre-computed width
         self = FrameBuffer(
@@ -373,6 +385,7 @@ extension FrameBuffer {
             lineWidths: combinedWidths)
         overlays = carriedOverlays
         hitTestRegions = carriedRegions
+        animatedCells = carriedAnimations
     }
 
     /// Places another buffer to the right of this one with optional spacing.
@@ -409,6 +422,10 @@ extension FrameBuffer {
             if !other.hitTestRegions.isEmpty {
                 hitTestRegions.append(
                     contentsOf: other.shiftedHitTestRegions(byX: priorWidth, y: 0))
+            }
+            if !other.animatedCells.isEmpty {
+                animatedCells.append(
+                    contentsOf: other.shiftedAnimatedCells(byX: priorWidth, y: 0))
             }
             return
         }
@@ -478,6 +495,8 @@ extension FrameBuffer {
         let carriedOverlays = overlays + other.shiftedOverlays(byX: myWidth + spacingApplied, y: 0)
         let carriedRegions =
             hitTestRegions + other.shiftedHitTestRegions(byX: myWidth + spacingApplied, y: 0)
+        let carriedAnimations =
+            animatedCells + other.shiftedAnimatedCells(byX: myWidth + spacingApplied, y: 0)
 
         // Replace self with the new buffer, supplying the uniform-width hint the
         // bare `FrameBuffer(lines:width:)` used to discard (it defaults the flag
@@ -496,6 +515,7 @@ extension FrameBuffer {
             lines: result, width: newWidth, uniformWidth: resultUniform, lineWidths: nil)
         overlays = carriedOverlays
         hitTestRegions = carriedRegions
+        animatedCells = carriedAnimations
     }
 
     /// Layers another buffer on top of this one (ZStack behavior).
@@ -521,6 +541,7 @@ extension FrameBuffer {
         // regions need no shift.
         overlays.append(contentsOf: overlay.overlays)
         hitTestRegions.append(contentsOf: overlay.hitTestRegions)
+        animatedCells.append(contentsOf: overlay.animatedCells)
     }
 
     /// Creates a new buffer with another buffer composited on top at the specified position.
@@ -541,7 +562,9 @@ extension FrameBuffer {
             // Nothing visible to draw, but the overlay may still carry its
             // own nested layers / hit-test regions that need to be
             // lifted into the result.
-            guard !overlay.overlays.isEmpty || !overlay.hitTestRegions.isEmpty else {
+            guard !overlay.overlays.isEmpty || !overlay.hitTestRegions.isEmpty
+                || !overlay.animatedCells.isEmpty
+            else {
                 return self
             }
             var result = self
@@ -588,6 +611,9 @@ extension FrameBuffer {
         composited.hitTestRegions =
             hitTestRegions
             + overlay.shiftedHitTestRegions(byX: position.x, y: position.y)
+        composited.animatedCells =
+            animatedCells
+            + overlay.shiftedAnimatedCells(byX: position.x, y: position.y)
         return composited
     }
 
@@ -607,11 +633,15 @@ extension FrameBuffer {
     public mutating func composite(with overlay: Self, at position: (x: Int, y: Int)) {
         guard !overlay.isEmpty else {
             // No visible cells, but nested layers and hit regions still lift.
-            guard !overlay.overlays.isEmpty || !overlay.hitTestRegions.isEmpty else { return }
+            guard !overlay.overlays.isEmpty || !overlay.hitTestRegions.isEmpty
+                || !overlay.animatedCells.isEmpty
+            else { return }
             overlays.append(
                 contentsOf: overlay.shiftedOverlays(byX: position.x, y: position.y))
             hitTestRegions.append(
                 contentsOf: overlay.shiftedHitTestRegions(byX: position.x, y: position.y))
+            animatedCells.append(
+                contentsOf: overlay.shiftedAnimatedCells(byX: position.x, y: position.y))
             return
         }
         guard linesAreUniformWidth else {
@@ -660,6 +690,8 @@ extension FrameBuffer {
         overlays.append(contentsOf: overlay.shiftedOverlays(byX: position.x, y: position.y))
         hitTestRegions.append(
             contentsOf: overlay.shiftedHitTestRegions(byX: position.x, y: position.y))
+        animatedCells.append(
+            contentsOf: overlay.shiftedAnimatedCells(byX: position.x, y: position.y))
     }
 
     /// Returns a copy of this buffer guaranteed to fit within the given bounds.
@@ -725,6 +757,12 @@ extension FrameBuffer {
         // content must never discard them.
         result.overlays = overlays
         result.hitTestRegions = hitTestRegions
+        // Runs describe CELLS, so unlike the free-floating layers above they are
+        // dropped when their cells are clipped away — otherwise a run scrolled
+        // out of a viewport would keep repainting over whatever took its place.
+        result.animatedCells = animatedCells.filter {
+            $0.offsetY < maxHeight && $0.offsetX + $0.width <= maxWidth
+        }
         return result
     }
 }
@@ -798,6 +836,13 @@ extension FrameBuffer {
     /// Mirrors ``shiftedOverlays(byX:y:)`` — combining operations call
     /// this so a region tracks the lines it was emitted with as the
     /// surrounding view tree composes its parent.
+    /// This buffer's ``animatedCells``, each shifted by `(dx, dy)`.
+    public func shiftedAnimatedCells(byX dx: Int, y dy: Int) -> [AnimatedCellRun] {
+        guard !animatedCells.isEmpty else { return [] }
+        guard dx != 0 || dy != 0 else { return animatedCells }
+        return animatedCells.map { $0.shifted(byX: dx, y: dy) }
+    }
+
     public func shiftedHitTestRegions(byX dx: Int, y dy: Int) -> [HitTestRegion] {
         guard !hitTestRegions.isEmpty else { return [] }
         guard dx != 0 || dy != 0 else { return hitTestRegions }
