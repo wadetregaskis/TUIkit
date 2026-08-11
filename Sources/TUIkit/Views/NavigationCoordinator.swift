@@ -58,6 +58,22 @@ final class NavigationCoordinator {
     /// Writes the path back. See ``read``.
     var write: ([AnyHashable]) -> Void = { _ in }
 
+    /// The title each depth showed while it was the top screen, indexed by
+    /// depth (0 is the root).
+    ///
+    /// A breadcrumb needs the titles of screens that are NOT being rendered,
+    /// and a title is a preference — published by the screen that drew it, on
+    /// the frame it drew. So there is nowhere to read an ancestor's title from;
+    /// it has to have been remembered when that screen was on top, which is
+    /// what this does.
+    ///
+    /// The consequence worth knowing: a crumb shows the title its screen had
+    /// when you left it. A screen whose title would have changed while it was
+    /// buried shows the old one until you go back to it. For the thing a
+    /// breadcrumb is for — "where am I, and how do I get back" — that is the
+    /// right answer anyway, since it names the screen you would return to.
+    private var titlesByDepth: [String] = []
+
     init() {}
 }
 
@@ -82,6 +98,33 @@ extension NavigationCoordinator {
         var elements = read()
         elements.append(value)
         write(elements)
+    }
+
+    /// Records the title `depth` is showing, for later crumbs.
+    ///
+    /// Only two depths report in any one frame — the root, which renders
+    /// off-screen, and whatever is on top — so everything between them is
+    /// remembered from the frames when it *was* on top. That is the whole point
+    /// of this table.
+    ///
+    /// Which is why a *changed* title drops the depths above it and an unchanged
+    /// one does not. A change means a different screen is at that depth, so the
+    /// names below it in the trail describe screens the user never opened. An
+    /// unchanged one is just the root re-reporting itself, as it does every
+    /// frame; truncating on that would erase the middle of the trail before
+    /// anything could read it.
+    func recordTitle(_ title: String, atDepth depth: Int) {
+        if depth < titlesByDepth.count {
+            guard titlesByDepth[depth] != title else { return }
+            titlesByDepth.removeSubrange(depth...)
+        }
+        while titlesByDepth.count < depth { titlesByDepth.append("") }
+        titlesByDepth.append(title)
+    }
+
+    /// The remembered titles from the root up to (and including) `depth`.
+    func titles(upTo depth: Int) -> [String] {
+        Array(titlesByDepth.prefix(depth + 1))
     }
 
     /// Pops `count` screens, stopping at the root.

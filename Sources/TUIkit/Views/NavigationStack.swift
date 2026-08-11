@@ -26,10 +26,23 @@ import TUIkitView
 /// ```
 ///
 /// The stack shows its root until something is pushed; from then on it shows
-/// the top of the path, under a one-line navigation bar carrying a **‹ Back**
-/// button and the screen's ``navigationTitle(_:)``. Going back is a click on
-/// that button, Return/Space with it focused, **Escape**, or
-/// `@Environment(\.dismiss)` from anywhere in the pushed screen.
+/// the top of the path, under a navigation bar carrying the trail of
+/// ``navigationTitle(_:)``s that got you there:
+///
+/// ```
+///   Planets  ›  Mars  ›  Deimos  ›  Copernicus Rim
+/// ```
+///
+/// Every crumb but the last is a `Button` — a Tab stop, and clicking or
+/// activating one pops straight back to that depth rather than one screen at a
+/// time. **Escape** and `@Environment(\.dismiss)` still pop one, from anywhere
+/// in the pushed screen.
+///
+/// The trail gives way as the terminal narrows: first its middle is elided
+/// (`Planets  ›  …  ›  Copernicus Rim`), keeping the two ends that orient you;
+/// then, when even that will not fit, the bar falls back to a single **‹ Back**
+/// button and the truncated title. The bar's height never changes through any of
+/// this — see ``barHeight``.
 ///
 /// ## Where the path lives
 ///
@@ -229,10 +242,16 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         // `.navigationDestination(for:)` registrations, which stay current
         // because the closures are re-captured each frame.
         if !context.isMeasuring {
+            let backdrop = base.isolatedForBackground()
+            // Collect the root's title while it renders, because this is the
+            // only place it is ever published — the bar draws for pushed
+            // screens, so nothing else sees depth 0's name, and the crumb trail
+            // would start with an anonymous "…" no matter how wide the terminal.
+            let preferences = backdrop.environment.preferenceStorage
+            preferences?.push()
             _ = TUIkit.renderToBuffer(
-                root,
-                context: base.isolatedForBackground()
-                    .withChildIdentity(type: type(of: root)))
+                root, context: backdrop.withChildIdentity(type: type(of: root)))
+            coordinator.recordTitle(preferences?.pop()[NavigationTitleKey.self] ?? "", atDepth: 0)
         }
 
         return renderScreen(top: top, context: base)
@@ -302,9 +321,15 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
             proposal: ProposedSize(width: nil, height: nil),
             context: barContext.withChildIdentity(type: NavigationBarID.self)
         ).width
+        // Crumbs when they fit, the Back button when they do not. `backWidth`
+        // is what a bar with the single button would need, so it doubles as the
+        // budget the trail has to beat.
+        coordinator.recordTitle(title, atDepth: coordinator.depth)
         let titled = navigationBar(
             back: back,
             title: title.truncatedToWidth(max(0, width - backWidth - 1)),
+            crumbs: NavigationCrumbs.trail(
+                titles: coordinator.titles(upTo: coordinator.depth), fittingWidth: width),
             coordinator: coordinator)
 
         let rendered = TUIkit.renderToBuffer(
@@ -312,18 +337,42 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         return padded(rendered, toWidth: width, height: Self.barHeight)
     }
 
-    /// The bar's view: back button, title, and the rule beneath them.
+    /// The bar's view: the crumb trail (or the Back button and title when the
+    /// trail will not fit), and the rule beneath.
     private func navigationBar(
-        back: String, title: String, coordinator: NavigationCoordinator
+        back: String, title: String, crumbs: [NavigationCrumbs.Crumb]?, coordinator: NavigationCoordinator
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 1) {
-                backButton(back, coordinator: coordinator)
-                Text(title)
-                    .bold()
+            HStack(spacing: 0) {
+                if let crumbs {
+                    ForEach(Array(crumbs.enumerated()), id: \.offset) { _, crumb in
+                        crumbView(crumb, coordinator: coordinator)
+                    }
+                } else {
+                    backButton(back, coordinator: coordinator)
+                    Text(" ")
+                    Text(title).bold()
+                }
                 Spacer()
             }
             Divider()
+        }
+    }
+
+    /// A crumb: a `Button` when it goes somewhere, plain text when it is the
+    /// separator or the screen you are already on.
+    ///
+    /// Only the clickable ones are Buttons, so only they are Tab stops — the
+    /// separators would otherwise put dead entries in the focus ring, and the
+    /// current screen is not somewhere to navigate to.
+    @ViewBuilder
+    private func crumbView(_ crumb: NavigationCrumbs.Crumb, coordinator: NavigationCoordinator) -> some View {
+        if let depth = crumb.popsTo {
+            // The plain style's own focus-indicator prefix supplies the lead.
+            Button(crumb.label) { coordinator.pop(coordinator.depth - depth) }
+                .buttonStyle(.plain)
+        } else {
+            Text(NavigationCrumbs.lead + crumb.label).bold()
         }
     }
 

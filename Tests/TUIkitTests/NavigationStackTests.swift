@@ -73,7 +73,10 @@ struct NavigationStackTests {
             })
 
         #expect(rendered[0].contains("one"))
-        #expect(rendered[0].contains("Back"))
+        // The bar's leftmost crumb is the way out. The root here published no
+        // title of its own, so it shows as the anonymous "…" — still clickable,
+        // still the root.
+        #expect(rendered[0].contains("\(NavigationCrumbs.separator)"), "bar: \(rendered[0])")
     }
 
     @Test("The bar is two rows whatever the title's length")
@@ -107,12 +110,14 @@ struct NavigationStackTests {
 
         // No .navigationDestination(for: Item.self) anywhere: the screen is
         // blank, but dropping the value silently would be worse — and stranding
-        // the user with no back button worse still.
+        // the user with no way back worse still. The screen publishes no title
+        // either, so this is the barest possible bar: two anonymous crumbs, the
+        // first of which still pops to the root.
         let rendered = lines(
             NavigationStack(path: binding) {
                 Text("root")
             })
-        #expect(rendered[0].contains("Back"))
+        #expect(rendered[0].contains("\(NavigationCrumbs.separator)"), "bar: \(rendered[0])")
     }
 
     // MARK: - Links

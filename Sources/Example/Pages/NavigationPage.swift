@@ -22,6 +22,20 @@ private struct Moon: Hashable {
     let planet: String
 }
 
+/// A surface feature, and below it a sample taken there. Two more types purely
+/// to make the stack DEEP: at five levels the navigation bar's breadcrumb trail
+/// has to elide its middle on a normal terminal, and below a certain width fall
+/// back to the single Back button. A three-level demo never reaches either.
+private struct Feature: Hashable {
+    let name: String
+    let moon: String
+}
+
+private struct Sample: Hashable {
+    let label: String
+    let feature: String
+}
+
 /// The navigation demo: a stack you can actually walk into and back out of.
 ///
 /// The interesting part is not that it pushes — it is what is still true when
@@ -73,6 +87,8 @@ struct NavigationPage: View {
                 rootScreen
                     .navigationDestination(for: Planet.self) { planetScreen($0) }
                     .navigationDestination(for: Moon.self) { moonScreen($0) }
+                    .navigationDestination(for: Feature.self) { featureScreen($0) }
+                    .navigationDestination(for: Sample.self) { sampleScreen($0) }
             }
             .border(color: .palette.border)
 
@@ -142,10 +158,47 @@ struct NavigationPage: View {
             Text("\(moon.name) · \(moon.planet)").bold()
             Text(L("page.navigation.moonBody"))
                 .foregroundStyle(.palette.foregroundSecondary)
+            // Two more levels below here, so the trail gets long enough to
+            // elide. Feature and sample names are the demo's CONTENT, like the
+            // planet names above them, so they are not translated.
+            ForEach(Self.features(of: moon), id: \.name) { feature in
+                NavigationLink(feature.name, value: feature)
+            }
             Spacer()
             rootButton
         }
         .navigationTitle(moon.name)
+    }
+
+    private func featureScreen(_ feature: Feature) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("\(feature.name) · \(feature.moon)").bold()
+            ForEach(Self.samples(at: feature), id: \.label) { sample in
+                NavigationLink(sample.label, value: sample)
+            }
+            Spacer()
+            rootButton
+        }
+        .navigationTitle(feature.name)
+    }
+
+    private func sampleScreen(_ sample: Sample) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("\(sample.label) · \(sample.feature)").bold()
+            Spacer()
+            rootButton
+        }
+        .navigationTitle(sample.label)
+    }
+
+    /// Named surface features, deliberately long enough that the trail has to
+    /// elide at ordinary terminal widths.
+    private static func features(of moon: Moon) -> [Feature] {
+        ["Tranquillitatis Basin", "Copernicus Rim"].map { Feature(name: $0, moon: moon.name) }
+    }
+
+    private static func samples(at feature: Feature) -> [Sample] {
+        ["Core 1", "Core 2"].map { Sample(label: $0, feature: feature.name) }
     }
 
     private var aboutScreen: some View {
