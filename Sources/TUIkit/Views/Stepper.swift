@@ -414,7 +414,15 @@ private struct _StepperCore: View, Renderable, Layoutable {
             isFocused: isFocused,
             isHovered: isHovered,
             palette: palette,
-            pulsePhase: context.environment.pulsePhase,
+            // Read the clock ONLY when the pulse is actually drawn — the same
+            // condition `buildContent` uses to consume it. `pulsePhase` is a
+            // VOLATILE read: asking for it tells the run loop this frame
+            // consumed the clock, which keeps the clock ticking and re-renders
+            // the whole page ~10 times a second. An unfocused stepper does not
+            // use the phase, so reading it kept every page with a stepper
+            // anywhere on it rendering forever, drawing an identical frame.
+            pulsePhase: isFocused && !isDisabled && !context.isMeasuring
+                ? context.environment.pulsePhase : 0,
             valueStyle: context.environment.styleCascade.resolve(
                 for: [.all, .text, .control(.stepper)]),
             isDisabled: isDisabled
