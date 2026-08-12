@@ -646,3 +646,64 @@ assertion just had to stop assuming.
 
 Remaining: the **scrollbar** (Scroll View 27.0, Picker 24.5, Lists 8.5, Tables)
 and `_MenuItemRow.highlight` (Overlays & Modals 10.4, Menus 3.5).
+
+## 15. A second measure-pass write — and a correction (2026-08-12)
+
+A read-only audit for siblings of the §12 bug (four agents, one prompt each,
+no edits) found `_DatePickerCore.renderToBuffer` doing the same thing in a
+different disguise:
+
+```swift
+selection.wrappedValue = model.clamp(selection.wrappedValue)   // every pass
+```
+
+Writing a `Binding` backed by `@State` writes a `StateBox`, which invalidates
+the render cache and requests another render. `Date` is not `Equatable`-gated
+anywhere on that path, so re-storing an identical date still dirties the tree:
+**every frame scheduled the next one, forever.** Fixed by comparing first.
+
+**This corrects §11 and §14.** Both said the Picker page's cost was the
+long-menu demo's scrollbar. It was not — that page carries three `DatePicker`s
+bound to one `$date`:
+
+| Example page: Picker | idle CPU |
+|---|---|
+| §14 | 24.5% |
+| now | **0.5%** |
+
+I had asserted the scrollbar twice without measuring it, on the strength of the
+page's name. The audit was not looking for that and found it anyway.
+
+**The test that nearly wasn't.** The first regression test used
+`.constant(date)` and passed against the *unfixed* code — a constant binding's
+setter is a no-op, so nothing reaches a `StateBox` and the bug is invisible to
+it. The real test builds a `StateBox`-backed binding and asserts
+`BodyMutationDiagnostic` reports nothing on the second render; it fails on the
+unfixed code naming `<root>`. **A regression test that has not been run against
+the unfixed code is a guess.**
+
+### The sweep after this fix
+
+| page | idle% |
+|---|---|
+| Scroll View | 25.0 |
+| Progress & Gauges | 18.5 (legitimate) |
+| Lists | 8.5 |
+| Overlays & Modals | 8.5 |
+| Sliders | 8.0 |
+| Spinners | 6.5 (legitimate) |
+| Text Styles | 4.5 |
+| Menus | 3.5 |
+| Tables | 3.0 |
+| Steppers | 2.0 |
+| **everything else — 22 of 32 pages** | **≤ 1.0** |
+
+Two of the four audit reports are still unworked, and they name more of this:
+`scrollIndicatorEmphasis` (ScrollIndicator.swift:47) resolves the clock whenever
+its scrollable is *focused*, before the test of whether an indicator will be
+drawn at all — four call sites (ScrollView.swift:550, _ListCore.swift:895,
+Table.swift:1300 and :1645), which is very likely most of Lists 8.5 and some of
+Scroll View 25.0. `FocusSectionModifier.swift:63` and
+`NavigationSplitView.swift:282` read `pulsePhase` for a value only a *bordered*
+container consumes, so a focus section around plain content reads the clock and
+throws it away.

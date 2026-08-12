@@ -246,7 +246,16 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         handler.canBeFocused = !isDisabled
         handler.activeIndex = min(max(0, handler.activeIndex), max(0, model.orderedKinds().count - 1))
         // Keep the bound date within range (the binding is the source of truth).
-        selection.wrappedValue = model.clamp(selection.wrappedValue)
+        //
+        // Only when it is actually out of range. Writing a binding writes a
+        // `StateBox`, which invalidates the render cache and asks for another
+        // render — and this runs on every render pass, including a measure. An
+        // unconditional store therefore made every frame schedule the next one,
+        // forever, drawing an identical picture; see the same shape in
+        // `_TabViewCore.tabContentSizes`. `Date` is not `Equatable`-constrained
+        // in `Binding`, so nothing upstream can notice the value did not change.
+        let clamped = model.clamp(selection.wrappedValue)
+        if clamped != selection.wrappedValue { selection.wrappedValue = clamped }
 
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)

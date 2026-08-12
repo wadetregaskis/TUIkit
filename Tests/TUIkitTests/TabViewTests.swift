@@ -4,6 +4,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -553,6 +554,44 @@ struct TabViewMeasureMutationTests {
 
         // The first pass legitimately seeds the cache. The second must not
         // touch it: nothing about the view or the width has changed.
+        _ = renderToBuffer(view, context: context)
+        diagnostic.beginTraversal()
+        _ = renderToBuffer(view, context: context)
+        diagnostic.endTraversal()
+
+        #expect(diagnostic.reports.isEmpty, "saw \(diagnostic.reports)")
+    }
+}
+
+@MainActor
+@Suite("DatePicker must not dirty state while it renders")
+struct DatePickerRenderMutationTests {
+
+    /// The bound date is clamped to the range on every pass. Writing a binding
+    /// writes a `StateBox`, which invalidates the render cache and requests
+    /// another render — so an unconditional store made every frame schedule the
+    /// next one, forever. Same shape as `_TabViewCore.tabContentSizes`.
+    @Test("A second render writes no state when the date is already in range")
+    func inRangeDateWritesNothing() {
+        let diagnostic = BodyMutationDiagnostic()
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 8,
+            environment: EnvironmentValues(), tuiContext: TUIContext()
+        ).isolatingRenderCache()
+        context.renderCache!.bodyMutationDiagnostic = diagnostic
+        context.environment.stateStorage?.renderCache = context.renderCache
+
+        // A REAL state-backed binding, not `.constant(_)`: a constant binding's
+        // setter is a no-op, so it cannot observe the bug at all — the write has
+        // to reach a `StateBox` for the invalidation to fire. (The first version
+        // of this test used `.constant` and passed against the unfixed code.)
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: 99)
+        let box: StateBox<Date> = context.environment.stateStorage!.storage(
+            for: key, default: Date(timeIntervalSince1970: 1_000_000))
+        let binding = Binding<Date>(get: { box.value }, set: { box.value = $0 })
+
+        let view = DatePicker("When", selection: binding)
+
         _ = renderToBuffer(view, context: context)
         diagnostic.beginTraversal()
         _ = renderToBuffer(view, context: context)
