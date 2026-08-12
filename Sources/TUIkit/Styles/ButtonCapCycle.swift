@@ -18,13 +18,29 @@
 /// rule for what colour they take — dim to the button's own face, bright to the
 /// full accent — belongs in one place.
 struct ButtonCapCycle {
-    /// The cap colour at each tick of a full cycle. A single entry means the
-    /// caps do not animate: unfocused, disabled, or `.selectionIndicatorStyle`
-    /// set to `.none`.
-    let colors: [Color]
+    /// The shared focus-emphasis cycle behind every breathing indicator, so the
+    /// caps keep step with list cursors and menu rows and honour
+    /// `.selectionIndicatorStyle`.
+    private let cycle: SelectionEmphasisCycle
 
-    /// Where the clock is now — the index to draw immediately.
-    let step: Int
+    /// Whether the button this describes holds the focus. A cycle is still when
+    /// unfocused, but a still cycle sits at `bright` — and an unfocused cap
+    /// wants the button's own face, not the accent — so the two are not the
+    /// same question.
+    private let isFocused: Bool
+
+    /// The button's own face: what an unfocused cap shows, and the recessive
+    /// end of the breath.
+    private let background: Color
+
+    /// The full accent: the loud end of the breath.
+    ///
+    /// The cap is a half-block GLYPH, not a fill behind text, so it has no
+    /// readability ceiling and can go all the way — which is also the widest
+    /// ramp the terminal's palette can give it. It used to stop at 45% accent,
+    /// which on a 256-colour terminal quantised to two or three indices,
+    /// several of them off-hue greys.
+    private let accent: Color
 
     /// Builds the cycle for a button on `background` in a palette whose accent
     /// is `accent`.
@@ -33,25 +49,21 @@ struct ButtonCapCycle {
     ///   never indicating, however the focus system has it recorded.
     @MainActor
     init(isFocused: Bool, background: Color, accent: Color, context: RenderContext) {
-        let cycle = context.environment.selectionEmphasis.cycle(isFocused)
-        // The cap is a half-block GLYPH, not a fill behind text, so it has no
-        // readability ceiling: it breathes all the way to the full accent,
-        // which is also the widest ramp the terminal's palette can give it. It
-        // used to stop at 45% accent, which on a 256-colour terminal quantised
-        // to two or three indices, several of them off-hue greys.
-        //
-        // Through the shared clock, so the caps keep step with list cursors and
-        // menu rows and honour `.selectionIndicatorStyle`.
-        colors = isFocused ? cycle.colors(dim: background, bright: accent) : [background]
-        step = cycle.step
+        cycle = context.environment.selectionEmphasis.cycle(isFocused)
+        self.isFocused = isFocused
+        self.background = background
+        self.accent = accent
     }
 
     /// Whether the caps actually move. A still cap needs no run — the ordinary
     /// render already drew it, and replaying it would emit bytes for no change.
-    var isAnimating: Bool { colors.count > 1 }
+    var isAnimating: Bool { isFocused && cycle.isAnimating }
 
     /// The colour to draw right now.
-    var colorNow: Color { colors[step % colors.count] }
+    @MainActor
+    var colorNow: Color {
+        isFocused ? cycle.colorNow(dim: background, bright: accent) : background
+    }
 
     /// The runs for a single-row button `width` cells wide: one cap at each end.
     ///
@@ -62,21 +74,18 @@ struct ButtonCapCycle {
     /// distinct ends — at that width the caller's own clamping has already
     /// begun eating the chrome, and a run must never outlive the cells it
     /// describes.
+    @MainActor
     func runs(width: Int) -> [AnimatedCellRun] {
         guard isAnimating, width >= 2 else { return [] }
         return [
-            AnimatedCellRun(
-                offsetX: 0, offsetY: 0, width: 1,
-                frames: frames(TerminalSymbols.openCap), clock: .cursor),
-            AnimatedCellRun(
-                offsetX: width - 1, offsetY: 0, width: 1,
-                frames: frames(TerminalSymbols.closeCap), clock: .cursor),
-        ]
+            run(TerminalSymbols.openCap, offsetX: 0),
+            run(TerminalSymbols.closeCap, offsetX: width - 1),
+        ].compactMap { $0 }
     }
 
-    /// One finished, styled string per step — the form ``AnimatedCellRun``
-    /// wants, so the loop's per-tick work is an array index.
-    private func frames(_ cap: Character) -> [String] {
-        colors.map { ANSIRenderer.colorize(String(cap), foreground: $0) }
+    @MainActor
+    private func run(_ cap: Character, offsetX: Int) -> AnimatedCellRun? {
+        cycle.run(
+            String(cap), dim: background, bright: accent, offsetX: offsetX, offsetY: 0)
     }
 }

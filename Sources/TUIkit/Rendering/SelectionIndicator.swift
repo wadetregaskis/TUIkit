@@ -225,6 +225,47 @@ public struct SelectionEmphasisCycle: Sendable {
     public func colors(dim: Color, bright: Color) -> [Color] {
         frames.map { $0.color(dim: dim, bright: bright) }
     }
+
+    /// The colour to draw *right now* — `colors(dim:bright:)` at ``step``.
+    ///
+    /// The modulo matters: the clock's tick count is unbounded and keeps
+    /// running while nothing is focused, so `step` routinely exceeds the
+    /// cycle's length.
+    @MainActor
+    public func colorNow(dim: Color, bright: Color) -> Color {
+        frames[step % frames.count].color(dim: dim, bright: bright)
+    }
+
+    /// A run that breathes a single glyph at `(offsetX, offsetY)`, or `nil`
+    /// when this cycle is still.
+    ///
+    /// The nil case is not an omission to paper over: a still glyph was already
+    /// drawn by the ordinary render, and a run would have the loop rewrite it
+    /// on every tick to no visible effect. Only movement earns a run.
+    ///
+    /// The run's width is the glyph's own width in *cells*, which is what
+    /// ``AnimatedCellRun`` promises and not always what the glyph's character
+    /// count suggests — `●` is East Asian Ambiguous, and the radio bullet and a
+    /// box-drawing cap do not measure alike everywhere.
+    @MainActor
+    public func run(
+        _ glyph: String, dim: Color, bright: Color, offsetX: Int, offsetY: Int
+    ) -> AnimatedCellRun? {
+        guard isAnimating else { return nil }
+        return AnimatedCellRun(
+            offsetX: offsetX,
+            offsetY: offsetY,
+            width: glyph.strippedLength,
+            // One finished, styled string per step, so the loop's per-tick work
+            // is an array index.
+            frames: colors(dim: dim, bright: bright).map {
+                ANSIRenderer.colorize(glyph, foreground: $0)
+            },
+            // The cursor clock, because that is the one this cycle's frames were
+            // laid out on (`CursorTimer.cycleTicks`) — a run handed to the pulse
+            // clock would advance at a different rate than it was built for.
+            clock: .cursor)
+    }
 }
 
 extension SelectionEmphasisClock {
