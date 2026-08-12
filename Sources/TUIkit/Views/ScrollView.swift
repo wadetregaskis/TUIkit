@@ -547,15 +547,13 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 handler: handler,
                 width: contentWidth,
                 palette: context.environment.palette,
-                // Only when an indicator will actually be drawn — the argument
-                // is evaluated before `applyScrollIndicators`' own guard, and
-                // resolving consults the cursor clock, which is what tells the
-                // demand-driven loop the frame consumed it. A focused scroll
-                // view with no VERTICAL overflow (one that scrolls only
-                // horizontally is still focusable) would otherwise re-render
-                // the page ~20 times a second and paint nothing.
-                emphasis: handler.hasContentAbove || handler.hasContentBelow
-                    ? scrollIndicatorEmphasis(isFocused: isFocused, context: context) : nil,
+                // A CYCLE, not this tick's colour: the indicator hands its
+                // cells to the run loop and reads no clock (see
+                // `AnimatedCellRun`). Still only when one will be drawn —
+                // building a cycle is cheap but not free, and a scroll view
+                // that scrolls only horizontally has no vertical indicators.
+                cycle: handler.hasContentAbove || handler.hasContentBelow
+                    ? scrollIndicatorCycle(isFocused: isFocused, context: context) : nil,
                 locale: context.environment.locale
             )
         }
@@ -969,7 +967,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         handler: ScrollViewHandler,
         width: Int,
         palette: any Palette,
-        emphasis: Color?,
+        cycle: SelectionEmphasisCycle?,
         locale: Locale
     ) -> FrameBuffer {
         guard buffer.height > 0 else { return buffer }
@@ -978,37 +976,50 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         }
 
         var lines = buffer.lines
+        // The indicators' own runs, so a focused scroll view breathes them
+        // without the page being rendered again on every tick of the clock.
+        var runs: [AnimatedCellRun] = []
 
         if handler.hasContentAbove, !lines.isEmpty {
             // Indicator rows are padded to full viewport width
             // — without padding the resulting buffer's effective
             // width collapses to the indicator's own length.
-            lines[0] = renderScrollIndicator(
+            let indicator = renderScrollIndicator(
                 direction: .up,
                 count: handler.rowsAbove,
                 unit: .lines,
                 width: width,
                 palette: palette,
                 approximate: handler.contentHeightIsEstimate,
-                emphasis: emphasis,
+                cycle: cycle,
                 locale: locale
-            ).padToVisibleWidth(width)
+            )
+            lines[0] = indicator.text.padToVisibleWidth(width)
+            if let animation = indicator.animation { runs.append(animation) }
         }
 
         if handler.hasContentBelow, lines.count >= 1 {
-            lines[lines.count - 1] = renderScrollIndicator(
+            let indicator = renderScrollIndicator(
                 direction: .down,
                 count: handler.rowsBelow,
                 unit: .lines,
                 width: width,
                 palette: palette,
                 approximate: handler.contentHeightIsEstimate,
-                emphasis: emphasis,
+                cycle: cycle,
                 locale: locale
-            ).padToVisibleWidth(width)
+            )
+            lines[lines.count - 1] = indicator.text.padToVisibleWidth(width)
+            // The renderer builds every run at row 0 — it does not know which
+            // row its caller put the indicator on — so move this one down to
+            // the row it was actually drawn on.
+            if let animation = indicator.animation {
+                runs.append(animation.shifted(byX: 0, y: lines.count - 1))
+            }
         }
-
-        return buffer.replacingLines(lines)
+        var result = buffer.replacingLines(lines)
+        result.animatedCells += runs
+        return result
     }
 }
 

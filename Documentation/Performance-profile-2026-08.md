@@ -746,3 +746,50 @@ Recorded as a change kept for correctness and consistency, **not** as a
 performance win. The remaining Lists 8.3 / Scroll View 23.9 are still
 unexplained by anything found so far, and the next step for them is the
 `setNeedsRender` stack dump from §12 rather than another conversion on spec.
+
+## 17. The "N more" indicators converted (2026-08-12)
+
+The producer §12's probe named on the Scroll View page —
+`scrollIndicatorEmphasis` ← `_ScrollViewCore.applyChrome` — now hands its cells
+to the run loop. `renderScrollIndicator` grew a cycle-aware overload returning
+`(text, AnimatedCellRun?)`; `applyScrollIndicators` collects one run per
+indicator and attaches them to the buffer.
+
+| Example page: Scroll View | idle CPU | writes/s | bytes/s |
+|---|---|---|---|
+| before | 23.9% | 20.4 | 8 785 |
+| after | **16.0%** | 32.0 | 14 512 |
+
+**A third off, not a collapse — and the remainder is explained.** That page
+demos scrollbars *as well as* indicators, and the bar is still an unconverted
+producer: `ScrollbarColors.focusIndicating` (Scrollbar.swift:147) reads the
+cursor clock at `ScrollView+Scrollbars.swift:103` and `:130`. So the page still
+renders in full for the bar's sake while the indicators now replay.
+
+The write rate roughly doubled, which is expected and worth stating: the
+indicator used to advance only when a full render happened to produce different
+bytes, and now it advances on the cursor clock's own 20 Hz. 14.5 KB/s is
+noise on a terminal link, but it is a real increase, not a rounding artefact.
+
+Two details this conversion needed:
+
+- **The run covers the arrow and label, not the leading blanks.** An indicator
+  is centred by padding; repainting spaces on a clock is bytes for nothing. The
+  renderer was split so the static line and every animated frame are laid out by
+  one piece of arithmetic (`ScrollIndicatorParts`), which is what keeps the run's
+  `offsetX` and the render's padding from drifting apart.
+- **The bottom indicator's run is built at row 0** — `renderScrollIndicator`
+  does not know which row its caller put it on — so `applyScrollIndicators`
+  shifts it to `lines.count - 1`. The replay-is-identity assertion in
+  `ScrollbarFocusPulseTests` is what would catch getting that wrong.
+
+The rewritten test replaces one that asserted the *old* mechanism (output varies
+with `environment.pulsePhase`). It fails on the unfixed code with
+`animatedCells.count → 0 == 2`, checked by reverting the run attachment — the
+third time today a mechanism change has invalidated a test that asserted the
+implementation rather than the behaviour.
+
+**Next for this page:** the scrollbar itself, which is the last producer. The
+scout established its geometry — one run per animated bar row (arrows animate;
+thumb cells animate; empty track cells do not), `thumbSpan` is the authority on
+which rows those are.

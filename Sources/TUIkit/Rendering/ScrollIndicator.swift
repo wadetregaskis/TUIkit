@@ -48,6 +48,19 @@ func scrollIndicatorEmphasis(isFocused: Bool, context: RenderContext) -> Color? 
         .color(dim: palette.foregroundTertiary, bright: palette.accent)
 }
 
+/// The indicator's emphasis across a whole cycle, for a focused scrollable.
+///
+/// The counterpart to ``scrollIndicatorEmphasis(isFocused:context:)``: that one
+/// resolves THIS TICK's colour and consults the clock to do it, which keeps the
+/// clock ticking and re-renders the whole page every tick. This one builds the
+/// cycle, which reads no clock, so the indicator's cells can be handed to the
+/// run loop instead.
+@MainActor
+func scrollIndicatorCycle(isFocused: Bool, context: RenderContext) -> SelectionEmphasisCycle? {
+    guard isFocused else { return nil }
+    return context.environment.selectionEmphasis.cycle(true)
+}
+
 // MARK: - Scroll Indicator Rendering
 
 /// Formats an estimated count compactly — "~897", "~5.4K", "~200M" — so an
@@ -128,7 +141,76 @@ func renderScrollIndicator(
     emphasis: Color? = nil,
     locale: Locale = .current
 ) -> String {
-    let arrow = direction == .up ? "▲" : "▼"
+    scrollIndicatorParts(
+        direction: direction, count: count, unit: unit, width: width,
+        approximate: approximate, locale: locale
+    ).line(color: emphasis ?? palette.foregroundTertiary)
+}
+
+/// The same indicator, drawn from a whole emphasis cycle instead of one tick's
+/// colour — plus the ``AnimatedCellRun`` that lets the run loop breathe those
+/// cells with no view involved.
+///
+/// The run covers the arrow and its label and nothing else: the leading blanks
+/// that centre the indicator are not part of the animation, and repainting them
+/// on a clock would be bytes spent to redraw spaces. Its `offsetY` is 0 — the
+/// caller knows which row it landed on and shifts it there.
+@MainActor
+func renderScrollIndicator(
+    direction: ScrollIndicatorDirection,
+    count: Int,
+    unit: ScrollIndicatorUnit,
+    width: Int,
+    palette: any Palette,
+    approximate: Bool = false,
+    cycle: SelectionEmphasisCycle?,
+    locale: Locale = .current
+) -> (text: String, animation: AnimatedCellRun?) {
+    let parts = scrollIndicatorParts(
+        direction: direction, count: count, unit: unit, width: width,
+        approximate: approximate, locale: locale)
+    guard let cycle, cycle.isFocused else {
+        return (parts.line(color: palette.foregroundTertiary), nil)
+    }
+    let dim = palette.foregroundTertiary
+    let bright = palette.accent
+    return (
+        parts.line(color: cycle.colorNow(dim: dim, bright: bright)),
+        cycle.run(dim: dim, bright: bright, offsetX: parts.padding, offsetY: 0) {
+            parts.styled(color: $0)
+        }
+    )
+}
+
+/// An indicator's text and geometry, before any colour is chosen — so the
+/// static render and every frame of the animated one are laid out by the same
+/// arithmetic and cannot drift apart.
+private struct ScrollIndicatorParts {
+    let arrow: String
+    let label: String
+    let padding: Int
+
+    /// Just the animated cells: the arrow and its label.
+    func styled(color: Color) -> String {
+        ANSIRenderer.colorize(arrow, foreground: color)
+            + ANSIRenderer.colorize(label, foreground: color)
+    }
+
+    /// The whole row: the centring blanks, then the animated cells.
+    func line(color: Color) -> String {
+        String(repeating: " ", count: padding) + styled(color: color)
+    }
+}
+
+private func scrollIndicatorParts(
+    direction: ScrollIndicatorDirection,
+    count: Int,
+    unit: ScrollIndicatorUnit,
+    width: Int,
+    approximate: Bool,
+    locale: Locale
+) -> ScrollIndicatorParts {
+    let arrow = direction == .up ? "\u{25B2}" : "\u{25BC}"
     let countText =
         approximate
         ? approximateCountLabel(count, locale: locale)
@@ -150,12 +232,7 @@ func renderScrollIndicator(
     let body = bodies.first { 1 + $0.count + 2 <= width } ?? ""
     let label = body.isEmpty ? " " : " \(body) "
 
-    let indicatorColor = emphasis ?? palette.foregroundTertiary
-    let styledArrow = ANSIRenderer.colorize(arrow, foreground: indicatorColor)
-    let styledLabel = ANSIRenderer.colorize(label, foreground: indicatorColor)
-
     let indicatorWidth = 1 + label.count
-    let padding = max(0, (width - indicatorWidth) / 2)
-
-    return String(repeating: " ", count: padding) + styledArrow + styledLabel
+    return ScrollIndicatorParts(
+        arrow: arrow, label: label, padding: max(0, (width - indicatorWidth) / 2))
 }

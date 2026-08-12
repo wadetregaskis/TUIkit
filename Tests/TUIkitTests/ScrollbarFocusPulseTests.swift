@@ -72,7 +72,7 @@ struct ScrollbarFocusPulseTests {
 
     /// Renders a ScrollView with NO scrollbar (so it shows "N more" text
     /// indicators) at a given pulse phase; returns the raw lines.
-    private func rawIndicatorLines(pulsePhase: Double, focused: Bool) -> [String] {
+    private func indicatorBuffer(focused: Bool) -> FrameBuffer {
         let tuiContext = TUIContext()
         let focusManager = FocusManager()
         let view = ScrollView {
@@ -83,11 +83,10 @@ struct ScrollbarFocusPulseTests {
         // .automatic (default) with a short frame → no bar, just indicators.
         .frame(height: 6)
 
-        func frame() -> [String] {
+        func frame() -> FrameBuffer {
             var environment = EnvironmentValues()
             if focused { environment.focusManager = focusManager }
             environment.applyRuntimeServices(from: tuiContext)
-            environment.pulsePhase = pulsePhase
             let context = RenderContext(
                 availableWidth: 24, availableHeight: 6,
                 environment: environment, tuiContext: tuiContext)
@@ -99,7 +98,7 @@ struct ScrollbarFocusPulseTests {
             focusManager.endRenderPass()
             tuiContext.stateStorage.endRenderPass()
             tuiContext.renderCache.removeInactive()
-            return buffer.lines
+            return buffer
         }
         _ = frame()
         // Scroll to the middle so BOTH indicators show.
@@ -108,18 +107,40 @@ struct ScrollbarFocusPulseTests {
         return frame()
     }
 
-    @Test("A focused scrollbar-less ScrollView pulses its N-more indicators")
+    @Test("A focused scrollbar-less ScrollView hands over its N-more indicators")
     func focusedIndicatorsPulse() {
-        let dim = rawIndicatorLines(pulsePhase: 0.0, focused: true)
-        let bright = rawIndicatorLines(pulsePhase: 1.0, focused: true)
+        // The indicators breathe through the run loop now, not by being
+        // recoloured from the live phase — so what proves it is the runs they
+        // leave behind, one per indicator, describing the cells drawn.
+        let buffer = indicatorBuffer(focused: true)
+        let lines = buffer.lines.map { $0.stripped }
         #expect(
-            dim.contains { $0.contains("▲") } || dim.contains { $0.contains("▼") },
-            "an indicator is present: \(dim.map { $0.stripped })")
-        #expect(dim != bright, "the focused indicators animate with the phase")
+            lines.contains { $0.contains("▲") } && lines.contains { $0.contains("▼") },
+            "scrolled to the middle, so both indicators show: \(lines)")
 
-        // Unfocused: steady.
-        let a = rawIndicatorLines(pulsePhase: 0.0, focused: false)
-        let b = rawIndicatorLines(pulsePhase: 1.0, focused: false)
-        #expect(a == b, "unfocused indicators must not animate")
+        #expect(buffer.animatedCells.count == 2, "one run per indicator")
+        #expect(buffer.animatedCells.allSatisfy { $0.isAnimating }, "both breathe")
+        // Top indicator on the first row, bottom on the last.
+        #expect(
+            buffer.animatedCells.map(\.offsetY).sorted() == [0, buffer.lines.count - 1],
+            "the runs sit on the rows the indicators were drawn on")
+        for run in buffer.animatedCells {
+            #expect(Set(run.frames).count > 1, "more than one picture: \(run)")
+            #expect(
+                run.frames.allSatisfy { $0.strippedLength == run.width },
+                "every frame is the same width: \(run)")
+            // The run must describe the cells that were drawn: replaying this
+            // tick's frame changes nothing. This is what catches an offset that
+            // forgot the centring padding.
+            let replayed = buffer.composited(
+                with: FrameBuffer(lines: [run.frame(at: 0)]),
+                at: (x: run.offsetX, y: run.offsetY))
+            #expect(replayed.lines.map { $0.stripped } == lines, "the run moved the cells")
+        }
+    }
+
+    @Test("An unfocused ScrollView's indicators animate nothing")
+    func unfocusedIndicatorsSteady() {
+        #expect(indicatorBuffer(focused: false).animatedCells.isEmpty)
     }
 }
