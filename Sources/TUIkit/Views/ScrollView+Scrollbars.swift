@@ -109,7 +109,25 @@ extension _ScrollViewCore {
             let cell = index < bar.count ? bar[index] : emptyCell
             lines[index] = content + String(repeating: " ", count: pad) + cell
         }
-        return buffer.replacingLines(lines, width: contentWidth + 1, uniformWidth: true)
+        var result = buffer.replacingLines(lines, width: contentWidth + 1, uniformWidth: true)
+        // The bar's own cells, handed to the run loop. Its column is the last
+        // one — the content was padded out to `contentWidth` above — and only
+        // the rows that actually change earn a run, so a tall bar does not
+        // repaint its whole length to move a two-cell thumb.
+        if !context.isMeasuring,
+            let cycle = ScrollbarColors.focusCycle(isFocused: isFocused, context: context)
+        {
+            result.animatedCells += ScrollbarRenderer.verticalScrollbarRuns(
+                height: height,
+                extent: handler.contentHeight,
+                viewport: handler.viewportHeight,
+                offset: handler.scrollOffset,
+                arrows: context.environment.scrollbarArrows,
+                proportional: context.environment.scrollbarProportionalThumb,
+                cycle: cycle, palette: palette
+            ).map { $0.shifted(byX: contentWidth, y: 0) }
+        }
+        return result
     }
 
     /// Appends the bottom horizontal scrollbar over a reserved row. When the
@@ -134,6 +152,21 @@ extension _ScrollViewCore {
             : ""
         var lines = buffer.lines
         lines.append(bar + corner)
-        return buffer.replacingLines(
+        var result = buffer.replacingLines(
             lines, width: contentWidth + (hasVerticalBar ? 1 : 0), uniformWidth: true)
+        // The bar occupies the row just appended.
+        if !context.isMeasuring,
+            let cycle = ScrollbarColors.focusCycle(isFocused: isFocused, context: context),
+            let run = ScrollbarRenderer.horizontalScrollbarRun(
+                width: contentWidth,
+                extent: handler.horizontal.extent,
+                viewport: handler.horizontal.viewportHeight,
+                offset: handler.horizontal.scrollOffset,
+                arrows: context.environment.scrollbarArrows,
+                proportional: context.environment.scrollbarProportionalThumb,
+                cycle: cycle, palette: palette)
+        {
+            result.animatedCells.append(run.shifted(byX: 0, y: lines.count - 1))
+        }
+        return result
     }}

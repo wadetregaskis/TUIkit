@@ -162,11 +162,42 @@ struct ScrollbarColors {
                 track: palette.foregroundQuaternary,
                 arrow: palette.foregroundTertiary)
         }
-        let dim = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
-        let accent = SelectionIndicator.resolve(isFocused: true, context: context)
-            .color(dim: dim, bright: palette.accent)
+        // The cycle, not the live phase: building it reads no clock, so a
+        // focused bar no longer forces a full re-render on every tick. The
+        // cells are handed to the run loop instead — see `focusCycle` and
+        // ``AnimatedCellRun``.
+        let cycle = context.environment.selectionEmphasis.cycle(true)
         return Self(
-            thumb: accent, track: palette.foregroundQuaternary, arrow: accent)
+            thumb: cycle.colorNow(dim: Self.pulseDim(palette), bright: palette.accent),
+            track: palette.foregroundQuaternary,
+            arrow: cycle.colorNow(dim: Self.pulseDim(palette), bright: palette.accent))
+    }
+
+    /// The bar with a given accent for its thumb and arrows — one frame of the
+    /// focused bar's cycle.
+    static func accented(_ accent: Color, palette: any Palette) -> Self {
+        Self(thumb: accent, track: palette.foregroundQuaternary, arrow: accent)
+    }
+
+    /// The recessive end of the focused bar's breath.
+    @MainActor
+    static func pulseDim(_ palette: any Palette) -> Color {
+        palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
+    }
+
+    /// The bar's breathing cycle, or nil when nothing about it moves — not
+    /// focused, scrolling disabled, or `.selectionIndicatorStyle(.none)`.
+    ///
+    /// A caller that gets a cycle must hand the bar's cells to the run loop as
+    /// ``AnimatedCellRun``s; a caller that gets nil has a still bar and needs no
+    /// runs. Nothing here reads a clock.
+    @MainActor
+    static func focusCycle(
+        isFocused: Bool, context: RenderContext
+    ) -> SelectionEmphasisCycle? {
+        guard context.environment.isScrollEnabled, isFocused else { return nil }
+        let cycle = context.environment.selectionEmphasis.cycle(true)
+        return cycle.isAnimating ? cycle : nil
     }
 }
 
@@ -326,6 +357,68 @@ enum ScrollbarRenderer {
         let head = reserve == 4 ? [up, down] : [up]
         let tail = reserve == 4 ? [up, down] : [down]
         return head + lines + tail
+    }
+
+    /// The vertical bar's animation runs: one per row whose cell actually
+    /// changes across the cycle.
+    ///
+    /// Built by rendering the WHOLE bar once per colour of the cycle and
+    /// keeping the rows that differ — so the glyph logic (thumb spans in
+    /// eighths, partial end cells, arrow reserve) is written once and the
+    /// animation cannot disagree with the render about which cells are thumb.
+    /// Empty track cells come out identical at every colour and so earn no run,
+    /// which is what keeps a tall bar from repainting its whole length 20 times
+    /// a second to move a two-cell thumb.
+    ///
+    /// Offsets are relative to the bar's own column, row 0 — the caller knows
+    /// where the bar sits and shifts them.
+    @MainActor
+    static func verticalScrollbarRuns(
+        height: Int, extent: Int, viewport: Int, offset: Int,
+        arrows: ScrollbarArrows, proportional: Bool,
+        cycle: SelectionEmphasisCycle, palette: any Palette
+    ) -> [AnimatedCellRun] {
+        let frames = cycle.colors(dim: ScrollbarColors.pulseDim(palette), bright: palette.accent)
+            .map { accent in
+                verticalScrollbar(
+                    height: height, extent: extent, viewport: viewport, offset: offset,
+                    arrows: arrows, proportional: proportional,
+                    colors: .accented(accent, palette: palette))
+            }
+        guard let first = frames.first else { return [] }
+        return (0..<first.count).compactMap { row in
+            let cells = frames.map { $0.indices.contains(row) ? $0[row] : "" }
+            guard Set(cells).count > 1 else { return nil }
+            return AnimatedCellRun(
+                offsetX: 0, offsetY: row, width: cells[0].strippedLength,
+                frames: cells, clock: .cursor)
+        }
+    }
+
+    /// The horizontal bar's run: the whole bar row.
+    ///
+    /// One run rather than per-cell, because a horizontal bar is a single row
+    /// and splitting it would mean diffing styled cells to find the animated
+    /// span. The static track cells are repainted with it — one row's worth of
+    /// bytes per tick, which is the price of not writing a second cell-diffing
+    /// routine that could disagree with the renderer.
+    @MainActor
+    static func horizontalScrollbarRun(
+        width: Int, extent: Int, viewport: Int, offset: Int,
+        arrows: ScrollbarArrows, proportional: Bool,
+        cycle: SelectionEmphasisCycle, palette: any Palette
+    ) -> AnimatedCellRun? {
+        let frames = cycle.colors(dim: ScrollbarColors.pulseDim(palette), bright: palette.accent)
+            .map { accent in
+                horizontalScrollbar(
+                    width: width, extent: extent, viewport: viewport, offset: offset,
+                    arrows: arrows, proportional: proportional,
+                    colors: .accented(accent, palette: palette))
+            }
+        guard let first = frames.first, Set(frames).count > 1 else { return nil }
+        return AnimatedCellRun(
+            offsetX: 0, offsetY: 0, width: first.strippedLength,
+            frames: frames, clock: .cursor)
     }
 
     /// A horizontal scrollbar `width` cells wide: a `◀`/`▶` arrow assembly at each

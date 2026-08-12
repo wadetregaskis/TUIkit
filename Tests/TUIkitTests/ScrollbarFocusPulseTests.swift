@@ -21,7 +21,7 @@ struct ScrollbarFocusPulseTests {
 
     /// Renders a focused, scrollbar-bearing ScrollView at a given pulse
     /// phase and returns the RAW lines (SGR bytes included).
-    private func rawLines(pulsePhase: Double, focused: Bool) -> [String] {
+    private func barBuffer(focused: Bool) -> FrameBuffer {
         let tuiContext = TUIContext()
         let focusManager = FocusManager()
         let view = ScrollView {
@@ -32,13 +32,12 @@ struct ScrollbarFocusPulseTests {
         .scrollbarVisibility(.visible)
         .frame(height: 6)
 
-        func frame() -> [String] {
+        func frame() -> FrameBuffer {
             var environment = EnvironmentValues()
             // Without a focus manager the ScrollView renders unfocused; with
             // one, the overflowing ScrollView auto-focuses itself.
             if focused { environment.focusManager = focusManager }
             environment.applyRuntimeServices(from: tuiContext)
-            environment.pulsePhase = pulsePhase
             let context = RenderContext(
                 availableWidth: 20, availableHeight: 6,
                 environment: environment, tuiContext: tuiContext)
@@ -50,7 +49,7 @@ struct ScrollbarFocusPulseTests {
             focusManager.endRenderPass()
             tuiContext.stateStorage.endRenderPass()
             tuiContext.renderCache.removeInactive()
-            return buffer.lines
+            return buffer
         }
         _ = frame()
         return frame()
@@ -58,16 +57,38 @@ struct ScrollbarFocusPulseTests {
 
     @Test("A focused ScrollView's scrollbar animates with the pulse phase")
     func focusedBarPulses() {
-        let dim = rawLines(pulsePhase: 0.0, focused: true)
-        let bright = rawLines(pulsePhase: 1.0, focused: true)
-        #expect(dim != bright, "the focused bar's bytes track the phase")
+        // The bar breathes through the run loop now: one run per row whose cell
+        // actually changes across the cycle. The arrows and the thumb change;
+        // the empty track cells do not, and must earn no run — repainting them
+        // on a clock would be bytes spent to redraw an unchanged colour.
+        let buffer = barBuffer(focused: true)
+        let runs = buffer.animatedCells
+        #expect(!runs.isEmpty, "a focused bar hands over its animated rows")
+        #expect(runs.allSatisfy { $0.isAnimating }, "every run is more than one picture")
+        #expect(
+            runs.count < buffer.lines.count,
+            "the static track rows earn no run: \(runs.count) of \(buffer.lines.count)")
+
+        let barColumn = buffer.width - 1
+        for run in runs {
+            #expect(run.offsetX == barColumn, "runs sit in the bar's column: \(run)")
+            #expect(run.width == 1, "a vertical bar is one cell wide: \(run)")
+            #expect(
+                run.frames.allSatisfy { $0.strippedLength == 1 },
+                "every frame is one cell: \(run)")
+            // Replaying this tick's frame changes nothing — which is what
+            // proves the run describes the cells that were drawn.
+            let before = buffer.lines.map { $0.stripped }
+            let replayed = buffer.composited(
+                with: FrameBuffer(lines: [run.frame(at: 0)]),
+                at: (x: run.offsetX, y: run.offsetY))
+            #expect(replayed.lines.map { $0.stripped } == before, "the run moved cells: \(run)")
+        }
     }
 
-    @Test("An unfocused scrollbar is steady across phases")
+    @Test("An unfocused scrollbar animates nothing")
     func unfocusedBarSteady() {
-        let a = rawLines(pulsePhase: 0.0, focused: false)
-        let b = rawLines(pulsePhase: 1.0, focused: false)
-        #expect(a == b, "unfocused bars must not animate")
+        #expect(barBuffer(focused: false).animatedCells.isEmpty)
     }
 
     /// Renders a ScrollView with NO scrollbar (so it shows "N more" text

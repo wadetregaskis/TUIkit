@@ -793,3 +793,48 @@ implementation rather than the behaviour.
 scout established its geometry — one run per animated bar row (arrows animate;
 thumb cells animate; empty track cells do not), `thumbSpan` is the authority on
 which rows those are.
+
+## 18. The scrollbar converted — and the Scroll View page's floor explained
+
+The last producer. `ScrollbarColors.focusIndicating` no longer resolves the
+clock: it takes its accent from the cycle (`colorNow`), and the bar's cells go
+to the run loop.
+
+**One run per row that actually changes.** The runs are built by rendering the
+whole bar once per colour of the cycle and keeping the rows that differ — so the
+glyph logic (thumb spans in eighths, partial end cells, arrow reserve) stays
+written once and the animation cannot disagree with the render about which cells
+are thumb. Empty track cells come out identical at every colour and earn no run,
+which is what stops a 40-row bar repainting its whole length 20 times a second to
+move a two-cell thumb. The horizontal bar takes one whole-row run instead:
+splitting it would need a second cell-diffing routine that could drift from the
+renderer, and one row of bytes per tick is the cheaper mistake.
+
+| Example page: Scroll View | idle CPU |
+|---|---|
+| §17 (indicators converted) | 16.0% |
+| now | 17.0% |
+
+**No further win, and the probe says why.** All three drivers report *nothing*
+on that page now: no pulse read, no cursor read, no `setNeedsRender`. What is
+left is the page's own animated-row demo — a `Spinner` inside a scroll view,
+put there deliberately (#222/#235) to prove animation-in-a-cell works. That is
+scheduler-driven animation doing exactly what it is for, the same category as
+Spinners 6.5 and Progress & Gauges 18.5, and the same answer the probe gave for
+Lists in §16.
+
+So the honest accounting for that page is 23.9% → ~17%, all of it from the
+indicators, with the bar conversion contributing nothing *measurable here*
+because the page never idles. Kept anyway, and not as a consolation: it removes
+the **last live-clock read from the scrolling path**, so a focused bar in an app
+without a spinner on screen now costs nothing, and `ScrollbarFocusPulseTests`
+proves the cells still breathe (it fails on the unfixed code with
+`runs → []`).
+
+**The idle-load programme is now complete in the sense that matters**: every
+Example page that renders while nothing changes has been found and fixed, and
+every page still burning CPU is animating something on purpose. What remains
+above 3% — Scroll View 17.0, Progress & Gauges 18.5, Lists 8.4, Spinners 6.5,
+Overlays & Modals 8.5, Sliders 8.0 — is legitimate animation plus two
+unconverted producers (`_MenuItemRow.highlight`, the Slider's own indicator)
+whose pages animate anyway.
