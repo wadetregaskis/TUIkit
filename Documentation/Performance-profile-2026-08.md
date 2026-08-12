@@ -969,3 +969,122 @@ Two things are worth carrying forward regardless:
 2. **Byte-keying works.** Zero false hits on every page whose environment
    dependencies were already tracked; the only failures came from the
    environment hole above, not from the key.
+
+## 20. The environment digest — experiment, and what it settled (2026-08-12)
+
+§19 ended on a blocker: a memo cannot see environment published with
+`EnvironmentValues.setting(_:to:)` / direct assignment, because only the
+`.environment(_:_:)` modifier routes through `noteAppliedEnvironment`. This
+section records the experiment that attacked it. **Nothing from it is
+committed** except the `Hashable` conformances it required (915518d1); the
+findings are the deliverable.
+
+### The idea: digest the environment instead of watching its writers
+
+Per-site change detection needs every publisher to cooperate, and the
+framework publishes by assigning on a copied `EnvironmentValues` in roughly a
+hundred places. But every one of those assignments funnels through **one**
+place: `EnvironmentValues.subscript<K: EnvironmentKey>`'s setter. So instead of
+watching writers, keep a running digest of the contents:
+
+```swift
+public private(set) var digest: UInt64 = 0
+set {
+    if let old = storage[id] { digest ^= slotDigest(id, old) }   // XOR out
+    storage[id] = newValue
+    digest ^= slotDigest(id, newValue)                            // XOR in
+}
+```
+
+XOR makes it order-independent (two subtrees reaching the same environment by
+different routes agree) and makes re-writing the same value a no-op. The memo
+then compares one `UInt64` per lookup instead of walking a dictionary — which
+is what the original design rejected fingerprinting for.
+
+### Cost: small, and concentrated where you would expect
+
+Interleaved A/B of two binaries, `Stress --bench`, 800 iterations, mean of two
+runs each. Within-build variance measured separately at 0.5–1.7%.
+
+| scenario | base µs | digest µs | delta |
+|---|---|---|---|
+| megalist | 411.6 | 398.2 | −3.3% |
+| deep | 7038.0 | 7510.1 | **+6.7%** |
+| fanout | 22306.8 | 22358.3 | +0.2% |
+| modifiers | 7035.4 | 7074.6 | +0.6% |
+| textwall | 4003.8 | 4051.1 | +1.2% |
+| dashboard | 332.0 | 307.2 | −7.5% |
+| kitchensink | 820.4 | 803.0 | −2.1% |
+
+Several scenarios came out *faster*, which adding work cannot cause: that is
+code-layout noise between two different binaries, and it sets the honest error
+bar at about ±5%. The real read is **≤1% on most trees, ~5–7% on `deep`**,
+which is the environment-write-heaviest scenario and so exactly where the cost
+should land.
+
+### Two traps worth remembering
+
+**`as? AnyObject` succeeds for everything on Apple platforms.** The first
+version digested class references by `ObjectIdentifier(value as AnyObject)`.
+Structs bridge into a freshly allocated `__SwiftValue` box, so the identifier
+differed on every write — the digest would have changed every frame and
+nothing would ever have hit, while *looking* like it worked. `type(of: value)
+is AnyClass` is the test that means what it says.
+
+**`Optional<AService>` is neither a class nor `Hashable`.** Almost everything
+the framework puts in the environment is an optional service — the focus
+manager, the state storage, the render cache. Before unwrapping, *every*
+environment in the tree was undigestable, so no subtree anywhere was
+comparable. This is the failure mode where a scheme reports "safe" by simply
+never engaging.
+
+### What had to become Hashable, and what could not
+
+With optionals unwrapped, the undigestable set on three Example pages was:
+
+```
+Appearance   Color   StyleCascade   SystemPalette   ToggleCharacterSet
+InlineMenuStyle   _MenuItemButtonStyle   RadioGroupPickerStyle
+@MainActor @Sendable (KeyEvent) -> ()
+```
+
+The first five are in *every* environment, so they had to be hashable or
+nothing memoizes — they were all already `Equatable`, and the conformance came
+for free except `Appearance` (custom `==`). That is commit 915518d1.
+
+The rest are fine left alone, and this is the pleasing part of the design: a
+style existential or a key-handler closure marks its environment undigestable,
+which disables memoization **only in the subtree that carries it**. The
+mechanism degrades locally instead of globally.
+
+### Result: the digest fixes the focus class
+
+With the digest in the memo's key, `ContextMenuTests` — "the content is told
+whether its focus stop holds the focus", the §19 failure that proved the memo
+was serving stale pixels — **passes**. The idea works.
+
+Two failures remained, and neither is the environment:
+
+1. Three `TupleViewEquatableTests` assert exact `stats.misses` / `stats.stores`
+   counts. The automatic memo shares those counters, so the numbers move. A
+   real API question (should the automatic memo have its own counters?), not a
+   correctness one.
+2. `MenuTests` — the drop-down caret stays closed. This one **passes when the
+   test is run alone, with or without the memo**, and only fails in the full
+   suite, so it is a test-isolation interaction (cf. `RenderCache` state shared
+   between tests) that the memo makes visible, not a rendering defect.
+
+Worth noting what `Menu` showed on the way: `MenuPopupState` is a **class**
+held in a `StateBox`, so `state.isOpen = true` mutates the object and
+`StateBox.didSet` never fires — no invalidation is enqueued at all. Any memo
+has to treat in-place mutation of persisted reference state as a third
+untracked-dependency channel alongside focus and environment. Today the
+hit-region gate covers the controls that do it, but that is a coincidence of
+those controls being clickable, not a guarantee.
+
+### Where this leaves it
+
+The digest is the right shape and is affordable. The remaining work before an
+automatic memo could ship is bounded and now known: separate memo counters,
+the test-isolation interaction, and a decision on reference-typed view state.
+That is a much smaller list than §19's, and none of it is architectural.
