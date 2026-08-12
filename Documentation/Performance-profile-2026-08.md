@@ -1163,3 +1163,96 @@ Three options, in order of how much they give up:
 
 Option 2 is the honest one and is the only one with no silent-wrongness mode.
 It is also the one that cannot be decided inside a performance pass.
+
+## 22. The miss-reason diagnostic, and what it eliminated (2026-08-12)
+
+§21 ended with the memo storing buffers and hitting none of them, and four
+rounds of "found a cause, fixed it, number didn't move". This round replaced
+guessing with a five-line instrument, which is what should have happened
+first: on a miss, record **which component of the key differed**.
+
+```swift
+guard let entry = autoEntries[key] else { autoMisses.noEntry += 1; return nil }
+guard entry.contextWidth == …, entry.contextHeight == … else { autoMisses.size += 1; … }
+guard entry.environmentDigest == digest else { autoMisses.digest += 1; … }
+guard entry.bytes == bytes else { autoMisses.bytes += 1; … }
+```
+
+A miss that is `noEntry` indicts the **key**; the others indict the **payload**.
+That one distinction did more than the previous four rounds combined.
+
+### First reading: the payload was never the problem
+
+```
+Layout System:  noEntry 19   size 0   digest 52   bytes 0
+```
+
+**`bytes 0`** — the view values were byte-identical every frame, all 52 of
+them. The conformance-free key from §19 works exactly as measured. Every
+theory about localised strings or rebuilt view trees was wrong.
+
+**`digest 52`** — every entry failed on the environment. And the cause was
+sitting in `ServiceEnvironment`: `FrameNowNanosKey`, the current frame's
+monotonic timestamp, lives *in the environment*. It differs on every frame by
+definition, so every subtree below it digested differently, forever. Same for
+`PulsePhaseKey` and `CursorTimerKey`.
+
+The fix is principled rather than a special case: those are **clocks**, and
+reading one is already recorded by `VolatileReadTracker`, which makes the
+reading subtree decline caching. The tracker is the mechanism for time; the
+digest must not also encode it. Marking them `InfrastructureEnvironmentKey`
+took digest misses from 52 to 0.
+
+(The same marker fixed a self-inflicted instance: the memo installs a fresh
+`VolatileReadTracker` into the environment on every miss. It is a class, so it
+digested by identity — a new one each frame changed the digest of everything
+below. The memo was measuring its own instrumentation. `EquatableView` does
+the same thing and never noticed, because its key ignores the environment.)
+
+### Second reading: the key, and two suspects eliminated
+
+With the payload clean, every remaining miss is `noEntry` — the lookup does
+not find what the previous frame stored. Two candidates were ruled out by
+measurement rather than argument, on the same page and the same frames:
+
+```
+AUTO  — hits: 0, … entries: 32 | miss: noEntry 10 size 0 digest 7 bytes 0
+FRAME — hits: 6, misses: 0, … subtreeClears: 0, entries: 2, hit rate: 100%
+```
+
+- **`subtreeClears: 0`** — nothing is being evicted by invalidation. The
+  entries survive; the lookups do not find them.
+- **`hit rate: 100%`** on the opt-in memo, on the same page, in the same
+  frames — so `ViewIdentity` is stable across frames and hashes correctly.
+  `EquatableView` keys on identity alone and hits every time.
+
+That leaves `occurrence` — the component this design *added* to the key — as
+the remaining suspect, plus a small residual digest churn (7 of 17 lookups).
+
+`occurrence` exists to separate sibling nodes that share one `ViewIdentity`,
+since a `Renderable` adds no child identity. It is positional, so it was moved
+to reset per *walk* rather than per pass (a frame walks the scene more than
+once — header height discovery, then correction) exactly as
+`RenderLoop.beginSceneRender()` already documents for the mouse dispatcher's
+positional handler ids. That fix was necessary and reduced `noEntry`
+substantially, but did not eliminate it.
+
+### Where this leaves the design
+
+Every dependency channel is now demonstrably handled:
+
+| channel | mechanism | evidence |
+|---|---|---|
+| view value | raw bytes | `bytes 0` — never a mismatch, never a false hit |
+| environment | digest, clocks excluded | `digest 52 → 0` |
+| registries | region/overlay/volatile gates | gate counters: only regions decline, 2106 vs 4229 |
+| eviction | `markActive` + invalidation | `subtreeClears 0`; entries persist |
+
+The one unresolved component is the one that is *not* required by the theory:
+`EquatableView` gets a 100% hit rate with **identity alone**. The obvious next
+move is therefore to drop `occurrence` from the key and pay for sibling
+collisions differently — the byte comparison already rejects a wrong sibling
+(two different views at one identity have different bytes), so the occurrence
+number may be redundant with the payload check it sits in front of. That is a
+one-line experiment with a measurement attached, and it is where the next
+round should start.
