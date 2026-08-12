@@ -367,9 +367,9 @@ legitimately animate (Spinners, Progress & Gauges) are not waste; the rest is.
 | Scroll View | 26.9 | 27.4 | scrollbar focus pulse — next |
 | Picker | 23.9 | 27.4 | scrollbar / menu indicator |
 | Progress & Gauges | 19.0 | 20.4 | indeterminate bars (legitimate) |
-| Theme | 16.4 | 17.5 | to be identified |
-| Tab Views | 11.4 | 12.5 | to be identified |
-| Mouse | 10.0 | 11.0 | to be identified |
+| Theme | 16.4 | 17.5 | focused **RadioButton** bullet — unconverted producer |
+| Tab Views | 11.4 | 12.5 | active **tab chip** background — unconverted producer |
+| Mouse | 10.0 | 11.0 | button caps, already converted — see below |
 | Lists | 17.9 | **10.0** | |
 | Image (File) | 13.0 | **9.0** | |
 | Overlays & Modals | 8.5 | 9.5 | |
@@ -390,8 +390,25 @@ this profile, a bug hunt, and two rounds of conversions. `IdleClockReadTests`
 now asserts that resting controls consult no clock, with a complement test that
 focused ones still animate — so the class cannot come back silently.
 
-Everything above ~8% that is not a legitimate animation is now a scrollbar or
-an unidentified reader. Identify with `rawidle.py` before converting on spec.
+Everything above ~8% that is not a legitimate animation is now a known
+producer. Identified with `rawidle.py`, which shows what is actually written:
+
+- **Theme** — the focused radio button's `●`, pulsing at 12 writes/s
+  (`RadioButton.swift:515`). A straight conversion.
+- **Tab Views** — the active tab chip's background
+  (`TabView.activeChipBackground`). Also a straight conversion.
+- **Scroll View / Picker / Lists** — a genuinely focused scrollbar.
+  `IdleClockReadTests` covers all three and they pass, so this is a real
+  animation, not a resting control holding the clock open. Note the scrollbar
+  is not a two-cell indicator: the WHOLE BAR pulses, so it wants one run per
+  bar row. Measure that rather than assume it — it is still likely a win,
+  because the render already rewrites those lines every tick.
+- **Mouse** — worth a second look, and the one that does NOT fit. Its animator
+  is the bracketed button's caps, which are already converted, and its write
+  rate (11/s, 5.5 KB/s) matches replay rather than render. Yet it costs 11%
+  against Buttons & Links' 0.5% at the same write rate. Its `ms/pass` is 7.03,
+  among the highest, so the likely story is a few genuinely expensive renders
+  rather than the animation — but that is a hypothesis, not a measurement.
 
 `TextEditor` is deliberately left on the old path: its caret has multi-line
 geometry. It costs exactly what it cost before, which is the migration rule
