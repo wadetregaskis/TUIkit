@@ -81,6 +81,14 @@ struct IdleClockReadTests {
                         RadioButtonItem("b", "Bravo")
                     })
             ),
+            (
+                "TabView",
+                AnyView(
+                    TabView(selection: .constant(0)) {
+                        Tab("Alpha", value: 0) { Text("A") }
+                        Tab("Bravo", value: 1) { Text("B") }
+                    })
+            ),
             ("List", AnyView(List(selection: .constant(String?.none)) { Text("a"); Text("b") })),
             // Scrollables get their content deliberately overflowed: an
             // indicator or scrollbar only exists when there is more to show,

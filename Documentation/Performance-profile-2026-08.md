@@ -455,3 +455,47 @@ Remaining, in the order their pages cost: scrollbar + `scrollIndicatorEmphasis`
 (Tab Views 12.5), then Toggle, List/Table row cursors, Slider, the grids and
 the menu renderers. And the Mouse page (11.0), which still does not fit the
 pattern.
+
+## 11. The tab chip converted — and what it did NOT buy (2026-08-11)
+
+The active tab chip now hands its cells to the run loop like the button caps
+and the radio bullet: `ActiveChipCycle`, both strip styles, one run for the
+active chip only. It is correct — `FocusIndicatorAnimationTests` pins the run's
+row and column in both styles (the bordered chip sits under a row of tab tops
+and inside the box's left wall, so an unshifted run would land on chrome), and
+a `VolatileReadTracker` probe of the page's controls reports **0 clock reads
+and 1 animating run**.
+
+It bought nothing measurable:
+
+| Example page: Tab Views | idle CPU | writes/s |
+|---|---|---|
+| before | 11.5% | 2.2 |
+| after | 12.4% | 2.2 |
+
+**So the chip was never that page's cost.** §9 named it from `rawidle.py` —
+what *changes on screen* when the page is idle — and that is a different
+question from what *keeps the clock running*. Only one reader anywhere in the
+frame is needed to force a full render for everyone; the chip was simply the
+one thing whose appearance depended on it visibly.
+
+What the numbers say now:
+
+- **Sliders (7.7%, 10.3 writes/s)** is the honest shape of an unconverted
+  producer: a focused Slider reads the phase, the page re-renders ~10×/s, and
+  the diff emits every time because the knob's colour really does change.
+- **Tab Views (12.4%, 2.2 writes/s)** is the other shape: something re-renders
+  the page ~10×/s and almost nothing changes, so the writes are rare and the
+  CPU is all view walk. That page's frames are expensive — three `TabView`s,
+  each measuring every tab's content — which is why it costs more than Sliders
+  while writing five times less.
+- The reader is **not** in the page's own controls: rendering the page's shape
+  headless (three tab views, toggles, a slider, a picker, an overflowing
+  `ScrollView` with focus on a descendant) reports zero reads. It needs the
+  live app shell — header, status bar, navigation bar — to reproduce, and that
+  is where to look next.
+
+The lesson for the remaining conversions: **`rawidle.py` finds what moves, not
+what costs.** Before converting a producer to quiet a page, confirm the page's
+clock is actually being held open by *that* producer — a `VolatileReadTracker`
+render of the page is the cheap way to ask.

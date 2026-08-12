@@ -173,6 +173,8 @@ type_name:
     - _HStackCore
     # Internal so its reveal-snap extension can live in ScrollViewReveal.swift.
     - _ScrollViewCore
+    # Internal so its strip-drawing extension can live in TabViewStrip.swift.
+    - _TabViewCore
     # Internal _-prefixed helper views and value types created by view
     # modifiers, following the same SwiftUI convention.
     - _TaggedView

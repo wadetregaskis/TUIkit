@@ -329,6 +329,49 @@ struct FocusIndicatorAnimationTests {
         #expect(focused(disabled).animatedCells.isEmpty)
     }
 
+    // MARK: - Tab chip
+
+    /// A tab strip claims the focus on its FIRST render, so its focused
+    /// appearance is only visible on the second — against the same context.
+    private func focusedTabs(_ style: TabViewStyle) -> FrameBuffer {
+        let view = TabView(selection: .constant(0)) {
+            Tab("Alpha", value: 0) { Text("A") }
+            Tab("Bravo", value: 1) { Text("B") }
+        }.tabViewStyle(style)
+        let context = makeRenderContext(width: 40, height: 10)
+        _ = renderToBuffer(view, context: context)
+        return renderToBuffer(view, context: context)
+    }
+
+    @Test("A focused tab strip hands over its active chip, in either style")
+    func tabChip() {
+        // Only the active chip: an inactive one is not animating, and a run
+        // over it would repaint a colour it never had.
+        let compact = focusedTabs(.compact)
+        expectAnimates(compact, runs: 1, "compact tab chip")
+        #expect(compact.animatedCells[0].offsetY == 0, "the compact strip's only row")
+
+        // The bordered strip puts its labels UNDER a row of tab tops and inside
+        // the box's left wall, so its chip is the case where an unshifted run
+        // would land on chrome.
+        let bordered = focusedTabs(.bordered)
+        expectAnimates(bordered, runs: 1, "bordered tab chip")
+        #expect(bordered.animatedCells[0].offsetY == 1, "under the tab tops")
+        #expect(bordered.animatedCells[0].offsetX > 0, "inside the left wall")
+    }
+
+    @Test("An unfocused tab strip animates nothing")
+    func unfocusedTabsAreStill() {
+        let view = TabView(selection: .constant(0)) {
+            Tab("Alpha", value: 0) { Text("A") }
+            Tab("Bravo", value: 1) { Text("B") }
+        }
+        let context = makeRenderContext(width: 40, height: 10)
+        context.environment.focusManager!.register(FocusSentinel())
+        _ = renderToBuffer(view, context: context)
+        #expect(renderToBuffer(view, context: context).animatedCells.isEmpty)
+    }
+
     @Test("A button keeps its runs through the tree a page wraps it in")
     func capsSurviveRealChrome() {
         // The producer and the propagation both have to hold for the page to

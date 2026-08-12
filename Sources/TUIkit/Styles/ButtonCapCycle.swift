@@ -23,12 +23,6 @@ struct ButtonCapCycle {
     /// `.selectionIndicatorStyle`.
     private let cycle: SelectionEmphasisCycle
 
-    /// Whether the button this describes holds the focus. A cycle is still when
-    /// unfocused, but a still cycle sits at `bright` — and an unfocused cap
-    /// wants the button's own face, not the accent — so the two are not the
-    /// same question.
-    private let isFocused: Bool
-
     /// The button's own face: what an unfocused cap shows, and the recessive
     /// end of the breath.
     private let background: Color
@@ -50,19 +44,19 @@ struct ButtonCapCycle {
     @MainActor
     init(isFocused: Bool, background: Color, accent: Color, context: RenderContext) {
         cycle = context.environment.selectionEmphasis.cycle(isFocused)
-        self.isFocused = isFocused
         self.background = background
         self.accent = accent
     }
 
     /// Whether the caps actually move. A still cap needs no run — the ordinary
     /// render already drew it, and replaying it would emit bytes for no change.
-    var isAnimating: Bool { isFocused && cycle.isAnimating }
+    var isAnimating: Bool { cycle.isAnimating }
 
-    /// The colour to draw right now.
+    /// The colour to draw right now. A cap is a fill, so it recedes to the
+    /// button's own face when unfocused rather than sitting at the accent.
     @MainActor
     var colorNow: Color {
-        isFocused ? cycle.colorNow(dim: background, bright: accent) : background
+        cycle.isFocused ? cycle.colorNow(dim: background, bright: accent) : background
     }
 
     /// The runs for a single-row button `width` cells wide: one cap at each end.

@@ -172,7 +172,7 @@ private struct TabSizeCache {
 /// The selected content is rendered under a value-keyed *branch identity*, so
 /// each tab's subtree (and its `@State`) is isolated — switching tabs can't
 /// alias one tab's state onto another's.
-private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
+struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     let selection: Binding<SelectionValue>
     let tabs: [_RawTab]
 
@@ -439,6 +439,161 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         )
     }
 
+    private func persistedFocusIDForClicks(_ context: RenderContext) -> String {
+        FocusRegistration.persistFocusID(
+            context: context, explicitFocusID: nil, defaultPrefix: "tabview",
+            propertyIndex: StateIndex.focusID)
+    }
+
+    /// Registers a click handler per tab region (selecting that tab).
+    private func attachTabClicks(
+        to buffer: inout FrameBuffer,
+        regions: [(x: Int, y: Int, width: Int, index: Int)],
+        context: RenderContext
+    ) {
+        guard !context.isMeasuring, let dispatcher = context.environment.mouseEventDispatcher else { return }
+        let captureFocusID = persistedFocusIDForClicks(context)
+        let focusManager = context.environment.focusManager
+        for region in regions {
+            let value = tabs[region.index].value
+            let capture = selection
+            let handlerID = dispatcher.register { event in
+                guard event.phase == .released, event.button == .left else {
+                    return event.phase == .pressed && event.button == .left
+                }
+                focusManager?.focus(id: captureFocusID)
+                if let v = value.base as? SelectionValue { capture.wrappedValue = v }
+                return true
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: region.x, offsetY: region.y, width: region.width, height: 1,
+                    handlerID: handlerID, focusID: nil))
+        }
+    }
+
+    /// Renders the `.bordered` style: folder tabs sitting on a line-drawn content
+    /// box. Inactive tabs sit on the box's top border (separated from the content
+    /// by it); the active tab's row floats to the bottom and its underside opens
+    /// into the content — the border curves around it (`╯ … ╰`) so the tab and
+    /// the body read as one surface. The strip is aligned (leading / centre /
+    /// trailing) over the box.
+    ///
+    /// For a single row this matches a classic notebook tab exactly. When the
+    /// tabs wrap, upper rows stack as folder-tab strips above the active row; only
+    /// the active (bottom) row connects into the content.
+    private func renderBordered(
+        selectedIndex: Int, isFocused: Bool, palette: any Palette, context: RenderContext
+    ) -> FrameBuffer {
+        let surface = surfaceColor(palette)
+        let border = palette.border
+        let insets = resolvedContentInsets(style: .bordered, context: context)
+        let alignment = context.environment.tabViewHeaderAlignment
+        let chip = ActiveChipCycle(
+            surface: surface, palette: palette, isFocused: isFocused, context: context)
+        let (activeFg, inactiveFg, inactiveBg) = stripLabelColors(
+            surface: surface, isFocused: isFocused, palette: palette)
+
+        // Size to the widest tab; the strip wraps per the header-wrap mode.
+        let avail = max(1, context.availableWidth - 2)
+        let widest = widestContentWidth(insets: insets, available: avail, context: context)
+        let rows = floatActiveRowToBottom(
+            stripRowGroups(
+                style: .compact,
+                available: stripWrapBudget(widest: widest, available: avail, context: context)),
+            selectedIndex: selectedIndex)
+        guard !rows.isEmpty else { return FrameBuffer() }
+        let chrome = 2 * rows.count + 2  // each row: tops + labels; plus content-border + bottom
+        let interior = max(widest, rows.map(folderRowWidth).max() ?? 0)
+        let boxWidth = interior + 2
+
+        // Render the content at the full interior width (so a ViewThatFits editor
+        // reliably picks its wide layout), then clamp it to its own natural width
+        // so the per-line padding below centres it as a block; a tab as wide as
+        // the interior clamps to it and fills. (See the compact path.)
+        var contentCtx = contentContext(context, stripHeight: chrome)
+        contentCtx.availableWidth = interior
+        let natural = naturalSelectedWidth(insets: insets, available: avail, context: context)
+        let full = TUIkit.renderToBuffer(
+            tabs[selectedIndex].content.padding(insets).background(surface), context: contentCtx)
+        let content = full.clamped(toWidth: min(natural, interior), height: full.height)
+
+        func bc(_ s: String) -> String { ANSIRenderer.colorize(s, foreground: border) }
+        func surf(_ n: Int) -> String {
+            n > 0 ? ANSIRenderer.colorize(String(repeating: " ", count: n), background: surface) : ""
+        }
+        var (lines, regions, animatedCells) = folderStripRows(
+            rows: rows, selectedIndex: selectedIndex, chip: chip,
+            style: FolderStripStyle(
+                activeFg: activeFg, inactiveFg: inactiveFg, inactiveBg: inactiveBg,
+                border: border, surface: surface, interior: interior, boxWidth: boxWidth,
+                alignment: alignment))
+
+        // Content rows, centred within the interior as one block (a uniform
+        // offset, so internal column alignment is preserved), then the bottom.
+        //
+        // The rows the content may occupy once the strip and borders take
+        // theirs. The panel is hard-capped to `availableHeight` (the clamp at
+        // the end), so any content beyond this budget could only survive by
+        // displacing the bottom border — GitHub issue #13's missing `╰─╯`, with
+        // stray interior rows where it should have been. Two ways past the
+        // budget, both capped here: a height-flexible tab (a ScrollView, a
+        // Spacer) measures its NATURAL height against the full available
+        // height, chrome not yet subtracted, so `tallestContentHeight` padded
+        // the panel one strip past what fits; and a tab genuinely taller than
+        // the terminal. Either way the content clips INSIDE the border, like
+        // any other bordered container.
+        let contentPad = max(0, (interior - content.width) / 2)
+        let contentStartY = lines.count
+        let (visibleContent, panelContentHeight) = borderedPanelContent(
+            content: content, insets: insets, avail: avail, chrome: chrome, context: context)
+        for line in visibleContent.lines {
+            let used = line.strippedLength
+            lines.append(
+                bc("│") + surf(contentPad) + line + surf(max(0, interior - contentPad - used)) + bc("│"))
+        }
+        // Size the box to the TALLEST tab so switching tabs doesn't change the
+        // box height: pad the (selected) content down to that height with
+        // surface-filled interior rows before the bottom border.
+        while lines.count - contentStartY < panelContentHeight {
+            lines.append(bc("│") + surf(interior) + bc("│"))
+        }
+        lines.append(bc("╰" + String(repeating: "─", count: interior) + "╯"))
+
+        var buffer = FrameBuffer(lines: lines)
+        // The strip's rows open the buffer, so the run's coordinates are the
+        // buffer's already.
+        buffer.animatedCells = context.isMeasuring ? [] : animatedCells
+        // Re-attach the content's interactive regions/overlays (slider, toggle, …):
+        // the content rows above were rebuilt as fresh strings, so the content
+        // buffer's hit regions are not carried automatically. Shift them past the
+        // left border + centring pad and down past the tab-strip rows. From the
+        // budget-clipped content, so nothing hit-tests against rows not drawn.
+        let contentShiftX = 1 + contentPad
+        buffer.hitTestRegions.append(
+            contentsOf: visibleContent.shiftedHitTestRegions(byX: contentShiftX, y: contentStartY))
+        buffer.overlays.append(
+            contentsOf: visibleContent.shiftedOverlays(byX: contentShiftX, y: contentStartY))
+        attachTabClicks(to: &buffer, regions: regions, context: context)
+        return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
+    }
+
+    /// The budget-clipped content rows and the interior height the panel pads
+    /// to — both capped to what fits below the strip, so the bottom border
+    /// always survives (GitHub issue #13; see the call site's rationale).
+    private func borderedPanelContent(
+        content: FrameBuffer, insets: EdgeInsets, avail: Int, chrome: Int, context: RenderContext
+    ) -> (visible: FrameBuffer, panelHeight: Int) {
+        let budget = max(0, context.availableHeight - chrome)
+        let visible =
+            content.height > budget
+            ? content.clamped(toWidth: content.width, height: budget)
+            : content
+        let panelHeight = min(
+            tallestContentHeight(insets: insets, available: avail, context: context), budget)
+        return (visible, panelHeight)
+    }
+
     // MARK: Surface, padding & geometry
 
     /// The shared surface — a very subtle lift above the base background (the
@@ -448,22 +603,6 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
     /// palette that doesn't tint those, it collapses to the base background.
     private func surfaceColor(_ palette: any Palette) -> Color {
         palette.appHeaderBackground.resolve(with: palette)
-    }
-
-    /// The active tab chip's background. When the strip is focused it breathes
-    /// toward the accent on the pulse clock, so the active tab is easy to find on
-    /// a busy screen; otherwise it's the quiet shared surface.
-    ///
-    /// `pulsePhase` is read from the environment only in the focused branch — that
-    /// volatile read is what keeps the pulse timer (and the per-frame re-renders)
-    /// running, so an unfocused tab view costs nothing.
-    private func activeChipBackground(
-        surface: Color, palette: any Palette, isFocused: Bool, context: RenderContext
-    ) -> Color {
-        guard isFocused else { return surface }
-        return Color.lerp(
-            surface, palette.accent.opacity(ViewConstants.focusedChipBackground, over: surface),
-            phase: context.environment.pulsePhase)
     }
 
     /// The interior padding around each tab's content. An explicit
@@ -494,12 +633,12 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
 
     /// A bordered (folder-tab) row's width: each tab body is `" title "`, and the
     /// tabs share `count + 1` vertical walls.
-    private func folderRowWidth(_ row: [Int]) -> Int {
+    func folderRowWidth(_ row: [Int]) -> Int {
         row.reduce(0) { $0 + tabWidth($1, style: .bordered) } + (row.count + 1)
     }
 
     /// A compact row's width: the chips (each `▐ title ▌`) abut with no separator.
-    private func compactRowWidth(_ row: [Int]) -> Int {
+    func compactRowWidth(_ row: [Int]) -> Int {
         row.reduce(0) { $0 + tabWidth($1, style: .compact) }
     }
 
@@ -514,7 +653,7 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
     /// from this one number. Counting Characters here drew a strip wider than it
     /// measured, so the box came out ragged and the click regions slid left of
     /// the tabs they belong to.
-    private func tabWidth(_ index: Int, style: TabViewStyle) -> Int {
+    func tabWidth(_ index: Int, style: TabViewStyle) -> Int {
         let body = tabs[index].title.strippedLength + 2   // " title "
         return style == .compact ? body + 2 : body
     }
@@ -586,7 +725,7 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
         let surface = surfaceColor(palette)
         let insets = resolvedContentInsets(style: .compact, context: context)
         let alignment = context.environment.tabViewHeaderAlignment
-        let activeBg = activeChipBackground(
+        let chip = ActiveChipCycle(
             surface: surface, palette: palette, isFocused: isFocused, context: context)
 
         // Size to the widest tab; the strip wraps per the header-wrap mode (folded
@@ -612,10 +751,11 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
             tabs[selectedIndex].content.padding(insets).background(surface), context: contentCtx)
         let content = full.clamped(toWidth: min(natural, panelWidth), height: full.height)
 
-        let (stripLines, regions) = compactStripLines(
+        let strip = compactStripLines(
             rows: rows, selectedIndex: selectedIndex, isFocused: isFocused,
-            surface: surface, activeBg: activeBg, palette: palette,
+            surface: surface, chip: chip, palette: palette,
             width: panelWidth, alignment: alignment)
+        let (stripLines, regions) = (strip.lines, strip.regions)
 
         // Centre the content block within the panel as one surface island,
         // shifting it (and its click regions) by a uniform offset so a narrower
@@ -639,328 +779,12 @@ private struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layouta
 
         var buffer = FrameBuffer(lines: stripLines)
         buffer.appendVertically(centredContent)
+        // The strip is the top of the buffer, so its coordinates are already
+        // the buffer's. (The clamp below drops the run if the chip is off-screen
+        // — the run goes with the cells it describes.)
+        buffer.animatedCells = context.isMeasuring ? [] : strip.animatedCells
         attachTabClicks(to: &buffer, regions: regions, context: context)
         return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
-    }
-
-    /// Lays out the wrapped, aligned compact chip rows. Returns the lines (each
-    /// padded to `width`) and the per-tab click regions in strip coordinates.
-    private func compactStripLines(
-        rows: [[Int]], selectedIndex: Int, isFocused: Bool,
-        surface: Color, activeBg: Color, palette: any Palette,
-        width: Int, alignment: HorizontalAlignment
-    ) -> (lines: [String], regions: [(x: Int, y: Int, width: Int, index: Int)]) {
-        let (activeFg, inactiveFg, inactiveBg) = stripLabelColors(
-            surface: surface, isFocused: isFocused, palette: palette)
-        var lines: [String] = []
-        var regions: [(x: Int, y: Int, width: Int, index: Int)] = []
-
-        for (y, row) in rows.enumerated() {
-            let offset = max(0, alignment.childOffset(childWidth: compactRowWidth(row), in: width))
-            var line = String(repeating: " ", count: offset)
-            var x = offset
-            for i in row {
-                let active = i == selectedIndex
-                let body = " \(tabs[i].title) "
-                // A coloured chip: the half-block caps (▐ … ▌) extend the chip's
-                // fill half a cell each side with a clean edge. The active chip
-                // takes the surface (breathing when focused) + bold; inactive
-                // chips recede onto the base background.
-                let chip = active ? activeBg : inactiveBg
-                let chipFg = active ? activeFg : inactiveFg
-                line += ANSIRenderer.colorize("▐", foreground: chip)
-                line += ANSIRenderer.colorize(body, foreground: chipFg, background: chip, bold: active)
-                line += ANSIRenderer.colorize("▌", foreground: chip)
-                let chipWidth = tabWidth(i, style: .compact)  // body + the two caps
-                regions.append((x: x, y: y, width: chipWidth, index: i))
-                x += chipWidth
-            }
-            if x < width { line += String(repeating: " ", count: width - x) }
-            lines.append(line)
-        }
-        return (lines, regions)
-    }
-
-    private func persistedFocusIDForClicks(_ context: RenderContext) -> String {
-        FocusRegistration.persistFocusID(
-            context: context, explicitFocusID: nil, defaultPrefix: "tabview",
-            propertyIndex: StateIndex.focusID)
-    }
-
-    /// Registers a click handler per tab region (selecting that tab).
-    private func attachTabClicks(
-        to buffer: inout FrameBuffer,
-        regions: [(x: Int, y: Int, width: Int, index: Int)],
-        context: RenderContext
-    ) {
-        guard !context.isMeasuring, let dispatcher = context.environment.mouseEventDispatcher else { return }
-        let captureFocusID = persistedFocusIDForClicks(context)
-        let focusManager = context.environment.focusManager
-        for region in regions {
-            let value = tabs[region.index].value
-            let capture = selection
-            let handlerID = dispatcher.register { event in
-                guard event.phase == .released, event.button == .left else {
-                    return event.phase == .pressed && event.button == .left
-                }
-                focusManager?.focus(id: captureFocusID)
-                if let v = value.base as? SelectionValue { capture.wrappedValue = v }
-                return true
-            }
-            buffer.hitTestRegions.append(
-                HitTestRegion(
-                    offsetX: region.x, offsetY: region.y, width: region.width, height: 1,
-                    handlerID: handlerID, focusID: nil))
-        }
-    }
-
-    /// Renders the `.bordered` style: folder tabs sitting on a line-drawn content
-    /// box. Inactive tabs sit on the box's top border (separated from the content
-    /// by it); the active tab's row floats to the bottom and its underside opens
-    /// into the content — the border curves around it (`╯ … ╰`) so the tab and
-    /// the body read as one surface. The strip is aligned (leading / centre /
-    /// trailing) over the box.
-    ///
-    /// For a single row this matches a classic notebook tab exactly. When the
-    /// tabs wrap, upper rows stack as folder-tab strips above the active row; only
-    /// the active (bottom) row connects into the content.
-    private func renderBordered(
-        selectedIndex: Int, isFocused: Bool, palette: any Palette, context: RenderContext
-    ) -> FrameBuffer {
-        let surface = surfaceColor(palette)
-        let border = palette.border
-        let insets = resolvedContentInsets(style: .bordered, context: context)
-        let alignment = context.environment.tabViewHeaderAlignment
-        let activeBg = activeChipBackground(
-            surface: surface, palette: palette, isFocused: isFocused, context: context)
-        let (activeFg, inactiveFg, inactiveBg) = stripLabelColors(
-            surface: surface, isFocused: isFocused, palette: palette)
-
-        // Size to the widest tab; the strip wraps per the header-wrap mode.
-        let avail = max(1, context.availableWidth - 2)
-        let widest = widestContentWidth(insets: insets, available: avail, context: context)
-        let rows = floatActiveRowToBottom(
-            stripRowGroups(
-                style: .compact,
-                available: stripWrapBudget(widest: widest, available: avail, context: context)),
-            selectedIndex: selectedIndex)
-        guard !rows.isEmpty else { return FrameBuffer() }
-        let chrome = 2 * rows.count + 2  // each row: tops + labels; plus content-border + bottom
-        let interior = max(widest, rows.map(folderRowWidth).max() ?? 0)
-        let boxWidth = interior + 2
-
-        // Render the content at the full interior width (so a ViewThatFits editor
-        // reliably picks its wide layout), then clamp it to its own natural width
-        // so the per-line padding below centres it as a block; a tab as wide as
-        // the interior clamps to it and fills. (See the compact path.)
-        var contentCtx = contentContext(context, stripHeight: chrome)
-        contentCtx.availableWidth = interior
-        let natural = naturalSelectedWidth(insets: insets, available: avail, context: context)
-        let full = TUIkit.renderToBuffer(
-            tabs[selectedIndex].content.padding(insets).background(surface), context: contentCtx)
-        let content = full.clamped(toWidth: min(natural, interior), height: full.height)
-
-        func bc(_ s: String) -> String { ANSIRenderer.colorize(s, foreground: border) }
-        func surf(_ n: Int) -> String {
-            n > 0 ? ANSIRenderer.colorize(String(repeating: " ", count: n), background: surface) : ""
-        }
-        func base(_ n: Int) -> String { n > 0 ? String(repeating: " ", count: n) : "" }
-        // The absolute box column of a row's left wall, per the strip alignment.
-        func rowOffset(_ rowWidth: Int) -> Int {
-            1 + max(0, alignment.childOffset(childWidth: rowWidth, in: interior))
-        }
-
-        var lines: [String] = []
-        var regions: [(x: Int, y: Int, width: Int, index: Int)] = []
-
-        for (rowIndex, row) in rows.enumerated() {
-            let isBottom = rowIndex == rows.count - 1
-            let off = rowOffset(folderRowWidth(row))
-
-            // Walls (count + 1) and bodies for this row, in absolute columns.
-            var wallCols: [Int] = []
-            var bodySpans: [(start: Int, len: Int, index: Int)] = []
-            var col = off
-            for i in row {
-                wallCols.append(col)
-                let bw = tabWidth(i, style: .bordered)
-                bodySpans.append((start: col + 1, len: bw, index: i))
-                col += 1 + bw
-            }
-            wallCols.append(col)
-
-            // Tab tops: the whole strip span is border-coloured, so emit it as one
-            // run — `╭`/`╮` for active corners & strip ends, `┬` for shared walls.
-            var top = ""
-            for k in wallCols.indices {
-                // A wall touching the active tab takes a rounded corner so the
-                // active tab reads as a raised `╭ … ╮` cell — `╮` on its right
-                // wall, `╭` on its left. These deliberately cut into the shared
-                // walls with its neighbours (a "backwards" corner on the
-                // neighbour), which is what makes the active tab stand out.
-                let activeRight = k > 0 && row[k - 1] == selectedIndex
-                let activeLeft = k < bodySpans.count && row[k] == selectedIndex
-                top += Self.topWallGlyph(
-                    isStripStart: k == 0, isStripEnd: k == wallCols.count - 1,
-                    activeRight: activeRight, activeLeft: activeLeft)
-                if k < bodySpans.count { top += String(repeating: "─", count: bodySpans[k].len) }
-            }
-            lines.append(base(off) + bc(top) + base(boxWidth - off - top.count))
-
-            // Tab labels: `│ title │ title │ …`, the active chip on the surface.
-            let labelsY = lines.count
-            var labels = base(off)
-            for (k, i) in row.enumerated() {
-                let active = i == selectedIndex
-                labels += bc("│")
-                labels += ANSIRenderer.colorize(
-                    " \(tabs[i].title) ",
-                    foreground: active ? activeFg : inactiveFg,
-                    background: active ? activeBg : inactiveBg, bold: active)
-                regions.append((x: bodySpans[k].start, y: labelsY, width: bodySpans[k].len, index: i))
-            }
-            labels += bc("│")
-            lines.append(labels + base(boxWidth - off - folderRowWidth(row)))
-
-            // Under the active (bottom) row: the content box's top border, curving
-            // up to wrap the active tab and opening (surface gap) beneath it.
-            if isBottom {
-                lines.append(activeRowBottomBorder(
-                    wallCols: wallCols, bodySpans: bodySpans, selectedIndex: selectedIndex,
-                    boxWidth: boxWidth, border: border, surface: surface))
-            }
-        }
-
-        // Content rows, centred within the interior as one block (a uniform
-        // offset, so internal column alignment is preserved), then the bottom.
-        //
-        // The rows the content may occupy once the strip and borders take
-        // theirs. The panel is hard-capped to `availableHeight` (the clamp at
-        // the end), so any content beyond this budget could only survive by
-        // displacing the bottom border — GitHub issue #13's missing `╰─╯`, with
-        // stray interior rows where it should have been. Two ways past the
-        // budget, both capped here: a height-flexible tab (a ScrollView, a
-        // Spacer) measures its NATURAL height against the full available
-        // height, chrome not yet subtracted, so `tallestContentHeight` padded
-        // the panel one strip past what fits; and a tab genuinely taller than
-        // the terminal. Either way the content clips INSIDE the border, like
-        // any other bordered container.
-        let contentPad = max(0, (interior - content.width) / 2)
-        let contentStartY = lines.count
-        let (visibleContent, panelContentHeight) = borderedPanelContent(
-            content: content, insets: insets, avail: avail, chrome: chrome, context: context)
-        for line in visibleContent.lines {
-            let used = line.strippedLength
-            lines.append(
-                bc("│") + surf(contentPad) + line + surf(max(0, interior - contentPad - used)) + bc("│"))
-        }
-        // Size the box to the TALLEST tab so switching tabs doesn't change the
-        // box height: pad the (selected) content down to that height with
-        // surface-filled interior rows before the bottom border.
-        while lines.count - contentStartY < panelContentHeight {
-            lines.append(bc("│") + surf(interior) + bc("│"))
-        }
-        lines.append(bc("╰" + String(repeating: "─", count: interior) + "╯"))
-
-        var buffer = FrameBuffer(lines: lines)
-        // Re-attach the content's interactive regions/overlays (slider, toggle, …):
-        // the content rows above were rebuilt as fresh strings, so the content
-        // buffer's hit regions are not carried automatically. Shift them past the
-        // left border + centring pad and down past the tab-strip rows. From the
-        // budget-clipped content, so nothing hit-tests against rows not drawn.
-        let contentShiftX = 1 + contentPad
-        buffer.hitTestRegions.append(
-            contentsOf: visibleContent.shiftedHitTestRegions(byX: contentShiftX, y: contentStartY))
-        buffer.overlays.append(
-            contentsOf: visibleContent.shiftedOverlays(byX: contentShiftX, y: contentStartY))
-        attachTabClicks(to: &buffer, regions: regions, context: context)
-        return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
-    }
-
-    /// The strip's label colours — active foreground (the accent when the strip
-    /// is focused, a surface-contrasting tone otherwise) plus the inactive
-    /// chips' foreground and background. Shared by both strip styles.
-    private func stripLabelColors(
-        surface: Color, isFocused: Bool, palette: any Palette
-    ) -> (activeFg: Color, inactiveFg: Color, inactiveBg: Color) {
-        (
-            isFocused
-                ? palette.accent.resolve(with: palette)
-                : Self.contrastingForeground(for: surface, palette: palette),
-            palette.foregroundSecondary,
-            palette.background.resolve(with: palette)
-        )
-    }
-
-    /// The budget-clipped content rows and the interior height the panel pads
-    /// to — both capped to what fits below the strip, so the bottom border
-    /// always survives (GitHub issue #13; see the call site's rationale).
-    private func borderedPanelContent(
-        content: FrameBuffer, insets: EdgeInsets, avail: Int, chrome: Int, context: RenderContext
-    ) -> (visible: FrameBuffer, panelHeight: Int) {
-        let budget = max(0, context.availableHeight - chrome)
-        let visible =
-            content.height > budget
-            ? content.clamped(toWidth: content.width, height: budget)
-            : content
-        let panelHeight = min(
-            tallestContentHeight(insets: insets, available: avail, context: context), budget)
-        return (visible, panelHeight)
-    }
-
-    /// The glyph for a tab-strip top wall: rounded corners at the strip ends and
-    /// around the active tab (`╭`/`╮`), a `┬` for an ordinary shared wall. The
-    /// precedence (strip-end before active-tab) makes a wall that is both read as
-    /// the strip end.
-    private static func topWallGlyph(
-        isStripStart: Bool, isStripEnd: Bool, activeRight: Bool, activeLeft: Bool
-    ) -> String {
-        if isStripStart {
-            return "╭"
-        } else if isStripEnd {
-            return "╮"
-        } else if activeRight {
-            return "╮"
-        } else if activeLeft {
-            return "╭"
-        } else {
-            return "┬"
-        }
-    }
-
-    /// The content box's top border drawn beneath the active (bottom) tab row: it
-    /// curves up to wrap the active tab (`╯` … `╰`, with a surface-coloured gap
-    /// across the tab body) and meets the inactive walls with `┴`.
-    private func activeRowBottomBorder(
-        wallCols: [Int], bodySpans: [(start: Int, len: Int, index: Int)],
-        selectedIndex: Int, boxWidth: Int, border: Color, surface: Color
-    ) -> String {
-        func bc(_ s: String) -> String { ANSIRenderer.colorize(s, foreground: border) }
-        let activeWall = wallCols.firstIndex { wc in
-            bodySpans.contains { $0.index == selectedIndex && $0.start == wc + 1 }
-        } ?? 0
-        let aLeft = wallCols[activeWall]
-        guard let aBody = bodySpans.first(where: { $0.index == selectedIndex }) else {
-            return bc("╰" + String(repeating: "─", count: max(0, boxWidth - 2)) + "╯")
-        }
-        let aRight = aBody.start + aBody.len
-        let inactiveWalls = Set(wallCols).subtracting([aLeft, aRight])
-        func borderGlyph(_ c: Int) -> String {
-            if c == 0 { return "╭" }
-            if c == boxWidth - 1 { return "╮" }
-            if c == aLeft { return "╯" }
-            if c == aRight { return "╰" }
-            return inactiveWalls.contains(c) ? "┴" : "─"
-        }
-        var left = ""
-        for c in 0..<aBody.start { left += borderGlyph(c) }
-        var right = ""
-        for c in aRight..<boxWidth { right += borderGlyph(c) }
-        let gap =
-            aBody.len > 0
-            ? ANSIRenderer.colorize(String(repeating: " ", count: aBody.len), background: surface)
-            : ""
-        return bc(left) + gap + bc(right)
     }
 
     /// Black or white, whichever reads better on `color`.

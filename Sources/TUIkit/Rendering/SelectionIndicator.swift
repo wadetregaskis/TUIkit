@@ -220,6 +220,15 @@ public struct SelectionEmphasisCycle: Sendable {
     /// element, is a single frame: a still picture, not an animation.
     public var isAnimating: Bool { frames.count > 1 }
 
+    /// Whether this cycle describes a focused element.
+    ///
+    /// Worth asking separately from ``isAnimating`` because a still cycle sits
+    /// at `bright` — right for a selection mark, which stays visible when the
+    /// focus moves elsewhere, and wrong for a *fill* (a button's caps, a tab's
+    /// chip), which should recede to its own surface. Those callers draw
+    /// `isFocused ? colorNow(dim:bright:) : <their own resting colour>`.
+    public var isFocused: Bool { frames[0].isFocused }
+
     /// The colour at each frame, for an element with these two endpoints.
     @MainActor
     public func colors(dim: Color, bright: Color) -> [Color] {
@@ -251,16 +260,35 @@ public struct SelectionEmphasisCycle: Sendable {
     public func run(
         _ glyph: String, dim: Color, bright: Color, offsetX: Int, offsetY: Int
     ) -> AnimatedCellRun? {
+        run(dim: dim, bright: bright, offsetX: offsetX, offsetY: offsetY) {
+            ANSIRenderer.colorize(glyph, foreground: $0)
+        }
+    }
+
+    /// A run for an element the caller draws itself, once per colour of the
+    /// cycle — a tab's whole chip, a scrollbar's thumb, anything whose
+    /// appearance is more than a foreground colour on a glyph.
+    ///
+    /// `draw` must produce the same cells the ordinary render drew, at the
+    /// colour it is handed; the run's width is taken from the first frame, so
+    /// what is replayed is measured from what is actually drawn rather than
+    /// from the caller's belief about its width.
+    @MainActor
+    public func run(
+        dim: Color, bright: Color, offsetX: Int, offsetY: Int, draw: (Color) -> String
+    ) -> AnimatedCellRun? {
+        // A still cycle earns no run: the render already drew that picture, and
+        // replaying it would emit bytes per tick to change nothing.
         guard isAnimating else { return nil }
+        // One finished, styled string per step, so the loop's per-tick work is
+        // an array index.
+        let drawn = colors(dim: dim, bright: bright).map(draw)
+        guard let first = drawn.first else { return nil }
         return AnimatedCellRun(
             offsetX: offsetX,
             offsetY: offsetY,
-            width: glyph.strippedLength,
-            // One finished, styled string per step, so the loop's per-tick work
-            // is an array index.
-            frames: colors(dim: dim, bright: bright).map {
-                ANSIRenderer.colorize(glyph, foreground: $0)
-            },
+            width: first.strippedLength,
+            frames: drawn,
             // The cursor clock, because that is the one this cycle's frames were
             // laid out on (`CursorTimer.cycleTicks`) — a run handed to the pulse
             // clock would advance at a different rate than it was built for.

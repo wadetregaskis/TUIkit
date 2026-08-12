@@ -173,32 +173,46 @@ struct TabViewTests {
         #expect(bordered[contentRow].contains("  CONTENT"), "bordered content is inset: \(bordered)")
     }
 
-    @Test("The active tab breathes (background changes with the pulse) when focused (#4)")
+    @Test("The active tab breathes when focused, without re-rendering the page (#4)")
     func activeTabAnimatesWhenFocused() {
+        // The chip hands its cells to the run loop as an `AnimatedCellRun`
+        // rather than recolouring itself from the live phase — so what proves
+        // it breathes is the run it leaves behind, and that the run's frames
+        // are actually different pictures.
         let tui = TUIContext()
         let fm = FocusManager()
-        func activeChipBackground(phase: Double) -> String {
+        func strip(focused: Bool) -> FrameBuffer {
             // Wide content so both chips sit on one row (the active chip on the
-            // sole strip line, where the test reads it).
+            // sole strip line).
             let view = TabView(selection: .constant(0)) {
                 Tab("AAA", value: 0) { Text(String(repeating: "x", count: 16)) }
                 Tab("BBB", value: 1) { Text(String(repeating: "y", count: 16)) }
             }.tabViewStyle(.compact)
             var env = EnvironmentValues()
-            env.focusManager = fm
-            env.pulsePhase = phase
+            env.focusManager = focused ? fm : FocusManager()
             let ctx = RenderContext(
                 availableWidth: 30, availableHeight: 5, environment: env, tuiContext: tui)
-            fm.beginRenderPass()
-            let line = renderToBuffer(view, context: ctx).lines.first ?? ""
-            fm.endRenderPass()
-            // The first 48;2;r;g;b run on the strip line is the active chip's fill.
-            guard let r = line.range(of: "48;2;") else { return "none" }
-            return String(line[r.upperBound...].prefix(11))
+            env.focusManager!.beginRenderPass()
+            defer { env.focusManager!.endRenderPass() }
+            return renderToBuffer(view, context: ctx)
         }
-        _ = activeChipBackground(phase: 0)  // first render auto-focuses the strip
-        #expect(activeChipBackground(phase: 0.0) != activeChipBackground(phase: 1.0),
-                "the focused active tab's fill tracks the pulse phase (it animates)")
+        _ = strip(focused: true)  // first render auto-focuses the strip
+        let buffer = strip(focused: true)
+
+        #expect(buffer.animatedCells.count == 1, "exactly one chip is active")
+        guard let run = buffer.animatedCells.first else { return }
+        #expect(run.isAnimating, "the focused active chip's fill breathes")
+        #expect(Set(run.frames).count > 1, "the cycle is more than one picture")
+        #expect(run.offsetY == 0, "the strip's only row")
+        #expect(
+            run.frames.allSatisfy { $0.strippedLength == run.width },
+            "every frame fills exactly the chip: \(run)")
+        // And it describes the cells that were drawn: replaying this tick's
+        // frame changes nothing.
+        let before = buffer.lines.map(\.stripped)
+        let replayed = buffer.composited(
+            with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
+        #expect(replayed.lines.map(\.stripped) == before, "the run moved the chip's cells")
     }
 
     @Test("The active tab's row moves to the bottom of the wrapped strip")
