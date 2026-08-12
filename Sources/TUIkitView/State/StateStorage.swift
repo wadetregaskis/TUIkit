@@ -21,12 +21,19 @@ import TUIkitCore
 /// - **Populated** during rendering: when `renderToBuffer` hydrates a view's
 ///   `@State` properties, it looks up or creates `Storage` objects here.
 /// - **Pruned** at the end of each render pass: identities not seen during
-///   the current frame are removed (coordinated with `LifecycleManager`).
+///   the current frame are removed. This runs *alongside* `LifecycleManager`'s
+///   own sweep, not in coordination with it — the two key on different things
+///   (`ViewIdentity` here, a lifecycle token string there) and
+///   `RenderLoop.endRenderPass` simply calls them in sequence. Retaining a
+///   subtree here therefore does **not** retain its `.task`s or its
+///   `onDisappear`.
 ///
 /// ## Thread Safety
 ///
-/// `StateStorage` is accessed only from the main thread (TUIKit's single-threaded
-/// event loop). No locking is required.
+/// The store itself is main-actor only, but a `StateBox`'s **setter** is not:
+/// a `.task` or an input-thread mouse handler can write one. That path takes no
+/// lock here — it hands off to `RenderCache.invalidateRender(for:)`, which does
+/// (see its Thread Safety note).
 public final class StateStorage: @unchecked Sendable {
 
     // MARK: - State Key

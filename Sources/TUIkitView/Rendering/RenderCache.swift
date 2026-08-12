@@ -26,12 +26,24 @@ import TUIkitCore
 ///
 /// ## Invalidation
 ///
-/// The cache is **fully cleared** whenever any `@State` value changes
-/// (via `StateBox.value`'s `didSet`). This is conservative but correct:
-/// state changes can propagate to any subtree through bindings or environment.
+/// A `@State` write does **not** clear the cache. `StateBox.value`'s `didSet`
+/// calls ``invalidateRender(for:)`` with the box's own identity, which enqueues
+/// it; the queue drains at the next ``beginRenderPass()`` into
+/// `clearAffected(by:)`, dropping that identity, everything **below** it, and
+/// everything **above** it on the ancestor spine. Siblings survive.
 ///
-/// Between state changes (e.g. animation frames, pulse ticks), the cache
-/// provides full memoization of unchanged subtrees.
+/// The whole cache is dropped only by: an `@Observable` mutation (which arrives
+/// with no identity, via `setNeedsRenderWithCacheClear`), a palette / appearance
+/// / locale / toggle-glyph change, or an explicit `nil` invalidation.
+///
+/// Two consequences worth knowing before relying on this:
+///
+/// - Because the **ancestors** go too, a state change deep inside a memoized
+///   subtree evicts every memoized entry on the spine above it. Nesting
+///   `.equatable()` buys less than it looks under churn.
+/// - Only ``EquatableView`` and `_MemoizedRow` consult the cache at all —
+///   `measureChild` / `renderChild` do not. A tree with neither is walked in
+///   full every frame, cache or no cache.
 ///
 /// ## Garbage Collection
 ///
@@ -47,8 +59,11 @@ import TUIkitCore
 ///
 /// ## Thread Safety
 ///
-/// `RenderCache` is accessed only from the main thread (TUIKit's single-threaded
-/// event loop). No locking is required.
+/// The cache's tables are main-actor only, but ``invalidateRender(for:)`` is
+/// **not**: a `@State` write can arrive from any thread (a `.task`, a mouse
+/// handler on the input thread). That path therefore only takes a lock and
+/// enqueues; every mutation of `entries` / `sizeEntries` happens on the main
+/// actor when the queue drains.
 public final class RenderCache: @unchecked Sendable {
 
     /// Aggregated cache performance statistics.
