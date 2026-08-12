@@ -547,7 +547,15 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 handler: handler,
                 width: contentWidth,
                 palette: context.environment.palette,
-                emphasis: scrollIndicatorEmphasis(isFocused: isFocused, context: context),
+                // Only when an indicator will actually be drawn — the argument
+                // is evaluated before `applyScrollIndicators`' own guard, and
+                // resolving consults the cursor clock, which is what tells the
+                // demand-driven loop the frame consumed it. A focused scroll
+                // view with no VERTICAL overflow (one that scrolls only
+                // horizontally is still focusable) would otherwise re-render
+                // the page ~20 times a second and paint nothing.
+                emphasis: handler.hasContentAbove || handler.hasContentBelow
+                    ? scrollIndicatorEmphasis(isFocused: isFocused, context: context) : nil,
                 locale: context.environment.locale
             )
         }

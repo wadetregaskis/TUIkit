@@ -707,3 +707,42 @@ Scroll View 25.0. `FocusSectionModifier.swift:63` and
 `NavigationSplitView.swift:282` read `pulsePhase` for a value only a *bordered*
 container consumes, so a focus section around plain content reads the clock and
 throws it away.
+
+## 16. The scroll-indicator read follows the draw — with no measured win
+
+The audit's second finding: `scrollIndicatorEmphasis` resolves the cursor clock
+whenever its scrollable is **focused**, at four call sites, all of them *before*
+the test of whether an indicator will be painted (`ScrollView.swift:550`,
+`_ListCore.swift:895`, `Table.swift:1300` and `:1645`). Resolving is a clock
+read, and a clock read is what tells the demand-driven loop the frame consumed
+it — so a focused scrollable that draws no indicator re-renders the whole page
+~20 times a second and paints nothing. The `Table.swift:1300` case is the
+clearest: when the table shows a *scrollbar*, the emphasis is resolved and then
+never used, because both draw sites are behind `!showsBar`.
+
+Each call site now resolves only when an indicator will actually be drawn.
+
+**It bought nothing measurable**, and the reason is honest: on every Example
+page that has a focused scrollable, the content overflows and the indicators
+*are* drawn, so the read was legitimate there all along.
+
+| page | before | after |
+|---|---|---|
+| Lists | 8.5% | 8.3% |
+| Scroll View | 25.0% | 23.9% |
+| Tables | 3.0% | 3.2% |
+
+All three are inside run-to-run noise.
+
+**And the test does not prove it either.** Two attempts failed to build a case
+that fails on the unfixed code: a fitting List/ScrollView in the harness does
+not report focus (plausibly it is not focusABLE when its content fits —
+see #192 — which would make that half of the finding unreachable rather than a
+live bug). Rather than ship a green assertion that proves nothing, the test was
+deleted. What is kept is the guard itself: it is small, local, and makes the
+read follow the draw everywhere, which is the rule the Stepper fix established.
+
+Recorded as a change kept for correctness and consistency, **not** as a
+performance win. The remaining Lists 8.3 / Scroll View 23.9 are still
+unexplained by anything found so far, and the next step for them is the
+`setNeedsRender` stack dump from §12 rather than another conversion on spec.

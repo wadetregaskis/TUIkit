@@ -42,8 +42,16 @@ struct IdleClockReadTests {
         if !focused {
             context.environment.focusManager!.register(IdleSentinel())
         }
+        // TWICE, and count only the second. A control claims focus DURING its
+        // first render, so the first pass renders it unfocused no matter what
+        // the focus manager is about to decide — counting that pass reports
+        // zero for every control and the assertion passes vacuously. (It did:
+        // this helper's first version could not see the scroll-indicator bug at
+        // all.) `reads` is monotonic, so the delta is the second pass's own.
         _ = renderToBuffer(view, context: context)
-        return tracker.reads
+        let afterFirstPass = tracker.reads
+        _ = renderToBuffer(view, context: context)
+        return tracker.reads - afterFirstPass
     }
 
     /// Every control that breathes, rendered at rest. The list is the point:

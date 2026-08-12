@@ -1296,8 +1296,16 @@ where Value.ID: Hashable {
         let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
         let showsBar = !bar.isEmpty
         // A focused table with no scrollbar pulses its "N more" indicators.
-        let indicatorEmphasis = scrollIndicatorEmphasis(
-            isFocused: tableHasFocus, context: context)
+        // Resolve the emphasis ONLY when an indicator will actually be drawn.
+        // Resolving consults the cursor clock, and that read is what tells the
+        // demand-driven loop the frame consumed it — so asking before knowing
+        // whether anything will be painted re-renders the whole page ~20 times
+        // a second to draw nothing. Same class as the Stepper's ungated
+        // `pulsePhase` read (8ebc3385).
+        let drawsIndicator = !showsBar && (window.showAbove || window.showBelow)
+        let indicatorEmphasis =
+            drawsIndicator
+            ? scrollIndicatorEmphasis(isFocused: tableHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
         var lines: [String] = []
         if window.showAbove, !showsBar {
@@ -1641,8 +1649,15 @@ where Value.ID: Hashable {
         palette: any Palette
     ) -> (lines: [String], rowLines: [String]) {
         let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
-        let indicatorEmphasis = scrollIndicatorEmphasis(
-            isFocused: tableHasFocus, context: context)
+        // Resolve the emphasis ONLY when an indicator will actually be drawn:
+        // resolving consults the cursor clock, and that read is what tells the
+        // demand-driven loop the frame consumed it. Asking before knowing
+        // whether anything will be painted re-renders the whole page ~20 times
+        // a second to draw nothing. Same class as the Stepper's ungated
+        // `pulsePhase` read (8ebc3385).
+        let indicatorEmphasis =
+            handler.hasContentAbove || handler.hasContentBelow
+            ? scrollIndicatorEmphasis(isFocused: tableHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
         // The "N more" indicators are chrome — they describe where the content
         // sits — so the rows are collected separately and only they slide (§1.5).

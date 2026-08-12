@@ -892,7 +892,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // A focused list with no scrollbar pulses its "N more" indicators as
         // its focus cue (in addition to the pulsing cursor row) — the
         // scrollbar-less counterpart to the bar's own pulse.
-        let indicatorEmphasis = scrollIndicatorEmphasis(isFocused: listHasFocus, context: context)
+        // Resolve the emphasis ONLY when an indicator will actually be drawn:
+        // resolving consults the cursor clock, and that read is what tells the
+        // demand-driven loop the frame consumed it. Asking before knowing
+        // whether anything will be painted re-renders the whole page ~20 times
+        // a second to draw nothing. Same class as the Stepper's ungated
+        // `pulsePhase` read (8ebc3385).
+        let drawsIndicator =
+            origin.offset > 0 || origin.topClip > 0 || handler.hasContentBelow
+        let indicatorEmphasis =
+            drawsIndicator
+            ? scrollIndicatorEmphasis(isFocused: listHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
 
         if origin.offset > 0 || origin.topClip > 0 {
