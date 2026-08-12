@@ -587,3 +587,37 @@ So the whole remainder is four producers, each shared across many pages:
 
 Progress & Gauges (19.9) and Spinners (9.0) animate legitimately and are not
 waste.
+
+## 13. The toggle indicator converted (2026-08-12)
+
+Second of the four producers §12 named. Both built-in indicator styles now
+pre-render their whole cycle and leave one `AnimatedCellRun`: the checkbox's
+bracket colour (or its self-contained glyph's colour) and the switch's
+*track* background, which is what carries focus on the coloured-track styles.
+
+| page | idle CPU before | after | writes/s |
+|---|---|---|---|
+| Toggles | 7.0% | **0.3%** | 10.6 (unchanged) |
+| Layout System | 9.5% | **0.6%** | 10.6 (unchanged) |
+
+The write rate is untouched at both, so the indicators still breathe at the
+same cadence — through the replay, with no view walk behind them.
+
+Two things this one needed that the earlier conversions did not:
+
+- **The animated colour is a *background* in the switch's case**, not a
+  foreground on a glyph, so it uses the `draw:`-closure form of
+  `SelectionEmphasisCycle.run` rather than the glyph form. `IndicatorCycle`
+  (private to `_ToggleCore`) holds the cycle plus a `resting` colour, because
+  disabled and hovered are separate answers from "focused at phase 0".
+- **Two existing tests asserted the old mechanism** — that the drawn line
+  differs across `environment.pulsePhase`. That is no longer how it works and
+  the tests were rewritten to the new contract: exactly one animating run, more
+  than one distinct picture in it, every frame the same cell width, replaying
+  this tick's frame changes nothing, and — the point of the original test — the
+  OFF cycle's frames are disjoint from the ON cycle's, so a breathing off
+  switch can never be mistaken for on.
+
+Remaining: the scrollbar (Scroll View 27.0, Picker 24.9, Lists 8.5, Tables),
+`_PickerMenuCore.collapsedLine` (Picker, Mouse 10.5, Image (File) 9.0), and
+`_MenuItemRow.highlight` (Overlays & Modals 10.4, Menus 3.5).

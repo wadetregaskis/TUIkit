@@ -71,9 +71,9 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// focus / hover / disabled.
     private func styledToggleIndicator(
         isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool, context: RenderContext
-    ) -> String {
+    ) -> (text: String, animation: AnimatedCellRun?) {
         let palette = context.environment.palette
-        let bracketColor = indicatorBracketColor(
+        let brackets = bracketCycle(
             isDisabled: isDisabled, isFocused: isFocused, isHovered: isHovered, context: context)
 
         // The checkbox glyphs come from the configurable ``ToggleCharacterSet`` (■/□
@@ -84,22 +84,28 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         let style = context.environment.effectiveToggleCharacterSet
         let mark = isOnValue ? style.onMark : style.offMark
 
-        if style.openBracket.isEmpty {
-            // Self-contained glyph (unicode squares): its *shape* shows on/off, so its
-            // colour is free to show state — accent when checked, plus the
-            // focus / hover / disabled tints the brackets would otherwise carry.
-            let markColor = (isOnValue && !isDisabled && !isFocused) ? palette.accent : bracketColor
-            return ANSIRenderer.colorize(mark, foreground: markColor)
+        // One function draws the indicator at a given bracket colour, so the
+        // animation's frames are the same cells the render draws.
+        func draw(_ bracketColor: Color) -> String {
+            if style.openBracket.isEmpty {
+                // Self-contained glyph (unicode squares): its *shape* shows on/off, so
+                // its colour is free to show state — accent when checked, plus the
+                // focus / hover / disabled tints the brackets would otherwise carry.
+                let markColor =
+                    (isOnValue && !isDisabled && !isFocused) ? palette.accent : bracketColor
+                return ANSIRenderer.colorize(mark, foreground: markColor)
+            }
+            // Two-tone bracketed (ASCII): the brackets show focus while the
+            // inner mark shows on/off (accent when checked, dimmed when
+            // disabled; the OFF mark is a space, so its colour is moot).
+            return ANSIRenderer.colorize(style.openBracket, foreground: bracketColor)
+                + ANSIRenderer.colorize(
+                    mark,
+                    foreground: indicatorMarkColor(
+                        isOnValue: isOnValue, isDisabled: isDisabled, context: context))
+                + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
         }
-        // Two-tone bracketed (ASCII): the brackets show focus while the
-        // inner mark shows on/off (accent when checked, dimmed when
-        // disabled; the OFF mark is a space, so its colour is moot).
-        return ANSIRenderer.colorize(style.openBracket, foreground: bracketColor)
-            + ANSIRenderer.colorize(
-                mark,
-                foreground: indicatorMarkColor(
-                    isOnValue: isOnValue, isDisabled: isDisabled, context: context))
-            + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
+        return (draw(brackets.now), brackets.run(draw: draw))
     }
 
     /// Bracket color for the two-tone bracketed indicators (checkbox `[x]` and
@@ -108,25 +114,65 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// (An unfocused-but-enabled control must stay readable — dimming it
     /// to the disabled style made the brackets almost invisible against
     /// the terminal background.)
-    private func indicatorBracketColor(
+    private func bracketCycle(
         isDisabled: Bool, isFocused: Bool, isHovered: Bool, context: RenderContext
-    ) -> Color {
+    ) -> IndicatorCycle {
         let palette = context.environment.palette
+        let resting: Color
         if isDisabled {
-            return palette.foregroundTertiary.opacity(
+            resting = palette.foregroundTertiary.opacity(
                 ViewConstants.disabledForeground, over: palette.background)
-        }
-        if isFocused {
-            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
-            return SelectionIndicator.resolve(isFocused: true, context: context)
-                .color(dim: dimAccent, bright: palette.accent)
-        }
-        if isHovered {
+        } else if isHovered {
             // Hover bumps the brackets to a partial accent tint
             // so the affordance reads without the focused pulse.
-            return palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
+            resting = palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
+        } else {
+            resting = palette.foreground
         }
-        return palette.foreground
+        return IndicatorCycle(
+            isFocused: isFocused && !isDisabled,
+            dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
+            bright: palette.accent,
+            resting: resting,
+            context: context)
+    }
+
+    /// One animated colour of an indicator, taken as a whole cycle.
+    ///
+    /// A cycle rather than "this tick's colour" because that is what lets the
+    /// toggle hand those cells to the run loop as an ``AnimatedCellRun``. Asking
+    /// for the live phase instead is a volatile read: it keeps the clock running
+    /// and re-renders the whole page, several times a second, to recolour two
+    /// cells. Building the cycle reads no clock at all.
+    private struct IndicatorCycle {
+        let cycle: SelectionEmphasisCycle
+
+        /// What the indicator shows when it is NOT focused — disabled, hovered,
+        /// or simply at rest. Held separately because a still cycle sits at
+        /// `bright`: right for a selection mark, wrong for chrome that recedes.
+        let resting: Color
+
+        let dim: Color
+        let bright: Color
+
+        @MainActor
+        init(isFocused: Bool, dim: Color, bright: Color, resting: Color, context: RenderContext) {
+            cycle = context.environment.selectionEmphasis.cycle(isFocused)
+            self.dim = dim
+            self.bright = bright
+            self.resting = resting
+        }
+
+        /// The colour to draw right now.
+        @MainActor
+        var now: Color { cycle.isFocused ? cycle.colorNow(dim: dim, bright: bright) : resting }
+
+        /// The indicator's run — it opens the toggle's row, so its offset is the
+        /// buffer's origin. Nil when the indicator is not breathing.
+        @MainActor
+        func run(draw: (Color) -> String) -> AnimatedCellRun? {
+            cycle.run(dim: dim, bright: bright, offsetX: 0, offsetY: 0, draw: draw)
+        }
     }
 
     /// Mark color for the two-tone bracketed indicators: accent when on, plain
@@ -161,7 +207,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// the track on light and dark terminals alike (dimmed to match when disabled).
     private func styledSwitchIndicator(
         isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool, context: RenderContext
-    ) -> String {
+    ) -> (text: String, animation: AnimatedCellRun?) {
         let palette = context.environment.palette
         // The knob follows the checkbox style's glyph repertoire (see
         // ``SwitchIndicatorGlyphs/knob(for:)``): the seamless two-cell emoji
@@ -179,16 +225,19 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             // foreground when off). No background colours at all, keeping the
             // style honest for terminals/fonts where the block glyphs are the
             // reason `.ascii` was chosen.
-            let bracketColor = indicatorBracketColor(
+            let brackets = bracketCycle(
                 isDisabled: isDisabled, isFocused: isFocused, isHovered: isHovered, context: context)
             let knob = ANSIRenderer.colorize(
                 SwitchIndicatorGlyphs.asciiKnob,
                 foreground: indicatorMarkColor(
                     isOnValue: isOnValue, isDisabled: isDisabled, context: context))
             let track = isOnValue ? " " + knob : knob + " "
-            return ANSIRenderer.colorize(style.openBracket, foreground: bracketColor)
-                + track
-                + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
+            func draw(_ bracketColor: Color) -> String {
+                ANSIRenderer.colorize(style.openBracket, foreground: bracketColor)
+                    + track
+                    + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
+            }
+            return (draw(brackets.now), brackets.run(draw: draw))
         }
 
         let knob = SwitchIndicatorGlyphs.knob(for: style)
@@ -220,20 +269,53 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // accent for on, neutral grey lifted toward the foreground for off —
         // so the breathing never misreads as a state change, and the knob's
         // half-block margin keeps it visible at the dim end of the pulse.
-        var focusedTrack = trackColor
-        if isFocused, !isDisabled {
-            let bright: Color =
-                isOnValue
+        let track = IndicatorCycle(
+            isFocused: isFocused && !isDisabled,
+            dim: trackColor.opacity(ViewConstants.focusPulseMin, over: palette.background),
+            bright: isOnValue
                 ? palette.accent
-                : Color.lerp(.brightBlack, palette.foreground, phase: 0.45)
-            let dim = trackColor.opacity(ViewConstants.focusPulseMin, over: palette.background)
-            focusedTrack = SelectionIndicator.resolve(isFocused: true, context: context)
-                .color(dim: dim, bright: bright)
-        }
+                : Color.lerp(.brightBlack, palette.foreground, phase: 0.45),
+            resting: trackColor,
+            context: context)
 
         // Off: knob then a blank cell; on: a blank cell then knob.
         let cells = isOnValue ? " " + knob : knob + " "
-        return ANSIRenderer.colorize(cells, foreground: knobColor, background: focusedTrack)
+        func draw(_ background: Color) -> String {
+            ANSIRenderer.colorize(cells, foreground: knobColor, background: background)
+        }
+        return (draw(track.now), track.run(draw: draw))
+    }
+
+    /// The buffer for one of the built-in toggle styles: the indicator, the
+    /// label composed beside it, and the indicator's animation run.
+    ///
+    /// The switch style renders a two-position track (knob left = off, right =
+    /// on) on a distinct background, so it reads as a switch rather than a
+    /// checkbox; the others use the checkbox glyph.
+    private func builtInStyleBuffer(
+        isSwitch: Bool, isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool,
+        labelContext: RenderContext, palette: any Palette, context: RenderContext
+    ) -> (buffer: FrameBuffer, clickWidth: Int, clickHeight: Int) {
+        let styledIndicator =
+            isSwitch
+            ? styledSwitchIndicator(
+                isOnValue: isOnValue, isDisabled: isDisabled,
+                isFocused: isFocused, isHovered: isHovered, context: context)
+            : styledToggleIndicator(
+                isOnValue: isOnValue, isDisabled: isDisabled,
+                isFocused: isFocused, isHovered: isHovered, context: context)
+
+        let composed = composeLabelBuffer(
+            indicator: styledIndicator.text, labelContext: labelContext,
+            isDisabled: isDisabled, palette: palette)
+        var buffer = composed.buffer
+        // The indicator opens the toggle's first row, so its run needs no
+        // shifting. Handing it to the run loop is what lets the focus indicator
+        // breathe without re-rendering the page around it.
+        if !context.isMeasuring, let animation = styledIndicator.animation {
+            buffer.animatedCells = [animation]
+        }
+        return (buffer, composed.titleWidth, composed.titleRows)
     }
 
     /// Composes a built-in toggle's buffer from its indicator and label.
@@ -360,24 +442,13 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                         ViewConstants.disabledForeground, over: palette.background)
             }
 
-            // The switch style renders a two-position track (knob left = off,
-            // right = on) on a distinct background, so it reads as a switch rather
-            // than a checkbox; the others use the checkbox glyph.
-            let styledIndicator =
-                toggleStyle is SwitchToggleStyle
-                ? styledSwitchIndicator(
-                    isOnValue: isOnValue, isDisabled: isDisabled,
-                    isFocused: isFocused, isHovered: isHovered, context: context)
-                : styledToggleIndicator(
-                    isOnValue: isOnValue, isDisabled: isDisabled,
-                    isFocused: isFocused, isHovered: isHovered, context: context)
-
-            let composed = composeLabelBuffer(
-                indicator: styledIndicator, labelContext: labelContext,
-                isDisabled: isDisabled, palette: palette)
-            buffer = composed.buffer
-            clickWidth = composed.titleWidth
-            clickHeight = composed.titleRows
+            let built = builtInStyleBuffer(
+                isSwitch: toggleStyle is SwitchToggleStyle, isOnValue: isOnValue, isDisabled: isDisabled, isFocused: isFocused,
+                isHovered: isHovered, labelContext: labelContext, palette: palette,
+                context: context)
+            buffer = built.buffer
+            clickWidth = built.clickWidth
+            clickHeight = built.clickHeight
         } else {
             let configuration = ToggleStyleConfiguration(
                 label: AnyView(label),

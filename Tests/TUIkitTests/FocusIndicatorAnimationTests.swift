@@ -372,6 +372,50 @@ struct FocusIndicatorAnimationTests {
         #expect(renderToBuffer(view, context: context).animatedCells.isEmpty)
     }
 
+    // MARK: - Toggle indicator
+
+    @Test("A focused toggle hands over its indicator, in every style")
+    func toggleIndicator() {
+        // Checkbox (brackets or a self-contained glyph) and switch (a coloured
+        // track) animate different things, so each is pinned. All of them open
+        // the toggle's row, so all of them anchor at the origin.
+        for (name, view) in [
+            ("checkbox", AnyView(Toggle("On", isOn: .constant(true)))),
+            (
+                "ascii checkbox",
+                AnyView(Toggle("On", isOn: .constant(true)).toggleCharacterSet(.ascii))
+            ),
+            ("switch", AnyView(Toggle("On", isOn: .constant(true)).toggleStyle(.switch))),
+            (
+                "ascii switch",
+                AnyView(
+                    Toggle("On", isOn: .constant(true)).toggleStyle(.switch)
+                        .toggleCharacterSet(.ascii))
+            ),
+        ] {
+            let buffer = focused(view)
+            expectAnimates(buffer, runs: 1, "\(name) toggle")
+            #expect(buffer.animatedCells[0].offsetX == 0, "\(name): the indicator opens the row")
+            #expect(buffer.animatedCells[0].offsetY == 0, "\(name): on the first row")
+            #expect(
+                buffer.animatedCells[0].frames.allSatisfy {
+                    $0.strippedLength == buffer.animatedCells[0].width
+                }, "\(name): every frame is the same width")
+        }
+    }
+
+    @Test("An unfocused or disabled toggle animates nothing")
+    func toggleIndicatorStill() {
+        let context = makeRenderContext(width: 40, height: 8)
+        context.environment.focusManager!.register(FocusSentinel())
+        #expect(
+            renderToBuffer(Toggle("On", isOn: .constant(true)), context: context)
+                .animatedCells.isEmpty)
+        // A disabled toggle never registers for focus, and its indicator is
+        // drawn from the disabled branch, which has no cycle at all.
+        #expect(focused(Toggle("On", isOn: .constant(true)).disabled(true)).animatedCells.isEmpty)
+    }
+
     @Test("A button keeps its runs through the tree a page wraps it in")
     func capsSurviveRealChrome() {
         // The producer and the propagation both have to hold for the page to
