@@ -358,27 +358,40 @@ screen hides an output leak.
 
 ### Where the idle cost is now
 
-Full sweep, 150×50, after the two conversions. Pages that legitimately animate
-(Spinners, Progress & Gauges, the Image pages) are not waste; the rest is.
+Full sweep, 150×50, after the conversions **and** the Stepper fix. Pages that
+legitimately animate (Spinners, Progress & Gauges) are not waste; the rest is.
 
-| page | idle% | what animates |
-|---|---|---|
-| Forms | 41.3 → **16.0** | text cursor (converted); something else still reads a clock |
-| Scroll View | 26.9 | scrollbar focus pulse |
-| Picker | 23.9 | scrollbar / menu indicator |
-| Progress & Gauges | 19.0 | indeterminate bars (legitimate) |
-| Lists | 17.9 | scrollbar + list cursor |
-| Theme | 16.4 | — to be identified |
-| Image (File) | 13.0 | — to be identified |
-| Tab Views | 11.4 | — to be identified |
-| Mouse | 10.0 | — to be identified |
-| Overlays & Modals | 8.5 | — to be identified |
+| page | idle% at §5 | now | note |
+|---|---|---|---|
+| Forms | 41.3 | **0.5** | caret converted + the Stepper bug |
+| Scroll View | 26.9 | 27.4 | scrollbar focus pulse — next |
+| Picker | 23.9 | 27.4 | scrollbar / menu indicator |
+| Progress & Gauges | 19.0 | 20.4 | indeterminate bars (legitimate) |
+| Theme | 16.4 | 17.5 | to be identified |
+| Tab Views | 11.4 | 12.5 | to be identified |
+| Mouse | 10.0 | 11.0 | to be identified |
+| Lists | 17.9 | **10.0** | |
+| Image (File) | 13.0 | **9.0** | |
+| Overlays & Modals | 8.5 | 9.5 | |
+| Toggles | 7.5 | 8.0 | |
+| Sliders | 7.5 | 8.0 | |
+| Buttons & Links | 5.8 | **0.5** | |
+| Image (URL) | 7.0 | **0.5** | |
+| Emoji & SF Symbols | 3.5 | **1.0** | |
 
-Forms was the single biggest remaining item and the clearest: it emitted **2
-writes per second** while burning 41% of a core, every one of those ~20
-renders/s discarded by the diff as byte-identical. That was the text cursor —
-one cell, two frames — and converting it (`6b22ddfd`) took the page to **16.0%**.
-The remaining 16% is a different reader on that page, not the caret.
+**The Stepper bug is the lesson of this round.** It read `pulsePhase`
+unconditionally and used it only when focused. That read is volatile — it is
+how a frame tells the demand-driven loop it consumed the clock — so one resting
+stepper kept the 10 Hz timer alive and re-rendered its whole page forever. It
+alone accounted for Forms going 15.9% → 0.3%, and it moved five other pages.
+
+Nothing about it was visible: correct screen, no output, CPU only. It survived
+this profile, a bug hunt, and two rounds of conversions. `IdleClockReadTests`
+now asserts that resting controls consult no clock, with a complement test that
+focused ones still animate — so the class cannot come back silently.
+
+Everything above ~8% that is not a legitimate animation is now a scrollbar or
+an unidentified reader. Identify with `rawidle.py` before converting on spec.
 
 `TextEditor` is deliberately left on the old path: its caret has multi-line
 geometry. It costs exactly what it cost before, which is the migration rule
