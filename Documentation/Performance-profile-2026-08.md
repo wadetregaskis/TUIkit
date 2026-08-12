@@ -561,9 +561,29 @@ nothing. On the unfixed code it fails naming the culprit —
 | Tables | 3.0 |
 | **Tab Views, Theme, Forms, Buttons, Radio, Steppers, Split View, Image (URL), Empty State, everything else** | **0.5 or less** |
 
-Two thirds of the Example is now genuinely idle. What is left splits in two:
-**Scroll View / Picker / Lists / Sliders / Toggles** are honest unconverted
-producers (a focused control reads the clock; converting it is the remaining
-`AnimatedCellRun` work), while **Mouse, Overlays & Modals, Layout System and
-Image (File)** have no obvious animator and deserve the `setNeedsRender` stack
-dump above before anyone converts anything for them.
+Two thirds of the Example is now genuinely idle, and everything left is a named
+producer. The four pages with no obvious animator were put under the same
+probes, and none of them is a second dirty-state loop — `setNeedsRender` fires
+zero times while idle on all four. Each is a focused control reading the
+**cursor** clock:
+
+| page | idle% | who reads the clock |
+|---|---|---|
+| Mouse | 10.5 | `_PickerMenuCore.collapsedLine` — the *closed* picker's focus indicator |
+| Image (File) | 9.0 | the same |
+| Layout System | 9.5 | `_ToggleCore.indicatorBracketColor` |
+| Overlays & Modals | 10.4 | `_MenuItemRow.highlight` |
+
+So the whole remainder is four producers, each shared across many pages:
+
+1. **The scrollbar** — Scroll View 27.0, Picker 24.9, Lists 8.5, Tables. The
+   biggest, and the awkward one: the whole bar pulses, so it wants one run per
+   bar row. Measure rather than assume.
+2. **`_PickerMenuCore.collapsedLine`** — Picker, Mouse, Image (File), and every
+   page carrying a picker.
+3. **`_ToggleCore.indicatorBracketColor`** — Toggles 7.0, Layout System 9.5,
+   Forms, and everywhere else a toggle appears.
+4. **`_MenuItemRow.highlight`** — Overlays & Modals 10.4, Menus 3.5.
+
+Progress & Gauges (19.9) and Spinners (9.0) animate legitimately and are not
+waste.
