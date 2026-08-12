@@ -65,6 +65,25 @@ struct IdleClockReadTests {
                 "DatePicker",
                 AnyView(DatePicker("When", selection: .constant(Date(timeIntervalSince1970: 0))))
             ),
+            (
+                "Picker",
+                AnyView(
+                    Picker("Fruit", selection: .constant("a")) {
+                        Text("Apple").tag("a")
+                        Text("Banana").tag("b")
+                    })
+            ),
+            ("List", AnyView(List(selection: .constant(String?.none)) { Text("a"); Text("b") })),
+            // Scrollables get their content deliberately overflowed: an
+            // indicator or scrollbar only exists when there is more to show,
+            // and it is the thing that pulses.
+            (
+                "ScrollView",
+                AnyView(
+                    ScrollView {
+                        VStack { ForEach(0..<40, id: \.self) { Text("row \($0)") } }
+                    })
+            ),
         ]
         for (name, view) in resting {
             #expect(
