@@ -28,7 +28,7 @@
 /// - `success / warning / error / info` are readable green / amber / red / blue
 ///   tuned to the background's lightness (Terminal uses its default ANSI set
 ///   for all profiles, so these are intentionally profile-independent in hue).
-public struct TerminalProfilePalette: Palette {
+public struct TerminalProfilePalette: Palette, Hashable {
 
     // MARK: - Profile
 

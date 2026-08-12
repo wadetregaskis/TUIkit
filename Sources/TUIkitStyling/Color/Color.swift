@@ -22,12 +22,12 @@
 /// ```swift
 /// Text("Custom").foregroundStyle(.rgb(255, 128, 0))
 /// ```
-public struct Color: Sendable, Equatable {
+public struct Color: Sendable, Hashable {
     /// The internal color value.
     public let value: ColorValue
 
     /// Internal enum for different color types.
-    public enum ColorValue: Sendable, Equatable {
+    public enum ColorValue: Sendable, Hashable {
         case standard(ANSIColor)
         case bright(ANSIColor)
         case palette256(UInt8)

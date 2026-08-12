@@ -46,7 +46,7 @@
 /// let appearance = context.environment.appearance
 /// let style = appearance.borderStyle
 /// ```
-public struct Appearance: Cyclable, Equatable {
+public struct Appearance: Cyclable, Hashable {
     /// Unique identifier for the appearance (conforms to ``Cyclable``).
     public var id: String { rawId.rawValue }
 
@@ -74,6 +74,14 @@ public struct Appearance: Cyclable, Equatable {
     /// Equatable conformance based on the type-safe ID.
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.rawId == rhs.rawId && lhs.borderStyle == rhs.borderStyle
+    }
+
+    /// Hashes exactly what ``==`` compares. Hand-written because the custom
+    /// `==` above suppresses synthesis; `id` and `name` are derived from
+    /// `rawId`, so they add nothing.
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(rawId)
+        hasher.combine(borderStyle)
     }
 }
 

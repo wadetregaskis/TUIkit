@@ -8,7 +8,7 @@
 ///
 /// Each style provides characters for all border components:
 /// corners, edges, and T-junctions for complex layouts.
-public struct BorderStyle: Sendable, Equatable {
+public struct BorderStyle: Sendable, Hashable {
     /// Top-left corner character.
     public let topLeft: Character
 

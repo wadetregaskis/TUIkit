@@ -20,10 +20,10 @@
 /// `.style` call — entries are appended in ``StyleScope/specificity`` order
 /// (broad first, specific last) so the more specific wins there, while any deeper
 /// subtree entry still wins by proximity.
-public struct StyleCascade: Sendable, Equatable {
+public struct StyleCascade: Sendable, Hashable {
 
     /// One scoped contribution.
-    public struct Entry: Sendable, Equatable {
+    public struct Entry: Sendable, Hashable {
         public let scope: StyleScope
         public let attributes: StyleAttributes
 

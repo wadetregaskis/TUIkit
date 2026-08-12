@@ -38,7 +38,7 @@ import TUIkitCore
 /// checked / disabled. When brackets are present (``ascii``) they are coloured
 /// by focus while the inner mark is coloured by on/off — the classic two-tone
 /// `[x]`.
-public struct ToggleCharacterSet: Sendable, Equatable {
+public struct ToggleCharacterSet: Sendable, Hashable {
     /// The mark shown when the toggle is **on** (e.g. `■` or `x`).
     public let onMark: String
 

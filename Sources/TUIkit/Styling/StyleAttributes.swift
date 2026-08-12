@@ -60,7 +60,7 @@ public enum FontWeight: Sendable, Hashable {
 /// The tri-state (`Bool?`) lets a subtree turn an attribute **on** and a
 /// descendant turn it **off** (e.g. `.bold()` then `.bold(false)` deeper),
 /// matching SwiftUI.
-public struct StyleAttributes: Sendable, Equatable {
+public struct StyleAttributes: Sendable, Hashable {
     public var foreground: Color?
     public var background: Color?
     public var bold: Bool?

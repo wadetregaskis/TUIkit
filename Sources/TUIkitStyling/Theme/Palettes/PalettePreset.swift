@@ -21,7 +21,7 @@
 /// let palette = SystemPalette(.amber)
 /// paletteManager.setCurrent(SystemPalette(.green))
 /// ```
-public struct SystemPalette: Palette {
+public struct SystemPalette: Palette, Hashable {
     // MARK: - Preset
 
     /// Built-in palette presets inspired by classic terminal phosphors.

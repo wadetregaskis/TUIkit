@@ -13,7 +13,7 @@ import TUIkit
 /// the app header, and the status bar live. Presets are loaded by snapshotting a
 /// built-in ``SystemPalette`` into this editable form; the theme page's
 /// `ColorPicker`s then mutate individual colours.
-struct CustomizablePalette: Palette {
+struct CustomizablePalette: Palette, Hashable {
     var id: String
     var name: String
 
