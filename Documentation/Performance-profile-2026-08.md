@@ -499,3 +499,71 @@ The lesson for the remaining conversions: **`rawidle.py` finds what moves, not
 what costs.** Before converting a producer to quiet a page, confirm the page's
 clock is actually being held open by *that* producer — a `VolatileReadTracker`
 render of the page is the cheap way to ask.
+
+## 12. What Tab Views actually cost: a write during the measure pass (2026-08-12)
+
+§11 said the reader was not in the page's controls and had to be found in the
+live app. It was not a reader at all.
+
+`_TabViewCore.tabContentSizes` memoises each tab's measured size in a
+`StateBox`, and wrote it back **unconditionally** — from `sizeThatFits`, i.e.
+during the MEASURE pass. Writing a `StateBox` invalidates the render cache and
+requests another render; that render measures; that measure writes again. **An
+idle page containing a tab view re-rendered itself forever**, producing
+byte-identical frames.
+
+| Example page: Tab Views | idle CPU | writes/s |
+|---|---|---|
+| §11 (after the chip conversion) | 12.4% | 2.2 |
+| now | **0.5%** | 2.3 |
+
+The write rate is unchanged, so the chip still breathes — through the replay,
+which is what it was converted for. The fix is one line plus `Equatable`: store
+the memo only when it changed. A memo is not state; re-storing an identical one
+must not dirty anything.
+
+**How it was found.** Not by reading code. Three instrumented runs, each
+answering one question:
+
+1. Dump a stack whenever `VolatileReadTracker.recordVolatileRead()` fires →
+   **nothing**, so no view read the pulse clock.
+2. Same for the cursor clock's own flag (`CursorTimer.didReadThisFrame`, which
+   is tracked *separately* — that asymmetry is worth remembering) → the only
+   hits came from the main menu **while navigating**, not while idle. Gating
+   the dump on "more than 5.2 s since launch" was what made that visible; the
+   first two runs were reading navigation-time noise.
+3. Dump a stack from `AppState.setNeedsRender()` instead → straight to
+   `StateBox.value.set` → `RenderCache.invalidateRender` →
+   `_TabViewCore.tabContentSizes` → `widestContentWidth` → `sizeThatFits`.
+
+`BodyMutationDiagnostic` already existed for exactly this class and now has a
+regression test in `TabViewTests`: render twice, assert the second pass writes
+nothing. On the unfixed code it fails naming the culprit —
+`identity: "/_TabViewCore<Int>"`.
+
+### The sweep after both fixes
+
+| page | idle% |
+|---|---|
+| Scroll View | 27.0 |
+| Picker | 24.9 |
+| Progress & Gauges | 19.9 (legitimate) |
+| Mouse | 10.5 |
+| Overlays & Modals | 10.4 |
+| Layout System | 9.5 |
+| Spinners | 9.0 (legitimate) |
+| Image (File) | 9.0 |
+| Lists | 8.5 |
+| Sliders | 7.5 |
+| Toggles | 7.0 |
+| Text Styles | 4.5 |
+| Menus | 3.5 |
+| Tables | 3.0 |
+| **Tab Views, Theme, Forms, Buttons, Radio, Steppers, Split View, Image (URL), Empty State, everything else** | **0.5 or less** |
+
+Two thirds of the Example is now genuinely idle. What is left splits in two:
+**Scroll View / Picker / Lists / Sliders / Toggles** are honest unconverted
+producers (a focused control reads the clock; converting it is the remaining
+`AnimatedCellRun` work), while **Mouse, Overlays & Modals, Layout System and
+Image (File)** have no obvious animator and deserve the `setNeedsRender` stack
+dump above before anyone converts anything for them.

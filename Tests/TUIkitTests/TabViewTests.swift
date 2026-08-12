@@ -523,3 +523,41 @@ struct TabViewTests {
         #expect(padInt == padInsets, "the two overloads render identically")
     }
 }
+
+// MARK: - Idle render loop
+
+@MainActor
+@Suite("TabView must not dirty state while it measures")
+struct TabViewMeasureMutationTests {
+
+    /// The tab-size cache is written from `sizeThatFits`. Writing a `StateBox`
+    /// invalidates the render cache and requests another render — which
+    /// measures, which wrote again: an idle page with a tab view re-rendered
+    /// itself forever, producing byte-identical frames (12% of a core on the
+    /// Example's Tab Views page). `BodyMutationDiagnostic` is the seam that
+    /// names exactly this.
+    @Test("A second render writes no state")
+    func steadyStateWritesNothing() {
+        let diagnostic = BodyMutationDiagnostic()
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 12,
+            environment: EnvironmentValues(), tuiContext: TUIContext()
+        ).isolatingRenderCache()
+        context.renderCache!.bodyMutationDiagnostic = diagnostic
+        context.environment.stateStorage?.renderCache = context.renderCache
+
+        let view = TabView(selection: .constant(0)) {
+            Tab("Alpha", value: 0) { Text("first") }
+            Tab("Bravo", value: 1) { Text("second, wider") }
+        }
+
+        // The first pass legitimately seeds the cache. The second must not
+        // touch it: nothing about the view or the width has changed.
+        _ = renderToBuffer(view, context: context)
+        diagnostic.beginTraversal()
+        _ = renderToBuffer(view, context: context)
+        diagnostic.endTraversal()
+
+        #expect(diagnostic.reports.isEmpty, "saw \(diagnostic.reports)")
+    }
+}

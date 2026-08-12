@@ -150,7 +150,12 @@ private enum TabViewStateIndex {
 /// latest width would flush and re-seed every tab on each probe. Holding a
 /// handful covers a probe sweep and a resize, and evicting the least recently
 /// used keeps it bounded across a long resize drag.
-private struct TabSizeCache {
+/// `Equatable` so the caller can decline to write back a cache that did not
+/// change. Writing a `StateBox` invalidates the render cache and requests
+/// another render — and this one is written from the MEASURE pass, so an
+/// unconditional store made every frame schedule the next one, forever. See
+/// ``_TabViewCore/tabContentSizes(insets:available:context:)``.
+private struct TabSizeCache: Equatable {
     private static let capacity = 8
 
     /// The widths held, least recently used first.
@@ -242,7 +247,14 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let present = Set(tabs.map { AnyHashable($0.value) })
         entry = entry.filter { present.contains($0.key) }  // drop removed tabs
         cache.set(entry, for: available)
-        box.value = cache
+        // Only when it actually changed. This runs during the MEASURE pass, and
+        // writing a `StateBox` invalidates the render cache and asks for another
+        // render — which measures again, which wrote again. An idle page with a
+        // tab view rendered itself forever at whatever rate the loop would run,
+        // producing byte-identical frames: 12% of a core on the Example's Tab
+        // Views page, with nothing on screen changing. The cache is a memo, not
+        // state; re-storing the same memo must not dirty anything.
+        if cache != box.value { box.value = cache }
         return entry
     }
 
