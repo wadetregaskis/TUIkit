@@ -1088,3 +1088,78 @@ The digest is the right shape and is affordable. The remaining work before an
 automatic memo could ship is bounded and now known: separate memo counters,
 the test-isolation interaction, and a decision on reference-typed view state.
 That is a much smaller list than §19's, and none of it is architectural.
+
+## 21. Landing the memo: three gates, and the one that does not close (2026-08-12)
+
+§20 left a short list before an automatic memo could ship. Working it down
+resolved everything on it and then found the actual blocker, which was not on
+it. Reverted again; here is the chain, because each step failed in a way worth
+recognising.
+
+**Separate counters — done, and it fixed two of the three items.** The
+automatic memo now has its own `autoStats` rather than sharing `stats`, whose
+existing meaning ("how the *opt-in* memos are doing") several tests assert
+exact figures on. With that, the full suite passed 4015/4015 — three runs, to
+be sure the order-dependent `MenuTests` failure was really gone.
+
+**And a green suite meant nothing.** Instrumenting the live app showed
+`entries 0, hits 0, misses 0` on every page: the memo was never running at
+all. `hasUndigestableValue` is sticky and inherited, and the app installs its
+default styles on the **root** environment — so one unhashable style
+existential there disabled memoization for the entire tree. Every test passed
+because nothing was memoized. This is the failure mode the whole scheme is
+most prone to, and it is invisible to a test suite; only a hit-rate
+measurement finds it.
+
+**So make everything digestable.** Values that are neither `Hashable` nor a
+class fall back to hashing their raw bytes — conservative in the same way the
+view-value key is, and local in effect. The flag disappears entirely. Now the
+memo ran: 350–945 lookups a frame.
+
+**Still zero hits, and zero entries.** Gate counters showed stores *were*
+happening — ~52 a frame, with only hit-test regions declining any real number
+(2106 declined vs 4229 stored, cumulative). The entries were being collected
+by `removeInactive()` at the end of the very pass that stored them: only
+`EquatableView` and `_MemoizedRow` call `cache.markActive`, and the automatic
+memo did not. One line.
+
+**Entries then persisted — 11 to 52 a page — and hits stayed at zero.** That
+is the real blocker, and it is the direct consequence of the previous fix.
+Hashing raw bytes gives a *stable* digest only for values whose bytes are
+stable. A closure's context pointer and a heap-boxed existential's payload are
+freshly allocated on every write, so the environment digest changes every
+frame, and every lookup misses. Removing the poison flag converted "disabled
+everywhere" into "misses everywhere" — the same nil result by a different
+route.
+
+### What that actually settles
+
+The three dependency channels are now all handled or understood, and none of
+them is the problem:
+
+- **view value** — raw bytes, zero false hits measured (§19);
+- **environment** — the digest, which demonstrably fixes the focus class (§20);
+- **per-frame registries** — the existing region/overlay/volatile gates, which
+  the counters show are doing their job and declining only what they should.
+
+What is left is narrower than any of those: **an environment slot needs a
+digest that is stable across frames**, and for a closure or a boxed existential
+there is no such thing without deciding that its *type* is the identity. That
+is a real correctness compromise (two instances of one style type with
+different stored properties would collide), not an implementation detail — so
+it wants a decision, not another attempt.
+
+Three options, in order of how much they give up:
+
+1. **Digest style existentials by type identity**, and require framework style
+   types to be stateless. Cheap, and true of every built-in style today, but a
+   third-party style with stored properties would be silently wrong.
+2. **Make the style protocols refine `Hashable`.** Correct, and synthesis makes
+   it free for most conformers, but it is a public API change and constrains
+   every user-defined style.
+3. **Keep a per-slot "unstable" set** rather than one sticky flag, and let the
+   memo ignore slots a subtree provably never read. That needs environment
+   *read* tracking, which does not exist and is not cheap.
+
+Option 2 is the honest one and is the only one with no silent-wrongness mode.
+It is also the one that cannot be decided inside a performance pass.
