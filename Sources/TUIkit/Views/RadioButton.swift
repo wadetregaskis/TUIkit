@@ -321,20 +321,21 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         let hoveredIndex = isDisabled ? -1 : hoveredIndexBox.value
 
         // Render items based on orientation
-        let lines: [String]
-        let itemRegions: [(x: Int, y: Int, width: Int)]
+        let rendered: RenderedItems
         switch orientation {
         case .vertical:
-            (lines, itemRegions) = renderVerticalWithRegions(
+            rendered = renderVerticalWithRegions(
                 context: context, handler: handler, groupHasFocus: groupHasFocus,
                 hoveredIndex: hoveredIndex, palette: palette)
         case .horizontal:
-            (lines, itemRegions) = renderHorizontalWithRegions(
+            rendered = renderHorizontalWithRegions(
                 context: context, handler: handler, groupHasFocus: groupHasFocus,
                 hoveredIndex: hoveredIndex, palette: palette)
         }
+        let itemRegions = rendered.regions
 
-        var buffer = FrameBuffer(lines: lines)
+        var buffer = FrameBuffer(lines: rendered.lines)
+        buffer.animatedCells = rendered.animatedCells
 
         // Mouse: a left-button release on an item row selects that item
         // and grants the group focus. Each item gets its own hit-test
@@ -408,18 +409,28 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         return buffer
     }
 
+    /// One orientation's worth of rendered items: the lines to show, the
+    /// per-item hit regions, and any focus indicator that animates itself —
+    /// all three anchored to the same origin, which is why they travel together.
+    private struct RenderedItems {
+        let lines: [String]
+        let regions: [(x: Int, y: Int, width: Int)]
+        let animatedCells: [AnimatedCellRun]
+    }
+
     private func renderVerticalWithRegions(
         context: RenderContext,
         handler: RadioButtonGroupHandler,
         groupHasFocus: Bool,
         hoveredIndex: Int,
         palette: Palette
-    ) -> (lines: [String], regions: [(x: Int, y: Int, width: Int)]) {
+    ) -> RenderedItems {
         var lines: [String] = []
         var regions: [(x: Int, y: Int, width: Int)] = []
+        var animatedCells: [AnimatedCellRun] = []
         for (index, item) in items.enumerated() {
             let isFocused = handler.focusedIndex == index && groupHasFocus
-            let line = renderRadioButton(
+            let (line, indicator) = renderRadioButton(
                 index: index,
                 item: item,
                 isFocused: isFocused,
@@ -432,8 +443,12 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
             lines.append(line)
             // One full-width row per item.
             regions.append((x: 0, y: index, width: line.strippedLength))
+            // Each item starts its own row, so the bullet sits at column 0 of it.
+            if let indicator {
+                animatedCells.append(indicator.shifted(byX: 0, y: index))
+            }
         }
-        return (lines, regions)
+        return RenderedItems(lines: lines, regions: regions, animatedCells: animatedCells)
     }
 
     private func renderHorizontalWithRegions(
@@ -442,8 +457,8 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         groupHasFocus: Bool,
         hoveredIndex: Int,
         palette: Palette
-    ) -> (lines: [String], regions: [(x: Int, y: Int, width: Int)]) {
-        let itemStrings = items.enumerated().map { index, item -> String in
+    ) -> RenderedItems {
+        let rendered = items.enumerated().map { index, item in
             let isFocused = handler.focusedIndex == index && groupHasFocus
             return renderRadioButton(
                 index: index,
@@ -459,20 +474,36 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
 
         let spacingWidth = 2
         var regions: [(x: Int, y: Int, width: Int)] = []
+        var animatedCells: [AnimatedCellRun] = []
         var xCursor = 0
-        for (i, text) in itemStrings.enumerated() {
-            let w = text.strippedLength
+        for (i, item) in rendered.enumerated() {
+            let w = item.text.strippedLength
             regions.append((x: xCursor, y: 0, width: w))
+            // Every item shares the one row, so the bullet's column is wherever
+            // its item begins — the same cursor the hit regions are cut from.
+            if let indicator = item.indicator {
+                animatedCells.append(indicator.shifted(byX: xCursor, y: 0))
+            }
             xCursor += w
-            if i < itemStrings.count - 1 {
+            if i < rendered.count - 1 {
                 xCursor += spacingWidth
             }
         }
 
         let spacing = String(repeating: " ", count: spacingWidth)
-        return ([itemStrings.joined(separator: spacing)], regions)
+        return RenderedItems(
+            lines: [rendered.map(\.text).joined(separator: spacing)],
+            regions: regions,
+            animatedCells: animatedCells)
     }
 
+    /// Renders one item's row.
+    ///
+    /// - Returns: the styled text, and — when this item holds the focus and its
+    ///   indicator is actually breathing — an ``AnimatedCellRun`` describing
+    ///   that one cell, anchored at the row's own origin for the caller to
+    ///   shift into place. The run is what lets the bullet pulse without the
+    ///   page being rendered again on every tick of the clock.
     private func renderRadioButton(
         index: Int,
         item: RadioButtonItem<Value>,
@@ -482,7 +513,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         isHovered: Bool,
         context: RenderContext,
         palette: Palette
-    ) -> String {
+    ) -> (text: String, indicator: AnimatedCellRun?) {
         // Combine own + cascaded disabled (renderToBuffer's shadowing local does
         // not reach this helper).
         let isDisabled = self.isDisabled || !context.environment.isEnabled
@@ -506,14 +537,25 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         // both more emphatic affordances and shouldn't
         // compete.
         let indicatorColor: Color
+        // Set only on the focused branch: it is the one state in which the
+        // indicator moves, and at most one item in a group is ever focused.
+        var indicatorRun: AnimatedCellRun?
         if isDisabled {
             indicatorColor = palette.foregroundTertiary.opacity(
                 ViewConstants.disabledForeground, over: palette.background)
         } else if isFocused {
-            // Focused: pulsing accent (whether selected or not)
+            // Focused: pulsing accent (whether selected or not) — taken as a
+            // whole cycle rather than a phase, so the bullet can be handed to
+            // the run loop to breathe on its own. Asking for the live phase
+            // instead would keep the clock ticking and re-render this entire
+            // page ten times a second to repaint one cell.
             let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
-            indicatorColor = SelectionIndicator.resolve(isFocused: true, context: context)
-                .color(dim: dimAccent, bright: palette.accent)
+            let cycle = context.environment.selectionEmphasis.cycle(true)
+            indicatorColor = cycle.colorNow(dim: dimAccent, bright: palette.accent)
+            if !context.isMeasuring {
+                indicatorRun = cycle.run(
+                    indicator, dim: dimAccent, bright: palette.accent, offsetX: 0, offsetY: 0)
+            }
         } else if isSelected {
             // Selected but not focused: solid accent
             indicatorColor = palette.accent
@@ -542,7 +584,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         let labelText = labelBuffer.lines.first ?? ""
 
         // Combine: indicator + label
-        return styledIndicator + " " + labelText
+        return (styledIndicator + " " + labelText, indicatorRun)
     }
 }
 

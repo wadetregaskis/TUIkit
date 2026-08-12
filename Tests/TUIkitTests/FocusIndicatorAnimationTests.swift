@@ -47,14 +47,25 @@ struct FocusIndicatorAnimationTests {
         _ buffer: FrameBuffer, at step: Int = 0,
         _ comment: Comment? = nil, sourceLocation: SourceLocation = #_sourceLocation
     ) {
-        let before = buffer.lines.map(\.stripped)
+        let before = visible(buffer)
         for run in buffer.animatedCells {
             let replayed = buffer.composited(
                 with: FrameBuffer(lines: [run.frame(at: step)]),
                 at: (x: run.offsetX, y: run.offsetY))
             #expect(
-                replayed.lines.map(\.stripped) == before, comment ?? "run \(run) moved the cells",
+                visible(replayed) == before, comment ?? "run \(run) moved the cells",
                 sourceLocation: sourceLocation)
+        }
+    }
+
+    /// A buffer's rows as the terminal shows them: no styling, and no trailing
+    /// blanks — compositing squares a buffer's rows off to its widest line, so
+    /// a short row picks up padding that never reaches the screen. Anything a
+    /// misplaced run would actually do (shift a glyph, overwrite one, split a
+    /// wide character) still shows up here.
+    private func visible(_ buffer: FrameBuffer) -> [String] {
+        buffer.lines.map { line in
+            String(line.stripped.reversed().drop(while: { $0 == " " }).reversed())
         }
     }
 
@@ -242,6 +253,80 @@ struct FocusIndicatorAnimationTests {
                 .textCursor(TextCursorStyle(shape: .block, animation: .blink)))
         let distinct = Set(buffer.animatedCells.first?.frames ?? [])
         #expect(distinct.count == 2, "a blink has exactly two pictures, got \(distinct.count)")
+    }
+
+    // MARK: - Radio bullet
+
+    private func radioGroup(
+        _ orientation: RadioButtonOrientation = .vertical
+    ) -> RadioButtonGroup<String> {
+        RadioButtonGroup(selection: .constant("a"), orientation: orientation) {
+            RadioButtonItem("a", "Alpha")
+            RadioButtonItem("b", "Bravo")
+            RadioButtonItem("c", "Charlie")
+        }
+    }
+
+    /// Renders twice: the first pass registers the group's handler, the second
+    /// reads back whatever `move` did to it. That is also the real sequence —
+    /// a key moves the focus and the next frame draws it.
+    private func radioBuffer(
+        _ orientation: RadioButtonOrientation = .vertical,
+        focusedFirst: Bool = true,
+        move: (FocusManager) -> Void = { _ in }
+    ) -> FrameBuffer {
+        let group = radioGroup(orientation)
+        let context = makeRenderContext(width: 40, height: 8)
+        if !focusedFirst { context.environment.focusManager!.register(FocusSentinel()) }
+        _ = renderToBuffer(group, context: context)
+        move(context.environment.focusManager!)
+        return renderToBuffer(group, context: context)
+    }
+
+    @Test("A focused radio group hands over its bullet")
+    func radioBullet() {
+        let buffer = radioBuffer()
+        // One run for the whole group: at most one item holds the focus, so a
+        // second run would mean an item is animating that isn't focused.
+        expectAnimates(buffer, runs: 1, "radio bullet")
+        let run = buffer.animatedCells[0]
+        #expect(run.offsetX == 0, "the bullet opens the row")
+        #expect(run.offsetY == 0, "the first item has the focus")
+        #expect(run.width == TerminalSymbols.radioSelected.strippedLength)
+        #expect(run.frames.allSatisfy { $0.strippedLength == run.width })
+    }
+
+    @Test("The bullet moves down the group with the focus")
+    func radioBulletFollowsFocus() {
+        // Each item is its own row, so a vertical group is the case where a run
+        // left at row 0 would repaint the wrong item forever — and still look
+        // plausible, because something would be pulsing.
+        let buffer = radioBuffer { _ = $0.dispatchKeyEvent(KeyEvent(key: .down)) }
+        expectAnimates(buffer, runs: 1, "radio bullet after Down")
+        #expect(buffer.animatedCells[0].offsetY == 1)
+    }
+
+    @Test("A horizontal group's bullet sits at its own item's column")
+    func radioBulletHorizontal() {
+        // All three items share one row here, so the bullet's column is the
+        // only thing distinguishing them.
+        let buffer = radioBuffer(.horizontal) { _ = $0.dispatchKeyEvent(KeyEvent(key: .right)) }
+        expectAnimates(buffer, runs: 1, "horizontal radio bullet")
+        let run = buffer.animatedCells[0]
+        #expect(run.offsetY == 0, "a horizontal group is one row")
+        #expect(run.offsetX > 0, "the second item does not start at column 0")
+    }
+
+    @Test("An unfocused or disabled radio group animates nothing")
+    func radioBulletStill() {
+        #expect(radioBuffer(focusedFirst: false).animatedCells.isEmpty)
+        // A disabled group never registers for focus, and its indicator is
+        // drawn from the disabled branch — which has no cycle at all.
+        let disabled = RadioButtonGroup(selection: .constant("a")) {
+            RadioButtonItem("a", "Alpha")
+            RadioButtonItem("b", "Bravo")
+        }.disabled(true)
+        #expect(focused(disabled).animatedCells.isEmpty)
     }
 
     @Test("A button keeps its runs through the tree a page wraps it in")

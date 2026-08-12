@@ -367,7 +367,7 @@ legitimately animate (Spinners, Progress & Gauges) are not waste; the rest is.
 | Scroll View | 26.9 | 27.4 | scrollbar focus pulse — next |
 | Picker | 23.9 | 27.4 | scrollbar / menu indicator |
 | Progress & Gauges | 19.0 | 20.4 | indeterminate bars (legitimate) |
-| Theme | 16.4 | 17.5 | focused **RadioButton** bullet — unconverted producer |
+| Theme | 16.4 | 17.5 → **0.7** | radio bullet converted, see §10 |
 | Tab Views | 11.4 | 12.5 | active **tab chip** background — unconverted producer |
 | Mouse | 10.0 | 11.0 | button caps, already converted — see below |
 | Lists | 17.9 | **10.0** | |
@@ -418,3 +418,40 @@ Remaining producers, by the pages they would quiet: scrollbar +
 `scrollIndicatorEmphasis` (Scroll View, Lists, Tables, Picker), Toggle (Forms,
 Toggles), List/Table row cursors (Lists, Tables), then RadioButton, Slider, the
 grids and the menu renderers.
+
+## 10. The radio bullet converted (2026-08-11)
+
+Same binary pair, `idlepage.py`, 150×50, the Theme page idle with its radio
+group focused:
+
+| | idle CPU | writes/s | bytes/s |
+|---|---|---|---|
+| before | 16.6% | 10.8 | 2 667 |
+| after | **0.7%** | 11.4 | 3 288 |
+
+**24× less CPU at the same write rate.** The rate is the part that matters as
+much as the CPU: it says the bullet is still breathing at the same cadence, and
+that the loop is splicing cells rather than a view being asked anything. A
+frozen indicator would have shown ~0 writes/s (the replay suppresses a tick
+that lands on the same picture), which is precisely how a broken conversion
+disguises itself as a win. Bytes are up 23%, the known ~12%-per-run dead-escape
+overhead the SGR netting will collect.
+
+The shared parts moved to `SelectionEmphasisCycle` first — `colorNow(dim:bright:)`
+and `run(_:dim:bright:offsetX:offsetY:)` — because the three rules a converted
+producer has to get right (index the cycle modulo its length; emit nothing when
+it is still; measure the run in cells, not characters) should exist once.
+`ButtonCapCycle` was rebuilt on them in the same pass.
+
+One thing radio buttons need that buttons did not: **the run's row is the
+focused item's row**. A group is a list, so a run left at row 0 would repaint
+the wrong item — and still look plausible, because *something* would be
+pulsing. `FocusIndicatorAnimationTests` asserts the offset moves with the focus
+(vertical) and with the item's column (horizontal); the replay-is-identity
+check alone does not catch it, since every item's bullet is the same glyph.
+
+Remaining, in the order their pages cost: scrollbar + `scrollIndicatorEmphasis`
+(Scroll View 27.4, Picker 27.4, Lists 10.0, Tables), the TabView active chip
+(Tab Views 12.5), then Toggle, List/Table row cursors, Slider, the grids and
+the menu renderers. And the Mouse page (11.0), which still does not fit the
+pattern.
