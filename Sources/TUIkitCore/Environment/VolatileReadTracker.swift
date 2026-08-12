@@ -42,6 +42,14 @@ public final class VolatileReadTracker: @unchecked Sendable {
     ///   the frame's collection (and a cached observer stops firing);
     /// - `onChange(of:)` — the change detection is a per-frame comparison;
     ///   a cached row never compares, so changes go permanently unnoticed.
+    /// - `.statusBarItems` — the bar's section items are cleared and rebuilt
+    ///   every pass, so a cached subtree's items vanish from the bar.
+    ///
+    /// The pattern is the same each time: a **per-frame registry** the render
+    /// loop empties and the view tree refills. Anything that writes to one
+    /// belongs here, because nothing in the rendered buffer reveals the
+    /// registration (unlike hit-test regions and overlays, which travel in the
+    /// buffer and so are gated directly).
     public private(set) var sideEffects: Int = 0
 
     /// The combined count a value-memoizing view snapshots around a scoped

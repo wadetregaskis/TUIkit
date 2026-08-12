@@ -55,6 +55,15 @@ extension StatusBarItemsModifier: Renderable {
     func renderToBuffer(context renderContext: RenderContext) -> FrameBuffer {
         let statusBar = renderContext.environment.statusBar
 
+        // Declare the registration to any value-memoizing ancestor, exactly as
+        // the preference and `onKeyPress` modifiers do. The status bar's items
+        // are rebuilt from scratch every render pass (`clearSectionItems()`),
+        // so a subtree served from cache never re-registers and its items
+        // silently vanish from the bar — a disappearance nothing in the
+        // buffer reveals, since this modifier adds no hit region and reads no
+        // volatile value, so every other gate lets it through.
+        renderContext.environment.volatileReadTracker?.recordRenderSideEffect()
+
         // Set the items silently (without triggering re-render) to avoid render loops.
         // The modifier is called during rendering, so we must not trigger another render.
         if let contextName = self.context {
