@@ -838,3 +838,134 @@ above 3% — Scroll View 17.0, Progress & Gauges 18.5, Lists 8.4, Spinners 6.5,
 Overlays & Modals 8.5, Sliders 8.0 — is legitimate animation plus two
 unconverted producers (`_MenuItemRow.highlight`, the Slider's own indicator)
 whose pages animate anyway.
+
+## 19. Area 2 — how much of a frame is redundant, and why memoizing it is blocked (2026-08-12)
+
+The second optimisation area asked: if only one part of the page changed, can we
+re-layout and re-render only that part? Before designing anything, the question
+worth answering is how much that could possibly be worth. This section records
+the measurement and the wall the obvious implementation hits.
+
+### The instrument
+
+A temporary `RenderRedundancyProbe` bracketed the render dispatcher
+(`renderToBuffer(_:context:)`) and `measureChild`, recording per node: the view
+value's raw bytes, the inclusive time, the subtree size, and whether the
+produced `FrameBuffer` equalled the previous frame's for that node. Nodes were
+keyed by `(identity.path, type, occurrence-within-pass)` — the occurrence index
+matters because a `Renderable` adds no child identity, so wrappers and (on the
+legacy `TupleView` row path) siblings share one `ViewIdentity`.
+
+"Reusable" counts only **maximal identical subtrees**: walk pre-order, and when
+a node's output matched, add its whole subtree and skip past it. That is the
+ceiling for any memo — an oracle that knows the answer in advance.
+
+Driven through a PTY at 150×50, tabbing through each page (so frames really
+happen; an idle page renders nothing at all since §12).
+
+| page | nodes/frame | reusable nodes | reusable render time |
+|---|---|---|---|
+| Layout System | 301 | 88% | 68% |
+| Buttons & Links | 225 | 86% | 61% |
+| Tables | 210 | 85% | 53% |
+| Theme | 803 | 95% | 86% |
+| Colors | 898 | 100% | 100% |
+
+So the premise is confirmed and then some: while the user tabs between
+controls, **85–100% of the render walk reproduces byte-identical output**. The
+measure pass is 15–33% of the two passes' combined time, so the render walk is
+the larger half and worth attacking first.
+
+### Where the reusable time sits — and why that is the problem
+
+Aggregating the maximal identical roots by view type puts essentially all of it
+in *app-level composite views*:
+
+```
+ROOT  1.476ms x1 (36 nodes) DemoSection<VStack<TupleView<Pack{Text, Toggle<Text>, …}>>>
+ROOT  0.833ms x1 (38 nodes) LazyVStack<ForEach<Range<Int>, Int, …>>
+ROOT  0.540ms x1 (25 nodes) DemoSection<HStack<TupleView<Pack{VStack<…>, VStack<…>}>>>
+ROOT  0.278ms x1 (13 nodes) DemoAppHeader
+```
+
+Not framework primitives — the Example's own `DemoSection`. Self time is spread
+thin and sits in the layout cores (`_ScrollViewCore` 1.18ms, `_LayoutCore`
+0.94ms, `_VStackCore` 0.56ms — compositing), not in leaves (`Text` × 65 totals
+0.18ms). A leaf-level cache would buy nothing; the win is only available at the
+composite boundary.
+
+`DemoSection` does not conform to `Equatable`, and neither will most app views,
+so `EquatableView` cannot reach any of this. Hence the idea below.
+
+### Raw-byte equality as a conformance-free key
+
+A Swift view tree is stored **inline**, so one `memcmp` of the root struct
+covers the whole subtree's inputs. Byte equality is a conservative stand-in for
+value equality: it can only report "same" when the values occupy identical
+memory — equal inline payloads, or the same heap pointer (for a `String`, the
+same storage and therefore the same contents). Rebuilt arrays, interpolated
+strings and fresh closure contexts all compare unequal, so it misses; it cannot
+invent a hit.
+
+Measured coverage, restricted to subtrees the existing cache gates would allow
+storing (no hit-test regions, no overlays):
+
+| page | oracle ceiling | byte-key achievable | false hits |
+|---|---|---|---|
+| Layout System | 68% | 47% | 0 |
+| Buttons & Links | 61% | 16% | 0 |
+| Tables | 53% | 9% | 0 |
+| Theme | 86% | 19% | 0 |
+| Forms | — | 5% | **8** |
+
+The gap between ceiling and achievable is closures and heap-built strings —
+which is also why the control-heavy pages score low, and that is *correct*:
+their subtrees must run every frame anyway.
+
+### The wall: focus is an untracked dependency
+
+Forms reported **8 false hits** — bytes identical, output different — in
+`Button` and its ancestors. A control's appearance depends on the focus manager,
+which is neither in the view value nor in `@State`, so nothing invalidates the
+cache when focus moves.
+
+An implementation confirmed this is not a probe artefact. An automatic
+byte-keyed memo on the composite path, reusing every existing gate (measure
+pass, hit regions, overlays, `VolatileReadTracker`, invalidation-during-render,
+incomparable environment), builds and passes 4010 of 4015 tests but fails two
+real ones:
+
+- `ContextMenuTests` — "The content is told whether its focus stop holds the
+  focus" reports `no` where `yes` is required;
+- `MenuTests` — the open caret never appears, because the label was served from
+  cache.
+
+Root cause: `\.isFocused` (and friends) are published with
+`environment.setting(_:to:)`, which **bypasses `noteAppliedEnvironment`** — the
+hook that detects an environment change at its application site and clears the
+cache below it. Only the `.environment(_:_:)` *modifier* goes through that hook.
+So a subtree whose output depends on framework-published environment can be
+served stale, and no existing gate notices.
+
+That is a pre-existing hole in `EquatableView` too; it has simply never been hit
+because `.equatable()` is opt-in and is not applied to focus-dependent views.
+Making the memo automatic exposes it everywhere at once.
+
+**The automatic memo was therefore reverted, not shipped.** It is not merely
+unprofitable — it is incorrect.
+
+### What would unblock it
+
+Routing `EnvironmentValues.setting(_:to:)` through the same change-detection as
+the `.environment` modifier, so any environment a subtree's output depends on
+invalidates it. That is a change on one of the hottest paths in the framework
+and needs its own measurement; it is the prerequisite for *any* broader
+memoization, including a future subtree re-render, not just for this scheme.
+
+Two things are worth carrying forward regardless:
+
+1. **The ceiling is real and large** (53–86% of render time). Whatever finally
+   collects it, the work is there.
+2. **Byte-keying works.** Zero false hits on every page whose environment
+   dependencies were already tracked; the only failures came from the
+   environment hole above, not from the key.
