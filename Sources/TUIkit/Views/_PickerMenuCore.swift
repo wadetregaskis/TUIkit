@@ -118,7 +118,10 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             context: context,
             palette: palette
         )
-        var buffer = FrameBuffer(lines: [collapsed])
+        var buffer = FrameBuffer(lines: [collapsed.text])
+        // The collapsed control IS the buffer's only row, so the caps' runs
+        // need no shifting.
+        if !context.isMeasuring { buffer.animatedCells = collapsed.animations }
 
         attachCollapsedMouseHandlers(
             to: &buffer,
@@ -126,7 +129,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             handler: handler,
             hoverBox: hoverBox,
             persistedFocusID: persistedFocusID,
-            collapsedWidth: collapsed.strippedLength
+            collapsedWidth: collapsed.text.strippedLength
         )
 
         guard isOpen else { return buffer }
@@ -336,7 +339,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         isHovered: Bool,
         context: RenderContext,
         palette: any Palette
-    ) -> String {
+    ) -> (text: String, animations: [AnimatedCellRun]) {
         // Combine own + cascaded disabled (renderToBuffer's shadowing local does
         // not reach this helper).
         let isDisabled = self.isDisabled || !context.environment.isEnabled
@@ -375,25 +378,21 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             labelFg = palette.foregroundSecondary.ensuringContrast(atLeast: 3.0, against: buttonBg)
         }
 
-        let capColor: Color
-        if isDisabled {
-            capColor = buttonBg
-        } else if isFocused {
-            // A glyph, not a fill behind text: it breathes to the full accent,
-            // on the shared clock. Same reasoning as `Button`'s end caps.
-            capColor = SelectionIndicator.resolve(isFocused: true, context: context)
-                .color(dim: buttonBg, bright: palette.accent)
-        } else {
-            capColor = buttonBg
-        }
+        // The caps are glyphs, not a fill behind text, so they breathe all the
+        // way to the accent — and as a whole cycle, so the run loop can advance
+        // those two cells without re-rendering the page. Literally the same
+        // treatment as `Button`'s end caps, so it is the same type.
+        let caps = ButtonCapCycle(
+            isFocused: isFocused && !isDisabled,
+            background: buttonBg, accent: palette.accent, context: context)
 
         let openCap = ANSIRenderer.colorize(
             String(TerminalSymbols.openCap),
-            foreground: capColor
+            foreground: caps.colorNow
         )
         let closeCap = ANSIRenderer.colorize(
             String(TerminalSymbols.closeCap),
-            foreground: capColor
+            foreground: caps.colorNow
         )
         let styledContent = ANSIRenderer.colorize(
             content,
@@ -401,6 +400,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             background: buttonBg,
             bold: isFocused && !isDisabled
         )
-        return openCap + styledContent + closeCap
+        let line = openCap + styledContent + closeCap
+        return (line, caps.runs(width: line.strippedLength))
     }
 }

@@ -621,3 +621,28 @@ Two things this one needed that the earlier conversions did not:
 Remaining: the scrollbar (Scroll View 27.0, Picker 24.9, Lists 8.5, Tables),
 `_PickerMenuCore.collapsedLine` (Picker, Mouse 10.5, Image (File) 9.0), and
 `_MenuItemRow.highlight` (Overlays & Modals 10.4, Menus 3.5).
+
+## 14. The picker's collapsed control converted (2026-08-12)
+
+Third of the four. A closed `Picker` is a bracketed button in all but name —
+`▐ label ⌄ ▌`, with only the caps breathing — so it now shares `ButtonCapCycle`
+rather than resolving the phase itself.
+
+| page | idle CPU before | after | writes/s |
+|---|---|---|---|
+| Mouse | 10.5% | **0.6%** | 10.3 (unchanged) |
+| Image (File) | 9.0% | **0.6%** | 10.6 (unchanged) |
+| Picker | 24.9% | 24.5% | 10.6 |
+
+Mouse and Image (File) are done. **The Picker page does not move, and that is
+the expected answer**: its cost is the long-menu demo's scrollbar, not the
+collapsed control — the same distinction §11 drew, arrived at deliberately this
+time rather than by surprise.
+
+One test premise needed correcting: a picker draws its *label* before the
+control, so its caps do not sit at the row's ends the way a button's do. The
+replay-is-identity check catches a wrong offset regardless; the explicit
+assertion just had to stop assuming.
+
+Remaining: the **scrollbar** (Scroll View 27.0, Picker 24.5, Lists 8.5, Tables)
+and `_MenuItemRow.highlight` (Overlays & Modals 10.4, Menus 3.5).

@@ -416,6 +416,39 @@ struct FocusIndicatorAnimationTests {
         #expect(focused(Toggle("On", isOn: .constant(true)).disabled(true)).animatedCells.isEmpty)
     }
 
+    // MARK: - Picker
+
+    @Test("A focused picker hands over its end caps")
+    func pickerCaps() {
+        // The collapsed control is a bracketed button in all but name, so it
+        // shares `ButtonCapCycle` — and must pin the same geometry.
+        let buffer = focused(
+            Picker("Fruit", selection: .constant("a")) {
+                Text("Apple").tag("a")
+                Text("Banana").tag("b")
+            })
+        expectAnimates(buffer, runs: 2, "picker caps")
+        // A picker draws its label BEFORE the control, so the caps do not sit
+        // at the row's ends — they bracket the control wherever it landed.
+        // (`expectAnimates` proves they land on the cells actually drawn.)
+        let offsets = buffer.animatedCells.map(\.offsetX).sorted()
+        #expect(offsets[0] > 0, "the label precedes the control: \(offsets)")
+        #expect(offsets[1] > offsets[0], "one cap at each end of the control")
+        #expect(buffer.animatedCells.allSatisfy { $0.offsetY == 0 && $0.width == 1 })
+    }
+
+    @Test("An unfocused or disabled picker animates nothing")
+    func pickerCapsStill() {
+        let context = makeRenderContext(width: 40, height: 8)
+        context.environment.focusManager!.register(FocusSentinel())
+        let picker = Picker("Fruit", selection: .constant("a")) {
+            Text("Apple").tag("a")
+            Text("Banana").tag("b")
+        }
+        #expect(renderToBuffer(picker, context: context).animatedCells.isEmpty)
+        #expect(focused(picker.disabled(true)).animatedCells.isEmpty)
+    }
+
     @Test("A button keeps its runs through the tree a page wraps it in")
     func capsSurviveRealChrome() {
         // The producer and the propagation both have to hold for the page to
