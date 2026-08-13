@@ -71,8 +71,15 @@ the emoji-class clusters below unless noted.
 ### Output behaviour
 
 - **Colour:** no truecolor — 256-colour palette is the ceiling
-  (`ColorDepth` quantises; palettes must satisfy the WCAG contrast floor
-  after quantisation).
+  (`ColorDepth` quantises). Framework-chosen label colours are floored at
+  `ViewConstants.labelContrastFloor` (3:1) **in truecolor**, against the face
+  they are drawn on, and quantisation then erodes that — measured across the
+  sixteen built-in palettes, a colour sitting exactly on the floor comes out
+  between 1.4:1 and 4.7:1 once mapped into the cube. What IS guaranteed after
+  quantisation is that a label and its background never land on the *same*
+  entry; `DisabledContrastTests` pins both properties. Closing the remaining
+  gap means flooring in the depth the frame will actually be rendered at,
+  which is a change to `ensuringContrast` rather than to any one control.
 - **VS-16 pictographic emoji** (❤️ ✏️ ☎️ 🖥️ 🛡️ …): paints 2,
   **advances 1** ("Bug A" — see `Emoji rendering bugs in macOS Sequoia's
   Terminal.app.md` for the full investigation). Compensated with CUF(1) by

@@ -43,6 +43,18 @@ public enum ViewConstants {
     /// Foreground opacity for disabled interactive controls.
     public static let disabledForeground: Double = 0.50
 
+    /// The contrast floor a framework-chosen label colour must clear against
+    /// the face it is drawn on (WCAG's large-text / UI-component ratio).
+    ///
+    /// Named rather than repeated as a literal because it has to hold for the
+    /// **disabled** state too, which is the state that had been skipping it:
+    /// a colour computed against the page background but painted on a
+    /// control's accent-tinted face was landing at 1.0–1.6 there, and the
+    /// 256-colour cube then quantised five of the sixteen built-in palettes to
+    /// a foreground and background that were the *same entry* — a disabled
+    /// button that read as an empty box. See ``Color/ensuringContrast(atLeast:against:)``.
+    public static let labelContrastFloor: Double = 3.0
+
     /// Accent opacity for selection indicator bullets.
     public static let selectionIndicator: Double = 0.60
 

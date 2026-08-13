@@ -370,12 +370,18 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // they sit on, like Button labels — see ButtonStyle.makeStandardBody.
         let labelFg: Color
         if isDisabled {
-            labelFg = palette.foregroundTertiary.opacity(
-                ViewConstants.disabledForeground, over: palette.background)
+            // The disabled branch is floored too — it is the one that was not,
+            // which is how a disabled picker's value came to be painted in the
+            // same 256-colour entry as the face under it.
+            labelFg = palette.foregroundTertiary
+                .opacity(ViewConstants.disabledForeground, over: palette.background)
+                .ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         } else if isFocused {
-            labelFg = palette.accent.ensuringContrast(atLeast: 3.0, against: buttonBg)
+            labelFg = palette.accent.ensuringContrast(
+                atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         } else {
-            labelFg = palette.foregroundSecondary.ensuringContrast(atLeast: 3.0, against: buttonBg)
+            labelFg = palette.foregroundSecondary.ensuringContrast(
+                atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         }
 
         // The caps are glyphs, not a fill behind text, so they breathe all the

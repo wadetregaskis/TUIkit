@@ -463,13 +463,20 @@ private struct _ButtonStyleBody: View, Renderable {
         // and is left alone.
         let labelFg: Color
         if isDisabled {
-            labelFg = palette.foregroundTertiary.opacity(
-                ViewConstants.disabledForeground, over: palette.background)
+            // Floored against the FACE, like every other framework-chosen
+            // colour here. The fade is computed over the page background — the
+            // recessive look this state wants — but the label is painted on
+            // the button's accent tint, and unfloored the two land 1.0–1.6:1
+            // apart on every built-in palette. Five of them then quantise to
+            // the same 256-colour entry and the label disappears completely.
+            labelFg = palette.foregroundTertiary
+                .opacity(ViewConstants.disabledForeground, over: palette.background)
+                .ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         } else if let cascadeForeground {
             labelFg = cascadeForeground.resolve(with: palette)
         } else {
             labelFg = (baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary)
-                .ensuringContrast(atLeast: 3.0, against: buttonBg)
+                .ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         }
 
         // Caps match the background normally, pulsing to accent when focused —
@@ -529,15 +536,23 @@ private struct _ButtonStyleBody: View, Renderable {
         // colours are floored against the face (see makeStandardBody).
         let labelFg: Color
         if isDisabled {
-            labelFg = palette.foregroundTertiary.opacity(
-                ViewConstants.disabledForeground, over: palette.background)
+            // See makeStandardBody. Floored only for the STANDARD variant: a
+            // plain button has no face, so its label sits on the page
+            // background and flooring it against `buttonBg` — a fill that is
+            // never drawn — would brighten it against nothing.
+            let faded = palette.foregroundTertiary
+                .opacity(ViewConstants.disabledForeground, over: palette.background)
+            labelFg = appearance.isPlain
+                ? faded
+                : faded.ensuringContrast(
+                    atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         } else if let cascadeForeground {
             labelFg = cascadeForeground.resolve(with: palette)
         } else if appearance.isPlain {
             labelFg = baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary
         } else {
             labelFg = (baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary)
-                .ensuringContrast(atLeast: 3.0, against: buttonBg)
+                .ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         }
 
         // Plain: focus-indicator prefix + the label, no caps or background.
