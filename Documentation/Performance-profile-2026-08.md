@@ -2344,3 +2344,29 @@ sits exactly on zero. Re-run at 40 reps with a different seed: **+0.5%
 Seventeen scenarios at 95% confidence produce roughly one wrong verdict per
 sweep by chance. A marginal verdict is a prompt to re-test with more reps and
 a different seed, not a result — now noted in the tool's README.
+
+### A null result worth recording: `.enumerated()` is not the tuple cost
+
+`swift_getTupleTypeMetadata` is **5.8%** of a `fanout` frame — the runtime
+being asked for two-element tuple metadata over and over. The obvious suspect
+was `for (index, child) in children.enumerated()`, which the stacks use
+thirteen times and which `fanout` runs 2000× a frame through `HStack`.
+
+Converting all five `HStack` loops to `for index in children.indices`
+measured **nothing**: `fanout` +1.1% [−0.7, +1.2], `framedcolumns` −0.5%,
+`tables-vstack` −3.6% [−17.7, +4.0], `dashboard` −0.3% — every one
+indistinguishable. Reverted: neutral, and `where` becoming `guard … continue`
+reads worse. `.enumerated()` over a concrete `[ChildView]` specializes fine.
+
+The real caller is elsewhere:
+
+    swift_getTupleTypeMetadata2
+      ← protocol witness for Collection.formIndex(after:) in conformance Range<A>
+
+i.e. advancing an index over `ForEach`'s `Data` through the **unspecialized**
+`RandomAccessCollection` witness — `ForEach(0..<n, id: \.self)` is
+`Data == Range<Int>`, but `childViews` is reached through a
+`ChildViewProvider` existential, so nothing specializes. That is the same
+cost the map→loop change of §31 accidentally addressed on `fanout` (−6%)
+while costing `modifiers` +30%. Whoever returns to it needs a mechanism for
+that trade first; the target is real but the lever is not yet known.
