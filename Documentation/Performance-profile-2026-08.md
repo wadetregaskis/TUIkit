@@ -2215,3 +2215,74 @@ measurement could not be separated from drift.
 
 Validating anything in that range needs a quiet machine and the order-swap
 check as standard. Everything larger has been taken.
+
+---
+
+## 34. The measurement, rebuilt (2026-08-13)
+
+§33 ended by naming the measurement floor as the constraint. This is the fix.
+`Tools/Profiling/ab_bench.py` (commit fc59158d) replaces the hand-rolled A/B
+loop; its README section is the usage, and this is the evidence.
+
+**What was wrong.** Three things, and each cost something:
+
+| | consequence |
+|---|---|
+| wall clock | every microsecond the scheduler spent elsewhere landed in the number |
+| fixed A-then-B order | a fixed bias — *every* pass showed whichever ran second as slower, including the pass where that was the original (§33) |
+| best-of-N per binary, unpaired | discards the pairing that cancels drift; a high-variance estimator from 3 samples |
+| fixed iteration count | 300 iterations of a 160 µs scenario is 50 ms, mostly warm-up — that produced a phantom +8.8% (§31) |
+
+**What replaced it.** `Stress --bench` now reports `cpu-per-frame` beside
+`per-frame` (thread CPU time, `Sources/Stress/CPUClock.swift`); the tool reads
+that, randomises the run order per rep, estimates the **median of the paired
+per-rep ratios**, brackets it with a percentile bootstrap, and prints a
+verdict. Iterations are calibrated per scenario to ~1.5 s a run.
+
+**Null test** — a binary against a byte-identical copy of itself, on a machine
+at load 1.68 with a browser taking 27% of a core. Every verdict must be
+`indistinguishable`, and the interval width *is* the noise floor:
+
+| scenario | change | 95% CI | verdict |
+|---|---|---|---|
+| `dashboard` | +0.2% | −0.7% … +0.7% | indistinguishable |
+| `table` | +0.0% | −2.6% … +0.8% | indistinguishable |
+| `churn` | +0.6% | −2.2% … +1.7% | indistinguishable |
+| `fanout` | −0.0% | −2.7% … +3.5% | indistinguishable |
+
+`fanout` narrows to ±2.0% at 40 reps — the interval shrinks as 1/√reps, so
+resolution is now a dial rather than a limit.
+
+**Positive control** — the map→loop change reverted in §31:
+
+| scenario | change | 95% CI | verdict |
+|---|---|---|---|
+| `modifiers` | +29.9% | +28.2% … +31.0% | slower |
+| `fanout` | −5.7% | −6.7% … −2.2% | faster |
+| `anyview` | −1.7% | −2.7% … −0.7% | faster |
+
+It resolves a **1.7%** improvement with an interval clear of zero — better
+than the ±3–5% §33 was stuck at — and independently confirms that revert.
+
+**Negative control** — the `substituting` rewrite reverted in §33 on
+judgement: `anyview` +0.5% [−3.2, +3.1], `textwall` +0.2% [−0.2, +1.4],
+`churn` +0.8% [−1.1, +3.4]. All indistinguishable. The judgement was right,
+and now it is a measurement.
+
+### Two knobs that measured worse
+
+Both were tried and rejected, so neither is an option in the tool:
+
+- **Min-of-k runs per binary per rep.** Widened `fanout` from ±3% to ±5%. The
+  minimum is a biased estimator whose bias tracks the local noise level, and
+  the extra runs push A and B further apart in time — which is exactly the
+  pairing the design depends on.
+- **Shorter runs with proportionally more reps** (same total time). Helped
+  `churn` (±1.4%), hurt `fanout` (±4%): a big working set needs enough frames
+  to amortise process start-up.
+
+### The standing rule
+
+Run the null test — `ab_bench.py X X` — whenever a result looks doubtful. It
+costs one command and answers the only question that matters before believing
+a number: what can this machine resolve right now.
