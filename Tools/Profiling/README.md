@@ -107,6 +107,13 @@ Four things make it trustworthy, and each was validated by measurement:
 test yourself — `ab_bench.py X X` — whenever you doubt a result; it costs one
 command and tells you exactly what this machine can resolve today.
 
+**One false positive per sweep is expected.** Seventeen scenarios at 95%
+confidence means roughly one verdict per run is wrong by chance. Treat a
+`faster`/`slower` whose interval *edge* sits on zero as a prompt to re-test —
+`--reps 40 --seed <something else>` — not as a result. That is exactly what
+happened to `table` in commit 114f7fa9: +0.7% [+0.0, +1.6] "slower" on the
+first pass, +0.5% [-0.1, +1.0] indistinguishable on the second.
+
 **Two tuning knobs that measured worse, so they are not options:** taking the
 minimum of several runs per binary per rep (widened `fanout` to ±5% — the min
 is a biased estimator whose bias tracks the local noise, and the extra runs

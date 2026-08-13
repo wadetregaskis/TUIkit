@@ -2286,3 +2286,61 @@ Both were tried and rejected, so neither is an option in the tool:
 Run the null test — `ab_bench.py X X` — whenever a result looks doubtful. It
 costs one command and answers the only question that matters before believing
 a number: what can this machine resolve right now.
+
+---
+
+## 35. Re-evaluating what the old method could not resolve (2026-08-13)
+
+With §34's tool in place, the results that were previously "in the noise"
+deserved a real answer rather than a shrug.
+
+### Cross-module optimization — settled, both ways
+
+§30 measured `-enable-default-cmo` as "net zero" from a mixed table
+(`anyview` −5.4%, `churn` +4.2%, …) that the old method could not resolve.
+Re-measured properly, from two builds of the same HEAD:
+
+| scenario | change | 95% CI | verdict |
+|---|---|---|---|
+| `anyview` | −0.9% | −2.1% … +2.8% | indistinguishable |
+| `fanout` | −0.7% | −1.9% … +2.8% | indistinguishable |
+| `deep` | −0.1% | −1.2% … +0.9% | indistinguishable |
+| `churn` | +0.1% | −1.7% … +2.0% | indistinguishable |
+
+Every point estimate is inside ±1%. The −5.4% and +4.2% of §30 were both
+noise. **The conservative flag does nothing here**, which retires the
+"unspecialized generic metadata is the cost" hypothesis as far as this lever
+can test it.
+
+The aggressive form is not available at all: `-cross-module-optimization`
+**crashes swift-frontend** on this codebase —
+
+    While running pass #190002 SILModuleTransform "CrossModuleOptimization"
+    compile command failed due to signal 6
+
+on `TUIkitView`. Worth a minimised upstream report if anyone wants that lever;
+until then it is not an option.
+
+### The localization scan — shipped
+
+§33 rewrote the *appending* half of `LocalizedStringKey.substituting` and
+measured neutral, concluding the cost was the **scan**. That conclusion held:
+replacing `"hlLqzjt".contains(…)` and `"@diufgGeExXos".contains(…)` — each of
+which scans a `String` grapheme by grapheme, per conversion, per interpolated
+`Text`, per frame — with two `switch` statements gives `churn` −2.4%,
+`anyview` −1.4%, `dashboard` −0.9%, all with intervals clear of zero
+(commit 114f7fa9).
+
+Small, but it is the first change this programme has shipped that the previous
+methodology could not have justified: every one of those effects is inside the
+±3–5% that §33 called the floor.
+
+### A false positive, caught
+
+`table` first read **+0.7% [+0.0, +1.6] "slower"** — an interval whose edge
+sits exactly on zero. Re-run at 40 reps with a different seed: **+0.5%
+[−0.1, +1.0], indistinguishable.**
+
+Seventeen scenarios at 95% confidence produce roughly one wrong verdict per
+sweep by chance. A marginal verdict is a prompt to re-test with more reps and
+a different seed, not a result — now noted in the tool's README.
