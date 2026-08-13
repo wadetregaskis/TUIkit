@@ -1782,3 +1782,124 @@ measure is the reusable case), not from any property of the view itself.
 The regressions stand. They are the price of a mechanism worth 16–90% on nine
 other scenarios, and the hit-rate counters are now permanent so the next
 attempt starts from data rather than from a plausible story.
+
+---
+
+## 29. Area 4 — the width scan stops segmenting text (2026-08-12)
+
+Re-profiling after Area 3 put a single family at the top of the trace. On
+`kitchensink` at scale 4 (8 000 iterations, 10 239 samples, 4907 ms on-CPU),
+Unicode grapheme segmentation was **14.6% of all CPU**:
+
+| ms | % | self time — leaf frames |
+|---|---|---|
+| 231 | 4.7 | `_swift_stdlib_getGraphemeBreakProperty` |
+| 227 | 4.6 | `Unicode._GraphemeBreakProperty.init(from:)` |
+| 112 | 2.3 | `_GraphemeBreakingState.shouldBreak(between:and:)` |
+| 76 | 1.5 | `_StringGuts._opaqueComplexCharacterStride(startingAt:)` |
+| 73 | 1.5 | `_StringGuts._opaqueCharacterStride(endingAt:in:)` |
+
+with `String.strippedLength` at **38.0% inclusive** above it, and
+`_slowRoundDownToNearestCharacter` at 7.9%.
+
+### Two causes, both in `strippedLength`
+
+1. **The ASCII fast path was all-or-nothing.** `visibleRunWidth` counted
+   bytes until the first byte ≥ 0x80, then re-walked the *whole* run by
+   `Character`. A box-drawing border is non-ASCII, so **every bordered line
+   in the framework took the segmenting path** — for content that is almost
+   entirely ASCII plus a handful of `│` and `─`.
+
+2. **Slicing a run rounded its bounds.** `forEachVisibleANSIRun` scans at the
+   scalar level (it must: an `Extend` scalar after an SGR terminator would
+   otherwise fuse onto the `m`), but yielded `self[runStart..<index]`. Those
+   are scalar indices, not necessarily cluster boundaries, so building the
+   `Substring` made the standard library round each bound down — segmenting
+   the line again, twice per escape sequence, to hand back a slice whose only
+   consumer wanted its scalars.
+
+### The fix: a pairwise break guarantee
+
+Unicode suppresses a grapheme break only for `Extend`, `ZWJ`, `SpacingMark`,
+`Prepend`, `Regional_Indicator`, Hangul jamo and `CR`/`LF`. Between two
+scalars in none of those categories there is *always* a break (GB999). So
+`Character.isStandaloneClusterScalar` is a conservative allow-list of the
+blocks terminal UIs are built from (ASCII, box drawing and block elements,
+Latin, punctuation, arrows, geometric shapes, CJK, fullwidth, the SF Symbols
+PUA); when every scalar in a run is admitted, the width is the sum of the
+scalars' own widths and no clustering is required. Emoji, flags, keycaps,
+combining marks and jamo are all excluded, and fall back to the exact path.
+
+Three supporting changes: `Unicode.Scalar.loneTerminalWidth` factored out of
+`Character.terminalWidth` (which keeps only the multi-scalar rules on top);
+runs yielded as scalar-view slices so no bound is rounded; and
+`asciiStrippedLength`, which runs the CSI state machine over UTF-8 bytes so an
+all-ASCII line — styled or not — never decodes a scalar at all.
+
+### Result
+
+Same trace after: **3630 ms on-CPU**. Every segmentation entry above is gone
+(absent from the top 200 self-time frames). `String.strippedLength`:
+38.0% → **15.6%** inclusive, 1863 ms → 568 ms.
+
+Interleaved best-of-3 A/B, 300 iterations, 120×40 — **every scenario faster**:
+
+| scale 1 | | scale 4 | |
+|---|---|---|---|
+| `dashboard` | −43.4% | `dashboard` | −42.1% |
+| `kitchensink` | −36.7% | `kitchensink` | −36.0% |
+| `textwall` | −19.0% | `textwall` | −20.1% |
+| `preferences` | −18.1% | `megalist` | −16.9% |
+| `table-multiline` | −13.7% | `table` | −15.5% |
+| `modifiers` | −13.3% | `churn` | −9.2% |
+| `tables-scroll` | −12.9% | | |
+| `table` | −12.8% | | |
+| `deep` | −12.4% | | |
+| `megalist` | −12.3% | | |
+| `tables-vstack` | −7.5% | | |
+| `scrollfollow` | −7.2% | | |
+| `churn` | −5.1% | | |
+| `framedcolumns` | −3.4% | | |
+| `anyview` | −2.5% | | |
+| `customlayout` | −2.3% | | |
+| `fanout` | −2.0% | | |
+
+**The ASCII byte path was not optional.** The first cut kept only the scalar
+scan, and *regressed* `textwall` +4.4% and `churn` +3.4%: styled ASCII went
+from a byte loop to a scalar loop, and for an all-ASCII string the standard
+library's own cluster stride is already trivial, so there was nothing to win
+and a decode to pay. Adding the byte path turned those two into −20.1% and
+−9.2%. A fast path that is faster than the general path is not automatically
+faster than the path it replaced.
+
+### How it is guarded
+
+Commit 317e8587. Three independent pins, none of them a hand-written table:
+
+- all 34 scenario/scale frame checksums byte-identical;
+- `loneTerminalWidth` equals `Character.terminalWidth` for **every**
+  single-scalar cluster in Unicode (1.1M scalars);
+- every scalar the allow-list admits (169k) is checked against the standard
+  library's own segmenter — it must break before a base, after a base, and
+  against itself, the three probes that between them cover every rule that
+  can suppress a break. A wrongly *excluded* scalar only costs speed; only a
+  wrongly *included* one could mis-measure, so this sweeps all of Unicode
+  rather than a sample.
+
+`strippedLength` is additionally compared against an independent
+`ansiSegments()` oracle over ASCII, styled ASCII, box drawing, CJK,
+fullwidth, emoji, ZWJ families, flags, keycaps, skin tones, NFD accents and
+malformed escapes.
+
+### What is at the top now
+
+| % | self time by module |
+|---|---|
+| 48.7 | libswiftCore (ARC, generic metadata, `tryCast`) |
+| 28.4 | TUIkit's own code |
+| 12.9 | libsystem_malloc |
+
+with `swift_release` 5.0%, `swift_retain` 4.3%, `tryCast` 2.0% and
+`getGenericContext` 2.0% the largest individual leaves. The next Area-4
+targets are therefore allocation and reference-counting traffic, not string
+work.
