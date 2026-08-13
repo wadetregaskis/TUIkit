@@ -1903,3 +1903,84 @@ with `swift_release` 5.0%, `swift_retain` 4.3%, `tryCast` 2.0% and
 `getGenericContext` 2.0% the largest individual leaves. The next Area-4
 targets are therefore allocation and reference-counting traffic, not string
 work.
+
+---
+
+## 30. Area 4 — what the caller attribution found next (2026-08-12)
+
+With the width scan fixed, `fanout` (the slowest scenario, and the shape of an
+ordinary wide non-lazy list) became the profiling target. Its leaf profile is
+almost entirely runtime, not TUIkit: ARC 18%, generic-metadata instantiation
+~14%, `tryCast` 4%. None of that is actionable *as leaves* — the question is
+who is calling it, which is what `analyze_timeprofile.py --callers` is for.
+
+### First: cross-module optimization is not the answer
+
+The metadata instantiation (`_swift_getGenericMetadata`, `TupleCacheEntry`,
+`MetadataCacheKey::operator==`, `hash_short`) is what unspecialized generic
+code costs — `V.Body.self` for a `TupleView<(Text, Text, Text, Text)>` is a
+runtime cache lookup keyed on four metadata pointers, not a constant. The
+obvious lever is to let the optimizer specialize across module boundaries.
+
+Measured: `-Xswiftc -enable-default-cmo`, interleaved best-of-3, 300
+iterations — `anyview` −5.4%, `fanout` −1.3%, `deep` −1.1%, `churn` +4.2%,
+`textwall` +1.8%, `kitchensink` +1.1%, `modifiers` +0.7%, `table` +0.2%. Net
+zero, and `unsafeFlags` would bar the package from being a versioned
+dependency anyway. Dropped.
+
+### `String(describing:)` on every row id — 5.1%
+
+    swift_dynamicCast .............. 797 ms  16.0%
+      String.init<A>(describing:) .. 204 ms   4.1%   ← top named caller
+    String.init<A>(describing:) .... 255 ms   5.1%
+      ForEach.makeChild(for:) ...... 252 ms   5.1%
+
+`String(describing:)` probes `TextOutputStreamable`,
+`CustomStringConvertible` and `CustomDebugStringConvertible` by dynamic cast
+before it can print anything, and `ForEach` ran it once per row per pass to
+build each row's identity key. Six sites spelled that conversion
+independently — and they *have* to agree, because `ScrollViewReader` matches
+a row by reproducing the key `ForEach` gave it.
+
+Now one function, `identityKey(_:)` (commit 0f748fff), with metatype-compared
+fast paths for `String`, `Int` and `UUID`. `fanout` −5.2% against a predicted
+5.1%.
+
+**The metatype comparison in front of each cast is load-bearing.** A dynamic
+cast looks *through* `Optional` and `AnyHashable`: a bare `id as? Int`
+succeeds for an `Int?` id and keys that row `"5"` where it had been
+`"Optional(5)"` — silently relocating its `@State`, focus and scroll target.
+
+### The state storage, read through the environment — 5.2%
+
+    EnvironmentValues.subscript.getter ....... 360 ms   8.2%
+      EnvironmentValues.stateStorage.getter .. 228 ms   5.2%
+
+`RenderContext` already mirrors `renderCache` into a stored field for exactly
+this reason (§ the field's own doc comment: ~4.5% of a text-heavy frame).
+`stateStorage` is read more often still — every composite view binds `@State`
+and marks its identity active, on both passes — and was not mirrored.
+
+Now mirrored, and both mirrors are re-derived by a `didSet` on `environment`
+rather than by hand, so in-place mutation of one environment value can no
+longer leave a mirror stale (commit 5691dff4). `fanout` −8.0%, `modifiers`
+−3.0%, `megalist` −2.4%, `churn` −2.3%, `textwall` −1.9%, others −0.7 to
+−1.1%, `table` +0.8% (variance).
+
+### Still open, in rough order of size
+
+1. **`ForEach.childViews` is 28.1% of a `fanout` frame** — `Collection.map`
+   over every element building a `ChildView` array eagerly, of which
+   `makeChild` is 19.6%. The lazy path (`childViewCollection`) exists; the
+   eager one is what non-lazy stacks still call.
+2. **`renderToBuffer`'s `view as? Renderable`** is the top Swift-level caller
+   of `swift_dynamicCast` (3.8%), twice per view counting
+   `measureChildUncached`'s `as? Layoutable`.
+3. **`element as? any Equatable` + `AnyEquatableBox`** per row per pass in
+   `makeChild` — a protocol conformance cast and an allocation.
+4. `RenderContext.withChildIdentity(erasedType:key:)` 5.3%,
+   `RenderCache.lookup` 7.2%, `IdentityNode.structurallyEqual` 2.1%.
+
+The pattern to keep: the leaf profile names ARC and casts, and that is never
+where the fix is. Both wins above came from `--callers`, not from the
+self-time table.
