@@ -1434,3 +1434,108 @@ again. But the shape of the remaining work is now concrete and small:
 3. **Tables reports `evicted 30`** — the first real eviction seen, so that page
    does invalidate its own entries. Expected for a page with live state, but
    worth confirming it is the demo's doing and not the memo's.
+
+## 25. Why the byte key cannot work — and a correction (2026-08-12)
+
+A 24-agent read-only analysis (four lenses — environment writes, available
+size, view-value bytes, entry lifetime — each finding adversarially verified)
+settled the automatic memo's viability. The answer is that **the byte-keyed
+design is structurally wrong**, and two of this document's earlier claims need
+correcting.
+
+### Correction: `bytes 0` was never a measurement
+
+§22–§24 read `bytes 0` off the memo's miss breakdown and concluded "the view
+values are byte-identical every frame". That was wrong. The instrument is a
+**short-circuiting guard chain** — `noEntry`, then `size`, then `digest`, then
+`bytes` — so a node that failed the digest check *never reached* the byte
+comparison. `bytes 0` meant "nothing got that far", not "nothing differed".
+§24's "the first time the view-value key has ever mismatched" is the same
+error: earlier readings could not have mismatched.
+
+§19's byte measurement stands — that came from the redundancy probe, which
+compared every node's bytes independently and cross-tabulated against output
+identity (67% of nodes byte-stable, zero false hits). But it measured *all*
+nodes, not the storing population, and the storing population is gated to
+subtrees that turn out to be the byte-stable minority.
+
+### Why the bytes cannot be stable, in general
+
+Every one of these allocates fresh heap storage per frame, and its pointer sits
+in the view struct's inline bytes:
+
+| source | what is fresh each frame |
+|---|---|
+| `@State` | a `StateBacking` class per construction |
+| `@Environment` | an `EnvironmentBox` class per property |
+| `$state` (`Binding`) | two closure contexts, per access |
+| `ForEach` / `for`-in in a ViewBuilder | `ViewArray`'s `[Element]` buffer |
+| an array literal passed as a view property | the buffer (contents stable, pointer not) |
+| `any ButtonStyle` and friends | the existential box |
+
+And three sources of undefined bytes that `memcmp` reads but Swift never
+promises to initialise: inter-field **struct padding**, **enum/Optional payload
+slack** (`ConditionalView` is sized to the larger branch), and the unused words
+of an **existential's inline buffer** — the last already proved in §23.
+
+**The amplifier:** a composite's bytes include its *entire inline subtree*, so
+one unstable word anywhere below poisons every ancestor. That is why the memo
+stored only 7–52 nodes a page: those are the subtrees containing none of the
+above.
+
+### The contrast that names the fix
+
+`EquatableView` keys the same cache by `Equatable.==`, which by construction
+ignores heap identity, padding and closure contexts — and it reaches a **100%
+hit rate** on the same pages where the byte key reaches 1–39%. The key was
+never the hard part; using bytes as a stand-in for equality was the mistake.
+
+### And a second, independent design error
+
+`AutoKey` is `(identity, type)` and carries **no size**, while two-pass layout
+structurally offers each child *two* different extents every frame — its
+parent's whole remaining extent while measuring, its allocated extent while
+rendering. `storeAuto` writes both into one dictionary slot, so each clobbers
+the other and both lookups miss. This is precisely the failure mode
+`_MemoizedRow` documents at length and guards against by refusing to store
+measure-pass buffers — a guard the automatic memo copied for `isMeasuring` but
+not for the size, and `isMeasuring` is set only on the `Layoutable` branch of
+`measureChild`, so it does not identify the walk.
+
+Compounding it, several containers render the *same* node twice per frame as
+real, non-measuring renders at different sizes: `_ContainerViewCore`'s footer
+(full inner width, then `innerWidth - footerPadding`), `MenuPopover`'s rows
+(into a `max(availableHeight * 64, 4096)` canvas, then for real), `ViewThatFits`
+(a 1,000,000² probe, then the real size), and the scrollbar reservation's
+monotonic fixpoint (W, then W−1, then H−1).
+
+### Other confirmed per-frame churn, for whoever returns to this
+
+- **`focusIndicatorColor` launders the excluded `pulsePhase` back in.** The
+  active focus section lerps a `Color` from the pulse phase and writes it to a
+  *non-infrastructure* key, so excluding `pulsePhase` itself buys nothing. It
+  stops at the first bordered `ContainerView` (which nils it), so it reaches
+  everything only where a section wraps unbordered content — the Example's
+  Focus page exactly. Already open as task #519 / §15.
+- **Freshly allocated classes written into the environment every frame:**
+  `isolatedForBackground()` (a new `FocusManager` + `KeyEventDispatcher` per
+  call, once per frame under `NavigationStack`), `.focused(_:equals:)`'s
+  `AssignedFocusID`, `.refreshable`'s `RefreshAction`/`ActionBox`,
+  `MenuPopover`'s `MenuRowSink`, and `StackFocusReach`'s scratch `FocusManager`.
+  Each digests by identity and so changes every frame.
+- **Closure-carrying environment values** (`DismissAction`, `onSubmit`) have no
+  frame-stable digest at all, so they mark their whole subtree unmemoizable.
+
+Two useful negative results: **`ViewIdentity` is fully structural and stable
+across frames** — never a source of misses, and can be excluded from future
+investigation. And **`L()` is not a suspect**: it returns the `String` stored in
+the cached dictionary, so its two words are bit-identical every frame.
+
+### Verdict
+
+Area 2 stops here. An automatic render memo needs a key that compares *values*,
+not memory — which is `Equatable`, which is what the opt-in memo already uses
+and which reaches 100%. Making that automatic means either app-side
+`.equatable()` (SwiftUI's own answer) or a synthesised structural comparator
+that ignores heap identity; the byte shortcut cannot be repaired, because the
+instability is in the language's representation, not in TUIkit.
