@@ -47,34 +47,76 @@ extension Character {
         }
     }
 
+    /// Whether `sv` is a scalar that can only ever be a grapheme cluster **by
+    /// itself** — it never joins with the scalar before or after it.
+    ///
+    /// Unicode's grapheme-break algorithm only *suppresses* a break for scalars
+    /// in a handful of categories: `Extend` (combining marks, variation
+    /// selectors, skin-tone modifiers), `ZWJ`, `SpacingMark`, `Prepend`,
+    /// `Regional_Indicator` (flags), Hangul jamo, the Indic conjunct forms, and
+    /// `CR`/`LF`. Every other pair of adjacent scalars breaks (GB999). So when
+    /// **both** neighbours answer `true` here there is guaranteed to be a
+    /// cluster boundary between them, and a width scan can simply add
+    /// ``Unicode/Scalar/loneTerminalWidth`` per scalar instead of asking the
+    /// standard library to segment the string.
+    ///
+    /// That segmentation — `_opaqueCharacterStride` /
+    /// `_swift_stdlib_getGraphemeBreakProperty` /
+    /// `_GraphemeBreakingState.shouldBreak` — was measured at ~17% of all CPU
+    /// in a `kitchensink` Time-Profiler trace, purely to re-derive that (say)
+    /// `│` and a space are two separate characters.
+    ///
+    /// This is a deliberately **conservative allow-list**: it names the blocks
+    /// that terminal UIs are actually built from, and everything else — every
+    /// complex script, all of the emoji planes, Hangul — answers `false` and
+    /// takes the exact (segmenting) path. A wrong `false` costs speed; only a
+    /// wrong `true` could cost correctness, so no block containing a combining
+    /// mark, a joiner, a regional indicator or a jamo appears below.
+    static func isStandaloneClusterScalar(_ sv: UInt32) -> Bool {
+        switch sv {
+        case 0x20...0x7E:  // printable ASCII
+            return true
+        case 0x2500...0x259F:  // Box Drawing, Block Elements — framework chrome
+            return true
+        case 0x00A0...0x02AF:  // Latin-1 Supplement … IPA Extensions (0x0300 starts combining)
+            return true
+        case 0x0370...0x0482:  // Greek, Cyrillic letters (0x0483 starts combining)
+            return true
+        case 0x2010...0x2027, 0x2030...0x205E:  // General Punctuation, minus the zero-width/format scalars
+            return true
+        case 0x2070...0x20CF:  // super/subscripts, currency (0x20D0 starts combining)
+            return true
+        case 0x2100...0x2426, 0x2440...0x244A, 0x2460...0x24FF:  // letterlike, arrows, maths, enclosed
+            return true
+        case 0x25A0...0x2BFF, 0x2E00...0x2E7F:  // geometric shapes … supplemental punctuation
+            return true
+        case 0x2E80...0x3029, 0x3030...0x3098, 0x309B...0x30FF:  // CJK radicals, punctuation, kana
+            return true
+        case 0x3105...0x312F, 0x3190...0x4DBF, 0x4E00...0x9FFF:  // Bopomofo, CJK
+            return true
+        case 0xF900...0xFAFF, 0xFF01...0xFF60, 0xFFE0...0xFFE6:  // CJK compatibility, fullwidth
+            return true
+        case 0x20000...0x3134F:  // CJK unified extensions B-G
+            return true
+        case 0x100000...0x10FFFD:  // Plane-16 PUA — SF Symbols
+            return true
+        default:
+            return false
+        }
+    }
+
     public var terminalWidth: Int {
         let scalars = unicodeScalars
         guard let first = scalars.first else { return 0 }
-        let scalarValue = first.value
 
-        // Fast path: a lone printable-ASCII scalar is always exactly one
-        // cell. This is the overwhelming majority of terminal text, and
-        // returning here skips the Unicode-property queries below
-        // (`isEmoji` / `isEmojiPresentation`) — those resolve through
-        // `_swift_stdlib_getBinaryProperties`, the single hottest leaf in
-        // render profiling. Restricted to single-scalar clusters so an
-        // ASCII base that carries combining marks, a keycap selector, etc.
-        // (e.g. "1️⃣") still falls through to the full width logic below.
-        if scalarValue >= 0x20, scalarValue <= 0x7E, scalars.count == 1 {
-            return 1
-        }
+        // A cluster of one scalar — the overwhelming majority of terminal text
+        // — is exactly its scalar's own width.
+        guard scalars.count > 1 else { return first.loneTerminalWidth }
 
-        // Zero-width characters
-        if scalarValue == 0x200B || scalarValue == 0x200C || scalarValue == 0x200D || scalarValue == 0xFEFF { return 0 }  // ZW space/NJ/J/BOM
-        if scalarValue == 0x00AD { return 0 }  // soft hyphen
-        if (0xFE00...0xFE0F).contains(scalarValue) { return 0 }  // variation selectors
-        if (0xE0100...0xE01EF).contains(scalarValue) { return 0 }  // variation selectors supplement
-        if (0x0300...0x036F).contains(scalarValue) { return 0 }  // combining diacritical marks
-        if (0x1AB0...0x1AFF).contains(scalarValue) { return 0 }  // combining diacritical marks extended
-        if (0x1DC0...0x1DFF).contains(scalarValue) { return 0 }  // combining diacritical marks supplement
-        if (0x20D0...0x20FF).contains(scalarValue) { return 0 }  // combining marks for symbols
-        if (0xFE20...0xFE2F).contains(scalarValue) { return 0 }  // combining half marks
-        if (0xE0000...0xE007F).contains(scalarValue) { return 0 }  // tags block
+        // Zero-width lead: a cluster whose base is itself a combining mark,
+        // joiner, variation selector or tag adds no cells.
+        if Self.isWidthNeutralExtraScalar(first.value) { return 0 }
+
         // NOTE: a skin-tone modifier reaching here is the FIRST scalar of the
         // grapheme cluster, i.e. it is *standalone* (no base) — when it
         // combines with a preceding emoji it is part of a multi-scalar cluster
@@ -83,43 +125,81 @@ extension Character {
         // the emoji-corpus list shows U+1F3FB…U+1F3FF), so it is 2 cells wide —
         // NOT zero. (Returning 0 here was a bug: it shifted everything after a
         // lone modifier left by 2 cells and dropped the enclosing border.)
-        if (0x1F3FB...0x1F3FF).contains(scalarValue) { return 2 }  // standalone Fitzpatrick skin-tone swatch
+        if (0x1F3FB...0x1F3FF).contains(first.value) { return 2 }  // standalone Fitzpatrick skin-tone swatch
 
         // Multi-scalar grapheme clusters (emoji sequences with ZWJ, skin tones,
         // flag sequences, keycap sequences) are typically 2 cells wide.
-        if scalars.count > 1 {
-            // A cluster is only forced to 2 cells when it carries an extra
-            // scalar that actually *adds* width — another emoji (ZWJ
-            // sequences), a regional indicator (flags), a skin-tone modifier.
-            // Extras that add NO width — variation selectors AND combining
-            // marks, ZWJ/joiners, and tags — do not make the cluster wide; a
-            // base letter carrying only those keeps the base's own width.
-            // This is what makes a *decomposed* (NFD) accented letter such as
-            // "é" (e + U+0301) one cell, not two — critical because macOS
-            // hands filenames back in NFD, so mis-measuring it drifts every
-            // border and column that renders such text. (A composed "é",
-            // U+00E9, is a single scalar and never reaches here.)
-            let hasWidthAddingExtras = scalars.dropFirst().contains { scalar in
-                !Self.isWidthNeutralExtraScalar(scalar.value)
-            }
-            if hasWidthAddingExtras {
-                // True multi-character sequence (ZWJ, flags, keycaps, skin tones)
-                return 2
-            }
-            // Base + variation selector(s).  If the selector is U+FE0F and
-            // the base can be rendered as emoji, the cluster is 2 cells.
-            // Otherwise fall through to the base character width check.
-            if scalars.contains(where: { $0.value == 0xFE0F }) && first.properties.isEmoji {
-                return 2
-            }
+        //
+        // A cluster is only forced to 2 cells when it carries an extra scalar
+        // that actually *adds* width — another emoji (ZWJ sequences), a
+        // regional indicator (flags), a skin-tone modifier. Extras that add NO
+        // width — variation selectors AND combining marks, ZWJ/joiners, and
+        // tags — do not make the cluster wide; a base letter carrying only
+        // those keeps the base's own width. This is what makes a *decomposed*
+        // (NFD) accented letter such as "é" (e + U+0301) one cell, not two —
+        // critical because macOS hands filenames back in NFD, so mis-measuring
+        // it drifts every border and column that renders such text. (A composed
+        // "é", U+00E9, is a single scalar and never reaches here.)
+        let hasWidthAddingExtras = scalars.dropFirst().contains { scalar in
+            !Self.isWidthNeutralExtraScalar(scalar.value)
         }
+        if hasWidthAddingExtras {
+            // True multi-character sequence (ZWJ, flags, keycaps, skin tones)
+            return 2
+        }
+        // Base + variation selector(s).  If the selector is U+FE0F and
+        // the base can be rendered as emoji, the cluster is 2 cells.
+        // Otherwise the cluster is exactly as wide as its base.
+        if scalars.contains(where: { $0.value == 0xFE0F }) && first.properties.isEmoji {
+            return 2
+        }
+        return first.loneTerminalWidth
+    }
+}
+
+// MARK: - Scalar Width
+
+extension Unicode.Scalar {
+    /// The display width, in terminal cells, of this scalar when it forms a
+    /// grapheme cluster **on its own**.
+    ///
+    /// This is the single source of truth for per-codepoint width;
+    /// ``Character/terminalWidth`` is this plus the multi-scalar cluster rules.
+    /// Splitting it out is what lets the width scanners
+    /// (``Swift/StringProtocol/visibleRunWidth``) measure a run of
+    /// non-combining scalars without paying for grapheme-cluster segmentation —
+    /// see ``Character/isStandaloneClusterScalar(_:)``.
+    var loneTerminalWidth: Int {
+        let scalarValue = value
+
+        // Fast path: printable ASCII is always exactly one cell. This is the
+        // overwhelming majority of terminal text, and returning here skips the
+        // Unicode-property queries below (`isEmoji` / `isEmojiPresentation`) —
+        // those resolve through `_swift_stdlib_getBinaryProperties`, one of the
+        // hottest leaves in render profiling.
+        if scalarValue >= 0x20, scalarValue <= 0x7E { return 1 }
+
+        // Zero-width characters (combining marks, joiners, selectors, tags).
+        if Character.isWidthNeutralExtraScalar(scalarValue) { return 0 }
+
+        // Standalone Fitzpatrick skin-tone swatch — 2 cells (see the note in
+        // ``Character/terminalWidth``).
+        if (0x1F3FB...0x1F3FF).contains(scalarValue) { return 2 }
+
+        // Second fast path: Box Drawing and Block Elements. Every bordered
+        // view, divider, scrollbar, progress track and shaded fill in the
+        // framework is built from these, so they are the most common non-ASCII
+        // scalars by a wide margin — and none of them is emoji or wide, so the
+        // property query and the whole East-Asian range ladder below are pure
+        // overhead for them.
+        if (0x2500...0x259F).contains(scalarValue) { return 1 }
 
         // Single-scalar codepoints that default to colour emoji presentation
         // are painted as 2-cell glyphs by Terminal.app (and most modern
         // terminal emulators) regardless of whether they're in any of the
         // East Asian Wide ranges below.  This catches BMP codepoints like
         // ⌚ (U+231A), ⌛ (U+231B), ⏩ (U+23E9) that the range checks miss.
-        if first.properties.isEmojiPresentation {
+        if properties.isEmojiPresentation {
             return 2
         }
 
@@ -541,8 +621,47 @@ extension StringProtocol {
     var visibleRunWidth: Int {
         var width = 0
         for byte in utf8 {
-            if byte >= 0x80 { return reduce(0) { $0 + $1.terminalWidth } }
+            if byte >= 0x80 { return unicodeScalars.terminalRunWidth }
             width += 1
+        }
+        return width
+    }
+}
+
+extension Sequence where Element == Unicode.Scalar {
+    /// Terminal width of an escape-free run of scalars.
+    ///
+    /// Sums per-scalar widths for as long as every scalar is guaranteed to
+    /// stand alone as its own grapheme cluster (see
+    /// ``Character/isStandaloneClusterScalar(_:)``) — which covers ASCII, all
+    /// the box-drawing chrome, punctuation and CJK, i.e. essentially every line
+    /// the framework draws. Only when a scalar that *might* combine appears —
+    /// an emoji, a combining mark, a flag, a jamo — does it fall back to real
+    /// grapheme-cluster segmentation, which is where the multi-scalar rules in
+    /// ``Character/terminalWidth`` live.
+    ///
+    /// Taking the run as a scalar view rather than a `Substring` matters as
+    /// much as skipping the segmentation: slicing a `String` with scalar
+    /// indices that may not sit on `Character` boundaries makes the standard
+    /// library round each bound down (`_slowRoundDownToNearestCharacter`),
+    /// which segments the string all over again.
+    var terminalRunWidth: Int {
+        var width = 0
+        for scalar in self {
+            let sv = scalar.value
+            if sv >= 0x20, sv <= 0x7E {  // printable ASCII — one cell, no checks
+                width += 1
+                continue
+            }
+            guard Character.isStandaloneClusterScalar(sv) else {
+                // This run may contain multi-scalar clusters; measure it the
+                // exact way, from the start (partial progress is not reusable —
+                // an earlier scalar could belong to the cluster we just hit).
+                var exact = ""
+                exact.unicodeScalars.append(contentsOf: self)
+                return exact.reduce(0) { $0 + $1.terminalWidth }
+            }
+            width += scalar.loneTerminalWidth
         }
         return width
     }
@@ -711,33 +830,77 @@ extension String {
     /// Accounts for wide characters (emoji, CJK) that occupy 2 terminal cells
     /// and zero-width characters (combining marks, variation selectors).
     public var strippedLength: Int {
-        // Fast path: a string with no ESC byte is a single visible run — the
-        // whole string — so grapheme-cluster it in place and sum cell widths
-        // with ZERO allocation. The general path below scans the runs, which
-        // used to materialize a `[String]` plus a `String` copy per run and then
-        // discard them — pure churn for a width count. `strippedLength` runs per
-        // word during `Text.wordWrap` and per line during render, every frame
-        // (profiling the `nested` tree: `String.strippedLength` ~23% inclusive,
-        // the run scan ~15%, dominated by `_StringGuts.append` /
-        // `_uncheckedFromUTF8` / tiny_malloc), and the text being measured while
-        // wrapping is plain (unstyled), so this is the overwhelming common case.
-        // Byte-identical: a no-ESC string yields exactly one run equal to the
-        // whole string.
-        // ESC detection is a direct byte search (0x1B is a standalone byte, never
-        // part of a multi-byte scalar), cheaper than decoding scalars.
+        // Fast path: an all-ASCII line, styled or not, is one cell per visible
+        // byte — no scalar decoding, no grapheme clustering, no slicing. That
+        // covers labels, wrapped words, table cells and every SGR-coloured line
+        // built from them, which is the overwhelming majority of what a terminal
+        // draws. `strippedLength` runs per word during `Text.wordWrap` and per
+        // line during render, every frame, so this is the single most-executed
+        // width path in the framework.
+        if let ascii = asciiStrippedLength() { return ascii }
+
+        // Non-ASCII, no escapes: one visible run — the whole string.
+        // (ESC is a standalone byte, never part of a multi-byte scalar, so a
+        // direct byte search settles it without decoding.)
         if !utf8.contains(0x1B) {
-            return visibleRunWidth
+            return unicodeScalars.terminalRunWidth
         }
+
         // General path: ANSI present — measure each visible run independently (a
         // trailing Extend scalar after an SGR terminator must not fuse onto the
         // previous run; see `forEachVisibleANSIRun(_:)`). Each run is a borrowed
-        // `Substring`, so this counts widths without allocating, and each run
-        // takes the ASCII byte-count fast path when it has no wide characters.
+        // scalar slice, so this counts widths without allocating.
         var total = 0
         forEachVisibleANSIRun { run in
-            total += run.visibleRunWidth
+            total += run.terminalRunWidth
         }
         return total
+    }
+
+    /// Visible width of this string when every byte of it is ASCII, or `nil` if
+    /// any byte is not.
+    ///
+    /// ASCII is exactly one cell per visible byte and no ASCII byte can combine
+    /// with a neighbour into a wider grapheme cluster, so the whole measurement
+    /// reduces to running the CSI state machine of ``forEachVisibleANSIRun(_:)``
+    /// over the UTF-8 bytes and counting what falls outside the escapes. The
+    /// scalar-level scan it replaces here decoded every scalar, sliced a run per
+    /// escape and re-scanned each slice; this touches each byte once.
+    ///
+    /// Not `private`: the tests call it directly, so that "the fast path and
+    /// the general path agree" is asserted rather than assumed.
+    func asciiStrippedLength() -> Int? {
+        enum ScanState { case normal, sawESC, inCSI }
+        var state = ScanState.normal
+        var width = 0
+        for byte in utf8 {
+            if byte >= 0x80 { return nil }
+            switch state {
+            case .normal:
+                if byte == 0x1B { state = .sawESC } else { width += 1 }
+
+            case .sawESC:
+                if byte == 0x5B {  // '[' → CSI introducer
+                    state = .inCSI
+                } else if byte != 0x1B {  // a bare ESC is dropped; this byte is visible
+                    width += 1
+                    state = .normal
+                }
+
+            case .inCSI:
+                let value = UInt32(byte)
+                if Self.isCSIBodyByte(value) { continue }  // parameter or intermediate
+                if Self.isCSIFinalByte(value) {
+                    state = .normal  // introducer complete, terminator consumed
+                } else if byte == 0x1B {
+                    state = .sawESC  // ESC interrupts a malformed CSI
+                } else {  // not a CSI byte where a terminator was expected
+                    width += 1
+                    state = .normal
+                }
+            }
+        }
+        return width
     }
 
     /// Invokes `body` once per visible run — the text between and around CSI
@@ -750,8 +913,16 @@ extension String {
     /// it after summing widths or joining — pure churn (it showed up in render
     /// profiling as `_StringGuts.append` / `_uncheckedFromUTF8` / tiny_malloc).
     /// A run is always a contiguous slice of the original (escapes only fall
-    /// *between* runs), so a borrowed `Substring` carries the same scalars with
-    /// no copy.
+    /// *between* runs), so a borrowed slice carries the same scalars with no
+    /// copy.
+    ///
+    /// The run is handed over as a **scalar view** slice, not a `Substring`.
+    /// The scan runs at the scalar level (it must — see below), and its
+    /// boundaries need not fall on `Character` boundaries, so building a
+    /// `Substring` from them makes the standard library round each bound down
+    /// to the nearest cluster (`_slowRoundDownToNearestCharacter`) — grapheme
+    /// segmentation of the whole line, twice per run, purely to produce a slice
+    /// whose callers only wanted its scalars back.
     ///
     /// Two things matter here, both about grapheme clustering around escape
     /// sequences:
@@ -777,7 +948,7 @@ extension String {
     ///    the escapes, so it grapheme-clusters on its own — a run that begins
     ///    at an `Extend` scalar starts a fresh cluster there, exactly as a
     ///    standalone `String` of those scalars would.
-    private func forEachVisibleANSIRun(_ body: (Substring) -> Void) {
+    private func forEachVisibleANSIRun(_ body: (Substring.UnicodeScalarView) -> Void) {
         // Single forward pass over the scalar view, tracking the start index of
         // the current visible run so each run can be yielded as a slice
         // `self[runStart..<index]` — no array, no per-run copy. A 3-state
@@ -803,7 +974,7 @@ extension String {
             switch state {
             case .normal:
                 if value == 0x1B {  // ESC ends the current run
-                    if hasRun { body(self[runStart..<index]); hasRun = false }
+                    if hasRun { body(scalars[runStart..<index]); hasRun = false }
                     state = .sawESC
                 } else if !hasRun {  // first visible scalar of a new run
                     runStart = index
@@ -837,7 +1008,7 @@ extension String {
             }
             index = scalars.index(after: index)
         }
-        if hasRun { body(self[runStart..<index]) }  // index == endIndex
+        if hasRun { body(scalars[runStart..<index]) }  // index == endIndex
     }
 
     /// Whether `value` is a CSI parameter or intermediate byte — everything
@@ -920,12 +1091,12 @@ extension String {
     /// The string with all ANSI (CSI) escape codes removed.
     public var stripped: String {
         // Fast path: no ESC byte → nothing to strip, return self (no scan, no
-        // copy). Otherwise append each visible run (a borrowed `Substring`) into
-        // one result — no intermediate `[String]`.
+        // copy). Otherwise append each visible run (a borrowed scalar slice)
+        // into one result — no intermediate `[String]`.
         if !unicodeScalars.contains(where: { $0.value == 0x1B }) { return self }
         var result = ""
         result.reserveCapacity(utf8.count)
-        forEachVisibleANSIRun { result += $0 }
+        forEachVisibleANSIRun { result.unicodeScalars.append(contentsOf: $0) }
         return result
     }
 
