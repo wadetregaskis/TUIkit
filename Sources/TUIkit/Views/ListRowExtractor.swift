@@ -127,7 +127,7 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
         // for a row that is about to be shown, and every such row renders.
         let rowContext = context.withChildIdentity(
             erasedType: Content.self,
-            key: String(describing: element[keyPath: idKeyPath]))
+            key: identityKey(element[keyPath: idKeyPath]))
         // Defer view construction, badge extraction, and rendering until the row
         // enters the visible window (see ``LazyListRowContent``).
         return LazyListRowContent(identity: rowContext.identity) { [content] in

@@ -47,6 +47,6 @@ extension View {
     /// - Parameter id: A value that identifies this view.
     /// - Returns: A view with the given identity bound to it.
     public func id<ID: Hashable>(_ id: ID) -> some View {
-        modifier(_IDModifier(key: String(describing: id)))
+        modifier(_IDModifier(key: identityKey(id)))
     }
 }

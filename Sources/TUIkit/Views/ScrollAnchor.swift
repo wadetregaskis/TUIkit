@@ -48,7 +48,7 @@ extension ErasedScrollAnchor {
     /// The stable row key this anchor names, in the same spelling `ForEach`
     /// builds its child keys with — or `nil` for the non-identity cases.
     var rowKey: String? {
-        if case .row(let id) = self { return String(describing: id.base) }
+        if case .row(let id) = self { return identityKey(id.base) }
         return nil
     }
 }

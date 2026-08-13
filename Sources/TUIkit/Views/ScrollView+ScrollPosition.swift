@@ -37,7 +37,7 @@ extension _ScrollViewCore {
             box.lastReportedID = value
             // The same stringification `ForEach` derives its keys with, so the
             // comparison in the seek paths is exact.
-            return ScrollToRequest(key: String(describing: value.base), anchor: anchor)
+            return ScrollToRequest(key: identityKey(value.base), anchor: anchor)
         case .edge, .offset:
             // Both are offsets, not rows, so they do not go through the key
             // seek — `applyPositionOffset` moves the scroll view directly.

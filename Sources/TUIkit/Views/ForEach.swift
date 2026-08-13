@@ -139,7 +139,7 @@ extension ForEach: ChildViewProvider {
     /// transparent (the wrapper is Renderable, adds no identity).
     private func makeChild(for element: Data.Element) -> ChildView {
         let view = content(element)
-        let key = String(describing: element[keyPath: idKeyPath])
+        let key = identityKey(element[keyPath: idKeyPath])
         if let equatableElement = element as? any Equatable {
             return ChildView(
                 _MemoizedRow(element: AnyEquatableBox(equatableElement), content: view),
@@ -165,7 +165,7 @@ extension ForEach: LazyChildViewProvider {
             count: data.count,
             key: { ordinal in
                 let element = data[data.index(data.startIndex, offsetBy: ordinal)]
-                return String(describing: element[keyPath: idKeyPath])
+                return identityKey(element[keyPath: idKeyPath])
             },
             anyID: { ordinal in
                 let element = data[data.index(data.startIndex, offsetBy: ordinal)]
