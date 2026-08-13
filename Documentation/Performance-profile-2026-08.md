@@ -1539,3 +1539,103 @@ and which reaches 100%. Making that automatic means either app-side
 `.equatable()` (SwiftUI's own answer) or a synthesised structural comparator
 that ignores heap identity; the byte shortcut cannot be repaired, because the
 instability is in the language's representation, not in TUIkit.
+
+---
+
+## 26. Area 3 — the super-linear band was one copying accumulator (2026-08-12)
+
+Area 3's brief was "improve the time complexity of the superlinear algorithms,
+ideally down to O(N) or better". The 17-scenario scale sweep had already
+isolated the band and, importantly, ruled out the obvious causes:
+
+| scenario | exponent before | per 2x scale |
+|---|---|---|
+| `anyview` | 1.54 | 2.5-3.1x |
+| `textwall` | 1.64 | 2.9-3.4x |
+| `fanout` | 1.74 | 3.0-3.6x |
+| `modifiers` | 1.81 | 3.3-3.7x |
+| `deep` | 1.82 | (depth, not breadth) |
+
+Three hypotheses were dead on arrival: **not** the ScrollView natural-extent
+ladder (its rung count is constant across 4->8, where time still rises 3.6x);
+**not** text volume (halving the terminal columns moved `textwall` 0.3%); and
+**not** call-count growth — `measureChild` calls are exactly linear in the child
+count (14.4k / 28.8k / 75.2k / 150.4k). What did grow was the cost *per call*:
+1.49 -> 2.18 -> 2.96 -> 5.35 microseconds, with an unchanged instruction mix.
+The self-time split said the same thing from another angle — 48-64% in
+libswiftCore (ARC, generic metadata, `tryCast`), 6-18% in malloc, only 17-27%
+in TUIkit's own code.
+
+Same work, more expensive each time, dominated by retain/release and
+allocation. That is not an algorithm doing more; it is an array being copied.
+
+### The accumulator
+
+`FrameBuffer.appendVertically` — the operation every stack calls once per child:
+
+```swift
+var combined = lines               // `lines` is `_read { yield storage }`,
+combined.append(contentsOf: other.lines)   // so this copies, not appends
+self = FrameBuffer(lines: combined, ...)
+```
+
+`combined` held a second reference to `storage`, so the array was no longer
+uniquely referenced and `append` copied the whole accumulated buffer —
+retaining every `String` row on the way. Four sibling accumulators in the same
+function did it too: `lineWidths` by the same copy-then-append, and `overlays` /
+`hitTestRegions` / `animatedCells` through `a + b`, which always allocates and
+copies both sides. `appendHorizontally` carried the same three concatenations.
+
+A stack appends N children into one buffer, so each container was O(n²) in its
+child count, with an O(n²) count of ARC retains on top. Timing a bare
+accumulation of single-line children:
+
+| n | before | ratio | after | ratio |
+|---|---|---|---|---|
+| 500 | 0.534 ms | | 0.008 ms | |
+| 1000 | 1.793 ms | 3.36 | 0.016 ms | 2.04 |
+| 2000 | 6.114 ms | 3.41 | 0.030 ms | 1.87 |
+| 4000 | 25.806 ms | 4.22 | 0.053 ms | 1.73 |
+| 8000 | 103.499 ms | 4.01 | 0.104 ms | 1.98 |
+
+4x per doubling is the quadratic; 2x per doubling is linear.
+
+### Effect on the band
+
+Exponents recomputed as log2(t8/t1)/3, and per-frame microseconds from an
+interleaved A/B of two prebuilt binaries:
+
+| scenario | exponent | scale 1 | scale 4 |
+|---|---|---|---|
+| `fanout` | 1.74 -> **1.17** | -50.4% | -73.5% |
+| `modifiers` | 1.81 -> **1.12** | -57.2% | -81.0% |
+| `textwall` | 1.64 -> **1.09** | -41.8% | -68.6% |
+| `anyview` | 1.54 -> **1.11** | -34.1% | -54.8% |
+| `churn` | — | -13.9% | -27.9% |
+
+Every scenario's frame checksum is unchanged at both scales, so the rendered
+output is byte-identical. The windowed scenarios (`megalist`, `scrollfollow`,
+`dashboard`, `table`) are flat; a 25-iteration sample had shown a spurious +19%
+on `megalist` that vanished at 400 iterations.
+
+`deep` is unmoved at -2%, exactly as expected — its quadratic is in the
+re-measure ladder, and remains the open item (see §Q1 / the `measure-memo`
+branch: it needs a layout tree, not a patch).
+
+### What generalises
+
+The signature to look for is **cost per call growing while the call count stays
+linear and the instruction mix stays flat**. That is never "the algorithm got
+harder"; it is a buffer being reallocated and recopied underneath. In Swift the
+specific trap is that a `_read`-yielded property assigned to a local becomes a
+*second reference*, so the next `append` silently deep-copies — the code reads
+like an amortised append and behaves like a full copy. `a + b` on arrays is the
+same defect written more honestly.
+
+This was the third O(n²) compositing bug in this file's neighbourhood
+(`insertOverlay` rescanning the line per child, `ansiAwareSlice`, now this), so
+the accumulators are worth auditing as a class rather than one at a time.
+
+Guarded by `FrameBufferCombineScalingTests`, which asserts the *shape* of the
+growth (under 20x for 8x the children) rather than an absolute speed; both
+guards fail on the unfixed code, at 31.7x and 45.9x.
