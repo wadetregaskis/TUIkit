@@ -937,12 +937,22 @@ not until now, and a ⌥-chord sent that way arrived as the **bare key** — the
 modifier looked ignored rather than undelivered, which is the worse failure of
 the two because the unmodified action happens instead.
 
-Apple Terminal's `⌥←`/`⌥→` are bound in its shipped key map to `ESC b` / `ESC f`
-(the Emacs word-motion pair), which decode as **alt+`b`** / **alt+`f`**, not as
-arrows at all. A binding on ⌥-arrow therefore cannot reach Apple Terminal
-unless the user rebinds those two entries or turns on "Use Option as Meta key",
-in which case the CSI form above applies. This is the same class of limitation
-as Shift+Up: a terminal key map that spends the chord before the app sees it.
+*Not yet captured (2026-08-13):* **what Apple Terminal actually sends for
+⌥←/⌥→.** The parser change above was verified against all three spellings by
+feeding them to a real app through a PTY — that part is measured — but which
+spelling (if any) Apple Terminal emits was not. Its shipped key map is believed
+to bind that pair to `ESC b` / `ESC f`, the Emacs word-motion pair, which would
+decode as **alt+`b`** / **alt+`f`** and never reach an app as arrows at all;
+that is an expectation from the profile's Keyboard tab, not a byte capture, and
+the parenthetical belongs in this section only once someone has run `cat -v` in
+Terminal.app and pressed the two chords. Do that before relying on either
+reading. The same run should cover iTerm2, Ghostty and Warp, whose Option
+handling is a per-profile setting in each ("Esc+" vs "Meta" vs "Normal").
+
+Either way the framework's rule stands on its own: **a ⌥-arrow binding must be
+an accelerator, never the only route.** `OutlineGroup`'s recursive disclosure
+follows it — plain Right and Left reach every branch one level at a time on
+every terminal, and Option only makes that faster where the chord survives.
 
 
 ### Control collides with the C0 range
