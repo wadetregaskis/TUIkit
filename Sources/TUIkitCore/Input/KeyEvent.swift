@@ -329,6 +329,18 @@ extension KeyEvent {
     /// - 6 = Shift+Ctrl
     /// - 7 = Alt+Ctrl
     /// - 8 = Shift+Alt+Ctrl
+    /// - 9 = Meta — and 10…16, Meta combined with the three above
+    ///
+    /// The code is `1 +` a bitfield, and xterm's fourth bit is **Meta**, a
+    /// modifier this framework does not have. It is not a fourth key on a Mac
+    /// keyboard: it is what a terminal configured to "use Option as Meta"
+    /// reports Option AS, so ⌥→ arrives as `ESC[1;9C` rather than `ESC[1;3C`.
+    /// Folding Meta onto `alt` is therefore not an approximation, it is the
+    /// same key by its other name — and it is what the ESC-prefixed spelling of
+    /// the very same convention (`ESC ESC [ C`, see ``parseEscapeSequence``)
+    /// has always decoded to. Without it a ⌥-chord silently arrived as the
+    /// bare key, which reads as the modifier being ignored rather than
+    /// undelivered.
     private static func extractModifiers(from params: [UInt8]) -> (shift: Bool, alt: Bool, ctrl: Bool) {
         // Look for semicolon separator
         guard let semicolonIndex = params.firstIndex(of: 0x3B) else {  // ';' = 0x3B
@@ -344,10 +356,10 @@ extension KeyEvent {
         }
 
         // Decode modifier bits (modifier - 1 gives the bit flags)
-        // Bit 0 = Shift, Bit 1 = Alt, Bit 2 = Ctrl
+        // Bit 0 = Shift, Bit 1 = Alt, Bit 2 = Ctrl, Bit 3 = Meta (read as Alt)
         let bits = modifier - 1
         let shift = (bits & 1) != 0
-        let alt = (bits & 2) != 0
+        let alt = (bits & 2) != 0 || (bits & 8) != 0
         let ctrl = (bits & 4) != 0
 
         return (shift: shift, alt: alt, ctrl: ctrl)

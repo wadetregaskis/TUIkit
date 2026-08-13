@@ -912,6 +912,39 @@ way: Apple Terminal sends bare `ESC[A`/`ESC[B` for Up/Down, dropping every
 modifier, while keeping them on Left/Right. A Shift+Up binding therefore cannot
 work in Apple Terminal. That is a terminal limitation, not a framework bug.
 
+### Option arrives in two different spellings
+
+Recorded 2026-08-13, while making ⌥←/⌥→ collapse and expand an outline
+recursively.
+
+A terminal set to treat **Option as Meta** does not report it in xterm's Alt
+bit. The CSI modifier parameter is `1 +` a bitfield whose bits are
+`1`=Shift, `2`=Alt, `4`=Ctrl, `8`=**Meta**, and Option-as-Meta lands in that
+fourth bit — so the same keypress reaches an app as either of:
+
+| Spelling | Bytes for ⌥→ | Sent by |
+|---|---|---|
+| xterm Alt bit | `ESC[1;3C` | terminals that report Option as Alt |
+| xterm Meta bit | `ESC[1;9C` | terminals configured "Option as Meta", CSI form |
+| ESC prefix | `ESC ESC[C` | the same setting's other encoding ("Esc+") |
+
+TUIkit has no `meta` flag on a **key** event (unlike `MouseEvent`, where the
+bit is real and the sections above measure what each terminal puts in it), and
+there is no separate Meta key on a Mac keyboard for the bit to mean instead.
+So `KeyEvent.parse` folds Meta onto `alt`, and all three spellings above decode
+to the same `KeyEvent`. The ESC-prefixed form always did; the CSI Meta form did
+not until now, and a ⌥-chord sent that way arrived as the **bare key** — the
+modifier looked ignored rather than undelivered, which is the worse failure of
+the two because the unmodified action happens instead.
+
+Apple Terminal's `⌥←`/`⌥→` are bound in its shipped key map to `ESC b` / `ESC f`
+(the Emacs word-motion pair), which decode as **alt+`b`** / **alt+`f`**, not as
+arrows at all. A binding on ⌥-arrow therefore cannot reach Apple Terminal
+unless the user rebinds those two entries or turns on "Use Option as Meta key",
+in which case the CSI form above applies. This is the same class of limitation
+as Shift+Up: a terminal key map that spends the chord before the app sees it.
+
+
 ### Control collides with the C0 range
 
 `Ctrl`+letter arrives as 0x01–0x1A and `KeyEvent.parse` maps it back to the

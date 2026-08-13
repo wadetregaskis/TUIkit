@@ -365,6 +365,50 @@ struct KeyEventParseTests {
         #expect(event?.shift == false)
     }
 
+    /// A terminal set to "use Option as Meta" reports Option in xterm's FOURTH
+    /// modifier bit rather than its Alt bit, so ⌥→ is `ESC[1;9C`. There is no
+    /// separate Meta on a Mac keyboard for it to mean instead, and the
+    /// ESC-prefixed spelling of the same setting (`ESC ESC [ C`) has always
+    /// decoded to alt — so the two spellings have to agree, or a ⌥-chord
+    /// arrives as the bare key on half the terminals that can send it.
+    @Test("Parse Meta+Right (ESC [ 1 ; 9 C) as alt — Option-as-Meta")
+    func parseMetaRight() {
+        let event = KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B, 0x39, 0x43])
+        #expect(event?.key == .right)
+        #expect(event?.alt == true)
+        #expect(event?.shift == false)
+        #expect(event?.ctrl == false)
+    }
+
+    @Test("Parse Meta+Left (ESC [ 1 ; 9 D) as alt")
+    func parseMetaLeft() {
+        let event = KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B, 0x39, 0x44])
+        #expect(event?.key == .left)
+        #expect(event?.alt == true)
+    }
+
+    /// Meta rides alongside the other three, so the combinations have to keep
+    /// their own bits as well: 10 = Meta+Shift, 13 = Meta+Ctrl.
+    @Test("Meta combines with the other modifiers (ESC [ 1 ; 10 C, ESC [ 1 ; 13 C)")
+    func parseMetaCombinations() {
+        let shifted = KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B, 0x31, 0x30, 0x43])
+        #expect(shifted == KeyEvent(key: .right, alt: true, shift: true))
+
+        let controlled = KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B, 0x31, 0x33, 0x43])
+        #expect(controlled == KeyEvent(key: .right, ctrl: true, alt: true))
+    }
+
+    /// The ESC-prefixed and CSI-parameter spellings of Option are the same
+    /// keypress, and an outline's ⌥→ has to work under either.
+    @Test("Both spellings of Option+Right agree")
+    func metaSpellingsAgree() {
+        let csi = KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B, 0x39, 0x43])
+        let escPrefixed = KeyEvent.parse([0x1B, 0x1B, 0x5B, 0x43])
+        let xtermAlt = KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B, 0x33, 0x43])
+        #expect(csi == escPrefixed)
+        #expect(csi == xtermAlt)
+    }
+
     @Test("Parse Ctrl+Up (ESC [ 1 ; 5 A)")
     func parseCtrlUp() {
         let event = KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B, 0x35, 0x41])
