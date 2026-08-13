@@ -138,15 +138,20 @@ extension ForEach: ChildViewProvider {
     /// identity exactly what it is unwrapped — the memo is identity-
     /// transparent (the wrapper is Renderable, adds no identity).
     private func makeChild(for element: Data.Element) -> ChildView {
-        let view = content(element)
         let key = identityKey(element[keyPath: idKeyPath])
         if let equatableElement = element as? any Equatable {
+            // The row view is NOT built here. `_MemoizedRow` takes the element
+            // and this `ForEach`'s content closure and builds the row only if
+            // the memo misses — which, in steady state, it mostly does not.
+            // Building it here instead cost `fanout` 21% of its frame in row
+            // views that the very next cache hit discarded.
             return ChildView(
-                _MemoizedRow(element: AnyEquatableBox(equatableElement), content: view),
+                _MemoizedRow(
+                    element: AnyEquatableBox(equatableElement), source: element, build: content),
                 identityType: Content.self,
                 key: key)
         }
-        return ChildView(view, identityType: Content.self, key: key)
+        return ChildView(content(element), identityType: Content.self, key: key)
     }
 }
 

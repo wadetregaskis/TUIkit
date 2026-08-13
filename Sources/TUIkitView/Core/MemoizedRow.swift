@@ -84,13 +84,44 @@ public struct AnyEquatableBox: Equatable {
 /// It is `Renderable` (and so adds no child identity), so the inner content
 /// keeps whatever identity it would have had unwrapped: the memo is
 /// identity-transparent to `@State` / focus.
-public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable, Layoutable {
+public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Renderable, Layoutable {
     public let element: Element
-    public let content: Content
+    /// The value the row is built FROM, and the builder that builds it.
+    ///
+    /// Deliberately not a built `Content`. The memo's whole premise is that
+    /// most rows hit — 94% of them in the `fanout` stress scenario — and on a
+    /// hit the built row view is never looked at: the cached buffer (or cached
+    /// size) is returned and the view is discarded. Building it eagerly, once
+    /// per row per pass, was `ForEach.makeChild`'s 21% of that scenario's
+    /// frame, nearly all of it thrown away.
+    ///
+    /// A `(Source) -> Content` rather than a captured `() -> Content` so
+    /// deferral costs no allocation: `build` is the enclosing `ForEach`'s own
+    /// content closure, which already exists and is shared by every row, so
+    /// storing it is a retain. A per-row capturing closure would trade the row
+    /// view's allocations for a closure box's, one per row per pass.
+    private let source: Source
+    private let build: (Source) -> Content
 
-    public init(element: Element, content: Content) {
+    /// The row view. **Builds it** — call once, and only where the memo has
+    /// already missed.
+    private var content: Content { build(source) }
+
+    /// Memoizes `build(source)` under the key `element`.
+    public init(element: Element, source: Source, build: @escaping (Source) -> Content) {
         self.element = element
-        self.content = content
+        self.source = source
+        self.build = build
+    }
+
+    /// Memoizes an already-built row.
+    ///
+    /// For callers that must construct the view anyway — `List`, which reads
+    /// the row's `.badge(_:)` off the unwrapped view before rendering it —
+    /// and for tests. The identity builder captures nothing, so it is a static
+    /// thunk, not an allocation.
+    public init(element: Element, content: Content) where Source == Content {
+        self.init(element: element, source: content, build: { $0 })
     }
 
     public var body: Never {

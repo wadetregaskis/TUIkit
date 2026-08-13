@@ -2497,3 +2497,157 @@ three of four exits*. No remaining value type has that shape.
 architectural item with a known hazard, and a representation change to view
 identity — both real, both far larger than anything shipped today, and neither
 worth starting without deciding it is the priority.
+
+## 38. The row the memo was going to throw away (2026-08-13)
+
+§37 named the remaining seam as structural: *"every frame rebuilds every row
+view from scratch, boxes it into `any View`, copies it into a `ChildView`,
+puts that in an array, and the stacks copy each element back out — and then
+the row memo usually discards the result because the buffer was already
+cached."* This is that item, scoped to the last clause.
+
+### What the profile said
+
+`fanout`, Time Profiler with `--callers`:
+
+```
+implicit closure #2 in ForEach.childViews    22.9%  inclusive
+  ForEach.makeChild(for:)                    21.3%  inclusive
+    HStack.init                               8.3%
+    (the caller's row closure)                8.1%
+swift_allocObject                             7.6%  self
+  ~half via swift_allocBox
+    → __swift_allocate_boxed_opaque_existential_1
+```
+
+and the harness's own counter puts `fanout`'s row-memo hit rate at **94.2%**.
+
+Those two facts together are the whole finding. `makeChild` built a row view
+for every row on every pass — and on 94 of every 100 rows the very next thing
+that happened was `_MemoizedRow` returning a cached buffer (or a cached size)
+and never looking at the view it had just been handed.
+
+### The change
+
+`_MemoizedRow` stops storing a built `Content` and stores what it takes to
+build one:
+
+```swift
+public let element: Element        // the memo key
+private let source: Source         // the ForEach data element
+private let build: (Source) -> Content
+private var content: Content { build(source) }   // builds — past a miss only
+```
+
+`build` is the enclosing `ForEach`'s own content closure, which already exists
+and is shared by every row, so storing it is a **retain, not an allocation**.
+A capturing `() -> Content` would have been simpler and would have traded the
+row view's allocations for one closure box per row per pass — which is the
+trade this change exists to avoid.
+
+`ForEach.makeChild` therefore no longer calls `content(element)` at all for an
+`Equatable` element. `List` keeps the eager initializer (`init(element:content:)`,
+constrained `where Source == Content` with an identity builder — a static thunk,
+not an allocation) because it must read the row's `.badge(_:)` off the unwrapped
+view before rendering it.
+
+### Warm: the steady state
+
+`ab_bench.py`, all 17 scenarios, 15 reps, CPU time, order randomised per rep:
+
+```
+scenario           iters     old µs     new µs   change           95% CI  verdict
+churn                913     1648.2      834.1   -49.8%    -51.1%  -47.1%  faster
+anyview              755     1814.7     1153.4   -36.3%    -37.2%  -33.8%  faster
+modifiers           1282     1091.3      732.9   -32.8%    -33.2%  -31.8%  faster
+fanout               357     4311.4     3345.3   -22.3%    -25.4%  -20.4%  faster
+textwall            1410     1058.4      956.4    -9.3%    -11.1%   -8.1%  faster
+preferences         6513      221.3      207.0    -5.2%    -11.0%   -4.2%  faster
+kitchensink         3165      700.6      655.2    -4.7%     -7.3%   -0.5%  faster
+customlayout        3909      352.2      344.4    -2.4%     -3.2%   -1.0%  faster
+dashboard           9771      156.2      153.8    -1.6%     -2.5%   -1.0%  faster
+```
+
+The rest are indistinguishable, which is the right answer for a scenario with
+no `Equatable`-element `ForEach` in it.
+
+`modifiers` at **−32.8%** is worth dwelling on: it is the scenario that
+*regressed* +23.9% and then +28.2% under the two attempts recorded in §31, and
+it regressed there for the same reason it wins here. Its rows are expensive to
+build. §31 tried to make building them cheaper; this stops building them.
+
+### It grows with the data
+
+The same A/B at `--scale 4` — four times the rows — on the six scenarios that
+move:
+
+```
+scenario           iters     old µs     new µs   change           95% CI  verdict
+churn                223     6383.1     3013.7   -54.2%    -55.6%  -51.5%  faster
+anyview              156     9465.5     5399.3   -42.3%    -44.1%  -34.3%  faster
+modifiers            318     4882.1     3028.4   -35.1%    -39.2%  -29.7%  faster
+fanout                57    25010.5    18389.5   -27.0%    -32.7%   -6.9%  faster
+textwall             304     4669.0     4085.7   -12.6%    -15.4%  -10.4%  faster
+dashboard           4934      313.2      303.4    -3.3%     -3.5%   -2.6%  faster
+```
+
+Every one is **larger** than at scale 1 (−49.8 / −36.3 / −32.8 / −22.3 / −9.3 /
+−1.6 respectively), which is the shape to expect: the work removed is per row,
+so more rows means more of it. It is not a small-N artefact.
+
+### Cold: the honest check
+
+Deferring work behind a memo makes the **miss** path dearer — a full miss now
+builds the row twice, once in `sizeThatFits` and once in `renderToBuffer`,
+where before both shared one build. `ab_bench.py --cold` (§ the tool gained the
+flag for exactly this) resets state and cache before every frame, so every
+frame is all-miss:
+
+```
+anyview              116    12468.6    12829.6    +2.7%     +2.1%   +2.8%  slower
+churn                125    11358.8    11694.3    +2.3%     +2.1%   +3.4%  slower
+customlayout        3159      458.2      466.4    +2.2%     +0.5%   +2.7%  slower
+tables-vstack       1266     1143.0     1154.0    +0.9%     +0.5%   +1.7%  slower
+megalist            1640      836.7      841.5    +0.7%     +0.4%   +1.3%  slower
+tables-scroll        501     2922.8     2943.0    +0.6%     +0.3%   +1.1%  slower
+...
+fanout                50    78659.6    77396.2    -1.6%     -1.9%   -1.1%  faster
+textwall             185     7914.7     7821.4    -1.2%     -1.9%   -0.5%  faster
+framedcolumns       1264     1130.4     1117.6    -1.1%     -1.6%   -0.6%  faster
+```
+
+**The trade, stated plainly:** up to **+2.7%** on a frame where nothing can be
+served from cache, against **−22% to −50%** on the steady state a running app
+lives in. `churn` is both the biggest warm win (−49.8%) and a cold loser
+(+2.3%), which is the trade in a single row of the table.
+
+Eight scenarios got *faster* cold, which was not predicted. The reason is a
+second-order effect: `ChildView` now boxes a `_MemoizedRow` holding an element,
+a source value and a closure reference, instead of boxing a fully-built row
+view. The existential box is smaller and the `[ChildView]` array copies less.
+That shows up only where the memo cannot mask it.
+
+### A false positive, caught by the rule
+
+The 15-rep warm sweep called `table-multiline` **+0.2% [+0.1, +1.3] slower** —
+a verdict with a sign. Per the multiple-comparisons rule from §35, seventeen
+simultaneous 95% intervals produce roughly one spurious verdict per run, so it
+was re-tested rather than believed:
+
+```
+                          40 reps, warm            null test (base vs base)
+table-multiline      +0.1%  [-0.2, +0.3]           -0.1%  [-0.3, +0.2]
+```
+
+Indistinguishable, and the null test against the binary itself has the same
+width. There was no effect.
+
+### Correctness
+
+- Frame checksums **byte-identical on all 34** scenario × scale (1×, 4×)
+  combinations.
+- 4034 tests green; SwiftLint 0 violations in 886 files.
+- `LazyChildViewsTests` gained the guarantee as a test: a second frame over a
+  warm cache must not invoke the row builder once. The pre-existing
+  "Subscripting builds exactly the touched rows" now asserts **zero** builds —
+  subscripting a memoized ordinal no longer constructs anything.

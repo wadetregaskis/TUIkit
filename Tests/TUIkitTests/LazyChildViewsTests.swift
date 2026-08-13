@@ -48,19 +48,54 @@ struct LazyChildViewsTests {
         #expect(counter.calls == 0, "no row view was built for count or keys")
     }
 
-    @Test("Subscripting builds exactly the touched rows")
-    func subscriptBuildsOnDemand() {
+    @Test("Subscripting a memoized row builds nothing at all")
+    func subscriptDefersEvenTheTouchedRow() {
         let counter = BuildCounter()
         let forEach = makeForEach(counting: counter)
         let context = makeBareRenderContext(width: 30, height: 10)
 
         let children = forEach.childViewCollection(context: context)
         let row = children[42]
-        #expect(counter.calls == 1, "one subscript, one build")
         #expect(row.identityChildKey == "42")
 
         _ = children[4_000_000]
-        #expect(counter.calls == 2)
+        // `Int` is Equatable, so each row is wrapped in `_MemoizedRow`, which
+        // holds the element and the row builder rather than a built view:
+        // nothing is built until the memo misses at measure or render time.
+        #expect(counter.calls == 0, "subscripting a memoized row builds no view")
+    }
+
+    @Test("A row served from the memo is not rebuilt")
+    func memoHitSkipsTheRowBuilder() {
+        let counter = BuildCounter()
+        let cache = RenderCache()
+        let stack = _VStackCore(
+            alignment: .leading, spacing: 0, overflow: .clip,
+            content: ForEach(0..<3) { index in
+                counter.calls += 1
+                return Text("row \(index)")
+            })
+
+        _ = renderToBuffer(stack, context: makeCachedContext(cache: cache))
+        let afterFirstFrame = counter.calls
+        #expect(afterFirstFrame > 0, "the first frame has nothing cached, so it must build")
+
+        _ = renderToBuffer(stack, context: makeCachedContext(cache: cache))
+        #expect(
+            counter.calls == afterFirstFrame,
+            "a second frame whose rows all hit the memo must not rebuild one of them")
+    }
+
+    /// A context wired like the render loop's, sharing `cache` across frames.
+    private func makeCachedContext(cache: RenderCache, width: Int = 30, height: Int = 10)
+        -> RenderContext
+    {
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: TUIContext())
+        environment.renderCache = cache  // the test-local cache, NOT the TUIContext's
+        return RenderContext(
+            availableWidth: width, availableHeight: height,
+            environment: environment, identity: ViewIdentity(path: "Root"))
     }
 
     @Test("Lazy and eager construction agree on identity, key, and memo wrapping")
@@ -79,8 +114,8 @@ struct LazyChildViewsTests {
                 lazyChild.identity(under: context) == eager[ordinal].identity(under: context),
                 "ordinal \(ordinal) must carry the identical identity either way")
             // Equatable elements memo-wrap on both paths (identity-transparent).
-            #expect(lazyChild.wrappedView is _MemoizedRow<AnyEquatableBox, Text>)
-            #expect(eager[ordinal].wrappedView is _MemoizedRow<AnyEquatableBox, Text>)
+            #expect(lazyChild.wrappedView is _MemoizedRow<AnyEquatableBox, String, Text>)
+            #expect(eager[ordinal].wrappedView is _MemoizedRow<AnyEquatableBox, String, Text>)
         }
     }
 
