@@ -2370,3 +2370,58 @@ i.e. advancing an index over `ForEach`'s `Data` through the **unspecialized**
 cost the map→loop change of §31 accidentally addressed on `fanout` (−6%)
 while costing `modifiers` +30%. Whoever returns to it needs a mechanism for
 that trade first; the target is real but the lever is not yet known.
+
+---
+
+## 36. One more round: the cache entry, and two scenarios that cannot measure (2026-08-13)
+
+### `CacheEntry`: struct → `final class`
+
+`RenderCache.lookup` must pull an entry out of the dictionary before it can
+check anything, and `CacheEntry` was a struct holding a type-erased snapshot
+plus a whole `FrameBuffer` — five arrays. Every lookup retained ~seven
+refcounted fields and released them again, **including on the three reject
+paths** that discard the entry immediately. `lookup` is 7.6% inclusive of a
+`fanout` frame, against `swift_release` 6.9% and `swift_retain` 5.5% self.
+
+A `final class` makes that one reference. Every property was already `let`, so
+sharing cannot alias a mutation; the type is `public` but referenced in exactly
+three places, all inside `RenderCache.swift`.
+
+| scenario | change | 95% CI | verdict |
+|---|---|---|---|
+| `fanout` | −4.2% | −7.2% … −3.7% | faster |
+| `textwall` | −2.1% | −3.4% … −0.9% | faster |
+| `anyview` | −1.8% | −4.0% … −1.0% | faster |
+| the other fourteen | | | indistinguishable |
+
+Commit ffa28081; all 34 checksums unchanged.
+
+### The null test was lying, and fixing it exposed two unusable scenarios
+
+`ab_bench.py X X` keyed each rep by binary *path*. Passing the same path twice
+collapsed the dictionary to one entry, so both sides read the **same** run:
+every ratio was exactly 1.0 and it printed `+0.0% [+0.0, +0.0]`. A perfect
+score from a measurement that never happened. (§34's null tests used two
+separate copies, so those stand.) Fixed to index by position — commit
+cbc88f97.
+
+Re-run properly:
+
+| scenario | null test | |
+|---|---|---|
+| `megalist` | −0.9% | [−13.4% … +17.3%] |
+| `tables-vstack` | −9.2% | [−18.2% … +10.3%] |
+
+**Both are ±15% scenarios on this machine** — their own run-to-run spread
+swamps anything worth shipping. That retroactively explains two verdicts they
+had just produced against the `CacheEntry` change (`tables-vstack` "+3.7%
+slower", `megalist` "+7.8%"): neither was about the change. Check a scenario's
+own floor before trusting its verdict.
+
+### Also tried, also null
+
+Making `HStack`'s five `.enumerated()` loops index-based, on the theory that
+the 5.8% in `swift_getTupleTypeMetadata` was the `(index, element)` tuple:
+indistinguishable on four scenarios, reverted. The real caller is
+`Collection.formIndex(after:)` on `Range<A>` — see the note at the end of §35.
