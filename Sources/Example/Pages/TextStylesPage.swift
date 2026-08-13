@@ -102,8 +102,10 @@ struct TextStylesPage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     let long = L("page.textStyles.longLine")
                     // Single-line truncation, cut at different ends (note the ellipsis).
-                    // `lineLimit`/`truncationMode` are Text modifiers, so they come
-                    // before `.frame` (which returns `some View`).
+                    // `lineLimit`/`truncationMode` exist on both `Text` and `View`;
+                    // written directly on a `Text` they bind to the `Text` ones, which
+                    // is why they can come before `.frame` (which returns `some View`).
+                    // The cascading forms are demoed in the next section.
                     Text(long).lineLimit(1).truncationMode(.tail).frame(width: 30)
                     Text(long).lineLimit(1).truncationMode(.head).frame(width: 30)
                     Text(long).lineLimit(1).truncationMode(.middle).frame(width: 30)
@@ -134,6 +136,16 @@ struct TextStylesPage: View {
                         Text(L("page.textStyles.viaTextCase"))
                     }
                     .textCase(.uppercase)
+
+                    // .lineLimit(2) on the VStack caps both paragraphs; the second
+                    // opts back out with .lineLimit(nil), which means "no limit" —
+                    // not "no opinion", or an inherited cap could never be lifted.
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(L("page.textStyles.cappedByInheritance"))
+                        Text(L("page.textStyles.uncapped")).lineLimit(nil)
+                    }
+                    .lineLimit(2)
+                    .frame(width: 46)
 
                     // Role-scoped: dim ALL secondary-coloured text in this block,
                     // without touching the primary line.

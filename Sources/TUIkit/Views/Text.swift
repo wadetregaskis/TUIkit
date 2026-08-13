@@ -240,7 +240,9 @@ extension Text {
     ///
     /// When the wrapped text would exceed the limit, the final visible line
     /// absorbs the remaining content and is truncated with an ellipsis.
-    /// Passing `nil` removes the limit.
+    /// Passing `nil` removes the limit — including one that
+    /// ``View/lineLimit(_:)`` cascaded from above, since a limit stated here
+    /// always wins for this one view.
     ///
     /// ```swift
     /// Text(longParagraph)
@@ -251,7 +253,7 @@ extension Text {
     /// - Returns: A new text with the line limit applied.
     public func lineLimit(_ limit: Int?) -> Text {
         var copy = self
-        copy.style.lineLimit = limit
+        copy.style.lineLimit = LineLimit(limit)
         return copy
     }
 }
@@ -301,8 +303,15 @@ public struct TextStyle: Sendable, Equatable {
     /// character position.
     public var truncatesAtWordBoundary: Bool = false
 
-    /// The maximum number of lines the text may occupy, or `nil` for no limit.
-    public var lineLimit: Int?
+    /// How many lines the text may occupy, or `nil` to inherit `\.lineLimit`
+    /// from the environment.
+    ///
+    /// Optional for the same reason ``truncationMode`` is, and with one extra
+    /// twist: the limit's own "no limit" answer is a *value*
+    /// (``LineLimit/unlimited``), not the absence of one — otherwise
+    /// `Text(x).lineLimit(nil)` inside a `.lineLimit(2)` subtree could not say
+    /// "not me" and the inherited cap would be unresettable.
+    public var lineLimit: LineLimit?
 
     /// Creates a default TextStyle with no formatting.
     public init() {}
@@ -366,6 +375,16 @@ extension Text: Renderable, Layoutable {
         return cascade.resolve(for: scopes).merged(over: base)
     }
 
+    /// This text's line cap in rows, or `nil` for none.
+    ///
+    /// One resolution for both passes: a limit set on this `Text` wins, a
+    /// cascaded ``View/lineLimit(_:)`` fills in otherwise. Measure and render
+    /// must agree — a divergence here reserves rows nothing draws into, or
+    /// clips text the parent left no room for.
+    private func resolvedLineLimit(context: RenderContext) -> Int? {
+        (style.lineLimit ?? context.environment.lineLimit).rowCount
+    }
+
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         // Text has a fixed size based on its content.
         // If a width is proposed, we may word-wrap.
@@ -390,8 +409,10 @@ extension Text: Renderable, Layoutable {
         // `truncatedToWidth(0)` then wiped.
         let width = maxWidth > 0 ? min(maxWidth, naturalWidth) : 0
         // A line limit caps the reported height so a parent allocates only
-        // the rows the text is allowed to occupy.
-        let height = min(wrapped.lines.count, style.lineLimit.map { max(1, $0) } ?? wrapped.lines.count)
+        // the rows the text is allowed to occupy. Resolved against the
+        // environment exactly as the render does, or a cascaded
+        // `.lineLimit(_:)` would reserve rows the render then refuses to draw.
+        let height = min(wrapped.lines.count, resolvedLineLimit(context: context) ?? wrapped.lines.count)
 
         // Text is never flexible - it has a fixed size
         return ViewSize.fixed(width, height)
@@ -449,7 +470,7 @@ extension Text: Renderable, Layoutable {
         // word boundaries, honour an explicit line limit, and clip an over-long
         // run with an ellipsis. Shared with multi-line Table cells via
         // `TextWrapping` so text lays out the same way wherever it's shown.
-        let lineLimit = style.lineLimit.map { max(1, $0) }
+        let lineLimit = resolvedLineLimit(context: context)
         let maxHeight = min(context.availableHeight, lineLimit ?? context.availableHeight)
         let wrapped = TextWrapping.fitMeasured(
             Self.applyingCase(effectiveCase, to: content),
