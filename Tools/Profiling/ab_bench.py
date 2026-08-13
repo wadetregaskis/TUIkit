@@ -3,7 +3,7 @@
 Paired A/B benchmark of two prebuilt `Stress` binaries, with an honest
 confidence interval and a verdict.
 
-    Tools/Profiling/ab_bench.py OLD NEW [--scenarios a b c] [--scale N]
+    Tools/Profiling/ab_bench.py OLD NEW [--scenarios a b c] [--scale N] [--cold]
 
 Why this exists
 ---------------
@@ -57,11 +57,12 @@ WALL_RE = re.compile(r"(?<!-)\bper-frame=([0-9.]+)")  # not `cpu-per-frame=`
 CPU_RE = re.compile(r"cpu-per-frame=([0-9.]+)")
 
 
-def run(binary, scenario, scale, iterations, cols, rows):
+def run(binary, scenario, scale, iterations, cols, rows, cold=False):
     """One bench run; returns (wall_us, cpu_us) per frame."""
     out = subprocess.run(
         [binary, "--bench", "--scenario", scenario, "--scale", str(scale),
-         "--iterations", str(iterations), "--cols", str(cols), "--rows", str(rows)],
+         "--iterations", str(iterations), "--cols", str(cols), "--rows", str(rows)]
+        + (["--cold"] if cold else []),
         capture_output=True, text=True, check=True).stdout
     wall = WALL_RE.search(out)
     cpu = CPU_RE.search(out)
@@ -70,9 +71,9 @@ def run(binary, scenario, scale, iterations, cols, rows):
     return float(wall.group(1)), float(cpu.group(1)) if cpu else None
 
 
-def calibrate(binary, scenario, scale, target_seconds, cols, rows):
+def calibrate(binary, scenario, scale, target_seconds, cols, rows, cold=False):
     """Iterations that make one run last roughly `target_seconds`."""
-    wall_us, _ = run(binary, scenario, scale, 30, cols, rows)
+    wall_us, _ = run(binary, scenario, scale, 30, cols, rows, cold)
     iterations = int(target_seconds * 1_000_000 / max(wall_us, 1.0))
     return max(50, min(iterations, 200_000))
 
@@ -123,6 +124,13 @@ def main():
     parser.add_argument("--metric", choices=["cpu", "wall"], default="cpu")
     parser.add_argument("--seed", type=int, default=20260813,
                         help="run-order seed; change it to re-randomise")
+    parser.add_argument("--cold", action="store_true",
+                        help="reset state + render cache every frame, so every "
+                             "frame is an all-miss frame. The steady state the "
+                             "default measures is what a running app spends its "
+                             "life in; this is the other end — the first frame "
+                             "of a page, and the honest check on any change that "
+                             "makes a cache MISS cost more than it used to.")
     args = parser.parse_args()
 
     load, busiest = quiesce_report()
@@ -131,14 +139,16 @@ def main():
         print("  NOTE: the box is busy. CPU-time metric absorbs preemption, but "
               "cache and memory-bandwidth contention still inflate real work.")
     print(f"metric={args.metric}-per-frame  reps={args.reps}  "
-          f"target={args.target_seconds}s/run  order randomised per rep\n")
+          f"target={args.target_seconds}s/run  order randomised per rep"
+          f"{'  COLD (cache reset every frame)' if args.cold else ''}\n")
 
     index = 1 if args.metric == "cpu" else 0
     if index == 1:
         # A binary built before the harness reported CPU time cannot supply it;
         # say so rather than comparing against nothing.
         for binary in (args.old, args.new):
-            if run(binary, args.scenarios[0], args.scale, 30, args.cols, args.rows)[1] is None:
+            if run(binary, args.scenarios[0], args.scale, 30, args.cols, args.rows,
+                   args.cold)[1] is None:
                 print(f"  {binary} predates cpu-per-frame — falling back to wall clock, "
                       "which is preemption-sensitive; expect wider intervals.\n")
                 index = 0
@@ -150,11 +160,12 @@ def main():
 
     for scenario in args.scenarios:
         iterations = calibrate(
-            args.old, scenario, args.scale, args.target_seconds, args.cols, args.rows)
+            args.old, scenario, args.scale, args.target_seconds, args.cols, args.rows,
+            args.cold)
         # A discarded pilot per binary, so neither pays first-touch costs
         # (page-ins, file cache) inside a measured rep.
         for binary in (args.old, args.new):
-            run(binary, scenario, args.scale, iterations, args.cols, args.rows)
+            run(binary, scenario, args.scale, iterations, args.cols, args.rows, args.cold)
 
         olds, news, ratios = [], [], []
         for _ in range(args.reps):
@@ -169,7 +180,7 @@ def main():
             for position in order:
                 results[position] = run(
                     binaries[position], scenario, args.scale, iterations,
-                    args.cols, args.rows)[index]
+                    args.cols, args.rows, args.cold)[index]
             old_us, new_us = results[0], results[1]
             olds.append(old_us)
             news.append(new_us)

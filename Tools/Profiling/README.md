@@ -76,7 +76,15 @@ swift build -c release --product Stress && cp .build/release/Stress /tmp/old
 swift build -c release --product Stress && cp .build/release/Stress /tmp/new
 Tools/Profiling/ab_bench.py /tmp/old /tmp/new                    # all 17 scenarios
 Tools/Profiling/ab_bench.py /tmp/old /tmp/new --scenarios fanout --reps 40
+Tools/Profiling/ab_bench.py /tmp/old /tmp/new --cold             # all-miss frames
 ```
+
+`--cold` resets the state store and render cache before every frame, so nothing
+is ever served from a cache. The default (warm) run measures the steady state an
+app spends its life in; `--cold` measures the other end — the first frame of a
+page, and, more to the point, **the honest check on any change that trades a
+cheaper cache hit for a dearer miss.** Run it whenever the change touched what
+happens on a miss.
 
 It prints a change, a 95% interval and a **verdict** per scenario:
 
