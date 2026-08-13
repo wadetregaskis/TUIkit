@@ -1639,3 +1639,77 @@ the accumulators are worth auditing as a class rather than one at a time.
 Guarded by `FrameBufferCombineScalingTests`, which asserts the *shape* of the
 growth (under 20x for 8x the children) rather than an absolute speed; both
 guards fail on the unfixed code, at 31.7x and 45.9x.
+
+---
+
+## 27. Area 3 — the last quadratic, and the option the earlier attempt missed (2026-08-12)
+
+After §26 the landscape has exactly one super-linear scenario left. Exponents
+(log2(t8/t1)/3) for all 17, measured on the fixed build:
+
+| band | scenarios |
+|---|---|
+| flat (≤0.15) | `megalist` -0.07, `table` -0.06, `table-multiline` -0.02, `scrollfollow` -0.04, `preferences` 0.08, `kitchensink` 0.15 |
+| sub-linear (0.70–0.98) | `framedcolumns` 0.70, `tables-vstack` 0.78, `dashboard` 0.80, `churn` 0.94, `customlayout` 0.97, `tables-scroll` 0.98 |
+| linear (1.09–1.16) | `modifiers` 1.09, `textwall` 1.12, `anyview` 1.15, `fanout` 1.16 |
+| **super-linear** | **`deep` 1.80** |
+
+### Why the earlier memo failed, and what it missed
+
+`deep`'s quadratic is structural: two-pass layout has level i's PASS 1 measure
+everything below i, then the render descends to i+1 whose PASS 1 measures
+everything below i+1. Measure *roots* are linear in depth (~2 per level); total
+measures are quadratic.
+
+Branch `measure-memo` (edda12ae) built a per-pass memo keyed by (identity, view
+type, proposal, extent) and rejected it: `EquatableViewMeasureMemoTests`'
+`valueGating` measures two different view values at one identity in one pass,
+and the memo served the first one's size for the second. Its own conclusion was
+that the fix needed a reflection digest ("costs what the memo saves") or a
+layout tree.
+
+The option it skipped is the view's **raw bytes** — `withUnsafeBytes(of: view)`
+into a `Hasher`. No reflection, no conformance requirement, and a view struct is
+a handful of words.
+
+The obvious objection is §25: the byte key was proved unusable. But §25's
+failure was specifically about **cross-frame** stability — `@State`,
+`@Environment`, `Binding` and existential boxes embed a freshly-allocated
+pointer every frame, so nothing ever matched. That does not apply *within* one
+pass, where the same value copied down the tree has byte-identical storage,
+pointers included. And the failure mode is asymmetric: undefined padding makes a
+lookup **miss** and re-measure, which is correct but unsaved. A false *hit*
+would need a 64-bit collision among the few hundred entries a pass stores.
+
+### Result
+
+| scale | before | after | hit rate |
+|---|---|---|---|
+| 1 | 7 275 µs | 2 278 µs (−68.7%) | 25.2% |
+| 2 | 22 083 µs | 3 705 µs (−83.2%) | 31.4% |
+| 4 | 80 488 µs | 8 882 µs (−89.0%) | 36.2% |
+| 8 | 319 219 µs | 29 474 µs (−90.8%) | 39.2% |
+
+Exponent **1.80 → 1.23**. The win growing with depth, and the hit rate climbing
+with it, is the quadratic coming out rather than a constant being shaved.
+
+Any nesting pays some of this, so it is not confined to `deep`: `anyview`
+−34.8%, `modifiers` −25.9%, `textwall` −25.6%, `framedcolumns` −24.7%, `fanout`
+−23.5%, `preferences` −22.9%, `customlayout` −21.1%, `table` −16.1%. Two
+scenarios regress where the memo mostly misses and still pays the hash: `churn`
++8.8%, `dashboard` +6.3%. All 34 scenario/scale checksums are unchanged.
+
+### The harness bug this exposed, which is the real lesson
+
+`measureChild` consults the memo only when a `VolatileReadTracker` is installed
+— that tracker is the gate deciding whether a measurement is safe to remember.
+Only `RenderLoop` installs one. `Headless` builds its own environment and did
+not, so **in the bench the memo was unreachable code that still cost a call**:
+it measured as a flat ~10% regression across every scale, with the curve
+untouched, and looked exactly like "the idea does not work".
+
+That is §25's lesson recurring in a new place: the failure was a silent no-op,
+and only a hit-rate count distinguished "engaged and did not help" from "never
+engaged". The counters are now permanent, in `logFrameStats`. A bench harness
+that does not reproduce the app's environment will keep producing confident
+measurements of nothing.
