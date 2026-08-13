@@ -1256,3 +1256,95 @@ collisions differently — the byte comparison already rejects a wrong sibling
 number may be redundant with the payload check it sits in front of. That is a
 one-line experiment with a measurement attached, and it is where the next
 round should start.
+
+## 23. First hits — and the two things that cost the rest (2026-08-12)
+
+§22's instrument pointed at `occurrence`, the one key component this design
+added. Removing it was right but insufficient; carrying on from there produced
+**the first non-zero hit rate**, and named the two causes that still hold the
+number down.
+
+### `occurrence` was never needed
+
+Dropped entirely: the key is now `(identity, viewType)`. Two same-typed
+siblings sharing one identity overwrite each other and then both miss — the
+stored bytes belong to the other sibling and are rejected — which costs a
+re-render and never a wrong buffer. `EquatableView` keys on identity alone and
+reaches 100%, which was the clue.
+
+### Cause 1: the digest slot nobody would guess
+
+Extending the miss diagnostic to name *which environment key* changed turned a
+week of hypotheses into one line of output:
+
+```
+DIGEST changed=["SynthesizeKeyEventKey"] gone=[]
+```
+
+`synthesizeKeyEvent` is the closure that routes a synthesised `KeyEvent`
+through the input chain. It is wired **once** at start-up, so it ought to
+digest identically every frame — and it did not, for a reason worth recording:
+
+**Hashing an `Any`'s raw bytes hashes uninitialised padding.** A closure is two
+words; `Any`'s inline buffer is three. The leftover word is whatever was on the
+stack, so two copies of the *same* closure hash differently. The §21 "hash a
+function's bytes at the leaf" rule was wrong for exactly this reason, and wrong
+invisibly — it produced a digest that churned rather than an error.
+
+Functions are therefore reported unstable again, and the key itself is marked
+`InfrastructureEnvironmentKey`: it is a *dispatch service*, not a rendering
+input. Nothing renders differently because of which synthesiser is installed.
+
+### Cause 2: infrastructure in the environment, in general
+
+That makes four environment slots that must be excluded, and they form a
+category rather than a list of exceptions:
+
+| slot | why it can never digest stably |
+|---|---|
+| `frameNowNanos` | it *is* the clock — differs every frame by definition |
+| `pulsePhase` | derived from the clock |
+| `cursorTimer` | the blink clock |
+| `volatileReadTracker` | a fresh instance the memo itself installs per miss |
+| `synthesizeKeyEvent` | a closure; no stable digest exists for one |
+
+The first three are already covered by `VolatileReadTracker`: *reading* one is
+recorded, and the reading subtree declines caching. The tracker is the
+mechanism for time, and the digest must not duplicate it. The fourth is the
+memo's own instrumentation — it was measuring itself. The fifth is a service.
+
+### The result
+
+With all five excluded, the memo hits for the first time:
+
+| page | entries | hits / 5 frames | hit rate |
+|---|---|---|---|
+| Container Views | 32 | 5 | 8% |
+| Text Styles | 45 | 5 | 2% |
+| Layout System | 52 | 5 | 1% |
+| Theme | 41 | 5 | 1% |
+| Tables | 30 | 2 | 1% |
+
+**Proof of life, not a win.** One hit per frame against 12–190 lookups is far
+below the point where the memo pays for itself, so it is reverted again. But
+the failure mode has changed shape: it is no longer "nothing works and the
+cause is unknown", it is "the mechanism works and something is still
+invalidating most candidates each frame". The next diagnostic is the same one
+that worked twice here — extend the per-miss reason breakdown to the *storing*
+nodes and see which of `noEntry` / `digest` / `bytes` dominates now that the
+known offenders are gone.
+
+### The general lesson, recorded because it cost five rounds
+
+Every failure in §20–§23 was a **silent no-op**, never an error:
+
+- a sticky flag disabled the memo tree-wide, and the whole suite passed;
+- `as? AnyObject` succeeded for every value and hashed a fresh box each time;
+- `Optional<Service>` made every environment undigestable;
+- the memo's own tracker changed the digest of everything below it;
+- byte-hashing an existential hashed uninitialised padding.
+
+None of these can be caught by an assertion, because in every case the code
+does something reasonable — it just never engages. **The only test that
+catches them is a live hit-rate measurement**, and it should be the first
+thing built for any cache, before the cache itself.
