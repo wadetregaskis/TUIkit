@@ -11,6 +11,32 @@
 import TUIkitCore
 
 struct ScrollContentWindow: Sendable, Hashable {
+    /// Equality and hashing deliberately **exclude** ``reply``.
+    ///
+    /// That slot is a per-render mailbox — `ScrollContentReply()` is freshly
+    /// allocated on every pass — so synthesised conformance made two windows
+    /// describing the *same* visible slice compare and hash differently every
+    /// frame. Anything keyed on the environment (the render memo) therefore
+    /// saw every subtree under a `ScrollView` change on every frame.
+    ///
+    /// A window is identified by what it *describes* — the offset, the
+    /// viewport, whose content it addresses — not by which mailbox happens to
+    /// be attached for the reply to travel back through.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.offset == rhs.offset && lhs.viewportHeight == rhs.viewportHeight
+            && lhs.contentIdentity == rhs.contentIdentity && lhs.edgeInset == rhs.edgeInset
+            && lhs.reportsIDAt == rhs.reportsIDAt && lhs.seek == rhs.seek
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(offset)
+        hasher.combine(viewportHeight)
+        hasher.combine(contentIdentity)
+        hasher.combine(edgeInset)
+        hasher.combine(reportsIDAt)
+        hasher.combine(seek)
+    }
+
     var offset: Int
     var viewportHeight: Int
 
