@@ -87,6 +87,30 @@ public struct LocalizedStringKey: Equatable, Hashable, Sendable {
         return Self.substituting(arguments, into: template)
     }
 
+    /// Whether `character` is a C length modifier (`%ld`, `%zu`, …), which a
+    /// translation may carry over and which carries no meaning here.
+    ///
+    /// - Note: A `switch` rather than `"hlLqzjt".contains(character)`. That
+    ///   spelling **scans a `String`** — a fresh one per call, compared
+    ///   grapheme by grapheme — and this runs per conversion of every
+    ///   interpolated `Text`, on every frame.
+    private static func isLengthModifier(_ character: Character) -> Bool {
+        switch character {
+        case "h", "l", "L", "q", "z", "j", "t": return true
+        default: return false
+        }
+    }
+
+    /// Whether `character` terminates a conversion — `%@` and the numeric
+    /// forms a translator might reasonably write. A `switch` for the same
+    /// reason as ``isLengthModifier(_:)``.
+    private static func isConversion(_ character: Character) -> Bool {
+        switch character {
+        case "@", "d", "i", "u", "f", "g", "G", "e", "E", "x", "X", "o", "s": return true
+        default: return false
+        }
+    }
+
     /// Replaces `%@` / `%N$@` (and the numeric conversions a translator might
     /// reasonably write) in `template` with `arguments`.
     ///
@@ -132,10 +156,10 @@ public struct LocalizedStringKey: Equatable, Hashable, Sendable {
                 cursor = template.index(index, offsetBy: 1)
             }
             // Length modifiers a translator may carry over from a C format.
-            while cursor < template.endIndex, "hlLqzjt".contains(template[cursor]) {
+            while cursor < template.endIndex, Self.isLengthModifier(template[cursor]) {
                 cursor = template.index(after: cursor)
             }
-            guard cursor < template.endIndex, "@diufgGeExXos".contains(template[cursor]) else {
+            guard cursor < template.endIndex, Self.isConversion(template[cursor]) else {
                 // Not a conversion at all: emit the `%` and carry on from the
                 // character after it, so nothing is swallowed.
                 result.append("%")
