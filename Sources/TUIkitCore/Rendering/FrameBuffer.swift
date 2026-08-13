@@ -332,19 +332,15 @@ extension FrameBuffer {
 
         // Pre-compute the new width (avoids redundant computation in didSet)
         let newWidth = max(width, other.width)
-
-        // Build combined array
-        var combined = lines
-        let selfWasEmpty = combined.isEmpty
-        if !selfWasEmpty && spacing > 0 {
-            combined.append(contentsOf: repeatElement("", count: spacing))
-        }
-        combined.append(contentsOf: other.lines)
+        let selfWasEmpty = storage.isEmpty
 
         // Propagate uniform-width cheaply (no re-measure). The stack is uniform
         // only when both sides are uniform AT THE SAME width and no empty spacer
         // line (visible width 0) was inserted between them. When self was empty,
         // the result is simply `other`. Anything else is "unknown" (false).
+        //
+        // Computed BEFORE the append below, which overwrites the geometry this
+        // reads.
         let resultUniform: Bool
         if selfWasEmpty {
             resultUniform = other.linesAreUniformWidth
@@ -354,38 +350,57 @@ extension FrameBuffer {
                 && width == other.width && spacing == 0
         }
 
-        // Carry per-line widths cheaply (concatenation, no re-measure) — the
-        // exact parallel of `combined`'s construction above. Possible only when
-        // both sides already know their widths; otherwise the result is "unknown"
-        // (nil). When self was empty the result is simply `other`'s widths; the
+        // Carry per-line widths cheaply (extension, no re-measure) — the exact
+        // parallel of `storage`'s growth below. Possible only when both sides
+        // already know their widths; otherwise the result is "unknown" (nil).
+        // When self was empty the result is simply `other`'s widths; the
         // inserted spacing blank lines ("") each have visible width 0.
-        let combinedWidths: [Int]?
         if selfWasEmpty {
-            combinedWidths = other.lineWidths
-        } else if let selfWidths = lineWidths, let otherWidths = other.lineWidths {
-            var widths = selfWidths
+            lineWidths = other.lineWidths
+        } else if lineWidths != nil, let otherWidths = other.lineWidths {
             if spacing > 0 {
-                widths.append(contentsOf: repeatElement(0, count: spacing))
+                lineWidths!.append(contentsOf: repeatElement(0, count: spacing))
             }
-            widths.append(contentsOf: otherWidths)
-            combinedWidths = widths
+            lineWidths!.append(contentsOf: otherWidths)
         } else {
-            combinedWidths = nil
+            lineWidths = nil
         }
 
-        let carriedOverlays = overlays + other.shiftedOverlays(byX: 0, y: verticalShift)
-        let carriedRegions =
-            hitTestRegions + other.shiftedHitTestRegions(byX: 0, y: verticalShift)
-        let carriedAnimations =
-            animatedCells + other.shiftedAnimatedCells(byX: 0, y: verticalShift)
+        // Grow the accumulator IN PLACE rather than building a fresh array per
+        // child. A stack appends its children one at a time into a single
+        // buffer, so copying the accumulated rows on each append made the
+        // combine O(n²) in the child count — and, because the rows are
+        // `String`s, it retained/released every accumulated row each time.
+        // Measured on a plain accumulation of single-line children: 500 → 8000
+        // rows cost 0.53 → 103 ms, ~4× per doubling. Appending in place is
+        // amortised O(rows added), which is what the loop as a whole needs to
+        // be linear.
+        //
+        // `storage` (not `lines`) deliberately: the public setter recomputes the
+        // whole-buffer width per write, and the geometry is already known
+        // exactly here — the same reasoning `composite(with:at:)` documents.
+        if !selfWasEmpty && spacing > 0 {
+            storage.append(contentsOf: repeatElement("", count: spacing))
+        }
+        storage.append(contentsOf: other.lines)
+        width = newWidth
+        linesAreUniformWidth = resultUniform
+        Self.assertLineWidthsInvariant(self)
 
-        // Replace self with new buffer using pre-computed width
-        self = FrameBuffer(
-            lines: combined, width: newWidth, uniformWidth: resultUniform,
-            lineWidths: combinedWidths)
-        overlays = carriedOverlays
-        hitTestRegions = carriedRegions
-        animatedCells = carriedAnimations
+        // Same story for the three carried side-channels: `a + b` allocates and
+        // copies both sides every child, so accumulating N children's overlays
+        // or hit regions was quadratic in their total count.
+        if !other.overlays.isEmpty {
+            overlays.append(contentsOf: other.shiftedOverlays(byX: 0, y: verticalShift))
+        }
+        if !other.hitTestRegions.isEmpty {
+            hitTestRegions.append(
+                contentsOf: other.shiftedHitTestRegions(byX: 0, y: verticalShift))
+        }
+        if !other.animatedCells.isEmpty {
+            animatedCells.append(
+                contentsOf: other.shiftedAnimatedCells(byX: 0, y: verticalShift))
+        }
     }
 
     /// Places another buffer to the right of this one with optional spacing.
@@ -491,14 +506,7 @@ extension FrameBuffer {
             result.append(combined)
         }
 
-        // `other`'s content lands to the right, past this buffer + spacing.
-        let carriedOverlays = overlays + other.shiftedOverlays(byX: myWidth + spacingApplied, y: 0)
-        let carriedRegions =
-            hitTestRegions + other.shiftedHitTestRegions(byX: myWidth + spacingApplied, y: 0)
-        let carriedAnimations =
-            animatedCells + other.shiftedAnimatedCells(byX: myWidth + spacingApplied, y: 0)
-
-        // Replace self with the new buffer, supplying the uniform-width hint the
+        // Supply the uniform-width hint the
         // bare `FrameBuffer(lines:width:)` used to discard (it defaults the flag
         // to false), so downstream consumers can skip their per-line padding walk
         // — the same hint discipline `appendVertically` follows. Each combined
@@ -511,11 +519,27 @@ extension FrameBuffer {
         // the safe `false` ("unknown", byte-identical: the consumer re-measures).
         let resultUniform =
             linesAreUniformWidth && other.linesAreUniformWidth && height <= other.height
-        self = FrameBuffer(
-            lines: result, width: newWidth, uniformWidth: resultUniform, lineWidths: nil)
-        overlays = carriedOverlays
-        hitTestRegions = carriedRegions
-        animatedCells = carriedAnimations
+        storage = result
+        width = newWidth
+        linesAreUniformWidth = resultUniform
+        lineWidths = nil
+
+        // `other`'s content lands to the right, past this buffer + spacing.
+        // Appended in place rather than via `a + b`, which allocates and copies
+        // both sides on every child — quadratic in the accumulated count for a
+        // stack of many interactive children. Mirrors `appendVertically`.
+        if !other.overlays.isEmpty {
+            overlays.append(
+                contentsOf: other.shiftedOverlays(byX: myWidth + spacingApplied, y: 0))
+        }
+        if !other.hitTestRegions.isEmpty {
+            hitTestRegions.append(
+                contentsOf: other.shiftedHitTestRegions(byX: myWidth + spacingApplied, y: 0))
+        }
+        if !other.animatedCells.isEmpty {
+            animatedCells.append(
+                contentsOf: other.shiftedAnimatedCells(byX: myWidth + spacingApplied, y: 0))
+        }
     }
 
     /// Layers another buffer on top of this one (ZStack behavior).
