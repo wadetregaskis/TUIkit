@@ -1713,3 +1713,72 @@ and only a hit-rate count distinguished "engaged and did not help" from "never
 engaged". The counters are now permanent, in `logFrameStats`. A bench harness
 that does not reproduce the app's environment will keep producing confident
 measurements of nothing.
+
+---
+
+## 28. Area 4 — why the memo's two regressions resist the obvious fixes (2026-08-12)
+
+§27 left `churn` +8.8% and `dashboard` +6.3% against wins of 16–90% elsewhere.
+The first Area-4 item was to remove them. Both obvious gates were tried and
+both are **rejected on measurement**; do not retry them without new evidence.
+
+Per-scenario hit rates, now printed by `--bench` unconditionally:
+
+| scenario | rate | | scenario | rate |
+|---|---|---|---|---|
+| `textwall` | 79.6% | | `anyview` | 1.4% |
+| `fanout` | 75.3% | | `kitchensink` | 4.8% |
+| `modifiers` | 48.7% | | `dashboard` | 2.6% |
+| `deep` | 39.9% | | `churn` | 0.2% |
+
+### Gate 1 — on hit rate. Rejected.
+
+The tempting design is to suppress the memo on frames whose previous hit rate
+was low. It is wrong: **`anyview` gains 34.8% on a 1.4% hit rate**. Its 638
+hits per 40 frames each skip an entire subtree, so a rate-based gate would
+switch the memo off precisely where it pays best. Hit *count* is not benefit;
+work *skipped* is.
+
+### Gate 2 — on subtree cost. Also rejected.
+
+So price each measurement: count nested `measureChild` calls across it (one
+increment on the hot path, one subtraction per store) and refuse to store
+anything cheap, on the theory that a leaf measured once and never revisited
+pays a hash and a dictionary insert for nothing — `churn` performs ~32 000
+lookups a frame for 74 hits, i.e. ~32 000 inserts never read.
+
+At a threshold of 8 nested measures, **`fanout` went from 75.3% hits to 0.0%**.
+Its rows are an `HStack` of four `Text`s — subtree cost ~5 — so the gate
+excluded exactly the entries its 75% hit rate was built from. The premise
+("wins come from skipping large subtrees") was false: `fanout` wins through
+many cheap hits, `anyview` through few expensive ones, and a single cost
+threshold cannot serve both.
+
+At a threshold of 2 (excluding only true leaves) the trade is real but still a
+trade — measured best-of-3 at 200 iterations against the ungated memo:
+
+| scenario | change |
+|---|---|
+| `churn` s4 | **−15.1%** |
+| `dashboard` s4 | −3.8% |
+| `anyview` s4 | −2.2% |
+| `deep` s1 | −1.4% |
+| `textwall` s1 | −0.9% |
+| `fanout` s1 | **+8.8%** |
+
+That fixes the two regressions by creating a new one on a shape that matters
+more (wide non-lazy lists are ordinary; "every view changes every frame" is
+synthetic). Reverted.
+
+### What the two failures say
+
+A stored entry pays iff the node is **revisited within the pass**, and that is
+not predictable at store time from anything local — not from the hit rate the
+cache is currently achieving, and not from what the measurement cost. Any
+future attempt needs a signal about *revisiting*, which is structural: the
+repeat visits come from the two-pass ladder (a measure nested inside another
+measure is the reusable case), not from any property of the view itself.
+
+The regressions stand. They are the price of a mechanism worth 16–90% on nine
+other scenarios, and the hit-rate counters are now permanent so the next
+attempt starts from data rather than from a plausible story.
