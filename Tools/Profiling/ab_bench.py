@@ -158,14 +158,19 @@ def main():
 
         olds, news, ratios = [], [], []
         for _ in range(args.reps):
-            order = [args.old, args.new]
+            # Indexed by POSITION, not by path: a null test (`ab_bench.py X X`)
+            # passes the same path twice, and keying by path would collapse the
+            # two runs into one and report a fake, perfect +0.0%.
+            order = [0, 1]
             if rng.random() < 0.5:
                 order.reverse()
-            results = {
-                b: run(b, scenario, args.scale, iterations, args.cols, args.rows)[index]
-                for b in order
-            }
-            old_us, new_us = results[args.old], results[args.new]
+            binaries = (args.old, args.new)
+            results = [0.0, 0.0]
+            for position in order:
+                results[position] = run(
+                    binaries[position], scenario, args.scale, iterations,
+                    args.cols, args.rows)[index]
+            old_us, new_us = results[0], results[1]
             olds.append(old_us)
             news.append(new_us)
             ratios.append(new_us / old_us)

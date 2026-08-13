@@ -107,6 +107,13 @@ Four things make it trustworthy, and each was validated by measurement:
 test yourself — `ab_bench.py X X` — whenever you doubt a result; it costs one
 command and tells you exactly what this machine can resolve today.
 
+**Some scenarios cannot resolve anything small.** `megalist` and
+`tables-vstack` null-test at **±15%** on this machine — their own run-to-run
+spread swamps any change worth making. Both produced spurious verdicts on a
+change that was fine (`tables-vstack` "+3.7% slower", `megalist` "+7.8%"), and
+the null test is what exposed them. Check a scenario's floor before trusting
+its verdict.
+
 **One false positive per sweep is expected.** Seventeen scenarios at 95%
 confidence means roughly one verdict per run is wrong by chance. Treat a
 `faster`/`slower` whose interval *edge* sits on zero as a prompt to re-test —
