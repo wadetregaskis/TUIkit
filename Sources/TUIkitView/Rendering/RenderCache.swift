@@ -123,7 +123,13 @@ public final class RenderCache: @unchecked Sendable {
     }
 
     /// A cached rendering result for a single view identity.
-    public struct CacheEntry {
+    /// - Note: A `final class`, not a struct. Every ``lookup(identity:view:contextWidth:contextHeight:)``
+    ///   pulls an entry out of the dictionary — including the **reject** paths,
+    ///   which discard it immediately — and a struct copy retains every
+    ///   refcounted field: the snapshot existential plus the five arrays inside
+    ///   the `FrameBuffer`. One reference instead. Every property is `let`, so
+    ///   sharing the instance cannot alias a mutation.
+    public final class CacheEntry {
         /// The type-erased view value at the time of caching.
         ///
         /// Cast back to the concrete `Equatable` type for comparison.
