@@ -63,14 +63,24 @@ extension ANSIRenderer {
     ///   - style: The TextStyle to apply.
     /// - Returns: The formatted string with ANSI codes.
     static func render(_ text: String, with style: TextStyle) -> String {
+        guard let sequence = styleSequence(for: style) else { return text }
+        return "\(sequence)\(text)\(reset)"
+    }
+
+    /// The SGR introducer ``render(_:with:)`` would emit for `style`, or `nil`
+    /// when the style is empty — the case where `render` returns its text
+    /// untouched.
+    ///
+    /// Exposed so a caller styling **many** strings the same way can build the
+    /// sequence once and wrap each of them as `sequence + text + reset`, which
+    /// is byte-for-byte what `render` produces. Every `render` call otherwise
+    /// rebuilds the identical `TextStyle`, re-derives its codes and re-joins
+    /// them: a `Table` row colours every cell with the same foreground, so a
+    /// 6-column table did that six times per row, per frame.
+    static func styleSequence(for style: TextStyle) -> String? {
         let codes = buildStyleCodes(style)
-
-        if codes.isEmpty {
-            return text
-        }
-
-        let styleSequence = "\(csi)\(codes.joined(separator: ";"))m"
-        return "\(styleSequence)\(text)\(reset)"
+        if codes.isEmpty { return nil }
+        return "\(csi)\(codes.joined(separator: ";"))m"
     }
 
     /// Generates the ANSI escape sequence for a background color.

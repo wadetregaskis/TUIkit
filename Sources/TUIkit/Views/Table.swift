@@ -2586,7 +2586,6 @@ where Value.ID: Hashable {
         context: RenderContext,
         palette: any Palette,
     ) -> String {
-        let spacing = String(repeating: " ", count: columnSpacing)
         let visualState = rowVisualState(
             isFocused: isFocused,
             isSelected: isSelected,
@@ -2599,29 +2598,50 @@ where Value.ID: Hashable {
             foreground: visualState.indicatorColor
         )
 
-        // Build cells using environment foreground color
+        // Every cell of every row is coloured the same, so derive its SGR
+        // introducer ONCE rather than rebuilding an identical `TextStyle` and
+        // re-joining its codes per cell (`ANSIRenderer.render` was 18.1%
+        // inclusive of a `tables-scroll` frame, `buildStyleCodes` 6.8%).
+        // `sequence + text + reset` is byte-for-byte what `colorize` produces.
         let foregroundColor = context.environment.foregroundStyle ?? palette.foreground
-        let cells = zip(columns, columnWidths).map { column, width -> String in
-            let value = column.value(for: item)
+        var cellStyle = TextStyle()
+        cellStyle.foregroundColor = foregroundColor
+        let cellSequence = ANSIRenderer.styleSequence(for: cellStyle)
+
+        // One buffer for the whole row. The previous form built a `[String]` of
+        // styled cells, `joined` them, and concatenated the indicator and the
+        // padding — an array plus a fresh String per cell and per join, thrown
+        // away immediately. Table rendering was spending **26% of the frame
+        // inside the allocator** (`tiny_free_*` / `tiny_malloc_*`), and rows
+        // are the bulk of it. Spacing and padding come from the shared
+        // `asciiSpaces` run, so neither allocates either.
+        let spacing = asciiSpaces(columnSpacing)
+        var content = styledIndicator
+        content.reserveCapacity(rowWidth * 2)
+        content += " "
+
+        let cellCount = min(columns.count, columnWidths.count)
+        for index in 0..<cellCount {
+            if index > 0 { content.append(contentsOf: spacing) }
+            let column = columns[index]
             let aligned = alignText(
-                value,
-                width: width,
+                column.value(for: item),
+                width: columnWidths[index],
                 alignment: column.alignment,
                 truncationMode: column.truncationMode
             )
-            return ANSIRenderer.colorize(aligned, foreground: foregroundColor)
+            if let cellSequence {
+                content += cellSequence
+                content += aligned
+                content += ANSIRenderer.reset
+            } else {
+                content += aligned
+            }
         }
 
-        let content = styledIndicator + " " + cells.joined(separator: spacing)
-
-        if let bgColor = visualState.backgroundColor {
-            let visibleLength = content.strippedLength
-            let padding = max(0, rowWidth - visibleLength)
-            let paddedContent = content + String(repeating: " ", count: padding)
-            return paddedContent.withPersistentBackground(bgColor)
-        } else {
-            return content
-        }
+        guard let bgColor = visualState.backgroundColor else { return content }
+        content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
+        return content.withPersistentBackground(bgColor)
     }
 
     /// The floating row a `.cursor` drag carries: the row's VALUES, condensed.
