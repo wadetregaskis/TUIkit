@@ -155,13 +155,26 @@ enum Headless {
         // scenario: measured at 6.0% of `dashboard`'s per-frame time against
         // 0.2% of `deep`'s. Timing it would tax the fast scenarios hardest and
         // show up as a regression that never happened.
+        //
+        // Timed twice, over the same region: the wall clock (what this always
+        // reported) and the thread's CPU clock. Only the second is comparable
+        // across runs on a machine that is doing anything else — see
+        // ``threadCPUNanoseconds()``. The CPU reads bracket the wall reads so
+        // the wall number still measures exactly the render.
         var ns: UInt64 = 0
+        var cpuNs: UInt64 = 0
+        var cpuMeasured = false
         for _ in 0..<iterations {
             if cold { warm = makeContext(cols: cols, rows: rows) }
             clock.tick &+= 1
+            let cpuStart = threadCPUNanoseconds()
             let frameStart = DispatchTime.now()
             let buffer = renderToBuffer(view, context: warm)
             ns &+= DispatchTime.now().uptimeNanoseconds - frameStart.uptimeNanoseconds
+            if let cpuStart, let cpuEnd = threadCPUNanoseconds() {
+                cpuNs &+= cpuEnd &- cpuStart
+                cpuMeasured = true
+            }
             checksum = checksum &+ contentChecksum(buffer)
             if isBlank(buffer) { blankFrames += 1 }
         }
@@ -173,6 +186,11 @@ enum Headless {
             + "iters=\(iterations) cold=\(cold)")
         print(String(format: "  total=%.1fms  per-frame=%.1fµs  (%.0f fps-equiv)  checksum=%d",
             totalMs, perFrameUs, 1_000_000 / max(0.001, perFrameUs), checksum))
+        if cpuMeasured {
+            let cpuPerFrameUs = Double(cpuNs) / 1_000 / Double(max(1, iterations))
+            print(String(format: "  cpu-per-frame=%.1fµs  (%.1f%% of wall)",
+                cpuPerFrameUs, perFrameUs > 0 ? cpuPerFrameUs / perFrameUs * 100 : 0))
+        }
         let memo = warm.renderCache?.measureMemoTotals ?? (hits: 0, misses: 0)
         let lookups = memo.hits + memo.misses
         print(String(format: "  measure memo: %d hits / %d lookups (%.1f%%)",

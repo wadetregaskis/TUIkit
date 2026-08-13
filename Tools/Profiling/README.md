@@ -65,6 +65,55 @@ Tools/Profiling/record.sh list 15 24 80   # List page in an 80x24 terminal
 
 Traces land in `profiling-traces/` (git-ignored).
 
+## Deciding whether a change actually helped — `ab_bench.py`
+
+Profiling says *where* the time goes. Deciding whether a change moved it is a
+separate, and surprisingly easy to get wrong, question:
+
+```bash
+swift build -c release --product Stress && cp .build/release/Stress /tmp/old
+# …make the change…
+swift build -c release --product Stress && cp .build/release/Stress /tmp/new
+Tools/Profiling/ab_bench.py /tmp/old /tmp/new                    # all 17 scenarios
+Tools/Profiling/ab_bench.py /tmp/old /tmp/new --scenarios fanout --reps 40
+```
+
+It prints a change, a 95% interval and a **verdict** per scenario:
+
+```
+scenario           iters     old µs     new µs   change           95% CI  verdict
+modifiers           1077     1154.7     1492.3   +29.9%    +28.2%  +31.0%  slower
+fanout               349     4724.5     4463.0    -5.7%     -6.7%   -2.2%  faster
+anyview              727     1974.2     1996.2    +0.5%     -3.2%   +3.1%  indistinguishable
+```
+
+`indistinguishable` is the answer that matters. Two changes were committed and
+reverted on 2026-08-12/13 (§31 and §33 of
+`Documentation/Performance-profile-2026-08.md`) because a hand-rolled A/B gave
+them a number with a sign where the honest answer was "cannot tell".
+
+Four things make it trustworthy, and each was validated by measurement:
+
+| | |
+|---|---|
+| **CPU time, not wall clock** | Reads the harness's `cpu-per-frame`. Preemption by everything else on the box no longer lands in the number. |
+| **Randomised run order** | A fixed order is a fixed bias — every hand-run pass showed whichever binary ran *second* as slower, including the pass where that was the original. |
+| **Paired ratios + a bootstrap CI** | A and B run adjacent in time, so drift hits both; comparing per-rep ratios cancels it, and the interval prices what is left. |
+| **Calibrated iteration count** | 300 iterations of a 160 µs scenario is 50 ms of measurement, mostly warm-up. Each run is sized to ~1.5 s. |
+
+**Noise floor** (identical binary against a copy of itself, machine at load
+1.7 with a browser taking 27% of a core): `dashboard` ±0.7%, `table` ±1.7%,
+`churn` ±2%, `fanout` ±3% at the default 15 reps and ±2% at 40. Run the null
+test yourself — `ab_bench.py X X` — whenever you doubt a result; it costs one
+command and tells you exactly what this machine can resolve today.
+
+**Two tuning knobs that measured worse, so they are not options:** taking the
+minimum of several runs per binary per rep (widened `fanout` to ±5% — the min
+is a biased estimator whose bias tracks the local noise, and the extra runs
+push A and B further apart in time, weakening the pairing); and shorter runs
+with proportionally more reps (helped `churn`, hurt `fanout`, which needs
+enough frames to amortise process start-up).
+
 ## The pieces
 
 ### `record.sh` — orchestrator
