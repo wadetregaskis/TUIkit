@@ -1401,31 +1401,51 @@ where Value.ID: Hashable {
         context: RenderContext,
         palette: any Palette
     ) -> [String] {
-        let spacing = String(repeating: " ", count: columnSpacing)
+        let spacing = asciiSpaces(columnSpacing)
         let visual = rowVisualState(
             isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
         let styledIndicator = ANSIRenderer.colorize(visual.indicator, foreground: visual.indicatorColor)
         let foreground = context.environment.foregroundStyle ?? palette.foreground
         let layout = cellLayout(for: item, columnWidths: columnWidths)
 
+        // One SGR introducer for every cell of every line — see ``renderRow``,
+        // which this is the multi-line twin of. Here it matters more: the
+        // per-cell colorize and the per-line array-plus-join ran once per LINE
+        // per row, so `table-multiline` was the one table shape that did not
+        // move when `renderRow` was rewritten.
+        var cellStyle = TextStyle()
+        cellStyle.foregroundColor = foreground
+        let cellSequence = ANSIRenderer.styleSequence(for: cellStyle)
+        let cellCount = min(columns.count, columnWidths.count)
+
         var lines: [String] = []
+        lines.reserveCapacity(layout.height)
         for lineIndex in 0..<layout.height {
             // The indicator shows only on the first line; continuation lines keep
             // the same two-cell gutter so the columns line up beneath it.
-            let gutter = lineIndex == 0 ? styledIndicator + " " : "  "
-            let cells = zip(columns, columnWidths).enumerated().map { index, pair -> String in
-                let (column, width) = pair
+            var content = lineIndex == 0 ? styledIndicator + " " : "  "
+            content.reserveCapacity(rowWidth * 2)
+
+            for index in 0..<cellCount {
+                if index > 0 { content.append(contentsOf: spacing) }
+                let column = columns[index]
                 let cellLines = layout.cells[index]
                 let text = lineIndex < cellLines.count ? cellLines[lineIndex] : ""
                 let aligned = alignText(
-                    text, width: width, alignment: column.alignment, truncationMode: column.truncationMode)
-                return ANSIRenderer.colorize(aligned, foreground: foreground)
+                    text, width: columnWidths[index], alignment: column.alignment,
+                    truncationMode: column.truncationMode)
+                if let cellSequence {
+                    content += cellSequence
+                    content += aligned
+                    content += ANSIRenderer.reset
+                } else {
+                    content += aligned
+                }
             }
-            let content = gutter + cells.joined(separator: spacing)
+
             if let bgColor = visual.backgroundColor {
-                let padding = max(0, rowWidth - content.strippedLength)
-                lines.append(
-                    (content + String(repeating: " ", count: padding)).withPersistentBackground(bgColor))
+                content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
+                lines.append(content.withPersistentBackground(bgColor))
             } else {
                 lines.append(content)
             }
