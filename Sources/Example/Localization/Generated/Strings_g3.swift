@@ -89,7 +89,7 @@ extension ExampleStrings {
             "page.list.help.jump": "Use [Home/End] to jump to first/last",
             "page.list.help.fastScroll": "Use [PageUp/PageDown] for fast scrolling",
             "page.list.help.select": "Use [Enter/Space] to select/deselect",
-            "page.list.help.tree": "In a tree, [Space] selects and [Enter] opens the branch; [→/←] open and close it",
+            "page.list.help.tree": "In a tree, [Space] selects and [Enter] opens the branch; [→/←] open and close it, [⌥→/⌥←] the whole subtree",
             "page.list.help.switch": "Use [Tab] to switch between lists",
             "page.list.help.wheel": "Use the mouse wheel to scroll any list (works whether or not the list has focus, and whether or not it has a selection binding)",
 
@@ -306,7 +306,7 @@ extension ExampleStrings {
             "page.list.help.jump": "Mit [Pos1/Ende] zum ersten/letzten springen",
             "page.list.help.fastScroll": "Mit [Bild auf/Bild ab] schnell scrollen",
             "page.list.help.select": "Mit [Enter/Leertaste] aus-/abwählen",
-            "page.list.help.tree": "In einem Baum wählt [Leertaste] aus, [Enter] öffnet den Zweig; [→/←] öffnen und schließen ihn",
+            "page.list.help.tree": "In einem Baum wählt [Leertaste] aus, [Enter] öffnet den Zweig; [→/←] öffnen und schließen ihn, [⌥→/⌥←] den ganzen Teilbaum",
             "page.list.help.switch": "Mit [Tab] zwischen Listen wechseln",
             "page.list.help.wheel": "Mit dem Mausrad jede Liste scrollen (funktioniert, ob die Liste fokussiert ist oder nicht und ob sie eine Auswahlbindung hat oder nicht)",
 
@@ -523,7 +523,7 @@ extension ExampleStrings {
             "page.list.help.jump": "Utilisez [Origine/Fin] pour aller au premier/dernier",
             "page.list.help.fastScroll": "Utilisez [Page préc./Page suiv.] pour défiler rapidement",
             "page.list.help.select": "Utilisez [Entrée/Espace] pour sélectionner/désélectionner",
-            "page.list.help.tree": "Dans une arborescence, [Espace] sélectionne et [Entrée] ouvre la branche ; [→/←] l'ouvrent et la ferment",
+            "page.list.help.tree": "Dans une arborescence, [Espace] sélectionne et [Entrée] ouvre la branche ; [→/←] l'ouvrent et la ferment, [⌥→/⌥←] toute la sous-arborescence",
             "page.list.help.switch": "Utilisez [Tab] pour passer d'une liste à l'autre",
             "page.list.help.wheel": "Utilisez la molette de la souris pour faire défiler n'importe quelle liste (fonctionne que la liste ait le focus ou non, et qu'elle ait une liaison de sélection ou non)",
 
@@ -740,7 +740,7 @@ extension ExampleStrings {
             "page.list.help.jump": "Usa [Inizio/Fine] per saltare al primo/ultimo",
             "page.list.help.fastScroll": "Usa [PagSu/PagGiù] per scorrere velocemente",
             "page.list.help.select": "Usa [Invio/Spazio] per selezionare/deselezionare",
-            "page.list.help.tree": "In un albero [Spazio] seleziona ed [Invio] apre il ramo; [→/←] lo aprono e lo chiudono",
+            "page.list.help.tree": "In un albero [Spazio] seleziona ed [Invio] apre il ramo; [→/←] lo aprono e lo chiudono, [⌥→/⌥←] l'intero sottoalbero",
             "page.list.help.switch": "Usa [Tab] per passare da un elenco all'altro",
             "page.list.help.wheel": "Usa la rotellina del mouse per scorrere qualsiasi elenco (funziona sia che l'elenco abbia il focus o meno, e sia che abbia un binding di selezione o meno)",
 
@@ -957,7 +957,7 @@ extension ExampleStrings {
             "page.list.help.jump": "Usa [Inicio/Fin] para saltar al primero/último",
             "page.list.help.fastScroll": "Usa [RePág/AvPág] para desplazarte rápido",
             "page.list.help.select": "Usa [Intro/Espacio] para seleccionar/deseleccionar",
-            "page.list.help.tree": "En un árbol, [Espacio] selecciona e [Intro] abre la rama; [→/←] la abren y la cierran",
+            "page.list.help.tree": "En un árbol, [Espacio] selecciona e [Intro] abre la rama; [→/←] la abren y la cierran, [⌥→/⌥←] todo el subárbol",
             "page.list.help.switch": "Usa [Tab] para cambiar entre listas",
             "page.list.help.wheel": "Usa la rueda del ratón para desplazar cualquier lista (funciona tenga o no el foco la lista, y tenga o no un enlace de selección)",
 
@@ -1174,7 +1174,7 @@ extension ExampleStrings {
             "page.list.help.jump": "使用 [Home/End] 跳到第一个/最后一个",
             "page.list.help.fastScroll": "使用 [PageUp/PageDown] 快速滚动",
             "page.list.help.select": "使用 [Enter/Space] 选择/取消选择",
-            "page.list.help.tree": "在树中，[Space] 选择，[Enter] 展开分支；[→/←] 展开和折叠分支",
+            "page.list.help.tree": "在树中，[Space] 选择，[Enter] 展开分支；[→/←] 展开和折叠分支，[⌥→/⌥←] 展开和折叠整个子树",
             "page.list.help.switch": "使用 [Tab] 在列表间切换",
             "page.list.help.wheel": "使用鼠标滚轮滚动任意列表（无论列表是否获得焦点，也无论它是否有选择绑定均可使用）",
 
@@ -1391,7 +1391,7 @@ extension ExampleStrings {
             "page.list.help.jump": "[Home/End] で先頭/末尾へジャンプ",
             "page.list.help.fastScroll": "[PageUp/PageDown] で高速スクロール",
             "page.list.help.select": "[Enter/Space] で選択/選択解除",
-            "page.list.help.tree": "ツリーでは [Space] で選択、[Enter] でブランチを開く。[→/←] で開閉",
+            "page.list.help.tree": "ツリーでは [Space] で選択、[Enter] でブランチを開く。[→/←] で開閉、[⌥→/⌥←] でサブツリー全体を開閉",
             "page.list.help.switch": "[Tab] でリスト間を切り替え",
             "page.list.help.wheel": "マウスホイールで任意のリストをスクロール（リストがフォーカスを持っているかどうか、選択バインディングがあるかどうかに関係なく機能します）",
 

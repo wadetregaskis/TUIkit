@@ -388,6 +388,82 @@ struct OutlineGroupTests {
         #expect(rendered.contains { $0.contains("TUIkit") } == false, "\(rendered)")
     }
 
+    /// The Finder's gesture: ⌥→ opens a branch and everything under it, in one
+    /// keystroke, however deep. "Views" is two levels down and no plain Right
+    /// can reach it without a stop at "TUIkit" on the way.
+    @Test("Option-Right opens the whole subtree, not one level of it")
+    func optionRightOpensEverythingBeneath() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        let view = List(tree, children: \.children) { node in Text(verbatim: node.id) }
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        #expect(focus.dispatchKeyEvent(KeyEvent(key: .right, alt: true)))
+        let rendered = lines(frame(view, tui: tui, context: context))
+        #expect(rendered.contains { $0.contains("TUIkit") }, "the child branch: \(rendered)")
+        #expect(rendered.contains { $0.contains("Views") }, "its own child too: \(rendered)")
+        #expect(rendered.contains { $0.contains("Core") }, "and the leaf beside it: \(rendered)")
+    }
+
+    /// ⌥← takes the descendants with it, so the subtree is folded away rather
+    /// than merely hidden: opening the branch again shows it closed, which is
+    /// the whole difference between "collapse" and "collapse everything".
+    @Test("Option-Left folds the subtree away, and it stays folded")
+    func optionLeftFoldsEverythingBeneath() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        let view = List(tree, children: \.children) { node in Text(verbatim: node.id) }
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        // Open two levels the plain way, so the state under test was NOT built
+        // by the gesture being tested: Right on "Sources", down to "TUIkit",
+        // Right on that, back up to "Sources".
+        for key in [Key.right, .down, .right, .up] {
+            _ = focus.dispatchKeyEvent(KeyEvent(key: key))
+            frame(view, tui: tui, context: context)
+        }
+        var rendered = lines(frame(view, tui: tui, context: context))
+        #expect(rendered.contains { $0.contains("Views") }, "two levels open: \(rendered)")
+
+        #expect(focus.dispatchKeyEvent(KeyEvent(key: .left, alt: true)), "it had things to close")
+        rendered = lines(frame(view, tui: tui, context: context))
+        #expect(rendered.contains { $0.contains("TUIkit") } == false, "\(rendered)")
+
+        // One plain Right re-opens the branch alone. Had the collapse stopped
+        // at "Sources", "TUIkit" would still be open underneath and "Views"
+        // would come back with it.
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .right))
+        rendered = lines(frame(view, tui: tui, context: context))
+        #expect(rendered.contains { $0.contains("TUIkit") }, "the branch is back: \(rendered)")
+        #expect(rendered.contains { $0.contains("Views") } == false, "still folded: \(rendered)")
+    }
+
+    /// The recursive form keeps the plain form's fall-through rules: a leaf has
+    /// no subtree, and a subtree already fully open has nothing to do.
+    @Test("Option-Right falls through on a leaf and on an already-open subtree")
+    func optionRightFallsThroughWithNothingToOpen() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        let view = List(tree, children: \.children) { node in Text(verbatim: node.id) }
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .right, alt: true))
+        frame(view, tui: tui, context: context)
+        var row = try #require(focus.currentFocused)
+        #expect(
+            row.handleKeyEvent(KeyEvent(key: .right, alt: true)) == false,
+            "the subtree is already open all the way down")
+
+        // "README" is a leaf: three rows down once "Sources" is open.
+        for _ in 0..<4 {
+            _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        }
+        frame(view, tui: tui, context: context)
+        row = try #require(focus.currentFocused)
+        #expect(row.handleKeyEvent(KeyEvent(key: .right, alt: true)) == false, "a leaf")
+        #expect(row.handleKeyEvent(KeyEvent(key: .left, alt: true)) == false, "a leaf")
+    }
+
     /// A key a row cannot use must fall through, or the list swallows it from
     /// whatever is outside — a horizontal scroller, a split-view divider.
     ///

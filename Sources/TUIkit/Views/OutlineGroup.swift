@@ -55,6 +55,17 @@ import TUIkitView
 /// - **Right** opens the focused branch and **Left** closes it, so a tree stays
 ///   reachable when the app has taken Return. Both fall through on a leaf, on a
 ///   branch already in that state, and on a list that is not a tree at all.
+/// - **⌥Right** and **⌥Left** carry that down the whole subtree — everything
+///   under the branch, however deep, in one keystroke. The Finder's gesture,
+///   and the reason a recursive collapse also folds the descendants: opening
+///   the branch again shows it as it was left, not as it was before.
+///
+/// - Note: ⌥-arrow depends on the terminal forwarding Option on an arrow key,
+///   which not all of them do — Apple Terminal spends ⌥←/⌥→ on its own
+///   word-motion bindings unless "Use Option as Meta key" is on. See
+///   `Documentation/Terminal-compatibility.md`. Plain Right and Left reach
+///   every branch regardless; the Option form is an accelerator, never the
+///   only way in.
 ///
 /// The glyphs and the indent step are ``DisclosureGroup``'s. A leaf's label
 /// lines up with its siblings' labels rather than with their triangles, so a
@@ -141,18 +152,71 @@ protocol OutlineRowActivating {
     /// - Parameters:
     ///   - id: The row's id, as the list knows it.
     ///   - target: `true` to open, `false` to close, `nil` to toggle.
+    ///   - includingDescendants: Whether to carry the same state down the
+    ///     node's whole subtree — every branch under it, however deep, and not
+    ///     only the ones currently on screen. A collapse takes the descendants
+    ///     with it, so re-opening the node shows it as it was left.
     /// - Returns: Whether anything moved — `false` for a leaf, for an unknown
-    ///   id, or for a branch already in the requested state, so the key falls
+    ///   id, and for a subtree already in the requested state, so the key falls
     ///   through to whatever else wants it.
     @discardableResult
-    func setRowExpanded(_ id: AnyHashable, to target: Bool?) -> Bool
+    func setRowExpanded(_ id: AnyHashable, to target: Bool?, includingDescendants: Bool) -> Bool
 }
 
 /// The mutable half of ``OutlineRowActivating``, refreshed every pass.
 final class OutlineActivation: @unchecked Sendable {
     /// Installed by ``OutlineGroup/extractListRows(context:)`` with that
     /// frame's real expansion box captured. `nil` before the first render.
-    var apply: ((AnyHashable, Bool?) -> Bool)?
+    var apply: ((AnyHashable, Bool?, Bool) -> Bool)?
+}
+
+/// The frame's tree, in the shape a disclosure keystroke needs to read it:
+/// which rows are branches, and how to reach everything under one.
+///
+/// Built during the render pass, read from key dispatch — which is *outside*
+/// the main actor. That crossing is the only reason this is a class. The data
+/// it holds is of unconstrained generic type, so capturing it directly in the
+/// activation closure would carry the render pass's isolation into a closure
+/// that has to run without it. A `Sendable` box states the invariant instead,
+/// the same one ``StateBox`` and ``OutlineActivation`` already rest on: written
+/// once while a frame renders, only read afterwards, and replaced wholesale by
+/// the next frame.
+///
+/// Deliberately holds the *elements* and a walk rather than precomputed id
+/// lists. Precomputing would mean walking every closed branch's descendants on
+/// every frame — and a closed branch is exactly the one whose subtree might be
+/// enormous and is certainly not on screen. This way the walk happens once, on
+/// the keystroke that asks for it.
+final class OutlineSubtreeIndex<Element, ID: Hashable>: @unchecked Sendable {
+    /// The branch rows of this frame, by the id the LIST knows them by.
+    private let branches: [AnyHashable: Element]
+
+    /// An element's own identity.
+    private let idOf: KeyPath<Element, ID>
+
+    /// Every branch id under an element, itself included.
+    private let branchesUnder: (Element) -> [ID]
+
+    init(
+        branches: [AnyHashable: Element],
+        idOf: KeyPath<Element, ID>,
+        branchesUnder: @escaping (Element) -> [ID]
+    ) {
+        self.branches = branches
+        self.idOf = idOf
+        self.branchesUnder = branchesUnder
+    }
+
+    /// The ids one disclosure gesture writes.
+    ///
+    /// - Returns: The row's own branch id, and the ids to write — that one
+    ///   alone, or its whole subtree. `nil` when the row is not a branch of
+    ///   this frame's tree, which is how a leaf lets the key fall through.
+    func affected(_ rowID: AnyHashable, includingDescendants: Bool) -> (own: ID, all: [ID])? {
+        guard let element = branches[rowID] else { return nil }
+        let own = element[keyPath: idOf]
+        return (own, includingDescendants ? branchesUnder(element) : [own])
+    }
 }
 
 // MARK: - The rows
@@ -184,6 +248,39 @@ extension OutlineGroup {
             }
         }
         return nodes
+    }
+
+    /// A walk that answers "every branch in this element's subtree, itself
+    /// first" — the ids a recursive open or close has to write.
+    ///
+    /// Walks the DATA rather than the visible nodes, because that is the whole
+    /// point: the descendants of a closed branch are exactly the ones that were
+    /// never flattened, and they are what "everything under this" means. Leaves
+    /// contribute nothing — there is no state to hold for a node that cannot
+    /// open.
+    ///
+    /// Handed back as a closure over the two key paths rather than left as a
+    /// method, because its one caller is the disclosure closure the list keeps,
+    /// which key dispatch reaches from OUTSIDE the main actor. A method would
+    /// make that closure read `self` — a main-actor-isolated view — where a
+    /// captured pair of key paths is just two values.
+    ///
+    /// Iterative for the same reason ``visibleNodes(expanded:)`` is: a deep
+    /// tree must not put the render pass any nearer the stack limit than the
+    /// view hierarchy already does.
+    func subtreeBranchWalk() -> (Data.Element) -> [ID] {
+        let idOf = idKeyPath
+        let childrenOf = childrenKeyPath
+        return { root in
+            var ids: [ID] = []
+            var stack = [root]
+            while let current = stack.popLast() {
+                guard let children = current[keyPath: childrenOf] else { continue }
+                ids.append(current[keyPath: idOf])
+                stack.append(contentsOf: children)
+            }
+            return ids
+        }
     }
 
     /// The view for one node's row.
@@ -262,8 +359,10 @@ extension OutlineGroup: OutlineRowActivating {
     /// outside the main actor, and everything it touches — a `let` reference
     /// and the closure inside it — is written only by the render loop.
     @discardableResult
-    nonisolated func setRowExpanded(_ id: AnyHashable, to target: Bool?) -> Bool {
-        activation.apply?(id, target) ?? false
+    nonisolated func setRowExpanded(
+        _ id: AnyHashable, to target: Bool?, includingDescendants: Bool
+    ) -> Bool {
+        activation.apply?(id, target, includingDescendants) ?? false
     }
 }
 
@@ -284,13 +383,18 @@ extension OutlineGroup: ListRowExtractor {
         // the list hands back, so the two are paired here, where both are in
         // hand — branches only, since a leaf must let the key fall through
         // rather than swallow a Left or Right it has no use for.
-        var branchNodeID: [AnyHashable: ID] = [:]
+        //
+        // The ELEMENT rather than just its id, because a recursive open or
+        // close has to walk a subtree that is mostly not on screen: the
+        // descendants of a closed branch were never flattened into `nodes`, and
+        // the element is what still knows where they are.
+        var branchElement: [AnyHashable: Data.Element] = [:]
         var rows: [ListRow<RowID>] = []
         rows.reserveCapacity(nodes.count)
         for (index, node) in nodes.enumerated() {
             guard let rowID: RowID = (node.id as? RowID) ?? (index as? RowID) else { continue }
             if node.isBranch {
-                branchNodeID[AnyHashable(rowID)] = node.id
+                branchElement[AnyHashable(rowID)] = node.element
             }
             let view = row(for: node, expansion: expansion, rowOwnsFocus: true)
             let rowContext = context.withChildIdentity(
@@ -303,17 +407,23 @@ extension OutlineGroup: ListRowExtractor {
                         (TUIkit.renderToBuffer(view, context: rowContext), nil)
                     }))
         }
-        activation.apply = { erased, target in
-            guard let id = branchNodeID[erased] else { return false }
-            let isOpen = expansion.value.contains(id)
-            let wanted = target ?? !isOpen
-            guard wanted != isOpen else { return false }
+        let index = OutlineSubtreeIndex(
+            branches: branchElement, idOf: idKeyPath, branchesUnder: subtreeBranchWalk())
+        activation.apply = { erased, target, includingDescendants in
+            guard let affected = index.affected(erased, includingDescendants: includingDescendants)
+            else { return false }
+            // A recursive gesture takes its DIRECTION from the node it was
+            // aimed at, then imposes that one state on the whole subtree —
+            // rather than toggling each branch to its own opposite, which
+            // would open half a tree and close the other half.
+            let wanted = target ?? !expansion.value.contains(affected.own)
+            let before = expansion.value.count
             if wanted {
-                expansion.value.insert(id)
+                expansion.value.formUnion(affected.all)
             } else {
-                expansion.value.remove(id)
+                expansion.value.subtract(affected.all)
             }
-            return true
+            return expansion.value.count != before
         }
         return rows
     }

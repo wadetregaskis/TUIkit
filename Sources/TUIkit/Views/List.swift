@@ -569,7 +569,8 @@ extension List where Footer == EmptyView {
 // toggle target where ``DisclosureGroup`` does not, and it is the same division
 // from the keyboard: Space selects the focused row, Return activates it (which
 // for a branch is to disclose it, unless `.onRowActivate` claims Return), and
-// Right / Left open and close it regardless.
+// Right / Left open and close it regardless — held with Option, the whole
+// subtree at once.
 
 extension List where Footer == EmptyView, SelectionValue == Int {
     /// Creates a list of a tree, without selection.

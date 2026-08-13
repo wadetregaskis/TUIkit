@@ -266,12 +266,17 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
 
     /// Opens or closes the branch the cursor is on.
     ///
+    /// - Parameters:
+    ///   - expanded: `true` to open, `false` to close.
+    ///   - includingDescendants: Whether to carry that state down the whole
+    ///     subtree rather than one level — the Option-held gesture.
     /// - Returns: Whether anything moved. `false` when the list is not a tree,
-    ///   when the focused row is a leaf, and when the branch is already in the
+    ///   when the focused row is a leaf, and when the subtree is already in the
     ///   requested state — the key falls through in each case.
-    func setFocusedRowExpanded(_ expanded: Bool) -> Bool {
+    func setFocusedRowExpanded(_ expanded: Bool, includingDescendants: Bool = false) -> Bool {
         guard let outlineActivation, let id = id(at: focusedIndex) else { return false }
-        return outlineActivation.setRowExpanded(AnyHashable(id), to: expanded)
+        return outlineActivation.setRowExpanded(
+            AnyHashable(id), to: expanded, includingDescendants: includingDescendants)
     }
 
     /// Deletes the focused row when the enclosing `ForEach` is deletable.
@@ -743,8 +748,13 @@ extension ItemListHandler {
         // closes it. Both fall through on a leaf, on a node already in that
         // state, and on a list that is not a tree at all — the list has no
         // other use for either key, so nothing is taken away.
+        //
+        // Held with Option they carry that state down the WHOLE subtree, which
+        // is the outline-view gesture people already know from the Finder: ⌥→
+        // opens everything under the branch, ⌥← folds it all away again.
         case .right, .left:
-            return setFocusedRowExpanded(event.key == .right)
+            return setFocusedRowExpanded(
+                event.key == .right, includingDescendants: event.alt)
 
         case .delete, .backspace:
             return deleteFocusedRow()

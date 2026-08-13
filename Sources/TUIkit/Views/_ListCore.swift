@@ -857,7 +857,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.primaryAction =
             primaryAction
             ?? outline.map { activating in
-                { id in activating.setRowExpanded(AnyHashable(id), to: nil) }
+                { id in
+                    activating.setRowExpanded(
+                        AnyHashable(id), to: nil, includingDescendants: false)
+                }
             }
         // An editable `ForEach` (`.onDelete` / `.onMove`) makes the focused row
         // deletable via the Delete / Backspace key and draggable to reorder.
