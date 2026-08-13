@@ -33,11 +33,17 @@ import TUIkitCore
 ///     README.md
 /// ```
 ///
-/// Each node is a Tab stop while it can disclose anything: **Return**, **Space**
-/// or a click on its row opens or closes it, as in ``DisclosureGroup``, whose
-/// glyphs and indent step this shares. A leaf's label lines up with its
-/// siblings' labels rather than with their triangles, so a column of names
-/// stays a column.
+/// Every branch is a Tab stop, and **Return** or **Space** opens or closes it.
+/// With the mouse it is the **triangle** that discloses, not the whole row —
+/// unlike ``DisclosureGroup``, which has no competition for its row, an outline
+/// row's text belongs to whatever the outline is inside, so that a list can
+/// select the node whose triangle just opened it. A single cell is a mean
+/// target, so the triangle's button quietly extends over the blank cell on
+/// either side: four cells to hit, one glyph to read.
+///
+/// The glyphs and the indent step are ``DisclosureGroup``'s. A leaf's label
+/// lines up with its siblings' labels rather than with their triangles, so a
+/// column of names stays a column.
 ///
 /// `children` is the whole distinction between a branch and a leaf: `nil` is a
 /// leaf and gets no triangle; a non-`nil` collection is a group, **even when it
@@ -116,8 +122,12 @@ public struct OutlineGroup<Data: RandomAccessCollection, ID: Hashable, Leaf: Vie
         while let (element, depth) = stack.popLast() {
             let id = element[keyPath: idKeyPath]
             let children = element[keyPath: childrenKeyPath]
-            nodes.append(Node(id: id, element: element, depth: depth, isBranch: children != nil))
-            guard let children, expanded.contains(id) else { continue }
+            let isOpen = expanded.contains(id)
+            nodes.append(
+                Node(
+                    id: id, element: element, depth: depth, isBranch: children != nil,
+                    isExpanded: isOpen))
+            guard let children, isOpen else { continue }
             for child in children.reversed() {
                 stack.append((child, depth + 1))
             }
@@ -129,12 +139,28 @@ public struct OutlineGroup<Data: RandomAccessCollection, ID: Hashable, Leaf: Vie
     @ViewBuilder
     private func row(for node: Node) -> some View {
         if node.isBranch {
-            DisclosureGroup(isExpanded: expansionBinding(for: node.id)) {
-                // The children are the NEXT rows, not this row's content — see
-                // the note on the type. A disclosure group with nothing inside
-                // is exactly the header this wants, triangle and all.
-                EmptyView()
-            } label: {
+            HStack(spacing: 0) {
+                // Only the TRIANGLE toggles, not the whole row — the rest of an
+                // outline row belongs to whatever the outline is inside, which
+                // is what lets a list select the node the triangle discloses.
+                // ``DisclosureGroup`` takes the whole row instead, because
+                // nothing else is competing for it there.
+                //
+                // One cell is a small target, so the button is deliberately
+                // wider than its glyph: the frame adds the blank cell after the
+                // triangle, and the focus gutter contributes the two before it.
+                // Four cells to hit, one glyph to read.
+                Button(
+                    action: { toggle(node.id) },
+                    label: {
+                        Text(verbatim: node.isExpanded
+                            ? TerminalSymbols.disclosureExpanded
+                            : TerminalSymbols.disclosureCollapsed)
+                            .frame(width: DisclosureMetrics.triangleColumnWidth)
+                    }
+                )
+                .buttonStyle(.plain)
+
                 content(node.element)
             }
             .padding(.leading, node.depth * DisclosureMetrics.contentIndent)
@@ -147,22 +173,18 @@ public struct OutlineGroup<Data: RandomAccessCollection, ID: Hashable, Leaf: Vie
         }
     }
 
-    /// A `Bool` binding onto one node's membership of ``expanded``.
+    /// Opens a closed node, or closes an open one.
     ///
-    /// Built from the projected `@State` binding rather than from `self`, so it
-    /// writes through the box this frame was bound to when the row's button
-    /// fires — which happens well after this returns.
-    private func expansionBinding(for id: ID) -> Binding<Bool> {
+    /// Reached through the projected `@State` binding rather than through
+    /// `self`, because the row's button fires long after this frame returned
+    /// and must write to the box that frame was bound to.
+    private func toggle(_ id: ID) {
         let expansion = $expanded
-        return Binding(
-            get: { expansion.wrappedValue.contains(id) },
-            set: { isOpen in
-                if isOpen {
-                    expansion.wrappedValue.insert(id)
-                } else {
-                    expansion.wrappedValue.remove(id)
-                }
-            })
+        if expansion.wrappedValue.contains(id) {
+            expansion.wrappedValue.remove(id)
+        } else {
+            expansion.wrappedValue.insert(id)
+        }
     }
 
     /// A node as it appears on screen: the element, how deep it sits, and
@@ -177,6 +199,11 @@ public struct OutlineGroup<Data: RandomAccessCollection, ID: Hashable, Leaf: Vie
         let element: Data.Element
         let depth: Int
         let isBranch: Bool
+
+        /// Carried on the node rather than re-read per row, so the flattening
+        /// walk is the only thing that consults the expansion set — the row
+        /// and the walk cannot disagree about which triangle to draw.
+        let isExpanded: Bool
     }
 }
 

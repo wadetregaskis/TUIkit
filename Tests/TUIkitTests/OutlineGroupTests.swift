@@ -234,6 +234,40 @@ struct OutlineGroupTests {
         #expect(rendered.count == 1 && rendered[0].contains("a"), "\(rendered)")
     }
 
+    // MARK: - Where a click lands
+
+    /// Clicks `(x, 0)` on a fresh outline and answers whether the first branch
+    /// opened. Row 0 is "Sources" at depth 0, so its triangle is at column 2,
+    /// with the focus gutter at 0–1 and the blank after it at 3.
+    private func clickOpensFirstBranch(atColumn x: Int) -> Bool {
+        let (tui, context) = harness()
+        let view = outline()
+        frame(view, tui: tui, context: context)
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: x, y: 0))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: x, y: 0))
+        return lines(frame(view, tui: tui, context: context)).contains { $0.contains("TUIkit") }
+    }
+
+    /// The triangle discloses; the label does not. An outline row's text has to
+    /// stay free for whatever contains the outline to claim — a list's
+    /// selection — which is the whole reason this is narrower than
+    /// ``DisclosureGroup``'s whole-row target.
+    @Test("clicking the triangle opens the branch; clicking the label does not")
+    func onlyTheTriangleToggles() {
+        #expect(clickOpensFirstBranch(atColumn: 2), "the triangle itself")
+        #expect(clickOpensFirstBranch(atColumn: 6) == false, "a click on \"Sources\" is not a toggle")
+    }
+
+    /// One cell is a mean target with a mouse, so the button is deliberately
+    /// wider than its glyph.
+    @Test("the blank cell either side of the triangle counts as the triangle")
+    func theTargetIsWiderThanTheGlyph() {
+        #expect(clickOpensFirstBranch(atColumn: 1), "the cell before it")
+        #expect(clickOpensFirstBranch(atColumn: 3), "the cell after it")
+    }
+
     // MARK: - Independence
 
     /// Two branches, one open: the expansion is a set keyed by node id, so

@@ -154,9 +154,17 @@ enum DisclosureMetrics {
     /// owned elsewhere: change the focus indicator's width or the triangle and
     /// the indent follows.
     static var contentIndent: Int {
-        BorderRenderer.focusIndicatorWidth
-            + TerminalSymbols.disclosureCollapsed.strippedLength
-            + glyphSpacing
+        BorderRenderer.focusIndicatorWidth + triangleColumnWidth
+    }
+
+    /// The triangle plus the blank cell after it.
+    ///
+    /// ``OutlineGroup`` makes exactly this its toggle button's label, so the
+    /// blank is part of the target: with the focus gutter in front of it that
+    /// is four clickable cells around a one-cell glyph, which is the
+    /// difference between a triangle you can hit and one you cannot.
+    static var triangleColumnWidth: Int {
+        TerminalSymbols.disclosureCollapsed.strippedLength + glyphSpacing
     }
 }
 
