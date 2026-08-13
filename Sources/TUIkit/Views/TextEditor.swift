@@ -137,7 +137,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = self.isDisabled || !context.environment.isEnabled
         let palette = context.environment.palette
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
         let width = max(1, context.availableWidth)
         let height = max(1, context.availableHeight)
 

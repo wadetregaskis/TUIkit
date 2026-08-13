@@ -62,7 +62,7 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
         let state = state(in: context)
         let sectionID = "menu-\(context.identity.path)"
         // Keep the box alive across the run loop's per-frame StateStorage GC.
-        if !context.isMeasuring { context.environment.stateStorage?.markActive(context.identity) }
+        if !context.isMeasuring { context.stateStorage?.markActive(context.identity) }
 
         var buffer = TUIkit.renderToBuffer(
             trigger(
@@ -126,7 +126,7 @@ struct _MenuPopupCore: View, Renderable, Layoutable {
     /// The persisted open/closed state, or a throwaway one outside a running
     /// app (no StateStorage — the menu then simply never opens).
     private func state(in context: RenderContext) -> MenuPopupState {
-        guard let stateStorage = context.environment.stateStorage else { return MenuPopupState() }
+        guard let stateStorage = context.stateStorage else { return MenuPopupState() }
         let box: StateBox<MenuPopupState> = stateStorage.storage(
             for: StateStorage.StateKey(
                 identity: context.identity, propertyIndex: StateIndex.state),

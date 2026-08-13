@@ -14,7 +14,7 @@ extension RenderContext {
     ///
     /// Injects every service the `TUIContext` owns into
     /// `EnvironmentValues`, making them accessible via
-    /// `context.environment.stateStorage`, etc.
+    /// `context.stateStorage`, etc.
     ///
     /// > Note: Services that live on `RenderLoop` rather than on
     ///   `TUIContext` (the focus manager, palette manager,

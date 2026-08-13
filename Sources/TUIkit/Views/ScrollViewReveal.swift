@@ -51,7 +51,7 @@ extension _ScrollViewCore {
         suppressed: Bool = false,
         context: RenderContext
     ) {
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
         let lastFocusedKey = StateStorage.StateKey(
             identity: context.identity,
             propertyIndex: StateIndex.lastFocusedID

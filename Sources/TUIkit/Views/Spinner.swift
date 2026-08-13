@@ -352,7 +352,7 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
 
         // Retrieve or create persistent start time for this spinner.
         let timeKey = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)

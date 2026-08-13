@@ -192,7 +192,7 @@ public func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameB
         // was constructed in), so views swapped by a conditional don't alias
         // each other's state. Mirrored in `measureChild`.
         bindStateProperties(
-            of: view, identity: context.identity, storage: context.environment.stateStorage!)
+            of: view, identity: context.identity, storage: context.stateStorage!)
 
         // Wrap body evaluation in observation tracking so that any @Observable
         // property accessed during body triggers a re-render when mutated.
@@ -206,7 +206,7 @@ public func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameB
             AppState.shared.setNeedsRenderWithCacheClear()
         }
 
-        context.environment.stateStorage!.markActive(context.identity)
+        context.stateStorage!.markActive(context.identity)
 
         return renderToBuffer(body, context: childContext)
     }

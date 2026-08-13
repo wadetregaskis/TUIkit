@@ -216,7 +216,7 @@ extension EquatableView {
     /// actually re-rendered. `retainSubtree` protects every identity below,
     /// exactly as the windowing containers do for their off-screen rows.
     fileprivate func markSubtreeActive(context: RenderContext) {
-        let storage = context.environment.stateStorage!
+        let storage = context.stateStorage!
         storage.markActive(context.identity)
         storage.retainSubtree(context.identity)
         // And the same declaration to the render cache, for the same reason one

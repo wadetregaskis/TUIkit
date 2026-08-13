@@ -107,7 +107,7 @@ struct _SwatchGridCore: View, Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         guard !entries.isEmpty else { return FrameBuffer() }
         let isDisabled = !context.environment.isEnabled
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
         let palette = context.environment.palette
 
         let persistedFocusID = FocusRegistration.persistFocusID(

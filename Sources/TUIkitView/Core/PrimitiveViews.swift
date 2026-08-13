@@ -163,7 +163,7 @@ extension Optional: ChildViewProvider where Wrapped: View {
 
 extension ConditionalView: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
 
         // On the render path, only invalidate the now-inactive branch when the
         // case actually FLIPPED since the last rendered frame. On a non-flip

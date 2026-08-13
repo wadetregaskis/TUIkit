@@ -126,7 +126,7 @@ final class StackWindowState {
 
 extension _VStackCore {
     func uniformWindowState(context: RenderContext) -> StackWindowState {
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
         let key = StateStorage.StateKey(
             identity: context.identity, propertyIndex: VStackStateIndex.uniformWindow)
         let box: StateBox<StackWindowState> = stateStorage.storage(
@@ -185,7 +185,7 @@ extension _VStackCore {
         guard !children[0].providesAlignmentGuide else { return nil }
 
         // Off-window rows leave the WINDOW, not the tree (§5h).
-        context.environment.stateStorage?.retainSubtree(context.identity)
+        context.stateStorage?.retainSubtree(context.identity)
 
         var childContext = context
         childContext.environment.scrollContentWindow = nil

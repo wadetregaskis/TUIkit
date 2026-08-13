@@ -370,7 +370,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = self.isDisabled || !context.environment.isEnabled
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
         let palette = context.environment.palette
 
         let persistedFocusID = FocusRegistration.persistFocusID(

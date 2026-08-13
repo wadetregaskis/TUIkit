@@ -45,7 +45,7 @@ extension OnChangeModifier: Renderable {
         guard !context.isMeasuring else {
             return TUIkitView.renderToBuffer(content, context: context)
         }
-        let storage = context.environment.stateStorage!
+        let storage = context.stateStorage!
 
         // The comparison below is per-frame work a cached buffer cannot
         // reproduce: a value-memoized row containing this modifier would

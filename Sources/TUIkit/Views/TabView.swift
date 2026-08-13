@@ -233,7 +233,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
                 tabs[index].content.padding(insets),
                 proposal: ProposedSize(width: nil, height: nil), context: branch)
         }
-        guard let stateStorage = context.environment.stateStorage else {
+        guard let stateStorage = context.stateStorage else {
             return [AnyHashable(tabs[selectedIndex].value): measureTab(selectedIndex)]
         }
         let key = StateStorage.StateKey(identity: context.identity, propertyIndex: StateIndex.sizeCache)
@@ -389,7 +389,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let isDisabled = !context.environment.isEnabled
 
         // Focus handler (arrow-key tab switching).
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context, explicitFocusID: nil, defaultPrefix: "tabview",
             propertyIndex: StateIndex.focusID)

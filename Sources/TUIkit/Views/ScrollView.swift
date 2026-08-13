@@ -256,7 +256,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             identity: context.identity,
             propertyIndex: StateIndex.handler
         )
-        let handlerBox: StateBox<ScrollViewHandler> = context.environment.stateStorage!.storage(
+        let handlerBox: StateBox<ScrollViewHandler> = context.stateStorage!.storage(
             for: handlerKey,
             default: ScrollViewHandler(
                 focusID: persistedFocusID,

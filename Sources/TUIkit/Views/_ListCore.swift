@@ -252,7 +252,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
         let style = context.environment.listStyle
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
 
         // Rows beyond the viewport are skipped, not gone: retain their state
         // (see StateStorage.retainSubtree). Render path only, per the

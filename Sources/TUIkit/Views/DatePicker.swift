@@ -224,7 +224,7 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = self.isDisabled || !context.environment.isEnabled
         let palette = context.environment.palette
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context, explicitFocusID: focusID,

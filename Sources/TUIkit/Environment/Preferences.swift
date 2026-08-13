@@ -99,7 +99,7 @@ extension OnPreferenceChangeModifier: Renderable {
         // This also replaced a per-publisher storage callback that delivered
         // RAW un-reduced values — the action now only ever sees the final
         // reduction, once, like SwiftUI.
-        let storage = context.environment.stateStorage!
+        let storage = context.stateStorage!
         let index = storage.nextOnChangeIndex(for: context.identity)
         let key = StateStorage.StateKey(identity: context.identity, propertyIndex: index)
         let previous: K.Value? = storage.trackedValue(for: key)

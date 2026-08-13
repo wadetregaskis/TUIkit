@@ -474,7 +474,7 @@ where Value.ID: Hashable {
                     defaultPrefix: "table", propertyIndex: 1)
                 let (handler, _) = resolveHandler(
                     persistedFocusID: persistedFocusID,
-                    stateStorage: context.environment.stateStorage!,
+                    stateStorage: context.stateStorage!,
                     context: context, contentHeight: rowArea, overflows: { _ in true })
                 reserveIndicatorLines(handler: handler, contentHeight: rowArea)
                 // Measure with the SAME locale the display path uses, or a
@@ -642,7 +642,7 @@ where Value.ID: Hashable {
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
 
         // Rows beyond the viewport are skipped, not gone: retain their state
         // (see StateStorage.retainSubtree). Render path only, per the

@@ -236,7 +236,7 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
         // `.navigationSplitViewColumnWidthReset(_:)` releases the pins.
         let resizable =
             context.environment.navigationSplitViewResizable
-            && context.environment.stateStorage != nil
+            && context.stateStorage != nil
         let widths = resizable ? resolvePersistedWidths(context: context) : nil
 
         // Calculate column widths — content-fit-from-left, or proportional.
@@ -522,7 +522,7 @@ extension _NavigationSplitViewCore {
     /// render pass (a changed `.navigationSplitViewColumnWidthReset(_:)` releases
     /// the user-pinned widths; a measure pass never mutates persisted state).
     fileprivate func resolvePersistedWidths(context: RenderContext) -> SplitViewWidths {
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
         let widths = stateStorage.storage(
             for: StateStorage.StateKey(identity: context.identity, propertyIndex: 0),
             default: SplitViewWidths()
@@ -738,7 +738,7 @@ extension _NavigationSplitViewCore {
         focusManager: FocusManager?
     ) -> DividerRenderInfo {
         guard resizable, !context.isMeasuring, let widths, let focusManager,
-            let stateStorage = context.environment.stateStorage
+            let stateStorage = context.stateStorage
         else {
             return DividerRenderInfo(isActive: false, isHovered: false, mouseHandlerID: nil)
         }

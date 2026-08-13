@@ -505,7 +505,7 @@ private func measureCompositeBody<V: View>(
     // have rendered at 80 columns, whatever the terminal actually was.
     resolveEnvironmentProperties(of: view, in: context.environment)
     bindStateProperties(
-        of: view, identity: context.identity, storage: context.environment.stateStorage!)
+        of: view, identity: context.identity, storage: context.stateStorage!)
     return measureChild(view.body, proposal: proposal, context: childContext)
 }
 

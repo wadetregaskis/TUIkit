@@ -267,7 +267,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         // frame's highlight forever, which is the same hole a memoised `ForEach`
         // row falls into.
         context.environment.volatileReadTracker?.recordRenderSideEffect()
-        context.environment.stateStorage?.markActive(context.identity)
+        context.stateStorage?.markActive(context.identity)
         context.environment.menuRowSink?.publish(
             ordinal: menuOrdinal, action: action, isEnabled: !isDisabled)
         return menuOrdinal == context.environment.menuHighlightedOrdinal
@@ -319,7 +319,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         // synthesised by the hover state machine. Disabled
         // buttons never show the affordance, so clamp to false
         // when isDisabled regardless of the stored value.
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
         let hoverKey = StateStorage.StateKey(
             identity: context.identity,
             propertyIndex: StateIndex.isHovered

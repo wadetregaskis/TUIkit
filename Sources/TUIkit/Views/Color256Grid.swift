@@ -267,7 +267,7 @@ struct _Color256GridCore: View, Renderable {
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = !context.environment.isEnabled
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,

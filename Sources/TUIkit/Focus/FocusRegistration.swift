@@ -91,7 +91,7 @@ struct FocusRegistration {
         defaultPrefix: String,
         propertyIndex: Int
     ) -> String {
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
         // A `.focused($binding, equals:)` modifier offers its id to the FIRST
         // focusable below it (see `AssignedFocusID`); it ranks below an explicit
         // `.focusID(_:)` but above the auto-generated path id. Claimed on the
@@ -147,7 +147,7 @@ struct FocusRegistration {
         // dimmed-backdrop render): skip registration so nothing auto-focuses.
         // markActive is unrelated to focus (state GC) and always runs.
         context.environment.focusManager?.register(handler, inSection: context.environment.activeFocusSectionID)
-        context.environment.stateStorage!.markActive(context.identity)
+        context.stateStorage!.markActive(context.identity)
     }
 
     /// Determines whether the given focusID currently has focus.

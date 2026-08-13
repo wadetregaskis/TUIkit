@@ -112,8 +112,8 @@ public struct _MemoizedRow<Element: Equatable, Content: View>: View, Renderable,
             // hit, and a `@State` deeper than a direct child would otherwise
             // be pruned this pass and reset on the next real render (see
             // `EquatableView.markSubtreeActive`, the same rule).
-            context.environment.stateStorage?.markActive(identity)
-            context.environment.stateStorage?.retainSubtree(identity)
+            context.stateStorage?.markActive(identity)
+            context.stateStorage?.retainSubtree(identity)
             return cached
         }
         // Render the content under a volatile-read tracker (reusing an

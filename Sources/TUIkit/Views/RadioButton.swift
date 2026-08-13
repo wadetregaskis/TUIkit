@@ -264,7 +264,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = self.isDisabled || !context.environment.isEnabled
         let palette = context.environment.palette
-        let stateStorage = context.environment.stateStorage!
+        let stateStorage = context.stateStorage!
 
         // Create type-erased selection binding and item values
         let erasedSelection = Binding<AnyHashable>(

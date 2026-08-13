@@ -28,10 +28,17 @@ public struct RenderContext {
     public var availableHeight: Int
 
     /// The environment values for this render pass.
-    public var environment: EnvironmentValues
+    ///
+    /// Assigning to this — whether wholesale or by mutating one value in place
+    /// — re-derives the mirrored service fields below, so they can never go
+    /// stale. Property observers do not run during initialization, so every
+    /// initializer must set the mirrors itself.
+    public var environment: EnvironmentValues {
+        didSet { mirrorServices() }
+    }
 
     /// The subtree-memoization cache for this render pass, mirrored from
-    /// ``environment`` at construction.
+    /// ``environment``.
     ///
     /// This is the same value as `environment.renderCache`, hoisted out of the
     /// environment dictionary so the hot memoization paths (`EquatableView`,
@@ -40,14 +47,28 @@ public struct RenderContext {
     /// `EnvironmentValues.subscript<K: EnvironmentKey>` (an `ObjectIdentifier`
     /// hash, an `[ObjectIdentifier: Any]` probe, and an `Any` downcast). A
     /// profile showed that getter at ~4.5% of a text-heavy frame.
-    ///
-    /// - Important: This MUST stay in sync with `environment.renderCache`. Every
-    ///   initializer derives it from the environment being installed, and
-    ///   ``withEnvironment(_:)`` — the only method that replaces the whole
-    ///   environment — re-derives it. The structural copy helpers
-    ///   (`withChildIdentity`, `withAvailableWidth`, …) only mutate identity or
-    ///   size, so they carry this field unchanged for free.
     public var renderCache: RenderCache?
+
+    /// The persistent `@State` storage for this render pass, mirrored from
+    /// ``environment`` for the same reason as ``renderCache``.
+    ///
+    /// This is the most-read service in the framework: `renderToBuffer` binds
+    /// `@State` and marks the identity active for *every* composite view, and
+    /// `measureCompositeBody` binds again on the measure pass. Read through the
+    /// environment dictionary, `EnvironmentValues.stateStorage.getter` measured
+    /// **5.2% of all CPU** on the `fanout` stress scenario — one service
+    /// lookup, all of it hash, `Any` unbox and `swift_dynamicCast`.
+    public var stateStorage: StateStorage?
+
+    /// Re-derives every mirrored service from ``environment``.
+    ///
+    /// The mirrors are a cache of the environment, so this is the one place
+    /// that defines what "in sync" means; ``environment``'s `didSet` calls it
+    /// on every assignment, and the initializers call it explicitly.
+    private mutating func mirrorServices() {
+        renderCache = environment.renderCache
+        stateStorage = environment.stateStorage
+    }
 
     /// The current view's structural identity in the render tree.
     ///
@@ -93,7 +114,10 @@ public struct RenderContext {
         self.availableHeight = availableHeight
         self.environment = environment
         self.identity = identity
+        // Property observers do not fire during initialization, so seed the
+        // mirrors by hand here.
         self.renderCache = environment.renderCache
+        self.stateStorage = environment.stateStorage
     }
 
     /// Creates a new context with the same size but different environment.
@@ -102,12 +126,11 @@ public struct RenderContext {
     /// - Returns: A new RenderContext with the updated environment.
     public func withEnvironment(_ environment: EnvironmentValues) -> Self {
         var copy = self
+        // Assigning the whole environment re-derives the mirrored services via
+        // `didSet`; the structural copy helpers (`withChildIdentity`,
+        // `withAvailableWidth`, …) only touch identity or size, so they carry
+        // the mirrors unchanged for free.
         copy.environment = environment
-        // This replaces the WHOLE environment, so the mirrored stored field must
-        // be re-derived or it would go stale (the old cache served for a swapped
-        // environment). Every other copy helper only touches identity/size and so
-        // carries `renderCache` correctly via `var copy = self`.
-        copy.renderCache = environment.renderCache
         return copy
     }
 

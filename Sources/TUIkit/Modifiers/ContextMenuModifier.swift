@@ -63,7 +63,7 @@ extension ContextMenuModifier: Renderable {
         // with this modifier's state slot (mirrors AlertPresentationModifier).
         let contentContext = context.withChildIdentity(type: Content.self, index: 0)
 
-        guard let stateStorage = context.environment.stateStorage else {
+        guard let stateStorage = context.stateStorage else {
             return TUIkit.renderToBuffer(content, context: contentContext)
         }
         let stateBox: StateBox<ContextMenuState> = stateStorage.storage(

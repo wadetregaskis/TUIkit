@@ -26,7 +26,7 @@ enum DialogDrag {
         context: RenderContext,
         propertyIndex: Int
     ) -> (x: Int, y: Int) {
-        guard !context.isMeasuring, let stateStorage = context.environment.stateStorage else {
+        guard !context.isMeasuring, let stateStorage = context.stateStorage else {
             return (0, 0)
         }
         let box: StateBox<_DialogDragHandler> = stateStorage.storage(
@@ -72,7 +72,7 @@ enum DialogDrag {
     /// Resets a dialog's drag offset. Called on the dismissed render path so a
     /// re-presented dialog opens centred rather than where it was last dragged.
     static func reset(context: RenderContext, propertyIndex: Int) {
-        guard !context.isMeasuring, let stateStorage = context.environment.stateStorage else { return }
+        guard !context.isMeasuring, let stateStorage = context.stateStorage else { return }
         let box: StateBox<_DialogDragHandler> = stateStorage.storage(
             for: StateStorage.StateKey(identity: context.identity, propertyIndex: propertyIndex),
             default: _DialogDragHandler())
