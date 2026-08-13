@@ -290,6 +290,71 @@ struct OutlineGroupTests {
         #expect(rendered.contains { $0.contains("beta") } == false, "the second did not")
     }
 
+    // MARK: - Inside a List
+
+    /// The point of `List(_:children:)`: the list's rows are the NODES. If the
+    /// outline arrived as one child, the list would have exactly one row — the
+    /// whole tree — and its cursor, its selection binding and its scrolling
+    /// would all address the tree rather than anything in it.
+    @Test("a hierarchical List makes each visible node one of its own rows")
+    func listRowsAreNodes() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        let selection = Selection()
+        let view = List(tree, children: \.children, selection: selection.binding) { node in
+            Text(verbatim: node.id)
+        }
+
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+        // Down moves the list's own cursor, one row per node — which it can
+        // only do if the nodes ARE the rows. (The first Down establishes the
+        // cursor on row 0; the second steps to row 1.)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        frame(view, tui: tui, context: context)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        frame(view, tui: tui, context: context)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .space))
+        #expect(selection.value == "README", "the cursor reached the second ROOT, and selected it")
+    }
+
+    @Test("selection is by node id, and survives opening a branch")
+    func selectionIsByNodeID() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        let selection = Selection()
+        let view = List(tree, children: \.children, selection: selection.binding) { node in
+            Text(verbatim: node.id)
+        }
+
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        frame(view, tui: tui, context: context)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .space))
+        #expect(selection.value == "Sources", "the first node, by its own id")
+
+        // Open it with the triangle; the rows below shift, the selection does
+        // not. A `List` draws a border and insets its rows by one, so row 0 is
+        // screen row 1 and its triangle sits two cells further right than it
+        // does in a bare outline.
+        let triangle = (x: 1 + 1 + BorderRenderer.focusIndicatorWidth, y: 1)
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: triangle.x, y: triangle.y))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: triangle.x, y: triangle.y))
+        let opened = lines(frame(view, tui: tui, context: context))
+        #expect(opened.contains { $0.contains("TUIkit") }, "the branch opened: \(opened)")
+        #expect(selection.value == "Sources", "and the selection stayed on the node it was on")
+    }
+
+    /// A selection binding that a test can read back.
+    @MainActor
+    private final class Selection {
+        var value: String?
+        var binding: Binding<String?> {
+            Binding(get: { self.value }, set: { self.value = $0 })
+        }
+    }
+
     @Test("a second Return closes the branch again")
     func returnClosesItAgain() throws {
         let (tui, context) = harness()

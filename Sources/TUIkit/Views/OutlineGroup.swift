@@ -5,6 +5,7 @@
 //  License: MIT
 
 import TUIkitCore
+import TUIkitView
 
 // MARK: - OutlineGroup
 
@@ -36,7 +37,7 @@ import TUIkitCore
 /// Every branch is a Tab stop, and **Return** or **Space** opens or closes it.
 /// With the mouse it is the **triangle** that discloses, not the whole row —
 /// unlike ``DisclosureGroup``, which has no competition for its row, an outline
-/// row's text belongs to whatever the outline is inside, so that a list can
+/// row's text belongs to whatever the outline is inside, so that a ``List`` can
 /// select the node whose triangle just opened it. A single cell is a mean
 /// target, so the triangle's button quietly extends over the blank cell on
 /// either side: four cells to hit, one glyph to read.
@@ -50,19 +51,18 @@ import TUIkitCore
 /// is empty** — which is SwiftUI's rule, and the right one, since "this folder
 /// has nothing in it" is worth being able to say.
 ///
-/// ## It is a flat column of rows, not a nest of views
+/// ## Its nodes are the container's rows
 ///
-/// A node's children are *sibling rows* indented one step, not a subtree
-/// rendered inside it. So the tree costs one row per node you can actually
-/// see: the depth lives in each row's leading padding rather than in the view
-/// hierarchy, and a closed branch's descendants are neither built nor
-/// measured. Nesting the levels instead would make a deep tree a deep view
-/// hierarchy, which is the shape a terminal renderer likes least.
+/// An outline emits one row per *visible* node to whatever contains it, exactly
+/// as ``ForEach`` emits one per element — a `VStack` lays them out as siblings,
+/// and a `List` makes each one a selectable row of its own, which is what
+/// `List(_:children:)` is. The depth lives in each row's leading padding rather
+/// than in the view hierarchy, so a deep tree is not a deep view hierarchy, and
+/// a closed branch's descendants are neither built nor measured — the
+/// flattening walk simply stops there.
 ///
-/// The rows are a `VStack`, so an outline is one child of whatever contains
-/// it. That is what a `ScrollView` or a `VStack` wants; feeding each node to a
-/// ``List`` as its own selectable row is the separate step SwiftUI spells
-/// `List(_:children:)`, and this flattening is what it will be built on.
+/// That is why, like `ForEach`, this has no `body` of its own: it is not one
+/// view, it is a run of them.
 ///
 /// The expansion is the group's own, starting closed, exactly as in SwiftUI —
 /// ``DisclosureGroup`` is the one to reach for when something outside needs to
@@ -90,29 +90,23 @@ public struct OutlineGroup<Data: RandomAccessCollection, ID: Hashable, Leaf: Vie
     /// Builds a node's label.
     let content: (Data.Element) -> Leaf
 
-    /// Which nodes are open. The group's own, as in SwiftUI: an outline has no
-    /// `isExpanded:` binding, because the interesting state is a *set* and
-    /// SwiftUI does not publish it.
-    @State private var expanded: Set<ID> = []
-
-    public var body: some View {
-        // A column of rows, one per VISIBLE node — nothing at all is built for
-        // a closed branch. `.leading`, because an outline's rows are a ragged
-        // left-aligned column and centring them would undo the indent that
-        // makes it a tree.
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(visibleNodes, id: \.id) { node in
-                row(for: node)
-            }
-        }
+    /// Never called: an outline is a run of rows, not one view, so it hands its
+    /// children to its container instead of rendering itself. `ForEach` says
+    /// the same thing the same way.
+    public var body: Never {
+        fatalError("OutlineGroup has no standalone rendering; use it inside a container")
     }
+}
 
+// MARK: - The rows
+
+extension OutlineGroup {
     /// The rows to draw, depth-first, stopping at every closed branch.
     ///
     /// Recomputed per pass rather than cached: it is a function of the data and
-    /// the expansion set, both of which the render already has, and an outline
-    /// is sized by what a person can see.
-    private var visibleNodes: [Node] {
+    /// the expansion set, both of which the caller already has, and an outline
+    /// is sized by what a person can actually see.
+    func visibleNodes(expanded: Set<ID>) -> [Node] {
         var nodes: [Node] = []
         // An explicit stack rather than recursion: a deep tree must not put the
         // render pass any nearer the stack limit than the view hierarchy
@@ -135,66 +129,40 @@ public struct OutlineGroup<Data: RandomAccessCollection, ID: Hashable, Leaf: Vie
         return nodes
     }
 
-    /// One row: a disclosure header for a branch, the bare label for a leaf.
-    @ViewBuilder
-    private func row(for node: Node) -> some View {
-        if node.isBranch {
-            HStack(spacing: 0) {
-                // Only the TRIANGLE toggles, not the whole row — the rest of an
-                // outline row belongs to whatever the outline is inside, which
-                // is what lets a list select the node the triangle discloses.
-                // ``DisclosureGroup`` takes the whole row instead, because
-                // nothing else is competing for it there.
-                //
-                // One cell is a small target, so the button is deliberately
-                // wider than its glyph: the frame adds the blank cell after the
-                // triangle, and the focus gutter contributes the two before it.
-                // Four cells to hit, one glyph to read.
-                Button(
-                    action: { toggle(node.id) },
-                    label: {
-                        Text(verbatim: node.isExpanded
-                            ? TerminalSymbols.disclosureExpanded
-                            : TerminalSymbols.disclosureCollapsed)
-                            .frame(width: DisclosureMetrics.triangleColumnWidth)
-                    }
-                )
-                .buttonStyle(.plain)
-
-                content(node.element)
-            }
-            .padding(.leading, node.depth * DisclosureMetrics.contentIndent)
-        } else {
-            // One step further in than its depth, so a leaf's label lands in
-            // the same column as a sibling branch's label rather than under
-            // that branch's triangle.
-            content(node.element)
-                .padding(.leading, (node.depth + 1) * DisclosureMetrics.contentIndent)
-        }
+    /// The view for one node's row.
+    func row(for node: Node, expansion: StateBox<Set<ID>>) -> _OutlineRow<Data.Element, ID, Leaf> {
+        _OutlineRow(
+            element: node.element, id: node.id, depth: node.depth, isBranch: node.isBranch,
+            isExpanded: node.isExpanded, expansion: expansion, content: content)
     }
 
-    /// Opens a closed node, or closes an open one.
+    /// The persistent set of open node ids.
     ///
-    /// Reached through the projected `@State` binding rather than through
-    /// `self`, because the row's button fires long after this frame returned
-    /// and must write to the box that frame was bound to.
-    private func toggle(_ id: ID) {
-        let expansion = $expanded
-        if expansion.wrappedValue.contains(id) {
-            expansion.wrappedValue.remove(id)
-        } else {
-            expansion.wrappedValue.insert(id)
-        }
+    /// Kept in the render-pass `StateStorage` rather than in an `@State`
+    /// property, because neither path that draws an outline goes through
+    /// `body`: a container asks for ``childViews(context:)`` and a `List` for
+    /// ``extractListRows(context:)``, and `@State` is bound during a view's own
+    /// render, which never happens. Both of those hand over a context, which is
+    /// what this needs anyway.
+    ///
+    /// The identity is a child step off the container's, keyed by name, so two
+    /// outlines in different places keep different sets. Two *siblings* of the
+    /// same type in one container would share one — the same collision
+    /// `ForEach` has for its rows' state, and for the same reason.
+    func expansion(context: RenderContext) -> StateBox<Set<ID>> {
+        let identity = context.withChildIdentity(erasedType: Self.self, key: "outline").identity
+        guard let storage = context.stateStorage else { return StateBox([]) }
+        // Nothing renders this identity, so nothing else will mark it — without
+        // this the set is collected at the end of the pass that created it and
+        // every branch closes itself again on the next frame.
+        storage.markActive(identity)
+        return storage.storage(
+            for: StateStorage.StateKey(identity: identity, propertyIndex: 0), default: [])
     }
 
-    /// A node as it appears on screen: the element, how deep it sits, and
-    /// whether it has a triangle.
-    ///
-    /// Deliberately **not** `Equatable`. `ForEach` memoizes an `Equatable`
-    /// element's row by that element, and this row's appearance also depends on
-    /// its depth and on whether it is open — state the element knows nothing
-    /// about — so a memo keyed on it would serve a stale triangle forever.
-    private struct Node {
+    /// A node as it appears on screen: the element, how deep it sits, whether
+    /// it has a triangle, and which way that triangle points.
+    struct Node {
         let id: ID
         let element: Data.Element
         let depth: Int
@@ -204,6 +172,116 @@ public struct OutlineGroup<Data: RandomAccessCollection, ID: Hashable, Leaf: Vie
         /// walk is the only thing that consults the expansion set — the row
         /// and the walk cannot disagree about which triangle to draw.
         let isExpanded: Bool
+    }
+}
+
+// MARK: - One row per visible node
+
+extension OutlineGroup: ChildViewProvider {
+    /// One child per visible node, keyed by the node's id — so a stack lays the
+    /// tree out as a column of siblings, and each row's own state follows its
+    /// node rather than its position.
+    public func childViews(context: RenderContext) -> [ChildView] {
+        let expansion = expansion(context: context)
+        return visibleNodes(expanded: expansion.value).map { node in
+            ChildView(
+                row(for: node, expansion: expansion),
+                identityType: _OutlineRow<Data.Element, ID, Leaf>.self,
+                key: identityKey(node.id))
+        }
+    }
+}
+
+extension OutlineGroup: ListRowExtractor {
+    /// One list row per visible node, so a `List` selects, reveals and scrolls
+    /// to *nodes* rather than to the outline as a whole.
+    ///
+    /// Eager rather than windowed: the row count is a function of the expansion
+    /// set, so answering it at all means walking the visible nodes — which is
+    /// the same O(visible) the list was going to pay. Content is still built
+    /// lazily, per row, exactly as `ForEach` does it.
+    func extractListRows<RowID: Hashable>(context: RenderContext) -> [ListRow<RowID>] {
+        let expansion = expansion(context: context)
+        return visibleNodes(expanded: expansion.value).enumerated()
+            .compactMap { index, node -> ListRow<RowID>? in
+                guard let rowID: RowID = (node.id as? RowID) ?? (index as? RowID) else {
+                    return nil
+                }
+                let view = row(for: node, expansion: expansion)
+                let rowContext = context.withChildIdentity(
+                    erasedType: _OutlineRow<Data.Element, ID, Leaf>.self,
+                    key: identityKey(node.id))
+                return ListRow(
+                    id: rowID,
+                    content: LazyListRowContent(identity: rowContext.identity) {
+                        (TUIkit.renderToBuffer(view, context: rowContext), nil)
+                    })
+            }
+    }
+}
+
+// MARK: - A row
+
+/// One node's row: the disclosure triangle (when it has one) and the label.
+///
+/// Its own type rather than a `@ViewBuilder` result so the row has a name —
+/// which is what a `ChildView` needs to key each node's identity by.
+public struct _OutlineRow<Element, ID: Hashable, Leaf: View>: View {
+    let element: Element
+    let id: ID
+    let depth: Int
+    let isBranch: Bool
+    let isExpanded: Bool
+
+    /// The outline's open-node set, held directly. It is the persistent box, so
+    /// writing to it from the button below outlives this frame and asks for the
+    /// next one — which is the whole reason the row carries it rather than a
+    /// snapshot of the value.
+    let expansion: StateBox<Set<ID>>
+
+    let content: (Element) -> Leaf
+
+    public var body: some View {
+        if isBranch {
+            HStack(spacing: 0) {
+                // Only the TRIANGLE toggles, not the whole row — the rest of an
+                // outline row belongs to whatever the outline is inside, which
+                // is what lets a list select the node the triangle discloses.
+                //
+                // One cell is a small target, so the button is deliberately
+                // wider than its glyph: the frame adds the blank cell after the
+                // triangle, and the focus gutter contributes the two before it.
+                // Four cells to hit, one glyph to read.
+                Button(
+                    action: toggle,
+                    label: {
+                        Text(verbatim: isExpanded
+                            ? TerminalSymbols.disclosureExpanded
+                            : TerminalSymbols.disclosureCollapsed)
+                            .frame(width: DisclosureMetrics.triangleColumnWidth)
+                    }
+                )
+                .buttonStyle(.plain)
+
+                content(element)
+            }
+            .padding(.leading, depth * DisclosureMetrics.contentIndent)
+        } else {
+            // One step further in than its depth, so a leaf's label lands in
+            // the same column as a sibling branch's label rather than under
+            // that branch's triangle.
+            content(element)
+                .padding(.leading, (depth + 1) * DisclosureMetrics.contentIndent)
+        }
+    }
+
+    /// Opens a closed node, or closes an open one.
+    private func toggle() {
+        if expansion.value.contains(id) {
+            expansion.value.remove(id)
+        } else {
+            expansion.value.insert(id)
+        }
     }
 }
 

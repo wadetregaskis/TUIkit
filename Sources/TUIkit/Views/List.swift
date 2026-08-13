@@ -556,6 +556,130 @@ extension List where Footer == EmptyView {
     }
 }
 
+// MARK: - Hierarchical Initializers (children:)
+
+// SwiftUI-parity `List(_:children:)`. Each overload builds an ``OutlineGroup``
+// internally, and an outline hands its container one row per VISIBLE node — so
+// the list's cursor, its selection binding and its scrolling all address nodes,
+// not the tree. A closed branch costs nothing: its descendants are never
+// flattened, so they are never counted, built or measured.
+//
+// The disclosure triangle is what opens a node; the rest of the row is the
+// list's, to select. That division is the reason ``OutlineGroup`` narrows its
+// toggle target where ``DisclosureGroup`` does not.
+
+extension List where Footer == EmptyView, SelectionValue == Int {
+    /// Creates a list of a tree, without selection.
+    ///
+    /// - Parameters:
+    ///   - data: The elements at the top of the tree.
+    ///   - children: A key path to an element's children, or `nil` for a leaf.
+    ///   - rowContent: Builds the row view for each node.
+    public init<Data: RandomAccessCollection, RowContent: View>(
+        _ data: Data,
+        children: KeyPath<Data.Element, Data?>,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == OutlineGroup<Data, Data.Element.ID, RowContent>, Data.Element: Identifiable {
+        self.init { OutlineGroup(data, children: children, content: rowContent) }
+    }
+
+    /// Creates a list of a tree keyed by an explicit id, without selection.
+    ///
+    /// - Parameters:
+    ///   - data: The elements at the top of the tree.
+    ///   - id: A key path to each element's stable identity.
+    ///   - children: A key path to an element's children, or `nil` for a leaf.
+    ///   - rowContent: Builds the row view for each node.
+    public init<Data: RandomAccessCollection, ID: Hashable, RowContent: View>(
+        _ data: Data,
+        id: KeyPath<Data.Element, ID>,
+        children: KeyPath<Data.Element, Data?>,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == OutlineGroup<Data, ID, RowContent> {
+        self.init { OutlineGroup(data, id: id, children: children, content: rowContent) }
+    }
+}
+
+extension List where Footer == EmptyView {
+    /// Creates a list of a tree with single selection.
+    ///
+    /// - Parameters:
+    ///   - data: The elements at the top of the tree.
+    ///   - children: A key path to an element's children, or `nil` for a leaf.
+    ///   - selection: A binding to the selected node's id (`nil` = none).
+    ///   - rowContent: Builds the row view for each node.
+    public init<Data: RandomAccessCollection, RowContent: View>(
+        _ data: Data,
+        children: KeyPath<Data.Element, Data?>,
+        selection: Binding<SelectionValue?>,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == OutlineGroup<Data, Data.Element.ID, RowContent>,
+            Data.Element: Identifiable, SelectionValue == Data.Element.ID {
+        self.init(selection: selection) {
+            OutlineGroup(data, children: children, content: rowContent)
+        }
+    }
+
+    /// Creates a list of a tree with multi-selection.
+    ///
+    /// - Parameters:
+    ///   - data: The elements at the top of the tree.
+    ///   - children: A key path to an element's children, or `nil` for a leaf.
+    ///   - selection: A binding to the set of selected node ids.
+    ///   - rowContent: Builds the row view for each node.
+    public init<Data: RandomAccessCollection, RowContent: View>(
+        _ data: Data,
+        children: KeyPath<Data.Element, Data?>,
+        selection: Binding<Set<SelectionValue>>,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == OutlineGroup<Data, Data.Element.ID, RowContent>,
+            Data.Element: Identifiable, SelectionValue == Data.Element.ID {
+        self.init(selection: selection) {
+            OutlineGroup(data, children: children, content: rowContent)
+        }
+    }
+
+    /// Creates a list of a tree keyed by an explicit id, with single selection.
+    ///
+    /// - Parameters:
+    ///   - data: The elements at the top of the tree.
+    ///   - id: A key path to each element's stable identity.
+    ///   - children: A key path to an element's children, or `nil` for a leaf.
+    ///   - selection: A binding to the selected node's id (`nil` = none).
+    ///   - rowContent: Builds the row view for each node.
+    public init<Data: RandomAccessCollection, RowContent: View>(
+        _ data: Data,
+        id: KeyPath<Data.Element, SelectionValue>,
+        children: KeyPath<Data.Element, Data?>,
+        selection: Binding<SelectionValue?>,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == OutlineGroup<Data, SelectionValue, RowContent> {
+        self.init(selection: selection) {
+            OutlineGroup(data, id: id, children: children, content: rowContent)
+        }
+    }
+
+    /// Creates a list of a tree keyed by an explicit id, with multi-selection.
+    ///
+    /// - Parameters:
+    ///   - data: The elements at the top of the tree.
+    ///   - id: A key path to each element's stable identity.
+    ///   - children: A key path to an element's children, or `nil` for a leaf.
+    ///   - selection: A binding to the set of selected node ids.
+    ///   - rowContent: Builds the row view for each node.
+    public init<Data: RandomAccessCollection, RowContent: View>(
+        _ data: Data,
+        id: KeyPath<Data.Element, SelectionValue>,
+        children: KeyPath<Data.Element, Data?>,
+        selection: Binding<Set<SelectionValue>>,
+        @ViewBuilder rowContent: @escaping (Data.Element) -> RowContent
+    ) where Content == OutlineGroup<Data, SelectionValue, RowContent> {
+        self.init(selection: selection) {
+            OutlineGroup(data, id: id, children: children, content: rowContent)
+        }
+    }
+}
+
 // MARK: - Convenience Modifiers
 
 extension List {

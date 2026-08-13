@@ -34,6 +34,7 @@ extension ExampleStrings {
             "page.list.boundValue": "Bound value:",
             "page.list.stylesSection": "List styles (.listStyle)",
             "page.list.multiLineSection": "Multi-line cells (scrollable)",
+            "page.list.treeSection": "Tree rows (List(children:))",
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "Menus",
@@ -249,6 +250,7 @@ extension ExampleStrings {
             "page.list.boundValue": "Gebundener Wert:",
             "page.list.stylesSection": "Listenstile (.listStyle)",
             "page.list.multiLineSection": "Mehrzeilige Zellen (scrollbar)",
+            "page.list.treeSection": "Baumzeilen (List(children:))",
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "Menüs",
@@ -464,6 +466,7 @@ extension ExampleStrings {
             "page.list.boundValue": "Valeur liée :",
             "page.list.stylesSection": "Styles de liste (.listStyle)",
             "page.list.multiLineSection": "Cellules multilignes (défilables)",
+            "page.list.treeSection": "Lignes d'arborescence (List(children:))",
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "Menus",
@@ -679,6 +682,7 @@ extension ExampleStrings {
             "page.list.boundValue": "Valore associato:",
             "page.list.stylesSection": "Stili di elenco (.listStyle)",
             "page.list.multiLineSection": "Celle multiriga (scorrevoli)",
+            "page.list.treeSection": "Righe ad albero (List(children:))",
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "Menu",
@@ -894,6 +898,7 @@ extension ExampleStrings {
             "page.list.boundValue": "Valor enlazado:",
             "page.list.stylesSection": "Estilos de lista (.listStyle)",
             "page.list.multiLineSection": "Celdas multilínea (desplazables)",
+            "page.list.treeSection": "Filas de árbol (List(children:))",
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "Menús",
@@ -1109,6 +1114,7 @@ extension ExampleStrings {
             "page.list.boundValue": "绑定值：",
             "page.list.stylesSection": "列表样式 (.listStyle)",
             "page.list.multiLineSection": "多行单元格（可滚动）",
+            "page.list.treeSection": "树形行 (List(children:))",
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "菜单",
@@ -1324,6 +1330,7 @@ extension ExampleStrings {
             "page.list.boundValue": "バインドされた値：",
             "page.list.stylesSection": "リストスタイル (.listStyle)",
             "page.list.multiLineSection": "複数行セル（スクロール可能）",
+            "page.list.treeSection": "ツリー行 (List(children:))",
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "メニュー",

@@ -190,6 +190,10 @@ type_name:
     - _ListRowBackgroundView
     - _ListRowColorView
     - _OpacityView
+    # One node's row in an `OutlineGroup`. Public-but-underscored because the
+    # outline hands its rows to its container as `ChildView`s, which key each
+    # one by this type.
+    - _OutlineRow
     # @FocusState modifier helpers created by .focused / .defaultFocus.
     - _FocusedModifier
     - _DefaultFocusModifier

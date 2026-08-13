@@ -90,16 +90,6 @@ struct SettingsAndAlignmentRow: View, Equatable {
     }
 }
 
-/// A file-tree shape for the ``OutlineGroup`` demo: `nil` children is a leaf,
-/// an empty array is a folder that happens to be empty (and still discloses).
-///
-/// The names are code identifiers and paths, so they are deliberately not
-/// localized — the same call the page makes for "Card" and "Panel".
-struct ContainersOutlineNode: Identifiable {
-    let id: String
-    var children: [Self]?
-}
-
 /// Container views demo page.
 ///
 /// Shows various container views including:
@@ -112,25 +102,6 @@ struct ContainersOutlineNode: Identifiable {
 ///   that owns its own
 struct ContainersPage: View {
     @State var showDetails: Bool = false
-
-    /// A miniature of this package's own layout.
-    private static let outlineTree = [
-        ContainersOutlineNode(
-            id: "Sources",
-            children: [
-                ContainersOutlineNode(
-                    id: "TUIkitCore",
-                    children: [
-                        ContainersOutlineNode(id: "Rendering", children: nil),
-                        ContainersOutlineNode(id: "Extensions", children: nil),
-                    ]),
-                ContainersOutlineNode(
-                    id: "TUIkit",
-                    children: [ContainersOutlineNode(id: "Views", children: nil)]),
-            ]),
-        ContainersOutlineNode(id: "Tests", children: []),
-        ContainersOutlineNode(id: "README.md", children: nil),
-    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -190,7 +161,7 @@ struct ContainersPage: View {
             // children array rather than nil, so it still gets a triangle —
             // "this folder has nothing in it" being worth saying.
             DemoSection(L("page.containers.section.outline")) {
-                OutlineGroup(Self.outlineTree, children: \.children) { node in
+                OutlineGroup(outlineDemoTree, children: \.children) { node in
                     Text(verbatim: node.id)
                 }
             }

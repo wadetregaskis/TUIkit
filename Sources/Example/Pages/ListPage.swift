@@ -66,6 +66,7 @@ struct ListPage: View {
     @State var multiSelection: Set<String> = []
     @State var transientSelection: String?
     @State var multiLineSelection: String?
+    @State var treeSelection: String?
     @State var multiLineByLine = true
     @State var multiLineFollowMargin = FollowMarginChoice.none.rawValue
     @State var browserURL: URL = FileBrowser.seedDirectory()
@@ -317,6 +318,17 @@ struct ListPage: View {
                     FollowMarginPicker(selection: $multiLineFollowMargin)
                     multiLineList
                 }
+            }
+
+            // A tree as the list's OWN rows: every visible node is a row, so
+            // the cursor walks nodes, the selection binding holds a node's id,
+            // and scrolling addresses nodes. The triangle opens a branch; the
+            // rest of the row belongs to the list, to select.
+            DemoSection(L("page.list.treeSection")) {
+                List(outlineDemoTree, children: \.children, selection: $treeSelection) { node in
+                    Text(verbatim: node.id)
+                }
+                .frame(height: 8)
             }
 
             KeyboardHelpSection(
