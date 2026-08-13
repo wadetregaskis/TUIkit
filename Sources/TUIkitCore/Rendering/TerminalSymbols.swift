@@ -28,6 +28,16 @@ public enum TerminalSymbols {
     /// Right-pointing triangle (U+25B6), used by Stepper and Slider.
     public static let rightArrow = "\u{25B6}"
 
+    // MARK: - Disclosure Triangles
+
+    /// Right-pointing triangle (U+25B6) marking a **collapsed** disclosure —
+    /// the same glyph ``rightArrow`` draws, named apart because it says
+    /// "there is more under here", not "step this value up".
+    public static let disclosureCollapsed = "\u{25B6}"
+
+    /// Down-pointing triangle (U+25BC) marking an **expanded** disclosure.
+    public static let disclosureExpanded = "\u{25BC}"
+
     // MARK: - Radio Button Indicators
 
     /// Filled circle for selected/focused radio button.

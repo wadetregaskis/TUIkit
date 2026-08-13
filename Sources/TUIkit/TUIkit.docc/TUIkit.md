@@ -133,6 +133,7 @@ struct MyApp: App {
 
 - ``Card``
 - ``Panel``
+- ``DisclosureGroup``
 - ``Alert``
 - ``Dialog``
 - ``PresentationDetent``

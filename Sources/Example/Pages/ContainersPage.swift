@@ -97,7 +97,9 @@ struct SettingsAndAlignmentRow: View, Equatable {
 /// - Box (simple bordered container)
 /// - Panel (container with title in border)
 /// - ProgressView (horizontal progress bar)
-/// - Collapsible detail section demonstrating `@State` toggle
+/// - DisclosureGroup, in both forms: an outer one whose expansion this page
+///   owns (so the button beside it moves the same state), and a nested one
+///   that owns its own
 struct ContainersPage: View {
     @State var showDetails: Bool = false
 
@@ -111,15 +113,13 @@ struct ContainersPage: View {
 
             DemoSection(L("page.containers.section.collapsible")) {
                 VStack(alignment: .leading) {
-                    HStack(spacing: 2) {
-                        Button(showDetails ? L("page.containers.hideDetails") : L("page.containers.showDetails")) {
-                            showDetails.toggle()
-                        }
-                        Text(showDetails ? L("page.containers.expanded") : L("page.containers.collapsed"))
-                            .dim()
-                    }
-                    if showDetails {
-                        Panel(L("page.containers.paddingExamples"), titleColor: .palette.accent) {
+                    // The OUTER group's expansion is owned by this page, so the
+                    // group and the button under it are two views of one truth:
+                    // clicking either moves both. That is what `isExpanded:` is
+                    // for — without it a group keeps its own state and nothing
+                    // outside can open it.
+                    DisclosureGroup(L("page.containers.paddingExamples"), isExpanded: $showDetails) {
+                        VStack(alignment: .leading) {
                             HStack(spacing: 1) {
                                 Text("h:1 v:0").foregroundStyle(.palette.foreground)
                                     .padding(.horizontal, 1)
@@ -133,7 +133,25 @@ struct ContainersPage: View {
                                     .padding(EdgeInsets(horizontal: 1, vertical: 2))
                                     .border()
                             }
+
+                            // The INNER group owns its own expansion, and its
+                            // content is indented one step further — which is
+                            // how nesting draws a tree.
+                            DisclosureGroup(L("page.containers.disclosure.nested")) {
+                                Text(L("page.containers.primaryText"))
+                                    .foregroundStyle(.palette.foreground)
+                                Text(L("page.containers.secondaryText"))
+                                    .foregroundStyle(.palette.foregroundSecondary)
+                            }
                         }
+                    }
+
+                    HStack(spacing: 2) {
+                        Button(showDetails ? L("page.containers.hideDetails") : L("page.containers.showDetails")) {
+                            showDetails.toggle()
+                        }
+                        Text(showDetails ? L("page.containers.expanded") : L("page.containers.collapsed"))
+                            .dim()
                     }
                 }
             }
