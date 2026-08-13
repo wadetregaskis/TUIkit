@@ -2425,3 +2425,75 @@ Making `HStack`'s five `.enumerated()` loops index-based, on the theory that
 the 5.8% in `swift_getTupleTypeMetadata` was the `(index, element)` tuple:
 indistinguishable on four scenarios, reverted. The real caller is
 `Collection.formIndex(after:)` on `Range<A>` — see the note at the end of §35.
+
+---
+
+## 37. Is there more ARC and malloc to win? (2026-08-13)
+
+The two changes that shipped today came from reference-counting and copy costs,
+not algorithms, so the natural question is whether that seam has more in it.
+Attributed on the `fanout` trace (2000 iterations):
+
+| % of frame | what |
+|---|---|
+| 6.9 | `swift_release` |
+| 5.5 | `swift_retain` |
+| 3.1 | `swift_bridgeObjectRelease` |
+| 2.4 | `swift_bridgeObjectRetain` |
+| **17.9** | **ARC total** |
+| 7.6 | `swift_allocObject` |
+| ~3.6 | …of which `swift_allocBox` → `__swift_allocate_boxed_opaque_existential_1` |
+
+### Where it comes from
+
+**Half the object allocation is existential boxing.** `ChildView` stores its
+child as `any View` — deliberately, so the view is boxed once rather than
+copied into two closure contexts — and `makeChild` builds a *fresh* row view
+every frame, so that box is a new heap allocation per row per frame.
+`CacheEntry.viewSnapshot: Any` and `AnyEquatableBox.value: any Equatable` box
+too, but only on a store and only for elements wider than three words
+(`fanout`'s are `Int`, so they stay inline).
+
+**The per-type copy work is thin and spread.** Self time, not inclusive:
+
+    initializeWithCopy for ChildView ......... 0.4%
+    initializeWithCopy for RenderContext ..... 0.3%
+    outlined copy of IdentityNode.Step ....... 0.3%
+    outlined init with copy of ChildView ..... 0.2%
+    outlined destroy of RenderContext ........ 0.2%
+    … and a similar tail for Text / TupleView
+
+Nothing here is another `CacheEntry` — that one was ~7 refcounted fields
+copied on a path taken several thousand times a frame *and thrown away on
+three of four exits*. No remaining value type has that shape.
+
+### What that leaves
+
+1. **Structural, and the real one.** Every frame rebuilds every row view from
+   scratch, boxes it into `any View`, copies it into a `ChildView`, puts that
+   in an array, and the stacks copy each element out again — and then the row
+   memo usually discards the result because the buffer was already cached.
+   The allocation and the ARC both trace back to that single fact. Fixing it
+   means the eager `childViews` path, which §31 already showed has a bad trade
+   (`fanout` −6% / `modifiers` +30%) and no known lever.
+
+2. **Considered and rejected on reasoning, not tried.** `RenderContext` now
+   carries four refcounted fields (environment, `renderCache`, `stateStorage`,
+   `identity`) and is copied at every descent, so consolidating the two
+   services into one box would remove a retain per copy. But adding
+   `stateStorage` as the fourth *was itself a win* (§30) — which says reads
+   dominate copies on this path, and a box would add indirection to the
+   dominant operation. Expect a loss; do not spend the build.
+
+3. **`swift_bridgeObjectRetain`/`Release` at 5.5%** is String and Array
+   traffic: `ChildView.identityKey: String?` and
+   `IdentityNode.Step.keyed(_, key:)` are copied per row per pass. For
+   `ForEach(0..<n)` those strings are small enough to live inline, so the
+   calls are cheap — but they are still calls, and removing them means
+   changing the identity key's representation away from `String`, which the
+   scroll-targeting API (`scrollTo(key:)`) is built on.
+
+**Assessment.** The one-line seam is worked out. What remains is one
+architectural item with a known hazard, and a representation change to view
+identity — both real, both far larger than anything shipped today, and neither
+worth starting without deciding it is the priority.
