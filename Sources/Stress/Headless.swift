@@ -88,6 +88,7 @@ enum Headless {
         // scenario trapped without this. Nothing here had published a
         // preference before, which is how it stayed missing.
         environment.preferenceStorage = PreferenceStorage()
+        environment.volatileReadTracker = VolatileReadTracker()
         return RenderContext(availableWidth: cols, availableHeight: rows, environment: environment)
     }
 

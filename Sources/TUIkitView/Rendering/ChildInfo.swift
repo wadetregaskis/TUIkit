@@ -356,6 +356,66 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
     // remaining stack, so it only ever trips on pathologically deep trees.
     if !StackGuard.hasHeadroom() { return ViewSize.fixed(0, 0) }
 
+    // Serve this pass's memo if the same view has already been measured at the
+    // same proposal. Two-pass layout re-measures a subtree once per enclosing
+    // level, so a chain of N nested containers measures the tail N times —
+    // O(depth²) work for O(depth) tree (measured: the `deep` stress scenario
+    // costs 7.0ms / 78.2ms / 474.7ms per frame at 1×/4×/10× depth).
+    //
+    // Only when a `VolatileReadTracker` is already installed: the render loop
+    // always installs one, and requiring it keeps this off standalone
+    // measurement paths (and off the cost of minting one per call).
+    if let cache = context.renderCache, let tracker = context.environment.volatileReadTracker {
+        let key = RenderCache.MeasureKey(
+            size: RenderCache.SizeKey(
+                identity: context.identity,
+                proposalWidth: proposal.width,
+                proposalHeight: proposal.height,
+                availableWidth: context.availableWidth,
+                availableHeight: context.availableHeight,
+                hasExplicitWidth: context.hasExplicitWidth,
+                hasExplicitHeight: context.hasExplicitHeight),
+            viewType: ObjectIdentifier(V.self),
+            valueHash: viewValueHash(view))
+        if let cached = cache.lookupMeasure(key: key) { return cached }
+        // The same gate `EquatableView`/`_MemoizedRow` use: a subtree that
+        // declares a render side effect or reads a per-frame-volatile value is
+        // measured, but not remembered.
+        let unsafeBefore = tracker.cacheUnsafeCount
+        let size = measureChildUncached(view, proposal: proposal, context: context)
+        if tracker.cacheUnsafeCount == unsafeBefore {
+            cache.storeMeasure(key: key, size: size)
+        }
+        return size
+    }
+    return measureChildUncached(view, proposal: proposal, context: context)
+}
+
+/// Hashes a view value's raw storage, to tell two values of one type apart
+/// inside a single render pass.
+///
+/// `measureChild` is generic over `V: View` and so cannot demand `Equatable`,
+/// which is why the only value-keyed memo in the tree sits behind
+/// `EquatableView`. The bytes are the conformance-free substitute: no
+/// reflection (which would cost what the memo saves), just the struct's own
+/// storage, which for a view is a handful of words.
+///
+/// See ``RenderCache/MeasureKey/valueHash`` for why raw bytes are sound within
+/// a pass but were not across frames.
+@MainActor
+private func viewValueHash<V: View>(_ view: V) -> Int {
+    withUnsafeBytes(of: view) { bytes in
+        var hasher = Hasher()
+        hasher.combine(bytes: bytes)
+        return hasher.finalize()
+    }
+}
+
+/// ``measureChild`` without the per-pass memo — the measurement itself.
+@MainActor
+private func measureChildUncached<V: View>(
+    _ view: V, proposal: ProposedSize, context: RenderContext
+) -> ViewSize {
     // Use Layoutable if available (mark as measuring to suppress side-effects).
     //
     // Spacer is handled here too: it conforms to `Layoutable` and its

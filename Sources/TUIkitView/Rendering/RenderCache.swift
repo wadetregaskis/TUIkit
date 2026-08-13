@@ -190,6 +190,68 @@ public final class RenderCache: @unchecked Sendable {
     /// Memoized `EquatableView` measurements (see ``lookupSize`` / ``storeSize``).
     private var sizeEntries: [SizeKey: SizeEntry] = [:]
 
+    /// A `measureChild` memo key: a ``SizeKey`` plus the view's TYPE.
+    ///
+    /// The type is what an identity-only key was missing. Transparent wrappers
+    /// descend under their parent's identity, so several distinct views share
+    /// one identity within a pass; keying on identity alone returned one view's
+    /// size for another (the abandoned cross-frame cache — it got Panel/Card/
+    /// Dialog wrong, and the equivalence harness caught it).
+    public struct MeasureKey: Hashable {
+        let size: SizeKey
+        let viewType: ObjectIdentifier
+        /// A hash of the view value's raw bytes — the discriminator that makes
+        /// this memo sound.
+        ///
+        /// Identity + type + proposal is *not* enough: two different view
+        /// values can share an identity within one pass (a transparent wrapper
+        /// descends under its parent's identity), and without this the memo
+        /// serves the first one's size for the second.
+        ///
+        /// Raw bytes work here for a reason that does **not** hold across
+        /// frames. The cross-frame byte key was abandoned because `@State`,
+        /// `@Environment`, `Binding` and existential boxes each embed a
+        /// freshly-allocated pointer every frame, so nothing ever matched.
+        /// Within a single pass those allocations are fixed: the same view
+        /// value, copied down the tree, has byte-identical storage including
+        /// its pointers. Two *different* values differ in the bytes that make
+        /// them different.
+        ///
+        /// The failure mode is asymmetric, which is what makes it safe. Struct
+        /// padding and enum payload slack are undefined bytes; when they differ
+        /// the lookup **misses** and the view is measured again — correct, just
+        /// not saved. A false *hit* would need two different values to hash
+        /// identically, i.e. a 64-bit collision among the few hundred entries a
+        /// pass stores.
+        let valueHash: Int
+
+        public init(size: SizeKey, viewType: ObjectIdentifier, valueHash: Int) {
+            self.size = size
+            self.viewType = viewType
+            self.valueHash = valueHash
+        }
+    }
+
+    /// Memoized `measureChild` results — see ``lookupMeasure`` / ``storeMeasure``.
+    ///
+    /// PER-PASS, unlike ``sizeEntries``: cleared by every ``beginRenderPass()``,
+    /// so nothing here outlives the frame that measured it. That is what makes
+    /// an unkeyed-by-value memo defensible where the cross-frame one was not —
+    /// within one pass the tree, the state and the environment are fixed, so a
+    /// repeat measurement of the same view at the same proposal is a repeat of
+    /// work already done, not a guess about a different frame.
+    private var measureEntries: [MeasureKey: ViewSize] = [:]
+    /// Measure-memo hit/miss counts for this frame, reported by
+    /// ``logFrameStats()``.
+    ///
+    /// Kept because a memo that silently never engages looks exactly like a
+    /// memo that engages and does not help — this one shipped inert once
+    /// already (the bench harness installed no ``VolatileReadTracker``, so the
+    /// gate below never opened and the whole thing was dead code that still
+    /// cost a call). The hit rate is the only thing that tells the difference.
+    private var measureHits = 0
+    private var measureMisses = 0
+
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
@@ -372,6 +434,18 @@ extension RenderCache {
         sizeEntries[key] = SizeEntry(viewSnapshot: view, size: size)
     }
 
+    /// Looks up this pass's memoized `measureChild` result.
+    public func lookupMeasure(key: MeasureKey) -> ViewSize? {
+        if let hit = measureEntries[key] { measureHits += 1; return hit }
+        measureMisses += 1
+        return nil
+    }
+
+    /// Stores a `measureChild` result for the rest of this pass.
+    public func storeMeasure(key: MeasureKey, size: ViewSize) {
+        measureEntries[key] = size
+    }
+
     /// Marks an identity as active during the current render pass.
     ///
     /// Identities not marked active by the end of the render pass
@@ -491,6 +565,10 @@ extension RenderCache {
         activeIdentities.removeAll(keepingCapacity: true)
         retainedSubtreeRoots.removeAll(keepingCapacity: true)
         frameCounter &+= 1
+        // The measure memo is this frame's scratch space and nothing more.
+        measureEntries.removeAll(keepingCapacity: true)
+        measureHits = 0
+        measureMisses = 0
     }
 
     /// Applies the invalidations enqueued by ``invalidateRender(for:)`` since the
@@ -605,7 +683,9 @@ extension RenderCache {
             "FRAME — hits: \(frame.hits), misses: \(frame.misses), "
                 + "stores: \(frame.stores), clears: \(frame.clears), "
                 + "subtreeClears: \(frame.subtreeClears), "
-                + "entries: \(entries.count), hit rate: \(rate)"
+                + "entries: \(entries.count), hit rate: \(rate) | "
+                + "MEASURE hits: \(measureHits) misses: \(measureMisses) "
+                + "entries: \(measureEntries.count)"
         )
     }
 }
