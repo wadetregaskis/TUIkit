@@ -118,21 +118,8 @@ extension ForEach: ChildViewProvider {
     /// ``ViewIdentity/child(erasedType:key:)``), stable across passes AND
     /// across data mutations — reordering the data moves each row's state
     /// with its element.
-    /// - Note: A hand-written loop, not `data.map(makeChild(for:))`. `Data` is
-    ///   only known to be a `RandomAccessCollection`, so `map` is the fully
-    ///   generic `Sequence.map`: passing a method reference as its transform
-    ///   builds a closure whose arguments and result pass **indirectly**
-    ///   (`@in_guaranteed`/`@out`), through a reabstraction thunk, once per
-    ///   element — and the result array grows without a capacity hint. On the
-    ///   `fanout` stress scenario those thunks carried 22.8% of the frame.
-    ///   Reserving and appending calls `makeChild` directly.
     public func childViews(context: RenderContext) -> [ChildView] {
-        var children: [ChildView] = []
-        children.reserveCapacity(data.count)
-        for element in data {
-            children.append(makeChild(for: element))
-        }
-        return children
+        data.map(makeChild(for:))
     }
 
     /// One element's `ChildView` — the single constructor behind both the
