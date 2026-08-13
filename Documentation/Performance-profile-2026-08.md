@@ -2153,3 +2153,65 @@ scenarios), session start → `df3a40e8`:
 
 All 34 scenario/scale frame checksums byte-identical throughout; 4033 tests;
 both apps smoke-walk clean with no structural render-lint findings.
+
+---
+
+## 33. Area 4 — localization runs per Text, per frame (2026-08-13)
+
+Profiling `anyview` — a third shape, ARC-dominated rather than allocator- or
+string-dominated — surfaced a cost that has nothing to do with the render
+pipeline. 4000 iterations, 4948 ms on-CPU:
+
+    ForEach.childViews(context:) ..................... 1670 ms  33.7%
+      ForEach.makeChild(for:) ........................ 1424 ms  28.8%
+        closure … in AnyViewStormView.body ........... 1157 ms  23.4%
+          Text.init(_:) ................................445 ms   9.0%
+            static LocalizedStringKey.substituting(…) . 259 ms   5.2%
+            LocalizedStringKey.resolved(with:) ........ 146 ms   2.9%
+            LocalizationService.string(for:) .......... 137 ms   2.8%
+          LocalizedStringKey.StringInterpolation
+            .appendInterpolation<A>(_:) ............... 132 ms   2.7%
+
+`Text.init(_ key: LocalizedStringKey)` resolves eagerly — it looks the key up
+and substitutes the interpolated arguments at **construction**. A list row
+written `Text("Row \(index)")` therefore performs a table lookup and a
+template substitution once per row, per frame, for as long as the row exists.
+That is ~9% of this frame, none of it in the renderer.
+
+### The obvious half of the fix measured as nothing
+
+`substituting` appended the literal text between conversions one `Character`
+at a time into an unreserved `String`. Rewriting it to reserve capacity and
+copy a run at a time measured **neutral**, three A/B passes:
+
+| pass | A | B | `anyview` |
+|---|---|---|---|
+| 1 | old | new | +5.2% |
+| 2 | **new** | **old** | +3.5% |
+| 3 | old | new | +2.3% |
+
+In every pass the binary that ran **second** was slower — including pass 2,
+where that was the *old* one. Position bias, not an effect. Reverted, because
+an unvalidated change that adds `runStart` bookkeeping to five branches is
+worse code for no measured gain.
+
+So the cost inside `substituting` is the **scan**, not the append:
+`Character`-at-a-time iteration, `Character.isNumber` (a Unicode property
+query) per digit, and `"hlLqzjt".contains(…)` / `"@diufgGeExXos".contains(…)`
+— each of which scans a `String` literal — per conversion. Whoever picks this
+up should switch those to `switch` statements over the character and leave
+the appending alone.
+
+### The measurement floor is now the constraint
+
+The remaining named targets are each 3–5% of a single scenario:
+`view as? Renderable` (3.8%), the per-row `as? any Equatable` conformance cast
+(3.3%), `withChildIdentity(erasedType:key:)` (5.3%), `RenderCache.lookup`
+(7.2%), and this one. On this machine, with the desktop app taking ~18% of a
+core and load average above 2, run-to-run variation on these scenarios is
+**±3–5%** — the same size as the effects. Both changes reverted today
+(§31 and this one) failed the same way: a plausible improvement whose
+measurement could not be separated from drift.
+
+Validating anything in that range needs a quiet machine and the order-swap
+check as standard. Everything larger has been taken.
