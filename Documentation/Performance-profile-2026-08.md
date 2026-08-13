@@ -1348,3 +1348,89 @@ None of these can be caught by an assertion, because in every case the code
 does something reasonable — it just never engages. **The only test that
 catches them is a live hit-rate measurement**, and it should be the first
 thing built for any cache, before the cache itself.
+
+## 24. The mailbox in the environment — 1% to 39% (2026-08-12)
+
+§23 ended with the memo hitting once per frame. Extending the miss breakdown
+one more step found why, and the cause turned out to be a defect in its own
+right rather than anything about caching.
+
+### The breakdown that localised it
+
+Two additions to the instrument: split `noEntry` into **evicted** (stored last
+frame, gone now) versus **never-stored** (gated out and never a candidate),
+and count what `removeInactive()` collects.
+
+```
+Container Views: hits 1  | noEntry 10 (evicted 0, never-stored 10)
+                         | size 0  digest 2  bytes 0  | collected 0
+Text Styles:     hits 1  | noEntry 10 (evicted 0, never-stored 10)
+                         | size 0  digest 40 bytes 0  | collected 0
+```
+
+`evicted 0` and `collected 0` cleared the entire eviction theory: nothing was
+being lost. `never-stored 10` is a constant — the outermost nodes, correctly
+declined because their buffers carry the page's hit-test regions. And every
+remaining miss was `digest`, on exactly the population that does store.
+
+Naming the offending slot took one more line of output:
+
+```
+AUTOCULPRIT ScrollContentWindowKey=40
+```
+
+### The defect
+
+`ScrollContentWindow` travels down the environment carrying the visible slice.
+It also carries `reply` — the Stage-6 channel a windowed stack reports its
+rendered slice back through — and that slot is deliberately reference-typed:
+
+```swift
+let contentReply = ScrollContentReply()          // fresh, every render pass
+measureContext.environment.scrollContentWindow = ScrollContentWindow(
+    offset: verticalScrollOffset, viewportHeight: viewportHeight, …,
+    reply: contentReply, …)
+```
+
+`ScrollContentReply` compares and hashes by `ObjectIdentifier`. Synthesised
+`Hashable` on the enclosing struct folded that in — so two windows describing
+the **same** visible slice compared unequal and hashed differently on every
+frame, because the mailbox was new each time.
+
+Every Example page sits inside a `ScrollView`, so this value is in the
+environment of essentially every view, and a value that changes every frame
+propagates to everything below it.
+
+The fix writes out `==` and `hash(into:)` to exclude `reply`. A window is
+identified by what it *describes* — offset, viewport, whose content, edge
+inset, pending seek — not by which mailbox is attached. Committed on its own
+merits (c0b22635) with a regression test that fails on the unfixed code:
+equal windows compare unequal and hash differently.
+
+**This was never really a caching bug.** Any code comparing or hashing a
+window — a cache key, a change check, a `Set` — was already being told the
+slice had changed on every frame when it had not.
+
+### The measurement
+
+| page | before | after | remaining miss reason |
+|---|---|---|---|
+| Text Styles | 1 hit/frame | **13 hit/frame (39%)** | 10 never-stored, 10 bytes |
+| Container Views | 1 | **2 (17%)** | 10 never-stored |
+| Layout System | 1 | ~9 | 47 digest (a second window instance) |
+| Tables | ~0.4 | ~1 | 30 evicted, 28 never-stored |
+
+Still not a shippable memo — 39% on the best page, with the per-node cost of
+asking not yet measured against it — so the memo and digest are reverted
+again. But the shape of the remaining work is now concrete and small:
+
+1. **Layout System still reports `ScrollContentWindowKey`.** That page nests a
+   second scroll view; either another field of the window varies legitimately
+   there, or the two walks of a frame publish different windows. The same
+   culprit diagnostic will say which.
+2. **Text Styles now reports `bytes 10`** — the first time the view-value key
+   has *ever* mismatched. Ten nodes on that page rebuild their view value
+   differently each frame; worth knowing which, since §19 measured zero.
+3. **Tables reports `evicted 30`** — the first real eviction seen, so that page
+   does invalidate its own entries. Expected for a page with live state, but
+   worth confirming it is the demo's doing and not the memo's.
