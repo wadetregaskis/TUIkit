@@ -1984,3 +1984,74 @@ longer leave a mirror stale (commit 5691dff4). `fanout` −8.0%, `modifiers`
 The pattern to keep: the leaf profile names ARC and casts, and that is never
 where the fix is. Both wins above came from `--callers`, not from the
 self-time table.
+
+---
+
+## 31. Area 4 — a rejected change, and where the increment landed (2026-08-13)
+
+### `data.map(makeChild(for:))` → a reserving loop. Committed, then reverted.
+
+`ForEach.childViews` built its array through the fully generic
+`Sequence.map`. `Data` is only a `RandomAccessCollection`, so handing `map` a
+method reference builds a closure whose argument and result pass **indirectly**
+through a reabstraction thunk, once per element:
+
+    Collection.map<A, B>(_:) ......................... 1215 ms  27.7%
+      thunk for @callee_guaranteed
+        (@in_guaranteed A.Sequence.Element) -> (@out …) 1003 ms  22.8%
+    ForEach.makeChild(for:) ........................... 862 ms  19.6%
+
+The loop does remove those thunks. It is still a net loss. Interleaved
+best-of-3 at **800** iterations:
+
+| scenario | change |
+|---|---|
+| `modifiers` | **+23.9%** |
+| `fanout` | −6.0% |
+| `anyview` | −4.4% |
+
+`fanout` rows are an `HStack` of four `Text`s; `modifiers` rows carry a deep
+modifier chain, so `content(element)` returns a large nested `ModifiedView`
+type. **Cheap row builders win, expensive ones lose several times more.**
+Whatever the generic `map` buys back on a large row type outweighs the thunks.
+
+`@inline(never)` on `makeChild` was tried on the theory that the loop inlined
+a huge row builder into an oversized frame (`___chkstk_darwin` was already
+1.6% self). `modifiers` went to **+28.2%** — theory wrong, mechanism still
+unexplained. Reverted (commits bdca102c, 048708c2).
+
+**How it got committed.** The original A/B ran 300 iterations over six
+scenarios, and `modifiers` was not one of them. It surfaced in the cumulative
+sweep as −1.9% where the width-scan change *alone* had given −13.3% — a win
+that had gone missing, which is exactly the shape a regression makes when you
+only look at totals. Two rules from it:
+
+- **Sweep every scenario before claiming "no regressions."** A six-scenario
+  sample is a spot check, not a sweep.
+- **Re-measure anything whose cumulative number moves the wrong way.** The
+  compounding arithmetic is the check on the per-change measurements.
+
+`dashboard` in the same sweep first read **+8.8%** at 300 iterations and
+−0.1% at 2000. At ~180 µs a frame, 300 iterations is 50 ms of measurement —
+mostly warm-up. Scale iterations to the scenario.
+
+### Where the increment landed
+
+Interleaved best-of-3, **800** iterations, 120×40, session start → session
+end (`317e8587`…`048708c2`) — **every scenario faster**:
+
+| scenario | change | | scenario | change |
+|---|---|---|---|---|
+| `dashboard` | −43.4% | | `deep` | −12.4% |
+| `kitchensink` | −36.0% | | `fanout` | −11.3% |
+| `textwall` | −27.1% | | `scrollfollow` | −10.2% |
+| `preferences` | −21.4% | | `anyview` | −9.4% |
+| `modifiers` | −21.0% | | `tables-vstack` | −6.3% |
+| `table-multiline` | −14.3% | | `customlayout` | −5.6% |
+| `tables-scroll` | −13.8% | | `framedcolumns` | −5.1% |
+| `table` | −13.5% | | `churn` | −3.3% |
+| `megalist` | −13.4% | | | |
+
+Three shipped changes: the width scan (§29), the identity key and the
+state-storage mirror (§30). All 34 scenario/scale frame checksums are
+byte-identical to the session's starting binary throughout.
