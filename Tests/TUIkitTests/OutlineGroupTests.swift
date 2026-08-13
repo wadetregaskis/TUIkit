@@ -307,10 +307,7 @@ struct OutlineGroupTests {
         frame(view, tui: tui, context: context)
         let focus = try #require(context.environment.focusManager)
         // Down moves the list's own cursor, one row per node — which it can
-        // only do if the nodes ARE the rows. (The first Down establishes the
-        // cursor on row 0; the second steps to row 1.)
-        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
-        frame(view, tui: tui, context: context)
+        // only do if the nodes ARE the rows.
         _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
         frame(view, tui: tui, context: context)
         _ = focus.dispatchKeyEvent(KeyEvent(key: .space))
@@ -327,8 +324,8 @@ struct OutlineGroupTests {
 
         frame(view, tui: tui, context: context)
         let focus = try #require(context.environment.focusManager)
-        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
-        frame(view, tui: tui, context: context)
+        // No priming: the list's cursor is live on the first frame, because the
+        // triangle is no longer a focus stop competing for it.
         _ = focus.dispatchKeyEvent(KeyEvent(key: .space))
         #expect(selection.value == "Sources", "the first node, by its own id")
 
@@ -344,6 +341,110 @@ struct OutlineGroupTests {
         let opened = lines(frame(view, tui: tui, context: context))
         #expect(opened.contains { $0.contains("TUIkit") }, "the branch opened: \(opened)")
         #expect(selection.value == "Sources", "and the selection stayed on the node it was on")
+    }
+
+    /// The rule the owner asked for, on the one focusable that has both a
+    /// selection and an action: SPACE belongs to the selection, RETURN
+    /// activates — and for a branch with no other action, activating it is
+    /// disclosing it.
+    @Test("Space selects the branch row; Return discloses it")
+    func spaceSelectsReturnDiscloses() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        let selection = Selection()
+        let view = List(tree, children: \.children, selection: selection.binding) { node in
+            Text(verbatim: node.id)
+        }
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .space))
+        #expect(selection.value == "Sources", "Space selected the focused branch")
+        var rendered = lines(frame(view, tui: tui, context: context))
+        #expect(
+            rendered.contains { $0.contains("TUIkit") } == false,
+            "…and did NOT disclose it: \(rendered)")
+
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .enter))
+        rendered = lines(frame(view, tui: tui, context: context))
+        #expect(rendered.contains { $0.contains("TUIkit") }, "Return disclosed it: \(rendered)")
+        #expect(selection.value == "Sources", "…without disturbing the selection")
+    }
+
+    /// The tree's own keys, which is what keeps disclosure reachable when an
+    /// app claims Return with its own `.onRowActivate`.
+    @Test("Right expands and Left collapses the focused branch")
+    func arrowsDiscloseTheBranch() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        let view = List(tree, children: \.children) { node in Text(verbatim: node.id) }
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        #expect(focus.dispatchKeyEvent(KeyEvent(key: .right)), "Right opened the branch")
+        var rendered = lines(frame(view, tui: tui, context: context))
+        #expect(rendered.contains { $0.contains("TUIkit") }, "\(rendered)")
+
+        #expect(focus.dispatchKeyEvent(KeyEvent(key: .left)), "Left closed it again")
+        rendered = lines(frame(view, tui: tui, context: context))
+        #expect(rendered.contains { $0.contains("TUIkit") } == false, "\(rendered)")
+    }
+
+    /// A key a row cannot use must fall through, or the list swallows it from
+    /// whatever is outside — a horizontal scroller, a split-view divider.
+    ///
+    /// Asked of the focused ELEMENT rather than of `dispatchKeyEvent`, because
+    /// that is where the fall-through happens: a Left or Right the focused
+    /// element declines is claimed one level up by the focus manager, which
+    /// treats the pair as previous/next within the section and always reports
+    /// it handled. What matters here is that the row doesn't take it first.
+    @Test("Left and Right fall through on a leaf and on a closed branch")
+    func arrowsFallThroughWhenThereIsNothingToOpen() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        let view = List(tree, children: \.children) { node in Text(verbatim: node.id) }
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        // The focused row is a CLOSED branch: Left has nothing to close.
+        var row = try #require(focus.currentFocused)
+        #expect(
+            row.handleKeyEvent(KeyEvent(key: .left)) == false,
+            "Left on an already-closed branch is not consumed")
+
+        // Move to "README", a leaf: neither key applies.
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        frame(view, tui: tui, context: context)
+        row = try #require(focus.currentFocused)
+        #expect(row.handleKeyEvent(KeyEvent(key: .right)) == false, "Right on a leaf")
+        #expect(row.handleKeyEvent(KeyEvent(key: .left)) == false, "Left on a leaf")
+        let rendered = lines(frame(view, tui: tui, context: context))
+        #expect(rendered.contains { $0.contains("TUIkit") } == false, "nothing opened: \(rendered)")
+    }
+
+    /// An app that gives its rows an action gets it — Return is theirs, and the
+    /// arrows are what keep the tree reachable.
+    @Test("onRowActivate wins Return; the arrows still disclose")
+    func appActivationWinsReturn() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        var activated: [String] = []
+        // With a selection binding the row ids ARE the node ids, so the
+        // activation closure is handed the name rather than an index.
+        let selection = Selection()
+        let view = List(tree, children: \.children, selection: selection.binding) { node in
+            Text(verbatim: node.id)
+        }
+        .onRowActivate { activated.append($0) }
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .enter))
+        var rendered = lines(frame(view, tui: tui, context: context))
+        #expect(activated == ["Sources"], "the app's action ran")
+        #expect(
+            rendered.contains { $0.contains("TUIkit") } == false,
+            "and Return did NOT also disclose: \(rendered)")
+
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .right))
+        rendered = lines(frame(view, tui: tui, context: context))
+        #expect(rendered.contains { $0.contains("TUIkit") }, "the arrows still do: \(rendered)")
     }
 
     /// A selection binding that a test can read back.

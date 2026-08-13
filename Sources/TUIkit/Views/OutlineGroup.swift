@@ -34,13 +34,27 @@ import TUIkitView
 ///     README.md
 /// ```
 ///
-/// Every branch is a Tab stop, and **Return** or **Space** opens or closes it.
 /// With the mouse it is the **triangle** that discloses, not the whole row —
 /// unlike ``DisclosureGroup``, which has no competition for its row, an outline
 /// row's text belongs to whatever the outline is inside, so that a ``List`` can
 /// select the node whose triangle just opened it. A single cell is a mean
-/// target, so the triangle's button quietly extends over the blank cell on
-/// either side: four cells to hit, one glyph to read.
+/// target, so the triangle quietly extends over the blank cell on either side:
+/// four cells to hit, one glyph to read.
+///
+/// ## From the keyboard
+///
+/// On its own — in a `VStack`, a `ScrollView` — each branch's triangle is a Tab
+/// stop, and **Return** or **Space** opens or closes it, as any button would.
+///
+/// Inside a ``List`` the row is the focusable and the triangle is not, because
+/// a row has a *selection* as well as an action and the two must not compete:
+///
+/// - **Space** selects the focused row, as it does in any list.
+/// - **Return** activates it, which for a branch means disclosing it — unless
+///   the app claims Return with ``List/onRowActivate(_:)``, which wins.
+/// - **Right** opens the focused branch and **Left** closes it, so a tree stays
+///   reachable when the app has taken Return. Both fall through on a leaf, on a
+///   branch already in that state, and on a list that is not a tree at all.
 ///
 /// The glyphs and the indent step are ``DisclosureGroup``'s. A leaf's label
 /// lines up with its siblings' labels rather than with their triangles, so a
@@ -90,12 +104,55 @@ public struct OutlineGroup<Data: RandomAccessCollection, ID: Hashable, Leaf: Vie
     /// Builds a node's label.
     let content: (Data.Element) -> Leaf
 
+    /// The bridge a hierarchical ``List`` drives the disclosure through.
+    ///
+    /// A reference type deliberately: this value is rebuilt every frame, and
+    /// the list re-reads it every frame too, so the pair always agree — but the
+    /// closure inside has to survive from the render that installs it to the
+    /// keystroke that calls it.
+    let activation = OutlineActivation()
+
     /// Never called: an outline is a run of rows, not one view, so it hands its
     /// children to its container instead of rendering itself. `ForEach` says
     /// the same thing the same way.
     public var body: Never {
         fatalError("OutlineGroup has no standalone rendering; use it inside a container")
     }
+}
+
+// MARK: - Disclosure from the list's own row cursor
+
+/// How a hierarchical ``List`` reaches the disclosure of the row its cursor is
+/// on.
+///
+/// The two halves are built in one initializer but only meet at render: an
+/// outline does not learn where its expansion lives until it is handed a
+/// context, while the list's key handling has to reach it from a handler
+/// configured before any key arrives. This reference type is what both hold —
+/// the outline fills it in each pass, the list calls through it.
+///
+/// Not actor-isolated, for the same reason ``ItemListHandler``'s
+/// `primaryAction` is a plain closure: key dispatch reaches the handler from a
+/// nonisolated context, and rendering — the only thing that ever writes here —
+/// is single-threaded on the run loop.
+protocol OutlineRowActivating {
+    /// Opens, closes or toggles the node with this id.
+    ///
+    /// - Parameters:
+    ///   - id: The row's id, as the list knows it.
+    ///   - target: `true` to open, `false` to close, `nil` to toggle.
+    /// - Returns: Whether anything moved — `false` for a leaf, for an unknown
+    ///   id, or for a branch already in the requested state, so the key falls
+    ///   through to whatever else wants it.
+    @discardableResult
+    func setRowExpanded(_ id: AnyHashable, to target: Bool?) -> Bool
+}
+
+/// The mutable half of ``OutlineRowActivating``, refreshed every pass.
+final class OutlineActivation: @unchecked Sendable {
+    /// Installed by ``OutlineGroup/extractListRows(context:)`` with that
+    /// frame's real expansion box captured. `nil` before the first render.
+    var apply: ((AnyHashable, Bool?) -> Bool)?
 }
 
 // MARK: - The rows
@@ -130,10 +187,18 @@ extension OutlineGroup {
     }
 
     /// The view for one node's row.
-    func row(for node: Node, expansion: StateBox<Set<ID>>) -> _OutlineRow<Data.Element, ID, Leaf> {
+    ///
+    /// - Parameter rowOwnsFocus: Whether something else — a `List`'s own row
+    ///   cursor — is the focusable here. When it is, the triangle must not be a
+    ///   second Tab stop inside the row: it would take the row's Space with it,
+    ///   and a tree of N branches would add N stops nobody asked for.
+    func row(
+        for node: Node, expansion: StateBox<Set<ID>>, rowOwnsFocus: Bool = false
+    ) -> _OutlineRow<Data.Element, ID, Leaf> {
         _OutlineRow(
             element: node.element, id: node.id, depth: node.depth, isBranch: node.isBranch,
-            isExpanded: node.isExpanded, expansion: expansion, content: content)
+            isExpanded: node.isExpanded, expansion: expansion, rowOwnsFocus: rowOwnsFocus,
+            content: content)
     }
 
     /// The persistent set of open node ids.
@@ -192,6 +257,16 @@ extension OutlineGroup: ChildViewProvider {
     }
 }
 
+extension OutlineGroup: OutlineRowActivating {
+    /// `nonisolated` because key dispatch is: the handler reaches this from
+    /// outside the main actor, and everything it touches — a `let` reference
+    /// and the closure inside it — is written only by the render loop.
+    @discardableResult
+    nonisolated func setRowExpanded(_ id: AnyHashable, to target: Bool?) -> Bool {
+        activation.apply?(id, target) ?? false
+    }
+}
+
 extension OutlineGroup: ListRowExtractor {
     /// One list row per visible node, so a `List` selects, reveals and scrolls
     /// to *nodes* rather than to the outline as a whole.
@@ -202,21 +277,45 @@ extension OutlineGroup: ListRowExtractor {
     /// lazily, per row, exactly as `ForEach` does it.
     func extractListRows<RowID: Hashable>(context: RenderContext) -> [ListRow<RowID>] {
         let expansion = expansion(context: context)
-        return visibleNodes(expanded: expansion.value).enumerated()
-            .compactMap { index, node -> ListRow<RowID>? in
-                guard let rowID: RowID = (node.id as? RowID) ?? (index as? RowID) else {
-                    return nil
-                }
-                let view = row(for: node, expansion: expansion)
-                let rowContext = context.withChildIdentity(
-                    erasedType: _OutlineRow<Data.Element, ID, Leaf>.self,
-                    key: identityKey(node.id))
-                return ListRow(
+        let nodes = visibleNodes(expanded: expansion.value)
+        // What the list will call a row is not always what the outline calls a
+        // node: a list with no selection binding is keyed by `Int`, so its rows
+        // are POSITIONS. The disclosure has to be reachable from whichever id
+        // the list hands back, so the two are paired here, where both are in
+        // hand — branches only, since a leaf must let the key fall through
+        // rather than swallow a Left or Right it has no use for.
+        var branchNodeID: [AnyHashable: ID] = [:]
+        var rows: [ListRow<RowID>] = []
+        rows.reserveCapacity(nodes.count)
+        for (index, node) in nodes.enumerated() {
+            guard let rowID: RowID = (node.id as? RowID) ?? (index as? RowID) else { continue }
+            if node.isBranch {
+                branchNodeID[AnyHashable(rowID)] = node.id
+            }
+            let view = row(for: node, expansion: expansion, rowOwnsFocus: true)
+            let rowContext = context.withChildIdentity(
+                erasedType: _OutlineRow<Data.Element, ID, Leaf>.self,
+                key: identityKey(node.id))
+            rows.append(
+                ListRow(
                     id: rowID,
                     content: LazyListRowContent(identity: rowContext.identity) {
                         (TUIkit.renderToBuffer(view, context: rowContext), nil)
-                    })
+                    }))
+        }
+        activation.apply = { erased, target in
+            guard let id = branchNodeID[erased] else { return false }
+            let isOpen = expansion.value.contains(id)
+            let wanted = target ?? !isOpen
+            guard wanted != isOpen else { return false }
+            if wanted {
+                expansion.value.insert(id)
+            } else {
+                expansion.value.remove(id)
             }
+            return true
+        }
+        return rows
     }
 }
 
@@ -239,6 +338,10 @@ public struct _OutlineRow<Element, ID: Hashable, Leaf: View>: View {
     /// snapshot of the value.
     let expansion: StateBox<Set<ID>>
 
+    /// Whether the container owns this row's focus — see
+    /// ``OutlineGroup/row(for:expansion:rowOwnsFocus:)``.
+    let rowOwnsFocus: Bool
+
     let content: (Element) -> Leaf
 
     public var body: some View {
@@ -252,16 +355,13 @@ public struct _OutlineRow<Element, ID: Hashable, Leaf: View>: View {
                 // wider than its glyph: the frame adds the blank cell after the
                 // triangle, and the focus gutter contributes the two before it.
                 // Four cells to hit, one glyph to read.
-                Button(
-                    action: toggle,
-                    label: {
-                        Text(verbatim: isExpanded
-                            ? TerminalSymbols.disclosureExpanded
-                            : TerminalSymbols.disclosureCollapsed)
-                            .frame(width: DisclosureMetrics.triangleColumnWidth)
-                    }
-                )
-                .buttonStyle(.plain)
+                //
+                // Inside a list the triangle keeps that click target but stops
+                // being FOCUSABLE: the row is the focusable there, Space is the
+                // row's (it selects) and Return is the row's (it activates —
+                // which for a branch means disclosing it). A second focus stop
+                // in the row would take both keys with it.
+                triangle
 
                 content(element)
             }
@@ -272,6 +372,27 @@ public struct _OutlineRow<Element, ID: Hashable, Leaf: View>: View {
             // that branch's triangle.
             content(element)
                 .padding(.leading, (depth + 1) * DisclosureMetrics.contentIndent)
+        }
+    }
+
+    /// The triangle: a Tab stop of its own when nothing else owns the row, a
+    /// bare tappable glyph when a list's cursor does.
+    @ViewBuilder
+    private var triangle: some View {
+        let glyph = Text(verbatim: isExpanded
+            ? TerminalSymbols.disclosureExpanded
+            : TerminalSymbols.disclosureCollapsed)
+            .frame(width: DisclosureMetrics.triangleColumnWidth)
+        if rowOwnsFocus {
+            // The same four cells, still clickable — the focus gutter is drawn
+            // by the list's own cursor rather than by a button here, so the
+            // glyph is padded to keep the column it had.
+            glyph
+                .padding(.leading, BorderRenderer.focusIndicatorWidth)
+                .onTapGesture { _, _ in toggle() }
+        } else {
+            Button(action: toggle, label: { glyph })
+                .buttonStyle(.plain)
         }
     }
 

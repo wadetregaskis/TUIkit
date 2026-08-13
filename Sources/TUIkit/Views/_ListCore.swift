@@ -845,7 +845,20 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
-        handler.primaryAction = primaryAction
+        // A hierarchical list's rows come from an `OutlineGroup`, which is what
+        // knows how to open one — reached the same way `.onMove` / `.onDelete`
+        // are, by asking the content.
+        let outline = content as? any OutlineRowActivating
+        handler.outlineActivation = outline
+        // Return ACTIVATES the focused row, and for a branch with no other
+        // action the activation is to disclose it. An app's own
+        // `.onRowActivate` still wins — Left / Right keep the tree reachable
+        // when it does.
+        handler.primaryAction =
+            primaryAction
+            ?? outline.map { activating in
+                { id in activating.setRowExpanded(AnyHashable(id), to: nil) }
+            }
         // An editable `ForEach` (`.onDelete` / `.onMove`) makes the focused row
         // deletable via the Delete / Backspace key and draggable to reorder.
         // Wired ONLY for the homogeneous all-content list, where a row's focus

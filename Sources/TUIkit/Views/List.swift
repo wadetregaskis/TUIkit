@@ -566,7 +566,10 @@ extension List where Footer == EmptyView {
 //
 // The disclosure triangle is what opens a node; the rest of the row is the
 // list's, to select. That division is the reason ``OutlineGroup`` narrows its
-// toggle target where ``DisclosureGroup`` does not.
+// toggle target where ``DisclosureGroup`` does not, and it is the same division
+// from the keyboard: Space selects the focused row, Return activates it (which
+// for a branch is to disclose it, unless `.onRowActivate` claims Return), and
+// Right / Left open and close it regardless.
 
 extension List where Footer == EmptyView, SelectionValue == Int {
     /// Creates a list of a tree, without selection.

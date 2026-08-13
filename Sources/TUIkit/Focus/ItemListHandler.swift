@@ -260,6 +260,39 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// behaviour: Enter and Space both toggle selection.
     var primaryAction: ((SelectionValue) -> Void)?
 
+    /// The tree inside this list, when there is one — see
+    /// ``OutlineRowActivating``. Left and Right collapse and expand through it.
+    var outlineActivation: (any OutlineRowActivating)?
+
+    /// Opens or closes the branch the cursor is on.
+    ///
+    /// - Returns: Whether anything moved. `false` when the list is not a tree,
+    ///   when the focused row is a leaf, and when the branch is already in the
+    ///   requested state — the key falls through in each case.
+    func setFocusedRowExpanded(_ expanded: Bool) -> Bool {
+        guard let outlineActivation, let id = id(at: focusedIndex) else { return false }
+        return outlineActivation.setRowExpanded(AnyHashable(id), to: expanded)
+    }
+
+    /// Deletes the focused row when the enclosing `ForEach` is deletable.
+    ///
+    /// The focus index IS the data offset here — `onDelete` is wired only for
+    /// the homogeneous all-content list (see `_ListCore`), so no header/footer
+    /// rows shift it.
+    ///
+    /// - Returns: Whether a row was deleted. `false` leaves Delete / Backspace
+    ///   to fall through, so a plain list never swallows either.
+    private func deleteFocusedRow() -> Bool {
+        guard let onDelete, focusedIndex >= 0, focusedIndex < itemCount else { return false }
+        let offset = focusedIndex
+        onDelete(IndexSet(integer: offset))
+        // The row below slides up into this slot; keep focus on it, clamped to
+        // the about-to-shrink data (itemCount refreshes next render).
+        focusedIndex = max(0, min(offset, itemCount - 2))
+        ensureFocusedItemVisible()
+        return true
+    }
+
     /// The `.onDelete(perform:)` action from an editable `ForEach`, if any:
     /// pressing Delete / Backspace on the focused row invokes it with that
     /// row's data offset (its focus index, in the all-content list this is only
@@ -705,22 +738,16 @@ extension ItemListHandler {
             handleSelectionKey(event.key)
             return true
 
+        // A tree's own keys, and the reason the row does not have to spend
+        // Space or Return on disclosure: Right opens the focused branch, Left
+        // closes it. Both fall through on a leaf, on a node already in that
+        // state, and on a list that is not a tree at all — the list has no
+        // other use for either key, so nothing is taken away.
+        case .right, .left:
+            return setFocusedRowExpanded(event.key == .right)
+
         case .delete, .backspace:
-            // Delete the focused row when the enclosing ForEach is deletable.
-            // The focus index IS the data offset here — `onDelete` is wired only
-            // for the homogeneous all-content list (see `_ListCore`), so no
-            // header/footer rows shift it. Left inert (fall through) otherwise,
-            // so a plain list never swallows Backspace.
-            guard let onDelete, focusedIndex >= 0, focusedIndex < itemCount else {
-                return false
-            }
-            let offset = focusedIndex
-            onDelete(IndexSet(integer: offset))
-            // The row below slides up into this slot; keep focus on it, clamped
-            // to the about-to-shrink data (itemCount refreshes next render).
-            focusedIndex = max(0, min(offset, itemCount - 2))
-            ensureFocusedItemVisible()
-            return true
+            return deleteFocusedRow()
 
         default:
             return false

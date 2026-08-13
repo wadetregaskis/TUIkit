@@ -323,7 +323,9 @@ struct ListPage: View {
             // A tree as the list's OWN rows: every visible node is a row, so
             // the cursor walks nodes, the selection binding holds a node's id,
             // and scrolling addresses nodes. The triangle opens a branch; the
-            // rest of the row belongs to the list, to select.
+            // rest of the row belongs to the list, to select — and the keyboard
+            // divides the same way, Space to the selection and Return (or
+            // Right / Left) to the disclosure.
             DemoSection(L("page.list.treeSection")) {
                 List(outlineDemoTree, children: \.children, selection: $treeSelection) { node in
                     Text(verbatim: node.id)
@@ -338,6 +340,7 @@ struct ListPage: View {
                     L("page.list.help.jump"),
                     L("page.list.help.fastScroll"),
                     L("page.list.help.select"),
+                    L("page.list.help.tree"),
                     L("page.list.help.switch"),
                     L("page.list.help.wheel"),
                 ]
