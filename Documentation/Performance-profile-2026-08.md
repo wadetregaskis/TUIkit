@@ -2055,3 +2055,101 @@ end (`317e8587`…`048708c2`) — **every scenario faster**:
 Three shipped changes: the width scan (§29), the identity key and the
 state-storage mirror (§30). All 34 scenario/scale frame checksums are
 byte-identical to the session's starting binary throughout.
+
+---
+
+## 32. Area 4 — the allocator, found by profiling a different shape (2026-08-13)
+
+Everything above came from profiling `fanout`. Profiling `tables-scroll`
+instead — the next most expensive scenario, and a completely different tree —
+found a bottleneck none of the `fanout` work would ever have reached.
+
+On `tables-scroll` the frame is dominated by **libsystem_malloc**, not by ARC,
+casts or metadata (2500 iterations, 6862 ms on-CPU):
+
+| ms | % | self time — leaf frames |
+|---|---|---|
+| 306 | 4.5 | `tiny_free_list_add_ptr` |
+| 267 | 3.9 | `tiny_free_reattach_region` |
+| 244 | 3.6 | `tiny_free_detach_region` |
+| 238 | 3.5 | `tiny_malloc_from_free_list` |
+| 231 | 3.4 | `tiny_free_list_remove_ptr` |
+| 213 | 3.1 | `tiny_free_no_lock` |
+| 154 | 2.2 | `tiny_free_scan_madvise_free` |
+| 137 | 2.0 | `free_tiny` |
+| | **26.2%** | **in the allocator** |
+
+The `detach_region` / `reattach_region` / `scan_madvise_free` entries are the
+giveaway: that is not steady free-list traffic, it is the heap repeatedly
+growing and shrinking across region boundaries — the signature of large
+transient allocations churning every frame.
+
+Above them:
+
+    _TableCore.renderRow(…) ......................... 2905 ms  42.3%
+      Sequence.map<A, B>(_:) ........................ 2722 ms  39.6%
+        partial apply for thunk … (@in_guaranteed
+          TableColumn<…>) ............................1462 ms  21.3%
+    static ANSIRenderer.render(_:with:) ............. 1242 ms  18.1%
+    static ANSIRenderer.buildStyleCodes(_:) .......... 469 ms   6.8%
+
+### Two costs, both per row
+
+**Allocation.** `renderRow` built a spacing `String(repeating:)`, an array of
+styled cells through a generic `map`, the `joined` result, three
+concatenations and a padding `String(repeating:)` — ~N+5 allocations per row,
+every one discarded immediately.
+
+**Restyling.** It called `ANSIRenderer.colorize` once per cell with the *same*
+foreground each time, rebuilding an identical `TextStyle`, re-deriving its
+codes and re-joining them for every column of every row.
+
+Now `ANSIRenderer.styleSequence(for:)` exposes the SGR introducer `render`
+emits, so a row derives it once and wraps each cell as
+`sequence + text + reset` — byte-for-byte what `colorize` produced — and the
+row is appended into a single reserved buffer, with `asciiSpaces` for spacing
+and padding. One allocation per row (commit a6b5aedb).
+
+| scenario | change | | scenario | change |
+|---|---|---|---|---|
+| `table` | **−33.8%** | | `framedcolumns` | −1.2% |
+| `tables-scroll` | **−29.8%** | | `dashboard` | −0.8% |
+| `tables-vstack` | −12.3% | | others | −0.0 to −0.8% |
+| `churn` | −2.3% | | `modifiers` | +1.2% (noise) |
+
+`table-multiline` was **exactly 0.0%** — because multi-line cells compose
+through `renderMultiLineRow`, which carried its own copy of the same pattern,
+running once per *line* rather than once per row. Same treatment there
+(commit df3a40e8): **`table-multiline` −25.1%**.
+
+That "flat" result was the useful signal. A shared cost duplicated into a
+sibling function shows up as one scenario stubbornly not moving while its
+neighbours do.
+
+### Measurement note
+
+Every scenario outside the table family moved +1.0 to +5.4% on one pass of the
+multi-line A/B. Re-running with the **binaries swapped** put `churn` at +4.5%
+in the other direction — a contradiction, so it was drift, not an effect.
+Swapping the order is the cheapest test for whether a small uniform shift is
+real.
+
+### Session total
+
+Interleaved best-of-3 (800 iterations, 2500 for the sub-millisecond
+scenarios), session start → `df3a40e8`:
+
+| scenario | change | | scenario | change |
+|---|---|---|---|---|
+| `dashboard` | −44.1% | | `deep` | −13.8% |
+| `table` | −43.7% | | `megalist` | −13.5% |
+| `tables-scroll` | −36.4% | | `framedcolumns` | −13.5% |
+| `table-multiline` | −34.9% | | `fanout` | −8.9% |
+| `kitchensink` | −27.3% | | `anyview` | −8.5% |
+| `textwall` | −26.6% | | `scrollfollow` | −8.2% |
+| `tables-vstack` | −18.5% | | `customlayout` | −4.9% |
+| `preferences` | −18.5% | | `churn` | −4.0% |
+| `modifiers` | −17.5% | | | |
+
+All 34 scenario/scale frame checksums byte-identical throughout; 4033 tests;
+both apps smoke-walk clean with no structural render-lint findings.
