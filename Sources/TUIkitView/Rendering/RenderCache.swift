@@ -252,6 +252,15 @@ public final class RenderCache: @unchecked Sendable {
     private var measureHits = 0
     private var measureMisses = 0
 
+    /// Cumulative measure-memo counts across every pass this cache has served.
+    ///
+    /// Separate from the per-frame pair above, which ``beginRenderPass()``
+    /// resets. A benchmark run wants the total over its iterations, not the
+    /// last frame's — and wants it without `TUIKIT_DEBUG_RENDER`, because the
+    /// number is the only way to tell a memo that never engaged from one that
+    /// engaged and did not pay (this memo shipped inert once already).
+    public private(set) var measureMemoTotals: (hits: Int, misses: Int) = (0, 0)
+
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
@@ -436,8 +445,13 @@ extension RenderCache {
 
     /// Looks up this pass's memoized `measureChild` result.
     public func lookupMeasure(key: MeasureKey) -> ViewSize? {
-        if let hit = measureEntries[key] { measureHits += 1; return hit }
+        if let hit = measureEntries[key] {
+            measureHits += 1
+            measureMemoTotals.hits += 1
+            return hit
+        }
         measureMisses += 1
+        measureMemoTotals.misses += 1
         return nil
     }
 
