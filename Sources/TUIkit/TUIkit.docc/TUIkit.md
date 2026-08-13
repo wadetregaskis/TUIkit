@@ -134,6 +134,7 @@ struct MyApp: App {
 - ``Card``
 - ``Panel``
 - ``DisclosureGroup``
+- ``OutlineGroup``
 - ``Alert``
 - ``Dialog``
 - ``PresentationDetent``
