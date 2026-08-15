@@ -114,6 +114,13 @@ extension ModalPresentationModifier: Renderable {
             return TUIkit.renderToBuffer(content, context: contentContext)
         }
 
+        // Whether the content forbade interactive dismissal. Read BEFORE the
+        // status-bar item below, which is why it rides a static conformance
+        // rather than a preference — the same constraint the detent has.
+        let dismissIsDisabled =
+            presentationTrait(InteractiveDismissDisabling.self, of: modal)?
+            .interactiveDismissIsDisabled ?? false
+
         // Register the modal focus section and activate it FIRST — so the page
         // rendered beneath registers its controls in the now-inactive page
         // section (and can't steal focus or auto-scroll), while the modal's own
@@ -143,12 +150,18 @@ extension ModalPresentationModifier: Renderable {
             // show), flipping the presentation binding back to false. Section
             // items are cleared each render pass, so closing the modal naturally
             // drops the override and restores the page's own ESC item.
+            //
+            // …unless the content asked not to be dismissed by hand, in which
+            // case the item is not published at all: no key binding, and
+            // nothing on the status bar offering a way out that does not work.
             let isPresented = self.isPresented
-            let dismissItem = StatusBarItem(shortcut: Shortcut.escape, label: "dismiss") {
-                isPresented.wrappedValue = false
+            if !dismissIsDisabled {
+                let dismissItem = StatusBarItem(shortcut: Shortcut.escape, label: "dismiss") {
+                    isPresented.wrappedValue = false
+                }
+                context.environment.statusBar.registerSectionItems(
+                    sectionID: sectionID, items: [dismissItem], composition: .merge)
             }
-            context.environment.statusBar.registerSectionItems(
-                sectionID: sectionID, items: [dismissItem], composition: .merge)
         }
 
         // Render the page beneath as an inert backdrop, isolated from the live
@@ -185,7 +198,7 @@ extension ModalPresentationModifier: Renderable {
         // content's own. It has to be read BEFORE the render — it is the height
         // being rendered into — which is why it rides a static conformance
         // rather than a preference (see ``PresentationDetentsProviding``).
-        let detentHeight = (modal as? any PresentationDetentsProviding)?
+        let detentHeight = presentationTrait(PresentationDetentsProviding.self, of: modal)?
             .resolvedHeight(in: overlayHeight)
 
         var modalBuffer: FrameBuffer

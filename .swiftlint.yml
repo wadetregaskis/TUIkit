@@ -186,6 +186,7 @@ type_name:
     - _LayoutCore
     - _GridCore
     - _PresentationDetentsView
+    - _InteractiveDismissView
     - _ListRowInsetsView
     - _ListRowBackgroundView
     - _ListRowColorView

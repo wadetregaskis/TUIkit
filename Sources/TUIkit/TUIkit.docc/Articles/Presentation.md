@@ -65,9 +65,11 @@ share of it, and `.height(_:)` an exact number of **rows** (a terminal has no
 Two things to know. It must be the content's **outermost** modifier — the
 detent is the height the content is rendered *into*, so it has to be readable
 before that render happens, which is why it rides the view's type rather than a
-preference. And a terminal has no grabber to drag: with several detents and no
-`selection:` binding the smallest applies, so bind one if the sheet should be
-able to change size.
+preference. (An `if` in the sheet's builder is fine; another presentation
+modifier such as ``View/interactiveDismissDisabled(_:)`` is fine either way
+round. Anything else you wrap it in is not.) And a terminal has no grabber to
+drag: with several detents and no `selection:` binding the smallest applies, so
+bind one if the sheet should be able to change size.
 
 ```swift
 @State private var detent: PresentationDetent = .medium
@@ -155,6 +157,25 @@ struct ContentView: View {
 The optional `onDismiss:` closure runs on the presented → dismissed
 transition, whatever cleared the binding — a Close button, a key press, or a
 programmatic change.
+
+### Insisting on an answer
+
+``View/interactiveDismissDisabled(_:)`` takes away the reader's own ways out.
+SwiftUI's gesture is a downward swipe; a terminal's are **Escape** and a click
+outside, so those are what it suppresses — Escape stops being offered on the
+status bar at all, rather than being offered and doing nothing.
+
+```swift
+.sheet(isPresented: $editing) {
+    Editor()
+        .interactiveDismissDisabled(hasUnsavedChanges)
+}
+```
+
+Everything programmatic still closes it: a `Done` button flipping the binding,
+`@Environment(\.dismiss)`, or the app clearing it once whatever the sheet was
+insisting on is done. Alerts and confirmation dialogs are unaffected — Escape
+there chooses the `.cancel` button, which is an answer rather than a dismissal.
 
 As in SwiftUI, there is also an item-driven overload,
 `sheet(item:onDismiss:content:)`: a non-`nil` `Identifiable` value presents

@@ -62,8 +62,8 @@ public enum PresentationDetent: Hashable, Sendable {
 /// Read by a static conformance check rather than a preference, for the reason
 /// the navigation bar's height is a constant: a preference is only readable
 /// *after* the subtree renders, and the detent has to be known *before* it, to
-/// be the height it renders into. The same rule as `.alignmentGuide` follows —
-/// it is read when the wrapper is the presented content's **outermost** view.
+/// be the height it renders into. It is found through any other presentation
+/// trait applied around it — see ``presentationTrait(_:of:)``.
 @MainActor
 protocol PresentationDetentsProviding {
     /// The detents this content offers.
@@ -112,6 +112,10 @@ extension _PresentationDetentsView: Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureChild(content, proposal: proposal, context: context)
     }
+}
+
+extension _PresentationDetentsView: PresentationTraitWrapper {
+    var presentationTraitContent: any View { content }
 }
 
 // MARK: - Modifier

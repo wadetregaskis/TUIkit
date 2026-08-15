@@ -145,7 +145,17 @@ extension PopoverPresentationModifier: Renderable {
         // longer holds the keyboard.
         context.environment.volatileReadTracker?.recordRenderSideEffect()
         let isPresented = self.isPresented
-        let dismiss = { isPresented.wrappedValue = false }
+        // Content that forbade interactive dismissal keeps Escape and the
+        // outside click from closing it — the presenter's two gestures, and
+        // SwiftUI's swipe-down in terminal form. A `Done` button inside, or
+        // `@Environment(\.dismiss)`, still works; that is the point.
+        let dismissIsDisabled =
+            presentationTrait(InteractiveDismissDisabling.self, of: popover)?
+            .interactiveDismissIsDisabled ?? false
+        let dismiss = {
+            guard !dismissIsDisabled else { return }
+            isPresented.wrappedValue = false
+        }
 
         let focusManager = context.environment.focusManager
         focusManager?.registerSection(id: sectionID)
@@ -158,11 +168,13 @@ extension PopoverPresentationModifier: Renderable {
         // the popover.
         focusManager?.markSectionFocusOptional(id: sectionID)
         context.environment.keyEventDispatcher!.grabInput(sectionID: sectionID)
-        context.environment.statusBar.escapeLabelOverride = "close popover"
-        context.environment.keyEventDispatcher!.addHandler(sectionID: sectionID) { event in
-            guard event.key == .escape else { return false }
-            dismiss()
-            return true
+        if !dismissIsDisabled {
+            context.environment.statusBar.escapeLabelOverride = "close popover"
+            context.environment.keyEventDispatcher!.addHandler(sectionID: sectionID) { event in
+                guard event.key == .escape else { return false }
+                dismiss()
+                return true
+            }
         }
 
         var popoverContext = context
@@ -184,7 +196,12 @@ extension PopoverPresentationModifier: Renderable {
         guard !panel.isEmpty else { return baseBuffer }
 
         // The same screen-covering backdrop every menu presentation uses: a
-        // click outside closes it, and the wheel still reaches the page.
+        // click outside closes it, and the wheel still reaches the page. With
+        // dismissal disabled the backdrop is still attached and `dismiss` is
+        // the no-op above — so the click is SWALLOWED rather than passed
+        // through. Letting it reach the page would be the opposite of what was
+        // asked: the popover stays up and something behind it acts on a click
+        // aimed at closing it.
         DropdownMenu.attachDismissBackdrop(to: &panel, context: context, onDismiss: dismiss)
 
         let placement = placement(
