@@ -54,7 +54,22 @@ public struct EnvironmentValues: @unchecked Sendable {
     /// - Returns: The value for the key, or its default value if not set.
     public subscript<K: EnvironmentKey>(key: K.Type) -> K.Value {
         get {
-            if let value = storage[ObjectIdentifier(key)] as? K.Value {
+            // Unwrap the STORAGE lookup before the cast. Doing it in one step
+            // — `storage[…] as? K.Value` — reads correctly and is wrong for
+            // every Optional-valued key: a miss gives `Optional<Any>.none`,
+            // which casts *successfully* to `Optional<Wrapped>.none`, so the
+            // `if let` binds a nil value and `defaultValue` is never reached.
+            // Silently, because the only observable difference is a default
+            // nobody could see was being ignored. Every Optional key in the
+            // tree happens to default to nil, so nothing was wrong today —
+            // but the next one to want a real default would have got nil and
+            // no diagnostic.
+            guard let boxed = storage[ObjectIdentifier(key)] else {
+                return K.defaultValue
+            }
+            // A value that WAS stored, including one deliberately set to nil,
+            // is what the caller asked for.
+            if let value = boxed as? K.Value {
                 return value
             }
             return K.defaultValue
