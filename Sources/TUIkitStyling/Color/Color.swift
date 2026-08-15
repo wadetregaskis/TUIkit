@@ -90,6 +90,52 @@ public struct Color: Sendable, Hashable {
     /// Bright white
     public static let brightWhite = Self(value: .bright(.white))
 
+    // MARK: - SwiftUI's Named Colors
+
+    // The eight names SwiftUI has that the ANSI vocabulary above does not.
+    //
+    // The VALUES are Apple's system palette, sampled from AppKit in the light
+    // (aqua) appearance rather than guessed — `NSColor.systemOrange` and friends
+    // converted to sRGB. SwiftUI resolves these dynamically per appearance; a
+    // terminal has no such notion, so one appearance had to be chosen and light
+    // is the one a default terminal theme matches.
+    //
+    // - Important: These are deliberately NOT the CSS colours of the same name.
+    //   `Color.orange` is Apple's `#FF9500`; CSS "orange" is `#FFA500`, and the
+    //   colour picker's Named-colours tab (``SwatchPalettes``) lists the CSS
+    //   value under that name. Both are correct for what they are: the picker
+    //   browses the web vocabulary, this matches the SwiftUI source you are
+    //   porting. Do not reconcile them.
+    //
+    // `.red`, `.green`, `.blue` and `.yellow` are NOT re-pointed at their system
+    // values. In a terminal those names mean the ANSI slots, which the user's
+    // theme defines — taking that away to gain a nominal match with Apple's
+    // `#FF3B30` would break every themed app on screen.
+
+    /// Grey (Apple's system grey, `#8E8E93`).
+    public static let gray = Self.hex(0x8E_8E_93)
+
+    /// Orange (Apple's system orange, `#FF9500`).
+    public static let orange = Self.hex(0xFF_95_00)
+
+    /// Pink (Apple's system pink, `#FF2D55`).
+    public static let pink = Self.hex(0xFF_2D_55)
+
+    /// Purple (Apple's system purple, `#AF52DE`).
+    public static let purple = Self.hex(0xAF_52_DE)
+
+    /// Brown (Apple's system brown, `#A2845E`).
+    public static let brown = Self.hex(0xA2_84_5E)
+
+    /// Mint (Apple's system mint, `#00C7BE`).
+    public static let mint = Self.hex(0x00_C7_BE)
+
+    /// Teal (Apple's system teal, `#59ADC4`).
+    public static let teal = Self.hex(0x59_AD_C4)
+
+    /// Indigo (Apple's system indigo, `#5856D6`).
+    public static let indigo = Self.hex(0x58_56_D6)
+
     // MARK: - Semantic Colors
 
     /// Primary color (default: blue)
