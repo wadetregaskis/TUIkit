@@ -170,6 +170,12 @@ extension PopoverPresentationModifier: Renderable {
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(context.environment.overlayContentHeight)
         popoverContext.environment.activeFocusSectionID = sectionID
+        // `@Environment(\.dismiss)` inside the popover closes the POPOVER — the
+        // same act as its Escape handler above. Left unset it would mean the
+        // top-level dismissal, which is to quit the application.
+        popoverContext.environment.dismiss = DismissAction {
+            isPresented.wrappedValue = false
+        }
 
         var panel = renderPresentedDialog(
             panelView(context: context), context: popoverContext,

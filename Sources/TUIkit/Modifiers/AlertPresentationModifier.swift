@@ -216,6 +216,14 @@ extension AlertPresentationModifier: Renderable {
         alertContext.environment.dismissMenu = DismissMenuAction {
             dismissAlert.wrappedValue = false
         }
+        // And the SwiftUI-facing spelling of the same thing. `dismissMenu` is
+        // the internal channel `Button` consults; `\.dismiss` is what an app
+        // author writes. Without it the alert's own actions inherit the
+        // top-level meaning of dismissal, which is to quit the application.
+        // Closes without choosing, exactly as `dismissMenu` does.
+        alertContext.environment.dismiss = DismissAction {
+            dismissAlert.wrappedValue = false
+        }
         var alertBuffer = renderPresentedDialog(
             alert, context: alertContext,
             capHeight: context.environment.overlayContentHeight)

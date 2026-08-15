@@ -18,10 +18,20 @@ import TUIkitCore
 /// `App.main()` returns. Unlike calling `exit(0)`, this lets normal Swift
 /// cleanup run.
 ///
-/// Inside a ``NavigationStack``'s pushed screen it means what SwiftUI means:
-/// go back one screen. The stack installs its own action into the environment
-/// for the screen it presents, so the same `dismiss()` call does the right
-/// thing wherever it is written.
+/// Anywhere *inside* something dismissable it means what SwiftUI means, because
+/// each of those installs its own action into the environment of what it
+/// presents: a ``NavigationStack``'s pushed screen goes back one screen, and a
+/// `sheet`, `modal`, `fullScreenCover`, `popover`, `alert` or
+/// `confirmationDialog` closes — the same act as that presentation's Escape
+/// route, so an `onDismiss` runs for either. The same `dismiss()` call
+/// therefore does the right thing wherever it is written, and the exit-the-app
+/// meaning above is only what is left when nothing encloses the view.
+///
+/// - Important: That fallback is why installing the action is not optional. A
+///   presentation that forgets leaves its content holding the top-level
+///   meaning, and `Button("Done") { dismiss() }` — the shape SwiftUI's own
+///   documentation teaches — quits the program instead of closing the sheet.
+///   ``PresentationDismissTests`` pins every presentation against that.
 ///
 /// # Example
 ///

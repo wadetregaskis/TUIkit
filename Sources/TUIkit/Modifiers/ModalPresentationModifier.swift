@@ -53,6 +53,25 @@ public struct ModalPresentationModifier<Content: View, Modal: View>: View {
     public var body: Never {
         fatalError("ModalPresentationModifier renders via Renderable")
     }
+
+    /// What `@Environment(\.dismiss)` means to the content being presented.
+    ///
+    /// Inside a presentation, dismissing means closing THAT presentation —
+    /// which is the one thing `DismissAction`'s default cannot know. Left
+    /// alone, the presented content inherits the top-level meaning, and the
+    /// top-level meaning of dismissing a terminal app is to quit it: a
+    /// `Button("Done") { dismiss() }` in a sheet — the shape SwiftUI's own
+    /// documentation teaches — exited the whole program.
+    ///
+    /// Flipping the binding is deliberately the same act the ESC status-bar
+    /// item performs, so the two routes out of a presentation cannot drift:
+    /// `onDismiss` fires off the binding's presented → dismissed transition
+    /// (see ``SwiftUICore/View/modal(isPresented:onDismiss:content:)``), so it
+    /// runs for `dismiss()` exactly as it does for ESC.
+    func dismissAction() -> DismissAction {
+        let isPresented = self.isPresented
+        return DismissAction { isPresented.wrappedValue = false }
+    }
 }
 
 // MARK: - Renderable
@@ -159,6 +178,7 @@ extension ModalPresentationModifier: Renderable {
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(overlayHeight)
         modalContext.environment.activeFocusSectionID = sectionID
+        modalContext.environment.dismiss = dismissAction()
 
         // A detent, if the content named one, decides the height instead of the
         // content's own. It has to be read BEFORE the render — it is the height
