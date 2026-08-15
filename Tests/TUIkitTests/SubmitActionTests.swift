@@ -108,6 +108,65 @@ struct SubmitActionTests {
         #expect(log == ["field", "cascade"], "both ran, most-specific first")
     }
 
+    // MARK: - submitScope
+
+    /// The fixture first, so the block below is measuring a block rather than a
+    /// field that never submitted in the first place.
+    @Test("submitScope stops the cascade reaching an enclosing .onSubmit")
+    func scopeBlocksTheCascade() {
+        func submitCount(scoped: Bool) -> Int {
+            let focusManager = FocusManager()
+            let context = makeContext(focusManager)
+            var submitted = 0
+            let field = TextField("Tag", text: .constant("x"))
+            let view = VStack {
+                if scoped { field.submitScope() } else { field }
+            }
+            .onSubmit { submitted += 1 }
+            _ = renderToBuffer(view, context: context)
+            _ = focusManager.dispatchKeyEvent(KeyEvent(key: .enter))
+            return submitted
+        }
+        #expect(submitCount(scoped: false) == 1, "the fixture really does cascade")
+        #expect(submitCount(scoped: true) == 0, "…and the scope stops it")
+    }
+
+    /// The half that makes it a boundary rather than an off switch: what the
+    /// scope blocks is what is OUTSIDE it.
+    @Test("an .onSubmit inside the scope still runs")
+    func scopeDoesNotBlockItsOwn() {
+        let focusManager = FocusManager()
+        let context = makeContext(focusManager)
+        var log: [String] = []
+
+        let view = VStack {
+            VStack {
+                TextField("Tag", text: .constant("x"))
+            }
+            .onSubmit { log.append("inner") }
+            .submitScope()
+        }
+        .onSubmit { log.append("outer") }
+
+        _ = renderToBuffer(view, context: context)
+        _ = focusManager.dispatchKeyEvent(KeyEvent(key: .enter))
+        #expect(log == ["inner"], "inner ran, outer was blocked")
+    }
+
+    @Test("submitScope(false) is a no-op")
+    func scopeFalseIsANoOp() {
+        let focusManager = FocusManager()
+        let context = makeContext(focusManager)
+        var submitted = 0
+        let view = VStack {
+            TextField("Tag", text: .constant("x")).submitScope(false)
+        }
+        .onSubmit { submitted += 1 }
+        _ = renderToBuffer(view, context: context)
+        _ = focusManager.dispatchKeyEvent(KeyEvent(key: .enter))
+        #expect(submitted == 1)
+    }
+
     @Test("Rendering (or measuring) never fires the submit action — only Return does")
     func renderDoesNotFire() {
         let focusManager = FocusManager()

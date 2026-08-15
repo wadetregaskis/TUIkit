@@ -43,6 +43,46 @@ extension OnSubmitModifier: Layoutable {
     }
 }
 
+// MARK: - submitScope cascade blocker
+
+/// Hides the enclosing `.onSubmit` actions from its content's subtree.
+///
+/// The mirror image of ``OnSubmitModifier``, and built the same way for the
+/// same reason: it has to read-modify-write the environment at render time,
+/// because what it does is relative to what is already there.
+struct SubmitScopeModifier<Content: View>: View {
+    let content: Content
+    let isBlocking: Bool
+
+    /// Not used during rendering — ``Renderable`` conformance takes priority.
+    var body: some View { content }
+
+    private func modifiedContext(_ context: RenderContext) -> RenderContext {
+        guard isBlocking else { return context }
+        // Emptying the list is the whole mechanism: an `.onSubmit` INSIDE the
+        // scope appends to this empty list and still runs, which is exactly
+        // SwiftUI's rule — the scope blocks submissions from reaching actions
+        // configured *higher up*, not from being handled at all.
+        //
+        // A constant is safe to write with `setting(_:to:)` (which skips the
+        // render cache's environment-change tracking): the value cannot differ
+        // between frames, so there is nothing for a cached subtree to miss.
+        return context.withEnvironment(context.environment.setting(\.submitActions, to: []))
+    }
+}
+
+extension SubmitScopeModifier: Renderable {
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        TUIkitView.renderToBuffer(content, context: modifiedContext(context))
+    }
+}
+
+extension SubmitScopeModifier: Layoutable {
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: modifiedContext(context))
+    }
+}
+
 // MARK: - View extensions
 
 extension View {
@@ -86,5 +126,30 @@ extension View {
     /// - Parameter submitLabel: The label describing the submit action.
     public func submitLabel(_ submitLabel: SubmitLabel) -> some View {
         environment(\.submitLabel, submitLabel)
+    }
+
+    /// Stops submissions from this subtree reaching an enclosing `.onSubmit` —
+    /// mirrors SwiftUI's `submitScope(_:)`.
+    ///
+    /// A form that saves on Return usually wants exactly that, except in the
+    /// one field where Return means something local. Wrapping that field ends
+    /// the cascade at it:
+    ///
+    /// ```swift
+    /// VStack {
+    ///     TextField("Name", text: $name)
+    ///     TextField("Tag", text: $tag)
+    ///         .submitScope()       // Return here does not save the form
+    /// }
+    /// .onSubmit { save() }
+    /// ```
+    ///
+    /// It blocks only what is OUTSIDE it. An `.onSubmit` written inside the
+    /// scope still runs, which is what makes the scope a boundary rather than
+    /// an off switch — and is SwiftUI's rule too.
+    ///
+    /// - Parameter isBlocking: Whether to block the cascade. Default `true`.
+    public func submitScope(_ isBlocking: Bool = true) -> some View {
+        SubmitScopeModifier(content: self, isBlocking: isBlocking)
     }
 }
