@@ -1481,7 +1481,6 @@
   "View.monospacedDigit()",
   "View.moveDisabled(_:)",
   "View.multilineTextAlignment(strategy:)",
-  "View.navigationBarBackButtonHidden(_:)",
   "View.navigationDestination(isPresented:destination:)",
   "View.navigationDestination(item:destination:)",
   "View.navigationDocument(_:)",
