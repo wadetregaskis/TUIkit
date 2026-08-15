@@ -385,6 +385,17 @@ extension Text: Renderable, Layoutable {
         (style.lineLimit ?? context.environment.lineLimit).rowCount
     }
 
+    /// Blank rows between wrapped lines, from ``View/lineSpacing(_:)``.
+    ///
+    /// Read through one accessor for the same reason as the line limit: the
+    /// measure adds these rows to the height it reports, and the render both
+    /// draws them and subtracts them from the lines it is allowed to lay out.
+    /// If the two disagreed, spacing would either reserve rows nothing fills or
+    /// push the last line past the space the parent granted.
+    private func resolvedLineSpacing(context: RenderContext) -> Int {
+        context.environment.lineSpacing
+    }
+
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         // Text has a fixed size based on its content.
         // If a width is proposed, we may word-wrap.
@@ -414,7 +425,13 @@ extension Text: Renderable, Layoutable {
         // the rows the text is allowed to occupy. Resolved against the
         // environment exactly as the render does, or a cascaded
         // `.lineLimit(_:)` would reserve rows the render then refuses to draw.
-        let height = min(wrapped.lines.count, resolvedLineLimit(context: context) ?? wrapped.lines.count)
+        let drawnLines = min(
+            wrapped.lines.count, resolvedLineLimit(context: context) ?? wrapped.lines.count)
+        // …and then the blank rows `.lineSpacing(_:)` interleaves. The limit
+        // counts LINES, as in SwiftUI, so it is applied first and the spacing
+        // expands what survives it.
+        let height = LineSpacingRows.displayRows(
+            forLines: drawnLines, spacing: resolvedLineSpacing(context: context))
 
         // Text is never flexible - it has a fixed size
         return ViewSize.fixed(width, height)
@@ -480,7 +497,13 @@ extension Text: Renderable, Layoutable {
         // run with an ellipsis. Shared with multi-line Table cells via
         // `TextWrapping` so text lays out the same way wherever it's shown.
         let lineLimit = resolvedLineLimit(context: context)
-        let maxHeight = min(context.availableHeight, lineLimit ?? context.availableHeight)
+        let spacing = resolvedLineSpacing(context: context)
+        // The height budget is in ROWS, but the wrap counts LINES — and with
+        // spacing those differ. Convert first, or a spaced text lays out as many
+        // lines as there are rows and then overflows by the gaps between them.
+        let linesThatFit = LineSpacingRows.lines(
+            fittingRows: context.availableHeight, spacing: spacing)
+        let maxHeight = min(linesThatFit, lineLimit ?? linesThatFit)
         let wrapped = TextWrapping.fitMeasured(
             Self.displayString(content, textCase: effectiveCase, context: context),
             width: maxWidth, maxLines: maxHeight, mode: mode, atWordBoundary: atWordBoundary)
@@ -548,7 +571,16 @@ extension Text: Renderable, Layoutable {
             styledLines = plainLines.map { ANSIRenderer.render($0, with: resolvedStyle) }
         }
 
-        return FrameBuffer(lines: styledLines, width: knownWidth, lineWidths: lineWidths)
+        // Interleave the spacing LAST, after styling: a blank row carries no
+        // text, so it needs no ANSI run, and inserting it earlier would have the
+        // run-attribution walk step over rows that are not part of the content.
+        guard spacing > 0, styledLines.count > 1 else {
+            return FrameBuffer(lines: styledLines, width: knownWidth, lineWidths: lineWidths)
+        }
+        return FrameBuffer(
+            lines: LineSpacingRows.interleaved(styledLines, spacing: spacing, blank: ""),
+            width: knownWidth,
+            lineWidths: LineSpacingRows.interleaved(lineWidths, spacing: spacing, blank: 0))
     }
 
     /// The palette role this text draws with, used to match `.semanticColor`
