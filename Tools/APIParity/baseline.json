@@ -1454,7 +1454,6 @@
   "View.ignoresSafeArea(_:edges:)",
   "View.imageScale(_:)",
   "View.interactionActivityTrackingTag(_:)",
-  "View.interactiveDismissDisabled(_:)",
   "View.invalidatableContent(_:)",
   "View.itemProvider(_:)",
   "View.kerning(_:)",
