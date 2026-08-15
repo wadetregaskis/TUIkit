@@ -33,6 +33,10 @@
 /// unknown name — the label renders **just its title**, with no icon column and
 /// no stray gap, so the call site stays correct everywhere. See ``SFSymbol``.
 public struct Label<Title: View, Icon: View>: View {
+    /// How the title and icon are arranged, and which of them is shown. Set by
+    /// ``View/labelStyle(_:)`` anywhere above this label.
+    @Environment(\.labelStyle) private var style
+
     let title: Title
     let icon: Icon
     /// When `false`, only the title is rendered (no icon, no leading gap). Set
@@ -59,20 +63,14 @@ public struct Label<Title: View, Icon: View>: View {
     }
 
     public var body: some View {
-        if iconIsVisible {
-            HStack(spacing: 1) {
-                // Text decorations (underline, strikethrough) that an enclosing
-                // view cascades — e.g. a Link underlining its label — clash with
-                // an icon glyph's own strokes, so the icon opts out. The title
-                // still honours them.
-                icon
-                    .underline(false)
-                    .strikethrough(false)
-                title
-            }
-        } else {
-            title
-        }
+        // The arrangement itself lives in the style — ``DefaultLabelStyle`` is
+        // the icon-gap-title composition this used to inline, including the
+        // icon's opt-out from cascaded text decorations.
+        style.makeAnyBody(
+            configuration: LabelStyleConfiguration(
+                title: AnyView(title),
+                icon: AnyView(icon),
+                iconIsVisible: iconIsVisible))
     }
 }
 
