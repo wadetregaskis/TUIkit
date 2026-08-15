@@ -23,6 +23,10 @@ struct MenuTests {
     {
         let tui = TUIContext()
         var environment = EnvironmentValues()
+        // A status bar of this frame's own: the environment no longer
+        // hands out a shared instance, which is what let a parallel
+        // neighbour's items be read back as this test's.
+        environment.statusBar = StatusBarState()
         environment.focusManager = FocusManager()
         environment.applyRuntimeServices(from: tui)
         if let overlayContentHeight { environment.overlayContentHeight = overlayContentHeight }
@@ -293,6 +297,10 @@ struct MenuTests {
         func frame(pulsePhase: Double) -> [String] {
             let tui = TUIContext()
             var environment = EnvironmentValues()
+            // A status bar of this frame's own: the environment no longer
+            // hands out a shared instance, which is what let a parallel
+            // neighbour's items be read back as this test's.
+            environment.statusBar = StatusBarState()
             environment.focusManager = FocusManager()
             environment.applyRuntimeServices(from: tui)
             environment.pulsePhase = pulsePhase
@@ -532,9 +540,9 @@ struct MenuTests {
         let (tui, context) = harness()
         // The status bar is shared per-app state, so start from a known point
         // rather than assuming no earlier test in this process claimed it.
-        context.environment.statusBar.escapeLabelOverride = nil
+        context.environment.statusBar?.escapeLabelOverride = nil
         openPopup(threeItemMenu, as: .keyboard, tui: tui, context: context)
-        #expect(context.environment.statusBar.escapeLabelOverride != nil)
+        #expect(context.environment.statusBar?.escapeLabelOverride != nil)
     }
 
     // MARK: - Style plumbing

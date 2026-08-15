@@ -209,7 +209,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         context: RenderContext, isOpen: Bool
     ) {
         guard isOpen, !context.isMeasuring else { return }
-        context.environment.statusBar.escapeLabelOverride = "close drop-down menu"
+        context.environment.statusBar?.escapeLabelOverride = "close drop-down menu"
     }
 
     // MARK: - Mouse handler wiring

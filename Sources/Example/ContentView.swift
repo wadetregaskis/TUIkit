@@ -144,7 +144,7 @@ struct ContentView: View {
                 case .f3:
                     // Cycle the border appearance globally. `@Environment`
                     // resolves correctly inside this handler.
-                    appearanceManager.cycleNext()
+                    appearanceManager?.cycleNext()
                     return true
                 default:
                     // Quick-jump shortcuts only work from the menu page.

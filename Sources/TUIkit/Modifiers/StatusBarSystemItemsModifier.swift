@@ -43,7 +43,9 @@ struct StatusBarSystemItemsModifier<Content: View>: View {
 
 extension StatusBarSystemItemsModifier: Renderable {
     func renderToBuffer(context renderContext: RenderContext) -> FrameBuffer {
-        let statusBar = renderContext.environment.statusBar
+        guard let statusBar = renderContext.environment.statusBar else {
+            return TUIkit.renderToBuffer(content, context: renderContext)
+        }
         statusBar.showThemeItem = showTheme
         statusBar.showAppearanceItem = showAppearance
 

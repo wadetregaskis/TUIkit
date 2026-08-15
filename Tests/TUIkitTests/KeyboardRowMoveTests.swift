@@ -474,13 +474,13 @@ struct KeyboardRowMoveTests {
         env.focusManager?.beginRenderPass()
         _ = renderToBuffer(view, context: context)
         env.focusManager?.endRenderPass()
-        #expect(context.environment.statusBar.escapeLabelOverride == nil, "nothing held yet")
+        #expect(context.environment.statusBar?.escapeLabelOverride == nil, "nothing held yet")
 
         #expect(env.focusManager?.dispatchKeyEvent(KeyEvent(key: .character("r"), ctrl: true)) == true)
         env.focusManager?.beginRenderPass()
         _ = renderToBuffer(view, context: context)
         env.focusManager?.endRenderPass()
-        #expect(context.environment.statusBar.escapeLabelOverride == "cancel move")
+        #expect(context.environment.statusBar?.escapeLabelOverride == "cancel move")
     }
 
     /// While a row is out of the list the cursor belongs to the SLOT — that is

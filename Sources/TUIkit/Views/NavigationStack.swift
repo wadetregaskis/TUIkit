@@ -305,8 +305,8 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         // lightweight kind: a pushed screen is not a modal, so the app's other
         // shortcuts keep working.
         if !context.isMeasuring {
-            barContext.environment.statusBar.escapeLabelOverride = "go back"
-            barContext.environment.statusBar.escapeClaimGrabsInput = false
+            barContext.environment.statusBar?.escapeLabelOverride = "go back"
+            barContext.environment.statusBar?.escapeClaimGrabsInput = false
             barContext.environment.keyEventDispatcher?.addHandler(
                 sectionID: barContext.environment.activeFocusSectionID
             ) { event in

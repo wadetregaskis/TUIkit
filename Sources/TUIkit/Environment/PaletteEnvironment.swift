@@ -41,18 +41,27 @@ extension EnvironmentValues {
 
 /// Environment key for the palette manager.
 private struct PaletteManagerKey: EnvironmentKey {
-    static let defaultValue = ThemeManager(items: PaletteRegistry.all)
+    static let defaultValue: ThemeManager? = nil
 }
 
 extension EnvironmentValues {
     /// The palette manager for cycling and setting palettes.
     ///
     /// ```swift
-    /// let paletteManager = context.environment.paletteManager
-    /// paletteManager.cycleNext()
-    /// paletteManager.setCurrent(SystemPalette(.amber))
+    /// context.environment.paletteManager?.cycleNext()
+    /// context.environment.paletteManager?.setCurrent(SystemPalette(.amber))
     /// ```
-    public var paletteManager: ThemeManager {
+    ///
+    /// `nil` outside a running application. These are the app's own objects,
+    /// created by `AppRunner` and published by `RenderLoop.buildEnvironment()`
+    /// — so a bare `EnvironmentValues()` (a headless render, a test) has none,
+    /// which is the truth. It used to hand out a SHARED instance instead, and
+    /// every such render mutated the same object: two tests rendering sheets in
+    /// parallel both registered their ESC item into it and read each other's
+    /// back. The convention here is the one `focusManager` and
+    /// `keyEventDispatcher` already follow — a runtime service is Optional, and
+    /// absent means absent.
+    public var paletteManager: ThemeManager? {
         get { self[PaletteManagerKey.self] }
         set { self[PaletteManagerKey.self] = newValue }
     }

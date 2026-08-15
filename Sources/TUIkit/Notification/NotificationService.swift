@@ -148,7 +148,7 @@ extension NotificationService {
 
 /// Environment key for the notification service.
 private struct NotificationServiceKey: EnvironmentKey {
-    static let defaultValue = NotificationService()
+    static let defaultValue: NotificationService? = nil
 }
 
 extension EnvironmentValues {
@@ -160,7 +160,17 @@ extension EnvironmentValues {
     /// ```swift
     /// NotificationService.current.post("Saved!")
     /// ```
-    public var notificationService: NotificationService {
+    ///
+    /// `nil` outside a running application. These are the app's own objects,
+    /// created by `AppRunner` and published by `RenderLoop.buildEnvironment()`
+    /// — so a bare `EnvironmentValues()` (a headless render, a test) has none,
+    /// which is the truth. It used to hand out a SHARED instance instead, and
+    /// every such render mutated the same object: two tests rendering sheets in
+    /// parallel both registered their ESC item into it and read each other's
+    /// back. The convention here is the one `focusManager` and
+    /// `keyEventDispatcher` already follow — a runtime service is Optional, and
+    /// absent means absent.
+    public var notificationService: NotificationService? {
         get { self[NotificationServiceKey.self] }
         set { self[NotificationServiceKey.self] = newValue }
     }

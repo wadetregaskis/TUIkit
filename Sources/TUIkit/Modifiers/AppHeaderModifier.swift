@@ -44,7 +44,11 @@ struct AppHeaderModifier<Content: View, Header: View>: View {
 
 extension AppHeaderModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let appHeader = context.environment.appHeader
+        // Without an app there is no header to hand the buffer to, and
+        // rendering it would be work nothing reads.
+        guard let appHeader = context.environment.appHeader else {
+            return TUIkit.renderToBuffer(content, context: context)
+        }
 
         // Render the header content to a buffer and store it in state.
         // The RenderLoop will pick it up and render it separately.

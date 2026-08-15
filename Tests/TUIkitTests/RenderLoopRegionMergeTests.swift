@@ -37,6 +37,10 @@ struct RenderLoopRegionMergeTests {
     private func makeContext(width: Int = 80, height: Int = 24) -> RenderContext {
         let tuiContext = TUIContext()
         var environment = EnvironmentValues()
+        // A status bar of this frame's own: the environment no longer
+        // hands out a shared instance, which is what let a parallel
+        // neighbour's items be read back as this test's.
+        environment.statusBar = StatusBarState()
         environment.focusManager = FocusManager()
         environment.applyRuntimeServices(from: tuiContext)
         return RenderContext(
@@ -321,6 +325,10 @@ struct RenderLoopRegionMergeTests {
     func clickOnActionLessItemFiresSynthesizeKey() {
         var synthesisedKey: KeyEvent?
         var environment = EnvironmentValues()
+        // A status bar of this frame's own: the environment no longer
+        // hands out a shared instance, which is what let a parallel
+        // neighbour's items be read back as this test's.
+        environment.statusBar = StatusBarState()
         let tuiContext = TUIContext()
         environment.focusManager = FocusManager()
         environment.applyRuntimeServices(from: tuiContext)

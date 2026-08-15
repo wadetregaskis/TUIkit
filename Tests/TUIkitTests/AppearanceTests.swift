@@ -95,11 +95,13 @@ struct AppearanceEnvironmentTests {
         #expect(env.appearance.rawId == .heavy)
     }
 
-    @Test("AppearanceManager can be accessed via environment")
-    func managerEnvironmentAccess() {
-        let env = EnvironmentValues()
-        let manager = env.appearanceManager
-        #expect(manager.items.count == 4)
+    /// Absent by default: the manager is the running app's, published by
+    /// `RenderLoop.buildEnvironment()`. A bare `EnvironmentValues()` has no
+    /// app, so it has no manager — it used to hand out a shared one that any
+    /// test could mutate for all the others.
+    @Test("no appearance manager without an application")
+    func managerAbsentByDefault() {
+        #expect(EnvironmentValues().appearanceManager == nil)
     }
 
     @Test("Custom AppearanceManager can be set via environment")
@@ -109,6 +111,6 @@ struct AppearanceEnvironmentTests {
             items: [Appearance.line, Appearance.heavy] as [Appearance]
         )
         env.appearanceManager = customManager
-        #expect(env.appearanceManager.items.count == 2)
+        #expect(env.appearanceManager?.items.count == 2)
     }
 }

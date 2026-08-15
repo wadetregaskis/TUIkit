@@ -44,7 +44,11 @@ struct NotificationHostModifier<Content: View>: View {
 extension NotificationHostModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let baseBuffer = TUIkit.renderToBuffer(content, context: context)
-        let service = context.environment.notificationService
+        // Without an app there is no service, so there is nothing to show
+        // over the content.
+        guard let service = context.environment.notificationService else {
+            return baseBuffer
+        }
         let activeEntries = service.activeEntries()
 
         guard !activeEntries.isEmpty else {

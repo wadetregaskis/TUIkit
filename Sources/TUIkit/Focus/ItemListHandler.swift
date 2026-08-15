@@ -1467,18 +1467,18 @@ extension ItemListHandler {
         // the page, so a row can be picked up here, carried to another subpage,
         // and dropped there. (See ``cancelMouseDragReorder()``.)
         if isKeyboardMove {
-            context.environment.statusBar.escapeLabelOverride = "cancel move"
-            context.environment.statusBar.escapeClaimGrabsInput = false
+            context.environment.statusBar?.escapeLabelOverride = "cancel move"
+            context.environment.statusBar?.escapeClaimGrabsInput = false
             return
         }
 
         guard selectionMode == .multi else { return }
         if isExtendingSelection {
-            context.environment.statusBar.escapeLabelOverride = "stop extending selection"
-            context.environment.statusBar.escapeClaimGrabsInput = false
+            context.environment.statusBar?.escapeLabelOverride = "stop extending selection"
+            context.environment.statusBar?.escapeClaimGrabsInput = false
         } else if let selection = multiSelection?.wrappedValue, !selection.isEmpty {
-            context.environment.statusBar.escapeLabelOverride = "clear selection"
-            context.environment.statusBar.escapeClaimGrabsInput = false
+            context.environment.statusBar?.escapeLabelOverride = "clear selection"
+            context.environment.statusBar?.escapeClaimGrabsInput = false
         }
     }
 }

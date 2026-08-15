@@ -287,7 +287,7 @@ struct EscapeClaimRenderTests {
         let context = makeRenderContext(width: 30, height: 8) { env, _ in
             env.focusManager = focus
         }
-        let statusBar = context.environment.statusBar
+        let statusBar = context.environment.statusBar!
 
         func render() {
             // What the RenderLoop's beginRenderPass does for these.

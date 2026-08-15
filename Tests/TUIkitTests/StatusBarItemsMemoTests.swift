@@ -23,6 +23,10 @@ struct StatusBarItemsMemoTests {
     private func renderFrame<V: View>(_ view: V, tuiContext: TUIContext) -> [String] {
         let focusManager = FocusManager()
         var environment = EnvironmentValues()
+        // A status bar of this frame's own: the environment no longer
+        // hands out a shared instance, which is what let a parallel
+        // neighbour's items be read back as this test's.
+        environment.statusBar = StatusBarState()
         environment.focusManager = focusManager
         environment.applyRuntimeServices(from: tuiContext)
         environment.activeFocusSectionID = "section"
@@ -30,17 +34,17 @@ struct StatusBarItemsMemoTests {
             availableWidth: 40, availableHeight: 10,
             environment: environment, tuiContext: tuiContext)
 
-        environment.statusBar.clearSectionItems()
+        environment.statusBar?.clearSectionItems()
         // The bar derives its active section from the focus manager, exactly
         // as `RenderLoop.beginRenderPass` wires it.
-        environment.statusBar.focusManager = focusManager
+        environment.statusBar?.focusManager = focusManager
         focusManager.registerSection(id: "section")
         tuiContext.stateStorage.beginRenderPass()
         tuiContext.renderCache.beginRenderPass()
         _ = renderToBuffer(view, context: context)
         tuiContext.stateStorage.endRenderPass()
         tuiContext.renderCache.removeInactive()
-        return environment.statusBar.currentUserItems.map(\.shortcut)
+        return environment.statusBar?.currentUserItems.map(\.shortcut) ?? []
     }
 
     @Test("A memoized row's status bar items survive a cache-hit frame")

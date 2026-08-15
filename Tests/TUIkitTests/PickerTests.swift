@@ -344,7 +344,7 @@ struct PickerTests {
         // The default StatusBarState is shared across tests via the
         // environment-key default value, so explicitly reset what we care
         // about before checking it.
-        context.environment.statusBar.escapeLabelOverride = nil
+        context.environment.statusBar?.escapeLabelOverride = nil
         var choice = AnyHashable("a")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
 
@@ -362,7 +362,7 @@ struct PickerTests {
         // First render registers the handler; the picker is closed, so it
         // should leave the override untouched (nil by default).
         _ = renderToBuffer(core, context: context)
-        #expect(context.environment.statusBar.escapeLabelOverride == nil)
+        #expect(context.environment.statusBar?.escapeLabelOverride == nil)
 
         // Flip the persisted handler open and re-render — the picker should
         // post the override so a page-level ESC handler reads "close menu".
@@ -379,7 +379,7 @@ struct PickerTests {
         )
         box.value.isOpen = true
         _ = renderToBuffer(core, context: context)
-        #expect(context.environment.statusBar.escapeLabelOverride == "close drop-down menu")
+        #expect(context.environment.statusBar?.escapeLabelOverride == "close drop-down menu")
     }
 
     @Test("A closed picker leaves the existing ESC label override alone")
@@ -390,7 +390,7 @@ struct PickerTests {
         // be a no-op so it does not stomp on whatever else is active —
         // for example a Dialog further down the same frame.
         let context = createTestContext()
-        context.environment.statusBar.escapeLabelOverride = "dismiss"
+        context.environment.statusBar?.escapeLabelOverride = "dismiss"
 
         var choice = AnyHashable("a")
         let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
@@ -406,7 +406,7 @@ struct PickerTests {
         )
 
         _ = renderToBuffer(core, context: context)
-        #expect(context.environment.statusBar.escapeLabelOverride == "dismiss")
+        #expect(context.environment.statusBar?.escapeLabelOverride == "dismiss")
     }
 }
 

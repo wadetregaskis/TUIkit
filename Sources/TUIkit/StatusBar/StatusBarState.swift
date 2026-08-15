@@ -387,7 +387,7 @@ extension StatusBarState {
 
 /// Environment key for accessing the status bar state.
 private struct StatusBarKey: EnvironmentKey {
-    static let defaultValue = StatusBarState()
+    static let defaultValue: StatusBarState? = nil
 }
 
 extension EnvironmentValues {
@@ -396,12 +396,21 @@ extension EnvironmentValues {
     /// Use this to set status bar items from within your views:
     ///
     /// ```swift
-    /// let statusBar = context.environment.statusBar
-    /// statusBar.setItems([
+    /// context.environment.statusBar?.setItems([
     ///     StatusBarItem(shortcut: "q", label: "quit")
     /// ])
     /// ```
-    public var statusBar: StatusBarState {
+    ///
+    /// `nil` outside a running application. These are the app's own objects,
+    /// created by `AppRunner` and published by `RenderLoop.buildEnvironment()`
+    /// — so a bare `EnvironmentValues()` (a headless render, a test) has none,
+    /// which is the truth. It used to hand out a SHARED instance instead, and
+    /// every such render mutated the same object: two tests rendering sheets in
+    /// parallel both registered their ESC item into it and read each other's
+    /// back. The convention here is the one `focusManager` and
+    /// `keyEventDispatcher` already follow — a runtime service is Optional, and
+    /// absent means absent.
+    public var statusBar: StatusBarState? {
         get { self[StatusBarKey.self] }
         set { self[StatusBarKey.self] = newValue }
     }

@@ -322,10 +322,10 @@ struct NavigationStackTests {
 
         // The stack claims ESC for the status bar (so the bar says what the key
         // does now) and registers the handler that acts on it.
-        #expect(context.environment.statusBar.escapeLabelOverride != nil)
+        #expect(context.environment.statusBar?.escapeLabelOverride != nil)
         // …but only lightly: a pushed screen is not a modal, so the app's other
         // shortcuts must keep working behind it.
-        #expect(context.environment.statusBar.escapeClaimGrabsInput == false)
+        #expect(context.environment.statusBar?.escapeClaimGrabsInput == false)
 
         #expect(context.environment.keyEventDispatcher?.dispatch(KeyEvent(key: .escape)) == true)
         #expect(path.isEmpty)

@@ -105,10 +105,10 @@ struct ThemePage: View {
             }
         )
         let appearanceSelection = Binding(
-            get: { appearanceManager.current.id },
+            get: { appearanceManager?.current.id ?? "" },
             set: { id in
                 if let appearance = appearances.first(where: { $0.id == id }) {
-                    appearanceManager.setCurrent(appearance)
+                    appearanceManager?.setCurrent(appearance)
                     // Picking a built-in border deactivates any custom one.
                     styling.customBorder = nil
                 }

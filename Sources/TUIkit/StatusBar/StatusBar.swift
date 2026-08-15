@@ -198,7 +198,7 @@ private struct _StatusBarCore: View, Renderable {
         // Pull the transient escape-label override (set by an open Picker
         // drop-down, an inline editor, etc.) so the escape entry shows
         // "close menu" or similar while the underlying handler is unchanged.
-        let escapeOverride = context.environment.statusBar.escapeLabelOverride
+        let escapeOverride = context.environment.statusBar?.escapeLabelOverride
 
         // Build item strings and capture their visible widths
         // so the layout pass can also report each item's column
@@ -207,7 +207,7 @@ private struct _StatusBarCore: View, Renderable {
         // (set by the dispatcher's .entered / .exited events
         // below) gets a bumped tint so the user has visual
         // confirmation that an item is clickable.
-        let hoveredID = context.environment.statusBar.hoveredItemID
+        let hoveredID = context.environment.statusBar?.hoveredItemID
         let layouts = combinedItems.map { item -> ItemLayout in
             let display = renderItemString(
                 item: item,
@@ -372,7 +372,7 @@ private struct _StatusBarCore: View, Renderable {
         // .entered / .exited transitions when motion tracking is
         // active.
         dispatcher.requestFeature(.motion)
-        let statusBarState = context.environment.statusBar
+        guard let statusBarState = context.environment.statusBar else { return buffer }
         let captureSynthesizeKey = context.environment.synthesizeKeyEvent
 
         var result = buffer

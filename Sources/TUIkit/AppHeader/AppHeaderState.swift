@@ -90,7 +90,7 @@ extension AppHeaderState {
 
 /// Environment key for the app header state.
 private struct AppHeaderKey: EnvironmentKey {
-    static let defaultValue = AppHeaderState()
+    static let defaultValue: AppHeaderState? = nil
 }
 
 extension EnvironmentValues {
@@ -98,7 +98,17 @@ extension EnvironmentValues {
     ///
     /// Used internally by ``AppHeaderModifier`` to store the header content
     /// and by `RenderLoop` to render it at the top of the terminal.
-    var appHeader: AppHeaderState {
+    ///
+    /// `nil` outside a running application. These are the app's own objects,
+    /// created by `AppRunner` and published by `RenderLoop.buildEnvironment()`
+    /// — so a bare `EnvironmentValues()` (a headless render, a test) has none,
+    /// which is the truth. It used to hand out a SHARED instance instead, and
+    /// every such render mutated the same object: two tests rendering sheets in
+    /// parallel both registered their ESC item into it and read each other's
+    /// back. The convention here is the one `focusManager` and
+    /// `keyEventDispatcher` already follow — a runtime service is Optional, and
+    /// absent means absent.
+    var appHeader: AppHeaderState? {
         get { self[AppHeaderKey.self] }
         set { self[AppHeaderKey.self] = newValue }
     }

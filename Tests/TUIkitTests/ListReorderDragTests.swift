@@ -474,7 +474,7 @@ struct ListReorderDragTests {
             MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, "d")))
         fixture.render()
         #expect(session.active != nil, "carrying a row")
-        #expect(fixture.env.statusBar.escapeLabelOverride == nil, "the page keeps Escape")
+        #expect(fixture.env.statusBar?.escapeLabelOverride == nil, "the page keeps Escape")
 
         #expect(
             fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .escape)) == false,

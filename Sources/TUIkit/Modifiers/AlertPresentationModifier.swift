@@ -167,7 +167,7 @@ extension AlertPresentationModifier: Renderable {
             // `ModalPresentationModifier`.
             let dismissItem = StatusBarItem(
                 shortcut: Shortcut.escape, label: "dismiss", action: dismiss)
-            context.environment.statusBar.registerSectionItems(
+            context.environment.statusBar?.registerSectionItems(
                 sectionID: sectionID, items: [dismissItem], composition: .merge)
 
             // The same dismissal, as a key handler, for a tree rendered without

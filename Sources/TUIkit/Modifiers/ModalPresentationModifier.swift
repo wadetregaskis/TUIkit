@@ -159,7 +159,7 @@ extension ModalPresentationModifier: Renderable {
                 let dismissItem = StatusBarItem(shortcut: Shortcut.escape, label: "dismiss") {
                     isPresented.wrappedValue = false
                 }
-                context.environment.statusBar.registerSectionItems(
+                context.environment.statusBar?.registerSectionItems(
                     sectionID: sectionID, items: [dismissItem], composition: .merge)
             }
         }

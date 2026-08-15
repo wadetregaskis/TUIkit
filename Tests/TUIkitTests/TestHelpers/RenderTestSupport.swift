@@ -26,6 +26,17 @@ import Testing
 func makeRenderContext(width: Int = 80, height: Int = 24) -> RenderContext {
     var environment = EnvironmentValues()
     environment.focusManager = FocusManager()
+    // A status bar of this context's own, wired to its focus manager exactly
+    // as `RenderLoop.beginRenderPass` does. Both halves matter: without the
+    // instance the bar is absent and anything asserting on it reads nil, and
+    // without the focus manager it cannot resolve which section's items are
+    // showing. This used to come from a SHARED environment-key default, so
+    // tests rendering in parallel registered into one object and read each
+    // other's items back — `isolatingRenderCache()` below is the same idea for
+    // the render cache.
+    let statusBar = StatusBarState()
+    statusBar.focusManager = environment.focusManager
+    environment.statusBar = statusBar
 
     return RenderContext(
         availableWidth: width,
@@ -83,7 +94,12 @@ func makeRenderContext(
     let tuiContext = TUIContext()
     var environment = EnvironmentValues()
     environment.focusManager = FocusManager()
+    // …as above. Set BEFORE `configure`, so a caller that installs its own
+    // focus manager or status bar still wins.
+    let statusBar = StatusBarState()
+    environment.statusBar = statusBar
     configure(&environment, tuiContext)
+    statusBar.focusManager = environment.focusManager
 
     return RenderContext(
         availableWidth: width,

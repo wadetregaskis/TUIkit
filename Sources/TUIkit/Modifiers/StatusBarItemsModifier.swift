@@ -53,7 +53,11 @@ struct StatusBarItemsModifier<Content: View>: View {
 
 extension StatusBarItemsModifier: Renderable {
     func renderToBuffer(context renderContext: RenderContext) -> FrameBuffer {
-        let statusBar = renderContext.environment.statusBar
+        // No status bar (a headless render, a test): nothing to register
+        // into, and the content still draws.
+        guard let statusBar = renderContext.environment.statusBar else {
+            return TUIkit.renderToBuffer(content, context: renderContext)
+        }
 
         // Declare the registration to any value-memoizing ancestor, exactly as
         // the preference and `onKeyPress` modifiers do. The status bar's items

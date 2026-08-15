@@ -41,18 +41,27 @@ extension EnvironmentValues {
 
 /// Environment key for the appearance manager.
 private struct AppearanceManagerKey: EnvironmentKey {
-    static let defaultValue = ThemeManager(items: AppearanceRegistry.all)
+    static let defaultValue: ThemeManager? = nil
 }
 
 extension EnvironmentValues {
     /// The appearance manager for cycling and setting appearances.
     ///
     /// ```swift
-    /// let appearanceManager = context.environment.appearanceManager
-    /// appearanceManager.cycleNext()
-    /// appearanceManager.setCurrent(Appearance.rounded)
+    /// context.environment.appearanceManager?.cycleNext()
+    /// context.environment.appearanceManager?.setCurrent(Appearance.rounded)
     /// ```
-    public var appearanceManager: ThemeManager {
+    ///
+    /// `nil` outside a running application. These are the app's own objects,
+    /// created by `AppRunner` and published by `RenderLoop.buildEnvironment()`
+    /// — so a bare `EnvironmentValues()` (a headless render, a test) has none,
+    /// which is the truth. It used to hand out a SHARED instance instead, and
+    /// every such render mutated the same object: two tests rendering sheets in
+    /// parallel both registered their ESC item into it and read each other's
+    /// back. The convention here is the one `focusManager` and
+    /// `keyEventDispatcher` already follow — a runtime service is Optional, and
+    /// absent means absent.
+    public var appearanceManager: ThemeManager? {
         get { self[AppearanceManagerKey.self] }
         set { self[AppearanceManagerKey.self] = newValue }
     }
