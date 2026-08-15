@@ -1447,7 +1447,6 @@
   "View.gridCellUnsizedAxes(_:)",
   "View.headerProminence(_:)",
   "View.help(_:)",
-  "View.hidden()",
   "View.highPriorityGesture(_:including:)",
   "View.highPriorityGesture(_:isEnabled:)",
   "View.highPriorityGesture(_:name:isEnabled:)",
