@@ -1189,8 +1189,6 @@
   "Text.init(timerInterval:pauseTime:countsDown:showsHours:)",
   "Text.italic(_:)",
   "Text.kerning(_:)",
-  "Text.monospaced(_:)",
-  "Text.monospacedDigit()",
   "Text.speechAdjustedPitch(_:)",
   "Text.speechAlwaysIncludesPunctuation(_:)",
   "Text.speechAnnouncementsQueued(_:)",
