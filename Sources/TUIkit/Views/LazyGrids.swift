@@ -80,32 +80,49 @@ private struct _LazyGridLayout: Layout, Sendable, Equatable {
     /// The extent available for the tracks to divide.
     ///
     /// A `nil` proposal (an unconstrained context — a `ScrollView`'s scrolling
-    /// axis, `sizeThatFits` probing) resolves against the tracks' own natural
-    /// demand instead, which is what makes a grid inside a horizontal scroller
-    /// size to its content rather than collapse.
-    private func across(of proposal: ProposedSize) -> Int {
+    /// axis, or a stack probing a child's ideal size) resolves against the
+    /// grid's own IDEAL demand instead.
+    private func across(of proposal: ProposedSize, subviewCount: Int) -> Int {
         let proposed = axis == .vertical ? proposal.width : proposal.height
-        guard let proposed, proposed > 0 else { return naturalAcross }
+        guard let proposed, proposed > 0 else { return idealAcross(for: subviewCount) }
         return proposed
     }
 
-    /// What the tracks ask for when nothing constrains them: every track at its
-    /// minimum, adaptive ones counted once.
-    private var naturalAcross: Int {
-        let minima = items.reduce(0) { total, item in
-            let minimum: Int =
-                switch item.size {
-                case .fixed(let extent): max(0, extent)
-                case .flexible(let minimum, _): max(1, minimum)
-                case .adaptive(let minimum, _): max(1, minimum)
+    /// What the tracks ask for when nothing constrains them.
+    ///
+    /// Unconstrained means "how much would you LIKE", not "how little can you
+    /// survive on" — and for `.adaptive` those differ enormously, because its
+    /// track count is an output. Counting an adaptive item as ONE track made a
+    /// 12-item grid report itself as twelve rows TALL; a stack believes that
+    /// measure, budgets twelve rows, and every sibling after it falls off the
+    /// screen. (Live-only: a bare render context proposes a width, so the
+    /// fallback never ran and the headless tests all passed.)
+    ///
+    /// So the ideal is one repeat per subview: everything on a single line.
+    /// A stack's unconstrained probe then sees one row rather than twelve, and
+    /// the constrained measure that actually drives layout is unaffected.
+    private func idealAcross(for subviewCount: Int) -> Int {
+        var extents: [Int] = []
+        var gaps: [Int] = []
+        for item in items {
+            let gap = item.spacing ?? GridItem.defaultSpacing
+            switch item.size {
+            case .fixed(let extent):
+                extents.append(max(0, extent))
+                gaps.append(gap)
+            case .flexible(let minimum, _):
+                extents.append(max(1, minimum))
+                gaps.append(gap)
+            case .adaptive(let minimum, _):
+                for _ in 0..<max(1, subviewCount) {
+                    extents.append(max(1, minimum))
+                    gaps.append(gap)
                 }
-            return total + minimum
+            }
         }
-        // Gaps go BETWEEN tracks, so there is one fewer than there are tracks —
-        // counting the last item's trailing spacing would ask for a cell that
-        // is never drawn.
-        let gaps = items.dropLast().reduce(0) { $0 + ($1.spacing ?? GridItem.defaultSpacing) }
-        return minima + gaps
+        guard !extents.isEmpty else { return 0 }
+        // Gaps go BETWEEN tracks, so there is one fewer than there are tracks.
+        return extents.reduce(0, +) + gaps.dropLast().reduce(0, +)
     }
 
     // MARK: Layout
@@ -113,7 +130,8 @@ private struct _LazyGridLayout: Layout, Sendable, Equatable {
     func sizeThatFits(
         proposal: ProposedSize, subviews: Subviews, cache: inout ()
     ) -> ViewSize {
-        let tracks = GridItem.resolve(items, available: across(of: proposal))
+        let tracks = GridItem.resolve(
+            items, available: across(of: proposal, subviewCount: subviews.count))
         guard !tracks.isEmpty, !subviews.isEmpty else { return ViewSize(width: 0, height: 0) }
 
         let breadths = lineBreadths(subviews, tracks: tracks)
@@ -124,9 +142,22 @@ private struct _LazyGridLayout: Layout, Sendable, Equatable {
         // are added, and would not line up with the rows above it.
         let across = acrossExtent(tracks)
 
+        // A grid with any `.flexible` or `.adaptive` track FILLS the extent it
+        // is offered — that is what those track kinds mean. Saying so is what
+        // makes a stack offer the whole width rather than sizing the grid to
+        // the ideal it reported from an unconstrained probe (and then clipping
+        // the rows that ideal did not account for). Only an all-`.fixed` grid
+        // is genuinely rigid.
+        let fillsAcross = items.contains {
+            switch $0.size {
+            case .fixed: false
+            case .flexible, .adaptive: true
+            }
+        }
+
         return axis == .vertical
-            ? ViewSize(width: across, height: along)
-            : ViewSize(width: along, height: across)
+            ? ViewSize(width: across, height: along, isWidthFlexible: fillsAcross)
+            : ViewSize(width: along, height: across, isHeightFlexible: fillsAcross)
     }
 
     func placeSubviews(

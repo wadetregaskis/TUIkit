@@ -209,6 +209,60 @@ struct LazyGridTests {
         #expect(drawn[1].replacingOccurrences(of: " ", with: "") == "bd", "\(drawn)")
     }
 
+    // MARK: - Measure/render parity
+
+    /// The bug that shipped: a stack probes a child with an UNCONSTRAINED
+    /// proposal, and a reflowing grid has no honest answer to "how tall are you
+    /// at no particular width". It used to answer with its single-column
+    /// minimum — twelve items became twelve ROWS — and the stack budgeted for
+    /// that and pushed every later sibling off the screen.
+    ///
+    /// Live-only until the fix: a bare render context always proposes a width,
+    /// so none of the tests above could reach it. `_LayoutCore` now grounds an
+    /// unconstrained proposal in the context, so the measure answers the same
+    /// question the render does.
+    @Test("an unconstrained measure matches the height actually rendered")
+    func unconstrainedMeasureMatchesRender() {
+        let grid = LazyVGrid(columns: [GridItem(.adaptive(minimum: 6))], alignment: .leading) {
+            ForEach(1...12, id: \.self) { n in Text(verbatim: "c\(n)") }
+        }
+        let context = makeBareRenderContext(width: 60, height: 20)
+        let unconstrained = measureChild(
+            grid, proposal: ProposedSize(width: nil, height: nil), context: context)
+        let drawn = renderToBuffer(grid, context: context)
+
+        #expect(
+            unconstrained.height == drawn.height,
+            "measured \(unconstrained.height) rows, drew \(drawn.height)")
+        #expect(drawn.height == 2, "twelve 6-cell items over 60 cells is two rows")
+    }
+
+    /// A grid whose tracks reflow FILLS the extent it is offered; only an
+    /// all-`.fixed` grid is rigid. A stack reads this to decide whether to
+    /// offer the full width or size the grid to its own report.
+    @Test("reflowing tracks report themselves as flexible")
+    func flexibilityIsDeclared() {
+        let context = makeBareRenderContext(width: 40, height: 10)
+        func measure(_ view: some View) -> ViewSize {
+            measureChild(view, proposal: ProposedSize(width: 40, height: 10), context: context)
+        }
+        let adaptive = measure(
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 4))]) { Text(verbatim: "a") })
+        let flexible = measure(
+            LazyVGrid(columns: [GridItem(.flexible())]) { Text(verbatim: "a") })
+        let fixed = measure(
+            LazyVGrid(columns: [GridItem(.fixed(4))]) { Text(verbatim: "a") })
+        #expect(adaptive.isWidthFlexible, "adaptive fills the width")
+        #expect(flexible.isWidthFlexible, "so does flexible")
+        #expect(!fixed.isWidthFlexible, "fixed does not")
+
+        // The horizontal grid's fill axis is the other one.
+        let hgrid = measure(
+            LazyHGrid(rows: [GridItem(.flexible())]) { Text(verbatim: "a") })
+        #expect(hgrid.isHeightFlexible, "a row track fills the height")
+        #expect(!hgrid.isWidthFlexible, "it grows along its width by content")
+    }
+
     @Test("an empty grid renders nothing rather than crashing")
     func empty() {
         let drawn = painted(

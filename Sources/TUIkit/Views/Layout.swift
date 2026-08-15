@@ -161,7 +161,27 @@ public struct _LayoutCore<L: Layout, Content: View>: View, Renderable, Layoutabl
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         let (subviews, _) = resolve(context: context)
         var cache = freshCache(subviews)
-        return layout.sizeThatFits(proposal: proposal, subviews: subviews, cache: &cache)
+        return layout.sizeThatFits(
+            proposal: grounded(proposal, in: context), subviews: subviews, cache: &cache)
+    }
+
+    /// Fills in an unconstrained proposal from what is actually on screen.
+    ///
+    /// ``renderToBuffer(context:)`` builds its proposal from
+    /// `context.availableWidth`/`Height` and ignores the one it was measured
+    /// with, so a `nil` here means the measure and the render answer different
+    /// questions. For most layouts that is harmless — a stack's height does not
+    /// depend on its width. For one whose SHAPE depends on the extent it is
+    /// given, it is a real divergence: a reflowing grid asked "how tall are you
+    /// at no particular width" has no honest answer, and whichever it invents
+    /// is the number a parent stack then budgets rows for.
+    ///
+    /// Grounding both passes in the same numbers makes measure/render parity
+    /// structural here, the way `Text.displayString` does for text.
+    private func grounded(_ proposal: ProposedSize, in context: RenderContext) -> ProposedSize {
+        ProposedSize(
+            width: proposal.width ?? max(0, context.availableWidth),
+            height: proposal.height ?? max(0, context.availableHeight))
     }
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
