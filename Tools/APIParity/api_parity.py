@@ -177,6 +177,48 @@ def explain(key, parity_map):
     return None
 
 
+def signature(key):
+    """("View.border", ("_", "color")) — the name, and its argument labels."""
+    if "(" not in key:
+        return key, None
+    base, rest = key.split("(", 1)
+    return base, tuple(label for label in rest.rstrip(")").split(":") if label)
+
+
+def label_deviations(swiftui, tuikit):
+    """Absent SwiftUI symbols whose name AND arity TUIkit has, spelled
+    differently.
+
+    A different label is worse than an absence: the capability is there, so
+    nobody notices it is unreachable until SwiftUI source fails to compile
+    against it. Argument labels are the API — types may legitimately differ
+    (a terminal counts cells where SwiftUI counts points), labels may not,
+    unless the behaviour genuinely differs too.
+
+    Arity has to match for this to mean anything; without it every missing
+    overload would look like a misspelling.
+    """
+    by_name = {}
+    for key in tuikit:
+        name, labels = signature(key)
+        if labels is not None:
+            by_name.setdefault(name, []).append((labels, key))
+    found = {}
+    for key in swiftui:
+        if key in tuikit:
+            continue
+        name, labels = signature(key)
+        if labels is None or name not in by_name:
+            continue
+        same_arity = [
+            other for other_labels, other in by_name[name]
+            if len(other_labels) == len(labels) and other_labels != labels
+        ]
+        if same_arity:
+            found[key] = sorted(same_arity)
+    return found
+
+
 def compare(swiftui, tuikit, parity_map):
     absent = {key: kind for key, kind in swiftui.items() if key not in tuikit}
     gaps, explained = {}, {}
@@ -215,7 +257,7 @@ def audit_map(swiftui, tuikit, parity_map):
     return stale
 
 
-def report(swiftui, tuikit, gaps, explained, stale, baseline):
+def report(swiftui, tuikit, gaps, explained, stale, deviations, baseline):
     print(f"toolchain:  {toolchain_version()}")
     print(f"SwiftUI:    {len(swiftui):>5} live public symbols "
           f"({'+'.join(SWIFTUI_MODULES)})")
@@ -250,6 +292,20 @@ def report(swiftui, tuikit, gaps, explained, stale, baseline):
             more = f" … +{len(names) - 8}" if len(names) > 8 else ""
             print(f"  {owner} ({len(names)}): {head}{more}")
             shown += 1
+
+    if deviations:
+        accepted = set(baseline.get("labelDeviations", []))
+        fresh = sorted(set(deviations) - accepted)
+        print(f"\nARGUMENT-LABEL deviations ({len(deviations)}, {len(fresh)} new) — "
+              f"same name and arity, different spelling.")
+        print("A label difference is not a rename: SwiftUI source will not compile.")
+        for key in (fresh or sorted(deviations))[:LIST_LIMIT]:
+            mark = "NEW " if key in set(fresh) else "    "
+            print(f"  {mark}SwiftUI {key}")
+            for candidate in deviations[key][:2]:
+                print(f"       TUIkit  {candidate}")
+        if len(fresh or deviations) > LIST_LIMIT:
+            print(f"  … and {len(fresh or deviations) - LIST_LIMIT} more")
 
     if stale:
         print(f"\nSTALE map entries ({len(stale)}) — the map disagrees with reality:")
@@ -319,7 +375,11 @@ def main():
         if os.path.exists(BASELINE_PATH):
             with open(BASELINE_PATH) as handle:
                 baseline = json.load(handle)
-        new, fixed = report(swiftui, tuikit, gaps, explained, stale, baseline)
+        deviations = label_deviations(swiftui, tuikit)
+        new, fixed = report(
+            swiftui, tuikit, gaps, explained, stale, deviations, baseline)
+        new_deviations = sorted(
+            set(deviations) - set(baseline.get("labelDeviations", [])))
 
         if args.json:
             with open(args.json, "w") as handle:
@@ -328,6 +388,7 @@ def main():
                     "counts": {"swiftui": len(swiftui), "tuikit": len(tuikit),
                                "gaps": len(gaps), "explained": len(explained)},
                     "gaps": sorted(gaps),
+                    "labelDeviations": {k: v for k, v in sorted(deviations.items())},
                     "stale": [{"key": k, "section": s, "why": w} for k, s, w in stale],
                 }, handle, indent=1)
 
@@ -338,11 +399,12 @@ def main():
                                "when one is closed or a new one is agreed.",
                     "toolchain": toolchain_version(),
                     "gaps": sorted(gaps),
+                    "labelDeviations": sorted(deviations),
                 }, handle, indent=1)
             print(f"\nbaseline recorded: {len(gaps)} gaps")
             return 0
 
-        if args.check and (new or stale):
+        if args.check and (new or stale or new_deviations):
             print("\nFAIL: new unexplained differences, or the map has gone stale.")
             print("Either implement the API, add it to parity-map.json with a "
                   "reason, or run --accept if it is a gap you are accepting.")

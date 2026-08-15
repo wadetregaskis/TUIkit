@@ -46,11 +46,31 @@ naive diff:
 ## What counts as a difference
 
 Symbols are keyed `Owner.name` — `View.padding(_:)`, `EnvironmentValues.locale`,
-or a bare name for a top-level type. Argument labels are part of the key, so
+or a bare name for a top-level type. **Argument labels are part of the key**, so
 `alert(_:isPresented:actions:)` and `alert(title:isPresented:)` are different
-symbols; that is deliberate, since source compatibility turns on the labels.
-Overloads that differ only in generic constraints collapse onto one key — a
-signature-level check belongs in a compile corpus, not here.
+symbols. That is the rule, not an artefact: labels ARE the API, and SwiftUI
+source will not compile against a different spelling. Types may legitimately
+differ — a terminal counts cells where SwiftUI counts points, so `Int` for
+`CGFloat` is expected and is not reported — but a label may differ only where
+the behaviour genuinely differs too.
+
+Overloads that differ only in generic constraints collapse onto one key; a
+full signature check belongs in a compile corpus, not here.
+
+### Label deviations are reported separately
+
+A symbol that TUIkit has under the same name and arity but a different spelling
+is worse than one it lacks: the capability is *there*, so nothing looks wrong
+until real SwiftUI source fails to compile. Those are pulled out into their own
+section rather than buried among absences, and `baseline.json` tracks them
+separately so `--check` fails on a **new** one.
+
+Arity must match for the comparison to mean anything — otherwise every missing
+overload (`Button.init(_:image:action:)`, which needs an asset catalogue) would
+read as a misspelling. Even with that filter the list contains coincidences:
+`Tab.init(_:image:content:)` against `Tab.init(_:value:content:)` is two
+different initialisers, not one misspelt. Read it as a shortlist to judge, not
+a defect list.
 
 Every absent symbol is then either **explained** or a **gap**:
 
