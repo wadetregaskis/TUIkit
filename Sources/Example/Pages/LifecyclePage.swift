@@ -47,7 +47,7 @@ struct LifecyclePage: View {
                         ValueDisplayRow(".task", "\(counters.task)")
                         ValueDisplayRow(".onChange", "\(counters.change)")
                     }
-                    .border(color: .brightBlack)
+                    .border(.brightBlack)
 
                     ValueDisplayRow(L("page.lifecycle.lastEvent"), counters.lastEvent)
                 }
@@ -89,7 +89,7 @@ struct LifecyclePage: View {
                         // environment — which is the point of `\.refresh`.
                         RefreshButton()
                     }
-                    .border(color: .brightBlack)
+                    .border(.brightBlack)
                     // Ctrl-R anywhere in this section reloads. The spinner
                     // shows over the top row for as long as it takes, with a
                     // blank cell either side so it reads as a badge.

@@ -90,7 +90,7 @@ struct NavigationPage: View {
                     .navigationDestination(for: Feature.self) { featureScreen($0) }
                     .navigationDestination(for: Sample.self) { sampleScreen($0) }
             }
-            .border(color: .palette.border)
+            .border(.palette.border)
 
             Text("\(L("page.navigation.depth")) \(path.count)")
                 .foregroundStyle(.palette.foregroundSecondary)

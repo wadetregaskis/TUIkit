@@ -23,7 +23,7 @@ struct BorderViaContainerViewTests {
 
     @Test(".border() renders with border around content")
     func borderRendersWithBorder() {
-        let view = Text("Hi").border(.line)
+        let view = Text("Hi").border(style: .line)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
@@ -35,7 +35,7 @@ struct BorderViaContainerViewTests {
 
     @Test(".border() with empty content renders empty")
     func borderEmptyContent() {
-        let view = EmptyView().border(.line)
+        let view = EmptyView().border(style: .line)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
@@ -48,7 +48,7 @@ struct BorderViaContainerViewTests {
         let view = VStack {
             Text("Line 1")
             Text("Line 2")
-        }.border(.line)
+        }.border(style: .line)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 

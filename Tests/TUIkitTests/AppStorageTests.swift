@@ -262,14 +262,14 @@ struct AppStoragePropertyWrapperTests {
     @Test("Returns the default value when the key is absent")
     func defaultWhenAbsent() {
         let backend = MockStorageBackend()
-        let storage = AppStorage(wrappedValue: "Guest", "username", storage: backend)
+        let storage = AppStorage(wrappedValue: "Guest", "username", store: backend)
         #expect(storage.wrappedValue == "Guest")
     }
 
     @Test("Reading the default value does not write to the backend")
     func readingDefaultDoesNotWrite() {
         let backend = MockStorageBackend()
-        let storage = AppStorage(wrappedValue: "Guest", "username", storage: backend)
+        let storage = AppStorage(wrappedValue: "Guest", "username", store: backend)
         _ = storage.wrappedValue
         #expect(!backend.hasValue(forKey: "username"))
         #expect(backend.storedKeyCount == 0)
@@ -279,14 +279,14 @@ struct AppStoragePropertyWrapperTests {
     func readsStoredValue() {
         let backend = MockStorageBackend()
         backend.setValue("Wade", forKey: "username")
-        let storage = AppStorage(wrappedValue: "Guest", "username", storage: backend)
+        let storage = AppStorage(wrappedValue: "Guest", "username", store: backend)
         #expect(storage.wrappedValue == "Wade")
     }
 
     @Test("Setting wrappedValue persists to the backend")
     func setPersists() {
         let backend = MockStorageBackend()
-        let storage = AppStorage(wrappedValue: 0, "count", storage: backend)
+        let storage = AppStorage(wrappedValue: 0, "count", store: backend)
         storage.wrappedValue = 7
         #expect(storage.wrappedValue == 7)
         #expect(backend.value(forKey: "count") == 7)
@@ -295,7 +295,7 @@ struct AppStoragePropertyWrapperTests {
     @Test("projectedValue exposes a Binding that round-trips through storage")
     func projectedValueBinding() {
         let backend = MockStorageBackend()
-        let storage = AppStorage(wrappedValue: false, "flag", storage: backend)
+        let storage = AppStorage(wrappedValue: false, "flag", store: backend)
         let binding = storage.projectedValue
 
         #expect(binding.wrappedValue == false)
@@ -307,8 +307,8 @@ struct AppStoragePropertyWrapperTests {
     @Test("Distinct keys are independent")
     func distinctKeysAreIndependent() {
         let backend = MockStorageBackend()
-        let a = AppStorage(wrappedValue: "a", "ka", storage: backend)
-        let b = AppStorage(wrappedValue: "b", "kb", storage: backend)
+        let a = AppStorage(wrappedValue: "a", "ka", store: backend)
+        let b = AppStorage(wrappedValue: "b", "kb", store: backend)
         a.wrappedValue = "A"
         #expect(b.wrappedValue == "b")
         #expect(a.wrappedValue == "A")
@@ -320,7 +320,7 @@ struct AppStoragePropertyWrapperTests {
         let storage = AppStorage(
             wrappedValue: Profile(name: "x", age: 1, tags: []),
             "profile",
-            storage: backend
+            store: backend
         )
         let updated = Profile(name: "y", age: 2, tags: ["t"])
         storage.wrappedValue = updated

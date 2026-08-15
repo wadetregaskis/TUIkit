@@ -32,7 +32,7 @@ struct FeatureBox: View, Equatable {
                 .foregroundStyle(.palette.foregroundSecondary)
         }
         .padding(EdgeInsets(horizontal: 2, vertical: 1))
-        .border(color: .palette.border)
+        .border(.palette.border)
     }
 }
 

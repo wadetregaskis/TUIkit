@@ -64,7 +64,7 @@ struct ScrollAnchoringDemo: View {
                     }
                 }
                 .frame(height: 8)
-                .border(color: .palette.border)
+                .border(.palette.border)
                 .anchorPosition($rowAnchor)
 
                 Stepper(
@@ -198,7 +198,7 @@ struct ScrollAnchoringDemo: View {
                     }
                 }
                 .frame(height: 8)
-                .border(color: .palette.border)
+                .border(.palette.border)
                 // BOUND, not declared: picking an edge writes it into the
                 // binding, which is the code-side `anchor(to:)` — the write
                 // jumps the view to that edge, and it then holds it. A

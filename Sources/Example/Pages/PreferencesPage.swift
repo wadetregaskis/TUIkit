@@ -68,7 +68,7 @@ struct PreferencesPage: View {
                                     value: "\(L("page.preferences.childLabel")) #\(index + 1) \(L("page.preferences.reporting"))")
                         }
                     }
-                    .border(color: .brightBlack)
+                    .border(.brightBlack)
 
                     ValueDisplayRow(L("page.preferences.lastMessage"), lastMessage.isEmpty ? "—" : lastMessage)
                 }

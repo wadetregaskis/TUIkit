@@ -376,7 +376,7 @@ public struct AppStorage<Value: Codable>: @unchecked Sendable {
     ///   - wrappedValue: The default value.
     ///   - key: The key to use for storage.
     ///   - storage: The storage backend to use.
-    public init(wrappedValue: Value, _ key: String, storage: StorageBackend) {
+    public init(wrappedValue: Value, _ key: String, store storage: StorageBackend) {
         self.key = key
         self.defaultValue = wrappedValue
         self.storage = storage

@@ -21,7 +21,7 @@ struct SceneStorageTests {
     @Test("It stores and reads back")
     func roundTrips() {
         let backend = MockStorageBackend()
-        let tab = SceneStorage(wrappedValue: "inbox", "selectedTab", storage: backend)
+        let tab = SceneStorage(wrappedValue: "inbox", "selectedTab", store: backend)
         #expect(tab.wrappedValue == "inbox")
 
         tab.wrappedValue = "archive"
@@ -29,7 +29,7 @@ struct SceneStorageTests {
 
         // A second wrapper over the same key and backend sees it — which is
         // what makes it storage rather than @State.
-        let other = SceneStorage(wrappedValue: "inbox", "selectedTab", storage: backend)
+        let other = SceneStorage(wrappedValue: "inbox", "selectedTab", store: backend)
         #expect(other.wrappedValue == "archive")
     }
 
@@ -39,8 +39,8 @@ struct SceneStorageTests {
         // "where the user was" and "what the user chose" are different
         // questions, and an app is entitled to use the same word for both.
         let backend = MockStorageBackend()
-        let scene = SceneStorage(wrappedValue: 0, "position", storage: backend)
-        let app = AppStorage(wrappedValue: 0, "position", storage: backend)
+        let scene = SceneStorage(wrappedValue: 0, "position", store: backend)
+        let app = AppStorage(wrappedValue: 0, "position", store: backend)
 
         scene.wrappedValue = 42
         #expect(scene.wrappedValue == 42)
@@ -54,7 +54,7 @@ struct SceneStorageTests {
     @Test("The binding writes through")
     func bindingWritesThrough() {
         let backend = MockStorageBackend()
-        let tab = SceneStorage(wrappedValue: "inbox", "tab", storage: backend)
+        let tab = SceneStorage(wrappedValue: "inbox", "tab", store: backend)
         let binding = tab.projectedValue
         binding.wrappedValue = "sent"
         #expect(tab.wrappedValue == "sent")
@@ -68,11 +68,11 @@ struct SceneStorageTests {
         }
         let backend = MockStorageBackend()
         let cursor = SceneStorage(
-            wrappedValue: Position(row: 0, column: 0), "cursor", storage: backend)
+            wrappedValue: Position(row: 0, column: 0), "cursor", store: backend)
         cursor.wrappedValue = Position(row: 3, column: 9)
         #expect(cursor.wrappedValue == Position(row: 3, column: 9))
 
-        let bools = SceneStorage(wrappedValue: false, "expanded", storage: backend)
+        let bools = SceneStorage(wrappedValue: false, "expanded", store: backend)
         bools.wrappedValue = true
         #expect(bools.wrappedValue)
     }

@@ -160,7 +160,7 @@ private struct ContextMenuTarget: View {
     var body: some View {
         Text(title)
             .padding(.horizontal, 1)
-            .border(color: borderColor)
+            .border(borderColor)
     }
 
     /// The same two endpoints the framework's own focused frames breathe

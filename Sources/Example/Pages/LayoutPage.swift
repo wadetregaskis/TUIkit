@@ -155,7 +155,7 @@ struct LayoutPage: View {
                     Text("\(L("page.layout.item")) 2")
                     Text("\(L("page.layout.item")) 3")
                 }
-                .border(color: .brightBlack)
+                .border(.brightBlack)
             }
 
             DemoSection(L("page.layout.section.hstack")) {
@@ -209,7 +209,7 @@ struct LayoutPage: View {
                         Text("[ \(L("page.layout.signOut")) ]")
                     }
                 }
-                .border(color: .brightBlack)
+                .border(.brightBlack)
             }
 
             DemoSection(L("page.layout.section.zstack")) {
@@ -219,7 +219,7 @@ struct LayoutPage: View {
                     Text(String(repeating: "▒", count: 28)).foregroundStyle(.palette.accent)
                     Text(" \(L("page.layout.onTop")) ").bold().inverted()
                 }
-                .border(color: .brightBlack)
+                .border(.brightBlack)
             }
 
             DemoSection(L("page.layout.section.alignmentGuide")) {
@@ -244,7 +244,7 @@ struct LayoutPage: View {
                         Text(L("page.layout.guideItem"))
                         Text(L("page.layout.guideItem2"))
                     }
-                    .border(color: .brightBlack)
+                    .border(.brightBlack)
                 }
             }
 
@@ -277,7 +277,7 @@ struct LayoutPage: View {
                         }
                     }
                     .frame(height: 2)
-                    .border(color: .brightBlack)
+                    .border(.brightBlack)
                 }
             }
 
@@ -296,7 +296,7 @@ struct LayoutPage: View {
                             Text(" \(chip) ").inverted()
                         }
                     }
-                    .border(color: .brightBlack)
+                    .border(.brightBlack)
                 }
             }
 
@@ -308,7 +308,7 @@ struct LayoutPage: View {
                     Divider(character: "═")
                     Text(L("page.layout.below"))
                 }
-                .border(color: .brightBlack)
+                .border(.brightBlack)
             }
 
             DemoSection(L("page.layout.section.lazy")) {
@@ -357,7 +357,7 @@ struct LayoutPage: View {
                         }
                     }
                     .frame(height: 8)
-                    .border(color: .palette.border)
+                    .border(.palette.border)
                     .onPreferenceChange(LazyRenderedRowsKey.self) { renderedRows = $0 }
                     .task {
                         await runMeasureSampler()
@@ -368,7 +368,7 @@ struct LayoutPage: View {
                         Text("\(L("page.layout.col")) 2")
                         Text("\(L("page.layout.col")) 3")
                     }
-                    .border(color: .brightBlack)
+                    .border(.brightBlack)
                 }
             }
 

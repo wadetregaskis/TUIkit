@@ -150,7 +150,7 @@ struct MousePage: View {
                         .bold()
                         .foregroundStyle(.palette.accent)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
-                        .border(color: .palette.border)
+                        .border(.palette.border)
                         .onTapGesture { x, y in
                             tapCount += 1
                             // Coordinates are local but the box's own
@@ -186,7 +186,7 @@ struct MousePage: View {
                         }
                     }
                     .padding(EdgeInsets(horizontal: 2, vertical: 0))
-                    .border(color: .palette.border)
+                    .border(.palette.border)
                     .onMouseEvent { event in
                         // Use the raw event stream so we can read
                         // shift to route the wheel sideways.
@@ -231,7 +231,7 @@ struct MousePage: View {
                     Text(L("page.mouse.dragArea"))
                         .foregroundStyle(.palette.accent)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
-                        .border(color: .palette.border)
+                        .border(.palette.border)
                         .onDragGesture { event in
                             dragPhase = describePhase(event.phase)
                             // Clamp the drag position to the visible
@@ -308,7 +308,7 @@ struct MousePage: View {
                     }
                     Text(L("page.mouse.rightOrModifiedClick"))
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
-                        .border(color: .palette.border)
+                        .border(.palette.border)
                         .onMouseEvent { event in
                             switch event.phase {
                             case .pressed where event.button == .right:
@@ -338,7 +338,7 @@ struct MousePage: View {
                         .foregroundStyle(isHovering ? .palette.accent : .palette.foregroundSecondary)
                         .frame(width: hoverLabelWidth, alignment: .center)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
-                        .border(color: isHovering ? .palette.accent : .palette.border)
+                        .border(isHovering ? .palette.accent : .palette.border)
                         .onHover { hovering in
                             isHovering = hovering
                         }
@@ -353,7 +353,7 @@ struct MousePage: View {
                     Text(L("page.mouse.scrollOverMe"))
                         .foregroundStyle(.palette.accent)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
-                        .border(color: .palette.border)
+                        .border(.palette.border)
                         .onScrollGesture { direction in
                             scrollTicks += 1
                             lastScrollDirection = describeScroll(direction)
@@ -416,12 +416,12 @@ struct MousePage: View {
             ForEach(fruits, id: \.self) { fruit in
                 Text(fruit)
                     .padding(EdgeInsets(horizontal: 1, vertical: 0))
-                    .border(color: .palette.border)
+                    .border(.palette.border)
                     .draggable(fruit)
             }
         }
         .padding(EdgeInsets(horizontal: 1, vertical: 0))
-        .border(color: shelfTargeted ? .palette.accent : .palette.border)
+        .border(shelfTargeted ? .palette.accent : .palette.border)
         .dropDestination(for: BasketFruit.self) { items, _ in
             for item in items {
                 removeFromBasket(item)
@@ -454,7 +454,7 @@ struct MousePage: View {
         }
         .padding(EdgeInsets(horizontal: 1, vertical: 0))
         .frame(width: 24)
-        .border(color: basketTargeted ? .palette.accent : .palette.border)
+        .border(basketTargeted ? .palette.accent : .palette.border)
         .dropDestination(for: String.self) { items, info in
             for item in items {
                 basket.append(item)

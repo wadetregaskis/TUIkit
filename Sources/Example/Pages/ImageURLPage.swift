@@ -63,7 +63,7 @@ struct ImageURLPage: View {
                     .imagePlaceholder(L("page.imageURL.downloading"))
                     .imagePlaceholderSpinner(true)
                     .zoomableImageScroll(zoom: zoom)
-                    .border(color: .palette.border)
+                    .border(.palette.border)
             } else {
                 Spacer()
                 HStack {

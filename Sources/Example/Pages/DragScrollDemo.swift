@@ -33,7 +33,7 @@ struct DragScrollDemoSection: View {
                 HStack(alignment: .top, spacing: 3) {
                     Text(L("page.mouse.dragScrollTag"))
                         .padding(EdgeInsets(horizontal: 1, vertical: 0))
-                        .border(color: .palette.accent)
+                        .border(.palette.accent)
                         .draggable(FilingTag())
                     // 24 folders in six visible lines: it overflows, so a drag
                     // toward the edge auto-scrolls it to reveal the rest.

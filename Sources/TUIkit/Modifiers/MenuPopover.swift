@@ -42,7 +42,7 @@ func renderMenuColumn(
     let column = VStack(alignment: .leading, spacing: 0) { items }
         .buttonStyle(_MenuItemButtonStyle())
         .padding(.horizontal, 1)
-    let menuView = column.border(color: borderColor)
+    let menuView = column.bordered(style: nil, colour: borderColor, width: 1)
     // Size the menu to its own content before rendering it. Laying it out
     // against the whole screen made a menu of three short items span the
     // terminal: `Divider` MEASURES as one cell but RENDERS at the width it is
@@ -106,7 +106,7 @@ func renderMenuColumn(
     // (`ScrollViewReveal`).
     let scrolled = ScrollView(.vertical) { column }
         .frame(height: max(1, capHeight - 2))
-        .border(color: borderColor)
+        .bordered(style: nil, colour: borderColor, width: 1)
     return renderToBuffer(scrolled, context: sized.withAvailableHeight(fullHeight))
 }
 

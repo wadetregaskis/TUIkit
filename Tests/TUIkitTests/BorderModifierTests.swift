@@ -23,7 +23,7 @@ struct BorderModifierTests {
 
     @Test(".border() renders with top and bottom borders")
     func borderModifierRenders() {
-        let view = Text("Test").border(.line)
+        let view = Text("Test").border(style: .line)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
@@ -36,7 +36,7 @@ struct BorderModifierTests {
 
     @Test(".border() with empty content returns empty")
     func borderModifierEmptyContent() {
-        let view = EmptyView().border(.line)
+        let view = EmptyView().border(style: .line)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
@@ -45,7 +45,7 @@ struct BorderModifierTests {
 
     @Test(".border() with line style uses correct corner characters")
     func borderModifierLineStyle() {
-        let view = Text("X").border(.line)
+        let view = Text("X").border(style: .line)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
@@ -60,7 +60,7 @@ struct BorderModifierTests {
 
     @Test(".border() with doubleLine style uses correct characters")
     func borderModifierDoubleLineStyle() {
-        let view = Text("X").border(.doubleLine)
+        let view = Text("X").border(style: .doubleLine)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
@@ -75,7 +75,7 @@ struct BorderModifierTests {
 
     @Test(".border() with rounded style uses correct characters")
     func borderModifierRoundedStyle() {
-        let view = Text("X").border(.rounded)
+        let view = Text("X").border(style: .rounded)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
@@ -90,7 +90,7 @@ struct BorderModifierTests {
 
     @Test(".border() with heavy style uses correct characters")
     func borderModifierHeavyStyle() {
-        let view = Text("X").border(.heavy)
+        let view = Text("X").border(style: .heavy)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
@@ -105,7 +105,7 @@ struct BorderModifierTests {
 
     @Test(".border() adds 4 to content width (2 border + 2 padding)")
     func borderModifierWidthOverhead() {
-        let view = Text("ABCDE").border(.line)
+        let view = Text("ABCDE").border(style: .line)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
@@ -116,7 +116,7 @@ struct BorderModifierTests {
 
     @Test(".border() content has 1 char padding on each side")
     func borderModifierContentPadding() {
-        let view = Text("Hi").border(.line)
+        let view = Text("Hi").border(style: .line)
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
@@ -146,5 +146,66 @@ struct BorderStyleTests {
         )
         #expect(custom.leftT == "F")
         #expect(custom.rightT == "F")
+    }
+}
+
+// MARK: - SwiftUI spelling
+
+/// `border` was reshaped so SwiftUI's own call site compiles: the colour comes
+/// first and unlabelled, as it does in `border(_ content: some ShapeStyle,
+/// width: CGFloat = 1)`. The terminal-only part — WHICH box-drawing characters
+/// — was added beside it rather than in its place, and a border with no colour
+/// named stays available because that is what a themed app wants.
+@MainActor
+@Suite("border matches SwiftUI's spelling")
+struct BorderSpellingTests {
+
+    private func lines(_ view: some View) -> [String] {
+        renderToBuffer(view, context: makeBareRenderContext(width: 24, height: 12))
+            .lines.map(\.stripped)
+    }
+
+    @Test("the colour is the first, unlabelled argument")
+    func colourFirst() {
+        // The shape SwiftUI teaches. It only has to COMPILE to prove the point;
+        // that it also draws a box is the sanity check.
+        let drawn = lines(Text(verbatim: "hi").border(.red))
+        #expect(drawn.contains { $0.contains("┌") || $0.contains("╭") }, "\(drawn)")
+    }
+
+    @Test("style rides alongside the colour, not instead of it")
+    func styleBesideColour() {
+        let drawn = lines(Text(verbatim: "hi").border(.cyan, style: .doubleLine))
+        #expect(drawn.contains { $0.contains("╔") }, "the double-line corner: \(drawn)")
+    }
+
+    /// The palette-coloured spelling has no SwiftUI equivalent — SwiftUI has no
+    /// palette — and is what most call sites want, so it must keep working
+    /// without naming a colour at all.
+    @Test("a border with no colour named still draws")
+    func noColourNamed() {
+        #expect(lines(Text(verbatim: "hi").border()).count >= 3)
+        #expect(lines(Text(verbatim: "hi").border(style: .rounded))
+            .contains { $0.contains("╭") })
+    }
+
+    /// A terminal has no fractional stroke, so `width` is the number of
+    /// concentric rings. Each one costs two cells of height, which is what
+    /// makes the count observable.
+    @Test("width draws that many concentric rings")
+    func widthNests() {
+        let one = lines(Text(verbatim: "hi").border(.red, width: 1)).count
+        let two = lines(Text(verbatim: "hi").border(.red, width: 2)).count
+        let three = lines(Text(verbatim: "hi").border(.red, width: 3)).count
+        #expect(two == one + 2, "one ring adds a row above and below: \(one) → \(two)")
+        #expect(three == two + 2, "and again: \(two) → \(three)")
+    }
+
+    @Test("width 0 draws no border at all")
+    func widthZero() {
+        let bare = lines(Text(verbatim: "hi"))
+        let zero = lines(Text(verbatim: "hi").border(.red, width: 0))
+        #expect(zero.count == bare.count, "\(zero) vs \(bare)")
+        #expect(!zero.contains { $0.contains("┌") || $0.contains("╭") })
     }
 }

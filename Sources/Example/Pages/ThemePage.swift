@@ -176,7 +176,7 @@ struct ThemePage: View {
                         keyDemoRow("Text(key)") { Text(savedKeyAsVariable) }
                         keyDemoRow("Text(verbatim:)") { Text(verbatim: "button.save") }
                     }
-                    .border(color: .brightBlack)
+                    .border(.brightBlack)
                 }
 
                 DemoSection(L("page.theme.presetPalette")) {

@@ -75,7 +75,7 @@ public struct SceneStorage<Value: Codable>: @unchecked Sendable {
     ///   - wrappedValue: The value to use before anything is stored.
     ///   - key: The key to store under, within the scene's namespace.
     ///   - storage: Where to store it.
-    public init(wrappedValue: Value, _ key: String, storage: StorageBackend) {
+    public init(wrappedValue: Value, _ key: String, store storage: StorageBackend) {
         self.key = Self.prefix + key
         self.defaultValue = wrappedValue
         self.storage = storage

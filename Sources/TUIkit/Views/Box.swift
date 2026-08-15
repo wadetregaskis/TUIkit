@@ -116,7 +116,7 @@ struct Box<Content: View>: View {
     }
 
     var body: some View {
-        content.border(borderStyle, color: borderColor)
+        content.bordered(style: borderStyle, colour: borderColor, width: 1)
     }
 }
 

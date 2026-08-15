@@ -234,7 +234,7 @@ struct ModifierPropagationTests {
     func borderWorksWithRefactoredViews() {
         var isOn = false
         let toggle = Toggle("Bordered", isOn: Binding(get: { isOn }, set: { isOn = $0 }))
-            .border(.line)
+            .border(style: .line)
 
         let context = testContext()
         let buffer = renderToBuffer(toggle, context: context)

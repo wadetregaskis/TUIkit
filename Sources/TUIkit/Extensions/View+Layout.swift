@@ -20,29 +20,86 @@ extension View {
     ///
     /// ```swift
     /// Text("Hello")
-    ///     .border()  // Uses appearance.borderStyle
+    ///     .border()               // the appearance's style, the palette's colour
+    ///
+    /// Text("Warning")
+    ///     .border(.red)           // SwiftUI's spelling, and it means the same
     ///
     /// Text("Rounded")
-    ///     .border(.rounded, color: .cyan)
+    ///     .border(.cyan, style: .rounded)
     ///
-    /// Text("Double")
-    ///     .border(.doubleLine, color: .yellow)
+    /// Text("Emphatic")
+    ///     .border(.yellow, style: .doubleLine, width: 2)
     /// ```
     ///
+    /// The colour comes first and unlabelled because that is where SwiftUI puts
+    /// it: `border(_ content: some ShapeStyle, width: CGFloat = 1)`. A terminal
+    /// border has something SwiftUI's has not — the box-drawing characters it
+    /// is made of — so `style:` is added rather than substituted, and the two
+    /// spellings agree on everything they share.
+    ///
     /// - Parameters:
-    ///   - style: The border style (default: appearance borderStyle).
-    ///   - color: The border color (default: theme border color).
+    ///   - colour: The border colour.
+    ///   - style: The box-drawing characters (default: the appearance's).
+    ///   - width: How many concentric rings to draw, in CELLS — a terminal has
+    ///     no fractional stroke, so a thicker border is literally a border
+    ///     around a border. `0` draws none; values above 1 nest.
     /// - Returns: A view with a border.
     public func border(
-        _ style: BorderStyle? = nil,
-        color: Color? = nil
+        _ colour: Color,
+        style: BorderStyle? = nil,
+        width: Int = 1
     ) -> some View {
+        bordered(style: style, colour: colour, width: width)
+    }
+
+    /// A border in the palette's own colour — the terminal-native spelling,
+    /// where the theme decides and the call site does not have to.
+    ///
+    /// SwiftUI has no equivalent because it has no palette: there, a border
+    /// with no colour is `border(.foreground)`. Here it is what nearly every
+    /// call wants, so it stays available rather than forcing a colour that a
+    /// theme change would then have to fight.
+    ///
+    /// - Parameters:
+    ///   - style: The box-drawing characters (default: the appearance's).
+    ///   - width: Concentric rings, in cells.
+    /// - Returns: A view with a border.
+    public func border(
+        style: BorderStyle? = nil,
+        width: Int = 1
+    ) -> some View {
+        bordered(style: style, colour: nil, width: width)
+    }
+
+    /// The one implementation both spellings funnel through, and the one the
+    /// framework's own chrome calls when its colour is already an `Optional`
+    /// (a menu or popover whose caller may or may not have named one).
+    ///
+    /// `width` nests rather than thickens: each ring is another
+    /// `ContainerView` around the last, which is exactly what a two-cell
+    /// border looks like on a grid that has no half-cells.
+    @ViewBuilder
+    func bordered(style: BorderStyle?, colour: Color?, width: Int) -> some View {
+        if width <= 0 {
+            self
+        } else {
+            (1..<max(1, width)).reduce(
+                AnyView(ring(style: style, colour: colour))
+            ) { inner, _ in
+                AnyView(inner.ring(style: style, colour: colour))
+            }
+        }
+    }
+
+    /// One border, drawn as the titleless container it has always been.
+    private func ring(style: BorderStyle?, colour: Color?) -> some View {
         ContainerView(
             style: ContainerStyle(
                 showHeaderSeparator: false,
                 showFooterSeparator: false,
                 borderStyle: style,
-                borderColor: color
+                borderColor: colour
             )
         ) {
             self

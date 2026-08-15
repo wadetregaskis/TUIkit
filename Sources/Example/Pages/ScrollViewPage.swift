@@ -101,7 +101,7 @@ struct ScrollViewPage: View {
                         }
                     }
                     .frame(height: 8)
-                    .border(color: .palette.border)
+                    .border(.palette.border)
                 }
             }
 
@@ -145,7 +145,7 @@ struct ScrollViewPage: View {
                         }
                     }
                     .frame(height: 10)
-                    .border(color: .palette.border)
+                    .border(.palette.border)
                 }
             }
 
@@ -167,7 +167,7 @@ struct ScrollViewPage: View {
                         }
                     }
                     .frame(height: 10)
-                    .border(color: .palette.border)
+                    .border(.palette.border)
                     .scrollbarVisibility(barVisibility)
                     .scrollbarArrows(barArrows)
                     .scrollbarProportionalThumb(barProportional)

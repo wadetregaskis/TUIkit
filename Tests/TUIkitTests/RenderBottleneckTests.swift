@@ -257,7 +257,7 @@ struct RenderBottleneckTests {
             .foregroundStyle(.red)
             .dimmed()
             .padding(1)
-            .border(.line)
+            .border(style: .line)
         let time5 = measure("5 modifiers", iterations: iterations) {
             _ = renderToBuffer(fiveModifiers, context: context)
         }

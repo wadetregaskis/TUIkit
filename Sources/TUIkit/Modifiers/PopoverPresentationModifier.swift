@@ -204,7 +204,7 @@ extension PopoverPresentationModifier: Renderable {
         popover
             .padding(EdgeInsets(horizontal: 1, vertical: 0))
             .background(context.environment.palette.background)
-            .border(color: context.environment.palette.border)
+            .border(context.environment.palette.border)
     }
 
     /// Where the panel goes in the presenting view's own coordinate space.

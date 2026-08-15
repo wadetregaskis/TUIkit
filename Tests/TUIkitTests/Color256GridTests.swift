@@ -313,12 +313,12 @@ struct ColorPickerPanel256TabTests {
         let key = "tuikit.colorPicker.palette256.showNumbers"  // must match _Palette256Editor
         let backend = MockStorageBackend()
         // First "mount": defaults off, then the user enables numbers.
-        let firstMount = AppStorage(wrappedValue: false, key, storage: backend)
+        let firstMount = AppStorage(wrappedValue: false, key, store: backend)
         #expect(firstMount.wrappedValue == false, "defaults to compact swatches")
         firstMount.wrappedValue = true
         // A later "mount" (tab re-entry / relaunch) reads the persisted value
         // rather than resetting to the default, which plain @State would do.
-        let laterMount = AppStorage(wrappedValue: false, key, storage: backend)
+        let laterMount = AppStorage(wrappedValue: false, key, store: backend)
         #expect(laterMount.wrappedValue == true, "the numbered-swatch preference persisted")
     }
 }
