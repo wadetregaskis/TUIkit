@@ -262,6 +262,12 @@
     "EmptyMatchedTransitionSourceConfiguration": {
       "why": "The empty base value passed into `matchedTransitionSource(id:in:configuration:)`. Inapplicable for the same reason as the protocol it conforms to — no transition machinery, no corner geometry."
     },
+    "EnvironmentValues.allowsTightening": {
+      "why": "The environment half of allowsTightening(_:); absent for the same reason — a cell grid has no inter-character spacing to tighten."
+    },
+    "EnvironmentValues.minimumScaleFactor": {
+      "why": "The environment half of minimumScaleFactor(_:); absent for the same reason — glyph size belongs to the terminal emulator, not to the app."
+    },
     "FillShapeView": {
       "why": "The View produced by Shape.fill(_:); no Shape exists. Filling a rectangular area with a colour is BackgroundModifier (Sources/TUIkit/Modifiers/BackgroundModifier.swift:15-42)."
     },
@@ -444,6 +450,12 @@
     },
     "UnevenRoundedRectangle": {
       "why": "Per-corner radii presuppose a radius at all; BorderStyle names four corner CHARACTERS (topLeft/topRight/bottomLeft/bottomRight, Sources/TUIkitStyling/Styles/BorderStyle.swift:13-22), which is the terminal's whole corner vocabulary."
+    },
+    "View.allowsTightening(_:)": {
+      "why": "It asks the type setter to reduce inter-character spacing so a line fits without truncating. A TUIkit app emits characters and the emulator advances a whole cell per column — 1 for most, 2 for East Asian wide and most emoji, 0 for combining marks. There is no sub-cell spacing to reduce. Fitting text into less space is spelled truncationMode(_:), lineLimit(_:) or ViewThatFits here."
+    },
+    "View.minimumScaleFactor(_:)": {
+      "why": "It permits shrinking the FONT to fit, down to a fraction of the nominal size. A TUIkit app does not own the font: cell size belongs to the emulator, is chosen by the user, and is identical for every glyph on screen. Nothing in the framework can scale one view's text without scaling the whole terminal."
     },
     "ViewSpacing": {
       "why": "SwiftUI derives a view's preferred spacing from its type and its FONT metrics. A terminal app does not own the typeface or size — the terminal does (Documentation/SwiftUI-compatibility.md:451) — so there is no per-view metric to report and every answer would be the same constant."
