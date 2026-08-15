@@ -133,6 +133,51 @@ about where row-level state lives, not plumbing.
 
 ---
 
+## 8. `View.focusEffectDisabled(_:)` — which parts of "focused" are an *effect*
+
+**The gap.** SwiftUI's modifier suppresses the focus ring without taking the
+view out of the focus ring.
+
+**Why it needs a decision — measured, not guessed.** The obvious seam looked
+universal: every control's emphasis resolves through
+`SelectionEmphasisClock.cycle(_:)` / `SelectionIndicator.resolve(isFocused:…)`,
+two functions. Gating both, then running a sweep that renders each control
+focused-with-effects-off and compares it to the same control genuinely
+unfocused (a live focus manager, focus parked on a sibling), **seven of eight
+subjects still differed**:
+
+| control | what still indicated focus |
+|---|---|
+| `Button` | the bold attribute (`ESC[1;…`) |
+| `Toggle` | the glyph's colour |
+| `TextField`, `SecureField` | the text cursor cell |
+| `Stepper` | the ◀ ▶ arrow colours |
+| `Slider` | the ◀ ▶ arrow colours |
+| `DatePicker` | the active field's background |
+
+The clock carries the *pulse*; each control separately branches on `isFocused`
+for its base colours and attributes. So this is a change to every control's
+focused-styling branch, not two gates — the same "not a universal seam" shape
+already declined twice on this list, and the reason a partial version must not
+ship: a control that kept indicating focus would read as a bug in that control.
+
+**And one genuine question.** Is a focused `TextField`'s **cursor** a focus
+*effect*? SwiftUI keeps the caret under `focusEffectDisabled` — the caret is
+the insertion point, not decoration — so "suppress everything that differs when
+focused" is the wrong rule for at least one control, and the right rule has to
+be stated per control rather than derived.
+
+**Options.** (a) Answer the caret question, then sweep every control. (b) Ship
+a narrower TUI-specific modifier that suppresses only the *pulse* (the animated
+part), under a name that does not promise SwiftUI's semantics. (c) Record as
+not-implemented in `parity-map.json`.
+
+**The sweep is worth keeping either way** — a byte-comparison against a
+genuinely-unfocused baseline is what turned an assumption into the table above,
+and it will catch producers a future implementer forgets.
+
+---
+
 ## Recording the answers
 
 An answered item should end in one of two places, not in this file:
