@@ -178,6 +178,47 @@ and it will catch producers a future implementer forgets.
 
 ---
 
+## 9. `Text.bold(_:)` and its four siblings — whose style wins
+
+**The gap.** SwiftUI's `Text.bold(_:)`, `.italic(_:)`, `.underline(_:…)`,
+`.strikethrough(_:…)` take `_ isActive: Bool = true`. TUIkit's take no
+argument.
+
+**Why it needs a decision — found by shipping it and watching two tests
+fail.** Adding the parameter compiles and looks harmless, and it silently
+changes existing code. `Text("Hi").bold(false)` currently resolves to the
+CASCADING ``View/bold(_:)``, whose proximity rule makes an inner `false` beat
+an outer `.bold()`. Give `Text` its own `bold(_:)` and the call binds there
+instead — and TUIkit's merge is
+
+    effectiveStyle.isBold = effectiveStyle.isBold || (cascaded.bold ?? false)
+
+so a `Text` whose own `isBold` is `false` still renders bold under an outer
+`.bold()`. Two existing tests caught it (`StyleCascadeTests`
+`broadItalicModifier`, `innerOverridesOuter`); nothing else would have.
+
+**The fix is a public-API model change, not a parameter.** `TextStyle`'s five
+flags are `Bool`, so "explicitly off" and "never asked" are the same value.
+They would have to become `Bool?` — the shape ``LineLimit`` already uses for
+exactly this reason ("the `Optional` around it carries *was one stated*") — and
+the merge would have to prefer a stated `false` over the cascade. That is
+SwiftUI's rule (the nearest wins), so the current OR is arguably wrong
+independently of this modifier; but it changes what existing apps render, and
+`TextStyle` is public.
+
+**Options.** (a) Make the five flags `Bool?`, fix the merge to let a stated
+value win, then add the parameters — one coherent change, with a sweep over
+every text-rendering path. (b) Add the parameters without the model change and
+accept that `Text.bold(false)` is weaker than `View.bold(false)` — rejected
+here as a trap, since the two spellings would differ invisibly. (c) Leave the
+argument-less spellings and record the four in `parity-map.json`.
+
+**Shipped in the meantime:** `Text.monospaced(_:)` and
+`Text.monospacedDigit()`, which are safe precisely because they are the
+identity — which overload a call binds to cannot change what it does.
+
+---
+
 ## Recording the answers
 
 An answered item should end in one of two places, not in this file:

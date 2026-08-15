@@ -176,6 +176,31 @@ extension Text {
         return copy
     }
 
+    /// Renders with a monospaced font — mirrors SwiftUI's `monospaced(_:)`.
+    ///
+    /// Already true of every glyph in a character grid; see
+    /// `MediumGuaranteedModifiers.swift` for the guarantee and the tests that
+    /// pin it. Returns the text unchanged.
+    ///
+    /// Safe to add alongside ``View/monospaced(_:)`` — unlike the style
+    /// toggles, both spellings are the identity, so which one a call binds to
+    /// cannot change what it does.
+    ///
+    /// - Parameter isActive: Ignored — a terminal cannot render
+    ///   proportionally, so `false` cannot mean what it means in SwiftUI.
+    public func monospaced(_ isActive: Bool = true) -> Text {
+        self
+    }
+
+    /// Renders digits at uniform width — mirrors SwiftUI's
+    /// `monospacedDigit()`.
+    ///
+    /// Already true: every digit is one cell, which is why a percentage
+    /// read-out has never jittered. Returns the text unchanged.
+    public func monospacedDigit() -> Text {
+        self
+    }
+
     /// Makes the text blink (if supported by the terminal).
     ///
     /// - Returns: A new text with blink effect.

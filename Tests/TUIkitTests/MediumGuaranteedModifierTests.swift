@@ -89,3 +89,23 @@ struct MediumGuaranteedModifierTests {
         #expect(box.value == "teh  i", "got \(box.value)")
     }
 }
+
+@MainActor
+@Suite("Text's monospaced pair")
+struct TextMonospacedTests {
+
+    private func rendered(_ text: Text) -> String {
+        renderToBuffer(text, context: makeRenderContext(width: 20, height: 1)).lines.first ?? ""
+    }
+
+    /// Identity, and that is why adding them alongside the `View` spellings is
+    /// safe: which overload a call binds to cannot change what it does. The
+    /// style toggles are NOT like this — see Parity-decisions-pending.md §9.
+    @Test("both return the text unchanged")
+    func monospacedIsIdentity() {
+        let plain = rendered(Text(verbatim: "10%"))
+        #expect(rendered(Text(verbatim: "10%").monospaced()) == plain)
+        #expect(rendered(Text(verbatim: "10%").monospaced(false)) == plain)
+        #expect(rendered(Text(verbatim: "10%").monospacedDigit()) == plain)
+    }
+}
