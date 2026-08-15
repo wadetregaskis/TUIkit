@@ -715,6 +715,10 @@
     "ToolbarPlacement": {
       "how": "choice of modifier: .appHeader (top surface) vs .statusBarItems (bottom surface)",
       "why": "/Users/robot/Documents/TUIkit/Sources/TUIkit/Extensions/View+Presentation.swift:184 and /Users/robot/Documents/TUIkit/Sources/TUIkit/Extensions/View+Events.swift:507. Both surfaces are real and rendered outside the view tree (RenderLoop.swift:487 subtracts `headerHeight` and `sta"
+    },
+    "View.fixedSize()": {
+      "how": "View.fixedSize(horizontal:vertical:) — both parameters default to true",
+      "why": "SwiftUI declares two overloads; TUIkit's single one has defaults, so `.fixedSize()` compiles and means the same thing (verified by a `swiftc -typecheck` probe against the built module, not by reading). Adding a no-argument overload would be a second spelling of one idea — what the consolidate-before-adding rule exists to prevent — and the extractor cannot see that a defaulted parameter list already covers the shorter call, so it reports the shape difference as a gap."
     }
   }
 }

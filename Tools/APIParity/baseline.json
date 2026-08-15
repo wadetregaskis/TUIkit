@@ -1421,7 +1421,6 @@
   "View.drawingGroup(opaque:colorMode:)",
   "View.dynamicTypeSize(_:)",
   "View.environmentObject(_:)",
-  "View.fixedSize()",
   "View.flipsForRightToLeftLayoutDirection(_:)",
   "View.focusEffectDisabled(_:)",
   "View.focusedObject(_:)",
