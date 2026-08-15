@@ -277,17 +277,22 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
                 TUIkit.renderToBuffer(
                     $0, context: screenContext.withChildIdentity(type: NavigationScreen.self))
             } ?? FrameBuffer()
-        let title = preferences?.pop()[NavigationTitleKey.self] ?? ""
+        let published = preferences?.pop()
+        let title = published?[NavigationTitleKey.self] ?? ""
+        let hidesBack = published?[NavigationBackButtonHiddenKey.self] ?? false
 
         content = padded(content, toWidth: width, height: contentHeight)
 
-        var buffer = renderBar(title: title, width: width, context: context)
+        var buffer = renderBar(
+            title: title, hidesBack: hidesBack, width: width, context: context)
         buffer.appendVertically(content)
         return buffer
     }
 
     /// The navigation bar, pinned to ``barHeight`` rows.
-    private func renderBar(title: String, width: Int, context: RenderContext) -> FrameBuffer {
+    private func renderBar(
+        title: String, hidesBack: Bool, width: Int, context: RenderContext
+    ) -> FrameBuffer {
         let coordinator = coordinator
         // The Back button is a real `Button`: a Tab stop, clickable, and
         // styled by whatever `.buttonStyle` is in effect above the stack.
@@ -316,20 +321,30 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         // Measure the BUTTON, not the bar — the bar ends in a `Spacer`, so
         // measuring it answers "the whole width", which left the title no room
         // at all and silently truncated it to nothing.
-        let backWidth = measureChild(
-            backButton(back, coordinator: coordinator),
-            proposal: ProposedSize(width: nil, height: nil),
-            context: barContext.withChildIdentity(type: NavigationBarID.self)
-        ).width
+        let backWidth =
+            hidesBack
+            ? 0
+            : measureChild(
+                backButton(back, coordinator: coordinator),
+                proposal: ProposedSize(width: nil, height: nil),
+                context: barContext.withChildIdentity(type: NavigationBarID.self)
+            ).width
         // Crumbs when they fit, the Back button when they do not. `backWidth`
         // is what a bar with the single button would need, so it doubles as the
         // budget the trail has to beat.
         coordinator.recordTitle(title, atDepth: coordinator.depth)
+        // With the button hidden the trail goes too: every crumb in it pops, so
+        // keeping it would leave three ways back where the screen asked for
+        // none. The title then has the whole bar rather than what the button
+        // left it.
         let titled = navigationBar(
             back: back,
+            hidesBack: hidesBack,
             title: title.truncatedToWidth(max(0, width - backWidth - 1)),
-            crumbs: NavigationCrumbs.trail(
-                titles: coordinator.titles(upTo: coordinator.depth), fittingWidth: width),
+            crumbs: hidesBack
+                ? nil
+                : NavigationCrumbs.trail(
+                    titles: coordinator.titles(upTo: coordinator.depth), fittingWidth: width),
             coordinator: coordinator)
 
         let rendered = TUIkit.renderToBuffer(
@@ -340,7 +355,8 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
     /// The bar's view: the crumb trail (or the Back button and title when the
     /// trail will not fit), and the rule beneath.
     private func navigationBar(
-        back: String, title: String, crumbs: [NavigationCrumbs.Crumb]?, coordinator: NavigationCoordinator
+        back: String, hidesBack: Bool, title: String, crumbs: [NavigationCrumbs.Crumb]?,
+        coordinator: NavigationCoordinator
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
@@ -348,6 +364,8 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
                     ForEach(Array(crumbs.enumerated()), id: \.offset) { _, crumb in
                         crumbView(crumb, coordinator: coordinator)
                     }
+                } else if hidesBack {
+                    Text(title).bold()
                 } else {
                     backButton(back, coordinator: coordinator)
                     Text(" ")

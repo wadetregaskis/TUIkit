@@ -58,6 +58,20 @@ Four ways, all of which end up in the same place:
   than quitting while it is inside a stack;
 - removing from the path yourself, if you bound one.
 
+``View/navigationBarBackButtonHidden(_:)`` takes away the first of those —
+and, on a wide terminal, the crumb trail with it, since every crumb pops too.
+<kbd>Esc</kbd> and `dismiss()` keep working: SwiftUI hides the button without
+disabling the swipe-back gesture, and Esc is this framework's counterpart to
+that gesture rather than to the button. A screen that must not be left at all
+wants this *and* something that consumes Esc.
+
+```swift
+.navigationDestination(for: Step.self) { step in
+    Wizard(step)
+        .navigationBarBackButtonHidden(step.isCommitting)
+}
+```
+
 ### Holding the path yourself
 
 Bind a path when something other than a link needs to change it — a deep link,

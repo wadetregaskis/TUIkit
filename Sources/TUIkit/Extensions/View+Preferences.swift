@@ -83,4 +83,34 @@ extension View {
     public func navigationTitle(_ title: Text) -> some View {
         preference(key: NavigationTitleKey.self, value: title.content)
     }
+
+    /// Hides the navigation bar's Back control for this screen.
+    ///
+    /// Mirrors SwiftUI's `navigationBarBackButtonHidden(_:)`. Apply it inside a
+    /// pushed screen; the enclosing ``NavigationStack`` reads it when it draws
+    /// the bar above that screen.
+    ///
+    /// ```swift
+    /// .navigationDestination(for: Step.self) { step in
+    ///     Wizard(step)
+    ///         .navigationBarBackButtonHidden(step.isCommitting)
+    /// }
+    /// ```
+    ///
+    /// The **breadcrumb trail goes with it**. On a wide terminal the bar draws
+    /// the trail instead of a Back button, and every crumb in it pops — so a
+    /// bar that dropped the button and kept the trail would have hidden one way
+    /// back and left three, which is not what the modifier says. The title
+    /// stays, and takes the width the button was using.
+    ///
+    /// **Escape still goes back.** SwiftUI hides the button without disabling
+    /// the swipe-back gesture, and Escape is this framework's counterpart to
+    /// that gesture rather than to the button. A screen that must not be left
+    /// at all wants this *and* something that consumes Escape.
+    ///
+    /// - Parameter hidesBackButton: Whether to hide the control. Default `true`.
+    /// - Returns: A view that publishes the preference.
+    public func navigationBarBackButtonHidden(_ hidesBackButton: Bool = true) -> some View {
+        preference(key: NavigationBackButtonHiddenKey.self, value: hidesBackButton)
+    }
 }

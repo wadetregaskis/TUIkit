@@ -79,6 +79,61 @@ struct NavigationStackTests {
         #expect(rendered[0].contains("\(NavigationCrumbs.separator)"), "bar: \(rendered[0])")
     }
 
+    // MARK: - navigationBarBackButtonHidden
+
+    /// Renders a one-deep stack whose destination may hide its Back control.
+    private func pushedBar(hidingBack: Bool, width: Int = 40) -> String {
+        var path = NavigationPath()
+        path.append(Item(name: "one"))
+        let binding = Binding(get: { path }, set: { path = $0 })
+        return lines(
+            NavigationStack(path: binding) {
+                Text("root").navigationTitle("Home")
+                    .navigationDestination(for: Item.self) { item in
+                        Text("body")
+                            .navigationTitle(item.name)
+                            .navigationBarBackButtonHidden(hidingBack)
+                    }
+            }, width: width)[0]
+    }
+
+    /// The trail is the bar's usual shape at this width, so the fixture is
+    /// asserted before the removal is: a test that only checked for absence
+    /// would pass on a bar that had stopped drawing anything at all.
+    @Test("hiding the Back control takes the crumb trail with it")
+    func backButtonHidden() {
+        let shown = pushedBar(hidingBack: false)
+        #expect(shown.contains(NavigationCrumbs.separator), "the fixture draws a trail: \(shown)")
+        #expect(shown.contains("Home"), "…and the trail names the root")
+
+        let hidden = pushedBar(hidingBack: true)
+        #expect(!hidden.contains(NavigationCrumbs.separator), "no trail: \(hidden)")
+        #expect(!hidden.contains("Home"), "no route back to the root either")
+        #expect(hidden.contains("one"), "but the screen's own title stays")
+    }
+
+    /// Narrow enough that the trail will not fit, so the bar falls back to the
+    /// Back button — the other of its two shapes, and the one the modifier is
+    /// named after.
+    @Test("the Back button goes too, in the narrow bar")
+    func backButtonHiddenWhenNarrow() {
+        #expect(pushedBar(hidingBack: false, width: 12).contains("\u{2039}"), "‹ Back is drawn")
+        #expect(!pushedBar(hidingBack: true, width: 12).contains("\u{2039}"))
+    }
+
+    /// Default `true`, matching SwiftUI, and a screen that says nothing keeps
+    /// its way back.
+    @Test("it defaults to hiding, and is off unless asked for")
+    func defaultsMatchSwiftUI() {
+        #expect(pushedBar(hidingBack: false).contains(NavigationCrumbs.separator))
+        let defaulted = lines(
+            NavigationStack(path: .constant(NavigationPath())) {
+                Text("root")
+                    .navigationBarBackButtonHidden()
+            })
+        #expect(defaulted.contains { $0.contains("root") }, "the root still renders")
+    }
+
     @Test("The bar is two rows whatever the title's length")
     func barHeightIsIndependentOfTheTitle() {
         // The chrome-height rule: content space cannot depend on content, so a

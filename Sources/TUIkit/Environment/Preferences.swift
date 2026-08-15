@@ -129,3 +129,13 @@ public struct NavigationTitleKey: PreferenceKey {
     /// The default navigation title (empty string).
     public static let defaultValue: String = ""
 }
+
+/// A preference key for whether a pushed screen hides its Back control.
+///
+/// A preference rather than a static conformance — unlike a sheet's detent,
+/// which decides the height it renders into, this is read AFTER the screen has
+/// rendered, which is exactly when the navigation bar is built.
+public struct NavigationBackButtonHiddenKey: PreferenceKey {
+    /// Screens show their Back control unless they say otherwise.
+    public static let defaultValue: Bool = false
+}
