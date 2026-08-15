@@ -394,7 +394,9 @@ extension Text: Renderable, Layoutable {
         // FI), and a measure of the untransformed text would reserve the wrong
         // number of cells for it.
         let wrapped = TextWrapping.wrapMeasured(
-            Self.applyingCase(cascadedAttributes(context: context).textCase, to: content),
+            Self.displayString(
+                content, textCase: cascadedAttributes(context: context).textCase,
+                context: context),
             width: maxWidth)
 
         // Reuse the per-line widths the wrap already computed instead of
@@ -437,6 +439,13 @@ extension Text: Renderable, Layoutable {
         effectiveStyle.isStrikethrough =
             effectiveStyle.isStrikethrough || (cascaded.strikethrough ?? false)
         effectiveStyle.isDim = effectiveStyle.isDim || (cascaded.dim ?? false)
+        // `.invalidated` says the content is STALE, not absent — so it is shown
+        // and dimmed rather than replaced with a skeleton. An out-of-date figure
+        // is still worth reading, which is the whole point of the distinction
+        // from `.placeholder`.
+        effectiveStyle.isDim =
+            effectiveStyle.isDim
+            || context.environment.redactionReasons.contains(.invalidated)
         effectiveCase = cascaded.textCase
 
         // Foreground precedence: an explicit *concrete* colour on this Text wins;
@@ -473,7 +482,7 @@ extension Text: Renderable, Layoutable {
         let lineLimit = resolvedLineLimit(context: context)
         let maxHeight = min(context.availableHeight, lineLimit ?? context.availableHeight)
         let wrapped = TextWrapping.fitMeasured(
-            Self.applyingCase(effectiveCase, to: content),
+            Self.displayString(content, textCase: effectiveCase, context: context),
             width: maxWidth, maxLines: maxHeight, mode: mode, atWordBoundary: atWordBoundary)
 
         let knownWidth = wrapped.widths.max() ?? 0
@@ -516,7 +525,9 @@ extension Text: Renderable, Layoutable {
             // break either side of a fragment boundary would be chosen blind),
             // so put the per-fragment styling back by walking the same source
             // the runs describe. See `TextRunAttribution`.
-            let runTexts = runs.map { Self.applyingCase(effectiveCase, to: $0.text) }
+            let runTexts = runs.map {
+                Self.displayString($0.text, textCase: effectiveCase, context: context)
+            }
             var resolvedRunStyles: [TextStyle] = []
             resolvedRunStyles.reserveCapacity(runs.count)
             for run in runs {
@@ -560,5 +571,19 @@ extension Text: Renderable, Layoutable {
         case .lowercase: return string.lowercased()
         case nil: return string
         }
+    }
+
+    /// The string this text will actually DRAW: cased, then redacted.
+    ///
+    /// Every site that needs the drawn string goes through here — the measure,
+    /// the render, and the per-run walk of a concatenation — so a redaction can
+    /// never change the width the measure reserved. Measuring the written
+    /// string while drawing a transformed one is the measure/render parity bug
+    /// class; `.textCase` was already routed this way for exactly that reason
+    /// (ß → SS changes the width), and redaction joins it.
+    private static func displayString(
+        _ string: String, textCase: TextCase?, context: RenderContext
+    ) -> String {
+        context.environment.redactionReasons.redacting(applyingCase(textCase, to: string))
     }
 }
