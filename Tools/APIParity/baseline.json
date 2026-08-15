@@ -1555,7 +1555,6 @@
   "View.simultaneousGesture(_:isEnabled:)",
   "View.simultaneousGesture(_:name:isEnabled:)",
   "View.strikethrough(_:pattern:color:)",
-  "View.submitScope(_:)",
   "View.symbolColorRenderingMode(_:)",
   "View.symbolEffect(_:options:isActive:)",
   "View.symbolEffect(_:options:value:)",
