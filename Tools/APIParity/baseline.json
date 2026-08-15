@@ -1367,7 +1367,6 @@
   "View.alert(_:isPresented:presenting:actions:message:)",
   "View.alert(isPresented:error:actions:)",
   "View.alert(isPresented:error:actions:message:)",
-  "View.allowsHitTesting(_:)",
   "View.anchorPreference(key:value:transform:)",
   "View.animation(_:)",
   "View.animation(_:body:)",
