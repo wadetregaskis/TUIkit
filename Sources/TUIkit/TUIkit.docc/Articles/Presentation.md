@@ -194,9 +194,11 @@ List(rows, selection: $selection) { ... }
 There is also an always-on `modal { … }` overload (bound to a constant `true`)
 for content that should always be presented while its host is on screen.
 
-> Note: TUIkit does not currently provide `.popover`, `.fullScreenCover`, or
-> `presentationDetents`. A pop-up anchored to a control is spelled ``Menu`` or
-> `contextMenu(menuItems:)`.
+> Note: `popover(isPresented:attachmentAnchor:arrowEdge:content:)` and
+> `fullScreenCover(isPresented:onDismiss:content:)` are both available, as is
+> `presentationDetents(_:)` — see the sections above. A pop-up of *choices*
+> anchored to a control is still better spelled ``Menu`` or
+> `contextMenu(menuItems:)`; `.popover` is for arbitrary content.
 
 ## Notifications
 
