@@ -105,4 +105,67 @@ struct HitTestingModifierTests {
             switchedOff.stripped == live.stripped,
             "and even disabling changes only the colour, never the glyphs")
     }
+
+    // MARK: - hidden()
+
+    /// The whole promise: the hole is the shape of the view, so nothing around
+    /// it moves. Measured on an HStack, where a collapsed child would pull the
+    /// trailing text left and the failure would be visible in one line.
+    @Test("a hidden view keeps its space")
+    func keepsItsSpace() {
+        let shown = HStack(spacing: 1) {
+            Text(verbatim: "1234567")
+            Text(verbatim: "end")
+        }
+        let hiddenFirst = HStack(spacing: 1) {
+            Text(verbatim: "1234567").hidden()
+            Text(verbatim: "end")
+        }
+        #expect(size(hiddenFirst).width == size(shown).width)
+        #expect(size(hiddenFirst).height == size(shown).height)
+        #expect(lines(hiddenFirst).count == lines(shown).count)
+        // "end" has to land in the same column, which is the layout-level claim
+        // that a bare width comparison cannot make.
+        let visible = lines(shown).first ?? ""
+        let hole = lines(hiddenFirst).first ?? ""
+        #expect(visible.hasSuffix("end") && hole.hasSuffix("end"))
+        #expect(hole.strippedLength == visible.strippedLength)
+    }
+
+    /// A multi-row subject, because a one-line fixture cannot tell "blanked"
+    /// from "collapsed to a single blank line".
+    @Test("a hidden view draws nothing at all")
+    func drawsNothing() {
+        let block = VStack(spacing: 0) {
+            Text(verbatim: "alpha")
+            Text(verbatim: "beta")
+            Text(verbatim: "gamma")
+        }
+        let drawn = buffer(block.hidden())
+        #expect(drawn.height == buffer(block).height, "same rows")
+        #expect(drawn.isBlank, "and not one glyph among them")
+    }
+
+    /// Invisible has to mean untouchable — otherwise a hidden placeholder keeps
+    /// swallowing the clicks meant for whatever is drawn beneath it.
+    @Test("a hidden view takes no clicks and floats no overlays")
+    func takesNoInput() {
+        let live = buffer(Button("Press") {})
+        #expect(!live.hitTestRegions.isEmpty, "the fixture really is clickable")
+        #expect(buffer(Button("Press") {}.hidden()).hitTestRegions.isEmpty)
+
+        let popping = Text(verbatim: "page")
+            .popover(isPresented: .constant(true)) { Button("Inside") {} }
+        #expect(!buffer(popping, width: 40, height: 12).overlays.isEmpty)
+        #expect(buffer(popping.hidden(), width: 40, height: 12).overlays.isEmpty)
+    }
+
+    /// The pairing that gives both modifiers their reason to exist: one takes
+    /// the pixels and the mouse, the other takes only the mouse.
+    @Test("hidden and allowsHitTesting(false) differ in exactly one way")
+    func versusHitTesting() {
+        let subject = Text(verbatim: "watermark")
+        #expect(lines(subject.allowsHitTesting(false)) == lines(subject))
+        #expect(lines(subject.hidden()) != lines(subject))
+    }
 }

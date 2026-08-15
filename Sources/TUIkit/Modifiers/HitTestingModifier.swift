@@ -5,10 +5,20 @@
 //  `allowsHitTesting(false)` leaves the view exactly as it looked and lets
 //  clicks fall through to whatever is beneath.
 //
-//  `hidden()` belongs here too and is NOT yet shipped — adding it to this
-//  module reproducibly broke an unrelated scrollbar test
-//  (`ScrollbarModifierWiringTests.visibilityPropagatesButInnerWins`), by a
-//  mechanism I could not establish. See the commit that added this file.
+//  `hidden()` is the same idea taken all the way: the view keeps its space
+//  and loses everything else — its drawing, its mouse, its overlays.
+//
+//  ⚠️ Declaring a `View.hidden()` has one non-obvious consequence, found the
+//  hard way. TUIkit conforms `Optional` to `View` (PrimitiveTypes+View.swift),
+//  so `hidden` becomes a member reachable through an Optional — and inside a
+//  swift-testing `#expect(…)` macro expansion, that is enough to derail the
+//  implicit member `.hidden` in an `Optional<SomeEnum>` argument position. It
+//  compiles clean and evaluates wrong. It is not specific to any TUIkit type:
+//  a private `enum Fruit { case hidden, apple }` reproduces it, and renaming
+//  this method to anything else makes it go away. Outside the macro, in a
+//  non-Optional position, or with the case spelled out in full, resolution is
+//  correct. So: inside `#expect`, write `SomeEnum.hidden`, not `.hidden`.
+//  ScrollbarModifierWiringTests carries the one in-tree instance.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -40,6 +50,58 @@ extension View {
     /// - Returns: A view whose hit regions are kept or dropped.
     public func allowsHitTesting(_ enabled: Bool) -> some View {
         _HitTestingView(content: self, enabled: enabled)
+    }
+}
+
+// MARK: - hidden()
+
+extension View {
+    /// Hides this view unconditionally, without giving up its space.
+    ///
+    /// Mirrors SwiftUI's `hidden()`. The view is laid out exactly as it would
+    /// have been and then draws nothing: a hole the shape of the view, which
+    /// takes no clicks and floats no pop-ups.
+    ///
+    /// ```swift
+    /// // Both rows keep the same width; only one of them is legible.
+    /// HStack { Text("total"); Text(amount).hidden() }
+    /// ```
+    ///
+    /// Reach for this when the layout must not move — a placeholder holding a
+    /// column open, a value that appears later. To remove the space as well,
+    /// leave the view out of the hierarchy (`if`/`else`) instead.
+    ///
+    /// - Returns: A view that occupies its space and shows nothing.
+    public func hidden() -> some View {
+        _HiddenView(content: self)
+    }
+}
+
+/// Renders `content` for its geometry only, then blanks it.
+///
+/// Blanking the *rendered* buffer rather than sizing a hole from
+/// `sizeThatFits` is deliberate: measure and render are allowed to disagree
+/// (a minimum can exceed a proposal), and a hidden view whose hole is a
+/// different shape from the view it hides would move the layout — the one
+/// thing this modifier promises not to do.
+///
+/// - Important: Framework infrastructure, created by ``View/hidden()``.
+private struct _HiddenView<Content: View>: View, Renderable, Layoutable {
+    let content: Content
+
+    var body: Never { fatalError("_HiddenView renders via Renderable") }
+
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
+    }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let drawn = TUIkit.renderToBuffer(content, context: context)
+        // Spaces, not zero-width nothing: this is the same convention `Spacer`
+        // uses for space that is occupied but blank, and it is what stops the
+        // hole from collapsing in a stack. Overlays, hit regions and animated
+        // runs are all left behind by construction.
+        return FrameBuffer(emptyWithWidth: drawn.width, height: drawn.height)
     }
 }
 

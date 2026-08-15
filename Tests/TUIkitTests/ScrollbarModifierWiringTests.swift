@@ -141,8 +141,14 @@ struct ScrollbarModifierWiringTests {
         #expect(
             innerHasBar(outer: .automatic, inner: nil),
             "an inner scrollable inherits the ancestor's .automatic")
+        // `ScrollbarVisibility.hidden` spelled out, not `.hidden`. The `inner`
+        // parameter is an Optional, and inside a `#expect` expansion an
+        // implicit member in an Optional position can bind to `View.hidden()`
+        // — reachable because `Optional` conforms to `View` — instead of to
+        // the enum case. It compiles clean and the expectation then fails on a
+        // render that is perfectly correct. See HitTestingModifier.swift.
         #expect(
-            !innerHasBar(outer: .automatic, inner: .hidden),
+            !innerHasBar(outer: .automatic, inner: ScrollbarVisibility.hidden),
             "its own .hidden overrides the ancestor")
         #expect(
             innerHasBar(outer: .hidden, inner: .visible),
