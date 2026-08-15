@@ -76,7 +76,7 @@ public struct Label<Title: View, Icon: View>: View {
 
 // MARK: - SF Symbol convenience
 
-extension Label where Title == Text, Icon == Text {
+extension Label where Title == Text, Icon == _SymbolIcon {
     /// Creates a label with a string title and an SF Symbol icon.
     ///
     /// On a terminal that can render the symbol (see ``SFSymbol``) the glyph is
@@ -84,6 +84,10 @@ extension Label where Title == Text, Icon == Text {
     /// SwiftUI's `Label(_:systemImage:)` signature — the icon is modelled as a
     /// terminal glyph (a Private-Use character) rather than a raster image,
     /// because a terminal can only place symbols as text, not size them.
+    ///
+    /// The symbol's *name* is stored and resolved to a glyph while rendering, so
+    /// ``View/symbolVariant(_:)`` set anywhere above the label chooses the cut —
+    /// see ``_SymbolIcon``.
     ///
     /// - Parameters:
     ///   - title: The title shown beside the icon.
@@ -94,11 +98,15 @@ extension Label where Title == Text, Icon == Text {
         // codepoint with no installed SF Symbols font would otherwise render as a
         // missing-glyph box; fall back to the title alone, as SwiftUI does when a
         // symbol is unavailable.
-        let resolved = SFSymbol.glyph(named: systemImage)
-        let showIcon = resolved != nil && SFSymbol.isFontAvailable
+        //
+        // Deliberately resolved against the BASE name: a variant applied further
+        // down decides which cut is drawn, but not whether there is an icon at
+        // all — and it cannot, because `_SymbolIcon` falls back to this same base
+        // symbol whenever the varied name is absent.
+        let showIcon = SFSymbol.glyph(named: systemImage) != nil && SFSymbol.isFontAvailable
         self.init(
             title: Text(String(title)),
-            icon: Text(resolved ?? ""),
+            icon: _SymbolIcon(name: systemImage),
             iconIsVisible: showIcon)
     }
 }

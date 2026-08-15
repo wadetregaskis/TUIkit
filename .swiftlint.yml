@@ -194,6 +194,10 @@ type_name:
     # outline hands its rows to its container as `ChildView`s, which key each
     # one by this type.
     - _OutlineRow
+    # The icon half of Label(_:systemImage:). Public-but-underscored because it
+    # appears in Label's generic signature; it exists so the symbol NAME is
+    # resolved to a glyph at render time, where .symbolVariant is visible.
+    - _SymbolIcon
     # @FocusState modifier helpers created by .focused / .defaultFocus.
     - _FocusedModifier
     - _DefaultFocusModifier
