@@ -173,6 +173,7 @@ extension PopoverPresentationModifier: Renderable {
         // `@Environment(\.dismiss)` inside the popover closes the POPOVER — the
         // same act as its Escape handler above. Left unset it would mean the
         // top-level dismissal, which is to quit the application.
+        popoverContext.environment.isPresented = true
         popoverContext.environment.dismiss = DismissAction {
             isPresented.wrappedValue = false
         }

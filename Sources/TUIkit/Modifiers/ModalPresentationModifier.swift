@@ -179,6 +179,7 @@ extension ModalPresentationModifier: Renderable {
             .withAvailableHeight(overlayHeight)
         modalContext.environment.activeFocusSectionID = sectionID
         modalContext.environment.dismiss = dismissAction()
+        modalContext.environment.isPresented = true
 
         // A detent, if the content named one, decides the height instead of the
         // content's own. It has to be read BEFORE the render — it is the height

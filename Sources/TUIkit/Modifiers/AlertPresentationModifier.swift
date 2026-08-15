@@ -221,6 +221,7 @@ extension AlertPresentationModifier: Renderable {
         // author writes. Without it the alert's own actions inherit the
         // top-level meaning of dismissal, which is to quit the application.
         // Closes without choosing, exactly as `dismissMenu` does.
+        alertContext.environment.isPresented = true
         alertContext.environment.dismiss = DismissAction {
             dismissAlert.wrappedValue = false
         }

@@ -144,6 +144,36 @@ struct PresentationDismissTests {
         #expect(!AppState.shared.consumeShouldExit(), "and must not quit the application")
     }
 
+    /// `\.isPresented` is the read-only companion: the same presentations that
+    /// publish a dismissal publish the flag, so a view can tell whether
+    /// `dismiss()` will close something or quit.
+    @Test("isPresented is true inside a presentation and false outside one")
+    func isPresentedFlag() throws {
+        let sink = FlagSink()
+        let box = StateBox(true)
+        let binding = Binding(get: { box.value }, set: { box.value = $0 })
+
+        frame(Text(verbatim: "page").sheet(isPresented: binding) { FlagProbe(sink: sink) })
+        #expect(sink.inside == true, "inside a sheet")
+
+        frame(FlagProbe(sink: sink))
+        #expect(sink.inside == false, "at the top level, nothing presented it")
+    }
+
+    private final class FlagSink: @unchecked Sendable {
+        var inside: Bool?
+    }
+
+    private struct FlagProbe: View {
+        @Environment(\.isPresented) private var isPresented
+        let sink: FlagSink
+
+        var body: some View {
+            sink.inside = isPresented
+            return Text(verbatim: "probe")
+        }
+    }
+
     /// The top-level meaning is unchanged: outside any presentation, dismissing
     /// a terminal app IS quitting it, and that is what `DismissAction()` means.
     @Test("outside a presentation, dismiss() still means quit")

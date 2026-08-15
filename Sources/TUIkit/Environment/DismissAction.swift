@@ -99,4 +99,31 @@ extension EnvironmentValues {
         get { self[DismissActionKey.self] }
         set { self[DismissActionKey.self] = newValue }
     }
+
+    /// Whether this view is inside something that was PRESENTED — a sheet,
+    /// modal, full-screen cover, popover, alert or confirmation dialog.
+    ///
+    /// SwiftUI's `\.isPresented`, and the read-only companion to
+    /// ``EnvironmentValues/dismiss``: the same presentations that publish a
+    /// dismissal publish this, so a view can tell whether calling `dismiss()`
+    /// will close something or quit the application.
+    ///
+    /// ```swift
+    /// @Environment(\.isPresented) private var isPresented
+    ///
+    /// // A footer that only makes sense in a sheet.
+    /// if isPresented { Button("Done") { dismiss() } }
+    /// ```
+    ///
+    /// A pushed ``NavigationStack`` screen reports `false`, as it does in
+    /// SwiftUI: it was navigated to, not presented.
+    public internal(set) var isPresented: Bool {
+        get { self[IsPresentedKey.self] }
+        set { self[IsPresentedKey.self] = newValue }
+    }
+}
+
+/// Environment key for ``EnvironmentValues/isPresented``.
+private struct IsPresentedKey: EnvironmentKey {
+    static let defaultValue = false
 }
