@@ -89,25 +89,6 @@ private struct Flow: Layout {
     }
 }
 
-/// One subview per line — the other half of the ``AnyLayout`` switch, so the
-/// same chips can be re-arranged without their identities (and state) being
-/// torn down.
-private struct Column: Layout {
-    func sizeThatFits(proposal: ProposedSize, subviews: Subviews, cache: inout ()) -> ViewSize {
-        ViewSize(
-            width: subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0,
-            height: subviews.count)
-    }
-
-    func placeSubviews(
-        in bounds: CellRect, proposal: ProposedSize, subviews: Subviews, cache: inout ()
-    ) {
-        for (row, subview) in subviews.enumerated() {
-            subview.place(at: (x: bounds.x, y: bounds.y + row), proposal: .unspecified)
-        }
-    }
-}
-
 /// Sample data for the custom-layout demo, deliberately of varied widths so the
 /// wrap points move as the terminal resizes. Tokens, not chrome — they are the
 /// demo's *content*, so they are not translated (as file names in the browser
@@ -290,7 +271,7 @@ struct LayoutPage: View {
                         .foregroundStyle(.palette.foregroundSecondary)
                     Toggle(L("page.layout.flowToggle"), isOn: $flowChipsLayout)
 
-                    let layout = flowChipsLayout ? AnyLayout(Flow()) : AnyLayout(Column())
+                    let layout = flowChipsLayout ? AnyLayout(Flow()) : AnyLayout(VStackLayout())
                     layout {
                         ForEach(flowChips, id: \.self) { chip in
                             Text(" \(chip) ").inverted()

@@ -17,12 +17,15 @@ import TUIkitView
 /// and focus across the switch instead of being torn down and rebuilt.
 ///
 /// ```swift
-/// let layout = isWide ? AnyLayout(Row()) : AnyLayout(Column())
+/// let layout = isWide ? AnyLayout(HStackLayout()) : AnyLayout(VStackLayout())
 /// layout {
 ///     Text("one")
 ///     Text("two")
 /// }
 /// ```
+///
+/// ``VStackLayout``, ``HStackLayout`` and ``ZStackLayout`` are the stacks'
+/// arrangements as values, which is what this is usually erasing.
 public struct AnyLayout: Layout {
     /// The erased cache of whichever layout this wraps.
     public struct Cache {
