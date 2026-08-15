@@ -371,7 +371,13 @@ extension Text: Renderable, Layoutable {
                 scopes.insert(.controlVariant(controlKind, variant))
             }
         }
-        let base = chromeRole?.defaultTextAttributes ?? StyleAttributes()
+        var base = chromeRole?.defaultTextAttributes ?? StyleAttributes()
+        // `.headerProminence(_:)` adjusts the BASELINE, so an explicit style
+        // cascaded over it still wins — the prominence says how loud a header
+        // is by default, not what an app may not override.
+        if chromeRole == .sectionHeader {
+            base = context.environment.headerProminence.headerAttributes(over: base)
+        }
         return cascade.resolve(for: scopes).merged(over: base)
     }
 
