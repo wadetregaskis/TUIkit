@@ -127,7 +127,7 @@ extension ExampleStrings {
             "page.secureField.help.submit": "[Enter] Submit (triggers onSubmit)",
             "page.secureField.help.nextField": "[Tab] Move to next field",
             // RadioButton
-            "page.radioButton.section.colorVertical": "Color Selection (Vertical)",
+            "page.radioButton.section.colorVertical": "Colour Selection (Vertical)",
             "page.radioButton.red": "Red",
             "page.radioButton.green": "Green",
             "page.radioButton.blue": "Blue",
@@ -144,7 +144,7 @@ extension ExampleStrings {
             "page.radioButton.unavailable": "An unavailable option",
             "page.radioButton.anotherUnavailable": "Another unavailable option",
             "page.radioButton.section.currentSelections": "Current Selections",
-            "page.radioButton.color": "Color",
+            "page.radioButton.color": "Colour",
             "page.radioButton.size": "Size",
             "page.radioButton.layout": "Layout",
             "page.radioButton.section.focusNav": "Focus Navigation",

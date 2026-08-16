@@ -15,7 +15,7 @@ extension ExampleStrings {
         "en": [
             // Spinners
             "page.spinners.styles": "Styles",
-            "page.spinners.customColorSection": "Custom Color",
+            "page.spinners.customColorSection": "Custom Colour",
             "page.spinners.installing": "Installing...",
 
             // List
