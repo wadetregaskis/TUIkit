@@ -228,6 +228,8 @@ struct MyApp: App {
 - ``TerminalProfilePalette``
 - ``PaletteRegistry``
 - ``Color``
+- ``Font``
+- ``FontWeight``
 - ``TextStyle``
 
 ### Appearance

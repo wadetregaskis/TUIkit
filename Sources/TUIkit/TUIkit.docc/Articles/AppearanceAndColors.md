@@ -206,6 +206,45 @@ Available cascading modifiers: `bold(_:)`, `italic(_:)`, `underline(_:)`,
 `strikethrough(_:)`, `fontWeight(_:)` (weight maps to bold / normal / faint on a
 terminal), and `textCase(_:)`.
 
+### Semantic font styles
+
+``View/font(_:)`` takes a ``Font`` — `.headline`, `.body`, `.caption` and the
+rest of SwiftUI's semantic styles — so source that says *this is a heading*
+keeps saying it here:
+
+```swift
+VStack(alignment: .leading) {
+    Text("Deployment failed").font(.headline)
+    Text("3 of 12 replicas unhealthy").font(.body)
+    Text("2 minutes ago").font(.caption)
+}
+```
+
+A terminal has one typeface at one size, so a font selects **intensity**, not
+metrics. Eleven SwiftUI styles collapse onto the three tiers a cell grid can
+tell apart:
+
+| Styles | Renders |
+|--------|---------|
+| `largeTitle`, `title`, `title2`, `title3`, `headline` | bold |
+| `subheadline`, `body`, `callout` | normal |
+| `footnote`, `caption`, `caption2` | faint |
+
+Nothing here changes a glyph or a cell count, so applying a font cannot reflow
+the layout around it. The axes that survive the medium are carried for real —
+``Font/weight(_:)``, ``Font/bold(_:)`` and ``Font/italic(_:)`` — while the ones
+that need a typeface (size, design, width, small caps) are absent rather than
+accepted and ignored.
+
+The mapping is the **baseline**, so an explicit attribute anywhere in the
+cascade still wins, and each style is addressable as a ``StyleScope/font(_:)``
+scope — which is how a theme redefines one wholesale:
+
+```swift
+ContentView()
+    .style(.font(.headline)) { $0.underline = true }
+```
+
 ### Scoped styling
 
 ``View/style(_:_:)-(_,StyleAttributes)`` targets a subset of views by ``StyleScope`` — including a

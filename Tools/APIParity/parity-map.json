@@ -101,6 +101,27 @@
         "SensoryFeedback*"
       ],
       "why": "Mesh gradients need per-pixel interpolation; spring curves and haptics need a continuous timeline and hardware a terminal does not have."
+    },
+    {
+      "match": [
+        "Font.custom*",
+        "Font.system*",
+        "Font.init(_:)",
+        "Font.pointSize*",
+        "Font.scaled*",
+        "Font.Width*",
+        "Font.default",
+        "Font.width(_:)"
+      ],
+      "why": "The typeface axes: naming a family, asking for a point size, scaling one, or widening it. A terminal emulator draws every cell in the one font at the one size its user configured, and no escape sequence asks it for another — so each of these could only be accepted and ignored. TUIkit's Font (Sources/TUIkit/Styling/Font.swift) carries the axes that DO survive: the semantic style, weight and italic."
+    },
+    {
+      "match": [
+        "Font.smallCaps*",
+        "Font.lowercaseSmallCaps*",
+        "Font.uppercaseSmallCaps*"
+      ],
+      "why": "Small caps is a glyph variant inside a typeface — real capitals at x-height. A terminal font has one glyph per codepoint and no variant table. `View.textCase(.uppercase)` is not this API under another name: it substitutes different CHARACTERS, changing what the text says and (for ß → SS) how many cells it needs."
     }
   ],
   "renamed": {
@@ -151,6 +172,10 @@
     "ViewAlignedScrollTargetBehavior": {
       "tuikit": "ScrollGranularity.row",
       "why": "Sources/TUIkit/Views/ScrollGranularity.swift:26-27 — \"the viewport moves one whole row at a time — the top row is always fully visible\" — applied with `.scrollGranularity(.row)` (:54). Same semantics, without needing a `scrollTargetLayout()` marker because List/Table enumerate th"
+    },
+    "Font.Weight": {
+      "tuikit": "FontWeight",
+      "why": "Sources/TUIkit/Styling/StyleAttributes.swift:24 — the enum is spelled `FontWeight` at the top level, and `Font.Weight` is a typealias to it (Sources/TUIkit/Styling/Font.swift), so SwiftUI's spelling and every case (`Font.Weight.bold`, `.light`, …) compile verbatim. The audit reads declarations rather than resolving typealiases, so it sees the members only under the top-level name."
     }
   },
   "notImplemented": {
@@ -273,9 +298,6 @@
     },
     "FillStyle": {
       "why": "eoFill and isAntialiased only mean something to a path rasterizer resolving self-intersection and edge coverage; there is no path and no partial cell coverage (see Shape)."
-    },
-    "Font": {
-      "why": "Font is a family+size+design+width+weight+leading bundle (Font.Design, Font.TextStyle, Font.Leading, pointSize, scaled(by:), smallCaps…). Every axis except weight requires choosing or scaling a typeface, which the app cannot do — the emulator draws all cells in its own configured"
     },
     "GeometryEffect": {
       "why": "Its single requirement is effectValue(size:) -> ProjectionTransform, which has no representation here (see ProjectionTransform). TUIkit's geometry-driven customisation point is instead Layout/Layoutable placing children at integer cells (Sources/TUIkit/Views/Layout.swift, Sources"
@@ -465,6 +487,24 @@
     },
     "WindowToolbarFullScreenVisibility": {
       "why": "Exists only to feed `windowToolbarFullScreenVisibility(_:)`; TUIkit has no window and no window toolbar — the host terminal owns both, and TUIkit only ever knows a rows×columns grid (Sources/TUIkit/App/RenderLoop.swift)."
+    },
+    "Font.Design": {
+      "why": "A design selects a typeface — serif, rounded, monospaced. A terminal emulator draws every cell in the one font its user configured, and no escape sequence asks it for another. TUIkit cannot honour any case, and `.monospaced` is already unconditionally true (see Sources/TUIkit/Modifiers/MediumGuaranteedModifiers.swift), so an accepted-and-ignored Design would be a stub that lies. Font carries the semantic axis instead: Sources/TUIkit/Styling/Font.swift."
+    },
+    "Font.Leading": {
+      "why": "Leading is the space between baselines, measured in fractions of a point. A terminal's baselines are one cell apart, always. The nearest expressible thing is a WHOLE blank row between lines, which TUIkit spells `View.lineSpacing(_:)` (Sources/TUIkit/Modifiers/LineSpacingModifier.swift) — a different unit and a different meaning, so it is not this API under another name."
+    },
+    "Font.Resolved": {
+      "why": "The result of resolving a Font against a display: pointSize, ctFont, width, smallCaps state. Every field names a typeface property TUIkit never chose, because the emulator chose it. There is nothing to report, and `ctFont` is CoreText — absent on Linux and Windows, which TUIkit builds for."
+    },
+    "Font.Context": {
+      "why": "The environment a Font resolves in — the display metrics and dynamic-type size feeding Font.Resolved. TUIkit resolves a semantic style straight to terminal attributes (Sources/TUIkit/Styling/Font.swift, `defaultAttributes`), with no intermediate resolution step for a context to parameterise."
+    },
+    "Font.leading(_:)": {
+      "why": "Leading is fractional-point spacing between baselines; a terminal's baselines are exactly one cell apart. The nearest expressible thing is a WHOLE blank row between wrapped lines — `View.lineSpacing(_:)` (Sources/TUIkit/Modifiers/LineSpacingModifier.swift) — a different unit and a different granularity, so it is not this API renamed. See also the `Font.Leading` entry."
+    },
+    "Font.resolve(in:)": {
+      "why": "Resolves a Font against a display context to a Font.Resolved (pointSize, ctFont, width…). TUIkit resolves a semantic style straight to terminal attributes — Sources/TUIkit/Styling/Font.swift, `defaultAttributes` — so there is no intermediate resolved form to hand back, and CoreText is absent on the Linux and Windows builds anyway."
     }
   },
   "differentShape": {
@@ -719,6 +759,10 @@
     "View.fixedSize()": {
       "how": "View.fixedSize(horizontal:vertical:) — both parameters default to true",
       "why": "SwiftUI declares two overloads; TUIkit's single one has defaults, so `.fixedSize()` compiles and means the same thing (verified by a `swiftc -typecheck` probe against the built module, not by reading). Adding a no-argument overload would be a second spelling of one idea — what the consolidate-before-adding rule exists to prevent — and the extractor cannot see that a defaulted parameter list already covers the shorter call, so it reports the shape difference as a gap."
+    },
+    "Font.TextStyle.encode(to:)": {
+      "how": "the synthesized `Codable` conformance on `Font.TextStyle`",
+      "why": "Sources/TUIkit/Styling/Font.swift — the enum declares `Codable`, so Swift synthesizes both `init(from:)` and `encode(to:)`, and a round-trip is asserted in Tests/TUIkitTests/FontTests.swift. The audit reads declarations from the symbol graph, which carries the synthesized initializer but not the synthesized encoder."
     }
   }
 }

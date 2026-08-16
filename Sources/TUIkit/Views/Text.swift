@@ -378,9 +378,15 @@ extension Text: Renderable, Layoutable {
     func cascadedAttributes(context: RenderContext) -> StyleAttributes {
         let cascade = context.environment.styleCascade
         let chromeRole = context.environment.chromeRole
-        guard !cascade.isEmpty || chromeRole != nil else { return StyleAttributes() }
+        let font = context.environment.font
+        guard !cascade.isEmpty || chromeRole != nil || font != nil else {
+            return StyleAttributes()
+        }
 
         var scopes: Set<StyleScope> = [.all, .text]
+        if let font {
+            scopes.insert(.font(font.textStyle))
+        }
         if let role = Self.semanticRole(
             explicit: style.foregroundColor, environment: context.environment) {
             scopes.insert(.semanticColor(role))
@@ -402,6 +408,14 @@ extension Text: Renderable, Layoutable {
         // is by default, not what an app may not override.
         if chromeRole == .sectionHeader {
             base = context.environment.headerProminence.headerAttributes(over: base)
+        }
+        // A semantic font is likewise a BASELINE — `.font(.headline)` says what
+        // a heading looks like when nobody said otherwise. It sits above the
+        // chrome default (asking for `.caption` on a section header should get
+        // you a caption) and below the cascade, so both a theme's
+        // `.style(.font(.headline))` and a plain `.bold(false)` still win.
+        if let font {
+            base = font.defaultAttributes.merged(over: base)
         }
         return cascade.resolve(for: scopes).merged(over: base)
     }

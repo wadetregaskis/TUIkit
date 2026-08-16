@@ -98,6 +98,45 @@ struct TextStylesPage: View {
                 }
             }
 
+            DemoSection(L("page.textStyles.section.font")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.textStyles.fontExplain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+
+                    // Each style renders its OWN name, so the collapse onto
+                    // three tiers is visible rather than described — and so is
+                    // the fact that none of them changes a cell count.
+                    Text(verbatim: ".largeTitle").font(.largeTitle)
+                    Text(verbatim: ".title").font(.title)
+                    Text(verbatim: ".title2").font(.title2)
+                    Text(verbatim: ".title3").font(.title3)
+                    Text(verbatim: ".headline").font(.headline)
+                    Text(verbatim: ".subheadline").font(.subheadline)
+                    Text(verbatim: ".body").font(.body)
+                    Text(verbatim: ".callout").font(.callout)
+                    Text(verbatim: ".footnote").font(.footnote)
+                    Text(verbatim: ".caption").font(.caption)
+                    Text(verbatim: ".caption2").font(.caption2)
+
+                    // The axes that survive the medium, composed onto a style.
+                    Text(L("page.textStyles.fontAxes"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Text(verbatim: ".caption.weight(.bold)").font(.caption.weight(.bold))
+                    Text(verbatim: ".headline.bold(false)").font(.headline.bold(false))
+                    Text(verbatim: ".headline.italic()").font(.headline.italic())
+
+                    // The mapping is a default, so a theme can redefine one
+                    // style without touching the others.
+                    Text(L("page.textStyles.fontThemed"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    VStack(alignment: .leading) {
+                        Text(verbatim: ".headline").font(.headline)
+                        Text(verbatim: ".caption").font(.caption)
+                    }
+                    .style(.font(.headline)) { $0.underline = true }
+                }
+            }
+
             DemoSection(L("page.textStyles.section.truncation")) {
                 VStack(alignment: .leading, spacing: 1) {
                     let long = L("page.textStyles.longLine")

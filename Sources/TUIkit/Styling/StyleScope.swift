@@ -75,6 +75,10 @@ public enum StyleScope: Sendable, Hashable {
     case controlVariant(ControlKind, String)
     /// A structural chrome element, e.g. a section header.
     case chrome(ChromeRole)
+    /// Text carrying a semantic ``Font/TextStyle``, e.g. `.headline`. Lets a
+    /// theme redefine what a semantic style looks like, since the mapping in
+    /// ``Font`` is only a default.
+    case font(Font.TextStyle)
 
     /// How narrow this scope is. Used only to order entries within a single
     /// application point (a `Theme` bundle); across the view tree, proximity
@@ -83,7 +87,7 @@ public enum StyleScope: Sendable, Hashable {
         switch self {
         case .all: return 0
         case .text, .control: return 1
-        case .semanticColor, .controlVariant, .chrome: return 2
+        case .semanticColor, .controlVariant, .chrome, .font: return 2
         }
     }
 }
