@@ -116,6 +116,49 @@ struct SpinnerStyleTests {
         let mirrored = frames.map { Array($0.reversed()).joined() }.sorted()
         #expect(forward == mirrored, "Bouncing animation is not left-right symmetric")
     }
+
+    @Test("The bounce never goes dark, so the dots never appear to reset")
+    func bouncingNeverGoesDark() {
+        // The trail used to be derived from the CURRENT direction — "the cells
+        // behind me". That is right mid-sweep and wrong at each turnaround,
+        // where the direction flips while the glow is still on the far side: the
+        // trail jumped across the highlight, and on the two frames where the
+        // highlight itself is off-track it left nothing behind at all. Both
+        // ends went blank for a frame, which reads as the animation resetting
+        // early rather than the dots condensing into the end.
+        let cycle = SpinnerStyle.bouncingPositions(trackLength: SpinnerStyle.trackWidth).count
+        let track = Color.brightBlack
+        for index in 0..<cycle {
+            let frame = SpinnerStyle.renderBouncingFrame(
+                frameIndex: index, color: .red, trackColor: track)
+            let lit = frame.contains(ANSIRenderer.colorize("●", foreground: .red))
+                || frame != String(
+                    repeating: ANSIRenderer.colorize("●", foreground: track),
+                    count: SpinnerStyle.trackWidth)
+            #expect(lit, "frame \(index) of \(cycle) is entirely track colour")
+        }
+    }
+
+    @Test("The glow follows where the dot has been, not where it is going")
+    func bouncingTrailFollowsHistory() {
+        // Frame 2 is the dot's first frame ON the track (positions -2, -1 then
+        // 0), reached from the left after the wrap. Cell 0 holds the highlight;
+        // the cells to its RIGHT were where the dot was a few frames ago, coming
+        // in leftward, so they must still be glowing. Under the old
+        // direction-derived trail they were dark, because "behind" had just
+        // flipped to mean the (off-track) left.
+        let plain = ANSIRenderer.colorize("●", foreground: Color.brightBlack)
+        let frame = SpinnerStyle.renderBouncingFrame(
+            frameIndex: 2, color: .red, trackColor: .brightBlack)
+        let cells =
+            frame
+            .replacing("\u{1B}[0m", with: "\u{1B}[0m\u{1}")
+            .split(separator: "\u{1}")
+            .map(String.init)
+        #expect(cells.count == SpinnerStyle.trackWidth)
+        #expect(cells[0] == ANSIRenderer.colorize("●", foreground: .red), "the highlight")
+        #expect(cells[1] != plain, "the cell the dot passed through is still warm")
+    }
 }
 
 // MARK: - Spinner Rendering Tests

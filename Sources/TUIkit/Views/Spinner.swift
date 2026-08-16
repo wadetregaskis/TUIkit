@@ -175,12 +175,24 @@ extension SpinnerStyle {
         return positions
     }
 
-    /// Renders a single bouncing frame with colored trail.
+    /// Renders a single bouncing frame with its colored afterglow.
     ///
-    /// The highlight position may be outside the visible track (overshoot).
-    /// Only positions within `0..<trackWidth` are rendered. Trail positions
-    /// that fall within the visible range still get their faded color, even
-    /// when the highlight itself is off-screen.
+    /// The trail is the highlight's own recent HISTORY: a cell is lit if the
+    /// highlight stood on it within the last ``trailOpacities`` frames, and its
+    /// brightness is how long ago. Nothing here consults a direction.
+    ///
+    /// That is the whole of it, and it has to be, because a Larson scanner
+    /// reverses. Deriving the trail from the current direction instead — "the
+    /// cells behind me, where behind means opposite to travel" — is right only
+    /// mid-sweep. At each turnaround the direction flips while the glow is still
+    /// on the far side, so the whole trail teleported across the highlight in one
+    /// frame; the two frames where the highlight is off-track and the trail is
+    /// "ahead" of it came out completely blank. On screen that read as the
+    /// animation resetting before the dots reached the end.
+    ///
+    /// The history model also gives the edges their character for free: coming
+    /// back from an overshoot the dot re-lights cells it lit on the way out, so
+    /// the glow bunches up and fades at the turn instead of switching sides.
     ///
     /// - Parameters:
     ///   - frameIndex: The current frame index in the bounce sequence.
@@ -193,76 +205,37 @@ extension SpinnerStyle {
         trackColor: Color
     ) -> String {
         let positions = bouncingPositions(trackLength: trackWidth)
-        let currentPos = positions[frameIndex % positions.count]
-
-        // Direction is the sign of the step from the previous frame. The bounce
-        // sequence has no consecutive duplicates, so this is unambiguous at every
-        // frame — including the wrap-around, where the step from the last frame
-        // (`-1`) to the first (`-2`) is still leftward. Treating that frame as
-        // already moving forward (an earlier special case did) flipped the trail
-        // off-screen one frame early, so the left edge never condensed the way
-        // the right edge does — the animation appeared to reset just short of the
-        // leftmost dot.
-        let prevIndex = (frameIndex - 1 + positions.count) % positions.count
-        let prevPos = positions[prevIndex]
-        let movingForward = currentPos > prevPos
+        let cycle = positions.count
 
         var result = ""
         for trackIndex in 0..<trackWidth {
-            let distance = trailDistance(
-                from: currentPos,
-                to: trackIndex,
-                movingForward: movingForward
-            )
-
-            if let distance, distance < trailOpacities.count {
-                if distance == 0 {
-                    // Leading highlight dot uses accent color
-                    result += ANSIRenderer.colorize("●", foreground: color)
-                } else {
-                    // Trail interpolates from highlight to trackColor
-                    let phase = 1.0 - trailOpacities[distance]
-                    let fadedColor = Color.lerp(color, trackColor, phase: phase)
-                    result += ANSIRenderer.colorize("●", foreground: fadedColor)
+            // How many frames ago the highlight was last here, capped at the
+            // trail's memory. The FRESHEST visit wins: at a turnaround a cell
+            // has been visited twice, and the newer one is what is glowing.
+            var age: Int?
+            for back in 0..<trailOpacities.count {
+                let index = ((frameIndex - back) % cycle + cycle) % cycle
+                if positions[index] == trackIndex {
+                    age = back
+                    break
                 }
-            } else {
+            }
+
+            guard let age else {
                 result += ANSIRenderer.colorize("●", foreground: trackColor)
+                continue
+            }
+            if age == 0 {
+                // The highlight itself.
+                result += ANSIRenderer.colorize("●", foreground: color)
+            } else {
+                let phase = 1.0 - trailOpacities[age]
+                result += ANSIRenderer.colorize(
+                    "●", foreground: Color.lerp(color, trackColor, phase: phase))
             }
         }
 
         return result
-    }
-}
-
-// MARK: - Private Helpers
-
-extension SpinnerStyle {
-    /// Calculates the trail distance from the highlight to a track position.
-    ///
-    /// Returns `nil` if the position is not in the trail (ahead of the highlight
-    /// or too far behind). Distance 0 = highlight itself, 1 = first trail, etc.
-    ///
-    /// - Parameters:
-    ///   - highlight: The current highlight position.
-    ///   - target: The track position to check.
-    ///   - movingForward: Whether the highlight is moving left→right.
-    /// - Returns: The trail distance, or `nil` if not in the trail.
-    fileprivate static func trailDistance(
-        from highlight: Int,
-        to target: Int,
-        movingForward: Bool
-    ) -> Int? {
-        if target == highlight { return 0 }
-
-        // Trail is behind the highlight (opposite to movement direction).
-        let offset: Int
-        if movingForward {
-            offset = highlight - target  // Trail extends to the left
-        } else {
-            offset = target - highlight  // Trail extends to the right
-        }
-
-        return offset > 0 ? offset : nil
     }
 }
 
