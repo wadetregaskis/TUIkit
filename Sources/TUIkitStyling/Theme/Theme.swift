@@ -88,11 +88,11 @@ public protocol Palette: Cyclable {
     /// The field surface behind editable text (TextField, SecureField,
     /// TextEditor).
     ///
-    /// Defaults to ``appHeaderBackground`` — the same subtle lift above the
-    /// base background the tab strip uses, so fields stay readable on light
-    /// and dark palettes alike (a fixed dark tint rendered dark-on-light
-    /// fields unreadable). Custom palettes can override for a distinct
-    /// field tone.
+    /// Defaults to ``Palette/liftedBackground`` — the same surface the tab
+    /// strip uses, so a field and a tab island read as the same material, and
+    /// so fields stay readable on light and dark palettes alike (a fixed dark
+    /// tint rendered dark-on-light fields unreadable). Custom palettes can
+    /// override for a distinct field tone.
     var fieldBackground: Color { get }
 }
 
@@ -117,7 +117,72 @@ extension Palette {
 
     public var cursorColor: Color { accent }
 
-    public var fieldBackground: Color { appHeaderBackground }
+    public var fieldBackground: Color { liftedBackground }
+
+    /// A surface that sits ON the page and must be visible as one: the tab
+    /// strip's island, the field behind editable text.
+    ///
+    /// ``appHeaderBackground`` when the palette gave it a value of its own, and
+    /// otherwise a small step from ``background`` toward ``foreground``.
+    ///
+    /// The fallback is the whole point. `appHeaderBackground` itself defaults to
+    /// `background`, so a palette that never overrode it — Green, Novel, Red
+    /// Sands and Solid Colors among the built-ins — handed every "subtle lift"
+    /// caller the page colour: fields and tab chips drew a background exactly
+    /// equal to what was already there, which is the same as drawing none.
+    ///
+    /// Toward the FOREGROUND rather than a fixed lighten or darken, because the
+    /// palettes disagree about which way is up: a light page needs its surfaces
+    /// darker and a dark page needs them lighter, and the foreground is the
+    /// palette's own statement of which end it lives at. It also keeps the hue,
+    /// so a green page lifts to a green surface rather than a grey one.
+    public var liftedBackground: Color {
+        let base = background.resolve(with: self)
+        let stated = appHeaderBackground.resolve(with: self)
+        // Compared after DOWNSAMPLING, not in truecolour. Several palettes state
+        // a header tone a hair off the page — distinct as 24-bit numbers, the
+        // same cube entry on a 256-colour terminal, and therefore invisible
+        // exactly where a surface most needs to be seen. Green, Novel, Red Sands
+        // and Solid Colors were all in that state, and comparing raw values
+        // called them "stated" and left them flat.
+        if stated.downsampledToPalette256() != base.downsampledToPalette256() { return stated }
+
+        // AWAY from the text first — a well, not a highlight. Stepping toward
+        // the foreground is the obvious move and it is the wrong one: it eats
+        // the very contrast the text needs, and measurably so (Novel's tertiary
+        // and Red Sands' foreground both fell under the readability floor at a
+        // 20% step). Away from the text, contrast can only improve.
+        let text = foreground.resolve(with: self)
+        let away = Color.lerp(base, Self.extreme(furthestFrom: text), phase: Self.surfaceRecess)
+        if away.downsampledToPalette256() != base.downsampledToPalette256() { return away }
+
+        // …unless the page is already AT that extreme, where there is nowhere
+        // further to go. Then the surface has to come toward the text, and the
+        // contrast it costs is small precisely because the page is extreme.
+        return Color.lerp(base, text, phase: Self.surfaceLift)
+    }
+
+    /// Black or white, whichever `color` is further from — the direction a
+    /// surface moves to get out of the text's way.
+    private static func extreme(furthestFrom color: Color) -> Color {
+        (color.relativeLuminance ?? 0) > 0.5 ? Color.rgb(0, 0, 0) : Color.rgb(255, 255, 255)
+    }
+
+    /// How far ``liftedBackground`` steps toward the foreground.
+    ///
+    /// Small enough that the surface reads as the same material as the page —
+    /// the point is a boundary, not a panel — and large enough to survive the
+    /// 256-colour cube, where anything finer rounds back onto the background
+    /// and the lift disappears on exactly the terminal least able to spare it.
+    /// 0.20 is the measured floor: at 0.14 the Novel profile's cream page and
+    /// brown text still land on one cube entry.
+    static var surfaceLift: Double { 0.20 }
+
+    /// How far the recessed (away-from-text) surface steps toward its extreme.
+    /// Larger than ``surfaceLift`` because it can afford to be: moving away
+    /// from the text costs no contrast, and pages that are already near an
+    /// extreme need a bigger push to clear the 256-colour cube at all.
+    static var surfaceRecess: Double { 0.35 }
 }
 
 extension Palette {

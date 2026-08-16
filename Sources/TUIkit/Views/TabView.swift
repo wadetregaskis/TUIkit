@@ -619,10 +619,13 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     /// The shared surface — a very subtle lift above the base background (the
     /// app-header tone), used for the active tab and the content area so they
     /// read as one continuous surface without an accent fill washing out the
-    /// content. Behaves like `statusBarBackground` / `appHeaderBackground`: on a
-    /// palette that doesn't tint those, it collapses to the base background.
+    /// content. Follows `appHeaderBackground` when the palette states one, and
+    /// otherwise a derived step off the page — never the page colour itself.
     private func surfaceColor(_ palette: any Palette) -> Color {
-        palette.appHeaderBackground.resolve(with: palette)
+        // `liftedBackground`, not `appHeaderBackground`: the latter defaults to
+        // the page background, so on a palette that never overrode it the strip
+        // painted the colour that was already there and the island vanished.
+        palette.liftedBackground.resolve(with: palette)
     }
 
     /// The interior padding around each tab's content. An explicit
