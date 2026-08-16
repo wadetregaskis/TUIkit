@@ -410,7 +410,6 @@ extension RenderLoop {
 
         // Terminal size: single getSize() call avoids 2 ioctl syscalls per frame.
         let terminalSize = terminal.getSize()
-        let statusBarHeight = statusBar.height
         let terminalWidth = terminalSize.width
         let terminalHeight = terminalSize.height
 
@@ -464,6 +463,8 @@ extension RenderLoop {
         // any events queued from the previous frame are filtered
         // against the right config.
         tuiContext.mouseEventDispatcher.setActiveSupport(baseMouseSupport)
+        applyChromeStyle(from: scene)
+        let statusBarHeight = statusBar.height
         invalidateCacheIfEnvironmentChanged(environment: environment)
 
         // Render the scene into the content area — resolving the app-header
@@ -1041,6 +1042,19 @@ extension RenderLoop {
         return true
     }
 
+    /// Adopts a scene-level `.chromeStyle(...)` for this frame.
+    ///
+    /// Must run BEFORE anything asks either bar's height: the style decides how
+    /// many rows they take, and the page's height is whatever is left. That is
+    /// why the status bar's height is read straight after this call rather than
+    /// alongside the terminal size, where it used to sit.
+    fileprivate func applyChromeStyle(from scene: some Scene) {
+        guard let chromeScene = scene as? any RootChromeStyleProvidingScene else { return }
+        let chrome = chromeScene.rootChromeStyle()
+        if let style = chrome.appHeader { appHeader.style = style }
+        if let style = chrome.statusBar { statusBar.style = style }
+    }
+
     /// Ends lifecycle, state, and cache tracking for this render pass.
     ///
     /// Fires `onDisappear` for removed views and removes state/cache
@@ -1119,7 +1133,7 @@ extension RenderLoop {
     ) -> FrameBuffer? {
         guard let contentBuffer = appHeader.contentBuffer else { return nil }
 
-        let headerView = AppHeader(contentBuffer: contentBuffer)
+        let headerView = AppHeader(contentBuffer: contentBuffer, style: appHeader.style)
 
         let context = RenderContext(
             availableWidth: terminalWidth,

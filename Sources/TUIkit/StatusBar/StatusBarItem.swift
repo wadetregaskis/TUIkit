@@ -5,17 +5,6 @@
 //  License: MIT  style, shortcut symbols, and system items.
 //
 
-// MARK: - Status Bar Style
-
-/// The visual style of the status bar.
-public enum StatusBarStyle: Sendable {
-    /// A single line with horizontal padding.
-    case compact
-
-    /// Bordered with the current appearance's border style.
-    case bordered
-}
-
 // MARK: - Status Bar Alignment
 
 /// The horizontal alignment of items within the status bar.

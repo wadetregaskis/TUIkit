@@ -23,6 +23,9 @@ struct AppHeader: View {
     /// The pre-rendered content buffer from the modifier.
     let contentBuffer: FrameBuffer
 
+    /// How the header frames itself against the page below it.
+    let style: ChromeStyle
+
     var body: Never {
         fatalError("AppHeader renders via Renderable")
     }
@@ -36,18 +39,37 @@ extension AppHeader: Renderable {
         let palette = context.environment.palette
         var lines: [String] = []
 
-        // Content lines padded to full width
+        // The box's walls eat two columns, so its content is laid out narrower;
+        // the other two styles get the full width.
+        let contentWidth = style == .bordered ? max(0, width - 2) : width
         for line in contentBuffer.lines {
-            lines.append(line.padToVisibleWidth(width))
+            lines.append(line.padToVisibleWidth(contentWidth))
         }
 
-        // Thin divider line, drawn with the current appearance's horizontal
-        // border glyph so a custom border (or F2/F3/the appearance picker)
-        // restyles the header divider in step with the rest of the app's chrome.
-        let glyph = context.environment.appearance.borderStyle.horizontal
-        let divider = String(repeating: glyph, count: width)
-        let styledDivider = ANSIRenderer.colorize(divider, foreground: palette.border)
-        lines.append(styledDivider)
+        switch style {
+        case .rule:
+            // A thin rule below the content, drawn from the same place the
+            // status bar draws its own — that shared source is what keeps the
+            // two ends of the frame looking like a pair, and it follows the
+            // current appearance so a custom border restyles both at once.
+            lines.append(ChromeStyle.ruleRow(width: width, context: context))
+        case .bordered:
+            let border = context.environment.appearance.borderStyle
+            let innerWidth = max(0, width - BorderRenderer.borderWidthOverhead)
+            lines = lines.map {
+                BorderRenderer.standardContentLine(
+                    content: $0, innerWidth: innerWidth, style: border, color: palette.border)
+            }
+            lines.insert(
+                BorderRenderer.standardTopBorder(
+                    style: border, innerWidth: innerWidth, color: palette.border),
+                at: 0)
+            lines.append(
+                BorderRenderer.standardBottomBorder(
+                    style: border, innerWidth: innerWidth, color: palette.border))
+        case .compact:
+            break  // content alone; the background colour is the only boundary
+        }
 
         // Preserve any hit-test regions the header content
         // emitted (e.g. a Button inside `.appHeader { ... }`).
@@ -57,7 +79,12 @@ extension AppHeader: Renderable {
         // dispatcher's set in RenderLoop. Same class of bug
         // as the status-bar one fixed in commit e5382a77.
         var result = FrameBuffer(lines: lines)
-        result.hitTestRegions = contentBuffer.hitTestRegions
+        // A box shifts the content right by its wall and down by its top rule;
+        // the other styles leave it where it was.
+        result.hitTestRegions =
+            style == .bordered
+            ? contentBuffer.shiftedHitTestRegions(byX: 1, y: 1)
+            : contentBuffer.hitTestRegions
         return result
     }
 }

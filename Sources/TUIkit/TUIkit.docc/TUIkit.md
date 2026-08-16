@@ -300,7 +300,7 @@ struct MyApp: App {
 - ``StatusBarState``
 - ``StatusBarItem``
 - ``StatusBarItemProtocol``
-- ``StatusBarStyle``
+- ``ChromeStyle``
 - ``StatusBarAlignment``
 - ``Shortcut``
 

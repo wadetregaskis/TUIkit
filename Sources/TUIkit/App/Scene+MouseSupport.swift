@@ -112,3 +112,12 @@ extension _MouseSupportScene: RootAppearanceOverrideProvidingScene {
         (content as? any RootAppearanceOverrideProvidingScene)?.rootAppearanceOverride()
     }
 }
+
+extension _MouseSupportScene: RootChromeStyleProvidingScene {
+    /// Pass-through: forward the wrapped scene's chrome styles so
+    /// `.chromeStyle(...)` composes with this modifier in either order.
+    func rootChromeStyle() -> (appHeader: ChromeStyle?, statusBar: ChromeStyle?) {
+        (content as? any RootChromeStyleProvidingScene)?.rootChromeStyle()
+            ?? (appHeader: nil, statusBar: nil)
+    }
+}

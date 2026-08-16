@@ -77,6 +77,30 @@ struct ThemePage: View {
         ("Border", \.border),
     ]
 
+    /// The chrome styles offered by the picker, with their display names.
+    private static var chromeNames: [(name: String, style: ChromeStyle)] {
+        [
+            (L("page.theme.chrome.rule"), .rule),
+            (L("page.theme.chrome.bordered"), .bordered),
+            (L("page.theme.chrome.compact"), .compact),
+        ]
+    }
+
+    /// A picker binding for ONE bar's style — the
+    /// `chromeStyle(appHeader:statusBar:)` half of the API.
+    private func chromeBinding(
+        _ keyPath: WritableKeyPath<ExampleStyling, ChromeStyle>
+    ) -> Binding<String> {
+        Binding(
+            get: { Self.chromeNames.first { $0.style == styling[keyPath: keyPath] }?.name ?? "" },
+            set: { name in
+                if let style = Self.chromeNames.first(where: { $0.name == name })?.style {
+                    styling[keyPath: keyPath] = style
+                }
+            }
+        )
+    }
+
     /// The same text as the literal above, but reaching `Text` as a *value*, so
     /// the `StringProtocol` overload takes it and no lookup happens.
     private var savedKeyAsVariable: String { "button.save" }
@@ -111,6 +135,24 @@ struct ThemePage: View {
                     appearanceManager?.setCurrent(appearance)
                     // Picking a built-in border deactivates any custom one.
                     styling.customBorder = nil
+                }
+            }
+        )
+        let chromeNames = Self.chromeNames
+        // A binding that moves BOTH bars, mirroring `Scene.chromeStyle(_:)`;
+        // `chromeBinding(_:)` below is the per-bar counterpart. Reads back as ""
+        // (nothing selected) while the two differ, which is honest: no single
+        // style is in force.
+        let bothChromeSelection = Binding(
+            get: {
+                styling.appHeaderStyle == styling.statusBarStyle
+                    ? chromeNames.first { $0.style == styling.appHeaderStyle }?.name ?? ""
+                    : ""
+            },
+            set: { name in
+                if let style = chromeNames.first(where: { $0.name == name })?.style {
+                    styling.appHeaderStyle = style
+                    styling.statusBarStyle = style
                 }
             }
         )
@@ -199,6 +241,41 @@ struct ThemePage: View {
                         }
                     }
                     .pickerStyle(.radioGroup)
+                }
+
+                DemoSection(L("page.theme.chromeStyle")) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(L("page.theme.chromeStyleDescription"))
+                            .foregroundStyle(.palette.foregroundSecondary)
+
+                        Picker(L("page.theme.chrome.bothLabel"), selection: bothChromeSelection) {
+                            ForEach(chromeNames, id: \.name) { entry in
+                                Text(entry.name).tag(entry.name)
+                            }
+                        }
+                        .pickerStyle(.radioGroup)
+
+                        Text(L("page.theme.chrome.separately"))
+                            .foregroundStyle(.palette.foregroundSecondary)
+                        HStack(spacing: 3) {
+                            Picker(
+                                L("page.theme.chrome.headerLabel"),
+                                selection: chromeBinding(\.appHeaderStyle)
+                            ) {
+                                ForEach(chromeNames, id: \.name) { entry in
+                                    Text(entry.name).tag(entry.name)
+                                }
+                            }
+                            Picker(
+                                L("page.theme.chrome.footerLabel"),
+                                selection: chromeBinding(\.statusBarStyle)
+                            ) {
+                                ForEach(chromeNames, id: \.name) { entry in
+                                    Text(entry.name).tag(entry.name)
+                                }
+                            }
+                        }
+                    }
                 }
 
                 DemoSection(L("page.theme.customBorder")) {

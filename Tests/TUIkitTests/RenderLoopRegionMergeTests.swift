@@ -77,7 +77,7 @@ struct RenderLoopRegionMergeTests {
             )
         )
 
-        let header = AppHeader(contentBuffer: contentBuffer)
+        let header = AppHeader(contentBuffer: contentBuffer, style: .rule)
         let rendered = renderToBuffer(header, context: makeContext(width: 40))
 
         #expect(rendered.hitTestRegions.contains(where: { $0.handlerID == marker }),

@@ -120,8 +120,11 @@ internal final class AppRunner<A: App> {
         self.appHeader = AppHeaderState()
         self.focusManager = FocusManager()
         self.paletteManager = ThemeManager(items: PaletteRegistry.all, renderTrigger: { [appState] in appState.setNeedsRender() })
+        // No style assignment here: the bars' default lives on their own state
+        // (``ChromeStyle/rule``, so the two mirror each other) and an app picks
+        // something else with `Scene.chromeStyle(...)`. Overriding it here made
+        // that default dead code and the footer a box under a ruled header.
         self.statusBar = StatusBarState(appState: appState)
-        self.statusBar.style = .bordered
         self.terminal = Terminal()
         self.tuiContext = TUIContext()
     }

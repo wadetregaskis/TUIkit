@@ -64,6 +64,12 @@ struct ExampleStyling: Equatable {
     /// the appearance manager's built-in border for the whole app; nil falls back
     /// to the built-in appearance (F2/F3/the appearance picker).
     var customBorder: BorderStyle?
+    /// How the app header and the status bar frame themselves, edited on the
+    /// Theme page. Two properties rather than one so the page can demonstrate
+    /// both spellings of `Scene.chromeStyle(...)`: the picker drives them
+    /// together, and unticking "match" lets them differ.
+    var appHeaderStyle: ChromeStyle = .rule
+    var statusBarStyle: ChromeStyle = .rule
 }
 
 // MARK: - Content View (Page Router)

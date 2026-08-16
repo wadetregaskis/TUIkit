@@ -86,6 +86,7 @@ struct StatusBarViewTests {
                 StatusBarItem(shortcut: "a", label: "alpha"),
                 StatusBarItem(shortcut: "b", label: "beta"),
             ],
+            style: .compact,
             alignment: .leading
         )
 
@@ -107,6 +108,7 @@ struct StatusBarViewTests {
                 StatusBarItem(shortcut: "a", label: "alpha"),
                 StatusBarItem(shortcut: "b", label: "beta"),
             ],
+            style: .compact,
             alignment: .trailing
         )
 
@@ -128,6 +130,7 @@ struct StatusBarViewTests {
                 StatusBarItem(shortcut: "a", label: "alpha"),
                 StatusBarItem(shortcut: "b", label: "beta"),
             ],
+            style: .compact,
             alignment: .center
         )
 
@@ -150,6 +153,7 @@ struct StatusBarViewTests {
                 StatusBarItem(shortcut: "b", label: "second"),
                 StatusBarItem(shortcut: "c", label: "third"),
             ],
+            style: .compact,
             alignment: .justified
         )
 
@@ -196,6 +200,7 @@ struct StatusBarAlignmentTests {
     func singleItemJustified() {
         let statusBar = StatusBar(
             items: [StatusBarItem(shortcut: "x", label: "only")],
+            style: .compact,
             alignment: .justified
         )
 

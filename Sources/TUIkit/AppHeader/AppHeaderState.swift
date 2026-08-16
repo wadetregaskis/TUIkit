@@ -52,13 +52,17 @@ final class AppHeaderState: @unchecked Sendable {
         return !buffer.isEmpty
     }
 
-    /// The height of the header in terminal lines.
+    /// How the header frames itself against the page.
     ///
-    /// Returns the content height plus one line for the divider.
-    /// Returns 0 when no content is set (header hidden).
+    /// Defaults to ``ChromeStyle/rule`` — the thin divider that mirrors the
+    /// status bar's. Set both at once with ``Scene/chromeStyle(_:)``.
+    var style: ChromeStyle = .rule
+
+    /// The height of the header in terminal lines: its content plus whatever
+    /// chrome the style draws around it, or 0 when no content is set.
     var height: Int {
         guard hasContent else { return 0 }
-        return (contentBuffer?.height ?? 0) + 1
+        return style.barHeight(contentRows: contentBuffer?.height ?? 0)
     }
 
     /// The estimated height for the current frame, based on the previous

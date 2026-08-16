@@ -120,7 +120,7 @@ struct RenderLoopAppearanceIntegrationTests {
     /// divider line (the last line of the header buffer).
     private func headerDivider(appearance: Appearance) -> String {
         let content = FrameBuffer(lines: ["My App"])
-        let header = AppHeader(contentBuffer: content)
+        let header = AppHeader(contentBuffer: content, style: .rule)
         var environment = EnvironmentValues()
         environment.appearance = appearance
         let context = RenderContext(

@@ -114,7 +114,11 @@ public final class StatusBarState: @unchecked Sendable {
     // MARK: - Appearance
 
     /// The current status bar style.
-    public var style: StatusBarStyle = .bordered
+    ///
+    /// Defaults to ``ChromeStyle/rule`` so the bar mirrors the app header,
+    /// which draws the same rule on its own page-facing side. Set both at once
+    /// with ``Scene/chromeStyle(_:)``.
+    public var style: ChromeStyle = .rule
 
     /// The horizontal alignment of items.
     public var alignment: StatusBarAlignment = .justified
@@ -239,13 +243,10 @@ public final class StatusBarState: @unchecked Sendable {
     /// Whether there are any user items (ignoring system items).
     public var hasUserItems: Bool { !currentUserItems.isEmpty }
 
-    /// The height of the status bar in lines.
+    /// The height of the status bar in lines, or 0 when it has nothing to show.
     public var height: Int {
         guard hasItems else { return 0 }
-        switch style {
-        case .compact: return 1
-        case .bordered: return 3
-        }
+        return style.barHeight(contentRows: 1)
     }
 }
 

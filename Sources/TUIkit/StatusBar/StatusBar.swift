@@ -45,7 +45,7 @@ public struct StatusBar: View {
     public let systemItems: [any StatusBarItemProtocol]
 
     /// The visual style.
-    public let style: StatusBarStyle
+    public let style: ChromeStyle
 
     /// The horizontal alignment of user items within the left container.
     public let alignment: StatusBarAlignment
@@ -68,7 +68,7 @@ public struct StatusBar: View {
     public init(
         userItems: [any StatusBarItemProtocol] = [],
         systemItems: [any StatusBarItemProtocol] = [],
-        style: StatusBarStyle = .compact,
+        style: ChromeStyle = .rule,
         alignment: StatusBarAlignment = .leading,
         highlightColor: Color = .cyan,
         labelColor: Color? = nil
@@ -91,7 +91,7 @@ public struct StatusBar: View {
     ///   - labelColor: The color for labels (default: nil, terminal default).
     public init(
         items: [any StatusBarItemProtocol],
-        style: StatusBarStyle = .compact,
+        style: ChromeStyle = .rule,
         alignment: StatusBarAlignment = .justified,
         highlightColor: Color = .cyan,
         labelColor: Color? = nil
@@ -113,7 +113,7 @@ public struct StatusBar: View {
     ///   - labelColor: The color for labels.
     ///   - builder: A closure that returns items.
     public init(
-        style: StatusBarStyle = .compact,
+        style: ChromeStyle = .rule,
         alignment: StatusBarAlignment = .justified,
         highlightColor: Color = .cyan,
         labelColor: Color? = nil,
@@ -165,7 +165,7 @@ public struct StatusBar: View {
 private struct _StatusBarCore: View, Renderable {
     let userItems: [any StatusBarItemProtocol]
     let systemItems: [any StatusBarItemProtocol]
-    let style: StatusBarStyle
+    let style: ChromeStyle
     let alignment: StatusBarAlignment
     let highlightColor: Color
     let labelColor: Color?
@@ -233,6 +233,26 @@ private struct _StatusBarCore: View, Renderable {
             itemRowOffset = 0
             // The placed columns on `result.placedColumns` are
             // already absolute on a single-row compact bar.
+            return applyHitTestRegions(
+                buffer: buffer,
+                layouts: layouts,
+                columns: result.placedColumns,
+                columnOffset: itemColumnOffset,
+                rowOffset: itemRowOffset,
+                context: context
+            )
+
+        case .rule:
+            // A rule ABOVE the items, mirroring the app header's rule below
+            // its content — the two are meant to read as one frame around the
+            // page, so both come from `ChromeStyle.ruleRow`.
+            let result = alignContent(layouts: layouts, width: context.availableWidth)
+            buffer = FrameBuffer(lines: [
+                ChromeStyle.ruleRow(width: context.availableWidth, context: context),
+                result.line,
+            ])
+            itemColumnOffset = 0
+            itemRowOffset = 1
             return applyHitTestRegions(
                 buffer: buffer,
                 layouts: layouts,
@@ -628,13 +648,9 @@ private struct _StatusBarCore: View, Renderable {
 // MARK: - Status Bar Height Helper
 
 extension StatusBar {
-    /// The height of the status bar in lines.
+    /// The height of the status bar in lines: its one row of items plus
+    /// whatever chrome the style draws around it.
     public var height: Int {
-        switch style {
-        case .compact:
-            return 1
-        case .bordered:
-            return 3
-        }
+        style.barHeight(contentRows: 1)
     }
 }

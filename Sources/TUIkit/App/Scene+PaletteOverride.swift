@@ -138,3 +138,12 @@ extension _PaletteScene: MouseSupportProvidingScene {
         (content as? MouseSupportProvidingScene)?.resolvedMouseSupport()
     }
 }
+
+extension _PaletteScene: RootChromeStyleProvidingScene {
+    /// Pass-through: forward the wrapped scene's chrome styles so
+    /// `.chromeStyle(...)` composes with this modifier in either order.
+    func rootChromeStyle() -> (appHeader: ChromeStyle?, statusBar: ChromeStyle?) {
+        (content as? any RootChromeStyleProvidingScene)?.rootChromeStyle()
+            ?? (appHeader: nil, statusBar: nil)
+    }
+}

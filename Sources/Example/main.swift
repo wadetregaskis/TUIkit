@@ -45,6 +45,11 @@ struct ExampleApp: App {
         .appearance(styling.customBorder.map {
             Appearance(id: Appearance.ID(rawValue: "custom"), borderStyle: $0)
         })
+        // Likewise scene-level: how the two framing bars separate themselves
+        // from the page is a property of the app's chrome, not of any page.
+        // The Theme page's picker drives both at once by default; the
+        // two-argument spelling is what lets it set them apart.
+        .chromeStyle(appHeader: styling.appHeaderStyle, statusBar: styling.statusBarStyle)
     }
 }
 
