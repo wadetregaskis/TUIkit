@@ -317,17 +317,40 @@ extension String {
     /// preserving a uniform background while not bleeding the prefix's text
     /// decorations (bold/underline) onto the suffix. See `FrameBuffer.insertOverlay`.
     public func ansiStateBefore(visibleColumn column: Int) -> String {
+        sgrState(throughColumn: column, includingBoundary: false).rendered
+    }
+
+    /// The netted ``SGRState`` the terminal is in as it draws the cell at
+    /// visible column `column`.
+    ///
+    /// One escape's worth more than ``ansiStateBefore(visibleColumn:)``, and the
+    /// difference is the whole point: escapes sitting *immediately* before that
+    /// cell — the `ESC[48;…m` a line opens with, say — style the cell itself, so
+    /// they belong to it. `ansiStateBefore` excludes them because it answers a
+    /// different question (what to restore where a suffix *begins*, which
+    /// carries those escapes along with it), and at column 0 that makes its
+    /// answer unconditionally empty.
+    ///
+    /// Wanted by anything that redraws a cell in place and has to land on the
+    /// surface already under it. See ``FrameBuffer/patchingAnimatedCells(in:with:atColumn:width:)``.
+    public func ansiSGRStateAt(visibleColumn column: Int) -> SGRState {
+        sgrState(throughColumn: column, includingBoundary: true)
+    }
+
+    /// The shared walk behind the two state queries.
+    private func sgrState(throughColumn column: Int, includingBoundary: Bool) -> SGRState {
         var visible = 0
         var state = SGRState()
         for segment in ansiSegments() {
             switch segment {
             case .ansi(let sequence, let isSGR):
-                if isSGR && visible < column { state.apply(sequence) }
+                let reached = includingBoundary ? visible <= column : visible < column
+                if isSGR && reached { state.apply(sequence) }
             case .visible(let character):
                 visible += character.terminalWidth
             }
         }
-        return state.rendered
+        return state
     }
 
     /// Everything ``FrameBuffer``'s overlay insertion needs about a line, from

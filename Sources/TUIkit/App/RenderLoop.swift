@@ -1004,15 +1004,18 @@ extension RenderLoop {
             guard let step = steps[run.clock] else { continue }
             let row = run.offsetY
             guard lines.indices.contains(row) else { continue }
-            // Spliced through the ordinary compositor rather than by hand: it
-            // already knows how to drop a styled run into a styled line at a
-            // visible column and restore the surrounding state afterwards, and
-            // getting that wrong is how a background stops halfway across a row.
-            let patched = FrameBuffer(lines: [lines[row]])
-                .composited(with: FrameBuffer(lines: [run.frame(at: step)]),
-                            at: (x: run.offsetX, y: 0))
-            if let line = patched.lines.first, line != lines[row] {
-                lines[row] = line
+            // Spliced through the compositor rather than by hand: it already
+            // knows how to drop a styled run into a styled line at a visible
+            // column and restore the surrounding state afterwards, and getting
+            // that wrong is how a background stops halfway across a row. The
+            // run-specific entry point rather than plain `composited` because
+            // this row is already on screen, so nothing will paint a background
+            // over it afterwards — see `patchingAnimatedRun(_:atStep:)`.
+            let patched = FrameBuffer.patchingAnimatedCells(
+                in: lines[row], with: run.frame(at: step),
+                atColumn: run.offsetX, width: run.width)
+            if patched != lines[row] {
+                lines[row] = patched
                 touched = true
             }
         }

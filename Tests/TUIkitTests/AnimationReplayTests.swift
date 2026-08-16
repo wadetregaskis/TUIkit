@@ -130,4 +130,113 @@ struct AnimatedRunSplicingTests {
             accumulated.last! > accumulated.first!,
             "compositing no longer leaves the replaced run's escapes behind; if that is now true by construction, this test can go")
     }
+
+    // MARK: - The background under an animated run
+
+    /// The line a real frame hands the replay: the diff writer's background code
+    /// and erase, then a foreground-only glyph, then the rest of the row.
+    private func styledRow(background: String = "\u{1B}[48;5;16m") -> String {
+        "\(background)\u{1B}[2K\u{1B}[38;5;46m□\u{1B}[0m\(background) Enable\u{1B}[0m\(background)   "
+    }
+
+    @Test("A foreground-only frame keeps the background it was drawn over")
+    func patchKeepsTheLineBackground() {
+        // The regression this exists for: a focus indicator's frames come from
+        // colouring a glyph, so they state a foreground and nothing else. The
+        // ordinary render draws them inside a line whose background was set at
+        // its start; the replay redraws that cell on its own, and reset the
+        // background out from under it — a white box around a breathing
+        // checkbox on any terminal whose default background is light.
+        let patched = FrameBuffer.patchingAnimatedCells(
+            in: styledRow(), with: "\u{1B}[38;5;77m□\u{1B}[0m", atColumn: 0, width: 1)
+
+        let glyph = patched.range(of: "□")!
+        let before = String(patched[patched.startIndex..<glyph.lowerBound])
+        #expect(
+            before.hasSuffix("\u{1B}[38;5;77m"),
+            "the frame's own foreground must be the last thing set: \(before.debugDescription)")
+        #expect(
+            before.contains("\u{1B}[48;5;16m"),
+            "the line's background must survive to the patched cell: \(before.debugDescription)")
+    }
+
+    @Test("The patch takes the background and nothing else")
+    func patchDoesNotInheritTextAttributes() {
+        // Only the SURFACE is inherited. Bold, underline and the foreground in
+        // force at that column belong to the glyph being replaced — carrying
+        // them over would make an indicator inside a bold section header bold,
+        // which is not what the render drew.
+        let bolded = "\u{1B}[1;4;48;5;16m\u{1B}[38;5;46m□\u{1B}[0m rest"
+        let patched = FrameBuffer.patchingAnimatedCells(
+            in: bolded, with: "\u{1B}[38;5;77m□\u{1B}[0m", atColumn: 0, width: 1)
+
+        let before = String(patched[patched.startIndex..<patched.range(of: "□")!.lowerBound])
+        #expect(before.contains("48;5;16"), "background: \(before.debugDescription)")
+        // The prefix at column 0 is empty, so the only escapes here are the ones
+        // the patch put there — a `1` or `4` among them could only have leaked.
+        #expect(!before.contains("[1m") && !before.contains("1;"), "\(before.debugDescription)")
+        #expect(!before.contains("[4m") && !before.contains("4;"), "\(before.debugDescription)")
+    }
+
+    @Test("A run away from column 0 gets the same treatment")
+    func patchMidLineKeepsTheBackground() {
+        // Buttons, scroll indicators and text cursors sit inside chrome, so
+        // their runs start at a column the prefix reaches — which changes which
+        // escapes `insertOverlay` keeps, and changed nothing about the hole:
+        // it resets before the overlay either way.
+        let patched = FrameBuffer.patchingAnimatedCells(
+            in: styledRow(), with: "\u{1B}[38;5;77mX\u{1B}[0m", atColumn: 3, width: 1)
+
+        let marker = patched.range(of: "X")!
+        let before = String(patched[patched.startIndex..<marker.lowerBound])
+        // The last background stated before the patched cell must be the line's.
+        #expect(
+            before.ansiSGRStateAt(visibleColumn: 3).renderedBackground == "\u{1B}[48;5;16m",
+            "\(before.debugDescription)")
+    }
+
+    @Test("A line with no background of its own gains none")
+    func patchAddsNothingOnADefaultBackground() {
+        // The terminal's own background is a legitimate answer — a bare
+        // `renderOnce` tree paints no surface at all — and the patch must not
+        // invent one, or every unstyled app would grow a black box.
+        let plain = "\u{1B}[38;5;46m□\u{1B}[0m rest"
+        let patched = FrameBuffer.patchingAnimatedCells(
+            in: plain, with: "\u{1B}[38;5;77m□\u{1B}[0m", atColumn: 0, width: 1)
+        #expect(!patched.contains("\u{1B}[4"), "\(patched.debugDescription)")
+    }
+}
+
+@Suite("SGR state at a column")
+struct ANSIStateAtColumnTests {
+
+    @Test("Column 0 sees the escapes that open the line")
+    func columnZeroSeesLeadingEscapes() {
+        // `ansiStateBefore` answers "what to restore where a suffix BEGINS", so
+        // escapes sitting at that boundary are excluded — they travel with the
+        // suffix. At column 0 that makes its answer unconditionally empty,
+        // which is right for its own caller and useless for a cell being
+        // redrawn in place. Hence the second, inclusive query.
+        let line = "\u{1B}[48;5;16m\u{1B}[38;5;46mX\u{1B}[0m rest"
+        #expect(line.ansiStateBefore(visibleColumn: 0).isEmpty)
+        #expect(line.ansiSGRStateAt(visibleColumn: 0).renderedBackground == "\u{1B}[48;5;16m")
+    }
+
+    @Test("An escape after the cell does not reach it")
+    func laterEscapesAreExcluded() {
+        // The cell at column 0 is drawn before the second background is set, so
+        // it must report the first.
+        let line = "\u{1B}[48;5;16mX\u{1B}[48;5;40mY"
+        #expect(line.ansiSGRStateAt(visibleColumn: 0).renderedBackground == "\u{1B}[48;5;16m")
+        #expect(line.ansiSGRStateAt(visibleColumn: 1).renderedBackground == "\u{1B}[48;5;40m")
+    }
+
+    @Test("A wide glyph is one cell boundary, not two")
+    func wideGlyphsAdvanceByTheirWidth() {
+        // 🥳 occupies two columns, so the escape after it applies from column 2.
+        let line = "\u{1B}[48;5;16m🥳\u{1B}[48;5;40mZ"
+        #expect(line.ansiSGRStateAt(visibleColumn: 0).renderedBackground == "\u{1B}[48;5;16m")
+        #expect(line.ansiSGRStateAt(visibleColumn: 1).renderedBackground == "\u{1B}[48;5;16m")
+        #expect(line.ansiSGRStateAt(visibleColumn: 2).renderedBackground == "\u{1B}[48;5;40m")
+    }
 }

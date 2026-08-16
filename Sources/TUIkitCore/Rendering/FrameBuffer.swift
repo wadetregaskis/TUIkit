@@ -616,7 +616,7 @@ extension FrameBuffer {
                 let overlayLine = overlay.lines[overlayRow]
                 if !overlayLine.isEmpty {
                     // Insert overlay content at the x position
-                    baseLine = insertOverlay(
+                    baseLine = Self.insertOverlay(
                         base: baseLine,
                         overlay: overlayLine,
                         atColumn: position.x
@@ -702,7 +702,7 @@ extension FrameBuffer {
             guard row >= 0, row < storage.count else { continue }
             let overlayLine = overlay.lines[overlayRow]
             guard !overlayLine.isEmpty else { continue }
-            storage[row] = insertOverlay(
+            storage[row] = Self.insertOverlay(
                 base: storage[row].padToVisibleWidth(resultWidth),
                 overlay: overlayLine,
                 atColumn: position.x)
@@ -883,6 +883,36 @@ extension FrameBuffer {
             return shifted
         }
     }
+
+    /// `line` with `frame` redrawn over the `width` cells starting at `column`.
+    ///
+    /// This is the animation tick — the one splice that happens *after* a frame
+    /// is finished, rather than while one is being assembled, and the difference
+    /// matters for exactly one reason: **the background**.
+    ///
+    /// ``composited(with:at:)`` resets before an overlay, so an overlay stating
+    /// no background of its own lands on the terminal's default. During assembly
+    /// that is harmless, because a container paints its background across the
+    /// whole finished row afterwards (``ANSIRenderer.applyPersistentBackground``
+    /// re-injects it after every reset). Nothing does that here — the row is
+    /// already on screen — so a foreground-only frame, which is what colouring a
+    /// glyph produces and therefore what most focus indicators leave behind,
+    /// punched a hole through to the terminal background on every tick: a white
+    /// box around a breathing checkbox on a light-background terminal.
+    ///
+    /// So the frame is drawn over the background the line already had at that
+    /// column, and *only* the background — the foreground, bold and underline in
+    /// force there belong to the glyph being replaced, not to the surface under
+    /// it.
+    public static func patchingAnimatedCells(
+        in line: String, with frame: String, atColumn column: Int, width: Int
+    ) -> String {
+        let background = line.ansiSGRStateAt(visibleColumn: column).renderedBackground
+        return insertOverlay(
+            base: line.padToVisibleWidth(max(line.strippedLength, column + width)),
+            overlay: background + frame,
+            atColumn: column)
+    }
 }
 
 // MARK: - Private Helpers
@@ -976,7 +1006,7 @@ extension FrameBuffer {
     ///   - overlay: The overlay text to insert (may contain ANSI codes).
     ///   - column: The column position (0-based, in visible characters).
     /// - Returns: The composited line with base styling preserved around the overlay.
-    fileprivate func insertOverlay(
+    fileprivate static func insertOverlay(
         base: String,
         overlay: String,
         atColumn column: Int

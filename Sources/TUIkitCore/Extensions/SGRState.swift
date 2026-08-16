@@ -154,4 +154,18 @@ public struct SGRState: Sendable, Equatable {
         if let background { parameters += background }
         return "\u{1B}[" + parameters.joined(separator: ";") + "m"
     }
+
+    /// Just the BACKGROUND half of ``rendered`` — the escape that re-establishes
+    /// this state's background colour and says nothing about anything else, or
+    /// `""` when the background is the terminal's own.
+    ///
+    /// Wanted wherever a run of cells is redrawn *in place* over a surface that
+    /// is not being redrawn with it. Such a redraw must land on the background
+    /// that was already there, but must NOT inherit the foreground, bold or
+    /// underline in force at that point — those belong to the text it is
+    /// replacing, not to the surface under it.
+    public var renderedBackground: String {
+        guard let background else { return "" }
+        return "\u{1B}[" + background.joined(separator: ";") + "m"
+    }
 }
