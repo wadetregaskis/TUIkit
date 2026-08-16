@@ -466,6 +466,93 @@ struct FocusIndicatorAnimationTests {
         // accidentally passing on an un-shifted run.
         #expect(buffer.animatedCells.allSatisfy { $0.offsetX > 0 && $0.offsetY > 0 })
     }
+
+    // MARK: - Composers that assemble rows by hand
+
+    // A container that concatenates child STRINGS gets none of what the child
+    // buffers carried — every hit region, overlay and run has to be lifted by
+    // name. Three of them lifted the regions (clicks worked) and dropped the
+    // runs, so a focused button in a button row or a dialog footer went bold
+    // and then sat perfectly still: the loop keeps its clock alive from the
+    // runs on the final buffer, so a run that never arrives is a freeze.
+
+    @Test("A ButtonRow carries its focused button's caps")
+    func buttonRowLiftsRuns() {
+        let buffer = focused(
+            ButtonRow {
+                Button("Cancel") {}
+                Button("OK") {}
+            })
+        expectAnimates(buffer, runs: 2, "focused button in a ButtonRow")
+    }
+
+    @Test("A dialog's horizontal button row carries them too")
+    func alertButtonRowLiftsRuns() {
+        let buffer = focused(
+            AlertButtonRow(buttons: [Button("Delete") {}, Button("Cancel") {}]))
+        expectAnimates(buffer, runs: 2, "focused button in an alert row")
+    }
+
+    @Test("A dialog's stacked button column carries them too")
+    func alertButtonColumnLiftsRuns() {
+        let buffer = focused(
+            AlertButtonColumn(buttons: [Button("Delete") {}, Button("Cancel") {}]))
+        expectAnimates(buffer, runs: 2, "focused button in an alert column")
+    }
+
+    @Test("A TabView carries its content's runs as well as its own chip's")
+    func tabViewLiftsContentRuns() {
+        // Both styles assembled their panel and then ASSIGNED the strip's runs
+        // over whatever the content had contributed, so every focused control
+        // inside a tab stopped moving. The chip and the button must both be
+        // animating, and the button's run must be shifted down past the strip.
+        for style in [TabViewStyle.compact, .bordered] {
+            let view = TabView(selection: .constant(0)) {
+                Tab("Alpha", value: 0) { Button("Save") {} }
+                Tab("Bravo", value: 1) { Text("B") }
+            }.tabViewStyle(style)
+            let context = makeRenderContext(width: 40, height: 12)
+            _ = renderToBuffer(view, context: context)  // the strip claims focus
+            let ring = context.environment.focusManager?.registeredFocusIDsInActiveSection() ?? []
+            let buttonID = ring.first { $0.hasPrefix("button") }
+            #expect(buttonID != nil, "\(style): no button in the ring: \(ring)")
+            context.environment.focusManager?.focus(id: buttonID ?? "")
+            let buffer = renderToBuffer(view, context: context)
+
+            // Two caps from the button; the chip is no longer focused, so it
+            // contributes none.
+            expectAnimates(buffer, runs: 2, "\(style): button inside a tab")
+            #expect(
+                buffer.animatedCells.allSatisfy { $0.offsetY > 0 },
+                "\(style): a content run was left at the strip's row")
+        }
+    }
+
+    @Test("A row lifts the runs of the button that actually has focus")
+    func rowRunsSitOnTheFocusedButton() {
+        // Two buttons, one focused: the runs must land on the focused one's
+        // cells, not the first one's. A composer that forgot the x-shift would
+        // pass the count check above and put both caps on the wrong button —
+        // which `expectAnimates`'s replay check would catch as a glyph moving,
+        // so this pins the *identity* instead: the caps sit either side of "OK".
+        let context = makeRenderContext(width: 40, height: 8)
+        let row = ButtonRow {
+            Button("Cancel") {}
+            Button("OK") {}
+        }
+        _ = renderToBuffer(row, context: context)  // register the ring
+        let ring = context.environment.focusManager?.registeredFocusIDsInActiveSection() ?? []
+        #expect(ring.count == 2, "two buttons, two focus ids: \(ring)")
+        context.environment.focusManager?.focus(id: ring[1])
+        let buffer = renderToBuffer(row, context: context)
+
+        expectAnimates(buffer, runs: 2, "second button focused")
+        let line = buffer.lines[0].stripped
+        let okStart = line.range(of: "OK").map { line.distance(from: line.startIndex, to: $0.lowerBound) }
+        #expect(okStart != nil, "line: \(line.debugDescription)")
+        let columns = buffer.animatedCells.map(\.offsetX).sorted()
+        #expect(columns.allSatisfy { $0 > 2 }, "caps landed on the first button: \(columns)")
+    }
 }
 
 /// Claims auto-focus before the control under test renders, so that control

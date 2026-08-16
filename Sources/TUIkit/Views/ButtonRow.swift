@@ -148,6 +148,7 @@ private struct _ButtonRowCore: View, Renderable, Layoutable {
         // composed row.
         var resultLines: [String] = Array(repeating: "", count: maxHeight)
         var resultRegions: [HitTestRegion] = []
+        var resultRuns: [AnimatedCellRun] = []
         let spacer = String(repeating: " ", count: spacing)
         var xCursor = 0
 
@@ -167,11 +168,19 @@ private struct _ButtonRowCore: View, Renderable, Layoutable {
             }
             resultRegions.append(
                 contentsOf: buffer.shiftedHitTestRegions(byX: xCursor, y: 0))
+            // …and the focused button's breathing caps, by the same shift. A
+            // row assembled by string concatenation carries nothing a child
+            // buffer knew unless it is lifted explicitly, and a dropped run is
+            // not a lost animation but a FROZEN one: the loop keeps the clock
+            // alive from the runs that reach the final buffer, so a button
+            // whose run never arrives simply stops moving.
+            resultRuns.append(contentsOf: buffer.shiftedAnimatedCells(byX: xCursor, y: 0))
             xCursor += buffer.width
         }
 
         var result = FrameBuffer(lines: resultLines)
         result.hitTestRegions = resultRegions
+        result.animatedCells = resultRuns
         return result
     }
 }

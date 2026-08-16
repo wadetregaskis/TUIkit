@@ -586,6 +586,14 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             contentsOf: visibleContent.shiftedHitTestRegions(byX: contentShiftX, y: contentStartY))
         buffer.overlays.append(
             contentsOf: visibleContent.shiftedOverlays(byX: contentShiftX, y: contentStartY))
+        // …and the runs, for the same reason and by the same shift: a focused
+        // control inside the tab breathes only if its run reaches the root, and
+        // the assignment above replaced the buffer's runs with the strip's.
+        if !context.isMeasuring {
+            buffer.animatedCells.append(
+                contentsOf: visibleContent.shiftedAnimatedCells(
+                    byX: contentShiftX, y: contentStartY))
+        }
         attachTabClicks(to: &buffer, regions: regions, context: context)
         return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
@@ -793,8 +801,12 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         buffer.appendVertically(centredContent)
         // The strip is the top of the buffer, so its coordinates are already
         // the buffer's. (The clamp below drops the run if the chip is off-screen
-        // — the run goes with the cells it describes.)
-        buffer.animatedCells = context.isMeasuring ? [] : strip.animatedCells
+        // — the run goes with the cells it describes.) Prepended rather than
+        // assigned: `appendVertically` already carried the content's own runs
+        // up, correctly shifted, and overwriting them froze every focused
+        // control inside a tab.
+        buffer.animatedCells =
+            context.isMeasuring ? [] : strip.animatedCells + buffer.animatedCells
         attachTabClicks(to: &buffer, regions: regions, context: context)
         return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }

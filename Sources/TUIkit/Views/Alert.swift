@@ -213,6 +213,7 @@ struct AlertButtonRow: View, Renderable {
         // clicks on dialog buttons reach the right handler.
         var resultLines: [String] = Array(repeating: "", count: maxHeight)
         var resultRegions: [HitTestRegion] = []
+        var resultRuns: [AnimatedCellRun] = []
         let spacer = String(repeating: " ", count: spacing)
         var xCursor = leftPadding
 
@@ -236,11 +237,17 @@ struct AlertButtonRow: View, Renderable {
             }
             resultRegions.append(
                 contentsOf: buffer.shiftedHitTestRegions(byX: xCursor, y: 0))
+            // …and its animated runs, so the focused button's caps keep
+            // breathing once the dialog composes the row. See the note in
+            // `_ButtonRowCore`: a dropped run freezes an animation rather than
+            // removing it.
+            resultRuns.append(contentsOf: buffer.shiftedAnimatedCells(byX: xCursor, y: 0))
             xCursor += buffer.width
         }
 
         var result = FrameBuffer(lines: resultLines)
         result.hitTestRegions = resultRegions
+        result.animatedCells = resultRuns
         return result
     }
 }
@@ -275,6 +282,7 @@ struct AlertButtonColumn: View, Renderable {
         let width = context.availableWidth
         var lines: [String] = []
         var regions: [HitTestRegion] = []
+        var runs: [AnimatedCellRun] = []
 
         // Each button renders under its OWN child identity. A `Button`'s
         // default focus ID is derived from `context.identity.path`, so rendering
@@ -297,13 +305,18 @@ struct AlertButtonColumn: View, Renderable {
             for line in buffer.lines {
                 lines.append(pad + line)
             }
-            // Lift each button's hit-test regions to its position in the column.
+            // Lift each button's hit-test regions — and its animated runs — to
+            // its position in the column. See `_ButtonRowCore` on why the runs
+            // are not optional: dropping one freezes the caps rather than
+            // merely failing to animate them.
             regions.append(
                 contentsOf: buffer.shiftedHitTestRegions(byX: leftPadding, y: startY))
+            runs.append(contentsOf: buffer.shiftedAnimatedCells(byX: leftPadding, y: startY))
         }
 
         var result = FrameBuffer(lines: lines)
         result.hitTestRegions = regions
+        result.animatedCells = runs
         return result
     }
 }
