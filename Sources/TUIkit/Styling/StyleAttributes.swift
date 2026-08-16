@@ -49,17 +49,21 @@ public enum FontWeight: Sendable, Hashable {
 
 // MARK: - Style attributes
 
-/// The themeable subset of ``TextStyle``, expressed as a *partial* overlay:
-/// every field is optional, where `nil` means "inherit / not set at this level".
+/// The themeable text attributes, expressed as a *partial* overlay: every field
+/// is optional, where `nil` means "inherit / not set at this level".
 ///
-/// `StyleAttributes` is the value carried by the scoped style cascade
-/// (``StyleCascade``). Container-level modifiers like ``View/bold(_:)``
-/// and ``View/style(_:_:)-(_,StyleAttributes)`` contribute these; ``Text`` merges the
-/// resolved result beneath its own explicit attributes when it renders.
+/// This is the type an app styles with. `StyleAttributes` is the value carried
+/// by the scoped style cascade (``StyleCascade``): container-level modifiers
+/// like ``View/bold(_:)`` and ``View/style(_:_:)-(_,StyleAttributes)``
+/// contribute these, every `…TextStyle { }` builder hands one out to fill in,
+/// and ``Text`` merges the resolved result beneath its own explicit attributes
+/// when it renders.
 ///
 /// The tri-state (`Bool?`) lets a subtree turn an attribute **on** and a
 /// descendant turn it **off** (e.g. `.bold()` then `.bold(false)` deeper),
-/// matching SwiftUI.
+/// matching SwiftUI. That is the difference from the framework's internal
+/// `TextStyle`, whose flags are plain `Bool` because it is the fully-resolved
+/// end of the pipeline and has nothing left to defer to.
 public struct StyleAttributes: Sendable, Hashable {
     public var foreground: Color?
     public var background: Color?

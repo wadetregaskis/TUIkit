@@ -207,12 +207,12 @@ modifier.
 
 **Two corrections to an earlier draft of this entry, both of which shrink it.**
 
-1. It is *not* a public-API break. `TextStyle` is declared `public`, but
-   nothing public accepts or returns one: `Text.style` is internal
+1. It is *not* a public-API break. `TextStyle` **was** declared `public`, but
+   nothing public accepted or returned one: `Text.style` is internal
    (`Sources/TUIkit/Views/Text.swift:33`), every construction site is an
-   internal local, and the only public member is `TextStyle.resolved(with:)` —
+   internal local, and the only public member was `TextStyle.resolved(with:)` —
    a method *on* the type, which only helps if you already had one. A caller
-   can write `TextStyle()` and then has nowhere to put it. Flipping the flags
+   could write `TextStyle()` and then had nowhere to put it. Flipping the flags
    to `Bool?` therefore changes no public signature; it changes what existing
    apps *render*, which is the real cost, and the sweep over every
    text-rendering path is the real work.
@@ -227,8 +227,13 @@ modifier.
    confined to `Text`'s own flags, which is exactly why `Text.bold(false)`
    would be weaker than `View.bold(false)`.
 
-`TextStyle`'s accidental `public` is a separate tidy-up (it appears only in the
-DocC index, which is likely how it survived).
+`TextStyle` is now **internal** (done separately, on the owner's call). Nothing
+outside the module referenced it — the tests reach it through `@testable` — so
+the build was clean on the first try, which is itself the proof that the type
+was never load-bearing public API. The DocC index entries it occupied now point
+at ``StyleAttributes``, ``StyleScope`` and ``StyleCascade``, which is what a
+reader looking for "how do I style text" actually needs; being listed there and
+nowhere else is likely how the stray `public` survived this long.
 
 **Options.** (a) Make the five flags `Bool?`, fix the merge to let a stated
 value win, then add the parameters — one coherent change, with a sweep over

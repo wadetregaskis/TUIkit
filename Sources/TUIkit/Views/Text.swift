@@ -285,36 +285,46 @@ extension Text {
 
 // MARK: - TextStyle
 
-/// The style of a text view.
+/// The concrete, fully-resolved set of attributes a run of text draws with —
+/// what `ANSIRenderer` turns into escape sequences.
 ///
-/// Contains all formatting options like color, bold, etc.
-public struct TextStyle: Sendable, Equatable {
+/// **Internal on purpose.** This is the framework's own end-of-pipeline value,
+/// not a knob: every flag here is a plain `Bool`, so it can say "bold" but not
+/// "explicitly NOT bold". The type an app styles with is ``StyleAttributes``,
+/// the *partial overlay* the style cascade carries, whose tri-state `Bool?`
+/// lets a subtree turn an attribute on and a descendant turn it back off. It
+/// was `public` by drift — nothing public ever accepted or returned one, so a
+/// caller could construct a `TextStyle` and then had nowhere to put it.
+///
+/// Do not widen this back to `public` to expose an attribute; add the attribute
+/// to ``StyleAttributes`` and let it cascade.
+struct TextStyle: Sendable, Equatable {
     /// The foreground color of the text.
-    public var foregroundColor: Color?
+    var foregroundColor: Color?
 
     /// The background color of the text.
-    public var backgroundColor: Color?
+    var backgroundColor: Color?
 
     /// Whether the text is bold.
-    public var isBold: Bool = false
+    var isBold: Bool = false
 
     /// Whether the text is italic.
-    public var isItalic: Bool = false
+    var isItalic: Bool = false
 
     /// Whether the text is underlined.
-    public var isUnderlined: Bool = false
+    var isUnderlined: Bool = false
 
     /// Whether the text is strikethrough.
-    public var isStrikethrough: Bool = false
+    var isStrikethrough: Bool = false
 
     /// Whether the text is dimmed.
-    public var isDim: Bool = false
+    var isDim: Bool = false
 
     /// Whether the text blinks.
-    public var isBlink: Bool = false
+    var isBlink: Bool = false
 
     /// Whether foreground and background colors are inverted.
-    public var isInverted: Bool = false
+    var isInverted: Bool = false
 
     /// How the text is shortened when it cannot fit its available space, or
     /// `nil` to inherit `\.truncationMode` from the environment.
@@ -322,11 +332,11 @@ public struct TextStyle: Sendable, Equatable {
     /// Optional so "this `Text` was told" and "nobody said" stay
     /// distinguishable: `View.truncationMode(_:)` cascades a default to a whole
     /// subtree, and a `Text` that set its own must still win inside it.
-    public var truncationMode: TruncationMode?
+    var truncationMode: TruncationMode?
 
     /// Whether truncation cuts only at word boundaries rather than at any
     /// character position.
-    public var truncatesAtWordBoundary: Bool = false
+    var truncatesAtWordBoundary: Bool = false
 
     /// How many lines the text may occupy, or `nil` to inherit `\.lineLimit`
     /// from the environment.
@@ -336,13 +346,13 @@ public struct TextStyle: Sendable, Equatable {
     /// (``LineLimit/unlimited``), not the absence of one — otherwise
     /// `Text(x).lineLimit(nil)` inside a `.lineLimit(2)` subtree could not say
     /// "not me" and the inherited cap would be unresettable.
-    public var lineLimit: LineLimit?
+    var lineLimit: LineLimit?
 
     /// Creates a default TextStyle with no formatting.
-    public init() {}
+    init() {}
 }
 
-// MARK: - Public API
+// MARK: - Palette resolution
 
 extension TextStyle {
     /// Resolves any semantic colors in this style against the given palette.
@@ -352,7 +362,7 @@ extension TextStyle {
     ///
     /// - Parameter palette: The palette to resolve semantic colors against.
     /// - Returns: A copy with all colors resolved to concrete values.
-    public func resolved(with palette: any Palette) -> TextStyle {
+    func resolved(with palette: any Palette) -> TextStyle {
         var copy = self
         copy.foregroundColor = foregroundColor?.resolve(with: palette)
         copy.backgroundColor = backgroundColor?.resolve(with: palette)

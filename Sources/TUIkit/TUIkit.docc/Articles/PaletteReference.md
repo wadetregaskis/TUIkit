@@ -285,5 +285,5 @@ This means the same view code produces different colors depending on the active 
 ### Color System
 
 - ``Color``
-- ``TextStyle``
+- ``StyleAttributes``
 

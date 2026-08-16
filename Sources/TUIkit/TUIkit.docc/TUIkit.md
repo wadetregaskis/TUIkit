@@ -230,7 +230,11 @@ struct MyApp: App {
 - ``Color``
 - ``Font``
 - ``FontWeight``
-- ``TextStyle``
+- ``StyleAttributes``
+- ``StyleScope``
+- ``StyleCascade``
+- ``ChromeRole``
+- ``ControlKind``
 
 ### Appearance
 
