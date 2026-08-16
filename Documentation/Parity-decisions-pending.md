@@ -197,14 +197,38 @@ so a `Text` whose own `isBold` is `false` still renders bold under an outer
 `.bold()`. Two existing tests caught it (`StyleCascadeTests`
 `broadItalicModifier`, `innerOverridesOuter`); nothing else would have.
 
-**The fix is a public-API model change, not a parameter.** `TextStyle`'s five
-flags are `Bool`, so "explicitly off" and "never asked" are the same value.
-They would have to become `Bool?` — the shape ``LineLimit`` already uses for
-exactly this reason ("the `Optional` around it carries *was one stated*") — and
-the merge would have to prefer a stated `false` over the cascade. That is
-SwiftUI's rule (the nearest wins), so the current OR is arguably wrong
-independently of this modifier; but it changes what existing apps render, and
-`TextStyle` is public.
+**The fix is a model change, not a parameter.** `TextStyle`'s five flags are
+`Bool`, so "explicitly off" and "never asked" are the same value. They would
+have to become `Bool?` — the shape ``LineLimit`` already uses for exactly this
+reason ("the `Optional` around it carries *was one stated*") — and the merge
+would have to prefer a stated `false` over the cascade. That is SwiftUI's rule
+(the nearest wins), so the current OR is arguably wrong independently of this
+modifier.
+
+**Two corrections to an earlier draft of this entry, both of which shrink it.**
+
+1. It is *not* a public-API break. `TextStyle` is declared `public`, but
+   nothing public accepts or returns one: `Text.style` is internal
+   (`Sources/TUIkit/Views/Text.swift:33`), every construction site is an
+   internal local, and the only public member is `TextStyle.resolved(with:)` —
+   a method *on* the type, which only helps if you already had one. A caller
+   can write `TextStyle()` and then has nowhere to put it. Flipping the flags
+   to `Bool?` therefore changes no public signature; it changes what existing
+   apps *render*, which is the real cost, and the sweep over every
+   text-rendering path is the real work.
+
+2. `StyleAttributes` — the type the public styling surface actually traffics in
+   (`.buttonTextStyle { }`, `.pickerTextStyle { }`, `View.style(_:_:)`, all
+   `(inout StyleAttributes) -> Void`) — **already is** tri-state `Bool?`, and
+   its own documentation says the tri-state exists precisely so that "a subtree
+   [can] turn an attribute **on** and a descendant turn it **off** … matching
+   SwiftUI" (`Sources/TUIkit/Styling/StyleAttributes.swift:60`). So the shape
+   is not novel and the cascade already behaves correctly; the asymmetry is
+   confined to `Text`'s own flags, which is exactly why `Text.bold(false)`
+   would be weaker than `View.bold(false)`.
+
+`TextStyle`'s accidental `public` is a separate tidy-up (it appears only in the
+DocC index, which is likely how it survived).
 
 **Options.** (a) Make the five flags `Bool?`, fix the merge to let a stated
 value win, then add the parameters — one coherent change, with a sweep over
