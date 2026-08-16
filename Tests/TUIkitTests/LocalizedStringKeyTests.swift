@@ -89,6 +89,21 @@ struct LocalizedStringKeyTests {
         #expect(Text(verbatim: "test.lsk.textpath").content == "test.lsk.textpath")
     }
 
+    @Test("A runtime key looks up once it is asked to be one")
+    func explicitKeyFromAVariableLooksUp() {
+        // The answer to "my key is in a variable, how do I localise it?" — and
+        // the reason the String overload's silence is a design and not a gap.
+        // Wrapping is the request; without it a `String` is content, because
+        // nothing else can tell a key from a user's name. The Theme page demos
+        // all four spellings side by side.
+        LocalizationService.shared.register(translations: [
+            "en": ["test.lsk.runtimekey": "resolved from a variable"]
+        ])
+        let computed = "test.lsk" + ".runtimekey"
+        #expect(Text(computed).content == "test.lsk.runtimekey")
+        #expect(Text(LocalizedStringKey(computed)).content == "resolved from a variable")
+    }
+
     // MARK: - Interpolation
 
     @Test("Interpolation builds one key for every value")

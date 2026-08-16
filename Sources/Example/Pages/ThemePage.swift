@@ -89,7 +89,7 @@ struct ThemePage: View {
         HStack(spacing: 2) {
             Text(verbatim: spelling)
                 .foregroundStyle(.palette.foregroundSecondary)
-                .frame(width: 24)
+                .frame(width: 30)
             result()
         }
     }
@@ -168,12 +168,16 @@ struct ThemePage: View {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(L("page.theme.keyDemoExplain"))
                             .foregroundStyle(.palette.foregroundSecondary)
-                        // Three spellings, three behaviours — and the first two
-                        // are the SAME source text, distinguished only by
-                        // whether it is a literal. Switch language above and
-                        // watch which of them move.
+                        // Four spellings of one string, and only two of them
+                        // move. The first three are the SAME source text,
+                        // distinguished by whether it is a literal and, when it
+                        // is not, whether it was asked to be a key. Switch
+                        // language above and watch.
                         keyDemoRow("Text(\"button.save\")") { Text("button.save") }
                         keyDemoRow("Text(key)") { Text(savedKeyAsVariable) }
+                        keyDemoRow("Text(LocalizedStringKey(key))") {
+                            Text(LocalizedStringKey(savedKeyAsVariable))
+                        }
                         keyDemoRow("Text(verbatim:)") { Text(verbatim: "button.save") }
                     }
                     .border(.brightBlack)
