@@ -197,14 +197,27 @@ struct StyleCascadeTests {
 
     @Test("Role-scoped dim applies only to text drawn with that palette role")
     func semanticRoleScoped() {
-        let view = VStack {
-            Text("plain")
-            Text("secondary").foregroundStyle(.palette.foregroundSecondary)
+        // Was asserted as `sgrCodes(...).contains("2")`, which could not fail:
+        // every `Text` emits a truecolor foreground and `38;2;51;255;51` puts a
+        // "2" in that set. Deleting the `.style` entry outright left the test
+        // green. Comparing rendered BYTES per line tests both halves of the
+        // claim — that the entry reaches the matching text, and that it reaches
+        // ONLY that one, which the old form never touched at all.
+        @MainActor func lines(styled: Bool) -> [String] {
+            let stack = VStack {
+                Text("plain")
+                Text("secondary").foregroundStyle(.palette.foregroundSecondary)
+            }
+            let view: AnyView =
+                styled
+                ? AnyView(stack.style(.semanticColor(.foregroundSecondary)) { $0.dim = true })
+                : AnyView(stack)
+            return renderToBuffer(view, context: context()).lines
         }
-        .style(.semanticColor(.foregroundSecondary)) { $0.dim = true }
-        // The secondary-coloured text must render dim ("2"); the plain text alone
-        // would not, so the presence of "2" proves the role-scoped entry matched.
-        #expect(sgrCodes(renderToBuffer(view, context: context())).contains("2"))
+        let plainRun = lines(styled: false)
+        let scopedRun = lines(styled: true)
+        #expect(scopedRun[1] != plainRun[1], "the secondary-coloured text picked the entry up")
+        #expect(scopedRun[0] == plainRun[0], "…and the plain text did not")
     }
 
     @Test("textCase transforms the rendered text")
@@ -217,8 +230,19 @@ struct StyleCascadeTests {
 
     @Test("fontWeight maps to bold / faint")
     func fontWeightMapping() {
+        // The faint half was `sgrCodes(...).contains("2")` and could not fail —
+        // see `semanticRoleScoped`. Weights are compared against `.regular`,
+        // the weight that maps to neither, and against each other.
+        @MainActor func rendered(_ weight: FontWeight) -> [String] {
+            renderToBuffer(Text("Hi").fontWeight(weight), context: context()).lines
+        }
+        let regular = rendered(.regular)
+        #expect(rendered(.bold) != regular, "a heavy weight renders differently")
+        #expect(rendered(.light) != regular, "a light weight renders differently")
+        #expect(rendered(.bold) != rendered(.light), "…and not the SAME differently")
+        // The bold half was sound (SGR 1 collides with nothing), so it stays as
+        // the one direct check that the difference is the attribute expected.
         #expect(sgrCodes(renderToBuffer(Text("Hi").fontWeight(.bold), context: context())).contains("1"))
-        #expect(sgrCodes(renderToBuffer(Text("Hi").fontWeight(.light), context: context())).contains("2"))
     }
 
     // MARK: - Scoped colour
