@@ -131,12 +131,30 @@ extension Text {
         return copy
     }
 
+    // Each of these takes SwiftUI's `isActive`, and `false` is a STATEMENT
+    // rather than a shrug: it beats a `.bold()` cascaded from an ancestor,
+    // because the nearest answer wins. That is what ``TextStyle``'s tri-state
+    // flags exist for — before them a `false` here was indistinguishable from
+    // silence and the cascade won by default.
+    //
+    // `bold()` / `italic()` keep their no-argument spellings because SwiftUI
+    // declares both, not merely a defaulted parameter.
+
     /// Makes the text bold.
     ///
     /// - Returns: A new text with bold formatting.
     public func bold() -> Text {
+        bold(true)
+    }
+
+    /// Applies or removes bold — mirrors SwiftUI's `bold(_:)`.
+    ///
+    /// - Parameter isActive: Whether the text is bold. `false` states that it
+    ///   is not, overriding a ``View/bold(_:)`` cascaded from an ancestor.
+    /// - Returns: A new text with the bold setting applied.
+    public func bold(_ isActive: Bool) -> Text {
         var copy = self
-        copy.style.isBold = true
+        copy.style.isBold = isActive
         return copy
     }
 
@@ -144,35 +162,69 @@ extension Text {
     ///
     /// - Returns: A new text with italic formatting.
     public func italic() -> Text {
+        italic(true)
+    }
+
+    /// Applies or removes italics — mirrors SwiftUI's `italic(_:)`.
+    ///
+    /// - Parameter isActive: Whether the text is italic. `false` overrides an
+    ///   ancestor's ``View/italic(_:)``.
+    /// - Returns: A new text with the italic setting applied.
+    public func italic(_ isActive: Bool) -> Text {
         var copy = self
-        copy.style.isItalic = true
+        copy.style.isItalic = isActive
         return copy
     }
 
-    /// Underlines the text.
+    /// Applies or removes an underline — mirrors SwiftUI's `underline(_:…)`.
     ///
-    /// - Returns: A new text with underline formatting.
-    public func underline() -> Text {
+    /// SwiftUI's `color:` and `pattern:` arguments are absent: a terminal draws
+    /// one underline, in the text's own colour, and has no dashed or dotted
+    /// variants to choose between. Omitting them makes
+    /// `underline(true, color: .red)` fail to compile rather than compile and
+    /// quietly ignore half of what it asked for.
+    ///
+    /// - Parameter isActive: Whether the text is underlined. `false` overrides
+    ///   an ancestor's ``View/underline(_:)``.
+    /// - Returns: A new text with the underline setting applied.
+    public func underline(_ isActive: Bool = true) -> Text {
         var copy = self
-        copy.style.isUnderlined = true
+        copy.style.isUnderlined = isActive
         return copy
     }
 
-    /// Strikes through the text.
+    /// Applies or removes a strikethrough — mirrors SwiftUI's
+    /// `strikethrough(_:…)`, without the `color:`/`pattern:` arguments for the
+    /// reason given on ``underline(_:)``.
     ///
-    /// - Returns: A new text with strikethrough formatting.
-    public func strikethrough() -> Text {
+    /// - Parameter isActive: Whether the text is struck through. `false`
+    ///   overrides an ancestor's ``View/strikethrough(_:)``.
+    /// - Returns: A new text with the strikethrough setting applied.
+    public func strikethrough(_ isActive: Bool = true) -> Text {
         var copy = self
-        copy.style.isStrikethrough = true
+        copy.style.isStrikethrough = isActive
         return copy
     }
 
     /// Dims the text (reduced intensity).
     ///
-    /// - Returns: A new text with dimmed appearance.
-    public func dim() -> Text {
+    /// TUIkit-only — SwiftUI has no faint attribute — but it takes the
+    /// parameter its four neighbours do, because being the one emphasis a
+    /// `Text` could not turn off would read as an oversight rather than a
+    /// decision. `.dim(false)` declines a dim arriving through the style
+    /// cascade (`.style(.text) { $0.dim = true }`).
+    ///
+    /// - Important: It cannot decline ``View/dimmed()``. That modifier is a
+    ///   buffer post-processor — it rewrites the rendered lines rather than
+    ///   contributing to the cascade — so by the time it acts, this `Text` has
+    ///   already had its say. The asymmetry is `dimmed()`'s, not this
+    ///   parameter's.
+    ///
+    /// - Parameter isActive: Whether the text is dimmed.
+    /// - Returns: A new text with the dim setting applied.
+    public func dim(_ isActive: Bool = true) -> Text {
         var copy = self
-        copy.style.isDim = true
+        copy.style.isDim = isActive
         return copy
     }
 

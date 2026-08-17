@@ -113,6 +113,82 @@ struct StyleCascadeTests {
         #expect(!sgrCodes(renderToBuffer(view, context: context())).contains("1"))
     }
 
+    // MARK: - A Text can now say NO (Parity-decisions-pending §9)
+
+    @Test("A Text's own .bold(false) beats an ancestor's .bold()")
+    func textStatedFalseBeatsTheCascade() {
+        // Before `TextStyle` went tri-state this could not be written: the
+        // parameter did not exist, and had it existed the merge was an `||`, so
+        // a `false` here was indistinguishable from silence and the ancestor
+        // won. It now binds to `Text.bold(_:)` rather than the cascading
+        // `View.bold(_:)`, and reaches the same answer by a different route.
+        let view = VStack { Text("Hi").bold(false) }.bold()
+        #expect(!sgrCodes(renderToBuffer(view, context: context())).contains("1"))
+
+        // …and silence still inherits, which is the half a blanket "Text wins"
+        // would break.
+        let quiet = VStack { Text("Hi") }.bold()
+        #expect(sgrCodes(renderToBuffer(quiet, context: context())).contains("1"))
+    }
+
+    @Test("Every emphasis a cascade can state, a Text can decline")
+    func allFiveCanBeDeclined() {
+        // One test over all five rather than five tests, because the claim is
+        // that the SET is complete: a flag left as a plain `Bool` would be the
+        // one that silently could not opt out.
+        //
+        // Asserted by BYTE EQUALITY against an unstyled render, not by looking
+        // for an SGR code. `sgrCodes` splits every parameter of every sequence,
+        // so a truecolor foreground (`38;2;51;255;51`) contributes a "2" that
+        // is indistinguishable from SGR 2 (faint) — which is exactly how the
+        // first draft of this test failed on `dim` alone. Equality also says
+        // something stronger: the decline undoes the cascade EXACTLY, leaving
+        // no residue.
+        func check(
+            _ what: String,
+            cascade: (AnyView) -> AnyView,
+            decline: (Text) -> Text
+        ) {
+            let plain = renderToBuffer(AnyView(VStack { Text("x") }), context: context()).lines
+            let inherited = renderToBuffer(
+                cascade(AnyView(VStack { Text("x") })), context: context()).lines
+            let declined = renderToBuffer(
+                cascade(AnyView(VStack { decline(Text("x")) })), context: context()).lines
+            #expect(inherited != plain, "\(what): the cascade must do something to begin with")
+            #expect(declined == plain, "\(what): a stated false must undo it")
+        }
+
+        check("bold", cascade: { AnyView($0.bold()) }, decline: { $0.bold(false) })
+        check("italic", cascade: { AnyView($0.italic()) }, decline: { $0.italic(false) })
+        check("underline", cascade: { AnyView($0.underline()) }, decline: { $0.underline(false) })
+        check(
+            "strikethrough", cascade: { AnyView($0.strikethrough()) },
+            decline: { $0.strikethrough(false) })
+        // Dim through the CASCADE, not `View.dimmed()`: that one is a buffer
+        // post-processor which rewrites the rendered lines, so nothing inside
+        // it can decline — see `Text.dim(_:)`.
+        check(
+            "dim", cascade: { AnyView($0.style(.text) { $0.dim = true }) },
+            decline: { $0.dim(false) })
+    }
+
+    @Test("Redaction still dims text that asked not to be")
+    func redactionOverridesAStatedFalse() {
+        // The one OR left in the merge, and it is deliberate: `.invalidated`
+        // says the content is STALE — the system speaking, not a preference —
+        // so it outranks the nearest statement.
+        //
+        // Compared by bytes for the reason above — every `Text` emits a
+        // truecolor foreground, whose `38;2;…` puts a "2" in `sgrCodes` that
+        // cannot be told from SGR 2. Asserting the code would pass here even if
+        // redaction did nothing at all.
+        let declined = VStack { Text("Hi").dim(false) }
+        let plain = renderToBuffer(declined, context: context()).lines
+        let redacted = renderToBuffer(
+            declined.redacted(reason: .invalidated), context: context()).lines
+        #expect(redacted != plain, "redaction dimmed it anyway: \(redacted)")
+    }
+
     @Test("Per-Text .bold() wins over a container .bold(false)")
     func perTextWins() {
         let view = VStack { Text("Hi").bold() }.bold(false)
