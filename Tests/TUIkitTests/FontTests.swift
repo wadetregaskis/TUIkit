@@ -30,9 +30,9 @@ struct FontTests {
     /// colour spells itself `38;2;r;g;b` — so a naive split reports a faint "2"
     /// for every truecolour run. This consumes the colour operands, which is the
     /// difference between these tests measuring intensity and measuring nothing.
-    private func sgrCodes(_ buffer: FrameBuffer) -> Set<String> {
+    private func sgrCodes(_ lines: [String]) -> Set<String> {
         var codes: Set<String> = []
-        for line in buffer.lines {
+        for line in lines {
             var rest = Substring(line)
             while let start = rest.range(of: "\u{1B}[") {
                 rest = rest[start.upperBound...]
@@ -58,11 +58,29 @@ struct FontTests {
     }
 
     private func codes(_ view: some View) -> Set<String> {
-        sgrCodes(renderToBuffer(view, context: makeRenderContext(width: 30, height: 3)))
+        sgrCodes(renderToBuffer(view, context: makeRenderContext(width: 30, height: 3)).lines)
     }
 
     private func line(_ view: some View) -> String {
         renderToBuffer(view, context: makeRenderContext(width: 30, height: 3)).lines.first ?? ""
+    }
+
+    /// The SGR attribute codes in effect over one *fragment* of a rendered
+    /// line — which is what a concatenation has to be asked about, since a
+    /// whole-line ``codes(_:)`` cannot tell which half carried what.
+    ///
+    /// Sound because `ANSIRenderer.render` emits `sequence + text + reset` per
+    /// fragment: the last escape sequence before the fragment's text is the
+    /// complete state it draws under, not a delta.
+    private func codes(_ view: some View, over fragment: String) -> Set<String> {
+        let rendered = line(view)
+        guard let text = rendered.range(of: fragment) else {
+            Issue.record("no \(fragment.debugDescription) in \(rendered.debugDescription)")
+            return []
+        }
+        let head = rendered[rendered.startIndex..<text.lowerBound]
+        guard let sequence = head.range(of: "\u{1B}[", options: .backwards) else { return [] }
+        return sgrCodes([String(head[sequence.lowerBound...])])
     }
 
     // MARK: - The three tiers
@@ -104,6 +122,104 @@ struct FontTests {
         let cleared = codes(VStack { Text(verbatim: "Hi").font(nil) }.font(.headline))
         #expect(inherited.contains("1"), "the fixture really does inherit bold")
         #expect(!cleared.contains("1"), "…and nil undoes it")
+    }
+
+    // MARK: - The Text-level spelling
+
+    /// The reason ``Text/font(_:)`` exists at all rather than deferring to the
+    /// `View` spelling: `Text + Text` folds each side into one view, so a font
+    /// that lived only in the environment would be *gone* by the time the
+    /// joined text rendered. Both halves have to keep their own.
+    @Test("a fragment carries its font through a concatenation")
+    func fontSurvivesConcatenation() {
+        let joined = Text(verbatim: "Report") + Text(verbatim: " just now").font(.caption)
+        #expect(!codes(joined, over: "Report").contains("2"), "the first half is not faint")
+        #expect(codes(joined, over: "just now").contains("2"), "…and the second half is")
+    }
+
+    /// The other half of that, and the one the fold in `Text.+` exists for:
+    /// `(a + b)` is already one `Text` with runs, so a font applied to it lives
+    /// on the base — and joining again has to push it INTO those runs, since
+    /// the third fragment's join discards the base it replaces.
+    @Test("a font on an already-joined text survives a further join")
+    func fontFoldsIntoExistingRuns() {
+        let pair = (Text(verbatim: "Deploy") + Text(verbatim: "ment")).font(.caption)
+        let joined = pair + Text(verbatim: " now")
+        #expect(codes(joined, over: "Deploy").contains("2"), "the first fragment kept it")
+        #expect(codes(joined, over: "ment").contains("2"), "…and so did the second")
+        #expect(!codes(joined, over: " now").contains("2"), "…and it did not leak onto the third")
+    }
+
+    /// A fragment's font is not merely a bundle of baseline attributes copied
+    /// in: it has to *match scopes*, or a theme would reach a `Text.font(_:)`
+    /// and stop at the boundary of a concatenation.
+    @Test("a fragment's own font matches its own cascade scope")
+    func fragmentFontMatchesItsScope() {
+        let joined = Text(verbatim: "Report") + Text(verbatim: " just now").font(.caption)
+        let themed = joined.style(.font(.caption)) { $0.underline = true }
+        #expect(!codes(themed, over: "Report").contains("4"), "the entry must not reach the first")
+        #expect(codes(themed, over: "just now").contains("4"), "…and must reach the caption")
+    }
+
+    /// Stating a font on the text itself is nearer than stating it on a
+    /// container, so it wins — the rule every other attribute follows.
+    @Test("a text's own font beats an inherited one")
+    func textFontBeatsTheEnvironment() {
+        let rendered = codes(VStack { Text(verbatim: "Hi").font(.caption) }.font(.headline))
+        #expect(rendered.contains("2"), "the caption won")
+        #expect(!rendered.contains("1"), "…and the inherited headline lost")
+    }
+
+    /// A font cannot change a cell count, and joining two of them cannot
+    /// either — otherwise a styled fragment would reflow the text around it.
+    @Test("fragment fonts change no cell count")
+    func concatenationGeometryIsUntouched() {
+        let plain = line(Text(verbatim: "Report") + Text(verbatim: " just now"))
+        let styled = line(
+            Text(verbatim: "Report").font(.largeTitle)
+                + Text(verbatim: " just now").font(.caption))
+        #expect(styled.stripped == plain.stripped)
+        #expect(styled.strippedLength == plain.strippedLength)
+    }
+
+    // MARK: - Weight, stated on the text
+
+    @Test("a weight states the intensity it maps to")
+    func weightStatesIntensity() {
+        #expect(codes(Text(verbatim: "Hi").fontWeight(.bold)).contains("1"))
+        #expect(codes(Text(verbatim: "Hi").fontWeight(.light)).contains("2"))
+        let regular = codes(Text(verbatim: "Hi").fontWeight(.regular))
+        #expect(!regular.contains("1") && !regular.contains("2"))
+    }
+
+    /// The tri-state payoff: `.regular` is a statement, so it beats a bold
+    /// arriving from a container. Before ``TextStyle``'s flags could say *no*,
+    /// this was unwritable.
+    @Test("regular clears a cascaded bold")
+    func regularClearsACascadedBold() {
+        let inherited = codes(VStack { Text(verbatim: "Hi") }.bold())
+        let cleared = codes(VStack { Text(verbatim: "Hi").fontWeight(.regular) }.bold())
+        #expect(inherited.contains("1"), "the fixture really does inherit bold")
+        #expect(!cleared.contains("1"), "…and regular declines it")
+    }
+
+    /// A font contributes a baseline and a weight states an attribute, so
+    /// which one was written first cannot matter.
+    @Test("a weight and a font compose in either order")
+    func weightAndFontCommute() {
+        let after = codes(Text(verbatim: "Hi").font(.caption).fontWeight(.bold))
+        let before = codes(Text(verbatim: "Hi").fontWeight(.bold).font(.caption))
+        #expect(after == before, "\(after) vs \(before)")
+        #expect(after.contains("1"), "bold")
+        #expect(!after.contains("2"), "…and not the caption's faintness")
+    }
+
+    /// `nil` is SwiftUI's "leave the inherited weight alone", which is not the
+    /// same as `.regular` — one is silence, the other a statement.
+    @Test("a nil weight states nothing")
+    func nilWeightIsSilence() {
+        let untouched = codes(VStack { Text(verbatim: "Hi").fontWeight(nil) }.bold())
+        #expect(untouched.contains("1"), "the inherited bold survived")
     }
 
     /// Semantic styling has to work through control labels too, or half of a

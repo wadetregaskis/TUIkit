@@ -228,6 +228,53 @@ extension Text {
         return copy
     }
 
+    /// Sets the semantic font for this text — mirrors SwiftUI's `font(_:)`.
+    ///
+    /// The `Text`-level spelling of ``View/font(_:)``, meaning the same thing: a
+    /// terminal has one typeface at one size, so a font selects **intensity**
+    /// rather than metrics (see ``Font``). What it adds is *survival through
+    /// concatenation* — a fragment carries its font into the joined text, so
+    /// both halves of
+    ///
+    /// ```swift
+    /// Text(name) + Text(" edited just now").font(.caption)
+    /// ```
+    ///
+    /// render as what they are. A container's `.font(_:)` cannot do that: it
+    /// reaches the whole subtree, and a concatenation is one view.
+    ///
+    /// - Parameter font: The font to use, or `nil` for the default appearance —
+    ///   which, inside a `.font(...)` subtree, is how this one text opts out.
+    /// - Returns: A new text with the font applied.
+    public func font(_ font: Font?) -> Text {
+        var copy = self
+        copy.style.font = .some(font)
+        return copy
+    }
+
+    /// Sets this text's weight — mirrors SwiftUI's `fontWeight(_:)`.
+    ///
+    /// A terminal has three weights rather than nine, so they map the way
+    /// ``FontWeight`` describes: heavier than regular renders bold, lighter
+    /// renders faint, and `.regular` renders neither — *actively*, so it clears
+    /// a bold arriving from anywhere else, a font's own tier included.
+    ///
+    /// Because a font contributes a baseline and this states an attribute, the
+    /// two compose in either order: `.font(.caption).fontWeight(.bold)` and
+    /// `.fontWeight(.bold).font(.caption)` are both a bold caption.
+    ///
+    /// - Parameter weight: The weight to apply, or `nil` to leave the inherited
+    ///   weight alone — SwiftUI's meaning for `nil` here, and
+    ///   ``View/fontWeight(_:)``'s.
+    /// - Returns: A new text at the corresponding intensity.
+    public func fontWeight(_ weight: FontWeight?) -> Text {
+        guard let attributes = weight?.styleAttributes else { return self }
+        var copy = self
+        copy.style.isBold = attributes.bold
+        copy.style.isDim = attributes.dim
+        return copy
+    }
+
     /// Renders with a monospaced font — mirrors SwiftUI's `monospaced(_:)`.
     ///
     /// Already true of every glyph in a character grid; see
@@ -385,6 +432,17 @@ struct TextStyle: Sendable, Equatable {
     /// Whether the text is dimmed, or `nil` if this `Text` never said.
     var isDim: Bool?
 
+    /// The semantic font this text stated for itself: the outer `nil` means it
+    /// never stated one, the inner `nil` that it stated *none*.
+    ///
+    /// Doubly optional because `\.font` is itself `Font?` — "no font" is a value
+    /// that key can hold, so a `Text`'s statement is *a value for the key, if it
+    /// made one*. Collapsing the two would make `Text(x).font(nil)`
+    /// indistinguishable from silence, and an inherited `.font(.headline)` could
+    /// not be escaped from: the hole the tri-state flags above close for
+    /// emphasis, reopened in the one place a font can open it.
+    var font: Font??
+
     /// Whether the text blinks.
     var isBlink: Bool = false
 
@@ -450,10 +508,14 @@ extension Text: Renderable, Layoutable {
     /// Returns empty attributes — every field `nil`, so every caller's `??`
     /// falls through — when nothing cascades and there is no chrome role, which
     /// is the common case and the reason this early-outs rather than resolving.
-    func cascadedAttributes(context: RenderContext) -> StyleAttributes {
+    ///
+    /// The font is a parameter rather than another environment read because a
+    /// fragment of a concatenation can bring its own, and it decides two things
+    /// at once: the baseline attributes below, and which `.font(_:)` scope
+    /// entries match. Neither can be borrowed from the enclosing text.
+    func cascadedAttributes(context: RenderContext, font: Font?) -> StyleAttributes {
         let cascade = context.environment.styleCascade
         let chromeRole = context.environment.chromeRole
-        let font = context.environment.font
         guard !cascade.isEmpty || chromeRole != nil || font != nil else {
             return StyleAttributes()
         }
@@ -493,6 +555,49 @@ extension Text: Renderable, Layoutable {
             base = font.defaultAttributes.merged(over: base)
         }
         return cascade.resolve(for: scopes).merged(over: base)
+    }
+
+    /// The font in effect for a set of stated attributes: what they state if
+    /// they stated anything, otherwise the subtree's `\.font`.
+    ///
+    /// One accessor for both passes, because a font can reach
+    /// ``StyleAttributes/textCase`` through a `.font(_:)`-scoped cascade entry —
+    /// and a case that changes width (ß → SS) measured against a different font
+    /// than it is drawn with reserves the wrong number of cells.
+    private func resolvedFont(stating stated: Font??, context: RenderContext) -> Font? {
+        stated ?? context.environment.font
+    }
+
+    /// `own` with the cascade's answers filling in every emphasis it did not
+    /// state.
+    ///
+    /// The NEAREST statement wins, which is SwiftUI's rule and what
+    /// ``TextStyle``'s tri-state flags exist for. It used to be an `||` — an
+    /// attribute any layer could turn on and none could turn off — which is why
+    /// nothing could opt out of an inherited `.bold()`.
+    ///
+    /// Shared with any fragment of a concatenation that brought its own font,
+    /// since such a fragment resolves its own cascade and must fold the result
+    /// in the same way.
+    private func applyingCascadedEmphasis(
+        to own: TextStyle, _ cascaded: StyleAttributes, context: RenderContext
+    ) -> TextStyle {
+        var result = own
+        result.isBold = own.isBold ?? cascaded.bold
+        result.isItalic = own.isItalic ?? cascaded.italic
+        result.isUnderlined = own.isUnderlined ?? cascaded.underline
+        result.isStrikethrough = own.isStrikethrough ?? cascaded.strikethrough
+        result.isDim = own.isDim ?? cascaded.dim
+        // Redaction is the system speaking, not a style: `.invalidated` says the
+        // content is STALE, not absent — so it is shown and dimmed rather than
+        // replaced with a skeleton, even where the text asked not to be dimmed.
+        // An out-of-date figure is still worth reading, which is the whole point
+        // of the distinction from `.placeholder`. The one place an OR is still
+        // right.
+        if context.environment.redactionReasons.contains(.invalidated) {
+            result.isDim = true
+        }
+        return result
     }
 
     /// This text's line cap in rows, or `nil` for none.
@@ -535,11 +640,10 @@ extension Text: Renderable, Layoutable {
         // written: `.textCase(.uppercase)` can change the width (ß → SS, ﬁ →
         // FI), and a measure of the untransformed text would reserve the wrong
         // number of cells for it.
+        let font = resolvedFont(stating: style.font, context: context)
+        let textCase = cascadedAttributes(context: context, font: font).textCase
         let wrapped = TextWrapping.wrapMeasured(
-            Self.displayString(
-                content, textCase: cascadedAttributes(context: context).textCase,
-                context: context),
-            width: maxWidth)
+            Self.displayString(content, textCase: textCase, context: context), width: maxWidth)
 
         // Reuse the per-line widths the wrap already computed instead of
         // re-`strippedLength`-ing every line.
@@ -572,9 +676,6 @@ extension Text: Renderable, Layoutable {
     }
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        var effectiveStyle = style
-        var effectiveCase: TextCase?
-
         // Resolve cascading attributes (container-level .bold()/.style(...) etc.)
         // and any chrome-role default (e.g. a Section header's bold+dim) beneath
         // this Text's own explicit attributes. A per-Text attribute always wins;
@@ -583,28 +684,10 @@ extension Text: Renderable, Layoutable {
         // `.semanticColor` entries match; its chrome role lets `.chrome(...)`
         // entries match.
         let cascade = context.environment.styleCascade
-        let cascaded = cascadedAttributes(context: context)
-        // The NEAREST statement wins, which is SwiftUI's rule and what the
-        // tri-state above exists for: this `Text`'s own answer if it gave one,
-        // otherwise the cascade's, otherwise off. It used to be an `||` — an
-        // attribute any layer could turn on and none could turn off — which is
-        // why nothing could opt out of an inherited `.bold()`.
-        effectiveStyle.isBold = effectiveStyle.isBold ?? cascaded.bold
-        effectiveStyle.isItalic = effectiveStyle.isItalic ?? cascaded.italic
-        effectiveStyle.isUnderlined = effectiveStyle.isUnderlined ?? cascaded.underline
-        effectiveStyle.isStrikethrough = effectiveStyle.isStrikethrough ?? cascaded.strikethrough
-        effectiveStyle.isDim = effectiveStyle.isDim ?? cascaded.dim
-        // `.invalidated` says the content is STALE, not absent — so it is shown
-        // and dimmed rather than replaced with a skeleton. An out-of-date figure
-        // is still worth reading, which is the whole point of the distinction
-        // from `.placeholder`.
-        // Redaction is the system speaking, not a style: `.invalidated` says the
-        // content is STALE, so it dims text that asked not to be. The one place
-        // an OR is still right.
-        if context.environment.redactionReasons.contains(.invalidated) {
-            effectiveStyle.isDim = true
-        }
-        effectiveCase = cascaded.textCase
+        let font = resolvedFont(stating: style.font, context: context)
+        let cascaded = cascadedAttributes(context: context, font: font)
+        var effectiveStyle = applyingCascadedEmphasis(to: style, cascaded, context: context)
+        let effectiveCase = cascaded.textCase
 
         // Foreground precedence: an explicit *concrete* colour on this Text wins;
         // an explicit *semantic* colour (a palette-role reference) may be remapped
@@ -695,11 +778,32 @@ extension Text: Renderable, Layoutable {
             var resolvedRunStyles: [TextStyle] = []
             resolvedRunStyles.reserveCapacity(runs.count)
             for run in runs {
-                var runStyle = effectiveStyle
-                // The run's own attributes sit above the base this Text
-                // resolved (its own style + the cascade); anything the run
-                // left unset falls through to that.
-                runStyle = run.style.merged(over: runStyle)
+                var runStyle: TextStyle
+                if let stated = run.style.font, stated != font {
+                    // A fragment that brought its own font resolves its OWN
+                    // cascade — the font decides both the baseline intensity and
+                    // which `.font(_:)` scope entries match, neither of which
+                    // can be borrowed from the enclosing text. It starts from
+                    // the explicit attributes alone (this text's, with the
+                    // fragment's over them) so that what the cascade fills in is
+                    // the fragment's answer and not the text's.
+                    runStyle = applyingCascadedEmphasis(
+                        to: run.style.merged(over: style),
+                        cascadedAttributes(context: context, font: stated),
+                        context: context)
+                    // The colours were resolved once, at text level (the
+                    // semantic-role remapping below reads this text's own
+                    // foreground); a fragment states its own or takes those.
+                    runStyle.foregroundColor =
+                        runStyle.foregroundColor ?? effectiveStyle.foregroundColor
+                    runStyle.backgroundColor =
+                        runStyle.backgroundColor ?? effectiveStyle.backgroundColor
+                } else {
+                    // The run's own attributes sit above the base this Text
+                    // resolved (its own style + the cascade); anything the run
+                    // left unset falls through to that.
+                    runStyle = run.style.merged(over: effectiveStyle)
+                }
                 resolvedRunStyles.append(runStyle.resolved(with: context.environment.palette))
             }
             var cursor = (run: 0, offset: 0)

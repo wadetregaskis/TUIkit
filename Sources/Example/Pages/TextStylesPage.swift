@@ -222,6 +222,14 @@ struct TextStylesPage: View {
                     (Text(L("page.textStyles.concatLabel")).bold()
                         + Text(L("page.textStyles.concatValue")))
                         .italic()
+
+                    // A semantic font travels WITH its fragment, which is why
+                    // `Text` has a `.font(_:)` of its own: the join makes ONE
+                    // view, so a container's font could only reach both halves
+                    // at once. Here the heading is emphatic and the aside is
+                    // faint, in a single Text.
+                    Text(L("page.textStyles.concatLabel")).font(.headline)
+                        + Text(L("page.textStyles.concatNote")).font(.caption)
                 }
             }
 

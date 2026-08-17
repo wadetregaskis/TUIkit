@@ -85,10 +85,15 @@ extension TextStyle {
     /// two flags with no cascade behind them (``TextStyle/isBlink``,
     /// ``TextStyle/isInverted``) stay one-way: nothing can state them false, so
     /// an OR is all that is available and all that is needed.
+    ///
+    /// The font's `??` unwraps only the OUTER optional, which is the whole
+    /// reason it has two: a fragment that said `.font(nil)` keeps its `nil`
+    /// instead of falling through to the base's font.
     func merged(over base: TextStyle) -> TextStyle {
         var result = self
         result.foregroundColor = foregroundColor ?? base.foregroundColor
         result.backgroundColor = backgroundColor ?? base.backgroundColor
+        result.font = font ?? base.font
         result.isBold = isBold ?? base.isBold
         result.isItalic = isItalic ?? base.isItalic
         result.isUnderlined = isUnderlined ?? base.isUnderlined
