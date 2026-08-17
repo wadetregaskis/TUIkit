@@ -231,7 +231,7 @@ struct TablePage: View {
             // A short height so the rows overflow, plus an opt-in scrollbar that
             // tracks the visible region (sub-cell-precise thumb, ▲/▼ end arrows).
             .frame(height: 8)
-            .scrollbarVisibility(.visible)
+            .scrollIndicators(.visible)
 
             // Two multi-line tables side by side: the small original (12 rows,
             // 2-line Details) on the left demonstrates wrapping cells, and a
@@ -281,7 +281,7 @@ struct TablePage: View {
                             .lineLimit(3)
                     }
                     .frame(height: 20)
-                    .scrollbarVisibility(fixedHeightScrollbar ? .visible : .hidden)
+                    .scrollIndicators(fixedHeightScrollbar ? .visible : .hidden)
                     .scrollGranularity(fixedHeightByLine ? .line : .row)
                     .scrollFollowMargin(
                         FollowMarginChoice(rawValue: fixedHeightFollowMargin)?.margin ?? .none)

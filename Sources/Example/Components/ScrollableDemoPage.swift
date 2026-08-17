@@ -27,7 +27,7 @@ extension View {
     /// content is itself greedy in height (a split view, a tab view) are left
     /// unwrapped, as they fill the viewport by design.
     func scrollableDemoPage() -> some View {
-        // `.scrollbarVisibility` is an ENVIRONMENT value, so it reaches every
+        // `.scrollIndicators` is an ENVIRONMENT value, so it reaches every
         // scrollable in the subtree — SwiftUI-parity behaviour, matching
         // `.scrollIndicators`. That is right for the modifier and wrong here:
         // the page wants a bar for ITSELF, but the demos inside it are showing
@@ -41,7 +41,7 @@ extension View {
         // content; the outer write is the one `_ScrollViewCore` reads for the
         // page's own bar. Demos that want a bar still ask for one explicitly
         // and still win, since their write is deeper.
-        ScrollView { self.scrollbarVisibility(.hidden) }
-            .scrollbarVisibility(.automatic)
+        ScrollView { self.scrollIndicators(.hidden) }
+            .scrollIndicators(.automatic)
     }
 }

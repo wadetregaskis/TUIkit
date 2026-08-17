@@ -52,7 +52,8 @@ struct TableReorderDragTests {
             self.reorderable = reorderable
             env.focusManager = FocusManager()
             env.rowReorderFeedback = feedback
-            env.scrollbarVisibility = scrollbar
+            env.verticalScrollIndicatorVisibility = scrollbar
+            env.horizontalScrollIndicatorVisibility = scrollbar
             env.applyRuntimeServices(from: tui)
             tui.mouseEventDispatcher.setActiveSupport(.full)
         }

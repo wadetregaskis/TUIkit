@@ -155,7 +155,7 @@ struct ListRowMouseRegionTests {
             ForEach(items, id: \.self) { Text($0) }
         }
         .frame(height: 8)
-        .scrollbarVisibility(.visible)
+        .scrollIndicators(.visible)
 
         let tui = TUIContext()
         let dispatcher = tui.mouseEventDispatcher

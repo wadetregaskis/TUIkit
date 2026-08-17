@@ -247,7 +247,7 @@ ScrollView:
 
 ```swift
 List("Items", selection: $selected) { ... }
-    .scrollbarVisibility(.visible)   // .automatic / .visible / .hidden
+    .scrollIndicators(.visible)      // .automatic / .visible / .hidden / .never
     .scrollbarArrows(.single)        // .none / .single / .double
 ```
 

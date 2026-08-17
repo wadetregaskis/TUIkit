@@ -355,7 +355,7 @@ struct TableRenderTests {
                 TableColumn("Name", value: \Row.name)
                 TableColumn("Size", value: \Row.size).width(.fixed(6))
             }
-            .scrollbarVisibility(.visible),
+            .scrollIndicators(.visible),
             context: tableContext(width: 30, height: 8)
         )
         expectClosedBorder(lines)

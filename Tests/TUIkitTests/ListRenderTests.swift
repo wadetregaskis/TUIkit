@@ -250,7 +250,7 @@ struct ListRenderTests {
             List(selection: .constant(String?.none)) {
                 ForEach((0..<20).map { "Item \($0)" }, id: \.self) { Text($0) }
             }
-            .scrollbarVisibility(.visible),
+            .scrollIndicators(.visible),
             context: listContext(width: 30, height: 8)
         )
         expectClosedBorder(lines)
@@ -290,7 +290,7 @@ struct ListRenderTests {
                 }
             }
         }
-        .scrollbarVisibility(.visible)
+        .scrollIndicators(.visible)
         let buffer = renderToBuffer(view, context: context)
         let lines = buffer.lines.map { $0.stripped }
         expectClosedBorder(lines)

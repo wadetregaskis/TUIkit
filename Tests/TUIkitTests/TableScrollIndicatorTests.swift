@@ -63,7 +63,8 @@ struct TableScrollIndicatorTests {
         var env = EnvironmentValues()
         env.focusManager = fm
         env.scrollGranularity = granularity
-        env.scrollbarVisibility = scrollbar
+        env.verticalScrollIndicatorVisibility = scrollbar
+        env.horizontalScrollIndicatorVisibility = scrollbar
         env.applyRuntimeServices(from: tui)
         let context = RenderContext(
             availableWidth: 30, availableHeight: Self.height, environment: env, tuiContext: tui)
@@ -254,11 +255,11 @@ struct TableScrollIndicatorTests {
     // MARK: - Scrollbars (multi-line path)
 
     /// The multi-line layout path used to draw no scrollbar at all — it marked
-    /// hidden rows with "N more" lines and nothing else, so `.scrollbarVisibility`
+    /// hidden rows with "N more" lines and nothing else, so `.scrollIndicators`
     /// was silently inert on any table with a multi-line column, and a table
     /// whose columns merely ALLOW two lines (this one: every row is one line)
     /// lost the bar a single-line table would have drawn.
-    @Test("A multi-line table honours .scrollbarVisibility(.visible)")
+    @Test("A multi-line table honours .scrollIndicators(.visible)")
     func multiLineTableDrawsAScrollbar() {
         let tui = TUIContext()
         let fm = FocusManager()

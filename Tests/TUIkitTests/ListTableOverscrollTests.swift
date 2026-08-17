@@ -43,7 +43,8 @@ struct ListTableOverscrollTests {
         makeRenderContext(width: width, height: height) { environment, tui in
             environment.mouseEventDispatcher = tui.mouseEventDispatcher
             environment.scrollOverscrollTop = top
-            environment.scrollbarVisibility = bar
+            environment.verticalScrollIndicatorVisibility = bar
+            environment.horizontalScrollIndicatorVisibility = bar
         }
     }
 

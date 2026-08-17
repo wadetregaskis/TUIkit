@@ -439,10 +439,9 @@ where Value.ID: Hashable {
         let palette = context.environment.palette
         let innerWidth = max(0, context.availableWidth - 4)
         let rowArea = max(1, context.availableHeight - 3)
-        let barVisibility = context.environment.scrollbarVisibility
+        let barVisibility = context.environment.verticalScrollIndicatorVisibility
         let wantsScrollbar =
-            !data.isEmpty && barVisibility != .hidden
-            && (barVisibility == .visible || data.count > rowArea)
+            !data.isEmpty && barVisibility.showsBar(overflowing: data.count > rowArea)
         let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
         let columnWidths = calculateColumnWidths(
             availableWidth: contentInnerWidth, spacing: columnSpacing)
@@ -544,10 +543,9 @@ where Value.ID: Hashable {
         let rowArea = max(1, context.availableHeight - 3)
         // Decide the bar exactly as `renderToBuffer` does — at the width a bar
         // WOULD leave, where rows wrap taller and so overflow soonest.
-        let barVisibility = context.environment.scrollbarVisibility
+        let barVisibility = context.environment.verticalScrollIndicatorVisibility
         let overflows = multiLineOverflows(rowArea: rowArea, innerWidth: innerWidth - 1)
-        let wantsScrollbar =
-            barVisibility != .hidden && (barVisibility == .visible || overflows)
+        let wantsScrollbar = barVisibility.showsBar(overflowing: overflows)
         let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
         let columnWidths = calculateColumnWidths(
             availableWidth: contentInnerWidth, spacing: columnSpacing)
@@ -660,14 +658,14 @@ where Value.ID: Hashable {
         // (`.hidden` by default), which is what keeps the default path free of
         // it (see `multiLineOverflows`).
         let rowArea = max(1, context.availableHeight - 3)
-        let barVisibility = context.environment.scrollbarVisibility
+        let barVisibility = context.environment.verticalScrollIndicatorVisibility
         let isMultiLine = columns.contains { $0.lineLimit > 1 }
         let wantsScrollbar =
-            !data.isEmpty && barVisibility != .hidden
-            && (barVisibility == .visible
-                || (isMultiLine
+            !data.isEmpty
+            && barVisibility.showsBar(
+                overflowing: isMultiLine
                     ? multiLineOverflows(rowArea: rowArea, innerWidth: innerWidth - 1)
-                    : data.count > rowArea))
+                    : data.count > rowArea)
         let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
 
         let columnWidths = calculateColumnWidths(

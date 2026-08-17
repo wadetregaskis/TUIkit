@@ -137,6 +137,10 @@
       "tuikit": "TabViewStyle.automatic",
       "why": "Sources/TUIkit/Views/TabViewModifiers.swift — TUIkit's `TabViewStyle` is an enum with `.automatic`, `.bordered` and `.compact` rather than a protocol with per-style structs, so the default is a case, not a type."
     },
+    "Font.Weight": {
+      "tuikit": "FontWeight",
+      "why": "Sources/TUIkit/Styling/StyleAttributes.swift:24 — the enum is spelled `FontWeight` at the top level, and `Font.Weight` is a typealias to it (Sources/TUIkit/Styling/Font.swift), so SwiftUI's spelling and every case (`Font.Weight.bold`, `.light`, …) compile verbatim. The audit reads declarations rather than resolving typealiases, so it sees the members only under the top-level name."
+    },
     "GlobalCoordinateSpace": {
       "tuikit": "CoordinateSpace.global",
       "why": "Sources/TUIkit/Views/GeometryReader.swift:102-103 — `case global`, \"Relative to the terminal's top-left cell\". One real behavioural caveat, documented at :42-48 and :60-61: `.global` is exact only when the renderer knows the reader's on-screen origin, otherwise it falls back to t"
@@ -159,7 +163,7 @@
     },
     "ScrollIndicatorVisibility": {
       "tuikit": "ScrollbarVisibility",
-      "why": "Sources/TUIkit/Views/Scrollbar.swift:23-30 — automatic / visible / hidden, matching three of SwiftUI's four. `.never` (hidden and non-overridable by descendants) has no counterpart; TUIkit's default is `.hidden`, not `.automatic` (Scrollbar.swift:49-55, deliberately opt-in for co"
+      "why": "Sources/TUIkit/Views/Scrollbar.swift — the CASE names are SwiftUI's (.automatic/.visible/.hidden/.never), which is what a call site writes: `.scrollIndicators(.visible)` never names the type. The type keeps `Scrollbar` so it reads with its siblings `ScrollbarArrows` and `ScrollbarEdges`, which have no SwiftUI counterpart at all — renaming one of the three would break the family to close a symbol nobody spells. `.never` behaves as `.hidden` here: SwiftUI separates them because a platform convention can override a hidden bar, and nothing in a terminal can."
     },
     "ScrollTargetBehavior": {
       "tuikit": "ScrollGranularity",
@@ -180,10 +184,6 @@
     "ViewAlignedScrollTargetBehavior": {
       "tuikit": "ScrollGranularity.row",
       "why": "Sources/TUIkit/Views/ScrollGranularity.swift:26-27 — \"the viewport moves one whole row at a time — the top row is always fully visible\" — applied with `.scrollGranularity(.row)` (:54). Same semantics, without needing a `scrollTargetLayout()` marker because List/Table enumerate th"
-    },
-    "Font.Weight": {
-      "tuikit": "FontWeight",
-      "why": "Sources/TUIkit/Styling/StyleAttributes.swift:24 — the enum is spelled `FontWeight` at the top level, and `Font.Weight` is a typealias to it (Sources/TUIkit/Styling/Font.swift), so SwiftUI's spelling and every case (`Font.Weight.bold`, `.light`, …) compile verbatim. The audit reads declarations rather than resolving typealiases, so it sees the members only under the top-level name."
     }
   },
   "notImplemented": {

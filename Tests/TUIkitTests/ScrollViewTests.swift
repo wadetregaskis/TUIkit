@@ -267,7 +267,7 @@ struct ScrollViewRenderingTests {
         let view = ScrollView(.horizontal) {
             Text("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")  // 36 columns
         }
-        .scrollbarVisibility(.automatic)
+        .scrollIndicators(.automatic)
         let context = makeContext(width: 10, height: 4)
         _ = renderToBuffer(view, context: context)  // settle the lazily-measured extent
         let text = renderToBuffer(view, context: context).lines.map(\.stripped).joined(separator: "\n")
@@ -281,7 +281,7 @@ struct ScrollViewRenderingTests {
         let view = ScrollView(.horizontal) {
             Text("short")
         }
-        .scrollbarVisibility(.automatic)
+        .scrollIndicators(.automatic)
         let context = makeContext(width: 20, height: 4)
         _ = renderToBuffer(view, context: context)
         let text = renderToBuffer(view, context: context).lines.map(\.stripped).joined(separator: "\n")
@@ -295,7 +295,7 @@ struct ScrollViewRenderingTests {
         let view = ScrollView(.horizontal) {
             Text("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")  // 36 columns
         }
-        .scrollbarVisibility(.automatic)
+        .scrollIndicators(.automatic)
         let context = makeContext(width: 12, height: 4)
         let dispatcher = context.environment.mouseEventDispatcher!
         dispatcher.setActiveSupport(.standard)

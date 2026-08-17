@@ -390,7 +390,7 @@ struct ListRenderingTests {
         let view = List("Items", selection: .constant(String?.none)) {
             ForEach(items, id: \.self) { Text($0) }
         }
-        .scrollbarVisibility(.automatic)
+        .scrollIndicators(.automatic)
         .frame(height: 8)
 
         let before = renderToBuffer(view, context: context)

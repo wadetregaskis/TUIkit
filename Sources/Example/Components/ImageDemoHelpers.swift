@@ -216,6 +216,6 @@ extension View {
                 .imageFitTarget(.viewport)
                 .imageZoom(zoom)
         }
-        .scrollbarVisibility(.automatic)
+        .scrollIndicators(.automatic)
     }
 }

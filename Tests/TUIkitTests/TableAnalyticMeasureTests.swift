@@ -77,7 +77,8 @@ struct TableAnalyticMeasureTests {
                 let data = rows(rowCount, wide: wide)
                 for (label, table) in tables(data: data) {
                     let context = makeRenderContext(width: width, height: height) { env, _ in
-                        env.scrollbarVisibility = barVisibility
+                        env.verticalScrollIndicatorVisibility = barVisibility
+                        env.horizontalScrollIndicatorVisibility = barVisibility
                     }
 
                     // The render ground truth, at the exact context shape the
@@ -174,7 +175,8 @@ struct TableAnalyticMeasureTests {
                 let data = rows(rowCount, wide: wide)
                 for (label, table) in multiLineTables(data: data) {
                     let context = makeRenderContext(width: width, height: height) { env, _ in
-                        env.scrollbarVisibility = barVisibility
+                        env.verticalScrollIndicatorVisibility = barVisibility
+                        env.horizontalScrollIndicatorVisibility = barVisibility
                     }
                     var renderContext = context
                     renderContext.hasExplicitWidth = false

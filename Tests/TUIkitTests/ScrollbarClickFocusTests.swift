@@ -32,13 +32,13 @@ struct ScrollbarClickFocusTests {
                 VStack { ForEach(0..<100, id: \.self) { Text("L\($0)") } }
             }
             .focusID("left")
-            .scrollbarVisibility(.visible)
+            .scrollIndicators(.visible)
             .frame(width: 12)
             ScrollView {
                 VStack { ForEach(0..<100, id: \.self) { Text("R\($0)") } }
             }
             .focusID("right")
-            .scrollbarVisibility(.visible)
+            .scrollIndicators(.visible)
             .frame(width: 12)
         }
     }

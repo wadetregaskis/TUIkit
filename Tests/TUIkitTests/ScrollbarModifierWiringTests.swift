@@ -35,7 +35,7 @@ struct ScrollbarModifierWiringTests {
                 ForEach(0..<100, id: \.self) { Text("row \($0)") }
             }
         }
-        .scrollbarVisibility(.visible)
+        .scrollIndicators(.visible)
     }
 
     /// Counts arrow glyphs in the rendered buffer's gutter.
@@ -109,7 +109,7 @@ struct ScrollbarModifierWiringTests {
         #expect(jumped > paged, "the two behaviours are distinct")
     }
 
-    /// `.scrollbarVisibility` is an ENVIRONMENT value, so it reaches nested
+    /// `.scrollIndicators` is an ENVIRONMENT value, so it reaches nested
     /// scrollables too — SwiftUI-parity behaviour, matching `.scrollIndicators`.
     ///
     /// This is deliberate, and it is worth pinning: it was mistaken for a bug
@@ -118,7 +118,7 @@ struct ScrollbarModifierWiringTests {
     /// wrapper was at fault, not the propagation. Both halves are asserted —
     /// that an inner scrollable inherits an outer setting, and that its own
     /// explicit setting still wins.
-    @Test("scrollbarVisibility reaches nested scrollables, and the inner one wins")
+    @Test("scrollIndicators reaches nested scrollables, and the inner one wins")
     func visibilityPropagatesButInnerWins() {
         func innerHasBar(outer: ScrollbarVisibility, inner: ScrollbarVisibility?) -> Bool {
             let tui = TUIContext()
@@ -128,8 +128,8 @@ struct ScrollbarModifierWiringTests {
                 }
             }
             .frame(height: 6)
-            if let inner { content = AnyView(content).scrollbarVisibility(inner) }
-            let view = AnyView(content).scrollbarVisibility(outer)
+            if let inner { content = AnyView(content).scrollIndicators(inner) }
+            let view = AnyView(content).scrollIndicators(outer)
 
             let buffer = renderToBuffer(view, context: makeContext(tui: tui))
             // A bar draws its arrows in the last column; the indicators instead
@@ -153,5 +153,78 @@ struct ScrollbarModifierWiringTests {
         #expect(
             innerHasBar(outer: .hidden, inner: .visible),
             "and its own .visible overrides an ancestor's .hidden")
+    }
+
+    // MARK: - .never, and the axes: argument
+
+    /// Whether a vertical bar and a horizontal bar were drawn.
+    ///
+    /// Both are read off one render of a view that overflows BOTH ways, so a
+    /// per-axis setting has something to be wrong about in either direction.
+    private func bars(_ apply: (AnyView) -> any View) -> (vertical: Bool, horizontal: Bool) {
+        let tui = TUIContext()
+        let content = AnyView(
+            ScrollView([.horizontal, .vertical]) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<60, id: \.self) { Text("row \($0) ————————————————————————————") }
+                }
+            }
+            .frame(width: 20, height: 6))
+        let buffer = renderToBuffer(AnyView(apply(content)), context: makeContext(tui: tui))
+        let lines = buffer.lines.map(\.stripped)
+        return (
+            vertical: lines.contains { $0.hasSuffix("\u{25B2}") || $0.hasSuffix("\u{25BC}") },
+            horizontal: lines.contains { $0.contains("\u{25C0}") || $0.contains("\u{25B6}") })
+    }
+
+    @Test("Both bars are off by default")
+    func hiddenByDefault() {
+        // The deliberate divergence from SwiftUI, and the reason for it: an
+        // `.automatic` default would make every scrolling view measure its
+        // content to find out whether it overflows.
+        let drawn = bars { $0 }
+        #expect(!drawn.vertical && !drawn.horizontal, "\(drawn)")
+    }
+
+    @Test(".never draws no bar, exactly as .hidden does")
+    func neverIsHidden() {
+        // SwiftUI distinguishes them — `.hidden` is a request a platform
+        // convention may override, `.never` is unconditional — and nothing here
+        // can override a hidden bar, so the two must agree. The case exists so
+        // that source written against SwiftUI compiles and means what it says.
+        let never = bars { $0.scrollIndicators(ScrollbarVisibility.never) }
+        #expect(!never.vertical && !never.horizontal, "\(never)")
+
+        // …and it overrides an ancestor that asked for one, which is the half
+        // that would pass by accident if `.never` simply did nothing.
+        let overridden = bars {
+            AnyView($0.scrollIndicators(ScrollbarVisibility.never).scrollIndicators(.visible))
+        }
+        #expect(!overridden.vertical && !overridden.horizontal, "\(overridden)")
+    }
+
+    @Test("axes: names which bar the setting is about")
+    func axesSelectsTheBar() {
+        let verticalOnly = bars { $0.scrollIndicators(.visible, axes: .vertical) }
+        #expect(verticalOnly.vertical, "asked for the vertical bar: \(verticalOnly)")
+        #expect(!verticalOnly.horizontal, "and only that one: \(verticalOnly)")
+
+        let horizontalOnly = bars { $0.scrollIndicators(.visible, axes: .horizontal) }
+        #expect(horizontalOnly.horizontal, "asked for the horizontal bar: \(horizontalOnly)")
+        #expect(!horizontalOnly.vertical, "and only that one: \(horizontalOnly)")
+    }
+
+    @Test("Two axis-specific calls compose rather than clobbering")
+    func axisCallsCompose() {
+        // The reason the modifier TRANSFORMS the environment instead of setting
+        // it: an unnamed axis has to keep what it inherited, and a plain
+        // `.environment` write would reset it to the default. Written as two
+        // calls precisely because that is the shape a caller reaches for.
+        let both = bars {
+            AnyView(
+                $0.scrollIndicators(.visible, axes: .horizontal)
+                    .scrollIndicators(.visible, axes: .vertical))
+        }
+        #expect(both.vertical && both.horizontal, "each call kept the other's axis: \(both)")
     }
 }

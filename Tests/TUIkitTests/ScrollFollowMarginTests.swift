@@ -112,7 +112,7 @@ struct ScrollFollowMarginTests {
                 }
             }
         }
-        .scrollbarVisibility(.visible)
+        .scrollIndicators(.visible)
         .scrollFollowMargin(.steps(2))
         .frame(height: 8)
 

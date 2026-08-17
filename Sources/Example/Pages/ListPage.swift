@@ -228,7 +228,7 @@ struct ListPage: View {
                         }
                     }
                     .frame(height: 8)
-                    .scrollbarVisibility(.visible)
+                    .scrollIndicators(.visible)
                 }
             }
 
@@ -378,7 +378,7 @@ struct ListPage: View {
         // three-row viewport "one row of margin" and "centred" pick the same
         // row, so the picker above looked inert between those two settings.
         .frame(height: 12)
-        .scrollbarVisibility(.visible)
+        .scrollIndicators(.visible)
         .scrollGranularity(multiLineByLine ? .line : .row)
         .scrollFollowMargin(
             FollowMarginChoice(rawValue: multiLineFollowMargin)?.margin ?? .none)

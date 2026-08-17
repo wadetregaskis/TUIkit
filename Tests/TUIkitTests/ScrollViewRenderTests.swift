@@ -210,7 +210,7 @@ struct ScrollViewRenderTests {
                     ForEach(0..<20, id: \.self) { Text("line \($0)") }
                 }
             }
-            .scrollbarVisibility(.visible),
+            .scrollIndicators(.visible),
             context: ctx(width: 20, height: 6)
         )
         #expect(buffer.width == 20, "the scrollbar sits inside the viewport width")
@@ -256,7 +256,7 @@ struct ScrollViewRenderTests {
                     ForEach(0..<20, id: \.self) { Text("line \($0)") }
                 }
             }
-            .scrollbarVisibility(.automatic),
+            .scrollIndicators(.automatic),
             context: ctx(width: 20, height: 6)
         )
         let lastColumn = buffer.lines.map { $0.stripped.last ?? " " }
@@ -277,7 +277,7 @@ struct ScrollViewRenderTests {
                 ForEach(0..<20, id: \.self) { Text("line \($0)") }
             }
         }
-        .scrollbarVisibility(.automatic)
+        .scrollIndicators(.automatic)
         let context = ctx(width: 20, height: 6)
         let first = renderToBuffer(view, context: context).lines.map { $0.stripped }
         let second = renderToBuffer(view, context: context).lines.map { $0.stripped }

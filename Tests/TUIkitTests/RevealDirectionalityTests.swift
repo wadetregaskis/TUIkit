@@ -152,7 +152,7 @@ struct RevealDirectionalityTests {
                 }
             }
         }
-        .scrollbarVisibility(.visible)
+        .scrollIndicators(.visible)
         .frame(height: 8)
 
         renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, height: 8)

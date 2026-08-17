@@ -639,7 +639,7 @@ struct ImageSizingTests {
         // `.automatic` scrollbar (▼) only appears once content exceeds the viewport.
         // Two renders settle the handler's lazily-measured content height.
         func hasVerticalScrollbar(_ content: some View) -> Bool {
-            let view = ScrollView { content }.scrollbarVisibility(.automatic)
+            let view = ScrollView { content }.scrollIndicators(.automatic)
             let context = renderContext(width: 24, height: 5)
             _ = renderToBuffer(view, context: context)
             let buffer = renderToBuffer(view, context: context)

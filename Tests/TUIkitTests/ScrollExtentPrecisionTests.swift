@@ -189,7 +189,7 @@ struct ScrollExtentPrecisionTests {
             TableColumn("Name", value: \ExtentRow.name).lineLimit(4).width(.fixed(7))
             TableColumn("Detail", value: \ExtentRow.detail)
         }
-        .scrollbarVisibility(.visible)
+        .scrollIndicators(.visible)
         return renderToBuffer(
             table,
             context: makeRenderContext(width: 44, height: 18) { env, _ in
@@ -209,7 +209,7 @@ struct ScrollExtentPrecisionTests {
         let table = Table(data, selection: .constant(Int?.none)) {
             TableColumn("Detail", value: \ExtentRow.detail)
         }
-        .scrollbarVisibility(.visible)
+        .scrollIndicators(.visible)
 
         let approximate = renderToBuffer(
             table,

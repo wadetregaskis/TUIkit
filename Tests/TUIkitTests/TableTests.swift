@@ -289,7 +289,7 @@ struct TableRenderingTests {
         let view = Table(files, selection: .constant(String?.none)) {
             TableColumn("Name", value: \FileInfo.name)
         }
-        .scrollbarVisibility(.automatic)
+        .scrollIndicators(.automatic)
 
         let before = renderToBuffer(view, context: context)
         dispatcher.setRegions(before.hitTestRegions)

@@ -229,7 +229,7 @@ struct ScrollGranularityTests {
                 Text((1...linesPerRow).map { "\(name)-\($0)" }.joined(separator: "\n"))
             }
         }
-        .scrollbarVisibility(showsScrollbar ? .visible : .hidden)
+        .scrollIndicators(showsScrollbar ? .visible : .hidden)
         .frame(height: frameHeight)
 
         func renderOnce() -> FrameBuffer {
@@ -432,7 +432,7 @@ struct ScrollGranularityTests {
                     TableColumn("Note", value: \NoteRow.note).width(.flexible).lineLimit(3)
                 }
                 .frame(height: 12)
-                .scrollbarVisibility(.visible)
+                .scrollIndicators(.visible)
                 .scrollGranularity(granularity)
             }
         }

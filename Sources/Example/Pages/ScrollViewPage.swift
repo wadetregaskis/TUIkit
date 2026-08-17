@@ -168,7 +168,7 @@ struct ScrollViewPage: View {
                     }
                     .frame(height: 10)
                     .border(.palette.border)
-                    .scrollbarVisibility(barVisibility)
+                    .scrollIndicators(barVisibility)
                     .scrollbarArrows(barArrows)
                     .scrollbarProportionalThumb(barProportional)
                     .scrollbarClickBehavior(barClickBehavior)

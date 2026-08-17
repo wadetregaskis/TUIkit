@@ -725,14 +725,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let overflowing = rowsOverflow(
             source, targetContentHeight: contentHeight,
             plusLines: handler.dropSlotAddsRow ? 1 : 0)
-        // A scrollbar (opt-in via `.scrollbarVisibility`) supersedes the "N more"
+        // A scrollbar (opt-in via `.scrollIndicators`) supersedes the "N more"
         // text indicators: it marks the off-screen rows itself, so the rows then
         // fill the whole content area with no reserved indicator line. Decided
         // before the offset-1 snap below, which only saves an indicator line a
         // bar doesn't have.
-        let barVisibility = context.environment.scrollbarVisibility
-        let showsScrollbar =
-            barVisibility != .hidden && (barVisibility == .visible || overflowing)
+        let showsScrollbar = context.environment.verticalScrollIndicatorVisibility
+            .showsBar(overflowing: overflowing)
         // Clamp the offset against the largest possible visible-row
         // count (one indicator, at an end); the exact viewport is
         // finalised in resolveVisibleWindow once the offset is known.

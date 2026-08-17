@@ -29,7 +29,7 @@ struct ScrollbarFocusPulseTests {
                 ForEach(0..<30, id: \.self) { i in Text("line \(i)") }
             }
         }
-        .scrollbarVisibility(.visible)
+        .scrollIndicators(.visible)
         .frame(height: 6)
 
         func frame() -> FrameBuffer {

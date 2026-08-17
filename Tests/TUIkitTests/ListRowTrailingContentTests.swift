@@ -89,7 +89,7 @@ struct ListRowTrailingContentTests {
                 }
             }
         }
-        .scrollbarVisibility(.visible)
+        .scrollIndicators(.visible)
 
         let context = makeRenderContext(width: 40, height: 10)
         let lines = renderToBuffer(view, context: context).lines.map { $0.stripped }

@@ -659,7 +659,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// what oscillates (bar → fits → no bar → overflows → bar → …). Measuring is
     /// side-effect-free (`measureChild`), so this never double-fires the content's
     /// effects; the content is rendered once, afterwards, at the resolved size.
-    /// `.visible` forces both bars on, `.hidden` forces them off.
+    /// `.visible` forces that axis's bar on, `.hidden`/`.never` force it off.
     ///
     /// Also returns the extents it settled on, when they were measured against
     /// the dimensions the reservation finally chose. That is the same question
@@ -672,10 +672,17 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     private func resolveScrollbars(
         viewportWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
     ) -> (vertical: Bool, horizontal: Bool, settled: (width: Int, height: Int)?) {
-        let barVisibility = context.environment.scrollbarVisibility
-        var wantsScrollbar = barVisibility == .visible
-        var wantsHorizontalBar = horizontal && barVisibility == .visible
-        guard barVisibility == .automatic else {
+        let verticalPolicy = context.environment.verticalScrollIndicatorVisibility
+        let horizontalPolicy = context.environment.horizontalScrollIndicatorVisibility
+        var wantsScrollbar = verticalPolicy == .visible
+        var wantsHorizontalBar = horizontal && horizontalPolicy == .visible
+        // Only an axis that asked to be told whether it overflows is worth
+        // measuring for, and measuring is the expensive part — so a view with
+        // `.visible` down one side and nothing on the other still measures
+        // nothing at all.
+        let measuresVertical = verticalPolicy == .automatic
+        let measuresHorizontal = horizontal && horizontalPolicy == .automatic
+        guard measuresVertical || measuresHorizontal else {
             return (wantsScrollbar, wantsHorizontalBar, nil)
         }
         var settled: (width: Int, height: Int)?
@@ -687,11 +694,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 contentWidth: probeWidth, viewportHeight: probeHeight,
                 horizontal: horizontal, context: context)
             var changed = false
-            if !wantsScrollbar, extents.height > probeHeight {
+            if measuresVertical, !wantsScrollbar, extents.height > probeHeight {
                 wantsScrollbar = true
                 changed = true
             }
-            if horizontal, !wantsHorizontalBar, extents.width > probeWidth {
+            if measuresHorizontal, !wantsHorizontalBar, extents.width > probeWidth {
                 wantsHorizontalBar = true
                 changed = true
             }

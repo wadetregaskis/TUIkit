@@ -61,7 +61,7 @@ struct WindowedCompositionTests {
                 ForEach(0..<50_000, id: \.self) { i in Text("row \(i)") }
             }
         }
-        .scrollbarVisibility(.visible)
+        .scrollIndicators(.visible)
         .frame(height: Self.viewport)
 
         renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
