@@ -140,8 +140,22 @@ extension Section where Parent == Text, Footer == EmptyView {
     /// This convenience initializer matches SwiftUI's `Section(_ title:content:)`.
     ///
     /// - Parameters:
+    ///   - titleKey: The key for the header text — a literal is looked up, see
+    ///     ``LocalizedStringKey``.
+    ///   - content: A ViewBuilder that defines the section's main content.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(titleKey.localized, content: content)
+    }
+
+    /// Creates a section with a string title as the header, shown as written.
+    ///
+    /// - Parameters:
     ///   - title: The string to use as the header text.
     ///   - content: A ViewBuilder that defines the section's main content.
+    @_disfavoredOverload
     public init(
         _ title: String,
         @ViewBuilder content: () -> Content

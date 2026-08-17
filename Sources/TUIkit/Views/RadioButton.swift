@@ -41,12 +41,29 @@ public struct RadioButtonItem<Value: Hashable> {
         self.labelBuilder = { AnyView(label()) }
     }
 
-    /// Creates a radio button item with a string label.
+    /// Creates a radio button item with a localized label.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - value: The value for this option.
+    ///   - labelKey: The key for the label text.
+    @MainActor
+    public init(
+        _ value: Value,
+        _ labelKey: LocalizedStringKey
+    ) {
+        self.init(value, labelKey.localized)
+    }
+
+    /// Creates a radio button item with a string label, displayed as written.
     ///
     /// - Parameters:
     ///   - value: The value for this option.
     ///   - label: The label text.
     @MainActor
+    @_disfavoredOverload
     public init(
         _ value: Value,
         _ label: String

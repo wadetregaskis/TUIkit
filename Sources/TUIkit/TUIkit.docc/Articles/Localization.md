@@ -39,8 +39,8 @@ Text(localized: LocalizationKey.Button.save)
 
 ### A String Literal Is Already a Key
 
-``Text`` also takes a ``LocalizedStringKey``, and a string **literal** binds
-there — so the plainest spelling is already localized:
+Every control that takes a title also takes a ``LocalizedStringKey``, and a
+string **literal** binds there — so the plainest spelling is already localized:
 
 ```swift
 Text("button.save")       // looked up
@@ -57,6 +57,35 @@ path or a person's name is never looked up by accident.
 Nothing breaks if a key is missing. Lookup falls back to English and then to
 the key itself, so an app that registers no translations displays exactly the
 literals it wrote.
+
+#### It is not only `Text`
+
+The same pair exists wherever a control takes display text, which is what makes
+the rule worth knowing rather than a `Text` curiosity:
+
+```swift
+Button("button.save") { save() }
+Toggle("settings.notifications", isOn: $on)
+TextField("field.name", text: $name)
+Section("section.advanced") { … }
+Label("menu.favourites", systemImage: "star")
+List("list.inbox", selection: $id) { … }
+Table(files, selection: $id) { TableColumn("column.size", value: \.size) }
+```
+
+…and on the modifiers that carry text: ``TUIkit/View/navigationTitle(_:)``,
+``TUIkit/View/alert(_:isPresented:actions:)``,
+``TUIkit/View/confirmationDialog(_:isPresented:titleVisibility:actions:)``,
+`searchable(prompt:)`, `badge(_:)` and `listEmptyPlaceholder(_:)`.
+
+Only **display text** is a key. A value the control is *showing you* is not:
+`LabeledContent("row.size", value: fileSize)` looks up the label and prints the
+size, an SF Symbol name is a symbol name, and a `Table`'s cells come from the
+data. If it would be wrong to translate it, it is not a key.
+
+> Tip: You never have to use this. `Button(myLocalizedString)` — a computed
+> `String` — is the disfavoured overload and is displayed exactly as given,
+> which is why an app that resolves its own strings keeps working unchanged.
 
 Interpolation builds one key for every value, with `%@` where each value went:
 

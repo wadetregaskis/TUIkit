@@ -94,6 +94,34 @@ public struct Panel<Content: View, Footer: View>: View {
     ///   - content: The main content of the panel.
     ///   - footer: The footer content.
     public init(
+        _ titleKey: LocalizedStringKey,
+        borderStyle: BorderStyle? = nil,
+        borderColor: Color? = nil,
+        titleColor: Color? = nil,
+        padding: EdgeInsets = EdgeInsets(horizontal: 1, vertical: 0),
+        showFooterSeparator: Bool = true,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.init(
+            titleKey.localized, borderStyle: borderStyle, borderColor: borderColor,
+            titleColor: titleColor, padding: padding,
+            showFooterSeparator: showFooterSeparator, content: content, footer: footer)
+    }
+
+    /// Creates a panel with a footer whose title is displayed as written.
+    ///
+    /// - Parameters:
+    ///   - title: The title to display.
+    ///   - borderStyle: The border style (default: appearance borderStyle).
+    ///   - borderColor: The border color (default: theme border).
+    ///   - titleColor: The title color (default: theme accent).
+    ///   - padding: The inner padding (default: horizontal 1, vertical 0).
+    ///   - showFooterSeparator: Whether to show separator before footer (default: true).
+    ///   - content: The main content of the panel.
+    ///   - footer: The footer content.
+    @_disfavoredOverload
+    public init(
         _ title: String,
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
@@ -145,6 +173,29 @@ extension Panel where Footer == EmptyView {
     ///   - titleColor: The title color (default: same as border).
     ///   - padding: The inner padding (default: horizontal 1, vertical 0).
     ///   - content: The content of the panel.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        borderStyle: BorderStyle? = nil,
+        borderColor: Color? = nil,
+        titleColor: Color? = nil,
+        padding: EdgeInsets = EdgeInsets(horizontal: 1, vertical: 0),
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            titleKey.localized, borderStyle: borderStyle, borderColor: borderColor,
+            titleColor: titleColor, padding: padding, content: content)
+    }
+
+    /// Creates a panel whose title is displayed as written.
+    ///
+    /// - Parameters:
+    ///   - title: The title to display in the top border.
+    ///   - borderStyle: The border style (default: appearance borderStyle).
+    ///   - borderColor: The border color (default: theme border).
+    ///   - titleColor: The title color (default: same as border).
+    ///   - padding: The inner padding (default: horizontal 1, vertical 0).
+    ///   - content: The content of the panel.
+    @_disfavoredOverload
     public init(
         _ title: String,
         borderStyle: BorderStyle? = nil,

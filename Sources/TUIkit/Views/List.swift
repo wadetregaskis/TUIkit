@@ -127,13 +127,35 @@ public struct List<SelectionValue: Hashable & Sendable, Content: View, Footer: V
 // MARK: - Single Selection Initializers (with Footer)
 
 extension List {
-    /// Creates a list with single selection, title, and footer.
+    /// Creates a list with single selection, a localized title, and a footer.
+    ///
+    /// A string **literal** binds here, so the title is a lookup key — see
+    /// ``LocalizedStringKey``. Every titled `List` initializer below takes one
+    /// the same way.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the title displayed in the border.
+    ///   - selection: A binding to the selected item's ID (nil = no selection).
+    ///   - content: A ViewBuilder that defines the list content.
+    ///   - footer: A ViewBuilder that defines the footer content.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        selection: Binding<SelectionValue?>,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.init(
+            titleKey.localized, selection: selection, content: content, footer: footer)
+    }
+
+    /// Creates a list whose title is displayed as written.
     ///
     /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - selection: A binding to the selected item's ID (nil = no selection).
     ///   - content: A ViewBuilder that defines the list content.
     ///   - footer: A ViewBuilder that defines the footer content.
+    @_disfavoredOverload
     public init(
         _ title: String,
         selection: Binding<SelectionValue?>,
@@ -177,12 +199,27 @@ extension List {
 // MARK: - Single Selection Initializers (without Footer)
 
 extension List where Footer == EmptyView {
-    /// Creates a list with single selection and a title.
+    /// Creates a list with single selection and a localized title.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the title displayed in the border.
+    ///   - selection: A binding to the selected item's ID (nil = no selection).
+    ///   - content: A ViewBuilder that defines the list content.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        selection: Binding<SelectionValue?>,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(titleKey.localized, selection: selection, content: content)
+    }
+
+    /// Creates a list whose title is displayed as written.
     ///
     /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - selection: A binding to the selected item's ID (nil = no selection).
     ///   - content: A ViewBuilder that defines the list content.
+    @_disfavoredOverload
     public init(
         _ title: String,
         selection: Binding<SelectionValue?>,
@@ -223,13 +260,31 @@ extension List where Footer == EmptyView {
 // MARK: - Multi Selection Initializers (with Footer)
 
 extension List {
-    /// Creates a list with multi-selection, title, and footer.
+    /// Creates a list with multi-selection, a localized title, and a footer.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the title displayed in the border.
+    ///   - selection: A binding to the set of selected item IDs.
+    ///   - content: A ViewBuilder that defines the list content.
+    ///   - footer: A ViewBuilder that defines the footer content.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        selection: Binding<Set<SelectionValue>>,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.init(
+            titleKey.localized, selection: selection, content: content, footer: footer)
+    }
+
+    /// Creates a multi-selection list whose title is displayed as written.
     ///
     /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - selection: A binding to the set of selected item IDs.
     ///   - content: A ViewBuilder that defines the list content.
     ///   - footer: A ViewBuilder that defines the footer content.
+    @_disfavoredOverload
     public init(
         _ title: String,
         selection: Binding<Set<SelectionValue>>,
@@ -273,12 +328,27 @@ extension List {
 // MARK: - Multi Selection Initializers (without Footer)
 
 extension List where Footer == EmptyView {
-    /// Creates a list with multi-selection and a title.
+    /// Creates a list with multi-selection and a localized title.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the title displayed in the border.
+    ///   - selection: A binding to the set of selected item IDs.
+    ///   - content: A ViewBuilder that defines the list content.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        selection: Binding<Set<SelectionValue>>,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(titleKey.localized, selection: selection, content: content)
+    }
+
+    /// Creates a multi-selection list whose title is displayed as written.
     ///
     /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - selection: A binding to the set of selected item IDs.
     ///   - content: A ViewBuilder that defines the list content.
+    @_disfavoredOverload
     public init(
         _ title: String,
         selection: Binding<Set<SelectionValue>>,
@@ -329,9 +399,24 @@ extension List {
     /// selected style.
     ///
     /// - Parameters:
+    ///   - titleKey: The key for the title displayed in the border.
+    ///   - content: A ViewBuilder that defines the list content.
+    ///   - footer: A ViewBuilder that defines the footer content.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.init(titleKey.localized, content: content, footer: footer)
+    }
+
+    /// Creates a selectionless list whose title is displayed as written.
+    ///
+    /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - content: A ViewBuilder that defines the list content.
     ///   - footer: A ViewBuilder that defines the footer content.
+    @_disfavoredOverload
     public init(
         _ title: String,
         @ViewBuilder content: () -> Content,
@@ -378,8 +463,18 @@ extension List where Footer == EmptyView {
     /// behaviour.
     ///
     /// - Parameters:
+    ///   - titleKey: The key for the title displayed in the border.
+    ///   - content: A ViewBuilder that defines the list content.
+    public init(_ titleKey: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.init(titleKey.localized, content: content)
+    }
+
+    /// Creates a selectionless list whose title is displayed as written.
+    ///
+    /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - content: A ViewBuilder that defines the list content.
+    @_disfavoredOverload
     public init(_ title: String, @ViewBuilder content: () -> Content) {
         self.title = title
         self.content = content()
@@ -422,9 +517,15 @@ extension List where Footer == EmptyView {
 // generic inits above are picked instead.
 
 extension List where SelectionValue == Int, Footer == EmptyView {
-    /// Creates a selectionless list with a title and a default
+    /// Creates a selectionless list with a localized title and a default
     /// SelectionValue of `Int`. See ``init(_:content:footer:)``
     /// for the selectionless semantics.
+    public init(_ titleKey: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.init(titleKey.localized, content: content)
+    }
+
+    /// Creates a selectionless list whose title is displayed as written.
+    @_disfavoredOverload
     public init(_ title: String, @ViewBuilder content: () -> Content) {
         self.title = title
         self.content = content()
@@ -711,10 +812,24 @@ extension List {
         return copy
     }
 
-    /// Sets the placeholder text displayed when the list has no items.
+    /// Sets the localized placeholder text displayed when the list has no items.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameter placeholderKey: The key for the text to show when empty.
+    /// - Returns: A list with the specified empty placeholder.
+    public func listEmptyPlaceholder(
+        _ placeholderKey: LocalizedStringKey
+    ) -> List<SelectionValue, Content, Footer> {
+        listEmptyPlaceholder(placeholderKey.localized)
+    }
+
+    /// Sets the empty placeholder text, displayed as written.
     ///
     /// - Parameter placeholder: The text to show when the list is empty.
     /// - Returns: A list with the specified empty placeholder.
+    @_disfavoredOverload
     public func listEmptyPlaceholder(_ placeholder: String) -> List<SelectionValue, Content, Footer> {
         var copy = self
         copy.emptyPlaceholder = placeholder

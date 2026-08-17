@@ -87,6 +87,18 @@ public struct LocalizedStringKey: Equatable, Hashable, Sendable {
         return Self.substituting(arguments, into: template)
     }
 
+    /// The localized text, resolved through the shared service.
+    ///
+    /// Every control that takes a title resolves **eagerly**, at construction,
+    /// exactly as ``Text/init(_:)-(LocalizedStringKey)`` does — which is what
+    /// lets a control keep storing a plain `String` and changes nothing about
+    /// how it measures or renders. Nothing is lost by resolving early: the view
+    /// tree is rebuilt every frame, so a language switched at runtime is picked
+    /// up on the next one.
+    var localized: String {
+        resolved(with: LocalizationService.shared)
+    }
+
     /// Whether `character` is a C length modifier (`%ld`, `%zu`, …), which a
     /// translation may carry over and which carries no meaning here.
     ///

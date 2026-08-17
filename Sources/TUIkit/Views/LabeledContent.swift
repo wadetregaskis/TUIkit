@@ -54,11 +54,24 @@ public struct LabeledContent<Label: View, Content: View>: View {
 // MARK: - String-titled convenience
 
 extension LabeledContent where Label == Text {
-    /// Creates labelled content with a string title and custom content.
+    /// Creates labelled content with a localized title and custom content.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the title shown as the label.
+    ///   - content: A view builder producing the content.
+    public init(_ titleKey: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.init(titleKey.localized, content: content)
+    }
+
+    /// Creates labelled content with a string title, shown as written.
     ///
     /// - Parameters:
     ///   - title: The title shown as the label.
     ///   - content: A view builder producing the content.
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S, @ViewBuilder content: () -> Content) {
         self.label = Text(String(title))
         self.content = content()
@@ -66,11 +79,25 @@ extension LabeledContent where Label == Text {
 }
 
 extension LabeledContent where Label == Text, Content == Text {
-    /// Creates labelled content with a string title and a string value.
+    /// Creates labelled content with a localized title and a string value.
+    ///
+    /// Only the title is a key. `value` is the thing being labelled — a
+    /// setting's current state, a file's size, someone's name — so it is shown
+    /// as written, which is SwiftUI's split too.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the title shown as the label.
+    ///   - value: The value shown as the content.
+    public init<S: StringProtocol>(_ titleKey: LocalizedStringKey, value: S) {
+        self.init(titleKey.localized, value: value)
+    }
+
+    /// Creates labelled content with a string title, shown as written.
     ///
     /// - Parameters:
     ///   - title: The title shown as the label.
     ///   - value: The value shown as the content.
+    @_disfavoredOverload
     public init<S1: StringProtocol, S2: StringProtocol>(_ title: S1, value: S2) {
         self.label = Text(String(title))
         self.content = Text(String(value))

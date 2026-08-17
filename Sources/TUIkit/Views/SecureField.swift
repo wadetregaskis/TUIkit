@@ -92,11 +92,34 @@ public struct SecureField<Label: View>: View {
 // MARK: - SecureField Initializers (String Label)
 
 extension SecureField where Label == Text {
+    /// Creates a secure field with a localized label.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the field's title, describing its purpose.
+    ///   - text: The text to display and edit.
+    public init(_ titleKey: LocalizedStringKey, text: Binding<String>) {
+        self.init(titleKey.localized, text: text)
+    }
+
+    /// Creates a secure field with a localized label and a prompt.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the field's title, describing its purpose.
+    ///   - text: The text to display and edit.
+    ///   - prompt: A `Text` providing guidance on what to type into the field.
+    public init(_ titleKey: LocalizedStringKey, text: Binding<String>, prompt: Text?) {
+        self.init(titleKey.localized, text: text, prompt: prompt)
+    }
+
     /// Creates a secure field with a text label generated from a title string.
     ///
     /// - Parameters:
     ///   - title: The title of the secure field, describing its purpose.
     ///   - text: The text to display and edit.
+    @_disfavoredOverload
     public init(_ title: String, text: Binding<String>) {
         self.label = Text(title)
         self.text = text
@@ -114,6 +137,7 @@ extension SecureField where Label == Text {
     ///   - text: The text to display and edit.
     ///   - prompt: A Text representing the prompt which provides users with
     ///     guidance on what to type into the secure field.
+    @_disfavoredOverload
     public init(_ title: String, text: Binding<String>, prompt: Text?) {
         self.label = Text(title)
         self.text = text

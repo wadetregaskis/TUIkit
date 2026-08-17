@@ -66,8 +66,20 @@ extension View {
     /// .navigationTitle("Home")
     /// ```
     ///
+    /// A string **literal** binds here, so the title is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameter titleKey: The key for the navigation title.
+    /// - Returns: A view with the navigation title preference set.
+    public func navigationTitle(_ titleKey: LocalizedStringKey) -> some View {
+        preference(key: NavigationTitleKey.self, value: titleKey.localized)
+    }
+
+    /// Sets the navigation title from a string, displayed as written.
+    ///
     /// - Parameter title: The navigation title.
     /// - Returns: A view with the navigation title preference set.
+    @_disfavoredOverload
     public func navigationTitle<S: StringProtocol>(_ title: S) -> some View {
         preference(key: NavigationTitleKey.self, value: String(title))
     }

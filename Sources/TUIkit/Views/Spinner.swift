@@ -281,12 +281,32 @@ public struct Spinner: View {
     /// The spinner color (uses theme accent if nil).
     let color: Color?
 
-    /// Creates a spinner with an optional label.
+    /// Creates a spinner with a localized label.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. The label is not optional in this overload:
+    /// `Spinner()` has no label to look up, and would otherwise be ambiguous
+    /// between the two.
+    ///
+    /// - Parameters:
+    ///   - labelKey: The key for text displayed after the spinner indicator.
+    ///   - style: The animation style (default: `.dots`).
+    ///   - color: The spinner color (default: theme accent).
+    public init(
+        _ labelKey: LocalizedStringKey,
+        style: SpinnerStyle = .dots,
+        color: Color? = nil
+    ) {
+        self.init(labelKey.localized, style: style, color: color)
+    }
+
+    /// Creates a spinner with an optional label, displayed as written.
     ///
     /// - Parameters:
     ///   - label: Text displayed after the spinner indicator.
     ///   - style: The animation style (default: `.dots`).
     ///   - color: The spinner color (default: theme accent).
+    @_disfavoredOverload
     public init(
         _ label: String? = nil,
         style: SpinnerStyle = .dots,

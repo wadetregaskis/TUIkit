@@ -135,7 +135,59 @@ extension DatePicker {
 // MARK: - String-titled initializers
 
 extension DatePicker where Label == Text {
-    /// Creates a date picker with a string title.
+    /// Creates a date picker with a localized title.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. The three range-constrained siblings below take
+    /// one the same way.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        selection: Binding<Date>,
+        displayedComponents: Components = [.hourAndMinute, .date]
+    ) {
+        self.init(
+            titleKey.localized, selection: selection,
+            displayedComponents: displayedComponents)
+    }
+
+    /// Creates a date picker with a localized title, constrained to a range.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        selection: Binding<Date>,
+        in range: ClosedRange<Date>,
+        displayedComponents: Components = [.hourAndMinute, .date]
+    ) {
+        self.init(
+            titleKey.localized, selection: selection, in: range,
+            displayedComponents: displayedComponents)
+    }
+
+    /// Creates a date picker with a localized title and a lower bound.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        selection: Binding<Date>,
+        in range: PartialRangeFrom<Date>,
+        displayedComponents: Components = [.hourAndMinute, .date]
+    ) {
+        self.init(
+            titleKey.localized, selection: selection, in: range,
+            displayedComponents: displayedComponents)
+    }
+
+    /// Creates a date picker with a localized title and an upper bound.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        selection: Binding<Date>,
+        in range: PartialRangeThrough<Date>,
+        displayedComponents: Components = [.hourAndMinute, .date]
+    ) {
+        self.init(
+            titleKey.localized, selection: selection, in: range,
+            displayedComponents: displayedComponents)
+    }
+
+    /// Creates a date picker with a string title, displayed as written.
+    @_disfavoredOverload
     public init<S: StringProtocol>(
         _ title: S,
         selection: Binding<Date>,
@@ -146,7 +198,8 @@ extension DatePicker where Label == Text {
             label: Text(String(title)))
     }
 
-    /// Creates a date picker with a string title, constrained to a range.
+    /// Creates a date picker with a string title, as written, within a range.
+    @_disfavoredOverload
     public init<S: StringProtocol>(
         _ title: S,
         selection: Binding<Date>,
@@ -158,7 +211,8 @@ extension DatePicker where Label == Text {
             label: Text(String(title)))
     }
 
-    /// Creates a date picker with a string title and a lower bound.
+    /// Creates a date picker with a string title, as written, and a lower bound.
+    @_disfavoredOverload
     public init<S: StringProtocol>(
         _ title: S,
         selection: Binding<Date>,
@@ -170,7 +224,8 @@ extension DatePicker where Label == Text {
             displayedComponents: displayedComponents, label: Text(String(title)))
     }
 
-    /// Creates a date picker with a string title and an upper bound.
+    /// Creates a date picker with a string title, as written, and an upper bound.
+    @_disfavoredOverload
     public init<S: StringProtocol>(
         _ title: S,
         selection: Binding<Date>,

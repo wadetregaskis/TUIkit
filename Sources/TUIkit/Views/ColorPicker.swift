@@ -28,12 +28,26 @@ public struct ColorPicker: View {
     private let selection: Binding<Color>
     private let step: Double
 
-    /// Creates a colour picker over an RGB binding.
+    /// Creates a colour picker over an RGB binding, with a localized label.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the label shown beside the editor.
+    ///   - selection: The colour to edit. Rewritten as `.rgb(...)` on each change.
+    ///   - step: How much each arrow press moves a channel (default 5 of 255).
+    public init(_ titleKey: LocalizedStringKey, selection: Binding<Color>, step: Double = 5) {
+        self.init(titleKey.localized, selection: selection, step: step)
+    }
+
+    /// Creates a colour picker whose label is displayed as written.
     ///
     /// - Parameters:
     ///   - title: The label shown beside the editor.
     ///   - selection: The colour to edit. Rewritten as `.rgb(...)` on each change.
     ///   - step: How much each arrow press moves a channel (default 5 of 255).
+    @_disfavoredOverload
     public init(_ title: String, selection: Binding<Color>, step: Double = 5) {
         self.title = title
         self.selection = selection

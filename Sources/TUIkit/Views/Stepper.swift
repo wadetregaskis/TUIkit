@@ -170,11 +170,33 @@ extension Stepper where Label == Text {
     /// mirroring SwiftUI — a stepper's value is data-model data, not an interface
     /// measurement, so it is not pinned to `Int`.
     ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the stepper's title.
+    ///   - value: The binding to the current value.
+    ///   - step: The step size. Defaults to `1`.
+    ///   - onEditingChanged: A callback for when editing begins and ends.
+    public init<V: Strideable>(
+        _ titleKey: LocalizedStringKey,
+        value: Binding<V>,
+        step: V.Stride = 1,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in }
+    ) {
+        self.init(
+            titleKey.localized, value: value, step: step,
+            onEditingChanged: onEditingChanged)
+    }
+
+    /// Creates a stepper with a title displayed as written.
+    ///
     /// - Parameters:
     ///   - title: The title of the stepper.
     ///   - value: The binding to the current value.
     ///   - step: The step size. Defaults to `1`.
     ///   - onEditingChanged: A callback for when editing begins and ends.
+    @_disfavoredOverload
     public init<S: StringProtocol, V: Strideable>(
         _ title: S,
         value: Binding<V>,
@@ -188,7 +210,27 @@ extension Stepper where Label == Text {
             onIncrement: nil, onDecrement: nil, onEditingChanged: onEditingChanged)
     }
 
-    /// Creates a stepper with a title, value binding, and range.
+    /// Creates a stepper with a localized title, value binding, and range.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the stepper's title.
+    ///   - value: The binding to the current value.
+    ///   - bounds: The range of valid values.
+    ///   - step: The step size. Defaults to `1`.
+    ///   - onEditingChanged: A callback for when editing begins and ends.
+    public init<V: Strideable>(
+        _ titleKey: LocalizedStringKey,
+        value: Binding<V>,
+        in bounds: ClosedRange<V>,
+        step: V.Stride = 1,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in }
+    ) {
+        self.init(
+            titleKey.localized, value: value, in: bounds, step: step,
+            onEditingChanged: onEditingChanged)
+    }
+
+    /// Creates a stepper with a title displayed as written, and a range.
     ///
     /// - Parameters:
     ///   - title: The title of the stepper.
@@ -196,6 +238,7 @@ extension Stepper where Label == Text {
     ///   - bounds: The range of valid values.
     ///   - step: The step size. Defaults to `1`.
     ///   - onEditingChanged: A callback for when editing begins and ends.
+    @_disfavoredOverload
     public init<S: StringProtocol, V: Strideable>(
         _ title: S,
         value: Binding<V>,
@@ -214,13 +257,32 @@ extension Stepper where Label == Text {
 // MARK: - Stepper Initializers (Custom Callbacks)
 
 extension Stepper where Label == Text {
-    /// Creates a stepper with a title and custom increment/decrement callbacks.
+    /// Creates a stepper with a localized title and increment/decrement callbacks.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the stepper's title.
+    ///   - onIncrement: Callback when increment is requested.
+    ///   - onDecrement: Callback when decrement is requested.
+    ///   - onEditingChanged: A callback for when editing begins and ends.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        onIncrement: (() -> Void)?,
+        onDecrement: (() -> Void)?,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in }
+    ) {
+        self.init(
+            titleKey.localized, onIncrement: onIncrement, onDecrement: onDecrement,
+            onEditingChanged: onEditingChanged)
+    }
+
+    /// Creates a stepper with a title displayed as written, and callbacks.
     ///
     /// - Parameters:
     ///   - title: The title of the stepper.
     ///   - onIncrement: Callback when increment is requested.
     ///   - onDecrement: Callback when decrement is requested.
     ///   - onEditingChanged: A callback for when editing begins and ends.
+    @_disfavoredOverload
     public init<S: StringProtocol>(
         _ title: S,
         onIncrement: (() -> Void)?,

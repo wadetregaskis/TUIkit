@@ -43,6 +43,34 @@ extension View {
     ///   - titleColor: Custom title text color (TUIKit extension, default: nil).
     /// - Returns: A view that presents an alert conditionally.
     public func alert<Actions: View, Message: View>(
+        _ titleKey: LocalizedStringKey,
+        isPresented: Binding<Bool>,
+        @ViewBuilder actions: @escaping () -> Actions,
+        @ViewBuilder message: @escaping () -> Message,
+        borderStyle: BorderStyle? = nil,
+        borderColor: Color? = nil,
+        titleColor: Color? = nil
+    ) -> some View {
+        alert(
+            titleKey.localized, isPresented: isPresented, actions: actions,
+            message: message, borderStyle: borderStyle, borderColor: borderColor,
+            titleColor: titleColor)
+    }
+
+    /// Presents an alert whose title is displayed as written.
+    ///
+    /// - Parameters:
+    ///   - title: The alert title.
+    ///   - isPresented: A binding to a Boolean value that determines whether
+    ///     to present the alert.
+    ///   - actions: A ViewBuilder returning the alert action buttons.
+    ///   - message: A ViewBuilder returning the alert message content.
+    ///   - borderStyle: Custom border style for the alert (TUIKit extension, default: nil).
+    ///   - borderColor: Custom border color (TUIKit extension, default: nil).
+    ///   - titleColor: Custom title text color (TUIKit extension, default: nil).
+    /// - Returns: A view that presents an alert conditionally.
+    @_disfavoredOverload
+    public func alert<Actions: View, Message: View>(
         _ title: String,
         isPresented: Binding<Bool>,
         @ViewBuilder actions: @escaping () -> Actions,
@@ -74,6 +102,31 @@ extension View {
     ///   - borderColor: Optional border color.
     ///   - titleColor: Optional title color.
     /// - Returns: A view that presents an alert conditionally.
+    public func alert<Actions: View>(
+        _ titleKey: LocalizedStringKey,
+        isPresented: Binding<Bool>,
+        @ViewBuilder actions: @escaping () -> Actions,
+        borderStyle: BorderStyle? = nil,
+        borderColor: Color? = nil,
+        titleColor: Color? = nil
+    ) -> some View {
+        alert(
+            titleKey.localized, isPresented: isPresented, actions: actions,
+            borderStyle: borderStyle, borderColor: borderColor, titleColor: titleColor)
+    }
+
+    /// Presents an alert with actions only, whose title is shown as written.
+    ///
+    /// - Parameters:
+    ///   - title: The alert title.
+    ///   - isPresented: A binding to a Boolean value that determines whether
+    ///     to present the alert.
+    ///   - actions: A ViewBuilder returning the alert action buttons.
+    ///   - borderStyle: Optional border style.
+    ///   - borderColor: Optional border color.
+    ///   - titleColor: Optional title color.
+    /// - Returns: A view that presents an alert conditionally.
+    @_disfavoredOverload
     public func alert<Actions: View>(
         _ title: String,
         isPresented: Binding<Bool>,
@@ -115,6 +168,20 @@ extension View {
     ///   - actions: A ViewBuilder returning the dialog's action buttons.
     ///   - message: A ViewBuilder returning the dialog's message.
     public func confirmationDialog<Actions: View, Message: View>(
+        _ titleKey: LocalizedStringKey,
+        isPresented: Binding<Bool>,
+        titleVisibility: Visibility = .automatic,
+        @ViewBuilder actions: @escaping () -> Actions,
+        @ViewBuilder message: @escaping () -> Message
+    ) -> some View {
+        confirmationDialog(
+            titleKey.localized, isPresented: isPresented,
+            titleVisibility: titleVisibility, actions: actions, message: message)
+    }
+
+    /// Presents a confirmation dialog whose title is displayed as written.
+    @_disfavoredOverload
+    public func confirmationDialog<Actions: View, Message: View>(
         _ title: String,
         isPresented: Binding<Bool>,
         titleVisibility: Visibility = .automatic,
@@ -135,6 +202,19 @@ extension View {
     }
 
     /// Presents a confirmation dialog (action sheet) with actions only.
+    public func confirmationDialog<Actions: View>(
+        _ titleKey: LocalizedStringKey,
+        isPresented: Binding<Bool>,
+        titleVisibility: Visibility = .automatic,
+        @ViewBuilder actions: @escaping () -> Actions
+    ) -> some View {
+        confirmationDialog(
+            titleKey.localized, isPresented: isPresented,
+            titleVisibility: titleVisibility, actions: actions)
+    }
+
+    /// Presents an actions-only dialog whose title is displayed as written.
+    @_disfavoredOverload
     public func confirmationDialog<Actions: View>(
         _ title: String,
         isPresented: Binding<Bool>,

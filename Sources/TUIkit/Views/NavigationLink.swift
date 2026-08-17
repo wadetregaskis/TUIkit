@@ -68,11 +68,24 @@ extension NavigationLink where Destination == Never {
         self.label = label()
     }
 
-    /// Creates a link with a text label that pushes `value` onto the path.
+    /// Creates a link with a localized label that pushes `value` onto the path.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the link's title.
+    ///   - value: The value to push. `nil` disables the link.
+    public init<P: Hashable>(_ titleKey: LocalizedStringKey, value: P?) where Label == Text {
+        self.init(titleKey.localized, value: value)
+    }
+
+    /// Creates a link with a text label, shown as written, that pushes `value`.
     ///
     /// - Parameters:
     ///   - title: The link's title.
     ///   - value: The value to push. `nil` disables the link.
+    @_disfavoredOverload
     public init<S: StringProtocol, P: Hashable>(_ title: S, value: P?) where Label == Text {
         self.target = .value(value.map { AnyHashable($0) })
         self.label = Text(String(title))
@@ -96,11 +109,27 @@ extension NavigationLink {
         self.label = label()
     }
 
-    /// Creates a link with a text label that pushes `destination`.
+    /// Creates a link with a localized label that pushes `destination`.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the link's title.
+    ///   - destination: A view builder for the screen to show.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        @ViewBuilder destination: () -> Destination
+    ) where Label == Text {
+        self.init(titleKey.localized, destination: destination)
+    }
+
+    /// Creates a link with a text label, shown as written, pushing `destination`.
     ///
     /// - Parameters:
     ///   - title: The link's title.
     ///   - destination: A view builder for the screen to show.
+    @_disfavoredOverload
     public init<S: StringProtocol>(
         _ title: S,
         @ViewBuilder destination: () -> Destination

@@ -76,11 +76,24 @@ public struct Menu<Label: View, Content: View>: View {
 }
 
 extension Menu where Label == Text {
-    /// Creates a menu that generates its label from a string.
+    /// Creates a menu that generates its label from a localized title.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the menu's title.
+    ///   - content: The menu's items — `Button`s and `Divider`s.
+    public init(_ titleKey: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.init(titleKey.localized, content: content)
+    }
+
+    /// Creates a menu that generates its label from a string, shown as written.
     ///
     /// - Parameters:
     ///   - title: The menu's title.
     ///   - content: The menu's items — `Button`s and `Divider`s.
+    @_disfavoredOverload
     public init(_ title: String, @ViewBuilder content: () -> Content) {
         self.init(content: content) { Text(title) }
     }

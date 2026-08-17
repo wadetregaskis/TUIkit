@@ -149,12 +149,30 @@ extension Gauge where CurrentValueLabel == EmptyView, BoundsLabel == EmptyView {
 }
 
 extension Gauge where Label == Text, CurrentValueLabel == EmptyView, BoundsLabel == EmptyView {
-    /// Creates a gauge with a string title.
+    /// Creates a gauge with a localized title.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for text describing what the gauge measures.
+    ///   - value: The value to show.
+    ///   - bounds: The range the value sits within (default `0...1`).
+    public init<V: BinaryFloatingPoint>(
+        _ titleKey: LocalizedStringKey,
+        value: V,
+        in bounds: ClosedRange<V> = 0...1
+    ) {
+        self.init(titleKey.localized, value: value, in: bounds)
+    }
+
+    /// Creates a gauge with a string title, displayed as written.
     ///
     /// - Parameters:
     ///   - title: A string describing what the gauge measures.
     ///   - value: The value to show.
     ///   - bounds: The range the value sits within (default `0...1`).
+    @_disfavoredOverload
     public init<S: StringProtocol, V: BinaryFloatingPoint>(
         _ title: S,
         value: V,

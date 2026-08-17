@@ -108,9 +108,20 @@ extension ProgressView where Label == EmptyView, CurrentValueLabel == EmptyView 
 }
 
 extension ProgressView where Label == Text, CurrentValueLabel == EmptyView {
-    /// Creates an indeterminate progress view with a string title.
+    /// Creates an indeterminate progress view with a localized title.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameter titleKey: The key for text describing the task in progress.
+    public init(_ titleKey: LocalizedStringKey) {
+        self.init(titleKey.localized)
+    }
+
+    /// Creates an indeterminate progress view with a string title, as written.
     ///
     /// - Parameter title: A string that describes the task in progress.
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S) {
         self.fractionCompleted = nil
         self.style = .block
@@ -190,12 +201,30 @@ extension ProgressView {
 // MARK: - String Title Initializer
 
 extension ProgressView where Label == Text, CurrentValueLabel == EmptyView {
-    /// Creates a progress view with a string title.
+    /// Creates a progress view with a localized title.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for text describing the task in progress.
+    ///   - value: The completed amount (nil for indeterminate).
+    ///   - total: The total amount (default: 1.0).
+    public init<V: BinaryFloatingPoint>(
+        _ titleKey: LocalizedStringKey,
+        value: V?,
+        total: V = 1.0
+    ) {
+        self.init(titleKey.localized, value: value, total: total)
+    }
+
+    /// Creates a progress view with a string title, displayed as written.
     ///
     /// - Parameters:
     ///   - title: A string that describes the task in progress.
     ///   - value: The completed amount (nil for indeterminate).
     ///   - total: The total amount (default: 1.0).
+    @_disfavoredOverload
     public init<S: StringProtocol, V: BinaryFloatingPoint>(
         _ title: S,
         value: V?,

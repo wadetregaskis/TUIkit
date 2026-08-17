@@ -57,7 +57,7 @@ public struct Text: View, Equatable {
     ///
     /// - Parameter key: The key to look up.
     public init(_ key: LocalizedStringKey) {
-        self.content = key.resolved(with: LocalizationService.shared)
+        self.content = key.localized
         self.style = TextStyle()
         self.runs = nil
     }

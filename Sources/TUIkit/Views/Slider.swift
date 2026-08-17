@@ -177,12 +177,36 @@ extension Slider where Label == Text, ValueLabel == EmptyView {
     /// The title describes the slider but, as in SwiftUI, is not drawn on the
     /// track. Pair the slider with a `Text` for a visible caption.
     ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key describing the slider's purpose (not rendered).
+    ///   - value: The selected value within `bounds`.
+    ///   - bounds: The range of valid values. Defaults to `0...1`.
+    ///   - step: The distance between each valid value. Defaults to `0.01`.
+    ///   - onEditingChanged: A callback for when editing begins and ends.
+    public init<V: BinaryFloatingPoint>(
+        _ titleKey: LocalizedStringKey,
+        value: Binding<V>,
+        in bounds: ClosedRange<V> = 0...1,
+        step: V.Stride = 0.01,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in }
+    ) where V.Stride: BinaryFloatingPoint {
+        self.init(
+            titleKey.localized, value: value, in: bounds, step: step,
+            onEditingChanged: onEditingChanged)
+    }
+
+    /// Creates a slider with a title displayed as written.
+    ///
     /// - Parameters:
     ///   - title: A description of the slider's purpose (not rendered).
     ///   - value: The selected value within `bounds`.
     ///   - bounds: The range of valid values. Defaults to `0...1`.
     ///   - step: The distance between each valid value. Defaults to `0.01`.
     ///   - onEditingChanged: A callback for when editing begins and ends.
+    @_disfavoredOverload
     public init<S: StringProtocol, V: BinaryFloatingPoint>(
         _ title: S,
         value: Binding<V>,

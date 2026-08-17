@@ -252,11 +252,27 @@ public struct Toggle<Label: View>: View {
 // MARK: - Toggle Initializers (String Label)
 
 extension Toggle where Label == Text {
-    /// Creates a toggle with a string label.
+    /// Creates a toggle with a localized label.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the toggle's label.
+    ///   - isOn: A binding to the toggle's boolean state.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        isOn: Binding<Bool>
+    ) {
+        self.init(titleKey.localized, isOn: isOn)
+    }
+
+    /// Creates a toggle with a string label, displayed as written.
     ///
     /// - Parameters:
     ///   - title: The toggle's label text.
     ///   - isOn: A binding to the toggle's boolean state.
+    @_disfavoredOverload
     public init<S: StringProtocol>(
         _ title: S,
         isOn: Binding<Bool>

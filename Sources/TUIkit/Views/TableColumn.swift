@@ -112,9 +112,24 @@ public struct TableColumn<Value>: Sendable {
     /// of it. Matches SwiftUI, where the same initializer is what makes a
     /// column sortable.
     ///
+    /// A string **literal** binds here, so the header is a lookup key — see
+    /// ``LocalizedStringKey``. Only the header: the cells come from the data.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the column header title.
+    ///   - value: A key path to the String property to display.
+    public init(
+        _ titleKey: LocalizedStringKey, value: KeyPath<Value, String> & Sendable
+    ) where Value: Sendable {
+        self.init(titleKey.localized, value: value)
+    }
+
+    /// Creates a table column whose header is displayed as written.
+    ///
     /// - Parameters:
     ///   - title: The column header title.
     ///   - value: A key path to the String property to display.
+    @_disfavoredOverload
     public init(_ title: String, value: KeyPath<Value, String> & Sendable) where Value: Sendable {
         self.title = title
         self.alignment = .leading
@@ -137,9 +152,24 @@ public struct TableColumn<Value>: Sendable {
     /// ```
     ///
     /// - Parameters:
+    ///   - titleKey: The key for the column header title.
+    ///   - value: A key path to the `Comparable` property this column sorts by.
+    ///   - content: Builds the cell's display string from a data item.
+    public init<V: Comparable>(
+        _ titleKey: LocalizedStringKey,
+        value: KeyPath<Value, V> & Sendable,
+        content: @escaping @Sendable (Value) -> String
+    ) where Value: Sendable {
+        self.init(titleKey.localized, value: value, content: content)
+    }
+
+    /// Creates a sortable column whose header is displayed as written.
+    ///
+    /// - Parameters:
     ///   - title: The column header title.
     ///   - value: A key path to the `Comparable` property this column sorts by.
     ///   - content: Builds the cell's display string from a data item.
+    @_disfavoredOverload
     public init<V: Comparable>(
         _ title: String,
         value: KeyPath<Value, V> & Sendable,
@@ -159,8 +189,18 @@ public struct TableColumn<Value>: Sendable {
     /// column that is both.
     ///
     /// - Parameters:
+    ///   - titleKey: The key for the column header title.
+    ///   - value: A closure that extracts the display string from a data item.
+    public init(_ titleKey: LocalizedStringKey, value: @escaping @Sendable (Value) -> String) {
+        self.init(titleKey.localized, value: value)
+    }
+
+    /// Creates a closure column whose header is displayed as written.
+    ///
+    /// - Parameters:
     ///   - title: The column header title.
     ///   - value: A closure that extracts the display string from a data item.
+    @_disfavoredOverload
     public init(_ title: String, value: @escaping @Sendable (Value) -> String) {
         self.title = title
         self.alignment = .leading

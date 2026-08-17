@@ -33,7 +33,20 @@ extension View {
         return SearchableModifier(content: self, text: text, prompt: prompt)
     }
 
-    /// Marks this view as searchable, with a string prompt.
+    /// Marks this view as searchable, with a localized prompt.
+    ///
+    /// A string **literal** binds here, so the prompt is a lookup key — see
+    /// ``LocalizedStringKey``.
+    public func searchable(
+        text: Binding<String>,
+        placement: SearchFieldPlacement = .automatic,
+        prompt: LocalizedStringKey
+    ) -> some View {
+        searchable(text: text, placement: placement, prompt: Text(prompt))
+    }
+
+    /// Marks this view as searchable, with a prompt displayed as written.
+    @_disfavoredOverload
     public func searchable(
         text: Binding<String>,
         placement: SearchFieldPlacement = .automatic,

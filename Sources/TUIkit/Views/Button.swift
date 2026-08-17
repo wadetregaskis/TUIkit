@@ -111,11 +111,28 @@ public struct Button: View {
     /// Internal: the only thing that wants it is a menu's own collapsed control.
     var isMenuTrigger = false
 
-    /// Creates a button with a label and action.
+    /// Creates a button with a localized label and an action.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. A `String` you computed binds to
+    /// ``init(_:action:)-(String,_)`` and is shown as written.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the button's label.
+    ///   - action: The action to perform when pressed.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        action: @escaping () -> Void
+    ) {
+        self.init(titleKey.localized, action: action)
+    }
+
+    /// Creates a button with a label and action, displayed as written.
     ///
     /// - Parameters:
     ///   - label: The button's label text.
     ///   - action: The action to perform when pressed.
+    @_disfavoredOverload
     public init(
         _ label: String,
         action: @escaping () -> Void
@@ -138,9 +155,24 @@ public struct Button: View {
     /// `init(_ title: S, role: ButtonRole?, action: () -> Void)`
     ///
     /// - Parameters:
+    ///   - titleKey: The key for the button's label — a literal is looked up.
+    ///   - role: An optional semantic role describing the button.
+    ///   - action: The action to perform when pressed.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        role: ButtonRole?,
+        action: @escaping () -> Void
+    ) {
+        self.init(titleKey.localized, role: role, action: action)
+    }
+
+    /// Creates a button with a role and a label displayed as written.
+    ///
+    /// - Parameters:
     ///   - label: The button's label text.
     ///   - role: An optional semantic role describing the button.
     ///   - action: The action to perform when pressed.
+    @_disfavoredOverload
     public init(
         _ label: String,
         role: ButtonRole?,

@@ -98,20 +98,45 @@ extension ContentUnavailableView where Actions == EmptyView {
 }
 
 extension ContentUnavailableView where Label == Text, Description == EmptyView, Actions == EmptyView {
-    /// Creates a content unavailable view with a title string.
+    /// Creates a content unavailable view with a localized title.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameter titleKey: The key for the title text.
+    public init(_ titleKey: LocalizedStringKey) {
+        self.init(titleKey.localized)
+    }
+
+    /// Creates a content unavailable view with a title shown as written.
     ///
     /// - Parameter title: The title text.
+    @_disfavoredOverload
     public init(_ title: String) {
         self.init(label: { Text(title) }, description: { EmptyView() }, actions: { EmptyView() })
     }
 }
 
 extension ContentUnavailableView where Label == Text, Description == Text, Actions == EmptyView {
-    /// Creates a content unavailable view with a title and description string.
+    /// Creates a content unavailable view with a localized title and description.
+    ///
+    /// Both are keys — an empty state is prose the reader is meant to
+    /// understand, so the sentence under the title needs translating as much as
+    /// the title does.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the title text.
+    ///   - description: The key for the description text.
+    public init(_ titleKey: LocalizedStringKey, description: LocalizedStringKey) {
+        self.init(titleKey.localized, description: description.localized)
+    }
+
+    /// Creates a content unavailable view with strings shown as written.
     ///
     /// - Parameters:
     ///   - title: The title text.
     ///   - description: The description text.
+    @_disfavoredOverload
     public init(_ title: String, description: String) {
         self.init(label: { Text(title) }, description: { Text(description) }, actions: { EmptyView() })
     }

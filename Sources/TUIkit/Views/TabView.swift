@@ -23,13 +23,30 @@ public struct Tab<Value: Hashable, Content: View>: View {
     let value: Value
     let content: Content
 
-    /// Creates a tab with a title, selection value, and content.
+    /// Creates a tab with a localized title, selection value, and content.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the tab's label in the strip.
+    ///   - value: The value this tab is selected by (matches the `TabView`'s
+    ///     selection binding).
+    ///   - content: The view shown while this tab is selected.
+    public init(
+        _ titleKey: LocalizedStringKey, value: Value, @ViewBuilder content: () -> Content
+    ) {
+        self.init(titleKey.localized, value: value, content: content)
+    }
+
+    /// Creates a tab whose title is displayed as written.
     ///
     /// - Parameters:
     ///   - title: The tab's label in the strip.
     ///   - value: The value this tab is selected by (matches the `TabView`'s
     ///     selection binding).
     ///   - content: The view shown while this tab is selected.
+    @_disfavoredOverload
     public init(_ title: String, value: Value, @ViewBuilder content: () -> Content) {
         self.title = title
         self.value = value

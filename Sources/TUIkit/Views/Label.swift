@@ -90,8 +90,20 @@ extension Label where Title == Text, Icon == _SymbolIcon {
     /// see ``_SymbolIcon``.
     ///
     /// - Parameters:
+    ///   - titleKey: The key for the title shown beside the icon — a literal is
+    ///     looked up, see ``LocalizedStringKey``. The `systemImage` is a symbol
+    ///     name rather than display text, so it is never a key.
+    ///   - systemImage: The SF Symbol name, e.g. `"star.fill"`.
+    public init(_ titleKey: LocalizedStringKey, systemImage: String) {
+        self.init(titleKey.localized, systemImage: systemImage)
+    }
+
+    /// Creates a label with a string title, shown as written, and an SF Symbol.
+    ///
+    /// - Parameters:
     ///   - title: The title shown beside the icon.
     ///   - systemImage: The SF Symbol name, e.g. `"star.fill"`.
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S, systemImage: String) {
         // Fall back to the title alone where the symbol would not actually
         // appear — see ``SFSymbol/canRender(named:)`` for the two halves of

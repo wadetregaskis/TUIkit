@@ -272,12 +272,30 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
 // MARK: - Convenience Initializer
 
 extension Picker where Label == Text {
-    /// Creates a picker with a text label.
+    /// Creates a picker with a localized label.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the picker's label.
+    ///   - selection: A binding to the selected value.
+    ///   - content: A view builder of options, each carrying a ``View/tag(_:)``.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        selection: Binding<SelectionValue>,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(titleKey.localized, selection: selection, content: content)
+    }
+
+    /// Creates a picker with a text label, displayed as written.
     ///
     /// - Parameters:
     ///   - title: The picker's label text.
     ///   - selection: A binding to the selected value.
     ///   - content: A view builder of options, each carrying a ``View/tag(_:)``.
+    @_disfavoredOverload
     public init(
         _ title: String,
         selection: Binding<SelectionValue>,

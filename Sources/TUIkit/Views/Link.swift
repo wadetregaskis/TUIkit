@@ -56,11 +56,24 @@ public struct Link<Label: View>: View {
 // MARK: - String-titled convenience
 
 extension Link where Label == Text {
-    /// Creates a link with a string title.
+    /// Creates a link with a localized title.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the title shown for the link.
+    ///   - destination: The URL to open when the link is activated.
+    public init(_ titleKey: LocalizedStringKey, destination: URL) {
+        self.init(titleKey.localized, destination: destination)
+    }
+
+    /// Creates a link with a string title, shown as written.
     ///
     /// - Parameters:
     ///   - title: The title shown for the link.
     ///   - destination: The URL to open when the link is activated.
+    @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S, destination: URL) {
         self.destination = destination
         // The underline is applied uniformly in `_Link` from the environment,
