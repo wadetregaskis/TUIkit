@@ -112,6 +112,10 @@ struct LayoutPage: View {
     /// Whether the bullet hangs off the stack's alignment line.
     @State private var hangBullet = true
 
+    /// How far the third guide demo pushes its own alignment line, in cells.
+    /// A guide is just a number, so a stepper can drive one directly.
+    @State private var guideOffset = 0
+
     /// Whether the chips flow onto wrapped lines or stack in one column.
     @State private var flowChipsLayout = true
 
@@ -126,6 +130,21 @@ struct LayoutPage: View {
     @State private var measureSink = LazyMeasureSink()
 
     private let lazyRowCount = 40
+
+    /// Amounts whose whole parts differ in width, so aligning on the decimal
+    /// point is visibly not the same as aligning on either edge.
+    private struct Amount: Hashable {
+        let whole: String
+        let fraction: String
+    }
+
+    private static let amounts = [
+        Amount(whole: "7", fraction: "50"),
+        Amount(whole: "1240", fraction: "05"),
+        Amount(whole: "96", fraction: "125"),
+        Amount(whole: "3", fraction: "7"),
+        Amount(whole: "58021", fraction: "40"),
+    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -204,14 +223,20 @@ struct LayoutPage: View {
             }
 
             DemoSection(L("page.layout.section.alignmentGuide")) {
-                // `.alignmentGuide` moves the line the stack aligns on. With the
-                // bullet's guide at its own TRAILING edge, the bullet hangs to
-                // the left of that line and everything else shifts right to meet
-                // it — so the column ends up WIDER than its widest child, which
-                // the border makes visible.
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L("page.layout.guideExplain"))
                         .foregroundStyle(.palette.foregroundSecondary)
+
+                    // 1 — A guide read off the view's OWN dimensions.
+                    //
+                    // With the bullet's leading guide at its own TRAILING edge,
+                    // the bullet hangs to the left of the line and everything
+                    // else shifts right to meet it, so the column ends up WIDER
+                    // than its widest child. The border is what makes that
+                    // visible, and it is the whole point: a guide moves the
+                    // line, and the line decides the stack's width.
+                    Text(L("page.layout.guideCase1"))
+                        .foregroundStyle(.palette.foregroundTertiary)
                     Toggle(L("page.layout.guideToggle"), isOn: $hangBullet)
 
                     VStack(alignment: .leading, spacing: 0) {
@@ -224,6 +249,52 @@ struct LayoutPage: View {
                         }
                         Text(L("page.layout.guideItem"))
                         Text(L("page.layout.guideItem2"))
+                    }
+                    .border(.brightBlack)
+
+                    // 2 — A guide that is a plain NUMBER, driven by a stepper.
+                    //
+                    // Nothing about a guide requires it to be an edge: the
+                    // closure returns a position, and any expression will do.
+                    // Stepping it moves one row's line while its neighbours
+                    // stay put, which is the clearest way to see that alignment
+                    // is per-child and not a property of the stack.
+                    Text(L("page.layout.guideCase2"))
+                        .foregroundStyle(.palette.foregroundTertiary)
+                    // No value in the label: `Stepper` prints its own read-out,
+                    // and two copies of the same number read as a bug.
+                    Stepper(L("page.layout.guideOffsetLabel"), value: $guideOffset, in: -6...6)
+
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(L("page.layout.guideFixed"))
+                        Text(L("page.layout.guideMoving"))
+                            .foregroundStyle(.palette.accent)
+                            .alignmentGuide(.leading) { _ in Double(-guideOffset) }
+                        Text(L("page.layout.guideFixed2"))
+                    }
+                    .border(.brightBlack)
+
+                    // 3 — A CUSTOM alignment: a line of one's own.
+                    //
+                    // `.leading` and `.trailing` can only align edges. A custom
+                    // `AlignmentID` names a line that means something to the
+                    // content — here the decimal point — and every row places
+                    // it wherever its own text puts it. The numbers line up on
+                    // the point even though they share no edge and no width.
+                    Text(L("page.layout.guideCase3"))
+                        .foregroundStyle(.palette.foregroundTertiary)
+
+                    VStack(alignment: .decimalPoint, spacing: 0) {
+                        ForEach(Self.amounts, id: \.self) { amount in
+                            HStack(spacing: 0) {
+                                Text(amount.whole)
+                                Text(".")
+                                    .foregroundStyle(.palette.accent)
+                                    .alignmentGuide(.decimalPoint) { $0[.leading] }
+                                Text(amount.fraction)
+                                    .foregroundStyle(.palette.foregroundSecondary)
+                            }
+                        }
                     }
                     .border(.brightBlack)
                 }
@@ -395,4 +466,24 @@ struct LayoutPage: View {
         flush()
         return runs.joined(separator: ", ")
     }
+}
+
+// MARK: - A custom alignment
+
+/// The line a decimal point sits on.
+///
+/// `.leading` and `.trailing` can only ever align an edge. An `AlignmentID`
+/// names a line the CONTENT cares about, and each child says where its own
+/// copy of that line is — so a column of numbers can line up on the point
+/// while sharing neither a width nor an edge.
+private enum DecimalPointID: AlignmentID {
+    /// Where the guide sits on a view that never mentions it. Leading, so a row
+    /// without a decimal point still lines up somewhere predictable rather than
+    /// floating.
+    static func defaultValue(in context: ViewDimensions) -> Double { 0 }
+}
+
+extension HorizontalAlignment {
+    /// Aligns children on their decimal point. See ``DecimalPointID``.
+    fileprivate static let decimalPoint = Self(DecimalPointID.self)
 }
