@@ -292,8 +292,10 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         // The rendered field is `openCap + content + closeCap`, so the total
         // width is the content width plus the two caps. Report that total so a
-        // parent (e.g. HStack) allocates the field accurately.
-        let capWidth = 2
+        // parent (e.g. HStack) allocates the field accurately. A `.plain` field
+        // draws no caps, so they cost nothing — the number comes from the style
+        // in both passes, through the one helper, so they cannot disagree.
+        let capWidth = FieldChrome.width(for: context.environment.textFieldStyle)
         let proposedTotal = proposal.width ?? (defaultContentWidth + capWidth)
         return ViewSize(
             width: max(minContentWidth + capWidth, proposedTotal),
@@ -311,8 +313,12 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         let palette = context.environment.palette
         let cursorStyle = context.environment.textCursorStyle
 
-        // TextField expands to fill available width (reserve 2 chars for caps)
-        let contentWidth = max(minContentWidth, context.availableWidth - 2)
+        // TextField expands to fill available width, less whatever chrome the
+        // style draws (two cap cells, or none for `.plain`).
+        let chrome = FieldChrome(
+            style: context.environment.textFieldStyle, palette: palette,
+            isHovered: false)
+        let contentWidth = max(minContentWidth, context.availableWidth - chrome.width)
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
@@ -382,6 +388,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             prompt: prompt,
             isDisabled: isDisabled,
             displayCharacter: displayCharacter,
+            surface: chrome.surface,
             contentForeground: cascaded.foreground
         )
 
@@ -396,35 +403,30 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             contentWidth: textWidth
         )
 
-        // Wrap with half-block caps. Hover bumps the cap tint so
-        // the affordance reads as "I'm clickable" without
-        // mimicking the focused look (focused fields get their
-        // signal from the cursor blink and the bold cap colour
-        // elsewhere — TextField's focus styling comes from the
-        // text renderer, not the caps).
         // The caps are half-block glyphs painted in the field surface — they
         // read as the field's rounded ends on any palette. Hover tints them
-        // toward the accent so the affordance still reads as "clickable".
-        let surface = palette.fieldBackground.resolve(with: palette)
-        let capColor =
-            isHovered
-            ? Color.lerp(surface, palette.accent.resolve(with: palette), phase: 0.35)
-            : surface
-        let openCap = ANSIRenderer.colorize(String(TerminalSymbols.openCap), foreground: capColor)
-        let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
+        // toward the accent so the affordance reads as "I'm clickable" without
+        // mimicking the focused look (a focused field signals through its
+        // caret, from the text renderer rather than the caps). A `.plain` field
+        // has neither cap; `hoveredChrome` is the same chrome the width above
+        // came from, re-derived with the hover tint.
+        let hoveredChrome = FieldChrome(
+            style: context.environment.textFieldStyle, palette: palette,
+            isHovered: isHovered)
 
         // The ▾/▴ combo-box affordance sits inside the field surface, against
         // the trailing cap.
         let disclosure = Self.disclosureGlyph(
-            isOpen: suggestionMenu?.isOpen, palette: palette, surface: surface)
-        var buffer = FrameBuffer(text: openCap + fieldContent.line + disclosure + closeCap)
+            isOpen: suggestionMenu?.isOpen, palette: palette, surface: chrome.surface)
+        var buffer = FrameBuffer(
+            text: hoveredChrome.open + fieldContent.line + disclosure + hoveredChrome.close)
 
         // The caret animates itself: its cells go to the run loop, which
         // repaints them on the cursor clock without re-rendering anything. Past
         // the opening cap, which is the only chrome before the content. See
         // ``AnimatedCellRun``.
         if !context.isMeasuring, let caret = fieldContent.caret {
-            buffer.animatedCells = [caret.shifted(byX: 1, y: 0)]
+            buffer.animatedCells = [caret.shifted(byX: chrome.leadingCells, y: 0)]
         }
 
         // Mouse: click focuses the field and drops the caret at the clicked
@@ -433,8 +435,10 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         if !isDisabled {
             // The ▾ disclosure occupies the two cells between the content and
             // the closing cap; clicks there toggle the menu, not the caret.
+            let leading = chrome.leadingCells
             let disclosureRange: Range<Int>? =
-                suggestionMenu != nil ? (1 + textWidth)..<(1 + textWidth + 2) : nil
+                suggestionMenu != nil
+                ? (leading + textWidth)..<(leading + textWidth + 2) : nil
             TextFieldMouseHandler.register(
                 buffer: &buffer,
                 context: context,
@@ -443,6 +447,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
                 hoverBox: hoverBox,
                 contentWidth: textWidth,
                 displayCharacter: displayCharacter,
+                leadingCapWidth: leading,
                 disclosureRange: disclosureRange)
         }
 
@@ -460,7 +465,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
     /// The combo box's ▾/▴ affordance, drawn inside the field surface against
     /// the trailing cap, or `""` when the field has no suggestion menu.
     private static func disclosureGlyph(
-        isOpen: Bool?, palette: any Palette, surface: Color
+        isOpen: Bool?, palette: any Palette, surface: Color?
     ) -> String {
         guard let isOpen else { return "" }
         let caret = isOpen ? DropdownMenu.openCaret : DropdownMenu.closedCaret

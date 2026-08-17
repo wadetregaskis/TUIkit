@@ -28,6 +28,10 @@ struct TextFieldContentRenderer {
     /// For TextField: the actual character. For SecureField: a bullet.
     let displayCharacter: (_ index: Int, _ text: String) -> Character
 
+    /// The field's surface, or `nil` for a `.plain` field that draws none.
+    /// See ``TextFieldStyle``.
+    var surface: Color?
+
     /// A scoped style-cascade override for the entered text's colour
     /// (`.textFieldTextStyle { … }`), or `nil` to use the palette foreground.
     /// The cursor, selection, and (dim) prompt keep their own colours.
@@ -76,7 +80,12 @@ struct TextFieldContentRenderer {
         // The palette's field surface (the tab-strip tone): palette-aware, so
         // light palettes get a light field. The old fixed accent-dim tint
         // multiplied toward black, rendering dark-on-light fields unreadable.
-        let backgroundColor = palette.fieldBackground.resolve(with: palette)
+        //
+        // `nil` under `.textFieldStyle(.plain)`, and deliberately nil rather
+        // than the palette's background: emitting NO background is what lets
+        // the text take the colour of whatever is behind the field, the way
+        // ordinary text in a tinted container does.
+        let backgroundColor = surface
 
         if isEmpty, prompt != nil {
             // SwiftUI (and AppKit) keep the placeholder visible in a focused
@@ -164,7 +173,7 @@ struct TextFieldContentRenderer {
     /// Builds the prompt content for an UNFOCUSED empty field. The focused
     /// case goes through ``buildTextWithCursor`` instead, so the caret draws
     /// over the prompt using the ordinary cursor machinery.
-    private func buildPromptContent(palette: any Palette, background: Color, width: Int) -> String {
+    private func buildPromptContent(palette: any Palette, background: Color?, width: Int) -> String {
         let promptText = promptString()
         // Truncate and pad by CELLS, not characters — a wide glyph in the
         // prompt must not push the field wider than its neighbours.
@@ -177,7 +186,9 @@ struct TextFieldContentRenderer {
 
     /// Builds text content without cursor (unfocused state), exactly `width`
     /// cells: characters from the front while they fit whole, then padding.
-    private func buildTextContent(text: String, palette: any Palette, background: Color, width: Int) -> String {
+    private func buildTextContent(
+        text: String, palette: any Palette, background: Color?, width: Int
+    ) -> String {
         var displayText = ""
         var cells = 0
         for index in 0..<text.count {
@@ -217,6 +228,21 @@ struct TextFieldContentRenderer {
         return (widths, scrollStart, scrollStart + width)
     }
 
+    /// The selection highlight's background and the text colour that reads on
+    /// it.
+    ///
+    /// A blend needs something concrete to blend TOWARD, and a `.plain` field
+    /// has no surface to name — so the palette's background stands in. The
+    /// selection is an opaque highlight either way; this only decides its
+    /// exact tint.
+    private static func selectionColors(
+        palette: any Palette, background: Color?
+    ) -> (background: Color, foreground: Color) {
+        let selection = palette.accent.opacity(
+            ViewConstants.selectionIndicator, over: background ?? palette.background)
+        return (selection, palette.readableText(on: selection))
+    }
+
     private func buildTextWithCursor(
         text: String,
         cursorPosition: Int,
@@ -224,7 +250,7 @@ struct TextFieldContentRenderer {
         palette: any Palette,
         cursorStyle: TextCursorStyle,
         cursorTimer: CursorTimer?,
-        background: Color,
+        background: Color?,
         width: Int,
         foregroundOverride: Color? = nil,
         displayOverride: ((_ index: Int, _ text: String) -> Character)? = nil
@@ -260,13 +286,12 @@ struct TextFieldContentRenderer {
         // Entered text honours the `.textFieldTextStyle` cascade override; the
         // cursor and selection keep their own colours.
         let textForeground = foregroundOverride ?? resolvedContentForeground(palette)
-        let selectionBackground = palette.accent.opacity(
-            ViewConstants.selectionIndicator, over: background)
-        let selectionForeground = palette.readableText(on: selectionBackground)
+        let (selectionBackground, selectionForeground) = Self.selectionColors(
+            palette: palette, background: background)
         var result = ""
         var runText = ""
         var runForeground = textForeground
-        var runBackground = background
+        var runBackground: Color? = background
         var hasRun = false
 
         func flushRun() {
@@ -275,7 +300,7 @@ struct TextFieldContentRenderer {
             runText = ""
             hasRun = false
         }
-        func emit(_ piece: Character, foreground: Color, background: Color) {
+        func emit(_ piece: Character, foreground: Color, background: Color?) {
             if hasRun && (foreground != runForeground || background != runBackground) {
                 flushRun()
             }
@@ -292,7 +317,7 @@ struct TextFieldContentRenderer {
         // straddling an edge → spaces for the visible part; outside → skipped.
         var cellX = 0
         var outputCells = 0
-        func emitClipped(_ character: Character, cells: Int, foreground: Color, background: Color) {
+        func emitClipped(_ character: Character, cells: Int, foreground: Color, background: Color?) {
             let start = cellX
             let end = cellX + cells
             cellX = end
@@ -317,7 +342,8 @@ struct TextFieldContentRenderer {
         // when it was spliced in. Costs one escape pair; buys the whole cheap
         // animation path. See ``AnimatedCellRun``.
         let colors = CaretColors(
-            background: background, text: textForeground, selectionText: selectionForeground,
+            background: background, blockText: background ?? palette.background,
+            text: textForeground, selectionText: selectionForeground,
             selectionBackground: selectionBackground)
         var caret: AnimatedCellRun?
 
@@ -378,7 +404,16 @@ struct TextFieldContentRenderer {
     /// The four colours the caret picks between, gathered so the frame builder
     /// takes one parameter rather than four.
     struct CaretColors {
-        let background: Color
+        /// The field's surface, or `nil` for a plain field with none — the
+        /// caret's own cells then take what is behind the field, exactly as
+        /// the rest of the line does.
+        let background: Color?
+
+        /// What a BLOCK caret punches its character out in. The surface where
+        /// there is one; a plain field still has to name a colour, a block
+        /// being opaque by definition, so it takes the palette's background.
+        let blockText: Color
+
         let text: Color
         let selectionText: Color
         let selectionBackground: Color
@@ -437,7 +472,7 @@ struct TextFieldContentRenderer {
         switch shape {
         case .block:
             return ANSIRenderer.colorize(
-                String(underlying), foreground: colors.background, background: state.color)
+                String(underlying), foreground: colors.blockText, background: state.color)
         case .underscore where cells == 1 && underlying != " ":
             return ANSIRenderer.colorize(
                 String(underlying), foreground: state.color, background: colors.background,

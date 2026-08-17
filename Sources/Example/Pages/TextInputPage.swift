@@ -12,6 +12,9 @@ import TUIkit
 struct TextInputPage: View {
     // TextField state
     @State private var demoText: String = ""
+    /// Shared by the three `.textFieldStyle` fields, so what differs between
+    /// them is visibly the chrome rather than the content.
+    @State private var styledText: String = "Ada"
     @State private var searchQuery: String = ""
     @State private var submittedValue: String = ""
 
@@ -102,6 +105,36 @@ struct TextInputPage: View {
                 // .textFieldTextStyle re-themes the entered text of all fields
                 // in this section (cursor, selection and prompt keep their colours).
                 .textFieldTextStyle { $0.foreground = .palette.accent }
+            }
+
+            // MARK: .textFieldStyle
+            DemoSection(L("page.textInput.styleSection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.textInput.styleExplain"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    HStack(spacing: 1) {
+                        Text(".automatic").foregroundStyle(.palette.foregroundSecondary)
+                            .frame(width: 12)
+                        TextField("Automatic", text: $styledText).frame(width: 24)
+                    }
+                    HStack(spacing: 1) {
+                        Text(".plain").foregroundStyle(.palette.foregroundSecondary)
+                            .frame(width: 12)
+                        TextField("Plain", text: $styledText)
+                            .textFieldStyle(.plain)
+                            .frame(width: 24)
+                    }
+                    // The point of `.plain`: a field that reads as part of a
+                    // sentence. Both fields above edit the SAME binding, so the
+                    // difference on screen is the chrome and nothing else.
+                    HStack(spacing: 0) {
+                        Text(L("page.textInput.styleInlineLead"))
+                        TextField("Inline", text: $styledText)
+                            .textFieldStyle(.plain)
+                            .frame(width: 16)
+                        Text(L("page.textInput.styleInlineTail"))
+                    }
+                }
             }
 
             // MARK: Cascading .onSubmit + .submitLabel

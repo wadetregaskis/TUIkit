@@ -249,8 +249,10 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         // The rendered field is `openCap + content + closeCap`, so the total
         // width is the content width plus the two caps. Report that total so a
-        // parent (e.g. HStack) allocates the field accurately.
-        let capWidth = 2
+        // parent (e.g. HStack) allocates the field accurately. A `.plain` field
+        // draws no caps; the count comes from the style through the one helper
+        // both passes use.
+        let capWidth = FieldChrome.width(for: context.environment.textFieldStyle)
         let proposedTotal = proposal.width ?? (defaultContentWidth + capWidth)
         return ViewSize(
             width: max(minContentWidth + capWidth, proposedTotal),
@@ -266,8 +268,12 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         let palette = context.environment.palette
         let cursorStyle = context.environment.textCursorStyle
 
-        // SecureField expands to fill available width (reserve 2 chars for caps)
-        let contentWidth = max(minContentWidth, context.availableWidth - 2)
+        // SecureField expands to fill available width, less whatever chrome the
+        // style draws (two cap cells, or none for `.plain`).
+        let chrome = FieldChrome(
+            style: context.environment.textFieldStyle, palette: palette,
+            isHovered: false)
+        let contentWidth = max(minContentWidth, context.availableWidth - chrome.width)
 
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
@@ -323,6 +329,7 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
             prompt: prompt,
             isDisabled: isDisabled,
             displayCharacter: { _, _ in TerminalSymbols.maskBullet },
+            surface: chrome.surface,
             contentForeground: cascaded.foreground
         )
 
@@ -337,27 +344,22 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
             contentWidth: contentWidth
         )
 
-        // Wrap with half-block caps. Hover bumps the cap tint
-        // so the affordance reads as "I'm clickable" — same
-        // visual language as TextField. Focused fields don't
-        // show the hover bump (focus is the more emphatic
-        // signal).
         // The caps are half-block glyphs painted in the field surface — they
-        // read as the field's rounded ends on any palette. Hover tints them
-        // toward the accent so the affordance still reads as "clickable".
-        let surface = palette.fieldBackground.resolve(with: palette)
-        let capColor =
-            isHovered
-            ? Color.lerp(surface, palette.accent.resolve(with: palette), phase: 0.35)
-            : surface
-        let openCap = ANSIRenderer.colorize(String(TerminalSymbols.openCap), foreground: capColor)
-        let closeCap = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
-        var buffer = FrameBuffer(text: openCap + fieldContent.line + closeCap)
+        // read as the field's rounded ends on any palette, and hover tints them
+        // toward the accent so the affordance reads as "I'm clickable", the same
+        // visual language as TextField. A focused field shows no hover bump
+        // (focus is the more emphatic signal), and a `.plain` field has no caps
+        // at all.
+        let hoveredChrome = FieldChrome(
+            style: context.environment.textFieldStyle, palette: palette,
+            isHovered: isHovered)
+        var buffer = FrameBuffer(
+            text: hoveredChrome.open + fieldContent.line + hoveredChrome.close)
 
         // The caret animates itself — see the note in TextField. Past the
         // opening cap, which is the only chrome before the content.
         if !context.isMeasuring, let caret = fieldContent.caret {
-            buffer.animatedCells = [caret.shifted(byX: 1, y: 0)]
+            buffer.animatedCells = [caret.shifted(byX: chrome.leadingCells, y: 0)]
         }
 
         // Mouse: click focuses the field and drops the caret at the clicked
@@ -371,7 +373,8 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
                 persistedFocusID: persistedFocusID,
                 hoverBox: hoverBox,
                 contentWidth: contentWidth,
-                displayCharacter: { _, _ in TerminalSymbols.maskBullet })
+                displayCharacter: { _, _ in TerminalSymbols.maskBullet },
+                leadingCapWidth: chrome.leadingCells)
         }
 
         return buffer
