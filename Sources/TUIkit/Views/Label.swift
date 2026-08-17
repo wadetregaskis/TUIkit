@@ -93,17 +93,15 @@ extension Label where Title == Text, Icon == _SymbolIcon {
     ///   - title: The title shown beside the icon.
     ///   - systemImage: The SF Symbol name, e.g. `"star.fill"`.
     public init<S: StringProtocol>(_ title: S, systemImage: String) {
-        // Show the glyph only when it BOTH resolves to a codepoint AND the system
-        // has a font that can draw it (``SFSymbol/isFontAvailable``). A resolved
-        // codepoint with no installed SF Symbols font would otherwise render as a
-        // missing-glyph box; fall back to the title alone, as SwiftUI does when a
-        // symbol is unavailable.
+        // Fall back to the title alone where the symbol would not actually
+        // appear — see ``SFSymbol/canRender(named:)`` for the two halves of
+        // that question, and why either alone is a trap.
         //
-        // Deliberately resolved against the BASE name: a variant applied further
+        // Deliberately asked about the BASE name: a variant applied further
         // down decides which cut is drawn, but not whether there is an icon at
         // all — and it cannot, because `_SymbolIcon` falls back to this same base
         // symbol whenever the varied name is absent.
-        let showIcon = SFSymbol.glyph(named: systemImage) != nil && SFSymbol.isFontAvailable
+        let showIcon = SFSymbol.canRender(named: systemImage)
         self.init(
             title: Text(String(title)),
             icon: _SymbolIcon(name: systemImage),

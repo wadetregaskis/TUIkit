@@ -62,19 +62,73 @@ enum ImageLoadingPhase: Sendable {
 ///
 /// While loading, a centered placeholder is displayed. By default this is
 /// a ``Spinner``. Use ``View/imagePlaceholder(_:)`` to customize.
+///
+/// ## SF Symbols
+///
+/// ``init(systemName:)`` makes the other kind of image SwiftUI has — a system
+/// symbol — which in a terminal is one glyph rather than a raster:
+///
+/// ```swift
+/// HStack {
+///     Image(systemName: "star.fill")
+///     Text("Favourite")
+/// }
+/// ```
+///
+/// The rendering modifiers above apply to raster images only; there is nothing
+/// for them to do to a character. See ``SFSymbol`` for where symbols draw at
+/// all, and ``Label/init(_:systemImage:)`` for the icon-with-title shape, which
+/// is usually the better one because it can drop its gap as well as its glyph.
 public struct Image: View {
-    /// The image source (file path or URL).
-    let source: ImageSource
+    /// What this image *is* — the two unrelated things SwiftUI's `Image` also
+    /// covers, kept as one type because that is the API being matched.
+    ///
+    /// They share nothing but the name: one is decoded, resampled and converted
+    /// to coloured cells, the other is a single character looked up in a table.
+    enum Content: Equatable {
+        /// A raster image, loaded from a file or a URL.
+        case raster(ImageSource)
+        /// An SF Symbol, by name — resolved to a glyph at render time so
+        /// ``View/symbolVariant(_:)`` above it still chooses the cut.
+        case symbol(String)
+    }
+
+    let content: Content
 
     /// Creates an image from the given source.
     ///
     /// - Parameter source: The image source (file or URL).
     public init(_ source: ImageSource) {
-        self.source = source
+        self.content = .raster(source)
     }
 
+    /// Creates an image showing the named SF Symbol.
+    ///
+    /// Mirrors SwiftUI's `Image(systemName:)`. The symbol is a terminal glyph,
+    /// not artwork: it takes the two cells a wide character takes and follows
+    /// the surrounding text's colour, and it cannot be scaled.
+    ///
+    /// Where the symbol would not really draw — a non-Apple platform, a
+    /// terminal without the SF Symbols font, an unknown name — this renders
+    /// **nothing**, because there is nothing else it could honestly show (see
+    /// ``SFSymbol/canRender(named:)``). That is the one place
+    /// ``Label/init(_:systemImage:)`` does better: it can close the gap it was
+    /// going to leave, and a bare `Image` in an `HStack` cannot, the spacing
+    /// being the stack's.
+    ///
+    /// - Parameter systemName: The SF Symbol name, e.g. `"star.fill"`.
+    public init(systemName: String) {
+        self.content = .symbol(systemName)
+    }
+
+    @ViewBuilder
     public var body: some View {
-        _ImageCore(source: source)
+        switch content {
+        case .raster(let source):
+            _ImageCore(source: source)
+        case .symbol(let name):
+            _SymbolIcon(name: name)
+        }
     }
 }
 
@@ -82,7 +136,7 @@ public struct Image: View {
 
 extension Image: @preconcurrency Equatable {
     public static func == (lhs: Image, rhs: Image) -> Bool {
-        lhs.source == rhs.source
+        lhs.content == rhs.content
     }
 }
 

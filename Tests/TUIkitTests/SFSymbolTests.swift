@@ -127,6 +127,21 @@ struct SFSymbolTests {
     }
     #endif
 
+    @Test("canRender is the conjunction, and both halves are load-bearing")
+    func canRenderIsTheConjunction() {
+        // The predicate `Label`, `_SymbolIcon` and so `Image(systemName:)` all
+        // gate on. Asserting it as an IDENTITY rather than as fixed values is
+        // what makes it mean the same thing on a machine with the SF Symbols
+        // font and one without — the two cases this rule exists to separate.
+        #expect(
+            SFSymbol.canRender(named: "star.fill")
+                == (SFSymbol.isFontAvailable && SFSymbol.glyph(named: "star.fill") != nil))
+
+        // A name nobody has heard of fails the resolvability half everywhere,
+        // font or no font.
+        #expect(!SFSymbol.canRender(named: "definitely.not.a.symbol"))
+    }
+
     @Test("isFontAvailable gates rendering, consistent with resolvability")
     func fontAvailabilityConsistent() {
         // A `static let`, so it's evaluated once — reading it just must not crash

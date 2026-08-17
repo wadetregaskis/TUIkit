@@ -460,13 +460,61 @@ struct ImageViewTests {
     @Test("Image initializes with file source")
     func imageFileInit() {
         let image = Image(.file("/path/to/image.png"))
-        #expect(image.source == .file("/path/to/image.png"))
+        #expect(image.content == .raster(.file("/path/to/image.png")))
     }
 
     @Test("Image initializes with URL source")
     func imageURLInit() {
         let image = Image(.url("https://example.com/image.png"))
-        #expect(image.source == .url("https://example.com/image.png"))
+        #expect(image.content == .raster(.url("https://example.com/image.png")))
+    }
+
+    // MARK: - SF Symbols
+
+    @Test("Image(systemName:) keeps the name, not a resolved glyph")
+    func imageSystemNameInit() {
+        // Stored rather than resolved, and this is the reason: the variant that
+        // decides which cut is drawn lives in the environment, which an
+        // initialiser cannot read. Resolving here would freeze `star` even
+        // under a `.symbolVariant(.fill)` further down.
+        #expect(Image(systemName: "star.fill").content == .symbol("star.fill"))
+    }
+
+    @Test("A symbol image and a raster image are never equal")
+    func symbolAndRasterDiffer() {
+        // They share a type and nothing else. The memo compares `Image` values,
+        // so a definition that ignored the case could serve one's buffer for
+        // the other.
+        let star = Image(systemName: "star")
+        let sameStar = Image(systemName: "star")
+        #expect(star != Image(.file("star")))
+        #expect(star == sameStar)
+        #expect(star != Image(systemName: "star.fill"))
+    }
+
+    @Test("An unresolvable symbol renders nothing at all")
+    func unresolvableSymbolIsEmpty() {
+        // Not a box, not a placeholder: nothing. A resolved codepoint with no
+        // font behind it draws as a missing-glyph box, and a name nobody has
+        // heard of resolves to nothing anywhere — in both cases an empty run is
+        // the honest output, and it is what `Label` falls back to as well.
+        let out = renderToBuffer(
+            Image(systemName: "definitely.not.a.symbol"),
+            context: makeBareRenderContext(width: 20, height: 3))
+        #expect(out.lines.joined().stripped.isEmpty, "\(out.lines)")
+    }
+
+    @Test("A symbol draws exactly when SFSymbol says it can")
+    func symbolDrawsWhenRenderable() {
+        // Host-dependent by nature — the SF Symbols font is not installed by
+        // default and never present on Linux — so the assertion is the
+        // AGREEMENT between the two, not a fixed glyph. That makes it mean
+        // something on either kind of machine.
+        let out = renderToBuffer(
+            Image(systemName: "star.fill"),
+            context: makeBareRenderContext(width: 20, height: 3))
+        let drewSomething = !out.lines.joined().stripped.isEmpty
+        #expect(drewSomething == SFSymbol.canRender(named: "star.fill"))
     }
 
     @Test("ImageSource equality works")

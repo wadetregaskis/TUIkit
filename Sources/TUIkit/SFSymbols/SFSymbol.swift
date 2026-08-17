@@ -68,6 +68,23 @@ public enum SFSymbol {
         #endif
     }
 
+    /// Whether the named symbol would actually appear on screen here.
+    ///
+    /// The two halves of the question, which have to be asked together:
+    /// ``glyph(named:)`` says the name maps to a codepoint, and
+    /// ``isFontAvailable`` says some installed font can draw one. Either alone
+    /// is a trap — a resolved codepoint with no font behind it renders as a
+    /// missing-glyph box, which is worse than no icon at all.
+    ///
+    /// This is what ``Label/init(_:systemImage:)`` gates its icon column on and
+    /// what ``Image/init(systemName:)`` gates its whole self on, so both fall
+    /// back the same way rather than each spelling the rule out again.
+    ///
+    /// - Parameter name: The SF Symbol name, e.g. `"star.fill"`.
+    public static func canRender(named name: String) -> Bool {
+        isFontAvailable && glyph(named: name) != nil
+    }
+
     /// Every known symbol, sorted by name. Empty on non-Apple platforms.
     ///
     /// The names are materialised into `String`s lazily on first access — the

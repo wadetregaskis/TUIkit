@@ -237,13 +237,24 @@ covers it (§1).
 Image("Logo")        // asset catalog   Image(.file("logo.png"))   // rasterised → ASCII art
                                         Image(.url("https://…/x.png"))
 Label("Star", systemImage: "star.fill") Label("Star", systemImage: "star.fill")  // glyph, Apple only
+Image(systemName: "star.fill")          Image(systemName: "star.fill")            // the glyph alone
 ```
 
 **Bitmap / vector `Image` stays out.** A cell grid can't blit a bitmap or render
 a vector glyph, so TUIkit converts a raster source to ASCII/ANSI art with its own
-controls (`.imageCharacterSet`, `.imageColorMode`, `.imageDithering`). There is
-no `Image(systemName:)`: an SF Symbol is not a resizable image in a terminal, only
-a character, so it is modelled as text.
+controls (`.imageCharacterSet`, `.imageColorMode`, `.imageDithering`).
+
+**`Image(systemName:)` now ships**, reversing what this section used to say. The
+old reasoning — an SF Symbol is a character rather than a resizable image, so it
+is modelled as text — describes the value correctly and was the wrong conclusion
+to draw from it: that a symbol cannot be scaled is a property to document, not a
+reason to withhold the spelling every ported SwiftUI file uses. It draws exactly
+the glyph `Label(_:systemImage:)` draws, under the same conditions, and the
+raster rendering modifiers simply have nothing to do to a character. Where the
+symbol would not really draw it renders **nothing** — the honest output, since
+there is no title to fall back to, and the one place `Label` still does better:
+it can close the gap it was going to leave, and a bare `Image` in an `HStack`
+cannot, the spacing being the stack's.
 
 **SF Symbols DO render as glyphs — but only in very limited circumstances.**
 `Label(_:systemImage:)` matches SwiftUI's signature, and `SFSymbol.glyph(named:)`
@@ -252,8 +263,8 @@ Plane-16 Private Use Area, so it renders **only** where a font supplies its
 glyphs: an **Apple platform**, in a terminal using a font that has them
 (**Terminal.app with SF Mono**, with the **SF Symbols font installed** — not the
 default). Everywhere else — Linux, or a terminal without the font —
-`Label(_:systemImage:)` shows just its title and `SFSymbol` resolves nothing, so
-code stays correct; the glyph simply appears only where it can. The name →
+`Label(_:systemImage:)` shows just its title, `Image(systemName:)` shows nothing,
+and `SFSymbol` resolves nothing, so code stays correct; the glyph simply appears only where it can. The name →
 codepoint table is Apple's own, extracted deterministically from the SF Symbols
 app (`Tools/GenerateSFSymbols`), and the Private-Use width/advance is handled the
 same way as VS-16 emoji. See `SFSymbol` for the full rules.

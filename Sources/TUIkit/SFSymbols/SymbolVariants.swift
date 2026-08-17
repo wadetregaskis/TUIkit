@@ -195,7 +195,13 @@ public struct _SymbolIcon: View {
     @Environment(\.symbolVariants) private var variants
 
     public var body: some View {
-        Text(verbatim: Self.glyph(for: name, variants: variants))
+        // Nothing at all where the symbol would not really draw. ``Label`` never
+        // reaches this — it drops the icon *and* its gap up front — but
+        // ``Image/init(systemName:)`` IS this view, with no title to fall back
+        // to, so the check has to live where the glyph is emitted. Asked of the
+        // base name, as ``Label`` asks it: the variant chooses the cut, not
+        // whether there is a symbol.
+        Text(verbatim: SFSymbol.canRender(named: name) ? Self.glyph(for: name, variants: variants) : "")
     }
 
     /// The glyph for `name` under `variants`, falling back to the base symbol.
