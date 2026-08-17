@@ -307,6 +307,24 @@
     "FillStyle": {
       "why": "eoFill and isAntialiased only mean something to a path rasterizer resolving self-intersection and edge coverage; there is no path and no partial cell coverage (see Shape)."
     },
+    "Font.Context": {
+      "why": "The environment a Font resolves in — the display metrics and dynamic-type size feeding Font.Resolved. TUIkit resolves a semantic style straight to terminal attributes (Sources/TUIkit/Styling/Font.swift, `defaultAttributes`), with no intermediate resolution step for a context to parameterise."
+    },
+    "Font.Design": {
+      "why": "A design selects a typeface — serif, rounded, monospaced. A terminal emulator draws every cell in the one font its user configured, and no escape sequence asks it for another. TUIkit cannot honour any case, and `.monospaced` is already unconditionally true (see Sources/TUIkit/Modifiers/MediumGuaranteedModifiers.swift), so an accepted-and-ignored Design would be a stub that lies. Font carries the semantic axis instead: Sources/TUIkit/Styling/Font.swift."
+    },
+    "Font.Leading": {
+      "why": "Leading is the space between baselines, measured in fractions of a point. A terminal's baselines are one cell apart, always. The nearest expressible thing is a WHOLE blank row between lines, which TUIkit spells `View.lineSpacing(_:)` (Sources/TUIkit/Modifiers/LineSpacingModifier.swift) — a different unit and a different meaning, so it is not this API under another name."
+    },
+    "Font.Resolved": {
+      "why": "The result of resolving a Font against a display: pointSize, ctFont, width, smallCaps state. Every field names a typeface property TUIkit never chose, because the emulator chose it. There is nothing to report, and `ctFont` is CoreText — absent on Linux and Windows, which TUIkit builds for."
+    },
+    "Font.leading(_:)": {
+      "why": "Leading is fractional-point spacing between baselines; a terminal's baselines are exactly one cell apart. The nearest expressible thing is a WHOLE blank row between wrapped lines — `View.lineSpacing(_:)` (Sources/TUIkit/Modifiers/LineSpacingModifier.swift) — a different unit and a different granularity, so it is not this API renamed. See also the `Font.Leading` entry."
+    },
+    "Font.resolve(in:)": {
+      "why": "Resolves a Font against a display context to a Font.Resolved (pointSize, ctFont, width…). TUIkit resolves a semantic style straight to terminal attributes — Sources/TUIkit/Styling/Font.swift, `defaultAttributes` — so there is no intermediate resolved form to hand back, and CoreText is absent on the Linux and Windows builds anyway."
+    },
     "GeometryEffect": {
       "why": "Its single requirement is effectValue(size:) -> ProjectionTransform, which has no representation here (see ProjectionTransform). TUIkit's geometry-driven customisation point is instead Layout/Layoutable placing children at integer cells (Sources/TUIkit/Views/Layout.swift, Sources"
     },
@@ -430,6 +448,9 @@
     "StrokeStyle": {
       "why": "lineWidth/dash/lineCap/lineJoin/miterLimit are all sub-cell quantities. A terminal stroke is exactly one cell wide and its \"style\" is which character is repeated — BorderStyle.line/doubleLine/heavy/rounded (Sources/TUIkitStyling/Styles/BorderStyle.swift:69-141), the closest thing"
     },
+    "SubmitLabel": {
+      "why": "It names an on-screen keyboard's Return key ('Go', 'Send', 'Search'). A terminal has no on-screen keyboard and no key TUIkit draws, so there is no surface the label could appear on. It WAS implemented, as a value stored in the environment that nothing read; that is worse than absence, because the call compiled and the developer never learned the affordance does not exist. Removed so `.submitLabel(.send)` fails to compile and the gap is theirs to decide about. `.onSubmit` — the behaviour, not the legend — is fully implemented (Sources/TUIkit/Modifiers/OnSubmitModifier.swift)."
+    },
     "SymbolColorRenderingMode": {
       "why": "gradient vs flat colouring inside one symbol needs sub-glyph colour addressing; the smallest colourable unit is the whole cell (one SGR foreground per run — Sources/TUIkit/Rendering/ANSIRenderer.swift)."
     },
@@ -487,6 +508,9 @@
     "View.minimumScaleFactor(_:)": {
       "why": "It permits shrinking the FONT to fit, down to a fraction of the nominal size. A TUIkit app does not own the font: cell size belongs to the emulator, is chosen by the user, and is identical for every glyph on screen. Nothing in the framework can scale one view's text without scaling the whole terminal."
     },
+    "View.submitLabel(_:)": {
+      "why": "It names an on-screen keyboard's Return key ('Go', 'Send', 'Search'). A terminal has no on-screen keyboard and no key TUIkit draws, so there is no surface the label could appear on. It WAS implemented, as a value stored in the environment that nothing read; that is worse than absence, because the call compiled and the developer never learned the affordance does not exist. Removed so `.submitLabel(.send)` fails to compile and the gap is theirs to decide about. `.onSubmit` — the behaviour, not the legend — is fully implemented (Sources/TUIkit/Modifiers/OnSubmitModifier.swift)."
+    },
     "ViewSpacing": {
       "why": "SwiftUI derives a view's preferred spacing from its type and its FONT metrics. A terminal app does not own the typeface or size — the terminal does (Documentation/SwiftUI-compatibility.md:451) — so there is no per-view metric to report and every answer would be the same constant."
     },
@@ -495,24 +519,6 @@
     },
     "WindowToolbarFullScreenVisibility": {
       "why": "Exists only to feed `windowToolbarFullScreenVisibility(_:)`; TUIkit has no window and no window toolbar — the host terminal owns both, and TUIkit only ever knows a rows×columns grid (Sources/TUIkit/App/RenderLoop.swift)."
-    },
-    "Font.Design": {
-      "why": "A design selects a typeface — serif, rounded, monospaced. A terminal emulator draws every cell in the one font its user configured, and no escape sequence asks it for another. TUIkit cannot honour any case, and `.monospaced` is already unconditionally true (see Sources/TUIkit/Modifiers/MediumGuaranteedModifiers.swift), so an accepted-and-ignored Design would be a stub that lies. Font carries the semantic axis instead: Sources/TUIkit/Styling/Font.swift."
-    },
-    "Font.Leading": {
-      "why": "Leading is the space between baselines, measured in fractions of a point. A terminal's baselines are one cell apart, always. The nearest expressible thing is a WHOLE blank row between lines, which TUIkit spells `View.lineSpacing(_:)` (Sources/TUIkit/Modifiers/LineSpacingModifier.swift) — a different unit and a different meaning, so it is not this API under another name."
-    },
-    "Font.Resolved": {
-      "why": "The result of resolving a Font against a display: pointSize, ctFont, width, smallCaps state. Every field names a typeface property TUIkit never chose, because the emulator chose it. There is nothing to report, and `ctFont` is CoreText — absent on Linux and Windows, which TUIkit builds for."
-    },
-    "Font.Context": {
-      "why": "The environment a Font resolves in — the display metrics and dynamic-type size feeding Font.Resolved. TUIkit resolves a semantic style straight to terminal attributes (Sources/TUIkit/Styling/Font.swift, `defaultAttributes`), with no intermediate resolution step for a context to parameterise."
-    },
-    "Font.leading(_:)": {
-      "why": "Leading is fractional-point spacing between baselines; a terminal's baselines are exactly one cell apart. The nearest expressible thing is a WHOLE blank row between wrapped lines — `View.lineSpacing(_:)` (Sources/TUIkit/Modifiers/LineSpacingModifier.swift) — a different unit and a different granularity, so it is not this API renamed. See also the `Font.Leading` entry."
-    },
-    "Font.resolve(in:)": {
-      "why": "Resolves a Font against a display context to a Font.Resolved (pointSize, ctFont, width…). TUIkit resolves a semantic style straight to terminal attributes — Sources/TUIkit/Styling/Font.swift, `defaultAttributes` — so there is no intermediate resolved form to hand back, and CoreText is absent on the Linux and Windows builds anyway."
     }
   },
   "differentShape": {

@@ -215,21 +215,4 @@ struct SubmitActionTests {
         #expect(searchFired == true, "the search field ran the .search action")
         #expect(textFired == false, "and NOT the .text action")
     }
-
-    // MARK: - submitLabel (stored for parity)
-
-    @Test("submitLabel is stored in the environment; titles resolve")
-    func submitLabelStored() {
-        var env = EnvironmentValues()
-        #expect(env.submitLabel == nil)
-        env.submitLabel = .send
-        #expect(env.submitLabel == .send)
-        #expect(SubmitLabel.send.title == "Send")
-        #expect(SubmitLabel.return.title == "Return")
-        #expect(SubmitLabel.continue.title == "Continue")
-        // The modifier compiles and renders without crashing.
-        _ = renderToBuffer(
-            TextField("x", text: .constant("y")).submitLabel(.go),
-            context: makeBareRenderContext())
-    }
 }

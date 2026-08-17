@@ -116,18 +116,6 @@ extension View {
         OnSubmitModifier(content: self, triggers: triggers, action: action)
     }
 
-    /// Sets the semantic submit label for text inputs in this view's subtree —
-    /// mirrors SwiftUI's `submitLabel(_:)`.
-    ///
-    /// SwiftUI draws this on the on-screen keyboard's Return key. A terminal has
-    /// no such key, so the value is stored for source-compatibility (and future
-    /// affordances such as a status-bar hint) rather than rendered.
-    ///
-    /// - Parameter submitLabel: The label describing the submit action.
-    public func submitLabel(_ submitLabel: SubmitLabel) -> some View {
-        environment(\.submitLabel, submitLabel)
-    }
-
     /// Stops submissions from this subtree reaching an enclosing `.onSubmit` —
     /// mirrors SwiftUI's `submitScope(_:)`.
     ///

@@ -37,12 +37,6 @@ private struct SubmitTriggerRoleKey: EnvironmentKey {
     static let defaultValue: SubmitTriggers = .text
 }
 
-/// The most recent `.submitLabel(_:)` in scope. Stored for parity; a terminal has
-/// no on-screen Return key to draw it on.
-private struct SubmitLabelKey: EnvironmentKey {
-    static let defaultValue: SubmitLabel? = nil
-}
-
 extension EnvironmentValues {
     /// The cascading `.onSubmit(of:_:)` actions in scope (outer-first). Read by
     /// text fields to assemble their effective submit action.
@@ -55,13 +49,6 @@ extension EnvironmentValues {
     var submitTriggerRole: SubmitTriggers {
         get { self[SubmitTriggerRoleKey.self] }
         set { self[SubmitTriggerRoleKey.self] = newValue }
-    }
-
-    /// The `.submitLabel(_:)` in scope, if any. Stored for source-compatibility;
-    /// no on-screen Return key exists to render it.
-    public var submitLabel: SubmitLabel? {
-        get { self[SubmitLabelKey.self] }
-        set { self[SubmitLabelKey.self] = newValue }
     }
 }
 

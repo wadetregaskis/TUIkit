@@ -3,12 +3,21 @@
 //
 //  SwiftUI modifiers whose GUARANTEE a character grid already provides.
 //
-//  These return `self`, and that is not a stub. A stub stores a value it never
-//  honours (`.submitLabel` does, openly, because a terminal has no Return key
-//  to draw a label on). These make a promise the medium keeps: every cell is
-//  one column wide, so text is already monospaced and digits are already
-//  tabular; nothing between the keyboard and a `TextField`'s binding rewrites
-//  what was typed, so there is no autocorrection to disable.
+//  These return `self`, and that is not a stub. A stub accepts a request the
+//  medium cannot meet and quietly drops it — TUIkit removes those instead, so
+//  the call fails to compile and the gap is the developer's to decide about
+//  (`.submitLabel` was one, deleted for exactly that reason). These make a
+//  promise the medium keeps: every cell is one column wide, so text is already
+//  monospaced and digits are already tabular; nothing between the keyboard and
+//  a `TextField`'s binding rewrites what was typed, so there is no
+//  autocorrection to disable.
+//
+//  The distinction is directional, and worth stating because the argument is
+//  ignored either way: `.monospaced(true)` is honoured — by the grid, for
+//  free — while `.monospaced(false)` asks for proportional text, which no
+//  terminal can give. The modifier survives because its default and its
+//  overwhelmingly common spelling are the satisfiable ones; deleting it to
+//  reject `false` would reject the honoured case too.
 //
 //  Each is covered by a test that asserts the GUARANTEE — equal cell widths
 //  for equal character counts, a misspelling arriving intact — rather than

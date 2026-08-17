@@ -18,7 +18,7 @@ struct TextInputPage: View {
     @State private var searchQuery: String = ""
     @State private var submittedValue: String = ""
 
-    // Cascading .onSubmit / .submitLabel demo state
+    // Cascading .onSubmit demo state
     @State private var formName: String = ""
     @State private var formEmail: String = ""
     @State private var submitLog: [String] = []
@@ -137,7 +137,7 @@ struct TextInputPage: View {
                 }
             }
 
-            // MARK: Cascading .onSubmit + .submitLabel
+            // MARK: Cascading .onSubmit
             DemoSection("page.textInput.submitSection") {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("page.textInput.submitExplain")
@@ -147,17 +147,17 @@ struct TextInputPage: View {
                     // Return in either runs it. The Email field ALSO has its own
                     // per-field `.onSubmit`, so submitting there logs twice
                     // (per-field first, then the cascading form action).
-                    // `.submitLabel(_:)` is accepted for SwiftUI parity — a
-                    // terminal has no on-screen Return key to draw it on.
+                    // SwiftUI's `.submitLabel(_:)` has no counterpart: it
+                    // labels an on-screen keyboard's Return key, which a
+                    // terminal does not have, so TUIkit omits it rather than
+                    // accepting it and doing nothing.
                     VStack(alignment: .leading, spacing: 0) {
                         TextField(
                             "page.textInput.submitName", text: $formName,
                             prompt: Text("page.textInput.submitName"))
-                            .submitLabel(.next)
                         TextField(
                             "page.textInput.submitEmail", text: $formEmail,
                             prompt: Text("page.textInput.submitEmail"))
-                            .submitLabel(.send)
                             .onSubmit { logSubmit(L("page.textInput.submitEmailCommitted")) }
                     }
                     .onSubmit {
