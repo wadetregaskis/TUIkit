@@ -860,6 +860,7 @@
   "SceneRestorationBehavior",
   "SceneRestorationBehavior.automatic",
   "SceneStorage.init(_:)",
+  "ScrollAnchorRole.alignment",
   "ScrollGeometry",
   "ScrollGeometry.bounds",
   "ScrollGeometry.containerSize",
