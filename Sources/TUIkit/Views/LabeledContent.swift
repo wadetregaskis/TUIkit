@@ -4,6 +4,10 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+// `FormatStyle` is Foundation's, for the `value:format:` rows — the same
+// modern-Foundation dependency `Text(_:format:)` already carries.
+import Foundation
+
 // MARK: - LabeledContent
 
 /// A control for labelling a piece of content — a label paired with a value or
@@ -101,5 +105,48 @@ extension LabeledContent where Label == Text, Content == Text {
     public init<S1: StringProtocol, S2: StringProtocol>(_ title: S1, value: S2) {
         self.label = Text(String(title))
         self.content = Text(String(value))
+    }
+
+    /// Creates labelled content whose value is formatted by a format style.
+    ///
+    /// ```swift
+    /// LabeledContent("row.downloaded", value: bytes, format: .byteCount(style: .file))
+    /// LabeledContent("row.progress", value: fraction, format: .percent)
+    /// ```
+    ///
+    /// The value is the thing being labelled, so it is never a lookup key — a
+    /// format style is how a *number* becomes text a reader can take in, and
+    /// the style carries its own locale. This is ``Text/init(_:format:)``'s
+    /// rule applied to a form row, and it saves the row from interpolating a
+    /// string by hand, which is how a form ends up with `0.4285714285714286`
+    /// in it.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the title shown as the label.
+    ///   - value: The value shown as the content.
+    ///   - format: A format style that converts `value` into a `String`.
+    public init<F: FormatStyle>(
+        _ titleKey: LocalizedStringKey,
+        value: F.FormatInput,
+        format: F
+    ) where F.FormatInput: Equatable, F.FormatOutput == String {
+        self.init(titleKey.localized, value: value, format: format)
+    }
+
+    /// Creates labelled content with a title shown as written and a formatted
+    /// value.
+    ///
+    /// - Parameters:
+    ///   - title: The title shown as the label.
+    ///   - value: The value shown as the content.
+    ///   - format: A format style that converts `value` into a `String`.
+    @_disfavoredOverload
+    public init<S: StringProtocol, F: FormatStyle>(
+        _ title: S,
+        value: F.FormatInput,
+        format: F
+    ) where F.FormatInput: Equatable, F.FormatOutput == String {
+        self.label = Text(String(title))
+        self.content = Text(value, format: format)
     }
 }

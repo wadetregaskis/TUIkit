@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -71,6 +72,30 @@ struct FormTests {
     func labeledContentStandalone() {
         let out = lines(LabeledContent("Version", value: "1.0.3")).joined(separator: "\n")
         #expect(out.contains("Version") && out.contains("1.0.3"))
+    }
+
+    /// `LabeledContent(_:value:format:)` — the row that shows a NUMBER. The
+    /// point is what it saves the caller from: interpolating the value by hand
+    /// is how a form ends up displaying `0.42857142857142855`. Locales are
+    /// pinned so the expected text is the same on every host.
+    @Test("LabeledContent formats a value rather than interpolating it")
+    func labeledContentFormatsItsValue() {
+        let locale = Locale(identifier: "en_US")
+        let count = lines(
+            LabeledContent(
+                "Items", value: 1234,
+                format: IntegerFormatStyle<Int>().locale(locale))
+        ).joined(separator: "\n")
+        #expect(count.contains("Items") && count.contains("1,234"), "got \(count)")
+
+        let fraction = 3.0 / 7.0
+        let percent = lines(
+            LabeledContent(
+                "Progress", value: fraction,
+                format: FloatingPointFormatStyle<Double>.Percent().locale(locale))
+        ).joined(separator: "\n")
+        #expect(percent.contains("43%"), "not the raw Double — got \(percent)")
+        #expect(!percent.contains("0.42"), "the unformatted value leaked through")
     }
 
     // MARK: - Custom FormStyle

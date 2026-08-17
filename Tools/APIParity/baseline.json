@@ -605,7 +605,6 @@
   "LabelStyleConfiguration.Icon",
   "LabelStyleConfiguration.Title",
   "LabeledContent.init(_:)",
-  "LabeledContent.init(_:value:format:)",
   "LabeledContentStyle",
   "LabeledContentStyle.Configuration",
   "LabeledContentStyle.automatic",
