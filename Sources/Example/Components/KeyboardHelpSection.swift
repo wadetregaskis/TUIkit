@@ -22,7 +22,7 @@ struct KeyboardHelpSection: View {
     let title: String
     let shortcuts: [String]
 
-    init(_ title: String = "Keyboard Controls", shortcuts: [String]) {
+    init(_ title: String = L("demo.keyboardControls"), shortcuts: [String]) {
         self.title = title
         self.shortcuts = shortcuts
     }
