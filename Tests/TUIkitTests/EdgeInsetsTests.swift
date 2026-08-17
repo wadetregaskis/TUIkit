@@ -74,4 +74,31 @@ struct EdgeSetTests {
     func edgeCases() {
         #expect(Edge.allCases == [.top, .leading, .bottom, .trailing])
     }
+
+    @Test("A single edge makes a set of exactly itself")
+    func edgeSetFromOneEdge() {
+        // Every case, not one sample: the two families are spelled alike (a
+        // `Set.top` static beside an `Edge.top` case), so a mapping that
+        // returned the wrong sibling is the mistake to expect, and it hides
+        // completely if only one case is checked.
+        for edge in Edge.allCases {
+            let set = Edge.Set(edge)
+            #expect(set.contains(Edge.Set(edge)), "\(edge)")
+            for other in Edge.allCases where other != edge {
+                #expect(!set.contains(Edge.Set(other)), "\(edge) leaked into \(other)")
+            }
+        }
+        // …and each lands on the static of the same name.
+        #expect(Edge.Set(.top) == .top)
+        #expect(Edge.Set(.leading) == .leading)
+        #expect(Edge.Set(.bottom) == .bottom)
+        #expect(Edge.Set(.trailing) == .trailing)
+    }
+
+    @Test("The vertical edge set takes one edge the same way")
+    func verticalEdgeSetFromOneEdge() {
+        #expect(VerticalEdge.Set(.top) == .top)
+        #expect(VerticalEdge.Set(.bottom) == .bottom)
+        #expect(!VerticalEdge.Set(.top).contains(.bottom))
+    }
 }

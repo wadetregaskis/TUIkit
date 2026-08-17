@@ -62,6 +62,17 @@ public enum VerticalEdge: Sendable {
             self.rawValue = rawValue
         }
 
+        /// Creates a set containing the one edge given — SwiftUI's
+        /// `VerticalEdge.Set(_:)`, and the counterpart to ``Edge/Set/init(_:)``.
+        ///
+        /// - Parameter edge: The edge the set contains.
+        public init(_ edge: VerticalEdge) {
+            switch edge {
+            case .top: self = .top
+            case .bottom: self = .bottom
+            }
+        }
+
         /// The top edge only.
         public static let top = Self(rawValue: 1 << 0)
 

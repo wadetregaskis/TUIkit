@@ -78,6 +78,23 @@ public enum Edge: Int8, Sendable, CaseIterable {
             self.rawValue = rawValue
         }
 
+        /// Creates a set containing the one edge given.
+        ///
+        /// SwiftUI's `Edge.Set(_:)`, and the reason to have it is that generic
+        /// code holding an `Edge` has no other way to reach the set: the
+        /// statics below are spelled the same but are a different type, so
+        /// `Edge.Set(edge)` is what any `for edge in Edge.allCases` loop needs.
+        ///
+        /// - Parameter edge: The edge the set contains.
+        public init(_ edge: Edge) {
+            switch edge {
+            case .top: self = .top
+            case .leading: self = .leading
+            case .bottom: self = .bottom
+            case .trailing: self = .trailing
+            }
+        }
+
         /// The top edge.
         public static let top = Self(rawValue: 1 << 0)
 
