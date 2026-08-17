@@ -80,19 +80,20 @@ extension TextStyle {
     /// This style with `base` beneath it — every attribute set here wins, and
     /// anything unset falls through.
     ///
-    /// "Unset" means `nil` for the Optionals and `false` for the flags. A flag
-    /// can therefore only ever be turned ON by a layer, never off, which is
-    /// the same one-way rule the environment cascade already follows: `.bold()`
-    /// on a container cannot be un-bolded by a child that simply didn't ask.
+    /// "Unset" means `nil` — including for the five emphasis flags, which is
+    /// what lets a run state an attribute OFF over a base that had it on. The
+    /// two flags with no cascade behind them (``TextStyle/isBlink``,
+    /// ``TextStyle/isInverted``) stay one-way: nothing can state them false, so
+    /// an OR is all that is available and all that is needed.
     func merged(over base: TextStyle) -> TextStyle {
         var result = self
         result.foregroundColor = foregroundColor ?? base.foregroundColor
         result.backgroundColor = backgroundColor ?? base.backgroundColor
-        result.isBold = isBold || base.isBold
-        result.isItalic = isItalic || base.isItalic
-        result.isUnderlined = isUnderlined || base.isUnderlined
-        result.isStrikethrough = isStrikethrough || base.isStrikethrough
-        result.isDim = isDim || base.isDim
+        result.isBold = isBold ?? base.isBold
+        result.isItalic = isItalic ?? base.isItalic
+        result.isUnderlined = isUnderlined ?? base.isUnderlined
+        result.isStrikethrough = isStrikethrough ?? base.isStrikethrough
+        result.isDim = isDim ?? base.isDim
         result.isBlink = isBlink || base.isBlink
         result.isInverted = isInverted || base.isInverted
         result.truncationMode = truncationMode ?? base.truncationMode

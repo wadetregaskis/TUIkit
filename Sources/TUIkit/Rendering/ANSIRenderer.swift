@@ -178,16 +178,16 @@ extension ANSIRenderer {
         var codes: [String] = []
 
         // Text attributes
-        if style.isBold {
+        if style.isBold == true {
             codes.append(StyleCode.bold)
         }
-        if style.isDim {
+        if style.isDim == true {
             codes.append(StyleCode.dim)
         }
-        if style.isItalic {
+        if style.isItalic == true {
             codes.append(StyleCode.italic)
         }
-        if style.isUnderlined {
+        if style.isUnderlined == true {
             codes.append(StyleCode.underline)
         }
         if style.isBlink {
@@ -196,7 +196,7 @@ extension ANSIRenderer {
         if style.isInverted {
             codes.append(StyleCode.inverse)
         }
-        if style.isStrikethrough {
+        if style.isStrikethrough == true {
             codes.append(StyleCode.strikethrough)
         }
 

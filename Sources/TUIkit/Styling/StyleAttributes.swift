@@ -61,9 +61,12 @@ public enum FontWeight: Sendable, Hashable {
 ///
 /// The tri-state (`Bool?`) lets a subtree turn an attribute **on** and a
 /// descendant turn it **off** (e.g. `.bold()` then `.bold(false)` deeper),
-/// matching SwiftUI. That is the difference from the framework's internal
-/// `TextStyle`, whose flags are plain `Bool` because it is the fully-resolved
-/// end of the pipeline and has nothing left to defer to.
+/// matching SwiftUI. The framework's internal `TextStyle` now carries the same
+/// tri-state for the five attributes this type can state, and for the same
+/// reason: it was described here as "the fully-resolved end of the pipeline
+/// with nothing left to defer to", which was wrong — a `Text`'s own answer is
+/// resolved AGAINST the cascade, so it needs to be able to say *no* and not
+/// merely *nothing*.
 public struct StyleAttributes: Sendable, Hashable {
     public var foreground: Color?
     public var background: Color?

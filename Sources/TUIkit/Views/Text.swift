@@ -305,20 +305,32 @@ struct TextStyle: Sendable, Equatable {
     /// The background color of the text.
     var backgroundColor: Color?
 
-    /// Whether the text is bold.
-    var isBold: Bool = false
+    // The five flags a STYLE CASCADE can also state are tri-state, and for the
+    // reason ``StyleAttributes`` is: `nil` is "this `Text` never said", which a
+    // plain `Bool` cannot tell apart from "this `Text` said no". Without the
+    // distinction the merge below can only ever turn an attribute ON — so a
+    // `Text` inside a `.bold()` subtree has no way to opt out, and
+    // `Text.bold(false)` cannot be written at all.
+    //
+    // ``isBlink`` and ``isInverted`` stay plain: nothing cascades them (they
+    // have no ``StyleAttributes`` counterpart — they are terminal attributes
+    // SwiftUI has no concept of), so there is no second opinion for a stated
+    // value to beat.
 
-    /// Whether the text is italic.
-    var isItalic: Bool = false
+    /// Whether the text is bold, or `nil` if this `Text` never said.
+    var isBold: Bool?
 
-    /// Whether the text is underlined.
-    var isUnderlined: Bool = false
+    /// Whether the text is italic, or `nil` if this `Text` never said.
+    var isItalic: Bool?
 
-    /// Whether the text is strikethrough.
-    var isStrikethrough: Bool = false
+    /// Whether the text is underlined, or `nil` if this `Text` never said.
+    var isUnderlined: Bool?
 
-    /// Whether the text is dimmed.
-    var isDim: Bool = false
+    /// Whether the text is strikethrough, or `nil` if this `Text` never said.
+    var isStrikethrough: Bool?
+
+    /// Whether the text is dimmed, or `nil` if this `Text` never said.
+    var isDim: Bool?
 
     /// Whether the text blinks.
     var isBlink: Bool = false
@@ -519,19 +531,26 @@ extension Text: Renderable, Layoutable {
         // entries match.
         let cascade = context.environment.styleCascade
         let cascaded = cascadedAttributes(context: context)
-        effectiveStyle.isBold = effectiveStyle.isBold || (cascaded.bold ?? false)
-        effectiveStyle.isItalic = effectiveStyle.isItalic || (cascaded.italic ?? false)
-        effectiveStyle.isUnderlined = effectiveStyle.isUnderlined || (cascaded.underline ?? false)
-        effectiveStyle.isStrikethrough =
-            effectiveStyle.isStrikethrough || (cascaded.strikethrough ?? false)
-        effectiveStyle.isDim = effectiveStyle.isDim || (cascaded.dim ?? false)
+        // The NEAREST statement wins, which is SwiftUI's rule and what the
+        // tri-state above exists for: this `Text`'s own answer if it gave one,
+        // otherwise the cascade's, otherwise off. It used to be an `||` — an
+        // attribute any layer could turn on and none could turn off — which is
+        // why nothing could opt out of an inherited `.bold()`.
+        effectiveStyle.isBold = effectiveStyle.isBold ?? cascaded.bold
+        effectiveStyle.isItalic = effectiveStyle.isItalic ?? cascaded.italic
+        effectiveStyle.isUnderlined = effectiveStyle.isUnderlined ?? cascaded.underline
+        effectiveStyle.isStrikethrough = effectiveStyle.isStrikethrough ?? cascaded.strikethrough
+        effectiveStyle.isDim = effectiveStyle.isDim ?? cascaded.dim
         // `.invalidated` says the content is STALE, not absent — so it is shown
         // and dimmed rather than replaced with a skeleton. An out-of-date figure
         // is still worth reading, which is the whole point of the distinction
         // from `.placeholder`.
-        effectiveStyle.isDim =
-            effectiveStyle.isDim
-            || context.environment.redactionReasons.contains(.invalidated)
+        // Redaction is the system speaking, not a style: `.invalidated` says the
+        // content is STALE, so it dims text that asked not to be. The one place
+        // an OR is still right.
+        if context.environment.redactionReasons.contains(.invalidated) {
+            effectiveStyle.isDim = true
+        }
         effectiveCase = cascaded.textCase
 
         // Foreground precedence: an explicit *concrete* colour on this Text wins;
