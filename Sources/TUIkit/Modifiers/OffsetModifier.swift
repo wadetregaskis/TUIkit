@@ -71,4 +71,20 @@ extension View {
     public func offset(x: Int = 0, y: Int = 0) -> some View {
         OffsetView(content: self, x: x, y: y)
     }
+
+    /// Offsets this view's drawn position by a size — SwiftUI's
+    /// `offset(_ offset: CGSize)`, in whole cells.
+    ///
+    /// The same modifier as ``offset(x:y:)``, spelled the way SwiftUI spells it
+    /// when the displacement is already a value rather than two numbers. A size
+    /// used as a displacement is SwiftUI's own idiom, not this framework's
+    /// invention; ``CellSize`` is the counterpart of the `CGSize` it takes,
+    /// because a terminal counts cells where SwiftUI counts points.
+    ///
+    /// - Parameter offset: Columns to shift right in `width`, rows to shift
+    ///   down in `height` (negative shifts the other way).
+    /// - Returns: A view drawn at the offset position.
+    public func offset(_ offset: CellSize) -> some View {
+        self.offset(x: offset.width, y: offset.height)
+    }
 }

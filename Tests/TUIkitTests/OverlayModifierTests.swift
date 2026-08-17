@@ -141,6 +141,25 @@ struct OverlayModifierTests {
             "…and the overlay still draws: \(buffer.lines.map(\.stripped))")
     }
 
+    // MARK: - The size-taking spelling
+
+    @Test("offset(CellSize) is offset(x:y:) under SwiftUI's other spelling")
+    func offsetTakingASize() {
+        // Asserted as an IDENTITY against the labelled form rather than against
+        // a hand-written expectation: the two must not be able to drift, and
+        // that is the whole content of the claim. A size used as a displacement
+        // is SwiftUI's idiom (`offset(_ offset: CGSize)`), which is why the
+        // width/height mapping onto columns/rows is worth pinning at all.
+        let labelled = render(Text("Hi").offset(x: 2, y: 1).overlay { Text("!") })
+        let sized = render(
+            Text("Hi").offset(CellSize(width: 2, height: 1)).overlay { Text("!") })
+        #expect(labelled.overlays.count == sized.overlays.count)
+        #expect(sized.overlays.first?.offsetX == labelled.overlays.first?.offsetX)
+        #expect(sized.overlays.first?.offsetY == labelled.overlays.first?.offsetY)
+        #expect(sized.overlays.first?.offsetX == 2, "width is columns")
+        #expect(sized.overlays.first?.offsetY == 1, "height is rows")
+    }
+
     /// A layer that really is empty — no lines, no layers, no regions — still
     /// short-circuits, so nothing about the ordinary case changed.
     @Test("A genuinely empty layer still short-circuits")

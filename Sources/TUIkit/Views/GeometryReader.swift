@@ -71,6 +71,20 @@ public struct CellSize: Equatable, Sendable {
 
     /// The height in rows.
     public let height: Int
+
+    /// Creates a size in whole cells.
+    ///
+    /// Public because a `CellSize` is not only something a ``GeometryProxy``
+    /// hands out: ``View/offset(_:)`` takes one, and a caller comparing against
+    /// a proxy's size has to be able to write the value it expects.
+    ///
+    /// - Parameters:
+    ///   - width: The width in cells.
+    ///   - height: The height in rows.
+    public init(width: Int, height: Int) {
+        self.width = width
+        self.height = height
+    }
 }
 
 /// A rectangle in whole terminal cells — the counterpart of `CGRect`.
