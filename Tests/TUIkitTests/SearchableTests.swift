@@ -228,6 +228,113 @@ struct SearchableTests {
         #expect(focus.currentFocusedID == before, "focus must not move")
     }
 
+    // MARK: - searchSuggestions / searchCompletion
+
+    /// A full frame at a known terminal size, with the pop-up overlay
+    /// composited in — a suggestions menu is an overlay, so it is not in
+    /// `buffer.lines` until that happens.
+    private func screen(
+        _ view: some View, tui: TUIContext, focus: FocusManager
+    ) -> String {
+        var environment = EnvironmentValues()
+        environment.focusManager = focus
+        environment.applyRuntimeServices(from: tui)
+        environment.terminalWidth = 60
+        environment.terminalHeight = 20
+        let context = RenderContext(
+            availableWidth: 60, availableHeight: 20,
+            environment: environment, tuiContext: tui)
+        tui.stateStorage.beginRenderPass()
+        focus.beginRenderPass()
+        let buffer = renderToBuffer(view, context: context)
+        focus.endRenderPass()
+        tui.stateStorage.endRenderPass()
+        return buffer.compositingOverlays(
+            maxWidth: 60, maxHeight: 20, palette: environment.palette
+        ).lines.map(\.stripped).joined(separator: "\n")
+    }
+
+    @Test("The search field offers what searchSuggestions built")
+    func searchFieldOffersSuggestions() {
+        let tui = TUIContext()
+        let focus = FocusManager()
+        let view = Text("CONTENT")
+            .searchable(text: binding(QueryBox()))
+            .searchSuggestions {
+                Text("apple")
+                Divider()
+                Text("apricot")
+            }
+
+        _ = screen(view, tui: tui, focus: focus)  // register + auto-focus the field
+        _ = screen(view, tui: tui, focus: focus)  // sync the completions
+        // The menu opens on demand, never on focus — so the Down is the test's
+        // subject as much as the suggestions are.
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        let out = screen(view, tui: tui, focus: focus)
+        #expect(out.contains("apple") && out.contains("apricot"), "\(out)")
+    }
+
+    @Test("A text field in the CONTENT is not armed by searchSuggestions")
+    func contentFieldsAreNotArmed() {
+        // The reason `\.searchSuggestions` is a key of its own. A modifier that
+        // named the search field must not reach into the caller's own fields —
+        // and sharing `\.textInputSuggestions` would do exactly that, silently.
+        let tui = TUIContext()
+        let focus = FocusManager()
+        let box = QueryBox()
+        let view = TextField("Other", text: binding(box))
+            .focusID("other")
+            .searchable(text: binding(QueryBox()))
+            .searchSuggestions { Text("apple") }
+
+        _ = screen(view, tui: tui, focus: focus)
+        focus.focus(id: "other")
+        _ = screen(view, tui: tui, focus: focus)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        let out = screen(view, tui: tui, focus: focus)
+        #expect(!out.contains("apple"), "the content's field opened a menu it was never given: \(out)")
+    }
+
+    @Test("An outer textInputSuggestions still reaches the search field")
+    func inheritedSuggestionsSurvive() {
+        // The other half of that decision: with no `.searchSuggestions` of its
+        // own, the field inherits like any text field rather than being
+        // singled out and cleared.
+        let tui = TUIContext()
+        let focus = FocusManager()
+        let view = Text("CONTENT")
+            .searchable(text: binding(QueryBox()))
+            .textInputSuggestions { Text("inherited") }
+
+        _ = screen(view, tui: tui, focus: focus)
+        _ = screen(view, tui: tui, focus: focus)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        #expect(screen(view, tui: tui, focus: focus).contains("inherited"))
+    }
+
+    @Test("searchCompletion decides what choosing a suggestion types")
+    func searchCompletionFillsTheField() {
+        // The label and the completion deliberately share no text, so the
+        // query can only be right by way of the completion.
+        let tui = TUIContext()
+        let focus = FocusManager()
+        let box = QueryBox()
+        let view = Text("CONTENT")
+            .searchable(text: binding(box))
+            .searchSuggestions {
+                Text("Everything").searchCompletion("*")
+            }
+
+        _ = screen(view, tui: tui, focus: focus)
+        _ = screen(view, tui: tui, focus: focus)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))  // open
+        _ = screen(view, tui: tui, focus: focus)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))  // highlight the row
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .enter))  // choose it
+        #expect(box.query == "*", "chose the completion, not the label: \(box.query)")
+    }
+
     @Test("Outside any searchable, the two values are inert")
     func defaultsOutsideASearchable() {
         let captured = ActionBox()

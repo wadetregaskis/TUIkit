@@ -43,6 +43,92 @@ extension View {
     }
 }
 
+// MARK: - Suggestions
+
+extension View {
+    /// Offers a menu of suggestions under the search field of an enclosing
+    /// ``View/searchable(text:placement:prompt:)``.
+    ///
+    /// Mirrors SwiftUI's `searchSuggestions(_:)`, and is written where SwiftUI
+    /// writes it — outside the `searchable`, which is what scopes it to the
+    /// search field rather than to every text field in the content:
+    ///
+    /// ```swift
+    /// List(matches) { Text($0.name) }
+    ///     .searchable(text: $query)
+    ///     .searchSuggestions {
+    ///         ForEach(recentQueries, id: \.self) { Text($0) }
+    ///         Divider()
+    ///         Text("everything").searchCompletion("*")
+    ///     }
+    /// ```
+    ///
+    /// A suggestion is a `Text` (its string is what the field is filled with),
+    /// any view carrying a ``View/searchCompletion(_:)``, or a ``Divider``
+    /// between groups — the same vocabulary
+    /// ``View/textInputSuggestions(_:)`` accepts, because it is the same menu
+    /// underneath. The builder is re-evaluated every render, so filtering the
+    /// suggestions against the current query is a matter of filtering the data
+    /// you build them from.
+    ///
+    /// The menu opens on demand rather than on focus — Down at the caret, or a
+    /// click on the `▾` at the field's trailing edge — and Return on a
+    /// highlighted row fills the field and submits, so
+    /// `.onSubmit(of: .search)` fires. See ``View/textInputSuggestions(_:)``
+    /// for the interaction in full.
+    ///
+    /// - Parameter suggestions: A view builder of suggestion entries.
+    /// - Returns: A view whose enclosed search field offers the suggestions.
+    public func searchSuggestions<S: View>(
+        @ViewBuilder _ suggestions: () -> S
+    ) -> some View {
+        environment(\.searchSuggestions, extractTextSuggestions(suggestions()))
+    }
+
+    /// Associates a completed query with this view when it is used as a search
+    /// suggestion — SwiftUI's `searchCompletion(_:)`.
+    ///
+    /// Without it, choosing a suggestion puts its label's plain text in the
+    /// field; use this where the label decorates or abbreviates what should
+    /// actually be searched for.
+    ///
+    /// ```swift
+    /// Label("Everything", systemImage: "asterisk").searchCompletion("*")
+    /// ```
+    ///
+    /// It is ``View/textInputCompletion(_:)`` under a second name, which is
+    /// SwiftUI's own arrangement: two menus, one for a search field and one for
+    /// any text field, each with a spelling that reads right at its call site,
+    /// and one mechanism beneath both.
+    ///
+    /// - Parameter completion: The text the field is filled with when this
+    ///   suggestion is chosen.
+    /// - Returns: A view carrying the completion for the suggestions menu.
+    public func searchCompletion(_ completion: String) -> some View {
+        textInputCompletion(completion)
+    }
+}
+
+/// Environment key carrying suggestions down to the enclosed search field.
+///
+/// Separate from ``EnvironmentValues/textInputSuggestions`` because the two
+/// differ in WHO they are for: that one reaches every ``TextField`` in the
+/// subtree, this one only the field ``SearchableModifier`` draws. Sharing the
+/// key would make `.searchSuggestions` silently arm any text field the caller
+/// happens to have in their content.
+private struct SearchSuggestionsKey: EnvironmentKey {
+    static let defaultValue: [_TextSuggestionEntry] = []
+}
+
+extension EnvironmentValues {
+    /// Suggestions for the enclosing search field. Set via
+    /// ``View/searchSuggestions(_:)``.
+    var searchSuggestions: [_TextSuggestionEntry] {
+        get { self[SearchSuggestionsKey.self] }
+        set { self[SearchSuggestionsKey.self] = newValue }
+    }
+}
+
 /// Composes a search field above the searchable content. Pure composition — no
 /// `_*Core`, no overlay, no focus machinery (Box.swift is the reference model).
 struct SearchableModifier<Content: View>: View {
@@ -75,6 +161,10 @@ struct SearchableModifier<Content: View>: View {
     /// Which side the icon sits on — and therefore which magnifier it is.
     @Environment(\.searchFieldIconPlacement) private var iconPlacement
 
+    /// What ``View/searchSuggestions(_:)`` above us offered, on its way to the
+    /// query field alone.
+    @Environment(\.searchSuggestions) private var suggestions
+
     /// The magnifier that faces the field from `iconPlacement`'s side: 🔎 is
     /// RIGHT-pointing so it looks rightward into a trailing field, 🔍 is
     /// LEFT-pointing so it looks leftward into a leading one. (The Unicode
@@ -94,8 +184,7 @@ struct SearchableModifier<Content: View>: View {
                 // Return here fires `.onSubmit(of: .search)` — not `.onSubmit(of:
                 // .text)`, and a plain text field in `content` (a sibling) still
                 // consumes `.text`.
-                TextField("", text: text, prompt: prompt ?? Text("Search"))
-                    .onEditingChanged { isSearching = $0 }
+                queryField
                     .environment(\.submitTriggerRole, .search)
                 if supportsEmojiChrome, iconPlacement == .trailing {
                     icon
@@ -107,6 +196,28 @@ struct SearchableModifier<Content: View>: View {
             content
                 .environment(\.isSearching, isSearching)
                 .environment(\.dismissSearch, dismissAction)
+        }
+    }
+
+    /// The query field, carrying whatever `.searchSuggestions` offered.
+    ///
+    /// The hand-off is what scopes the suggestions: they arrive on an
+    /// environment key of their own and are turned into the general
+    /// text-field key HERE, on this one field, so a `TextField` the caller has
+    /// in `content` is not armed by a modifier that never mentioned it.
+    ///
+    /// Left alone when there are none, rather than written as an empty list:
+    /// a `.textInputSuggestions` set above the whole searchable is a
+    /// deliberate statement about every field in it, and clearing it here
+    /// would make the search field the one exception.
+    @ViewBuilder
+    private var queryField: some View {
+        let field = TextField("", text: text, prompt: prompt ?? Text("Search"))
+            .onEditingChanged { isSearching = $0 }
+        if suggestions.isEmpty {
+            field
+        } else {
+            field.environment(\.textInputSuggestions, suggestions)
         }
     }
 

@@ -122,6 +122,14 @@
         "Font.uppercaseSmallCaps*"
       ],
       "why": "Small caps is a glyph variant inside a typeface — real capitals at x-height. A terminal font has one glyph per codepoint and no variant table. `View.textCase(.uppercase)` is not this API under another name: it substitutes different CHARACTERS, changing what the text says and (for ß → SS) how many cells it needs."
+    },
+    {
+      "match": [
+        "SearchSuggestionsPlacement*",
+        "EnvironmentValues.searchSuggestionsPlacement",
+        "View.searchSuggestions(_:for:)"
+      ],
+      "why": "SwiftUI can put a searchable field's suggestions in two places — a pop-up menu, or in the content beneath the field — so it needs a placement type and a per-placement visibility. TUIkit has one place: the field's drop-down (Sources/TUIkit/Views/TextInputSuggestions.swift, the same DropdownMenu the Picker uses). `View.searchSuggestions(_:)` and `View.searchCompletion(_:)` are implemented against it. Shipping the `for:` overload would mean either honouring one case of an OptionSet and silently ignoring the other — the partial-seam shape declined twice in Documentation/Parity-decisions-pending.md — or inventing an in-content suggestions surface, which is a feature rather than parity plumbing."
     }
   ],
   "renamed": {
