@@ -140,6 +140,15 @@
         "ContentUnavailableView.init(_:image:*"
       ],
       "why": "The `image:` spelling of these initializers names an `ImageResource` — a symbol the Xcode build generates from an asset catalogue, whose value is a raster bitmap at one of several scale factors. A terminal app has neither: no asset catalogue in the build (SwiftPM resources are files, not named image constants), and no way to place a bitmap in a cell. The `systemImage:` spelling of every one of these IS implemented (Sources/TUIkit/SFSymbols/ControlSymbolInitializers.swift), because an SF Symbol is a character: it resolves to a Private-Use scalar the terminal font may carry, and falls back to the title alone when it does not."
+    },
+    {
+      "match": [
+        "TextField.init(_:value:formatter:*",
+        "TextField.init(value:formatter:prompt:label:)",
+        "Text.init(_:formatter:)",
+        "*.appendInterpolation(_:formatter:)"
+      ],
+      "why": "The `formatter:` spelling is the pre-`FormatStyle` class API. It parses through an untyped out-parameter — `Formatter.getObjectValue(_:for:errorDescription:)` yields `AnyObject` — so binding it to a `Binding<Int>` is a downcast the compiler cannot check, and SwiftUI's `Text`/interpolation overloads narrow it further to `NSObject` and `ReferenceConvertible`, which are Objective-C bridging protocols rather than Swift ones. The same capability IS implemented in its typed form, where `Strategy.ParseOutput == FormatInput` makes the round-trip a static guarantee: `TextField(_:value:format:)` and its two siblings (Sources/TUIkit/Views/TextFieldValue.swift), `Text(_:format:)` (Sources/TUIkit/Views/Text.swift:111) and `\\(value, format:)` in a LocalizedStringKey interpolation. Adding the class spelling beside them would be the same feature with the type safety taken out."
     }
   ],
   "renamed": {

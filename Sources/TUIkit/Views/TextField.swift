@@ -94,16 +94,34 @@ public struct TextField<Label: View>: View {
     /// Action fired when editing begins (`true`) and ends (`false`).
     var onEditingChangedAction: ((Bool) -> Void)?
 
+    /// Set when the field edits a typed value rather than a `String` — see
+    /// ``init(value:format:prompt:label:)``. `text` is then unused: the string
+    /// being edited is a draft the bridging view holds, not the caller's.
+    var formatting: _FieldValueFormatting?
+
+    @ViewBuilder
     public var body: some View {
-        _TextFieldCore(
-            label: label,
-            text: text,
-            prompt: prompt,
-            focusID: focusID,
-            isDisabled: isDisabled,
-            onSubmitAction: onSubmitAction,
-            onEditingChangedAction: onEditingChangedAction
-        )
+        if let formatting {
+            _FormattedFieldBody(
+                formatting: formatting,
+                prompt: prompt,
+                label: label,
+                focusID: focusID,
+                isDisabled: isDisabled,
+                onSubmitAction: onSubmitAction,
+                onEditingChangedAction: onEditingChangedAction
+            )
+        } else {
+            _TextFieldCore(
+                label: label,
+                text: text,
+                prompt: prompt,
+                focusID: focusID,
+                isDisabled: isDisabled,
+                onSubmitAction: onSubmitAction,
+                onEditingChangedAction: onEditingChangedAction
+            )
+        }
     }
 }
 
@@ -147,6 +165,7 @@ extension TextField where Label == Text {
         self.isDisabled = false
         self.onSubmitAction = nil
         self.onEditingChangedAction = nil
+        self.formatting = nil
     }
 
     /// Creates a text field with a prompt.
@@ -166,6 +185,7 @@ extension TextField where Label == Text {
         self.isDisabled = false
         self.onSubmitAction = nil
         self.onEditingChangedAction = nil
+        self.formatting = nil
     }
 }
 
@@ -204,6 +224,7 @@ extension TextField {
         self.isDisabled = false
         self.onSubmitAction = nil
         self.onEditingChangedAction = nil
+        self.formatting = nil
     }
 }
 

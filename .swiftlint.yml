@@ -202,6 +202,12 @@ type_name:
     # @FocusState modifier helpers created by .focused / .defaultFocus.
     - _FocusedModifier
     - _DefaultFocusModifier
+    # The value-editing half of TextField(_:value:format:) — the bridge that
+    # erases the format style's type, and the view that owns the draft string.
+    # Internal (not private) because TextField's body is in TextField.swift and
+    # both live in TextFieldValue.swift beside the initializers that build them.
+    - _FieldValueFormatting
+    - _FormattedFieldBody
     # Applied by ContextMenuModifier so a menu's Buttons render as menu rows;
     # internal (not private) because the style and the modifier that applies it
     # live in different files.
