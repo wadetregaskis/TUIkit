@@ -39,8 +39,10 @@ struct DatePickerTests {
         return DatePickerHandler(focusID: "d", selection: sink.binding, model: model)
     }
 
-    /// A date built in the *current* calendar — used by the render tests, since
-    /// `_DatePickerCore` formats with `Calendar.current`.
+    /// A date built in the *current* calendar and zone — for the render tests
+    /// that install neither, where `_DatePickerCore` takes the environment's
+    /// defaults (`.autoupdatingCurrent` for both). The tests that DO install
+    /// them build their instant with `date(_:_:_:)` above, which is UTC.
     private func localDate(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
         Calendar.current.date(
             from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
@@ -270,6 +272,76 @@ struct DatePickerTests {
         ).lines.map { $0.stripped }.joined()
         #expect(text.contains("2026-03-05"))
         #expect(!text.contains("09:07"))
+    }
+
+    // MARK: - \.calendar and \.timeZone
+
+    /// Renders a picker showing one fixed instant, in whatever calendar and zone
+    /// the closure installs.
+    private func rendered(
+        _ instant: Date, configure: @escaping (inout EnvironmentValues) -> Void
+    ) -> String {
+        let sink = DateSink(instant)
+        let context = makeRenderContext(width: 40, height: 3) { environment, _ in
+            configure(&environment)
+        }
+        return renderToBuffer(DatePicker("When", selection: sink.binding), context: context)
+            .lines.map { $0.stripped }.joined()
+    }
+
+    /// 2026-03-05 09:07 UTC — one instant, deliberately at an hour that reads as
+    /// a different DAY in a far-enough-west zone, so a zone that failed to reach
+    /// the field could not pass by accident on the hour alone.
+    private var instant: Date { date(2026, 3, 5, 9, 7) }
+
+    @Test("The field shows the subtree's time zone, not the machine's")
+    func timeZoneReachesTheField() {
+        let utc = rendered(instant) { $0.timeZone = TimeZone(identifier: "UTC")! }
+        #expect(utc.contains("2026-03-05"), "\(utc)")
+        #expect(utc.contains("09:07"), "\(utc)")
+
+        // Tokyo is UTC+9 the year round, so the same instant is the evening of
+        // the same day; Honolulu is UTC-10, which puts it on the day before.
+        let tokyo = rendered(instant) { $0.timeZone = TimeZone(identifier: "Asia/Tokyo")! }
+        #expect(tokyo.contains("18:07"), "\(tokyo)")
+        let honolulu = rendered(instant) { $0.timeZone = TimeZone(identifier: "Pacific/Honolulu")! }
+        #expect(honolulu.contains("2026-03-04"), "\(honolulu)")
+        #expect(honolulu.contains("23:07"), "\(honolulu)")
+    }
+
+    @Test("The field counts in the subtree's calendar")
+    func calendarReachesTheField() {
+        // The same instant, in a calendar that numbers its years differently:
+        // the Gregorian 2026 is 1447/1448 in the Islamic calendar, so a picker
+        // still showing 2026 is one that never read `\.calendar`.
+        let gregorian = rendered(instant) {
+            $0.calendar = Calendar(identifier: .gregorian)
+            $0.timeZone = TimeZone(identifier: "UTC")!
+        }
+        #expect(gregorian.contains("2026-03-05"), "\(gregorian)")
+
+        let islamic = rendered(instant) {
+            $0.calendar = Calendar(identifier: .islamic)
+            $0.timeZone = TimeZone(identifier: "UTC")!
+        }
+        #expect(!islamic.contains("2026-03-05"), "\(islamic)")
+        #expect(islamic.contains("1447-"), "\(islamic)")
+    }
+
+    @Test("The environment's zone wins over the calendar's own")
+    func theEnvironmentZoneWins() {
+        // A `Calendar` carries a zone, and this one carries the WRONG one on
+        // purpose. `\.timeZone` is the value that says which zone the interface
+        // is in, so it is the one that must be honoured — documented on
+        // `EnvironmentValues.timeZone`, and easy to regress by simply reading
+        // `\.calendar` and using it as it arrives.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        let out = rendered(instant) {
+            $0.calendar = calendar
+            $0.timeZone = TimeZone(identifier: "UTC")!
+        }
+        #expect(out.contains("09:07"), "UTC won, not the calendar's Tokyo: \(out)")
     }
 
     // MARK: - Pulsing active-field highlight

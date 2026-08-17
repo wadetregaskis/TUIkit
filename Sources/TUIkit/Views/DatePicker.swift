@@ -38,10 +38,17 @@ public struct DatePickerComponents: OptionSet, Sendable {
 /// ```
 ///
 /// > Note: Unlike SwiftUI, this is an inline stepper-style field (no calendar
-/// > popup), it uses a fixed numeric format rather than the environment
-/// > locale/calendar, and it omits the watchOS-only `.hourMinuteAndSecond`
-/// > component. Components wrap within their field (no carry) and the whole date
-/// > is clamped to the `in:` range.
+/// > popup), it lays the components out in a fixed `YYYY-MM-DD HH:MM` order
+/// > rather than the environment locale's, and it omits the watchOS-only
+/// > `.hourMinuteAndSecond` component. Components wrap within their field (no
+/// > carry) and the whole date is clamped to the `in:` range.
+/// >
+/// > What it does take from the environment is the arithmetic:
+/// > ``EnvironmentValues/calendar`` and ``EnvironmentValues/timeZone``, so the
+/// > field counts in the subtree's calendar and shows the subtree's zone. Only
+/// > `\.locale` is deliberately ignored, and only for the layout — a
+/// > locale-ordered field would move its columns about under the caret, which
+/// > the typing model depends on not happening.
 public struct DatePicker<Label: View>: View {
     let selection: Binding<Date>
     let range: ClosedRange<Date>?
@@ -230,8 +237,14 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
             context: context, explicitFocusID: focusID,
             defaultPrefix: "datepicker", propertyIndex: StateIndex.focusID)
 
+        // The subtree's calendar, in the subtree's zone. Both are read here
+        // rather than baked into the handler, because the model is rebuilt each
+        // frame and reassigned below — so changing either takes effect on the
+        // next frame, without the picker having to notice.
+        var calendar = context.environment.calendar
+        calendar.timeZone = context.environment.timeZone
         let model = DateFieldModel(
-            calendar: .current, components: displayedComponents, range: range)
+            calendar: calendar, components: displayedComponents, range: range)
 
         let handlerKey = StateStorage.StateKey(
             identity: context.identity, propertyIndex: StateIndex.handler)

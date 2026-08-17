@@ -18,8 +18,15 @@ import Foundation
 ///
 /// A fixed zero-padded numeric format is used deliberately (not a locale
 /// `DateFormatter`) so component column widths stay stable and typing is
-/// deterministic — the caret model depends on it. (SwiftUI reads the environment
-/// calendar/locale; honouring `\.calendar`/`\.locale` is a possible follow-up.)
+/// deterministic — the caret model depends on it. So `\.locale` does NOT reach
+/// the field: what it would change is the presentation, and the presentation is
+/// pinned on purpose.
+///
+/// The `calendar` does reach it, and carries the zone: ``DatePicker`` builds
+/// this from `\.calendar` with `\.timeZone` set on it, so the arithmetic below —
+/// which months a year has, how long this one is, what instant a component edit
+/// produces — happens in the subtree's calendar and zone rather than the
+/// machine's.
 struct DateFieldModel {
     /// An editable date/time component.
     enum Kind: Equatable {
