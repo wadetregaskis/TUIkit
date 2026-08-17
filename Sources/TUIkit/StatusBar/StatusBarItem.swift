@@ -202,7 +202,40 @@ public struct StatusBarItem: StatusBarItemProtocol, Identifiable, @unchecked Sen
     /// The action to perform when the shortcut is triggered.
     private let action: (() -> Void)?
 
-    /// Creates a status bar item with an action.
+    /// Creates a status bar item with a localized label and an action.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. Only `label` is: `shortcut` is the key *glyph*
+    /// (`"q"`, `"⎋"`, `"⌃q"`), which is the same in every language and which
+    /// the item also derives its trigger key and identity from.
+    ///
+    /// - Parameters:
+    ///   - shortcut: The shortcut key(s) to display.
+    ///   - labelKey: The key for a short description (one word).
+    ///   - key: The key that triggers the action (derived from shortcut if not provided).
+    ///   - order: The display order (default: `.default`).
+    ///   - displayInStatusBar: Whether the item is rendered in the status bar
+    ///     (default: `true`).
+    ///   - action: The action to perform.
+    public init(
+        shortcut: String,
+        label labelKey: LocalizedStringKey,
+        key: Key? = nil,
+        order: StatusBarItemOrder = .default,
+        displayInStatusBar: Bool = true,
+        action: (() -> Void)? = nil
+    ) {
+        self.init(
+            shortcut: shortcut,
+            label: labelKey.localized,
+            key: key,
+            order: order,
+            displayInStatusBar: displayInStatusBar,
+            action: action
+        )
+    }
+
+    /// Creates a status bar item with an action, labelled as written.
     ///
     /// - Parameters:
     ///   - shortcut: The shortcut key(s) to display.
@@ -215,6 +248,7 @@ public struct StatusBarItem: StatusBarItemProtocol, Identifiable, @unchecked Sen
     ///     Shift-variants whose display is already covered by a
     ///     sibling item like `"c|C"`.
     ///   - action: The action to perform.
+    @_disfavoredOverload
     public init(
         shortcut: String,
         label: String,
@@ -259,12 +293,31 @@ public struct StatusBarItem: StatusBarItemProtocol, Identifiable, @unchecked Sen
         }
     }
 
-    /// Creates an informational status bar item (no action).
+    /// Creates an informational status bar item (no action) with a localized
+    /// label.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
+    /// - Parameters:
+    ///   - shortcut: The shortcut key(s) to display.
+    ///   - labelKey: The key for a short description.
+    ///   - order: The display order (default: `.default`).
+    public init(
+        shortcut: String, label labelKey: LocalizedStringKey,
+        order: StatusBarItemOrder = .default
+    ) {
+        self.init(shortcut: shortcut, label: labelKey.localized, order: order)
+    }
+
+    /// Creates an informational status bar item (no action), labelled as
+    /// written.
     ///
     /// - Parameters:
     ///   - shortcut: The shortcut key(s) to display.
     ///   - label: A short description.
     ///   - order: The display order (default: `.default`).
+    @_disfavoredOverload
     public init(shortcut: String, label: String, order: StatusBarItemOrder = .default) {
         self.init(
             shortcut: shortcut, label: label, key: nil, order: order,

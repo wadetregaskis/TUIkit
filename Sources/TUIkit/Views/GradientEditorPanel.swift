@@ -72,7 +72,27 @@ public struct GradientEditorPanel: View {
     /// and gradient chips, so no row grows the dialog past the preview.
     private static let previewWidth = 36
 
-    /// Creates a gradient-editor panel over a colour-stop binding.
+    /// Creates a gradient-editor panel with a localized title.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. The title is not defaulted in this overload, or
+    /// the two would be ambiguous where it is omitted.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the dialog title.
+    ///   - stops: The gradient's colour stops, evenly spaced. Rewritten live
+    ///     on every change; restored to the opening value on Cancel / `Esc`.
+    ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
+    ///     it false.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        stops: Binding<[Color]>,
+        isPresented: Binding<Bool>
+    ) {
+        self.init(titleKey.localized, stops: stops, isPresented: isPresented)
+    }
+
+    /// Creates a gradient-editor panel titled as written.
     ///
     /// - Parameters:
     ///   - title: The dialog title (default `"Gradient"`).
@@ -80,6 +100,7 @@ public struct GradientEditorPanel: View {
     ///     on every change; restored to the opening value on Cancel / `Esc`.
     ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
     ///     it false.
+    @_disfavoredOverload
     public init(
         _ title: String = "Gradient",
         stops: Binding<[Color]>,

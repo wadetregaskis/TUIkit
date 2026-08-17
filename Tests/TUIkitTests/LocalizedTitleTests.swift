@@ -420,6 +420,132 @@ struct LocalizedTitleTests {
             List { Text("row").badge(Self.computedKey) }, "badge")
     }
 
+    // MARK: - TUI-specific chrome
+
+    // Everything below has no SwiftUI counterpart — a terminal app's dialogs,
+    // cards and status bar. The rule is the same one: text a reader has to
+    // understand is a key, and a glyph is not.
+
+    @Test("Dialog")
+    func dialog() {
+        expectLocalized(
+            Dialog(title: "test.title.control") { Text("body") },
+            Dialog(title: Self.computedKey) { Text("body") }, "Dialog")
+        expectLocalized(
+            Dialog(title: "test.title.control") { Text("body") } footer: { Text("f") },
+            Dialog(title: Self.computedKey) { Text("body") } footer: { Text("f") },
+            "Dialog(footer:)")
+        expectLocalized(
+            Dialog<Text, EmptyView>.doubleLine(title: "test.title.control") { Text("body") },
+            Dialog<Text, EmptyView>.doubleLine(title: Self.computedKey) { Text("body") },
+            "Dialog.doubleLine")
+        expectLocalized(
+            Dialog<Text, EmptyView>.heavy(title: "test.title.control") { Text("body") },
+            Dialog<Text, EmptyView>.heavy(title: Self.computedKey) { Text("body") },
+            "Dialog.heavy")
+    }
+
+    @Test("Alert title and message")
+    func alert() {
+        expectLocalized(
+            Alert(title: "test.title.control", message: "m"),
+            Alert(title: Self.computedKey, message: "m"), "Alert title")
+        // The message is prose the reader has to understand, so it is a key too
+        // — unlike a `LabeledContent` value, which is the thing being labelled.
+        #expect(
+            rendered(Alert(title: "t", message: "test.title.control"))
+                .contains(Self.translation), "Alert message")
+        expectLocalized(
+            Alert(title: "test.title.control", message: "m") { Button("ok") {} },
+            Alert(title: Self.computedKey, message: "m") { Button("ok") {} },
+            "Alert(actions:)")
+    }
+
+    @Test("Card")
+    func card() {
+        expectLocalized(
+            Card(title: "test.title.control") { Text("body") },
+            Card(title: Self.computedKey) { Text("body") }, "Card")
+        expectLocalized(
+            Card(title: "test.title.control") { Text("body") } footer: { Text("f") },
+            Card(title: Self.computedKey) { Text("body") } footer: { Text("f") },
+            "Card(footer:)")
+        // The key overload is non-optional, so the untitled forms still reach
+        // the `String?` one rather than becoming ambiguous.
+        #expect(Card { Text("body") }.title == nil)
+        #expect(Card(title: nil) { Text("body") }.title == nil)
+    }
+
+    @Test("Colour and gradient editor panels")
+    func editorPanels() {
+        let color = Box(Color.red)
+        let stops = Box([Color.red, Color.blue])
+        let presented = Box(true)
+        expectLocalized(
+            ColorPickerPanel(
+                "test.title.control", selection: color.binding,
+                isPresented: presented.binding),
+            ColorPickerPanel(
+                Self.computedKey, selection: color.binding,
+                isPresented: presented.binding),
+            "ColorPickerPanel")
+        expectLocalized(
+            GradientEditorPanel(
+                "test.title.control", stops: stops.binding,
+                isPresented: presented.binding),
+            GradientEditorPanel(
+                Self.computedKey, stops: stops.binding,
+                isPresented: presented.binding),
+            "GradientEditorPanel")
+    }
+
+    @Test("StatusBarItem and QuitShortcut labels")
+    func statusBar() {
+        // Not views — the label is stored, so it is read directly. `shortcut` /
+        // `shortcutSymbol` stay plain strings: they are the key glyph, which is
+        // the same in every language.
+        #expect(StatusBarItem(shortcut: "q", label: "test.title.control").label
+            == Self.translation)
+        #expect(StatusBarItem(shortcut: "q", label: Self.computedKey).label == Self.key)
+        #expect(StatusBarItem(shortcut: "q", label: "test.title.control") {}.label
+            == Self.translation)
+        #expect(StatusBarItem(shortcut: "q", label: Self.computedKey) {}.label == Self.key)
+
+        #expect(
+            QuitShortcut(key: .character("q"), shortcutSymbol: "q", label: "test.title.control")
+                .label == Self.translation)
+        #expect(
+            QuitShortcut(key: .character("q"), shortcutSymbol: "q", label: Self.computedKey)
+                .label == Self.key)
+        // Omitting the label still reaches the `String` overload's default.
+        #expect(QuitShortcut(key: .character("q"), shortcutSymbol: "q").label == "quit")
+    }
+
+    @Test("imagePlaceholder")
+    func imagePlaceholder() {
+        // A path that cannot load leaves the image in its placeholder state,
+        // which is where the text is drawn.
+        expectLocalized(
+            Image(.file("/nope.png")).imagePlaceholder("test.title.control")
+                .imagePlaceholderSpinner(false),
+            Image(.file("/nope.png")).imagePlaceholder(Self.computedKey)
+                .imagePlaceholderSpinner(false),
+            "imagePlaceholder")
+        // Non-optional key overload, so `nil` still reaches the `String?` one.
+        _ = Image(.file("/nope.png")).imagePlaceholder(nil)
+    }
+
+    @Test("Notification message")
+    func notification() {
+        let service = NotificationService()
+        service.post("test.title.control")
+        service.post(Self.computedKey)
+        let entries = service.activeEntries()
+        #expect(entries.count == 2)
+        #expect(entries[0].message == Self.translation)
+        #expect(entries[1].message == Self.key)
+    }
+
     // MARK: - Fixtures
 
     /// A row type for the `Table` case.

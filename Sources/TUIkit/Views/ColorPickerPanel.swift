@@ -89,7 +89,27 @@ public struct ColorPickerPanel: View {
         }
     }
 
-    /// Creates a colour-picker panel over a colour binding.
+    /// Creates a colour-picker panel with a localized title.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. The title is not defaulted in this overload, or
+    /// the two would be ambiguous where it is omitted.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the dialog title.
+    ///   - selection: The colour to edit. Rewritten live on every change;
+    ///     restored to the opening value on Cancel / `Esc`.
+    ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
+    ///     it false.
+    public init(
+        _ titleKey: LocalizedStringKey,
+        selection: Binding<Color>,
+        isPresented: Binding<Bool>
+    ) {
+        self.init(titleKey.localized, selection: selection, isPresented: isPresented)
+    }
+
+    /// Creates a colour-picker panel titled as written.
     ///
     /// - Parameters:
     ///   - title: The dialog title (default `"Colour"`).
@@ -97,6 +117,7 @@ public struct ColorPickerPanel: View {
     ///     restored to the opening value on Cancel / `Esc`.
     ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
     ///     it false.
+    @_disfavoredOverload
     public init(
         _ title: String = "Colour",
         selection: Binding<Color>,

@@ -103,13 +103,27 @@ public final class NotificationService: @unchecked Sendable {
 // MARK: - Public API
 
 extension NotificationService {
-    /// Posts a new notification.
+    /// Posts a new notification with localized text.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. The notification appears immediately and
+    /// auto-dismisses after `duration` seconds.
+    ///
+    /// - Parameters:
+    ///   - messageKey: The key for the notification message text.
+    ///   - duration: How long the notification stays visible in seconds (default: 3.0).
+    public func post(_ messageKey: LocalizedStringKey, duration: TimeInterval = 3.0) {
+        post(messageKey.localized, duration: duration)
+    }
+
+    /// Posts a new notification, displayed as written.
     ///
     /// The notification appears immediately and auto-dismisses after `duration` seconds.
     ///
     /// - Parameters:
     ///   - message: The notification message text.
     ///   - duration: How long the notification stays visible in seconds (default: 3.0).
+    @_disfavoredOverload
     public func post(_ message: String, duration: TimeInterval = 3.0) {
         let entry = NotificationEntry(message: message, duration: duration)
         lock.lock()

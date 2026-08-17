@@ -78,10 +78,27 @@ Table(files, selection: $id) { TableColumn("column.size", value: \.size) }
 ``TUIkit/View/confirmationDialog(_:isPresented:titleVisibility:actions:)``,
 `searchable(prompt:)`, `badge(_:)` and `listEmptyPlaceholder(_:)`.
 
+The TUI-specific chrome follows the same rule — a terminal app's dialogs, cards
+and status bar are display text like any other:
+
+```swift
+Dialog(title: "dialog.settings") { … }
+Alert(title: "alert.unsaved.title", message: "alert.unsaved.body")
+Card(title: "card.summary") { … }
+StatusBarItem(shortcut: "q", label: "status.quit") { quit() }
+notifications.post("notice.saved")
+```
+
+An ``Alert``'s **message** is a key too, unlike a value: it is prose the reader
+has to understand. Both of its slots must be literals or neither is looked up,
+since a computed `String` in either one selects the plain-`String` overload.
+
 Only **display text** is a key. A value the control is *showing you* is not:
 `LabeledContent("row.size", value: fileSize)` looks up the label and prints the
 size, an SF Symbol name is a symbol name, and a `Table`'s cells come from the
-data. If it would be wrong to translate it, it is not a key.
+data. Nor is a **glyph**: a ``StatusBarItem``'s `shortcut` — `"q"`, `"⎋"`,
+`"⌃q"` — is the key you press, the same in every language, and the item derives
+its identity from it. If it would be wrong to translate it, it is not a key.
 
 > Tip: You never have to use this. `Button(myLocalizedString)` — a computed
 > `String` — is the disfavoured overload and is displayed exactly as given,

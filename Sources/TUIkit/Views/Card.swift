@@ -84,7 +84,48 @@ public struct Card<Content: View, Footer: View>: View {
     /// The background color (nil for transparent).
     let backgroundColor: Color?
 
-    /// Creates a card with all options including footer.
+    /// Creates a card with a localized title, content and footer.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. The title is not optional in this overload: a
+    /// card with no title has no key to look up, and would otherwise be
+    /// ambiguous between the two.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the card title.
+    ///   - borderStyle: The border style (default: appearance borderStyle).
+    ///   - borderColor: The border color (default: theme border).
+    ///   - titleColor: The title color (default: theme accent).
+    ///   - backgroundColor: The background color (default: nil).
+    ///   - padding: The inner padding (default: 1 on all sides).
+    ///   - showFooterSeparator: Whether to show separator before footer (default: true).
+    ///   - content: The content of the card.
+    ///   - footer: The footer content.
+    public init(
+        title titleKey: LocalizedStringKey,
+        borderStyle: BorderStyle? = nil,
+        borderColor: Color? = nil,
+        titleColor: Color? = nil,
+        backgroundColor: Color? = nil,
+        padding: EdgeInsets = EdgeInsets(all: 1),
+        showFooterSeparator: Bool = true,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.init(
+            title: titleKey.localized,
+            borderStyle: borderStyle,
+            borderColor: borderColor,
+            titleColor: titleColor,
+            backgroundColor: backgroundColor,
+            padding: padding,
+            showFooterSeparator: showFooterSeparator,
+            content: content,
+            footer: footer
+        )
+    }
+
+    /// Creates a card with all options including footer, titled as written.
     ///
     /// - Parameters:
     ///   - title: The title (optional).
@@ -96,6 +137,7 @@ public struct Card<Content: View, Footer: View>: View {
     ///   - showFooterSeparator: Whether to show separator before footer (default: true).
     ///   - content: The content of the card.
     ///   - footer: The footer content.
+    @_disfavoredOverload
     public init(
         title: String? = nil,
         borderStyle: BorderStyle? = nil,
@@ -191,7 +233,41 @@ private struct _CardCore<Content: View, Footer: View>: View, Renderable, Layouta
 // MARK: - Convenience Initializer (no footer)
 
 extension Card where Footer == EmptyView {
-    /// Creates a card without a footer.
+    /// Creates a footerless card with a localized title.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. Not optional, for the reason given on the
+    /// footered overload.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the card title.
+    ///   - borderStyle: The border style (default: appearance borderStyle).
+    ///   - borderColor: The border color (default: theme border).
+    ///   - titleColor: The title color (default: theme accent).
+    ///   - backgroundColor: The background color (default: nil).
+    ///   - padding: The inner padding (default: 1 on all sides).
+    ///   - content: The content of the card.
+    public init(
+        title titleKey: LocalizedStringKey,
+        borderStyle: BorderStyle? = nil,
+        borderColor: Color? = nil,
+        titleColor: Color? = nil,
+        backgroundColor: Color? = nil,
+        padding: EdgeInsets = EdgeInsets(all: 1),
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            title: titleKey.localized,
+            borderStyle: borderStyle,
+            borderColor: borderColor,
+            titleColor: titleColor,
+            backgroundColor: backgroundColor,
+            padding: padding,
+            content: content
+        )
+    }
+
+    /// Creates a card without a footer, titled as written.
     ///
     /// - Parameters:
     ///   - title: The title (optional).
@@ -201,6 +277,7 @@ extension Card where Footer == EmptyView {
     ///   - backgroundColor: The background color (default: nil).
     ///   - padding: The inner padding (default: 1 on all sides).
     ///   - content: The content of the card.
+    @_disfavoredOverload
     public init(
         title: String? = nil,
         borderStyle: BorderStyle? = nil,

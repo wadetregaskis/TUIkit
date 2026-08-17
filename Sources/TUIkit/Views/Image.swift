@@ -412,10 +412,24 @@ extension View {
         environment(\.imageDithering, dithering)
     }
 
-    /// Sets the placeholder text shown while an image is loading.
+    /// Sets the localized placeholder text shown while an image is loading.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. The text is not optional in this overload:
+    /// `nil` has no key to look up, and would otherwise be ambiguous between
+    /// the two.
+    ///
+    /// - Parameter textKey: The key for the placeholder text.
+    /// - Returns: A modified view.
+    public func imagePlaceholder(_ textKey: LocalizedStringKey) -> some View {
+        environment(\.imagePlaceholderText, textKey.localized)
+    }
+
+    /// Sets the placeholder text shown while an image is loading, as written.
     ///
     /// - Parameter text: The placeholder text, or nil for no text.
     /// - Returns: A modified view.
+    @_disfavoredOverload
     public func imagePlaceholder(_ text: String?) -> some View {
         environment(\.imagePlaceholderText, text)
     }

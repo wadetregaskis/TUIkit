@@ -51,7 +51,48 @@ public struct Alert<Actions: View>: View {
     /// confirmation-dialog column) rather than the default horizontal row.
     let verticalButtons: Bool
 
-    /// Creates an alert with custom action views.
+    /// Creates an alert with localized text and custom action views.
+    ///
+    /// String **literals** bind here, so they are lookup keys — see
+    /// ``LocalizedStringKey``. Both of them: an alert's message is prose the
+    /// reader has to understand, not data.
+    ///
+    /// > Note: Both must be literals, or neither is looked up — a computed
+    ///   `String` in either slot picks the plain-`String` overload below, which
+    ///   displays what it is given. Resolve such a pair yourself.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the alert title.
+    ///   - messageKey: The key for the alert message.
+    ///   - borderStyle: The border style (default: appearance borderStyle).
+    ///   - borderColor: The border color (default: theme border).
+    ///   - titleColor: The title color (default: theme foreground).
+    ///   - showFooterSeparator: Whether to show separator before actions (default: true).
+    ///   - verticalButtons: Stack the buttons vertically (default: `false`).
+    ///   - actions: The action views to display in the footer.
+    public init(
+        title titleKey: LocalizedStringKey,
+        message messageKey: LocalizedStringKey,
+        borderStyle: BorderStyle? = nil,
+        borderColor: Color? = nil,
+        titleColor: Color? = nil,
+        showFooterSeparator: Bool = true,
+        verticalButtons: Bool = false,
+        @ViewBuilder actions: () -> Actions
+    ) {
+        self.init(
+            title: titleKey.localized,
+            message: messageKey.localized,
+            borderStyle: borderStyle,
+            borderColor: borderColor,
+            titleColor: titleColor,
+            showFooterSeparator: showFooterSeparator,
+            verticalButtons: verticalButtons,
+            actions: actions
+        )
+    }
+
+    /// Creates an alert with custom action views, displayed as written.
     ///
     /// - Parameters:
     ///   - title: The alert title.
@@ -62,6 +103,7 @@ public struct Alert<Actions: View>: View {
     ///   - showFooterSeparator: Whether to show separator before actions (default: true).
     ///   - verticalButtons: Stack the buttons vertically (default: `false`).
     ///   - actions: The action views to display in the footer.
+    @_disfavoredOverload
     public init(
         title: String,
         message: String,
@@ -324,7 +366,36 @@ struct AlertButtonColumn: View, Renderable {
 // MARK: - Convenience Initializer (no actions)
 
 extension Alert where Actions == EmptyView {
-    /// Creates an alert without action buttons.
+    /// Creates an actionless alert with localized text.
+    ///
+    /// String **literals** bind here, so they are lookup keys — see
+    /// ``LocalizedStringKey``, and the note on
+    /// ``Alert/init(title:message:borderStyle:borderColor:titleColor:showFooterSeparator:verticalButtons:actions:)-(LocalizedStringKey,_,_,_,_,_,_,_)``
+    /// about mixing a literal with a computed `String`.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the alert title.
+    ///   - messageKey: The key for the alert message.
+    ///   - borderStyle: The border style (default: appearance default).
+    ///   - borderColor: The border color (default: nil).
+    ///   - titleColor: The title color (default: nil).
+    public init(
+        title titleKey: LocalizedStringKey,
+        message messageKey: LocalizedStringKey,
+        borderStyle: BorderStyle? = nil,
+        borderColor: Color? = nil,
+        titleColor: Color? = nil
+    ) {
+        self.init(
+            title: titleKey.localized,
+            message: messageKey.localized,
+            borderStyle: borderStyle,
+            borderColor: borderColor,
+            titleColor: titleColor
+        )
+    }
+
+    /// Creates an alert without action buttons, displayed as written.
     ///
     /// - Parameters:
     ///   - title: The alert title.
@@ -332,6 +403,7 @@ extension Alert where Actions == EmptyView {
     ///   - borderStyle: The border style (default: appearance default).
     ///   - borderColor: The border color (default: nil).
     ///   - titleColor: The title color (default: nil).
+    @_disfavoredOverload
     public init(
         title: String,
         message: String,

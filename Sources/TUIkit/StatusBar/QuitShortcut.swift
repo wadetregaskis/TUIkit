@@ -35,13 +35,37 @@ public struct QuitShortcut: Sendable {
     /// The label displayed next to the shortcut symbol (e.g., `"quit"`).
     public let label: String
 
-    /// Creates a custom quit shortcut.
+    /// Creates a custom quit shortcut with a localized label.
+    ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. Only `label` is: `shortcutSymbol` is the key
+    /// glyph, which is the same in every language. The label is not defaulted
+    /// in this overload, or the two would be ambiguous where it is omitted.
+    ///
+    /// - Parameters:
+    ///   - key: The key that triggers quit.
+    ///   - ctrl: Whether Ctrl must be held (default: `false`).
+    ///   - shortcutSymbol: The symbol shown in the status bar.
+    ///   - labelKey: The key for the label shown next to the symbol.
+    public init(
+        key: Key,
+        ctrl: Bool = false,
+        shortcutSymbol: String,
+        label labelKey: LocalizedStringKey
+    ) {
+        self.init(
+            key: key, ctrl: ctrl, shortcutSymbol: shortcutSymbol,
+            label: labelKey.localized)
+    }
+
+    /// Creates a custom quit shortcut, labelled as written.
     ///
     /// - Parameters:
     ///   - key: The key that triggers quit.
     ///   - ctrl: Whether Ctrl must be held (default: `false`).
     ///   - shortcutSymbol: The symbol shown in the status bar.
     ///   - label: The label shown next to the symbol (default: `"quit"`).
+    @_disfavoredOverload
     public init(
         key: Key,
         ctrl: Bool = false,
