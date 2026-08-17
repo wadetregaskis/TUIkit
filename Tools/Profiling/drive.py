@@ -17,7 +17,7 @@ Two modes:
                    Profiler (via xctrace) to the running app for the run
 
 Usage:
-    drive.py BIN [--scenario tour|list|table|emoji|scroll|mouse|idle]
+    drive.py BIN [--scenario tour|list|table|emoji|scroll|mouse|idle|menu]
                  [--loops N] [--rows R] [--cols C] [--settle S]
                  [--trace OUT.trace] [--time-limit MS] [--quiet]
 
@@ -106,6 +106,12 @@ def build_scenario(name, rows, cols):
         return scenario_scroll(PAGE_KEYS["scroll"])
     if name == "mouse":
         return scenario_mouse(rows, cols)
+    if name == "menu":
+        # Sit on the MAIN MENU with no input at all. It is the screen an app
+        # opens on, so its steady-state cost is the first thing a user feels —
+        # and it is structurally unlike the demo pages: ~32 inline menu rows
+        # plus the feature boxes, one of them focused and breathing.
+        return [(0.30, b"")] + [(0.10, b"")] * 120
     if name == "idle":
         # Sit on the emoji page (a heavy page) and let the pulse/cursor
         # timers re-render. Measures steady-state per-frame cost.
@@ -149,7 +155,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("binary")
     ap.add_argument("--scenario", default="tour",
-                    choices=["tour", "list", "table", "emoji", "scroll", "mouse", "idle", "progress"])
+                    choices=["tour", "list", "table", "emoji", "scroll", "mouse", "idle", "menu", "progress"])
     ap.add_argument("--loops", type=int, default=1)
     ap.add_argument("--rows", type=int, default=50)
     ap.add_argument("--cols", type=int, default=160)
