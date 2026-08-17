@@ -287,8 +287,12 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         // its action AND close the menu (SwiftUI's menu auto-dismiss). Capture the
         // dismiss action into a local now — the environment isn't reachable from
         // the event closure. `nil` everywhere outside a menu subtree, so a plain
-        // page button is unaffected.
-        let dismissMenu = context.environment.dismissMenu
+        // page button is unaffected — and `nil` too under a
+        // `.menuActionDismissBehavior(.disabled)`, which is exactly "run the
+        // action, leave the menu up".
+        let dismissMenu =
+            context.environment.menuActionDismissBehavior.dismissesMenu
+            ? context.environment.dismissMenu : nil
         let action = self.action
         let effectiveAction: () -> Void = {
             action()

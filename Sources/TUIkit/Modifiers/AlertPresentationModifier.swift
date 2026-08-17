@@ -216,6 +216,12 @@ extension AlertPresentationModifier: Renderable {
         alertContext.environment.dismissMenu = DismissMenuAction {
             dismissAlert.wrappedValue = false
         }
+        // `dismissMenu` is one channel serving two presentations, so the switch
+        // that governs MENU items must not reach an alert's buttons: an alert is
+        // a question and its buttons are answers, whatever a `.menuActionDismissBehavior`
+        // higher up the page said about menus. Re-asserted rather than merely
+        // left alone, because the environment cascades in from outside.
+        alertContext.environment.menuActionDismissBehavior = .enabled
         // And the SwiftUI-facing spelling of the same thing. `dismissMenu` is
         // the internal channel `Button` consults; `\.dismiss` is what an app
         // author writes. Without it the alert's own actions inherit the

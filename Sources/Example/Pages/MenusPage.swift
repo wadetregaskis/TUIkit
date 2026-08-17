@@ -23,6 +23,14 @@ struct MenusPage: View {
     @State private var contextAction: String = "—"
     @State private var pullDownChoice: String = "—"
     @State private var editor: String = ""
+    @State private var showsHidden = false
+    @State private var showsSizes = true
+    @State private var showsPreviews = false
+
+    /// The on/off marks the terminal can actually draw, so the sticky menu's
+    /// rows are ticked with the same glyphs a `Toggle` would use rather than a
+    /// hard-coded ✓ that some fonts lack.
+    @Environment(\.toggleCharacterSet) private var marks
 
     /// Suggestions for the combo box. Editor names are proper nouns, so the
     /// menu reads the same in every language — the point on show is the
@@ -45,6 +53,33 @@ struct MenusPage: View {
             content
         }
         .navigationTitle(L("page.menus.title"))
+    }
+
+    /// One row of the sticky menu: a `Button` whose label carries the flag's
+    /// current mark, and which leaves the menu up when it fires.
+    ///
+    /// The mark comes from ``ToggleCharacterSet`` so it degrades with the
+    /// terminal exactly as a `Toggle`'s does — and both marks of a set are the
+    /// same cell width, so the labels stay in one column as the flags change.
+    private func stickyItem(_ title: String, _ flag: Binding<Bool>) -> some View {
+        Button(
+            marks.openBracket
+                + (flag.wrappedValue ? marks.onMark : marks.offMark)
+                + marks.closeBracket + " " + title
+        ) {
+            flag.wrappedValue.toggle()
+        }
+        .menuActionDismissBehavior(.disabled)
+    }
+
+    /// The flags that are on, in menu order — or a dash when none are.
+    private var showingSummary: String {
+        let on = [
+            (showsHidden, L("page.menus.sticky.hidden")),
+            (showsSizes, L("page.menus.sticky.sizes")),
+            (showsPreviews, L("page.menus.sticky.previews")),
+        ].filter(\.0).map(\.1)
+        return on.isEmpty ? "—" : on.joined(separator: ", ")
     }
 
     private var content: some View {
@@ -116,6 +151,26 @@ struct MenusPage: View {
                     // choosing `Rename` twice shows two distinct choices.
                     .onMenuOpen { pullDownChoice = "—" }
                     ValueDisplayRow(L("page.menus.chose"), pullDownChoice)
+                }
+            }
+
+            DemoSection(L("page.menus.stickySection")) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(L("page.menus.stickyInstruction"))
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    // A menu of SETTINGS rather than of commands. The
+                    // `.menuActionDismissBehavior(.disabled)` is written on the
+                    // three toggles (inside `stickyItem`), NOT on the `Menu`, so
+                    // `Done` below them closes it the ordinary way — the modifier
+                    // scopes to whatever subtree it is applied to.
+                    Menu(L("page.menus.stickyTitle")) {
+                        stickyItem(L("page.menus.sticky.hidden"), $showsHidden)
+                        stickyItem(L("page.menus.sticky.sizes"), $showsSizes)
+                        stickyItem(L("page.menus.sticky.previews"), $showsPreviews)
+                        Divider()
+                        Button(L("page.menus.sticky.done")) {}
+                    }
+                    ValueDisplayRow(L("page.menus.showing"), showingSummary)
                 }
             }
 

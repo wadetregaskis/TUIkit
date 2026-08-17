@@ -277,6 +277,95 @@ struct ContextMenuTests {
         #expect(ran == true, "the button still works with no menu to dismiss")
     }
 
+    // MARK: - menuActionDismissBehavior
+
+    /// Opens `view`'s context menu from the KEYBOARD (which highlights its first
+    /// row — a pointer-opened menu deliberately highlights nothing), chooses that
+    /// row with Return, and reports whether the menu survived it.
+    private func chooseFirstRow(
+        of view: some View, tui: TUIContext, focusManager: FocusManager, context: RenderContext
+    ) -> Bool {
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        _ = focusManager.dispatchKeyEvent(KeyEvent(key: .tab))
+        _ = tui.keyEventDispatcher.dispatch(KeyEvent(key: .f10, shift: true))
+        // The menu's own key handlers are attached BY the render that presents
+        // it, so the frame has to happen before Return can reach them.
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        _ = tui.keyEventDispatcher.dispatch(KeyEvent(key: .enter))
+        return menuState(tui, context).isOpen
+    }
+
+    /// The control for the two below: with nothing said, a choice closes the
+    /// menu. Stated here in the same shape as the `.disabled` cases so the
+    /// difference between them is the modifier and nothing else.
+    @Test("By default, choosing a row closes the menu")
+    func defaultBehaviorDismisses() {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        var ran = 0
+        let view = Text("Right-click me").contextMenu {
+            Button("Cut") { ran += 1 }
+        }
+
+        let stillOpen = chooseFirstRow(
+            of: view, tui: tui, focusManager: focusManager, context: context)
+        #expect(ran == 1, "the action ran")
+        #expect(!stillOpen, "and the menu closed behind it")
+    }
+
+    /// The point of the modifier: a menu of settings should not have to be
+    /// re-opened after every flip.
+    @Test(".menuActionDismissBehavior(.disabled) leaves the menu up")
+    func disabledBehaviorKeepsTheMenuOpen() {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        var ran = 0
+        let view = Text("Right-click me")
+            .contextMenu {
+                Button("Hidden files") { ran += 1 }
+            }
+            .menuActionDismissBehavior(.disabled)
+
+        let stillOpen = chooseFirstRow(
+            of: view, tui: tui, focusManager: focusManager, context: context)
+        #expect(ran == 1, "the action still ran")
+        #expect(stillOpen, "and the menu is still up to be picked from again")
+    }
+
+    /// It rides the environment, so it scopes to whatever subtree it is written
+    /// on — which is what lets ONE row of an otherwise ordinary menu stay open.
+    /// A single environment key shared by the whole menu would pass the test
+    /// above and fail this one.
+    @Test("It scopes to the item it is written on, not to the whole menu")
+    func behaviorScopesToOneItem() {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        var toggled = 0
+        // The STICKY item is first, so the keyboard's row-0 choice lands on it.
+        let view = Text("Right-click me").contextMenu {
+            Button("Hidden files") { toggled += 1 }
+                .menuActionDismissBehavior(.disabled)
+            Button("Close") {}
+        }
+
+        let stillOpen = chooseFirstRow(
+            of: view, tui: tui, focusManager: focusManager, context: context)
+        #expect(toggled == 1)
+        #expect(stillOpen, "the sticky item kept its own menu open")
+
+        // And the ordinary sibling below it still closes the menu: Down moves the
+        // highlight onto it, Return chooses it.
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        _ = tui.keyEventDispatcher.dispatch(KeyEvent(key: .down))
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        _ = tui.keyEventDispatcher.dispatch(KeyEvent(key: .enter))
+        #expect(toggled == 1, "the second row is a different button")
+        #expect(!menuState(tui, context).isOpen, "and it dismisses, as any item does")
+    }
+
     // MARK: - The open menu owns the keyboard
 
     /// The composition the owner hit: a page with BOTH a combo `Menu` and a

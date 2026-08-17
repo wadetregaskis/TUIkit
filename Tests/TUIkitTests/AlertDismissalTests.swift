@@ -153,6 +153,33 @@ struct AlertDismissalTests {
         #expect(!presented.value, "and nothing was presented to dismiss")
     }
 
+    /// `dismissMenu` is one internal channel serving two presentations, so the
+    /// switch that governs MENU items must not reach an alert's buttons. An
+    /// alert is a question and its buttons are answers; a page that had turned
+    /// menu auto-dismiss off would otherwise get a dialog it could only close
+    /// with Escape — and only if it knew to try.
+    @Test("A .menuActionDismissBehavior(.disabled) page still closes its alerts")
+    func alertIgnoresTheMenuDismissBehavior() throws {
+        let (tui, context) = harness()
+        let presented = Flag(true)
+        var chose = "—"
+        let view = Text("Page")
+            .confirmationDialog(
+                "Delete this item?", isPresented: presented.binding,
+                actions: { Button("Delete", role: .destructive) { chose = "Delete" } })
+            .menuActionDismissBehavior(.disabled)
+
+        let open = renderArmed(view, tui: tui, context: context)
+        let target = try actionRow(open, "Delete")
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: target.x, y: target.y))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: target.x, y: target.y))
+
+        #expect(chose == "Delete", "the action ran")
+        #expect(!presented.value, "and the alert closed, the menu setting notwithstanding")
+    }
+
     // MARK: - One identity per action
 
     /// Every action button needs its OWN focus identity. Rendered from one

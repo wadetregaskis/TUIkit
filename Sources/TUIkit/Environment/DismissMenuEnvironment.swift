@@ -32,3 +32,94 @@ extension EnvironmentValues {
         set { self[DismissMenuKey.self] = newValue }
     }
 }
+
+// MARK: - menuActionDismissBehavior
+
+/// Whether choosing an item closes the menu it was chosen from — SwiftUI's
+/// `MenuActionDismissBehavior`, applied with
+/// ``TUIkit/View/menuActionDismissBehavior(_:)``.
+///
+/// A struct of static members rather than an enum, matching SwiftUI (and
+/// ``ButtonRole`` beside it): the cases are a fixed vocabulary the caller
+/// spells, not something anyone switches over.
+public struct MenuActionDismissBehavior: Equatable, Sendable {
+    private let rawValue: String
+
+    private init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    /// Let the menu decide — which, for every menu TUIkit draws, means it
+    /// closes. The default.
+    public static let automatic = Self("automatic")
+
+    /// Choosing an item always closes the menu.
+    public static let enabled = Self("enabled")
+
+    /// Choosing an item leaves the menu open, so more than one can be chosen
+    /// without re-opening it. Escape and an outside click still close it —
+    /// this governs the ITEMS, not the menu's other exits.
+    public static let disabled = Self("disabled")
+
+    /// Whether an item's action should close the menu it fired from.
+    ///
+    /// A computed answer rather than `!= .disabled` at the call site, so
+    /// adding a spelling later is a decision made here once instead of a
+    /// silent vote for dismissal everywhere — the same trap
+    /// ``ScrollbarVisibility/showsBar(overflowing:)`` exists to close.
+    var dismissesMenu: Bool {
+        switch self {
+        case .disabled: false
+        // `.automatic` defers to "the policies of the component", and a
+        // menu's policy — here as on every desktop — is to close behind a
+        // choice. `.enabled` says so explicitly; both dismiss.
+        default: true
+        }
+    }
+}
+
+private struct MenuActionDismissBehaviorKey: EnvironmentKey {
+    static let defaultValue = MenuActionDismissBehavior.automatic
+}
+
+extension EnvironmentValues {
+    /// What a menu item does to its menu when it fires. See
+    /// ``TUIkit/View/menuActionDismissBehavior(_:)``.
+    ///
+    /// Internal: SwiftUI exposes no `EnvironmentValues` member for this either,
+    /// the modifier being the whole API.
+    var menuActionDismissBehavior: MenuActionDismissBehavior {
+        get { self[MenuActionDismissBehaviorKey.self] }
+        set { self[MenuActionDismissBehaviorKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Tells menus within this view whether choosing an item dismisses them.
+    ///
+    /// The default closes the menu behind a choice, which is what a menu of
+    /// commands wants. A menu whose items are *settings* wants the opposite —
+    /// re-opening it after every flip is the whole cost of putting them there:
+    ///
+    /// ```swift
+    /// Menu("View") {
+    ///     Button(showsHidden ? "✓ Hidden files" : "  Hidden files") {
+    ///         showsHidden.toggle()
+    ///     }
+    ///     Button(showsSizes ? "✓ Sizes" : "  Sizes") { showsSizes.toggle() }
+    /// }
+    /// .menuActionDismissBehavior(.disabled)
+    /// ```
+    ///
+    /// It reaches every item in the subtree, so it can be applied to one
+    /// `Button` inside an otherwise ordinary menu just as well as to the whole
+    /// menu. Outside a menu it does nothing: a page's buttons have no menu to
+    /// close.
+    ///
+    /// - Parameter behavior: Whether an item's action closes its menu.
+    public func menuActionDismissBehavior(
+        _ behavior: MenuActionDismissBehavior
+    ) -> some View {
+        environment(\.menuActionDismissBehavior, behavior)
+    }
+}
