@@ -1379,7 +1379,6 @@
   "View.controlSize(_:)",
   "View.coordinateSpace(_:)",
   "View.defaultAppStorage(_:)",
-  "View.defaultScrollAnchor(_:for:)",
   "View.deleteDisabled(_:)",
   "View.dialogSuppressionToggle(_:isSuppressed:)",
   "View.dialogSuppressionToggle(isSuppressed:)",

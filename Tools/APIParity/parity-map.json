@@ -668,10 +668,6 @@
       "how": "TrackStyle (+ TrackConfiguration)",
       "why": "/Users/robot/Documents/TUIkit/Sources/TUIkit/Views/ProgressView.swift:223 takes `TrackStyle`; the presets are configurations of `TrackConfiguration` (Sources/TUIkit/Styles/TrackConfiguration.swift), with `.custom(_:)` exposing glyphs, sub-cell ramp, unfilled background and gradie"
     },
-    "ScrollAnchorRole": {
-      "how": "ScrollAnchorMode + ScrollAnchor / View.anchorPosition(_:)",
-      "why": "TUIkit splits the roles into named policies instead of parameterising one modifier: Sources/TUIkit/Views/ScrollAnchorMode.swift:28-32 (top/bottom/row/window) resolved from `defaultScrollAnchor(_:)` (Sources/TUIkit/Views/UnitPoint.swift:73), with the sizeChanges role handled by Sc"
-    },
     "ScrollBounceBehavior": {
       "how": "ScrollOverscroll (+ ScrollOverscrollState)",
       "why": "Sources/TUIkit/Views/ScrollOverscroll.swift:18-29 (.none / .rows(Int) / .viewport(minus:)) and :55 for the live excursion. SwiftUI's automatic/always/basedOnSize become an explicit allowance in rows; `.viewport(minus:)` is the idiom `.basedOnSize` cannot express."
