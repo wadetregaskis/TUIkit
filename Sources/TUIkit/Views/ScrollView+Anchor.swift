@@ -43,10 +43,16 @@ extension _ScrollViewCore {
         // `.window` / `.top` / `.row` must override a declared `.bottom` — a
         // release the user made by scrolling away has to actually stop the
         // follow, or `.window` would be a read-out with no behaviour behind it.
+        // The OPENING frame consults the `.initialOffset` anchor and every
+        // frame after it the `.sizeChanges` one — the same value for any view
+        // that used the unlabelled modifier. See `ScrollAnchorMode.governing`.
+        let modes = context.environment.declaredAnchorModes
+        let declared = ScrollAnchorMode.governing(
+            opening: modes.opening, standing: modes.standing, hasOpened: handler.hasOpened)
         let followsBottom = !context.isMeasuring
             && ScrollAnchorMode.effective(
                 boundAnchor: context.environment.anchorPosition?.wrappedValue,
-                defaultScrollAnchor: context.environment.defaultScrollAnchor) == .bottom
+                declared: declared) == .bottom
         // A pending scrollTo supersedes the glue this frame: the explicit
         // programmatic scroll is exactly the "scrolling away releases the
         // follow" interaction, expressed in code.

@@ -72,6 +72,31 @@ content, at both ends, specifiable as **absolute** rows (`5`) and
 | Code-side restore | **Shipped** as §3.2 designed it: writing into the bound `.anchorPosition` IS the restore. `.top`/`.bottom` jump to that edge (`anchor(to:)`), `.row(id)` pins that row (`anchor(toRow:)`), `nil` returns to the declaration (`restoreDefaultAnchor()`). No proxy extensions were needed. `ScrollViewReader` / `ScrollViewProxy.scrollTo(_:anchor:)` remains for one-shot SwiftUI-parity seeks. |
 | Over/underscroll | **Shipped** on every scrollable (`dbd0fa1f` ScrollView, `b0661dfd` List/Table) as `.scrollOverscroll(top:bottom:)`. The "additive parameter" hope in this row was wrong and §3.3 records the measurement: widening `scrollOffset`'s range TRAPS. The excursion is a separate signed rendering quantity instead, which left the offset's domain — and therefore every data-indexing consumer and both "N more" counts — untouched. |
 
+### 1.6 SwiftUI's anchor ROLES (added 2026-08-17)
+
+`defaultScrollAnchor(_:for:)` splits the unlabelled modifier's two questions:
+**`.initialOffset`** (where the view opens) and **`.sizeChanges`** (what it
+holds as content grows). Nothing above changes — the split is expressed as one
+sentence, *the opening frame consults the opening anchor and every frame after
+it the standing one*, which for a view using the unlabelled form substitutes a
+value for itself.
+
+It has to be that way round rather than an extra opening seek, because §1.1's
+opening placement **is not a separate step**: engagement is positional, a view
+with no content yet is at its own bottom (`offset 0 == maxOffset 0`), so the
+follow rule glues on frame one and that is what lands a `.bottom` view at the
+tail. A `.bottom` stated for `.sizeChanges` alone therefore needs the opening
+frame to consult something that is *not* `.bottom`.
+
+Both the environment key and the handlers' captured mode carry a third state
+("nobody stated an opening role") which defers to the standing one — that is
+what keeps a direct write of `\.defaultScrollAnchor`, and every test that sets
+`declaredAnchorMode` by hand, behaving exactly as before. `ScrollAnchorRole.alignment`
+is **not** offered: see `SwiftUI-compatibility.md` §4a. Row mode and the bound
+`.anchorPosition` remain TUI-specific, for the reasons recorded there.
+
+---
+
 **Substrate compatibility:** the locating work *enables* rather than
 obstructs this feature. All four modes are policies over the same
 persisted triple the anchored path already keeps — (row key, ordinal,

@@ -1001,8 +1001,8 @@ where Value.ID: Hashable {
         // Mirrors _ListCore.resolvePopulatedHandler — a Table anchors exactly
         // as a List does.
         handler.anchorPositionBinding = context.environment.anchorPosition
-        handler.declaredAnchorMode = ScrollAnchorMode.resolved(
-            defaultScrollAnchor: context.environment.defaultScrollAnchor)
+        (handler.declaredAnchorMode, handler.declaredOpeningAnchorMode) =
+            context.environment.declaredAnchorModes
         handler.idAt = { data[$0].id }
         handler.itemIDs = []
         // The reveal-on-focus arithmetic (run between renders, on key events)
@@ -1546,8 +1546,8 @@ where Value.ID: Hashable {
         // Same event-time capture as the multi-line path above: a user wheel
         // scroll releases a bound anchor, and the hold below reads the mode.
         handler.anchorPositionBinding = context.environment.anchorPosition
-        handler.declaredAnchorMode = ScrollAnchorMode.resolved(
-            defaultScrollAnchor: context.environment.defaultScrollAnchor)
+        (handler.declaredAnchorMode, handler.declaredOpeningAnchorMode) =
+            context.environment.declaredAnchorModes
         // Resolve row ids lazily: the selection handler only ever asks for the
         // visible window + the focused row (O(1) each via `data[index].id`), so
         // materialising a full id array here was O(total) waste — and `_TableCore`

@@ -83,6 +83,24 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// `ItemListHandler.declaredAnchorMode`.
     var declaredAnchorMode: ScrollAnchorMode = .window
 
+    /// The anchor mode the view declared for the OPENING frame (from
+    /// `defaultScrollAnchor(_:for: .initialOffset)`), synced each render beside
+    /// ``declaredAnchorMode``.
+    ///
+    /// `nil` means none was stated, and then the opening frame uses
+    /// ``declaredAnchorMode`` like every frame after it — which is exactly what
+    /// a view using the unlabelled modifier gets, and what makes the role split
+    /// inert for everything written before it.
+    var declaredOpeningAnchorMode: ScrollAnchorMode?
+
+    /// Whether this scrollable has rendered a frame yet.
+    ///
+    /// The opening frame is placed by ``declaredOpeningAnchorMode`` and every
+    /// frame after it by ``declaredAnchorMode`` — see
+    /// ``ScrollAnchorMode/governing(opening:standing:hasOpened:)``. Set on
+    /// render passes only: a measure must not spend the opening frame.
+    var hasOpened = false
+
     /// The declared anchor as an EDGE, for the shared user-scroll path
     /// (``ScrollableOffsetState/declaredEdgeAnchor``). Row and Window name no
     /// edge, so they answer `nil`.

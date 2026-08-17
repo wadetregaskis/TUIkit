@@ -30,7 +30,13 @@ extension ItemListHandler {
     func applyAnchorHold() {
         let bound = anchorPositionBinding?.wrappedValue
         adoptWrittenAnchor(bound)
-        switch ScrollAnchorMode.effective(boundAnchor: bound, declared: declaredAnchorMode) {
+        // The OPENING frame consults the `.initialOffset` anchor and every
+        // frame after it the `.sizeChanges` one — the same value for any list
+        // that used the unlabelled modifier. See `ScrollAnchorMode.governing`.
+        let declared = ScrollAnchorMode.governing(
+            opening: declaredOpeningAnchorMode, standing: declaredAnchorMode,
+            hasOpened: hasOpened)
+        switch ScrollAnchorMode.effective(boundAnchor: bound, declared: declared) {
         case .row:
             applyRowAnchorHold()
         case .bottom:
@@ -40,6 +46,9 @@ extension ItemListHandler {
             forgetRowAnchor()
         }
         bottomFollowBound = maxOffset
+        // The opening frame is spent; `applyAnchorHold` is render-pass only, so
+        // reaching here means a real frame was placed.
+        hasOpened = true
     }
 
     /// Jumps to an edge the app just *wrote* into the binding — §3.2's

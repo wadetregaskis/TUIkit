@@ -269,8 +269,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // Captured at render so a USER scroll can release a bound anchor to
         // `.window` at event time (the environment is out of reach there).
         handler.anchorPositionBinding = context.environment.anchorPosition
-        handler.declaredAnchorMode = ScrollAnchorMode.resolved(
-            defaultScrollAnchor: context.environment.defaultScrollAnchor)
+        (handler.declaredAnchorMode, handler.declaredOpeningAnchorMode) =
+            context.environment.declaredAnchorModes
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         handler.horizontal.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
         // Both axes: `.scrollDisabled` pins the view, not one direction of it.
@@ -371,6 +371,9 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         if !context.isMeasuring { handler.seekingTail = false }
         let wasGluedToBottom =
             isGluedToBottom(handler: handler, context: context) || seekingTail
+        // The opening frame is now spent: from here on the `.sizeChanges`
+        // anchor governs. Render passes only — a measure must not consume it.
+        if !context.isMeasuring { handler.hasOpened = true }
 
         let pendingSeek = consumedSeek(
             handler: handler, wantsScrollbar: wantsScrollbar, context: context)
