@@ -96,16 +96,21 @@ def extract(modules, out_dir, search_paths, sdk, target):
             sys.exit(f"symbolgraph-extract failed for {module}:\n{result.stderr}")
 
 
-def load_symbols(directory, modules):
+def load_symbols(directory, modules, collect_defaults=False):
     """Every public, live, first-party declaration in these modules.
 
     Keyed by "Owner.name" — a `View` modifier is `View.padding(_:)`, a
     top-level type is just its name. Overloads collapse onto one key on
     purpose: this compares vocabulary, and a signature diff belongs to the
     compile corpus (see the README), not here.
+
+    With `collect_defaults`, also returns how many TRAILING parameters of each
+    function carry a default value — what ``source_compatible`` needs to tell
+    an added optional argument from a changed signature.
     """
     wanted = set(modules)
     symbols = {}
+    defaults = {}
     for entry in sorted(os.listdir(directory)):
         if not entry.endswith(".symbols.json"):
             continue
@@ -130,7 +135,100 @@ def load_symbols(directory, modules):
                 continue
             key = ".".join(parts)
             symbols.setdefault(key, kind)
-    return symbols
+            if collect_defaults:
+                trailing = trailing_defaults(symbol)
+                if trailing:
+                    defaults[key] = max(defaults.get(key, 0), trailing)
+    return (symbols, defaults) if collect_defaults else symbols
+
+
+def trailing_defaults(symbol):
+    """How many of this function's LAST parameters have a default value.
+
+    Read off `declarationFragments`, which is where a symbol graph renders
+    ` = nil`; the per-parameter fragments omit defaults entirely. The scan
+    walks the fragment list rather than the rendered string because a
+    parameter list is full of commas, angle brackets and `->` that no amount
+    of bracket-counting parses reliably: `externalParam` starts a parameter,
+    and a `text` fragment holding `=` before the next one means that parameter
+    is defaulted. It stops when the parameter list closes, so the `==` in a
+    `where` clause cannot be mistaken for a default on the last parameter.
+    """
+    fragments = symbol.get("declarationFragments") or []
+    depth, started, closed, defaulted = 0, False, False, []
+    for fragment in fragments:
+        if closed:
+            break
+        kind, spelling = fragment.get("kind"), fragment.get("spelling", "")
+        if kind == "text":
+            # Character by character: a fragment can both carry a default and
+            # close the list (`" = 1) -> "`), so this cannot stop at fragment
+            # granularity without losing the last parameter's default.
+            for character in spelling:
+                if character == "(":
+                    depth += 1
+                    started = True
+                elif character == ")":
+                    depth -= 1
+                    if started and depth <= 0:
+                        closed = True
+                        break
+                elif character == "=" and depth == 1 and defaulted:
+                    defaulted[-1] = True
+        elif kind == "externalParam" and depth == 1:
+            defaulted.append(False)
+    count = 0
+    for flag in reversed(defaulted):
+        if not flag:
+            break
+        count += 1
+    return count
+
+
+def source_compatible(swiftui, tuikit, tuikit_defaults):
+    """Absent SwiftUI symbols that a SwiftUI call site nonetheless compiles to.
+
+    TUIkit is aiming at SOURCE compatibility, not identical declarations, so a
+    TUIkit function may add optional parameters of its own after SwiftUI's:
+    `alert(_:isPresented:actions:message:)` is spelled
+    `alert(_:isPresented:actions:message:borderStyle:borderColor:titleColor:)`
+    here, and the SwiftUI call compiles verbatim because the three extras are
+    defaulted. Comparing argument labels alone cannot see that, so those read
+    as gaps — the report claiming TUIkit has no `.alert`, which is false, and
+    a report that cries wolf is one nobody reads.
+
+    The test is deliberately narrow: SwiftUI's labels must be an exact PREFIX
+    of a TUIkit overload's, and every extra label after the prefix must carry
+    a default. Anything else — a reordering, an inserted parameter, an extra
+    one that is required — genuinely does not compile and stays a gap.
+
+    What it proves is that the call COMPILES, not that it MEANS the same
+    thing: `fixedSize()` reaches `fixedSize(horizontal:vertical:)` whatever
+    those defaults are, and it is only right because TUIkit defaults both to
+    `true` as SwiftUI does. Flipping such a default would turn a match here
+    into a silent behaviour difference, which is why every one of these is
+    printed rather than quietly folded into the explained count.
+    """
+    by_name = {}
+    for key in tuikit:
+        name, labels = signature(key)
+        if labels is not None:
+            by_name.setdefault(name, []).append((labels, key))
+    satisfied = {}
+    for key in swiftui:
+        if key in tuikit:
+            continue
+        name, labels = signature(key)
+        if labels is None or name not in by_name:
+            continue
+        for other_labels, other in by_name[name]:
+            extra = len(other_labels) - len(labels)
+            if extra <= 0 or other_labels[:len(labels)] != labels:
+                continue
+            if tuikit_defaults.get(other, 0) >= extra:
+                satisfied[key] = other
+                break
+    return satisfied
 
 
 def unavailable(symbol):
@@ -219,10 +317,17 @@ def label_deviations(swiftui, tuikit):
     return found
 
 
-def compare(swiftui, tuikit, parity_map):
+def compare(swiftui, tuikit, parity_map, compatible=None):
     absent = {key: kind for key, kind in swiftui.items() if key not in tuikit}
+    compatible = compatible or {}
     gaps, explained = {}, {}
     for key, kind in sorted(absent.items()):
+        if key in compatible:
+            # Not absent in any sense a call site can tell — see
+            # `source_compatible`. Counted with the explained, since that is
+            # what "accounted for" means here.
+            explained[key] = (kind, {"why": f"added optional arguments: `{compatible[key]}`"})
+            continue
         reason = explain(key, parity_map)
         (explained if reason else gaps)[key] = (kind, reason)
     return gaps, explained
@@ -257,7 +362,7 @@ def audit_map(swiftui, tuikit, parity_map):
     return stale
 
 
-def report(swiftui, tuikit, gaps, explained, stale, deviations, baseline):
+def report(swiftui, tuikit, gaps, explained, stale, deviations, baseline, compatible=None):
     print(f"toolchain:  {toolchain_version()}")
     print(f"SwiftUI:    {len(swiftui):>5} live public symbols "
           f"({'+'.join(SWIFTUI_MODULES)})")
@@ -265,6 +370,9 @@ def report(swiftui, tuikit, gaps, explained, stale, deviations, baseline):
           f"({', '.join(TUIKIT_MODULES)})")
     shared = len(set(swiftui) & set(tuikit))
     print(f"shared:     {shared:>5} symbols by name")
+    if compatible:
+        print(f"compatible: {len(compatible):>5} spelled with extra OPTIONAL arguments "
+              f"(SwiftUI source still compiles)")
     print(f"explained:  {len(explained):>5} absent but accounted for "
           f"(renamed or deliberately not implemented)")
     print(f"gaps:       {len(gaps):>5} absent and unexplained")
@@ -292,6 +400,13 @@ def report(swiftui, tuikit, gaps, explained, stale, deviations, baseline):
             more = f" … +{len(names) - 8}" if len(names) > 8 else ""
             print(f"  {owner} ({len(names)}): {head}{more}")
             shown += 1
+
+    if compatible:
+        print("\nSpelled with extra OPTIONAL arguments — SwiftUI's call site compiles "
+              "verbatim.\nListed in full: the rule proves compilation, not meaning "
+              "(see `source_compatible`).")
+        for key in sorted(compatible):
+            print(f"  {key}\n      <- {compatible[key]}")
 
     if deviations:
         accepted = set(baseline.get("labelDeviations", []))
@@ -360,7 +475,9 @@ def main():
         extract(TUIKIT_MODULES, tuikit_dir, [modules], sdk, args.target)
 
         swiftui = load_symbols(swiftui_dir, SWIFTUI_MODULES)
-        tuikit = load_symbols(tuikit_dir, TUIKIT_MODULES)
+        tuikit, tuikit_defaults = load_symbols(
+            tuikit_dir, TUIKIT_MODULES, collect_defaults=True)
+        compatible = source_compatible(swiftui, tuikit, tuikit_defaults)
         parity_map = load_map()
 
         stale = audit_map(swiftui, tuikit, parity_map)
@@ -370,14 +487,15 @@ def main():
             print(f"{len(stale)} stale entries")
             return 1 if (stale and args.check) else 0
 
-        gaps, explained = compare(swiftui, tuikit, parity_map)
+        gaps, explained = compare(swiftui, tuikit, parity_map, compatible)
         baseline = {}
         if os.path.exists(BASELINE_PATH):
             with open(BASELINE_PATH) as handle:
                 baseline = json.load(handle)
         deviations = label_deviations(swiftui, tuikit)
         new, fixed = report(
-            swiftui, tuikit, gaps, explained, stale, deviations, baseline)
+            swiftui, tuikit, gaps, explained, stale, deviations, baseline,
+            compatible)
         new_deviations = sorted(
             set(deviations) - set(baseline.get("labelDeviations", [])))
 

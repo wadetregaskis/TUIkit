@@ -57,6 +57,30 @@ the behaviour genuinely differs too.
 Overloads that differ only in generic constraints collapse onto one key; a
 full signature check belongs in a compile corpus, not here.
 
+### Extra OPTIONAL arguments are not a difference
+
+The target is *source* compatibility, not identical declarations (see the two
+rules at the top of `Documentation/SwiftUI-compatibility.md`), so a TUIkit
+function may append parameters of its own after SwiftUI's — `.alert` carries
+`borderStyle:`/`borderColor:`/`titleColor:` here. Comparing labels alone reads
+those as absences, and the report claiming TUIkit has no `.alert` is simply
+false; a report that cries wolf is one nobody reads.
+
+So a SwiftUI key is counted as **compatible** when its labels are an exact
+PREFIX of some TUIkit overload's and every extra label after the prefix carries
+a default — read out of the declaration fragments, which is where a symbol
+graph renders ` = nil`. Nothing looser qualifies: a reordering, an inserted
+parameter, or an extra one that is *required* genuinely fails to compile and
+stays a gap.
+
+The limit is worth stating, because it is the one way this could mislead: the
+rule proves the call **compiles**, not that it **means** the same thing.
+`fixedSize()` reaches `fixedSize(horizontal:vertical:)` whatever those defaults
+are, and it is only correct because TUIkit defaults both to `true` as SwiftUI
+does — flip one and the match here becomes a silent behaviour difference. That
+is why every compatible symbol is printed in full rather than folded into a
+count, and why each one also appears in the compile corpus below.
+
 ### Label deviations are reported separately
 
 A symbol that TUIkit has under the same name and arity but a different spelling
@@ -124,11 +148,15 @@ This tool proves two frameworks use the same words. It cannot prove they mean
 the same thing — `padding` existing on both says nothing about whether either
 inserts the same space. Three things would, in increasing order of cost:
 
-1. **A compile corpus.** Small snippets written in *SwiftUI source* that must
-   compile against TUIkit. This catches everything the symbol diff cannot:
-   default arguments, `@ViewBuilder`-ness, generic constraints, whether the
-   trailing closure lands where SwiftUI puts it. Cheap to run (`swiftc
-   -typecheck`), and a failure is unambiguous. The natural next build.
+1. **A compile corpus — now seeded.** `CompileCorpus.swift` is SwiftUI source
+   that must compile against TUIkit; `compile_corpus.sh` type-checks it and
+   nothing else (a clean exit IS the assertion). It catches what the symbol
+   diff cannot, in both directions: a symbol reported MISSING that in fact
+   compiles because of added optional arguments, and one reported PRESENT that
+   does not, because only the labels matched. Mutation-checked — deleting the
+   default on `fixedSize(horizontal:)` makes it fail. It is not yet wired into
+   CI, and it is a corpus of the calls that could plausibly break rather than
+   an inventory of every symbol.
 2. **Differential rendering.** Compile the *same* snippet against both, render
    SwiftUI headlessly (`NSHostingView` + `cacheDisplay`, which
    `Documentation/SwiftUI-compatibility.md` already cites for label metrics) and
@@ -140,5 +168,6 @@ inserts the same space. Three things would, in increasing order of cost:
    that runs headlessly. Those stay in the test suite and the PTY probes under
    `Tools/Smoke/`, written against the documented intent.
 
-Layer 1 is the one worth building next: it is deterministic, it needs no SwiftUI
-runtime, and it fails loudly on exactly the drift this tool is blind to.
+Layer 1 has begun, and the reason to grow it stands: it is deterministic, it
+needs no SwiftUI runtime, and it fails loudly on exactly the drift the symbol
+diff is blind to. Layer 2 remains the next real build.
