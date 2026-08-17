@@ -50,6 +50,21 @@ struct SearchableModifier<Content: View>: View {
     let text: Binding<String>
     let prompt: Text?
 
+    /// Whether the field holds focus — the value ``EnvironmentValues/isSearching``
+    /// publishes to `content`.
+    ///
+    /// State rather than a focus query, because the field's focus ID is
+    /// generated from its own render identity and nothing out here knows it.
+    /// `onEditingChanged` is precisely the focus transition (``TextFieldHandler``
+    /// fires it from `onFocusReceived`/`onFocusLost`), so the state tracks
+    /// focus rather than approximating it.
+    @State private var isSearching = false
+
+    /// Taken out of the environment here, in the body, because the closure
+    /// below runs during event dispatch — outside any render, where an
+    /// `@Environment` read is nil.
+    @Environment(\.focusManager) private var focusManager
+
     /// The bare `⌕` (U+2315 telephone recorder) is drawn tiny and thin-lined by
     /// Terminal.app, so it reads as noise beside the field rather than a search
     /// affordance. On terminals that render emoji chrome legibly we use a bold
@@ -80,12 +95,36 @@ struct SearchableModifier<Content: View>: View {
                 // .text)`, and a plain text field in `content` (a sibling) still
                 // consumes `.text`.
                 TextField("", text: text, prompt: prompt ?? Text("Search"))
+                    .onEditingChanged { isSearching = $0 }
                     .environment(\.submitTriggerRole, .search)
                 if supportsEmojiChrome, iconPlacement == .trailing {
                     icon
                 }
             }
+            // Both values reach the CONTENT only, which is where SwiftUI puts
+            // them: they answer questions about the field, and the field is the
+            // framework's, not the caller's.
             content
+                .environment(\.isSearching, isSearching)
+                .environment(\.dismissSearch, dismissAction)
+        }
+    }
+
+    /// Ending the search: empty the query, and give the keyboard back.
+    ///
+    /// The focus move is conditional because the action is callable from
+    /// anywhere in the content — a Clear button in a results list is the
+    /// canonical shape — and moving focus off a control the user is actually
+    /// using would be a bug, not a dismissal. Focus goes to the *next*
+    /// focusable, which is the content: the field is drawn above it, so this is
+    /// the same step Tab would take out of the field.
+    private var dismissAction: DismissSearchAction {
+        let text = text
+        let focusManager = focusManager
+        let wasSearching = isSearching
+        return DismissSearchAction {
+            text.wrappedValue = ""
+            if wasSearching { focusManager?.focusNext() }
         }
     }
 }

@@ -102,4 +102,139 @@ struct SearchableTests {
             .joined(separator: "\n")
         #expect(out.contains("Find fruit"))
     }
+
+    // MARK: - isSearching / dismissSearch
+
+    /// A content view that reports what it reads out of the environment.
+    ///
+    /// Reading through a rendered view rather than poking the context is the
+    /// point: these two values are only worth anything if they reach the
+    /// caller's own subtree, which is the half a direct environment assertion
+    /// would not test.
+    private struct Probe: View {
+        let captured: ActionBox
+
+        @Environment(\.isSearching) private var isSearching
+        @Environment(\.dismissSearch) private var dismissSearch
+
+        var body: some View {
+            captured.dismiss = dismissSearch
+            return Text(isSearching ? "SEARCHING" : "IDLE")
+        }
+    }
+
+    private final class ActionBox { var dismiss: DismissSearchAction? }
+
+    /// Drives one full frame the way `RenderLoop` does, so focus is assigned
+    /// and `@State` survives to the next one.
+    @discardableResult
+    private func frame(
+        _ view: some View, tuiContext: TUIContext, focusManager: FocusManager
+    ) -> String {
+        var environment = EnvironmentValues()
+        environment.focusManager = focusManager
+        environment.applyRuntimeServices(from: tuiContext)
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 8,
+            environment: environment, tuiContext: tuiContext)
+
+        tuiContext.preferences.beginRenderPass()
+        tuiContext.stateStorage.beginRenderPass()
+        tuiContext.renderCache.beginRenderPass()
+        focusManager.beginRenderPass()
+        let buffer = renderToBuffer(view, context: context)
+        focusManager.endRenderPass()
+        tuiContext.stateStorage.endRenderPass()
+        return buffer.lines.map(\.stripped).joined(separator: "\n")
+    }
+
+    @Test("The content learns that the field has focus")
+    func contentSeesIsSearching() {
+        let box = QueryBox()
+        let captured = ActionBox()
+        let view = Probe(captured: captured).searchable(text: binding(box))
+        let tui = TUIContext()
+        let focus = FocusManager()
+
+        // Frame 1 registers the field and hands it focus; the content of that
+        // same frame was already built, so it still reads the old value. Frame
+        // 2 is the one that carries it — the ordinary one-cycle propagation a
+        // state change has, and the reason this is not a one-render test.
+        frame(view, tuiContext: tui, focusManager: focus)
+        #expect(frame(view, tuiContext: tui, focusManager: focus).contains("SEARCHING"))
+    }
+
+    @Test("With focus elsewhere, nothing is searching")
+    func idleWhenTheFieldIsUnfocused() {
+        let captured = ActionBox()
+        // A button ahead of the search field takes the auto-focus, so the field
+        // never gets it — the same shape as a user who has tabbed away.
+        let view = VStack {
+            Button("Elsewhere") {}
+            Probe(captured: captured).searchable(text: binding(QueryBox()))
+        }
+        let tui = TUIContext()
+        let focus = FocusManager()
+
+        frame(view, tuiContext: tui, focusManager: focus)
+        #expect(frame(view, tuiContext: tui, focusManager: focus).contains("IDLE"))
+    }
+
+    @Test("Dismissing empties the query and lets go of the keyboard")
+    func dismissSearchClearsAndUnfocuses() {
+        let box = QueryBox()
+        box.query = "apple"
+        let captured = ActionBox()
+        let view = VStack {
+            Probe(captured: captured).searchable(text: binding(box))
+            Button("After") {}
+        }
+        let tui = TUIContext()
+        let focus = FocusManager()
+
+        frame(view, tuiContext: tui, focusManager: focus)
+        frame(view, tuiContext: tui, focusManager: focus)
+        let fieldID = focus.currentFocusedID
+        #expect(fieldID != nil, "the search field should hold focus to begin with")
+
+        captured.dismiss?()
+        #expect(box.query.isEmpty, "the query is emptied")
+        #expect(
+            focus.currentFocusedID != fieldID,
+            "focus moved off the field — it was \(focus.currentFocusedID ?? "nil")")
+    }
+
+    @Test("Dismissing from outside a search leaves focus alone")
+    func dismissOutsideASearchOnlyClears() {
+        let box = QueryBox()
+        box.query = "apple"
+        let captured = ActionBox()
+        // The field never takes focus (the button ahead of it does), so
+        // dismissing must not shunt the keyboard off whatever the user IS
+        // using. Only the query goes.
+        let view = VStack {
+            Button("Elsewhere") {}
+            Probe(captured: captured).searchable(text: binding(box))
+        }
+        let tui = TUIContext()
+        let focus = FocusManager()
+
+        frame(view, tuiContext: tui, focusManager: focus)
+        frame(view, tuiContext: tui, focusManager: focus)
+        let before = focus.currentFocusedID
+
+        captured.dismiss?()
+        #expect(box.query.isEmpty)
+        #expect(focus.currentFocusedID == before, "focus must not move")
+    }
+
+    @Test("Outside any searchable, the two values are inert")
+    func defaultsOutsideASearchable() {
+        let captured = ActionBox()
+        let out = render(Probe(captured: captured))
+        #expect(out.joined().contains("IDLE"))
+        // Nothing to clear and nothing to unfocus: the call must simply do
+        // nothing rather than, say, reach for the focus manager.
+        captured.dismiss?()
+    }
 }
