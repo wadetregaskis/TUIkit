@@ -309,6 +309,40 @@ public struct Alignment: Sendable, Equatable {
 
     /// Bottom trailing.
     public static let bottomTrailing = Self(horizontal: .trailing, vertical: .bottom)
+
+    // MARK: - Baseline presets
+
+    // The nine above pair the edges with each other; these six pair them with
+    // the two text baselines instead, which is what lines a label up with the
+    // FIRST line of a paragraph beside it rather than with the paragraph's
+    // box. They are ordinary combinations of alignments that already exist
+    // (see ``VerticalAlignment/firstTextBaseline`` for what a baseline means
+    // when a cell has no interior) — SwiftUI names them, so writing one must
+    // not be a compile error.
+
+    /// Leading edge, aligned to the first line of text.
+    public static let leadingFirstTextBaseline =
+        Self(horizontal: .leading, vertical: .firstTextBaseline)
+
+    /// Horizontally centred, aligned to the first line of text.
+    public static let centerFirstTextBaseline =
+        Self(horizontal: .center, vertical: .firstTextBaseline)
+
+    /// Trailing edge, aligned to the first line of text.
+    public static let trailingFirstTextBaseline =
+        Self(horizontal: .trailing, vertical: .firstTextBaseline)
+
+    /// Leading edge, aligned to the last line of text.
+    public static let leadingLastTextBaseline =
+        Self(horizontal: .leading, vertical: .lastTextBaseline)
+
+    /// Horizontally centred, aligned to the last line of text.
+    public static let centerLastTextBaseline =
+        Self(horizontal: .center, vertical: .lastTextBaseline)
+
+    /// Trailing edge, aligned to the last line of text.
+    public static let trailingLastTextBaseline =
+        Self(horizontal: .trailing, vertical: .lastTextBaseline)
 }
 
 // MARK: - Text Alignment

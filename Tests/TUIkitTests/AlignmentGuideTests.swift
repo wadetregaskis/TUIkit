@@ -112,6 +112,29 @@ struct AlignmentGuideTests {
         #expect(ViewDimensions(width: 0, height: 0)[VerticalAlignment.lastTextBaseline] == 0)
     }
 
+    /// The six `Alignment` presets that pair an edge with a baseline. They are
+    /// pure combinations, so what is worth pinning is that each pairs the two
+    /// alignments its NAME claims — a transposed pair would compile, and would
+    /// then quietly align a label to the wrong end of the paragraph.
+    @Test("Baseline Alignment presets pair the alignments they are named for")
+    func baselineAlignmentPresets() {
+        let cases: [(Alignment, HorizontalAlignment, VerticalAlignment)] = [
+            (.leadingFirstTextBaseline, .leading, .firstTextBaseline),
+            (.centerFirstTextBaseline, .center, .firstTextBaseline),
+            (.trailingFirstTextBaseline, .trailing, .firstTextBaseline),
+            (.leadingLastTextBaseline, .leading, .lastTextBaseline),
+            (.centerLastTextBaseline, .center, .lastTextBaseline),
+            (.trailingLastTextBaseline, .trailing, .lastTextBaseline),
+        ]
+        for (alignment, horizontal, vertical) in cases {
+            #expect(alignment.horizontal == horizontal)
+            #expect(alignment.vertical == vertical)
+        }
+        // And that they are genuinely distinct from the box-edge presets they
+        // sit beside: `.leading` centres vertically, this one does not.
+        #expect(Alignment.leadingFirstTextBaseline != Alignment.leading)
+    }
+
     @Test("No guide set explicitly reads back as nil")
     func explicitGuidesAbsentByDefault() {
         let dimensions = ViewDimensions(width: 10, height: 5)
