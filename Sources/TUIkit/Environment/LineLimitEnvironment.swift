@@ -29,21 +29,36 @@ public enum LineLimit: Sendable, Equatable {
     /// At most `count` lines; the last one absorbs the remainder and is
     /// truncated. Clamped to at least 1 where it is applied, so `.lines(0)`
     /// cannot render a text away entirely.
-    case lines(Int)
+    ///
+    /// `reservesSpace` makes the count a floor as well as a ceiling: the text
+    /// occupies exactly that many lines whether or not it needs them. It
+    /// travels WITH the count rather than beside it because that is what it
+    /// qualifies — a descendant that states a new limit is stating a new
+    /// reservation too, and a `Bool` of its own would linger over it.
+    case lines(Int, reservesSpace: Bool = false)
 
     /// The cap as a row count, or `nil` for ``unlimited`` — the form the
     /// wrapping code wants.
     var rowCount: Int? {
         switch self {
         case .unlimited: nil
-        case .lines(let count): max(1, count)
+        case .lines(let count, _): max(1, count)
+        }
+    }
+
+    /// The number of lines that must be occupied however short the text is, or
+    /// `nil` when it may shrink to fit.
+    var reservedLines: Int? {
+        switch self {
+        case .lines(let count, true): max(1, count)
+        default: nil
         }
     }
 
     /// Builds a limit from SwiftUI's `Int?` spelling, where `nil` is
     /// *unlimited* rather than *unset*.
-    init(_ limit: Int?) {
-        self = limit.map(Self.lines) ?? .unlimited
+    init(_ limit: Int?, reservesSpace: Bool = false) {
+        self = limit.map { .lines($0, reservesSpace: reservesSpace) } ?? .unlimited
     }
 }
 
@@ -102,5 +117,39 @@ extension View {
     /// - Returns: A view whose descendant text is capped at `number` lines.
     public func lineLimit(_ number: Int?) -> some View {
         environment(\.lineLimit, LineLimit(number))
+    }
+
+    /// Caps text in this subtree at `limit` lines, and — when `reservesSpace`
+    /// is true — makes it occupy that many whether it needs them or not.
+    /// Matches SwiftUI's `lineLimit(_:reservesSpace:)`.
+    ///
+    /// The reservation is what a list of rows wants. Without it a row whose
+    /// subtitle happens to wrap is one line taller than its neighbours, and the
+    /// whole column shuffles as the data changes:
+    ///
+    /// ```swift
+    /// ForEach(items) { item in
+    ///     VStack(alignment: .leading) {
+    ///         Text(item.title)
+    ///         Text(item.subtitle).lineLimit(2, reservesSpace: true)
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Every row is now the same height, and the short subtitles simply leave a
+    /// blank line where the second one would go.
+    ///
+    /// The floor is honoured only as far as the parent allows: squeezed into
+    /// fewer rows than it reserved, the text draws what fits rather than
+    /// spilling out of the space it was given.
+    ///
+    /// - Parameters:
+    ///   - limit: The maximum number of lines.
+    ///   - reservesSpace: Whether the text also occupies that many lines when
+    ///     it is shorter.
+    /// - Returns: A view whose descendant text is capped, and optionally
+    ///   padded, at `limit` lines.
+    public func lineLimit(_ limit: Int, reservesSpace: Bool) -> some View {
+        environment(\.lineLimit, LineLimit(limit, reservesSpace: reservesSpace))
     }
 }

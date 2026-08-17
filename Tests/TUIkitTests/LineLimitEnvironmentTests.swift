@@ -112,5 +112,64 @@ struct LineLimitEnvironmentTests {
     func intOptionalMapping() {
         #expect(LineLimit(nil) == .unlimited)
         #expect(LineLimit(3) == .lines(3))
+        #expect(LineLimit(3).reservedLines == nil, "a plain limit reserves nothing")
+    }
+
+    // MARK: - reservesSpace
+
+    @Test("A short text still occupies the lines it reserved")
+    func reservesSpacePadsShortText() {
+        // The point of the modifier: two rows whose text differs in length are
+        // the same height, so a column of them does not shuffle as the data
+        // changes.
+        let short = rendered(VStack { Text("one") }.lineLimit(3, reservesSpace: true))
+        #expect(short.count == 3, "padded out to its reservation: \(short)")
+        #expect(short[0].contains("one"))
+        #expect(short[1].isEmpty && short[2].isEmpty, "the reserved rows are blank: \(short)")
+
+        // …and without it, the same text is one line tall — which is the
+        // comparison that makes the above mean something.
+        #expect(rendered(VStack { Text("one") }.lineLimit(3)).count == 1)
+    }
+
+    @Test("A reservation is a floor, not a second ceiling")
+    func reservationStillCaps() {
+        // Long prose under `.lineLimit(2, reservesSpace: true)` is still capped
+        // at two lines — an implementation that only ever padded would let it
+        // run on.
+        let long = rendered(VStack { Text(prose) }.lineLimit(2, reservesSpace: true))
+        #expect(long.count == 2, "\(long)")
+        #expect(!long[1].isEmpty, "and both lines carry text: \(long)")
+    }
+
+    @Test("The measure reports the reserved height, not the drawn one")
+    func measureMatchesTheReservation() {
+        // The trap: measure and render resolve the policy separately. A
+        // reservation the measure did not claim gives the text fewer rows than
+        // it pads out to, and it spills; one the render does not fill leaves
+        // rows allocated that nothing draws into. Asserting they AGREE is what
+        // catches either direction.
+        let view = VStack { Text("one") }.lineLimit(4, reservesSpace: true)
+        #expect(measured(view).height == 4, "measured \(measured(view).height)")
+        #expect(measured(view).height == rendered(view).count)
+    }
+
+    @Test("A squeezed reservation draws what fits rather than overflowing")
+    func reservationYieldsToTheParent() {
+        // The floor is honoured only as far as the parent allows. Two rows of
+        // budget and a four-line reservation must give two rows, not four.
+        let squeezed = rendered(
+            VStack { Text("one") }.lineLimit(4, reservesSpace: true), height: 2)
+        #expect(squeezed.count <= 2, "\(squeezed)")
+    }
+
+    @Test("A new limit further down replaces the reservation with its own")
+    func innerLimitDropsTheReservation() {
+        // `reservesSpace` rides on the limit, so stating a limit states a
+        // reservation too — here, none. A `Bool` cascading separately would
+        // have left the outer reservation hanging over the inner limit.
+        let inner = rendered(
+            VStack { Text("one").lineLimit(2) }.lineLimit(4, reservesSpace: true))
+        #expect(inner.count == 1, "the inner limit reserves nothing: \(inner)")
     }
 }

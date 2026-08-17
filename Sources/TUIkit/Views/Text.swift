@@ -437,7 +437,18 @@ extension Text: Renderable, Layoutable {
     /// must agree — a divergence here reserves rows nothing draws into, or
     /// clips text the parent left no room for.
     private func resolvedLineLimit(context: RenderContext) -> Int? {
-        (style.lineLimit ?? context.environment.lineLimit).rowCount
+        resolvedLineLimitPolicy(context: context).rowCount
+    }
+
+    /// The whole resolved policy, cap and reservation together.
+    ///
+    /// Both walks read it through here for the same reason they read the cap
+    /// through one accessor: a reservation the measure claimed and the render
+    /// did not fill leaves blank rows the parent allocated and nothing draws
+    /// into, and one the render padded but the measure did not report spills
+    /// past the space it was granted.
+    private func resolvedLineLimitPolicy(context: RenderContext) -> LineLimit {
+        style.lineLimit ?? context.environment.lineLimit
     }
 
     /// Blank rows between wrapped lines, from ``View/lineSpacing(_:)``.
@@ -480,8 +491,11 @@ extension Text: Renderable, Layoutable {
         // the rows the text is allowed to occupy. Resolved against the
         // environment exactly as the render does, or a cascaded
         // `.lineLimit(_:)` would reserve rows the render then refuses to draw.
-        let drawnLines = min(
-            wrapped.lines.count, resolvedLineLimit(context: context) ?? wrapped.lines.count)
+        let policy = resolvedLineLimitPolicy(context: context)
+        var drawnLines = min(wrapped.lines.count, policy.rowCount ?? wrapped.lines.count)
+        // …and a reservation is a FLOOR on the same number, so a text shorter
+        // than its limit still asks its parent for the rows it will pad out to.
+        if let reserved = policy.reservedLines { drawnLines = max(drawnLines, reserved) }
         // …and then the blank rows `.lineSpacing(_:)` interleaves. The limit
         // counts LINES, as in SwiftUI, so it is applied first and the spacing
         // expands what survives it.
@@ -626,16 +640,32 @@ extension Text: Renderable, Layoutable {
             styledLines = plainLines.map { ANSIRenderer.render($0, with: resolvedStyle) }
         }
 
+        // A reservation pads the block out to its full height with blank lines
+        // — added here, before the spacing is interleaved, so the reserved rows
+        // are spaced like the real ones and the height matches what the measure
+        // reported. Capped at what the parent actually granted: squeezed into
+        // fewer rows than were reserved, the text draws what fits rather than
+        // spilling out of its box.
+        var paddedLines = styledLines
+        var paddedWidths = lineWidths
+        if let reserved = resolvedLineLimitPolicy(context: context).reservedLines {
+            let target = min(reserved, linesThatFit)
+            while paddedLines.count < target {
+                paddedLines.append("")
+                paddedWidths.append(0)
+            }
+        }
+
         // Interleave the spacing LAST, after styling: a blank row carries no
         // text, so it needs no ANSI run, and inserting it earlier would have the
         // run-attribution walk step over rows that are not part of the content.
-        guard spacing > 0, styledLines.count > 1 else {
-            return FrameBuffer(lines: styledLines, width: knownWidth, lineWidths: lineWidths)
+        guard spacing > 0, paddedLines.count > 1 else {
+            return FrameBuffer(lines: paddedLines, width: knownWidth, lineWidths: paddedWidths)
         }
         return FrameBuffer(
-            lines: LineSpacingRows.interleaved(styledLines, spacing: spacing, blank: ""),
+            lines: LineSpacingRows.interleaved(paddedLines, spacing: spacing, blank: ""),
             width: knownWidth,
-            lineWidths: LineSpacingRows.interleaved(lineWidths, spacing: spacing, blank: 0))
+            lineWidths: LineSpacingRows.interleaved(paddedWidths, spacing: spacing, blank: 0))
     }
 
     /// The palette role this text draws with, used to match `.semanticColor`
