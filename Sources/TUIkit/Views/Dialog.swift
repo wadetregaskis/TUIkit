@@ -288,12 +288,12 @@ extension Dialog where Footer == EmptyView {
     ///   - titleColor: The title color (default: nil).
     ///   - content: The dialog content.
     /// - Returns: A dialog with double-line borders.
-    public static func doubleLine<C: View>(
+    public static func doubleLine(
         title titleKey: LocalizedStringKey,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
-        @ViewBuilder content: () -> C
-    ) -> Dialog<C, EmptyView> {
+        @ViewBuilder content: () -> Content
+    ) -> Dialog {
         doubleLine(
             title: titleKey.localized,
             borderColor: borderColor,
@@ -311,13 +311,13 @@ extension Dialog where Footer == EmptyView {
     ///   - content: The dialog content.
     /// - Returns: A dialog with double-line borders.
     @_disfavoredOverload
-    public static func doubleLine<C: View>(
+    public static func doubleLine(
         title: String,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
-        @ViewBuilder content: () -> C
-    ) -> Dialog<C, EmptyView> {
-        Dialog<C, EmptyView>(
+        @ViewBuilder content: () -> Content
+    ) -> Dialog {
+        Self(
             title: title,
             borderStyle: .doubleLine,
             borderColor: borderColor,
@@ -337,12 +337,12 @@ extension Dialog where Footer == EmptyView {
     ///   - titleColor: The title color (default: nil).
     ///   - content: The dialog content.
     /// - Returns: A dialog with heavy borders.
-    public static func heavy<C: View>(
+    public static func heavy(
         title titleKey: LocalizedStringKey,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
-        @ViewBuilder content: () -> C
-    ) -> Dialog<C, EmptyView> {
+        @ViewBuilder content: () -> Content
+    ) -> Dialog {
         heavy(
             title: titleKey.localized,
             borderColor: borderColor,
@@ -360,13 +360,13 @@ extension Dialog where Footer == EmptyView {
     ///   - content: The dialog content.
     /// - Returns: A dialog with heavy borders.
     @_disfavoredOverload
-    public static func heavy<C: View>(
+    public static func heavy(
         title: String,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
-        @ViewBuilder content: () -> C
-    ) -> Dialog<C, EmptyView> {
-        Dialog<C, EmptyView>(
+        @ViewBuilder content: () -> Content
+    ) -> Dialog {
+        Self(
             title: title,
             borderStyle: .heavy,
             borderColor: borderColor,

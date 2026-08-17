@@ -178,9 +178,9 @@ struct AlertRenderTests {
 
     @Test("A preset alert with actions keeps both the preset title and the buttons")
     func presetWithActions() {
-        // The action-taking preset returns `Alert<A>` where `A` is inferred from
-        // the closure; the base specialization is arbitrary (here EmptyView).
-        let alert = Alert<EmptyView>.error(title: "Failed", message: "Try again?") {
+        // The preset's `Actions` IS the closure's type, so the receiver needs no
+        // annotation — this used to require an arbitrary `Alert<EmptyView>.`.
+        let alert = Alert.error(title: "Failed", message: "Try again?") {
             Button("Retry") {}
             Button("Cancel", role: .cancel) {}
         }

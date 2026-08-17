@@ -22,12 +22,12 @@ extension Alert {
     ///   - messageKey: The key for the alert message.
     ///   - actions: The action views.
     /// - Returns: A warning-styled alert.
-    public static func warning<A: View>(
+    public static func warning(
         title titleKey: LocalizedStringKey = LocalizedStringKey(
             LocalizationKey.Label.warning.rawValue),
         message messageKey: LocalizedStringKey,
-        @ViewBuilder actions: () -> A
-    ) -> Alert<A> {
+        @ViewBuilder actions: () -> Actions
+    ) -> Alert {
         warning(
             title: titleKey.localized, message: messageKey.localized, actions: actions)
     }
@@ -40,12 +40,12 @@ extension Alert {
     ///   - actions: The action views.
     /// - Returns: A warning-styled alert.
     @_disfavoredOverload
-    public static func warning<A: View>(
+    public static func warning(
         title: String = LocalizationService.shared.string(for: LocalizationKey.Label.warning),
         message: String,
-        @ViewBuilder actions: () -> A
-    ) -> Alert<A> {
-        Alert<A>(
+        @ViewBuilder actions: () -> Actions
+    ) -> Alert {
+        Self(
             title: title,
             message: message,
             titleColor: .palette.warning,
@@ -63,12 +63,12 @@ extension Alert {
     ///   - messageKey: The key for the alert message.
     ///   - actions: The action views.
     /// - Returns: An error-styled alert.
-    public static func error<A: View>(
+    public static func error(
         title titleKey: LocalizedStringKey = LocalizedStringKey(
             LocalizationKey.Label.error.rawValue),
         message messageKey: LocalizedStringKey,
-        @ViewBuilder actions: () -> A
-    ) -> Alert<A> {
+        @ViewBuilder actions: () -> Actions
+    ) -> Alert {
         error(title: titleKey.localized, message: messageKey.localized, actions: actions)
     }
 
@@ -80,12 +80,12 @@ extension Alert {
     ///   - actions: The action views.
     /// - Returns: An error-styled alert.
     @_disfavoredOverload
-    public static func error<A: View>(
+    public static func error(
         title: String = LocalizationService.shared.string(for: LocalizationKey.Label.error),
         message: String,
-        @ViewBuilder actions: () -> A
-    ) -> Alert<A> {
-        Alert<A>(
+        @ViewBuilder actions: () -> Actions
+    ) -> Alert {
+        Self(
             title: title,
             message: message,
             titleColor: .palette.error,
@@ -103,12 +103,12 @@ extension Alert {
     ///   - messageKey: The key for the alert message.
     ///   - actions: The action views.
     /// - Returns: An info-styled alert.
-    public static func info<A: View>(
+    public static func info(
         title titleKey: LocalizedStringKey = LocalizedStringKey(
             LocalizationKey.Label.info.rawValue),
         message messageKey: LocalizedStringKey,
-        @ViewBuilder actions: () -> A
-    ) -> Alert<A> {
+        @ViewBuilder actions: () -> Actions
+    ) -> Alert {
         info(title: titleKey.localized, message: messageKey.localized, actions: actions)
     }
 
@@ -120,12 +120,12 @@ extension Alert {
     ///   - actions: The action views.
     /// - Returns: An info-styled alert.
     @_disfavoredOverload
-    public static func info<A: View>(
+    public static func info(
         title: String = LocalizationService.shared.string(for: LocalizationKey.Label.info),
         message: String,
-        @ViewBuilder actions: () -> A
-    ) -> Alert<A> {
-        Alert<A>(
+        @ViewBuilder actions: () -> Actions
+    ) -> Alert {
+        Self(
             title: title,
             message: message,
             titleColor: .palette.info,
@@ -143,12 +143,12 @@ extension Alert {
     ///   - messageKey: The key for the alert message.
     ///   - actions: The action views.
     /// - Returns: A success-styled alert.
-    public static func success<A: View>(
+    public static func success(
         title titleKey: LocalizedStringKey = LocalizedStringKey(
             LocalizationKey.Label.success.rawValue),
         message messageKey: LocalizedStringKey,
-        @ViewBuilder actions: () -> A
-    ) -> Alert<A> {
+        @ViewBuilder actions: () -> Actions
+    ) -> Alert {
         success(title: titleKey.localized, message: messageKey.localized, actions: actions)
     }
 
@@ -160,12 +160,12 @@ extension Alert {
     ///   - actions: The action views.
     /// - Returns: A success-styled alert.
     @_disfavoredOverload
-    public static func success<A: View>(
+    public static func success(
         title: String = LocalizationService.shared.string(for: LocalizationKey.Label.success),
         message: String,
-        @ViewBuilder actions: () -> A
-    ) -> Alert<A> {
-        Alert<A>(
+        @ViewBuilder actions: () -> Actions
+    ) -> Alert {
+        Self(
             title: title,
             message: message,
             titleColor: .palette.success,

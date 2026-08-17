@@ -436,12 +436,12 @@ struct LocalizedTitleTests {
             Dialog(title: Self.computedKey) { Text("body") } footer: { Text("f") },
             "Dialog(footer:)")
         expectLocalized(
-            Dialog<Text, EmptyView>.doubleLine(title: "test.title.control") { Text("body") },
-            Dialog<Text, EmptyView>.doubleLine(title: Self.computedKey) { Text("body") },
+            Dialog.doubleLine(title: "test.title.control") { Text("body") },
+            Dialog.doubleLine(title: Self.computedKey) { Text("body") },
             "Dialog.doubleLine")
         expectLocalized(
-            Dialog<Text, EmptyView>.heavy(title: "test.title.control") { Text("body") },
-            Dialog<Text, EmptyView>.heavy(title: Self.computedKey) { Text("body") },
+            Dialog.heavy(title: "test.title.control") { Text("body") },
+            Dialog.heavy(title: Self.computedKey) { Text("body") },
             "Dialog.heavy")
     }
 
@@ -497,12 +497,9 @@ struct LocalizedTitleTests {
                 == LocalizationService.shared.string(for: LocalizationKey.Label.warning))
         // An explicit literal title wins over the default and is looked up.
         #expect(Alert<EmptyView>.error(title: "test.title.control", message: "m").title == Self.translation)
-        // The with-actions forms resolve identically. The receiver's own
-        // `Actions` has to be named because these presets are declared on the
-        // generic `Alert` and return an `Alert<A>` for a *different* `A` — a
-        // pre-existing wart, unrelated to localization.
+        // The with-actions forms resolve identically.
         #expect(
-            Alert<EmptyView>.info(message: "test.title.control") { Button("ok") {} }.message
+            Alert.info(message: "test.title.control") { Button("ok") {} }.message
                 == Self.translation)
     }
 
