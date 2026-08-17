@@ -21,6 +21,44 @@ extension View {
     ) -> some View {
         EnvironmentModifier(content: self, keyPath: keyPath, value: value)
     }
+
+    /// Changes an environment value for this view and its children, based on
+    /// what it already is.
+    ///
+    /// Mirrors SwiftUI's `transformEnvironment(_:transform:)`, and exists for
+    /// the cases ``environment(_:_:)`` cannot express: a value that must be
+    /// *derived* from the inherited one. What is inherited is not known where
+    /// the view is written — that is the whole point of the environment — so
+    /// the closure runs when the subtree renders instead.
+    ///
+    /// ```swift
+    /// // Nudge the scroll step without needing to know what it was.
+    /// content.transformEnvironment(\.acceleratedScrollStep) { $0 *= 2 }
+    ///
+    /// // Adjust one field of a struct value, leaving the rest inherited.
+    /// content.transformEnvironment(\.calendar) {
+    ///     $0.firstWeekday = 2
+    /// }
+    /// ```
+    ///
+    /// The second is the shape that makes this worth having: with
+    /// ``environment(_:_:)`` you would have to name a whole `Calendar`, which
+    /// means deciding every other field of it too — and deciding them without
+    /// being able to see what an ancestor set.
+    ///
+    /// - Parameters:
+    ///   - keyPath: The key path to the environment value.
+    ///   - transform: A closure that receives the inherited value and modifies
+    ///     it in place. It runs on both the measure and the render walk, and so
+    ///     must be a pure function of the value it is handed — a closure that
+    ///     counted its own calls would neither be stable nor mean anything.
+    /// - Returns: A view whose subtree sees the transformed value.
+    public func transformEnvironment<V>(
+        _ keyPath: WritableKeyPath<EnvironmentValues, V>,
+        transform: @escaping (inout V) -> Void
+    ) -> some View {
+        TransformEnvironmentModifier(content: self, keyPath: keyPath, transform: transform)
+    }
 }
 
 // MARK: - Observable Objects

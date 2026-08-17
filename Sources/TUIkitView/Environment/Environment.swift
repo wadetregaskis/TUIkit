@@ -137,6 +137,71 @@ extension EnvironmentModifier: Layoutable {
     }
 }
 
+// MARK: - Transform Environment Modifier
+
+/// A modifier that CHANGES an environment value rather than replacing it.
+///
+/// The difference from ``EnvironmentModifier`` is entirely one of timing: a set
+/// value is known when the view is built, a transformed one cannot be, because
+/// it is a function of whatever the enclosing environment happens to hold when
+/// this subtree renders. So the value is computed here, at render time, and the
+/// work is then handed to `EnvironmentModifier` — which already knows how to
+/// inject a value AND how to keep the render cache honest about it.
+///
+/// Delegating to its methods directly, rather than rendering one as a child,
+/// keeps this a pure value computation: no extra node in the identity path, no
+/// second dispatch, and one place where injection is implemented.
+public struct TransformEnvironmentModifier<Content: View, V>: View {
+    /// The content view.
+    public let content: Content
+
+    /// The key path to transform.
+    public let keyPath: WritableKeyPath<EnvironmentValues, V>
+
+    /// The transformation to apply to the inherited value.
+    public let transform: (inout V) -> Void
+
+    /// Creates a new transforming environment modifier.
+    public init(
+        content: Content,
+        keyPath: WritableKeyPath<EnvironmentValues, V>,
+        transform: @escaping (inout V) -> Void
+    ) {
+        self.content = content
+        self.keyPath = keyPath
+        self.transform = transform
+    }
+
+    /// Not used during rendering — ``Renderable`` conformance takes priority.
+    public var body: some View {
+        content
+    }
+
+    /// The plain injection this resolves to in `context`.
+    ///
+    /// Run on both walks, and it must produce the same value on each or the
+    /// measured size would describe a different environment than the drawn one.
+    /// It does, because the only inputs are the inherited value and the
+    /// caller's closure.
+    private func applied(in context: RenderContext) -> EnvironmentModifier<Content, V> {
+        var value = context.environment[keyPath: keyPath]
+        transform(&value)
+        return EnvironmentModifier(content: content, keyPath: keyPath, value: value)
+    }
+}
+
+extension TransformEnvironmentModifier: Renderable {
+    public func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        applied(in: context).renderToBuffer(context: context)
+    }
+}
+
+extension TransformEnvironmentModifier: Layoutable {
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        applied(in: context).sizeThatFits(proposal: proposal, context: context)
+    }
+}
+
 // MARK: - Uncomparable Environment Values
 
 private struct UncomparableEnvironmentKey: EnvironmentKey {
