@@ -25,14 +25,14 @@ struct ButtonsPage: View {
             content
         }
         .appHeader {
-            DemoAppHeader(L("menu.item.buttons"))
+            DemoAppHeader("menu.item.buttons")
         }
     }
 
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.buttons.section.counter")) {
+            DemoSection("page.buttons.section.counter") {
                 HStack(spacing: 2) {
                     Button("+1") {
                         clickCount += 1
@@ -42,7 +42,7 @@ struct ButtonsPage: View {
                         clickCount += 10
                     }
                     .buttonStyle(.success)
-                    Button(L("page.buttons.reset")) {
+                    Button("page.buttons.reset") {
                         clickCount = 0
                     }
                     .buttonStyle(.destructive)
@@ -52,54 +52,54 @@ struct ButtonsPage: View {
                 }
             }
 
-            DemoSection(L("page.buttons.section.styles")) {
+            DemoSection("page.buttons.section.styles") {
                 HStack(spacing: 2) {
-                    Button(L("page.buttons.default")) {
+                    Button("page.buttons.default") {
                         clickCount += 1
                     }
-                    Button(L("page.buttons.primary")) {
+                    Button("page.buttons.primary") {
                         clickCount += 1
                     }
                     .buttonStyle(.primary)
-                    Button(L("page.buttons.success")) {
+                    Button("page.buttons.success") {
                         clickCount += 1
                     }
                     .buttonStyle(.success)
-                    Button(L("page.buttons.destructive")) {
+                    Button("page.buttons.destructive") {
                         clickCount += 1
                     }
                     .buttonStyle(.destructive)
                 }
             }
 
-            DemoSection(L("page.buttons.section.disabled")) {
+            DemoSection("page.buttons.section.disabled") {
                 HStack(spacing: 2) {
-                    Button(L("page.buttons.enabled")) { clickCount += 1 }
-                    Button(L("page.buttons.disabled")) {}.disabled()
+                    Button("page.buttons.enabled") { clickCount += 1 }
+                    Button("page.buttons.disabled") {}.disabled()
                 }
             }
 
-            DemoSection(L("page.buttons.section.cascadingDisabled")) {
+            DemoSection("page.buttons.section.cascadingDisabled") {
                 // .disabled on a container cascades to every control inside.
                 VStack(alignment: .leading, spacing: 1) {
-                    Button(L("page.buttons.cantClick")) { clickCount += 1 }
-                    Toggle(L("page.buttons.cantToggle"), isOn: .constant(true))
+                    Button("page.buttons.cantClick") { clickCount += 1 }
+                    Toggle("page.buttons.cantToggle", isOn: .constant(true))
                 }
                 .disabled(true)
             }
 
-            DemoSection(L("page.buttons.section.tinted")) {
+            DemoSection("page.buttons.section.tinted") {
                 // .tint cascades the accent to every control inside. The toggle
                 // drives it: flip it off and the green tint (on the button AND on
                 // the toggle's own checkbox) disappears — a live cascade demo.
                 VStack(alignment: .leading, spacing: 1) {
-                    Button(L("page.buttons.primary")) { clickCount += 1 }.buttonStyle(.primary)
-                    Toggle(L("page.buttons.toggle"), isOn: $tintToggle)
+                    Button("page.buttons.primary") { clickCount += 1 }.buttonStyle(.primary)
+                    Toggle("page.buttons.toggle", isOn: $tintToggle)
                 }
                 .tint(tintToggle ? .palette.success : nil)
             }
 
-            DemoSection(L("page.buttons.section.plain")) {
+            DemoSection("page.buttons.section.plain") {
                 HStack(spacing: 2) {
                     Button("\(L("page.buttons.link")) 1") { clickCount += 1 }
                         .buttonStyle(.plain)
@@ -108,36 +108,36 @@ struct ButtonsPage: View {
                 }
             }
 
-            DemoSection(L("page.buttons.section.buttonRow")) {
+            DemoSection("page.buttons.section.buttonRow") {
                 ButtonRow(spacing: 3) {
-                    Button(L("page.buttons.cancel")) { clickCount += 1 }
-                    Button(L("page.buttons.save")) { clickCount += 1 }
+                    Button("page.buttons.cancel") { clickCount += 1 }
+                    Button("page.buttons.save") { clickCount += 1 }
                 }
                 .buttonStyle(.primary)
             }
 
-            DemoSection(L("page.buttons.section.themeableText")) {
+            DemoSection("page.buttons.section.themeableText") {
                 VStack(alignment: .leading, spacing: 1) {
                     // .buttonTextStyle re-themes the label text of every button in
                     // the subtree; the brackets/background stay as the style draws
                     // them.
                     HStack(spacing: 2) {
-                        Button(L("page.buttons.one")) { clickCount += 1 }
-                        Button(L("page.buttons.two")) { clickCount += 1 }
-                        Button(L("page.buttons.delete"), role: .destructive) { clickCount += 1 }
+                        Button("page.buttons.one") { clickCount += 1 }
+                        Button("page.buttons.two") { clickCount += 1 }
+                        Button("page.buttons.delete", role: .destructive) { clickCount += 1 }
                     }
                     .buttonTextStyle { $0.bold = true; $0.foreground = .green }
 
-                    Text(L("page.buttons.themeableNote"))
+                    Text("page.buttons.themeableNote")
                     .foregroundStyle(.palette.foregroundSecondary)
                 }
             }
 
             // A Link is a button that opens a URL, so it belongs with the other
             // activatable controls: Tab to it and press Enter, or click it.
-            DemoSection(L("page.buttons.section.links")) {
+            DemoSection("page.buttons.section.links") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.newControls.linkHint")).foregroundStyle(.palette.foregroundSecondary)
+                    Text("page.newControls.linkHint").foregroundStyle(.palette.foregroundSecondary)
                     Link("swift.org", destination: URL(string: "https://swift.org")!)
                     Link(destination: URL(string: "https://github.com/apple/swift")!) {
                         Label("apple/swift", systemImage: "swift")
@@ -146,10 +146,10 @@ struct ButtonsPage: View {
             }
 
             KeyboardHelpSection(
-                L("page.buttons.section.focusNav"),
+                "page.buttons.section.focusNav",
                 shortcuts: [
-                    L("page.buttons.help.tab"),
-                    L("page.buttons.help.enterSpace"),
+                    "page.buttons.help.tab",
+                    "page.buttons.help.enterSpace",
                 ]
             )
         }

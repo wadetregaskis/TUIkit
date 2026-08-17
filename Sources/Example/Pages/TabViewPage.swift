@@ -75,19 +75,19 @@ struct TabViewPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.tabView.compactStyle")) {
+            DemoSection("page.tabView.compactStyle") {
                 TabView(selection: $compactSelection) {
-                    Tab(L("page.tabView.profile"), value: 0) {
+                    Tab("page.tabView.profile", value: 0) {
                         VStack(alignment: .leading) {
                             Text("Ada Lovelace").bold()
-                            Text(L("page.tabView.firstProgrammer"))
+                            Text("page.tabView.firstProgrammer")
                                 .foregroundStyle(.palette.foregroundSecondary)
                         }
                     }
-                    Tab(L("page.tabView.settings"), value: 1) {
-                        Toggle(L("page.tabView.notifications"), isOn: $notify)
+                    Tab("page.tabView.settings", value: 1) {
+                        Toggle("page.tabView.notifications", isOn: $notify)
                     }
-                    Tab(L("page.tabView.about"), value: 2) {
+                    Tab("page.tabView.about", value: 2) {
                         Text("TUIkit · v1.0")
                     }
                 }
@@ -95,31 +95,31 @@ struct TabViewPage: View {
                 .tabViewHeaderAlignment(.leading)
             }
 
-            DemoSection(L("page.tabView.borderedStyle")) {
+            DemoSection("page.tabView.borderedStyle") {
                 TabView(selection: $borderedSelection) {
-                    Tab(L("page.tabView.overview"), value: 0) {
-                        Text(L("page.tabView.borderedDescription"))
+                    Tab("page.tabView.overview", value: 0) {
+                        Text("page.tabView.borderedDescription")
                     }
-                    Tab(L("page.tabView.audio"), value: 1) {
+                    Tab("page.tabView.audio", value: 1) {
                         VStack(alignment: .leading) {
-                            Text(L("page.tabView.volume"))
+                            Text("page.tabView.volume")
                             Slider(value: $volume, in: 0...1)
                                 .frame(width: 24)
                         }
                     }
-                    Tab(L("page.tabView.status"), value: 2) {
-                        Toggle(L("page.tabView.online"), isOn: $online)
+                    Tab("page.tabView.status", value: 2) {
+                        Toggle("page.tabView.online", isOn: $online)
                     }
-                    Tab(L("page.tabView.help"), value: 3) {
-                        Text(L("page.tabView.helpSwitchTabs"))
+                    Tab("page.tabView.help", value: 3) {
+                        Text("page.tabView.helpSwitchTabs")
                     }
                 }
                 .tabViewStyle(.bordered)
             }
 
-            DemoSection(L("page.tabView.adjustable")) {
+            DemoSection("page.tabView.adjustable") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Picker(L("page.tabView.tabStripAlignment"), selection: $headerAlignment) {
+                    Picker("page.tabView.tabStripAlignment", selection: $headerAlignment) {
                         ForEach(HeaderAlignment.allCases, id: \.self) { choice in
                             Text(L(choice.localizationKey)).tag(choice)
                         }
@@ -129,13 +129,13 @@ struct TabViewPage: View {
                     // several rows) instead of keeping it on one wide row — the
                     // same choice the colour picker makes. With it on, the
                     // alignment above visibly shifts each folded row.
-                    Toggle(L("page.tabView.foldStrip"), isOn: $foldStrip)
+                    Toggle("page.tabView.foldStrip", isOn: $foldStrip)
                     // Each tab below is taller than the one before, so this
                     // toggle has a visible effect: off (the default,
                     // `.largestTab`) holds the box at the tallest tab's height so
                     // it never jumps as you switch tabs; on (`.activeTab`) shrinks
                     // the box to whichever tab is showing.
-                    Toggle(L("page.tabView.sizeToVisibleTab"), isOn: $sizeToVisibleTab)
+                    Toggle("page.tabView.sizeToVisibleTab", isOn: $sizeToVisibleTab)
 
                     TabView(selection: $adjustableSelection) {
                         ForEach(Array(["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"].enumerated()), id: \.offset) { index, name in
@@ -160,11 +160,11 @@ struct TabViewPage: View {
             }
 
             KeyboardHelpSection(
-                L("page.tabView.navigation"),
+                "page.tabView.navigation",
                 shortcuts: [
-                    L("page.tabView.helpFocusStrip"),
-                    L("page.tabView.helpSwitchKeys"),
-                    L("page.tabView.helpClickHeader"),
+                    "page.tabView.helpFocusStrip",
+                    "page.tabView.helpSwitchKeys",
+                    "page.tabView.helpClickHeader",
                 ]
             )
 
@@ -172,7 +172,7 @@ struct TabViewPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.tabViews"))
+            DemoAppHeader("menu.item.tabViews")
         }
     }
 }

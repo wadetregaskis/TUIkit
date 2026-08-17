@@ -114,7 +114,7 @@ private struct RootView: View {
 
     private var menu: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(L("stress.shell.menu.title")).bold()
+            Text("stress.shell.menu.title").bold()
             Text("\(L("stress.shell.label.scale")) \(scale) · \(L("stress.shell.label.seed")) \(config.seed) "
                 + "· \(L("stress.shell.label.autopilot")) \(autopilotStatus)")
                 .foregroundStyle(.secondary)
@@ -129,7 +129,7 @@ private struct RootView: View {
                 }
             }
             Divider()
-            Text(L("stress.shell.menu.help"))
+            Text("stress.shell.menu.help")
                 .foregroundStyle(.secondary)
         }
         .padding(1)

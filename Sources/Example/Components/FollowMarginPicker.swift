@@ -44,7 +44,7 @@ struct FollowMarginPicker: View {
     @Binding var selection: Int
 
     var body: some View {
-        Picker(L("demo.followMargin"), selection: $selection) {
+        Picker("demo.followMargin", selection: $selection) {
             ForEach(FollowMarginChoice.allCases, id: \.rawValue) { choice in
                 Text(choice.label).tag(choice.rawValue)
             }

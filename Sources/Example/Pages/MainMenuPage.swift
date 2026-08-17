@@ -18,6 +18,14 @@ struct FeatureBox: View, Equatable {
     /// The secondary description text.
     let subtitle: String
 
+    /// Creates a box with a localized headline and description. Both are
+    /// display prose, so both are keys — see `DemoSection` for the pattern.
+    init(_ titleKey: LocalizedStringKey, _ subtitleKey: LocalizedStringKey) {
+        self.init(titleKey.localized, subtitleKey.localized)
+    }
+
+    /// Creates a box shown as written.
+    @_disfavoredOverload
     init(_ title: String, _ subtitle: String) {
         self.title = title
         self.subtitle = subtitle
@@ -118,7 +126,7 @@ struct MainMenuPage: View {
                 // place by `.menuStyle(.inline)`. Arrows and Tab walk the rows;
                 // the shortcut characters jump straight to a page; the menu
                 // scrolls itself if the terminal is too short for all 31.
-                Menu(L("menu.title")) {
+                Menu("menu.title") {
                     ForEach(Self.entries, id: \.page) { entry in
                         Button(L(entry.key)) {
                             menuSelection = entry.page
@@ -140,10 +148,10 @@ struct MainMenuPage: View {
                 Spacer()
                 VStack(spacing: 1) {
                     HStack(spacing: 3) {
-                        FeatureBox(L("feature.pureSwift.title"), L("feature.pureSwift.subtitle")).equatable()
-                        FeatureBox(L("feature.declarative.title"), L("feature.declarative.subtitle")).equatable()
-                        FeatureBox(L("feature.composable.title"), L("feature.composable.subtitle")).equatable()
-                        FeatureBox(L("feature.unicode.title"), "所有语言 🥳🤙🏽").equatable()
+                        FeatureBox("feature.pureSwift.title", "feature.pureSwift.subtitle").equatable()
+                        FeatureBox("feature.declarative.title", "feature.declarative.subtitle").equatable()
+                        FeatureBox("feature.composable.title", "feature.composable.subtitle").equatable()
+                        FeatureBox("feature.unicode.title", "所有语言 🥳🤙🏽").equatable()
                     }
                     HStack(spacing: 3) {
                         // The SF Symbols subtitle wraps to two lines (glyphs +
@@ -151,7 +159,7 @@ struct MainMenuPage: View {
                         // them relative to each other to show off
                         // `.multilineTextAlignment(_:)` — the modifier flows
                         // through the custom `FeatureBox` into its inner `Text`.
-                        FeatureBox(L("feature.sfSymbols.title"), sfSymbolsSubtitle)
+                        FeatureBox("feature.sfSymbols.title", sfSymbolsSubtitle)
                             .equatable()
                             .multilineTextAlignment(.center)
                     }
@@ -163,8 +171,8 @@ struct MainMenuPage: View {
         }
         .appHeader {
             DemoAppHeader(
-                L("app.title"),
-                subtitle: L("app.subtitle")
+                "app.title",
+                subtitle: "app.subtitle"
             )
         }
     }

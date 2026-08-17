@@ -59,34 +59,34 @@ struct EmojiPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.emoji.bugCasesSection")) {
+            DemoSection("page.emoji.bugCasesSection") {
                 VStack(alignment: .leading) {
-                    BugCaseRow(label: L("page.emoji.bugNormalLabel"),
-                               description: L("page.emoji.bugNormalDesc"),
+                    BugCaseRow(label: "page.emoji.bugNormalLabel",
+                               description: "page.emoji.bugNormalDesc",
                                clusters: ["🤙", "🥳", "😀", "👋", "🔥", "🎉", "💩"])
 
-                    BugCaseRow(label: L("page.emoji.bugVS16Label"),
-                               description: L("page.emoji.bugVS16Desc"),
+                    BugCaseRow(label: "page.emoji.bugVS16Label",
+                               description: "page.emoji.bugVS16Desc",
                                clusters: ["🖥️", "🛡️", "🚸", "📞", "✏️", "❤️"])
 
-                    BugCaseRow(label: L("page.emoji.bugFitzpatrickLabel"),
-                               description: L("page.emoji.bugFitzpatrickDesc"),
+                    BugCaseRow(label: "page.emoji.bugFitzpatrickLabel",
+                               description: "page.emoji.bugFitzpatrickDesc",
                                clusters: ["🤙🏽", "✊🏻", "👍🏼", "👋🏿", "👨🏽", "🙏🏼"])
 
-                    BugCaseRow(label: L("page.emoji.bugBMPSkinToneLabel"),
-                               description: L("page.emoji.bugBMPSkinToneDesc"),
+                    BugCaseRow(label: "page.emoji.bugBMPSkinToneLabel",
+                               description: "page.emoji.bugBMPSkinToneDesc",
                                clusters: ["☝🏻", "✌🏼", "✍🏽", "⛹🏾", "✊🏿"])
 
-                    BugCaseRow(label: L("page.emoji.bugTerminalWidthLabel"),
-                               description: L("page.emoji.bugTerminalWidthDesc"),
+                    BugCaseRow(label: "page.emoji.bugTerminalWidthLabel",
+                               description: "page.emoji.bugTerminalWidthDesc",
                                clusters: ["⌚", "⌛", "⏩", "⏪", "⏫", "⏬", "⏰", "⏳"])
                 }
             }
 
             HStack(spacing: 1) {
-                Text(L("page.emoji.filterLabel")).foregroundStyle(.palette.foregroundSecondary)
-                TextField(L("page.emoji.filterField"), text: $filter,
-                          prompt: Text(L("page.emoji.filterPrompt")))
+                Text("page.emoji.filterLabel").foregroundStyle(.palette.foregroundSecondary)
+                TextField("page.emoji.filterField", text: $filter,
+                          prompt: Text("page.emoji.filterPrompt"))
             }
 
             // Emoji on the left, SF Symbols on the right — both filtered by the
@@ -113,8 +113,8 @@ struct EmojiPage: View {
         // content and is greedy in height (it fills the viewport and scrolls
         // itself). Nesting it in a page ScrollView would defeat both.
         .appHeader {
-            DemoAppHeader(L("menu.item.emoji"),
-                          subtitle: L("page.emoji.subtitle"))
+            DemoAppHeader("menu.item.emoji",
+                          subtitle: "page.emoji.subtitle")
         }
     }
 
@@ -153,10 +153,10 @@ struct EmojiPage: View {
                     SymbolRow(entry: entry)
                 }
             }
-            .listEmptyPlaceholder(L("page.emoji.sfSymbolsEmpty"))
+            .listEmptyPlaceholder("page.emoji.sfSymbolsEmpty")
         } else {
             ContentUnavailableView(
-                L("page.emoji.sfSymbolsUnavailableTitle"),
+                "page.emoji.sfSymbolsUnavailableTitle",
                 description: Self.allSymbols.isEmpty
                     ? L("page.emoji.sfSymbolsUnavailablePlatform")
                     : L("page.emoji.sfSymbolsUnavailableFont"))
@@ -238,8 +238,8 @@ struct EmojiPage: View {
 /// square brackets so any extra/missing cells from a Terminal.app bug
 /// are obvious — well-aligned brackets means the row rendered cleanly.
 private struct BugCaseRow: View {
-    let label: String
-    let description: String
+    let label: LocalizedStringKey
+    let description: LocalizedStringKey
     let clusters: [String]
 
     var body: some View {
@@ -247,7 +247,7 @@ private struct BugCaseRow: View {
             Text(label)
                 .foregroundStyle(.palette.accent)
             Text(clusters.map { "[\($0)]" }.joined(separator: " "))
-            Text("— \(description)")
+            Text("— \(description.localized)")
                 .foregroundStyle(.palette.foregroundSecondary)
                 .dim()
         }

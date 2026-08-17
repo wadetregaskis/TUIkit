@@ -47,7 +47,7 @@ private struct KitchenSinkView: View {
             }
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
-                Text(L("stress.scenario.kitchensink.heading.metrics")).bold()
+                Text("stress.scenario.kitchensink.heading.metrics").bold()
                 Divider()
                 ScrollView {
                     VStack(spacing: 1) {

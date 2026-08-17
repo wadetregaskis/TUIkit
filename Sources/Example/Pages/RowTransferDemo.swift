@@ -59,9 +59,9 @@ struct RowTransferDemoSection: View {
     @State private var backlogSelection: String?
 
     var body: some View {
-        DemoSection(L("page.list.transferSection")) {
+        DemoSection("page.list.transferSection") {
             VStack(alignment: .leading, spacing: 1) {
-                Text(L("page.list.transferHint"))
+                Text("page.list.transferHint")
                     .foregroundStyle(.palette.foregroundSecondary)
                 // The same keyboard-reorder hint the `.onMove` demo carries —
                 // the shortcuts are identical because they ARE the same
@@ -69,14 +69,14 @@ struct RowTransferDemoSection: View {
                 // press released without moving is a click and passes through
                 // to the List, so clicking a row selects it exactly as it does
                 // in the demo above.
-                Text(L("page.rows.keyboardMoveHint"))
+                Text("page.rows.keyboardMoveHint")
                     .foregroundStyle(.palette.foregroundTertiary)
                     .dim()
                 HStack(alignment: .top, spacing: 3) {
-                    list(.queue, title: L("page.list.transferQueue"))
-                    list(.backlog, title: L("page.list.transferBacklog"))
+                    list(.queue, title: "page.list.transferQueue")
+                    list(.backlog, title: "page.list.transferBacklog")
                 }
-                ValueDisplayRow(L("page.list.transferLast"), status)
+                ValueDisplayRow("page.list.transferLast", status)
             }
         }
     }
@@ -87,7 +87,7 @@ struct RowTransferDemoSection: View {
     /// landing slot under the pointer exactly as the reorder demo above does.
     /// A drop past the last row appends (and is the only way into an empty
     /// list); the index reports that as "before the row after the last one".
-    @ViewBuilder private func list(_ side: Side, title: String) -> some View {
+    @ViewBuilder private func list(_ side: Side, title: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title).bold()
             List(selection: selection(side)) {

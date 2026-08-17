@@ -52,7 +52,7 @@ struct MenusPage: View {
         ScrollView {
             content
         }
-        .navigationTitle(L("page.menus.title"))
+        .navigationTitle("page.menus.title")
     }
 
     /// One row of the sticky menu: a `Button` whose label carries the flag's
@@ -61,11 +61,11 @@ struct MenusPage: View {
     /// The mark comes from ``ToggleCharacterSet`` so it degrades with the
     /// terminal exactly as a `Toggle`'s does — and both marks of a set are the
     /// same cell width, so the labels stay in one column as the flags change.
-    private func stickyItem(_ title: String, _ flag: Binding<Bool>) -> some View {
+    private func stickyItem(_ titleKey: LocalizedStringKey, _ flag: Binding<Bool>) -> some View {
         Button(
             marks.openBracket
                 + (flag.wrappedValue ? marks.onMark : marks.offMark)
-                + marks.closeBracket + " " + title
+                + marks.closeBracket + " " + titleKey.localized
         ) {
             flag.wrappedValue.toggle()
         }
@@ -84,9 +84,9 @@ struct MenusPage: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
-            DemoSection(L("page.menus.contextSection")) {
+            DemoSection("page.menus.contextSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.menus.contextInstruction"))
+                    Text("page.menus.contextInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
                     // TWO targets, because the gestures worth trying are the ones
                     // that involve a menu already being up: right-clicking the
@@ -101,48 +101,48 @@ struct MenusPage: View {
                     HStack(spacing: 2) {
                         // The items are Buttons — SwiftUI's API — but they render
                         // as menu rows, and the pop-up hugs its widest item.
-                        ContextMenuTarget(L("page.menus.contextTarget"))
+                        ContextMenuTarget("page.menus.contextTarget")
                             .contextMenu {
-                                Button(L("page.menus.context.cut")) {
+                                Button("page.menus.context.cut") {
                                     contextAction = L("page.menus.context.cut")
                                 }
-                                Button(L("page.menus.context.copy")) {
+                                Button("page.menus.context.copy") {
                                     contextAction = L("page.menus.context.copy")
                                 }
                                 Divider()
-                                Button(L("page.menus.context.delete"), role: .destructive) {
+                                Button("page.menus.context.delete", role: .destructive) {
                                     contextAction = L("page.menus.context.delete")
                                 }
                             }
-                        ContextMenuTarget(L("page.menus.contextTarget2"))
+                        ContextMenuTarget("page.menus.contextTarget2")
                             .contextMenu {
-                                Button(L("page.menus.context.paste")) {
+                                Button("page.menus.context.paste") {
                                     contextAction = L("page.menus.context.paste")
                                 }
-                                Button(L("page.menus.context.selectAll")) {
+                                Button("page.menus.context.selectAll") {
                                     contextAction = L("page.menus.context.selectAll")
                                 }
                                 Divider()
-                                Button(L("page.menus.context.properties")) {
+                                Button("page.menus.context.properties") {
                                     contextAction = L("page.menus.context.properties")
                                 }
                             }
                     }
                     .onMenuOpen { contextAction = "—" }
-                    Text(L("page.menus.contextSwapNote"))
+                    Text("page.menus.contextSwapNote")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    ValueDisplayRow(L("page.menus.chose"), contextAction)
+                    ValueDisplayRow("page.menus.chose", contextAction)
                 }
             }
 
-            DemoSection(L("page.menus.pullDownSection")) {
+            DemoSection("page.menus.pullDownSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.menus.pullDownInstruction"))
+                    Text("page.menus.pullDownInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
                     // A pop-up Menu: the label is a collapsed control, and
                     // the items — plain Buttons, as in SwiftUI — open over the
                     // page and close again when one fires.
-                    Menu(L("page.menus.pullDownTitle")) {
+                    Menu("page.menus.pullDownTitle") {
                         ForEach(pullDownItems, id: \.self) { item in
                             Button(item) { pullDownChoice = item }
                         }
@@ -150,41 +150,41 @@ struct MenusPage: View {
                     // As above: the read-out clears as the menu opens, so
                     // choosing `Rename` twice shows two distinct choices.
                     .onMenuOpen { pullDownChoice = "—" }
-                    ValueDisplayRow(L("page.menus.chose"), pullDownChoice)
+                    ValueDisplayRow("page.menus.chose", pullDownChoice)
                 }
             }
 
-            DemoSection(L("page.menus.stickySection")) {
+            DemoSection("page.menus.stickySection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.menus.stickyInstruction"))
+                    Text("page.menus.stickyInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
                     // A menu of SETTINGS rather than of commands. The
                     // `.menuActionDismissBehavior(.disabled)` is written on the
                     // three toggles (inside `stickyItem`), NOT on the `Menu`, so
                     // `Done` below them closes it the ordinary way — the modifier
                     // scopes to whatever subtree it is applied to.
-                    Menu(L("page.menus.stickyTitle")) {
-                        stickyItem(L("page.menus.sticky.hidden"), $showsHidden)
-                        stickyItem(L("page.menus.sticky.sizes"), $showsSizes)
-                        stickyItem(L("page.menus.sticky.previews"), $showsPreviews)
+                    Menu("page.menus.stickyTitle") {
+                        stickyItem("page.menus.sticky.hidden", $showsHidden)
+                        stickyItem("page.menus.sticky.sizes", $showsSizes)
+                        stickyItem("page.menus.sticky.previews", $showsPreviews)
                         Divider()
-                        Button(L("page.menus.sticky.done")) {}
+                        Button("page.menus.sticky.done") {}
                     }
-                    ValueDisplayRow(L("page.menus.showing"), showingSummary)
+                    ValueDisplayRow("page.menus.showing", showingSummary)
                 }
             }
 
-            DemoSection(L("page.menus.boxSection")) {
+            DemoSection("page.menus.boxSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.menus.boxInstruction"))
+                    Text("page.menus.boxInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    TextField(L("page.menus.boxLabel"), text: $editor)
+                    TextField("page.menus.boxLabel", text: $editor)
                         .textInputSuggestions {
                             ForEach(editors, id: \.self) { Text($0) }
                         }
                         .frame(width: 24)
                     ValueDisplayRow(
-                        L("page.menus.typed"), editor.isEmpty ? "—" : editor)
+                        "page.menus.typed", editor.isEmpty ? "—" : editor)
                 }
             }
         }
@@ -202,13 +202,13 @@ struct MenusPage: View {
 /// whatever `.selectionIndicatorStyle` is in force — pulse, blink, or a static
 /// accent. Neither decision is made here.
 private struct ContextMenuTarget: View {
-    let title: String
+    let title: LocalizedStringKey
 
     @Environment(\.isFocused) private var isFocused
     @Environment(\.selectionEmphasis) private var emphasis
     @Environment(\.palette) private var palette
 
-    init(_ title: String) {
+    init(_ title: LocalizedStringKey) {
         self.title = title
     }
 

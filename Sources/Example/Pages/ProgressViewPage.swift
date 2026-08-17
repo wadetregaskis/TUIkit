@@ -85,7 +85,7 @@ struct ProgressViewPage: View {
                 indeterminateSection
             }
 
-            DemoSection(L("page.progressView.determinateStyles")) {
+            DemoSection("page.progressView.determinateStyles") {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 1) {
                         Text("Style        ").dim()
@@ -154,11 +154,11 @@ struct ProgressViewPage: View {
 
             // Build-your-own TrackConfiguration: every ingredient the named
             // presets are made of, applied live to a determinate bar.
-            DemoSection(L("page.trackEditor.section")) {
+            DemoSection("page.trackEditor.section") {
                 TrackStyleEditor(preview: .progress)
             }
 
-            DemoSection(L("page.progressView.indeterminateAnimations")) {
+            DemoSection("page.progressView.indeterminateAnimations") {
                 VStack(alignment: .leading, spacing: 0) {
                     indeterminateRow(label: "sweep        ", style: .sweep)
                     indeterminateRow(label: "barberPole   ", style: .barberPole)
@@ -175,7 +175,7 @@ struct ProgressViewPage: View {
                         ForEach(Array(gradientStops.enumerated()), id: \.offset) { _, stop in
                             Text("██").foregroundStyle(stop)
                         }
-                        Button(L("page.progressView.editGradient")) { editingGradient = true }
+                        Button("page.progressView.editGradient") { editingGradient = true }
                     }
                 }
             }
@@ -184,11 +184,11 @@ struct ProgressViewPage: View {
             // sits in a range rather than progress toward completion — so it
             // lives here. Its default shaded meter reads distinctly from the
             // ProgressView bars above; the `GaugeStyle` variants follow.
-            DemoSection(L("page.progressView.gaugeSection")) {
+            DemoSection("page.progressView.gaugeSection") {
                 VStack(alignment: .leading, spacing: 1) {
                     let fraction = animatedFraction()
                     Gauge(value: fraction, in: 0...1) {
-                        Text(L("page.newControls.gaugeLabel"))
+                        Text("page.newControls.gaugeLabel")
                     } currentValueLabel: {
                         Text("\(Int((fraction * 100).rounded()))%")
                     } minimumValueLabel: {
@@ -208,7 +208,7 @@ struct ProgressViewPage: View {
                     // ranges, exercising the label rendering with varied text
                     // widths — decimals ("0.62"), plain integers up to three
                     // digits, and signed degrees ("-12°").
-                    Text(L("page.progressView.gaugeNonPercent"))
+                    Text("page.progressView.gaugeNonPercent")
                         .foregroundStyle(.palette.foregroundSecondary)
                     gaugeRow(
                         label: "0…1                     ", fraction: fraction,
@@ -238,12 +238,12 @@ struct ProgressViewPage: View {
         .scrollableDemoPage()
         .modal(isPresented: $editingGradient) {
             GradientEditorPanel(
-                L("page.progressView.gradientTitle"),
+                "page.progressView.gradientTitle",
                 stops: gradientStopsBinding,
                 isPresented: $editingGradient)
         }
         .appHeader {
-            DemoAppHeader(L("menu.item.progress"))
+            DemoAppHeader("menu.item.progress")
         }
         // Merges with the page's back / scroll items. Cycles only the top
         // "Determinate" section's style; the style catalogues below stay put.
@@ -261,14 +261,14 @@ struct ProgressViewPage: View {
     /// state-less). The `s` shortcut cycles the style applied to just these.
     @ViewBuilder
     private func determinateSection(style: TrackStyle) -> some View {
-        DemoSection(L("page.progressView.determinate")) {
+        DemoSection("page.progressView.determinate") {
             VStack(alignment: .leading, spacing: 1) {
                 let fraction = animatedFraction()
-                ProgressView(L("page.progressView.downloadingFiles"), value: fraction)
+                ProgressView("page.progressView.downloadingFiles", value: fraction)
                     .progressViewStyle(style)
 
                 ProgressView(value: fraction) {
-                    Text(L("page.progressView.buildProgress"))
+                    Text("page.progressView.buildProgress")
                         .foregroundStyle(.palette.foreground)
                 } currentValueLabel: {
                     Text("\(Int((fraction * 100).rounded()))%")
@@ -282,19 +282,19 @@ struct ProgressViewPage: View {
     /// The "Indeterminate" section — labelled, custom-label and bare spinners.
     @ViewBuilder
     private var indeterminateSection: some View {
-        DemoSection(L("page.progressView.indeterminate")) {
+        DemoSection("page.progressView.indeterminate") {
             VStack(alignment: .leading, spacing: 1) {
-                ProgressView(L("page.progressView.connecting"))
+                ProgressView("page.progressView.connecting")
 
                 ProgressView {
-                    Text(L("page.progressView.reticulatingSplines"))
+                    Text("page.progressView.reticulatingSplines")
                         .foregroundStyle(.palette.foreground)
                 }
 
                 // Pure indeterminate, no label — useful inline against
                 // another control.
                 HStack(spacing: 1) {
-                    Text(L("page.progressView.working")).dim()
+                    Text("page.progressView.working").dim()
                     ProgressView()
                 }
             }

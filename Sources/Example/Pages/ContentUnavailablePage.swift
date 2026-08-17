@@ -16,33 +16,33 @@ struct ContentUnavailablePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.contentUnavailable.titleOnly")) {
-                ContentUnavailableView(L("page.contentUnavailable.noResults"))
+            DemoSection("page.contentUnavailable.titleOnly") {
+                ContentUnavailableView("page.contentUnavailable.noResults")
             }
 
-            DemoSection(L("page.contentUnavailable.titleDescription")) {
+            DemoSection("page.contentUnavailable.titleDescription") {
                 ContentUnavailableView(
-                    L("page.contentUnavailable.noMessages"),
-                    description: L("page.contentUnavailable.noMessagesDescription"))
+                    "page.contentUnavailable.noMessages",
+                    description: "page.contentUnavailable.noMessagesDescription")
             }
 
-            DemoSection(L("page.contentUnavailable.customForm")) {
+            DemoSection("page.contentUnavailable.customForm") {
                 ContentUnavailableView {
                     Text("✶  \(L("page.contentUnavailable.nothingSelected"))").bold().foregroundStyle(.palette.accent)
                 } description: {
-                    Text(L("page.contentUnavailable.chooseItem"))
+                    Text("page.contentUnavailable.chooseItem")
                         .foregroundStyle(.palette.foregroundSecondary)
                 } actions: {
-                    Button(L("page.contentUnavailable.refresh")) { refreshes += 1 }
+                    Button("page.contentUnavailable.refresh") { refreshes += 1 }
                 }
-                ValueDisplayRow(L("page.contentUnavailable.refreshPressed"), "\(refreshes)×")
+                ValueDisplayRow("page.contentUnavailable.refreshPressed", "\(refreshes)×")
             }
 
             KeyboardHelpSection(
                 "ContentUnavailableView",
                 shortcuts: [
-                    L("page.contentUnavailable.help.placeholder"),
-                    L("page.contentUnavailable.help.tabFocuses"),
+                    "page.contentUnavailable.help.placeholder",
+                    "page.contentUnavailable.help.tabFocuses",
                 ]
             )
 
@@ -50,7 +50,7 @@ struct ContentUnavailablePage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.emptyState"))
+            DemoAppHeader("menu.item.emptyState")
         }
     }
 }

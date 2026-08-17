@@ -22,7 +22,7 @@ private struct CounterView: View {
     var body: some View {
         HStack(spacing: 2) {
             Button("\(L("page.state.idCount")): \(count)") { count += 1 }
-            Text(L("page.state.idHint")).dim()
+            Text("page.state.idHint").dim()
         }
     }
 }
@@ -48,63 +48,63 @@ struct StatePersistencePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.state.persistenceSection")) {
+            DemoSection("page.state.persistenceSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.state.description"))
+                    Text("page.state.description")
                         .foregroundStyle(.palette.foregroundSecondary)
 
-                    Button(L("page.state.tapToIncrement")) {
+                    Button("page.state.tapToIncrement") {
                         launchTaps += 1
                     }
-                    Toggle(L("page.state.rememberMe"), isOn: $remembered)
+                    Toggle("page.state.rememberMe", isOn: $remembered)
 
                     HStack(spacing: 2) {
-                        ValueDisplayRow(L("page.state.storedTaps"), "\(launchTaps)")
+                        ValueDisplayRow("page.state.storedTaps", "\(launchTaps)")
                         ValueDisplayRow(
-                            L("page.state.remembered"),
+                            "page.state.remembered",
                             remembered ? L("page.state.yes") : L("page.state.no"))
                     }
                 }
             }
 
-            DemoSection(L("page.state.noteSection")) {
+            DemoSection("page.state.noteSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.state.noteDescription"))
+                    Text("page.state.noteDescription")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    TextField(L("page.state.notePlaceholder"), text: $note)
+                    TextField("page.state.notePlaceholder", text: $note)
                         .frame(width: 32)
                 }
             }
 
-            DemoSection(L("page.state.bindableSection")) {
+            DemoSection("page.state.bindableSection") {
                 // Derive Bindings into the @Observable model we already own.
                 let bindable = Bindable(settings)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.state.bindableDescription"))
+                    Text("page.state.bindableDescription")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    TextField(L("page.state.bindableName"), text: bindable.name)
+                    TextField("page.state.bindableName", text: bindable.name)
                         .frame(width: 24)
-                    Toggle(L("page.state.bindableSubscribed"), isOn: bindable.subscribed)
+                    Toggle("page.state.bindableSubscribed", isOn: bindable.subscribed)
                     ValueDisplayRow(
-                        L("page.state.bindableLive"),
+                        "page.state.bindableLive",
                         "\(settings.name) · \(settings.subscribed ? "on" : "off")")
                 }
             }
 
-            DemoSection(L("page.state.idSection")) {
+            DemoSection("page.state.idSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.state.idDescription"))
+                    Text("page.state.idDescription")
                         .foregroundStyle(.palette.foregroundSecondary)
                     // Re-keying by resetToken restarts CounterView's @State.
                     CounterView().id(resetToken)
-                    Button(L("page.state.idReset")) { resetToken += 1 }
+                    Button("page.state.idReset") { resetToken += 1 }
                 }
             }
 
-            DemoSection(L("page.state.whereSection")) {
+            DemoSection("page.state.whereSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow(L("page.state.savedTo"), Self.settingsPath)
-                    Text(L("page.state.relaunchHint"))
+                    ValueDisplayRow("page.state.savedTo", Self.settingsPath)
+                    Text("page.state.relaunchHint")
                         .foregroundStyle(.palette.accent)
                 }
             }
@@ -113,7 +113,7 @@ struct StatePersistencePage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.statePersistence"))
+            DemoAppHeader("menu.item.statePersistence")
         }
     }
 

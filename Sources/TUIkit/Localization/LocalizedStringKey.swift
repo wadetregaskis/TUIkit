@@ -95,7 +95,28 @@ public struct LocalizedStringKey: Equatable, Hashable, Sendable {
     /// how it measures or renders. Nothing is lost by resolving early: the view
     /// tree is rebuilt every frame, so a language switched at runtime is picked
     /// up on the next one.
-    var localized: String {
+    ///
+    /// It is public so your own controls can take a `LocalizedStringKey` and
+    /// follow the same rule:
+    ///
+    /// ```swift
+    /// struct FieldRow: View {
+    ///     let label: String
+    ///
+    ///     init(_ labelKey: LocalizedStringKey) { self.init(labelKey.localized) }
+    ///
+    ///     @_disfavoredOverload
+    ///     init(_ label: String) { self.label = label }
+    ///
+    ///     var body: some View { Text(label.padded(to: 20)) }
+    /// }
+    /// ```
+    ///
+    /// SwiftUI has no equivalent — its `LocalizedStringKey` is opaque, and a
+    /// component is expected to hand it straight to a `Text`. A terminal UI
+    /// needs the `String`: text is laid out in cells, so padding, truncating
+    /// and column alignment all happen on the resolved text.
+    public var localized: String {
         resolved(with: LocalizationService.shared)
     }
 

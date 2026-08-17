@@ -132,9 +132,9 @@ struct MousePage: View {
         .scrollableDemoPage()
         .appHeader {
             DemoAppHeader(
-                L("menu.item.mouse"),
+                "menu.item.mouse",
                 subtitle:
-                    L("page.mouse.subtitle")
+                    "page.mouse.subtitle"
             )
         }
     }
@@ -142,11 +142,11 @@ struct MousePage: View {
     @ViewBuilder private var pageContent: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.mouse.tapCounter")) {
+            DemoSection("page.mouse.tapCounter") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.mouse.tapInstruction"))
+                    Text("page.mouse.tapInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.mouse.clickMe"))
+                    Text("page.mouse.clickMe")
                         .bold()
                         .foregroundStyle(.palette.accent)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
@@ -163,17 +163,17 @@ struct MousePage: View {
                             lastTapAt = "(\(cx), \(cy))"
                         }
                     HStack(spacing: 2) {
-                        ValueDisplayRow(L("page.mouse.tapsLabel"), "\(tapCount)")
-                        ValueDisplayRow(L("page.mouse.lastTapAtLabel"), lastTapAt)
+                        ValueDisplayRow("page.mouse.tapsLabel", "\(tapCount)")
+                        ValueDisplayRow("page.mouse.lastTapAtLabel", lastTapAt)
                     }
                 }
             }
 
-            DemoSection(L("page.mouse.scrollCounter")) {
+            DemoSection("page.mouse.scrollCounter") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.mouse.scrollInstruction"))
+                    Text("page.mouse.scrollInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.mouse.scrollTerminalNote"))
+                    Text("page.mouse.scrollTerminalNote")
                         .foregroundStyle(.palette.foregroundTertiary)
                         .dim()
                     // 2-D scroll position display. The vertical and
@@ -218,17 +218,17 @@ struct MousePage: View {
                         }
                     }
                     HStack(spacing: 2) {
-                        ValueDisplayRow(L("page.mouse.verticalLabel"), "\(scrollDeltaY)")
-                        ValueDisplayRow(L("page.mouse.horizontalLabel"), "\(scrollDeltaX)")
+                        ValueDisplayRow("page.mouse.verticalLabel", "\(scrollDeltaY)")
+                        ValueDisplayRow("page.mouse.horizontalLabel", "\(scrollDeltaX)")
                     }
                 }
             }
 
-            DemoSection(L("page.mouse.dragTracker")) {
+            DemoSection("page.mouse.dragTracker") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.mouse.dragInstruction"))
+                    Text("page.mouse.dragInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.mouse.dragArea"))
+                    Text("page.mouse.dragArea")
                         .foregroundStyle(.palette.accent)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
                         .border(.palette.border)
@@ -245,8 +245,8 @@ struct MousePage: View {
                             dragDeltaY = event.translationY
                         }
                     HStack(spacing: 2) {
-                        ValueDisplayRow(L("page.mouse.phaseLabel"), dragPhase)
-                        ValueDisplayRow(L("page.mouse.atLabel"), "(\(dragX), \(dragY))")
+                        ValueDisplayRow("page.mouse.phaseLabel", dragPhase)
+                        ValueDisplayRow("page.mouse.atLabel", "(\(dragX), \(dragY))")
                         ValueDisplayRow("Δ:", "(\(dragDeltaX), \(dragDeltaY))")
                     }
                 }
@@ -259,18 +259,18 @@ struct MousePage: View {
             // shelf to return it, anywhere else to discard it with a poof —
             // the whole section is the "anywhere else" destination, and the
             // poof plays as a ZStack layer at the drop point.
-            DemoSection(L("page.mouse.dragDrop")) {
+            DemoSection("page.mouse.dragDrop") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.mouse.dragDropHint"))
+                    Text("page.mouse.dragDropHint")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.mouse.dragOutHint"))
+                    Text("page.mouse.dragOutHint")
                         .foregroundStyle(.palette.foregroundSecondary)
                     // Three drag demos, one per layer, and none of them
                     // spare: this section is the API, the auto-scroll
                     // section below is what a SCROLLABLE does during a
                     // drag, and the Lists page is what ROWS do. The note
                     // says so, so the overlap doesn't read as duplication.
-                    Text(L("page.mouse.dragDropRowsNote"))
+                    Text("page.mouse.dragDropRowsNote")
                         .foregroundStyle(.palette.foregroundTertiary)
                         .dim()
                     HStack(alignment: .top, spacing: 4) {
@@ -283,9 +283,9 @@ struct MousePage: View {
 
             DragScrollDemoSection()
 
-            DemoSection(L("page.mouse.rawEvents")) {
+            DemoSection("page.mouse.rawEvents") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.mouse.rawEventsInstruction"))
+                    Text("page.mouse.rawEventsInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
                     // Modifier-click forwarding is terminal-specific and not
                     // queryable (no escape sequence reports it), so the best
@@ -296,17 +296,17 @@ struct MousePage: View {
                     // context menu by default.
                     switch ProcessInfo.processInfo.environment["TERM_PROGRAM"] {
                     case "iTerm.app":
-                        Text(L("page.mouse.iTerm2RightClickNote"))
+                        Text("page.mouse.iTerm2RightClickNote")
                             .foregroundStyle(.palette.foregroundTertiary)
                             .dim()
                     case "Apple_Terminal":
-                        Text(L("page.mouse.appleTerminalModifierNote"))
+                        Text("page.mouse.appleTerminalModifierNote")
                             .foregroundStyle(.palette.foregroundTertiary)
                             .dim()
                     default:
                         EmptyView()
                     }
-                    Text(L("page.mouse.rightOrModifiedClick"))
+                    Text("page.mouse.rightOrModifiedClick")
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
                         .border(.palette.border)
                         .onMouseEvent { event in
@@ -323,15 +323,15 @@ struct MousePage: View {
                             }
                         }
                     HStack(spacing: 2) {
-                        ValueDisplayRow(L("page.mouse.rightClicksLabel"), "\(rightClicks)")
-                        ValueDisplayRow(L("page.mouse.modifiersLabel"), lastModifier)
+                        ValueDisplayRow("page.mouse.rightClicksLabel", "\(rightClicks)")
+                        ValueDisplayRow("page.mouse.modifiersLabel", lastModifier)
                     }
                 }
             }
 
-            DemoSection(L("page.mouse.hover")) {
+            DemoSection("page.mouse.hover") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.mouse.hoverInstruction"))
+                    Text("page.mouse.hoverInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
                     Text(isHovering ? L("page.mouse.hovering") : L("page.mouse.hoverMe"))
                         .bold()
@@ -342,15 +342,15 @@ struct MousePage: View {
                         .onHover { hovering in
                             isHovering = hovering
                         }
-                    ValueDisplayRow(L("page.mouse.stateLabel"), isHovering ? L("page.mouse.stateHovering") : L("page.mouse.stateOutside"))
+                    ValueDisplayRow("page.mouse.stateLabel", isHovering ? L("page.mouse.stateHovering") : L("page.mouse.stateOutside"))
                 }
             }
 
-            DemoSection(L("page.mouse.scrollGesture")) {
+            DemoSection("page.mouse.scrollGesture") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.mouse.scrollGestureInstruction"))
+                    Text("page.mouse.scrollGestureInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.mouse.scrollOverMe"))
+                    Text("page.mouse.scrollOverMe")
                         .foregroundStyle(.palette.accent)
                         .padding(EdgeInsets(horizontal: 2, vertical: 0))
                         .border(.palette.border)
@@ -359,8 +359,8 @@ struct MousePage: View {
                             lastScrollDirection = describeScroll(direction)
                         }
                     HStack(spacing: 2) {
-                        ValueDisplayRow(L("page.mouse.ticksLabel"), "\(scrollTicks)")
-                        ValueDisplayRow(L("page.mouse.lastDirectionLabel"), lastScrollDirection)
+                        ValueDisplayRow("page.mouse.ticksLabel", "\(scrollTicks)")
+                        ValueDisplayRow("page.mouse.lastDirectionLabel", lastScrollDirection)
                     }
                 }
             }
@@ -412,7 +412,7 @@ struct MousePage: View {
     /// fruit BACK (highlighting while a basket drag hovers it).
     @ViewBuilder private var shelfZone: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(L("page.mouse.shelf")).bold()
+            Text("page.mouse.shelf").bold()
             ForEach(fruits, id: \.self) { fruit in
                 Text(fruit)
                     .padding(EdgeInsets(horizontal: 1, vertical: 0))
@@ -441,9 +441,9 @@ struct MousePage: View {
     /// draggable — back to the shelf, or into the void for a poof.
     @ViewBuilder private var basketZone: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(L("page.mouse.basket")).bold()
+            Text("page.mouse.basket").bold()
             if basket.isEmpty {
-                Text(L("page.mouse.basketEmpty"))
+                Text("page.mouse.basketEmpty")
                     .foregroundStyle(.palette.foregroundTertiary)
             } else {
                 ForEach(basket.indices, id: \.self) { index in
@@ -475,7 +475,7 @@ struct MousePage: View {
     /// The poof style chooser: the styles label themselves with their own
     /// glyphs, so the look is visible before you pick it.
     @ViewBuilder private var poofStylePicker: some View {
-        Picker(L("page.mouse.poofStyle"), selection: $poofStyleRaw) {
+        Picker("page.mouse.poofStyle", selection: $poofStyleRaw) {
             ForEach(PoofStyle.allCases, id: \.rawValue) { style in
                 Text(style.glyph).tag(style.rawValue)
             }

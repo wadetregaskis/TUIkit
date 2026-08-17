@@ -83,15 +83,15 @@ struct TextInputPage: View {
         VStack(alignment: .leading, spacing: 1) {
 
             // MARK: TextField
-            DemoSection(L("page.textField.section.cursorDemo")) {
+            DemoSection("page.textField.section.cursorDemo") {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
                         Text("\(L("page.textField.input")):").foregroundStyle(.palette.foregroundSecondary)
-                        TextField("Input", text: $demoText, prompt: Text(L("page.textField.typeHere")))
+                        TextField("Input", text: $demoText, prompt: Text("page.textField.typeHere"))
                     }
                     HStack(spacing: 1) {
                         Text("\(L("page.textField.search")):").foregroundStyle(.palette.foregroundSecondary)
-                        TextField("Search", text: $searchQuery, prompt: Text(L("page.textField.enterSearchTerm")))
+                        TextField("Search", text: $searchQuery, prompt: Text("page.textField.enterSearchTerm"))
                             .onSubmit { submittedValue = searchQuery }
                     }
                     if !submittedValue.isEmpty {
@@ -100,7 +100,7 @@ struct TextInputPage: View {
                             Text(submittedValue).foregroundStyle(.palette.success)
                         }
                     }
-                    Text(L("page.textField.cursorInherited")).dim()
+                    Text("page.textField.cursorInherited").dim()
                 }
                 // .textFieldTextStyle re-themes the entered text of all fields
                 // in this section (cursor, selection and prompt keep their colours).
@@ -108,9 +108,9 @@ struct TextInputPage: View {
             }
 
             // MARK: .textFieldStyle
-            DemoSection(L("page.textInput.styleSection")) {
+            DemoSection("page.textInput.styleSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.textInput.styleExplain"))
+                    Text("page.textInput.styleExplain")
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 1) {
                         Text(".automatic").foregroundStyle(.palette.foregroundSecondary)
@@ -128,19 +128,19 @@ struct TextInputPage: View {
                     // sentence. Both fields above edit the SAME binding, so the
                     // difference on screen is the chrome and nothing else.
                     HStack(spacing: 0) {
-                        Text(L("page.textInput.styleInlineLead"))
+                        Text("page.textInput.styleInlineLead")
                         TextField("Inline", text: $styledText)
                             .textFieldStyle(.plain)
                             .frame(width: 16)
-                        Text(L("page.textInput.styleInlineTail"))
+                        Text("page.textInput.styleInlineTail")
                     }
                 }
             }
 
             // MARK: Cascading .onSubmit + .submitLabel
-            DemoSection(L("page.textInput.submitSection")) {
+            DemoSection("page.textInput.submitSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.textInput.submitExplain"))
+                    Text("page.textInput.submitExplain")
                         .foregroundStyle(.palette.foregroundSecondary)
 
                     // One `.onSubmit` on the VStack cascades to BOTH fields:
@@ -151,12 +151,12 @@ struct TextInputPage: View {
                     // terminal has no on-screen Return key to draw it on.
                     VStack(alignment: .leading, spacing: 0) {
                         TextField(
-                            L("page.textInput.submitName"), text: $formName,
-                            prompt: Text(L("page.textInput.submitName")))
+                            "page.textInput.submitName", text: $formName,
+                            prompt: Text("page.textInput.submitName"))
                             .submitLabel(.next)
                         TextField(
-                            L("page.textInput.submitEmail"), text: $formEmail,
-                            prompt: Text(L("page.textInput.submitEmail")))
+                            "page.textInput.submitEmail", text: $formEmail,
+                            prompt: Text("page.textInput.submitEmail"))
                             .submitLabel(.send)
                             .onSubmit { logSubmit(L("page.textInput.submitEmailCommitted")) }
                     }
@@ -165,7 +165,7 @@ struct TextInputPage: View {
                     }
 
                     if submitLog.isEmpty {
-                        Text(L("page.textInput.submitHint")).dim()
+                        Text("page.textInput.submitHint").dim()
                     } else {
                         ForEach(Array(submitLog.suffix(4).enumerated()), id: \.offset) { _, entry in
                             Text("• \(entry)").foregroundStyle(.palette.success)
@@ -175,19 +175,19 @@ struct TextInputPage: View {
             }
 
             // MARK: SecureField
-            DemoSection(L("page.secureField.section.passwordFields")) {
+            DemoSection("page.secureField.section.passwordFields") {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
                         Text("\(L("page.secureField.password")):").foregroundStyle(.palette.foregroundSecondary)
-                        SecureField(L("page.secureField.password"), text: $password)
+                        SecureField("page.secureField.password", text: $password)
                     }
                     HStack(spacing: 1) {
                         Text("\(L("page.secureField.confirm")):").foregroundStyle(.palette.foregroundSecondary)
-                        SecureField("Confirm", text: $confirmPassword, prompt: Text(L("page.secureField.reenterPassword")))
+                        SecureField("Confirm", text: $confirmPassword, prompt: Text("page.secureField.reenterPassword"))
                     }
                     HStack(spacing: 1) {
                         Text("\(L("page.secureField.apiKey")):").foregroundStyle(.palette.foregroundSecondary)
-                        SecureField(L("page.secureField.apiKey"), text: $apiKey)
+                        SecureField("page.secureField.apiKey", text: $apiKey)
                             .onSubmit {
                                 submittedPassword =
                                     "\(L("page.secureField.submittedPrefix")) \(apiKey.count) \(L("page.secureField.characters"))"
@@ -202,20 +202,20 @@ struct TextInputPage: View {
                     HStack(spacing: 1) {
                         Text("\(L("page.secureField.match")):").foregroundStyle(.palette.foregroundSecondary)
                         if password.isEmpty && confirmPassword.isEmpty {
-                            Text(L("page.secureField.enterPasswords")).dim()
+                            Text("page.secureField.enterPasswords").dim()
                         } else if password == confirmPassword {
-                            Text(L("page.secureField.passwordsMatch")).foregroundStyle(.palette.success)
+                            Text("page.secureField.passwordsMatch").foregroundStyle(.palette.success)
                         } else {
-                            Text(L("page.secureField.passwordsDiffer")).foregroundStyle(.palette.error)
+                            Text("page.secureField.passwordsDiffer").foregroundStyle(.palette.error)
                         }
                     }
                 }
             }
 
             // MARK: TextEditor
-            DemoSection(L("page.textInput.editorSection")) {
+            DemoSection("page.textInput.editorSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.newControls.editorHint")).foregroundStyle(.palette.foregroundSecondary)
+                    Text("page.newControls.editorHint").foregroundStyle(.palette.foregroundSecondary)
                     // Default field appearance (a subtle field tint, like
                     // TextField) — no box; a scroll indicator appears when the
                     // text is taller than the frame.
@@ -223,7 +223,7 @@ struct TextInputPage: View {
                         .frame(height: 5)
                     // The boxed look is available by adding `.border()`. Both
                     // share `notes`, so editing one updates the other.
-                    Text(L("page.textInput.editorBordered")).foregroundStyle(.palette.foregroundSecondary)
+                    Text("page.textInput.editorBordered").foregroundStyle(.palette.foregroundSecondary)
                     TextEditor(text: $notes)
                         .frame(height: 4)
                         .border()
@@ -231,11 +231,11 @@ struct TextInputPage: View {
             }
 
             // MARK: Disabled
-            DemoSection(L("page.textField.section.disabled")) {
+            DemoSection("page.textField.section.disabled") {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 1) {
                         Text("\(L("page.textField.disabled")):").foregroundStyle(.palette.foregroundSecondary)
-                        TextField("Disabled", text: $disabledText, prompt: Text(L("page.textField.cannotEdit")))
+                        TextField("Disabled", text: $disabledText, prompt: Text("page.textField.cannotEdit"))
                             .disabled()
                     }
                     HStack(spacing: 1) {
@@ -247,20 +247,20 @@ struct TextInputPage: View {
 
             HStack(alignment: .top, spacing: 3) {
                 KeyboardHelpSection(shortcuts: [
-                    L("page.textField.help.moveCursor"),
-                    L("page.textField.help.jumpStartEnd"),
-                    L("page.textField.help.backspace"),
-                    L("page.textField.help.delete"),
-                    L("page.textField.help.submit"),
-                    L("page.textField.help.nextField"),
+                    "page.textField.help.moveCursor",
+                    "page.textField.help.jumpStartEnd",
+                    "page.textField.help.backspace",
+                    "page.textField.help.delete",
+                    "page.textField.help.submit",
+                    "page.textField.help.nextField",
                 ])
 
                 KeyboardHelpSection(
-                    L("page.textField.section.cursorSettings"),
+                    "page.textField.section.cursorSettings",
                     shortcuts: [
-                        L("page.textField.help.f1Shape"),
-                        L("page.textField.help.f2Animation"),
-                        L("page.textField.help.f3Speed"),
+                        "page.textField.help.f1Shape",
+                        "page.textField.help.f2Animation",
+                        "page.textField.help.f3Speed",
                     ]
                 )
             }
@@ -272,7 +272,7 @@ struct TextInputPage: View {
         .statusBarItems(cursorStatusBarItems)
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.textInput"))
+            DemoAppHeader("menu.item.textInput")
         }
     }
 
@@ -284,7 +284,7 @@ struct TextInputPage: View {
 
     private var cursorStatusBarItems: [any StatusBarItemProtocol] {
         [
-            StatusBarItem(shortcut: Shortcut.escape, label: L("page.textField.back")),
+            StatusBarItem(shortcut: Shortcut.escape, label: "page.textField.back"),
             StatusBarItem(shortcut: Shortcut.f1, label: shapeLabel) {
                 cursorShapeIndex = (cursorShapeIndex + 1) % shapes.count
             },

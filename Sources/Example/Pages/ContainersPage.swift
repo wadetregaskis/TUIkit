@@ -16,22 +16,22 @@ struct ContainerTypesRow: View, Equatable {
             VStack(alignment: .leading) {
                 Text("Card").bold().foregroundStyle(.palette.accent)
                 Card(borderColor: .palette.border) {
-                    Text(L("page.containers.aCardView")).foregroundStyle(.palette.foreground)
-                    Text(L("page.containers.withPadding")).foregroundStyle(.palette.foregroundSecondary)
+                    Text("page.containers.aCardView").foregroundStyle(.palette.foreground)
+                    Text("page.containers.withPadding").foregroundStyle(.palette.foregroundSecondary)
                 }
             }
 
             VStack(alignment: .leading) {
                 Text(".border()").bold().foregroundStyle(.palette.accent)
-                Text(L("page.containers.simpleBordered"))
+                Text("page.containers.simpleBordered")
                     .foregroundStyle(.palette.foreground)
                     .border()
             }
 
             VStack(alignment: .leading) {
                 Text("Panel").bold().foregroundStyle(.palette.accent)
-                Panel(L("page.containers.info"), titleColor: .palette.accent) {
-                    Text(L("page.containers.titleInBorder")).foregroundStyle(.palette.foreground)
+                Panel("page.containers.info", titleColor: .palette.accent) {
+                    Text("page.containers.titleInBorder").foregroundStyle(.palette.foreground)
                 }
             }
         }
@@ -45,17 +45,17 @@ struct ContainerTypesRow: View, Equatable {
 struct SettingsAndAlignmentRow: View, Equatable {
     var body: some View {
         HStack(spacing: 2) {
-            DemoSection(L("page.containers.section.panelHeaderFooter")) {
-                Panel(L("page.containers.settings"), titleColor: .palette.accent) {
-                    Text(L("page.containers.primaryText")).foregroundStyle(.palette.foreground)
-                    Text(L("page.containers.secondaryText")).foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.containers.tertiaryText")).foregroundStyle(.palette.foregroundTertiary)
+            DemoSection("page.containers.section.panelHeaderFooter") {
+                Panel("page.containers.settings", titleColor: .palette.accent) {
+                    Text("page.containers.primaryText").foregroundStyle(.palette.foreground)
+                    Text("page.containers.secondaryText").foregroundStyle(.palette.foregroundSecondary)
+                    Text("page.containers.tertiaryText").foregroundStyle(.palette.foregroundTertiary)
                 } footer: {
-                    Text(L("page.containers.footerConfirm")).foregroundStyle(.palette.foreground)
+                    Text("page.containers.footerConfirm").foregroundStyle(.palette.foreground)
                 }
             }
 
-            DemoSection(L("page.containers.section.contentAlignment")) {
+            DemoSection("page.containers.section.contentAlignment") {
                 // Each bordered box uses `.frame(maxWidth: .infinity)` so the
                 // three share the row evenly. When the terminal is wide they
                 // expand and you can see "short" pushed against the
@@ -65,22 +65,22 @@ struct SettingsAndAlignmentRow: View, Equatable {
                 // box ever disappears and "short" stays visible underneath.
                 HStack(spacing: 1) {
                     VStack(alignment: .leading) {
-                        Text(L("page.containers.leadingAlign")).foregroundStyle(.palette.foreground)
-                        Text(L("page.containers.short")).foregroundStyle(.palette.foregroundSecondary)
+                        Text("page.containers.leadingAlign").foregroundStyle(.palette.foreground)
+                        Text("page.containers.short").foregroundStyle(.palette.foregroundSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .border()
 
                     VStack(alignment: .center) {
-                        Text(L("page.containers.centerAlign")).foregroundStyle(.palette.foreground)
-                        Text(L("page.containers.short")).foregroundStyle(.palette.foregroundSecondary)
+                        Text("page.containers.centerAlign").foregroundStyle(.palette.foreground)
+                        Text("page.containers.short").foregroundStyle(.palette.foregroundSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                     .border()
 
                     VStack(alignment: .trailing) {
-                        Text(L("page.containers.trailingAlign")).foregroundStyle(.palette.foreground)
-                        Text(L("page.containers.short")).foregroundStyle(.palette.foregroundSecondary)
+                        Text("page.containers.trailingAlign").foregroundStyle(.palette.foreground)
+                        Text("page.containers.short").foregroundStyle(.palette.foregroundSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .border()
@@ -111,14 +111,14 @@ struct ContainersPage: View {
             // (press the back-tick shortcut on the menu) covering both
             // determinate and indeterminate variants of every style.
 
-            DemoSection(L("page.containers.section.collapsible")) {
+            DemoSection("page.containers.section.collapsible") {
                 VStack(alignment: .leading) {
                     // The OUTER group's expansion is owned by this page, so the
                     // group and the button under it are two views of one truth:
                     // clicking either moves both. That is what `isExpanded:` is
                     // for — without it a group keeps its own state and nothing
                     // outside can open it.
-                    DisclosureGroup(L("page.containers.paddingExamples"), isExpanded: $showDetails) {
+                    DisclosureGroup("page.containers.paddingExamples", isExpanded: $showDetails) {
                         VStack(alignment: .leading) {
                             HStack(spacing: 1) {
                                 Text("h:1 v:0").foregroundStyle(.palette.foreground)
@@ -137,10 +137,10 @@ struct ContainersPage: View {
                             // The INNER group owns its own expansion, and its
                             // content is indented one step further — which is
                             // how nesting draws a tree.
-                            DisclosureGroup(L("page.containers.disclosure.nested")) {
-                                Text(L("page.containers.primaryText"))
+                            DisclosureGroup("page.containers.disclosure.nested") {
+                                Text("page.containers.primaryText")
                                     .foregroundStyle(.palette.foreground)
-                                Text(L("page.containers.secondaryText"))
+                                Text("page.containers.secondaryText")
                                     .foregroundStyle(.palette.foregroundSecondary)
                             }
                         }
@@ -160,21 +160,21 @@ struct ContainersPage: View {
             // whole tree, disclosing a level at a time. "Tests" has an EMPTY
             // children array rather than nil, so it still gets a triangle —
             // "this folder has nothing in it" being worth saying.
-            DemoSection(L("page.containers.section.outline")) {
+            DemoSection("page.containers.section.outline") {
                 OutlineGroup(outlineDemoTree, children: \.children) { node in
                     Text(verbatim: node.id)
                 }
             }
 
-            DemoSection(L("page.containers.section.appearance")) {
-                Text(L("page.containers.borderStyleHelp")).foregroundStyle(.palette.foregroundSecondary)
+            DemoSection("page.containers.section.appearance") {
+                Text("page.containers.borderStyleHelp").foregroundStyle(.palette.foregroundSecondary)
             }
 
             Spacer()
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.containers"))
+            DemoAppHeader("menu.item.containers")
         }
     }
 }

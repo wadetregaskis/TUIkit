@@ -79,9 +79,9 @@ struct ScrollViewPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.scrollView.longTextSection")) {
+            DemoSection("page.scrollView.longTextSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.scrollView.longTextBody"))
+                    Text("page.scrollView.longTextBody")
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     ScrollView {
@@ -93,7 +93,7 @@ struct ScrollViewPage: View {
                             // in the mixed-content section below).
                             HStack(spacing: 1) {
                                 Spinner(style: .line)
-                                Text(L("page.scrollView.liveRow")).dim()
+                                Text("page.scrollView.liveRow").dim()
                             }
                             ForEach(loremLines, id: \.self) { line in
                                 Text(line)
@@ -105,9 +105,9 @@ struct ScrollViewPage: View {
                 }
             }
 
-            DemoSection(L("page.scrollView.mixedSection")) {
+            DemoSection("page.scrollView.mixedSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.scrollView.mixedBody"))
+                    Text("page.scrollView.mixedBody")
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     ScrollView {
@@ -117,30 +117,30 @@ struct ScrollViewPage: View {
                             // (verifies the animation-in-cell gate; see also
                             // SpinnerRowAnimationTests).
                             HStack(spacing: 1) {
-                                Text(L("page.scrollView.heading")).bold()
+                                Text("page.scrollView.heading").bold()
                                 Spinner(style: .dots)
                             }
                             HStack(spacing: 1) {
-                                Text(L("page.scrollView.filter"))
-                                TextField(L("page.scrollView.filterField"), text: $searchText,
-                                          prompt: Text(L("page.scrollView.filterPrompt")))
+                                Text("page.scrollView.filter")
+                                TextField("page.scrollView.filterField", text: $searchText,
+                                          prompt: Text("page.scrollView.filterPrompt"))
                             }
-                            ValueDisplayRow(L("page.scrollView.search"), searchText)
+                            ValueDisplayRow("page.scrollView.search", searchText)
 
-                            Text(L("page.scrollView.buttonsLabel")).bold()
+                            Text("page.scrollView.buttonsLabel").bold()
                             HStack(spacing: 1) {
                                 Button("-1") { counter -= 1 }
                                 Button("+1") { counter += 1 }
-                                Button(L("page.scrollView.reset"), role: .destructive) { counter = 0 }
+                                Button("page.scrollView.reset", role: .destructive) { counter = 0 }
                             }
-                            ValueDisplayRow(L("page.scrollView.counter"), "\(counter)")
+                            ValueDisplayRow("page.scrollView.counter", "\(counter)")
 
-                            Text(L("page.scrollView.sliderLabel")).bold()
+                            Text("page.scrollView.sliderLabel").bold()
                             Slider(value: $sliderValue, in: 0...100, step: 1)
                             ValueDisplayRow(
-                                L("page.scrollView.sliderValue"), String(format: "%.0f", sliderValue))
+                                "page.scrollView.sliderValue", String(format: "%.0f", sliderValue))
 
-                            Text(L("page.scrollView.trailingLabel")).bold()
+                            Text("page.scrollView.trailingLabel").bold()
                             ForEach(Array(loremLines.prefix(20)), id: \.self) { Text($0) }
                         }
                     }
@@ -149,9 +149,9 @@ struct ScrollViewPage: View {
                 }
             }
 
-            DemoSection(L("page.scrollView.scrollbarSection")) {
+            DemoSection("page.scrollView.scrollbarSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.scrollView.scrollbarBody"))
+                    Text("page.scrollView.scrollbarBody")
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     // Few enough lines (18) in a tall enough viewport (10) that the
@@ -185,45 +185,45 @@ struct ScrollViewPage: View {
                     .scrollOverscroll(
                         top: overscroll.allowance, bottom: overscroll.allowance)
 
-                    Text(L("page.scrollView.scrollbarInteractive"))
+                    Text("page.scrollView.scrollbarInteractive")
                     .foregroundStyle(.palette.foregroundSecondary)
 
-                    Picker(L("page.scrollView.visibility"), selection: $barVisibility) {
-                        Text(L("page.scrollView.visibility.automatic")).tag(ScrollbarVisibility.automatic)
-                        Text(L("page.scrollView.visibility.visible")).tag(ScrollbarVisibility.visible)
-                        Text(L("page.scrollView.visibility.hidden")).tag(ScrollbarVisibility.hidden)
+                    Picker("page.scrollView.visibility", selection: $barVisibility) {
+                        Text("page.scrollView.visibility.automatic").tag(ScrollbarVisibility.automatic)
+                        Text("page.scrollView.visibility.visible").tag(ScrollbarVisibility.visible)
+                        Text("page.scrollView.visibility.hidden").tag(ScrollbarVisibility.hidden)
                     }
-                    Picker(L("page.scrollView.endArrows"), selection: $barArrows) {
-                        Text(L("page.scrollView.arrows.none")).tag(ScrollbarArrows.none)
-                        Text(L("page.scrollView.arrows.single")).tag(ScrollbarArrows.single)
-                        Text(L("page.scrollView.arrows.double")).tag(ScrollbarArrows.double)
+                    Picker("page.scrollView.endArrows", selection: $barArrows) {
+                        Text("page.scrollView.arrows.none").tag(ScrollbarArrows.none)
+                        Text("page.scrollView.arrows.single").tag(ScrollbarArrows.single)
+                        Text("page.scrollView.arrows.double").tag(ScrollbarArrows.double)
                     }
-                    Picker(L("page.scrollView.trackClick"), selection: $barClickBehavior) {
-                        Text(L("page.scrollView.click.page")).tag(ScrollbarClickBehavior.page)
-                        Text(L("page.scrollView.click.jump")).tag(ScrollbarClickBehavior.jump)
+                    Picker("page.scrollView.trackClick", selection: $barClickBehavior) {
+                        Text("page.scrollView.click.page").tag(ScrollbarClickBehavior.page)
+                        Text("page.scrollView.click.jump").tag(ScrollbarClickBehavior.jump)
                     }
-                    Toggle(L("page.scrollView.proportionalThumb"), isOn: $barProportional)
+                    Toggle("page.scrollView.proportionalThumb", isOn: $barProportional)
                     // How early the reveal-on-focus scrolls: at the edge
                     // (default), 2 lines early, or keeping the control centred.
                     FollowMarginPicker(selection: $revealFollowMargin)
-                    Toggle(L("page.scrollView.pinned"), isOn: $scrollPinned)
-                    Text(L("page.scrollView.pinnedNote"))
+                    Toggle("page.scrollView.pinned", isOn: $scrollPinned)
+                    Text("page.scrollView.pinnedNote")
                     .foregroundStyle(.palette.foregroundSecondary)
-                    Picker(L("page.scrollView.overscroll"), selection: $overscroll) {
+                    Picker("page.scrollView.overscroll", selection: $overscroll) {
                         ForEach(OverscrollChoice.allCases, id: \.rawValue) { choice in
                             Text(L(choice.localizationKey)).tag(choice)
                         }
                     }
-                    Text(L("page.scrollView.overscrollNote"))
+                    Text("page.scrollView.overscrollNote")
                     .foregroundStyle(.palette.foregroundSecondary)
                 }
             }
 
             ScrollAnchoringDemo()
 
-            DemoSection(L("page.scrollView.indicatorsOffSection")) {
+            DemoSection("page.scrollView.indicatorsOffSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.scrollView.indicatorsOffBody"))
+                    Text("page.scrollView.indicatorsOffBody")
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     ScrollView(showsIndicators: false) {
@@ -240,12 +240,12 @@ struct ScrollViewPage: View {
             Spacer()
 
             KeyboardHelpSection(
-                L("page.scrollView.shortcutsTitle"),
+                "page.scrollView.shortcutsTitle",
                 shortcuts: [
-                    L("page.scrollView.help.wheel"),
-                    L("page.scrollView.help.line"),
-                    L("page.scrollView.help.page"),
-                    L("page.scrollView.help.jump"),
+                    "page.scrollView.help.wheel",
+                    "page.scrollView.help.line",
+                    "page.scrollView.help.page",
+                    "page.scrollView.help.jump",
                 ]
             )
         }
@@ -257,8 +257,8 @@ struct ScrollViewPage: View {
         .scrollableDemoPage()
         .appHeader {
             DemoAppHeader(
-                L("menu.item.scrollView"),
-                subtitle: L("page.scrollView.subtitle")
+                "menu.item.scrollView",
+                subtitle: "page.scrollView.subtitle"
             )
         }
     }

@@ -13,13 +13,32 @@ import TUIkit
 /// # Example
 ///
 /// ```swift
-/// ValueDisplayRow("Volume:", String(format: "%.0f%%", volume * 100))
-/// ValueDisplayRow("Selection:", selection ?? "(none)")
+/// ValueDisplayRow("page.slider.volume", String(format: "%.0f%%", volume * 100))
+/// ValueDisplayRow("page.list.selection", selection ?? L("common.none"))
 /// ```
+///
+/// Only the **label** is a localization key, exactly as `LabeledContent(_:value:)`
+/// is in the framework: the value is the thing being shown, and translating it
+/// would be wrong. A label that is a computed `String` is displayed as given.
 struct ValueDisplayRow: View {
     let label: String
     let value: String
 
+    /// Creates a row with a localized label.
+    ///
+    /// - Parameters:
+    ///   - labelKey: The key for the row's label.
+    ///   - value: The value to display, as written.
+    init(_ labelKey: LocalizedStringKey, _ value: String) {
+        self.init(labelKey.localized, value)
+    }
+
+    /// Creates a row labelled as written.
+    ///
+    /// - Parameters:
+    ///   - label: The row's label.
+    ///   - value: The value to display.
+    @_disfavoredOverload
     init(_ label: String, _ value: String) {
         self.label = label
         self.value = value

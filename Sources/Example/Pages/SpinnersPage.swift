@@ -14,7 +14,7 @@ struct SpinnersPage: View {
             // The full style catalogue — every SpinnerStyle in declaration
             // order. The labels are the API case names (an API surface, left
             // untranslated), like the ProgressView catalogue.
-            DemoSection(L("page.spinners.styles")) {
+            DemoSection("page.spinners.styles") {
                 VStack(alignment: .leading, spacing: 0) {
                     spinnerRow("dots", .dots)
                     spinnerRow("line", .line)
@@ -31,19 +31,19 @@ struct SpinnersPage: View {
                 }
             }
 
-            DemoSection(L("page.spinners.customColorSection")) {
+            DemoSection("page.spinners.customColorSection") {
                 // A literal colour, deliberately distinct from the theme accent
                 // (the default spinner colour) so the customisation is visible —
                 // the green theme's `.palette.success` is nearly identical to its
                 // `.palette.accent`, which made this look uncustomised.
-                Spinner(L("page.spinners.installing"), style: .bouncing, color: .magenta)
+                Spinner("page.spinners.installing", style: .bouncing, color: .magenta)
             }
 
             Spacer()
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.spinners"))
+            DemoAppHeader("menu.item.spinners")
         }
     }
 

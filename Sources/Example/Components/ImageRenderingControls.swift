@@ -60,14 +60,14 @@ struct ImageRenderingControls: View {
         // glance (see ASCIIConverter.convert's dispatch).
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 2) {
-                Picker(L("component.imageControls.characters"), selection: $charsetIndex) {
+                Picker("component.imageControls.characters", selection: $charsetIndex) {
                     ForEach(0..<ImageDemoHelpers.Charset.allCases.count, id: \.self) { index in
                         Text(ImageDemoHelpers.charsetLabel(index)).tag(index)
                     }
                 }
                 // The blocks charset's discrete size; the other charsets
                 // size by glyph count instead.
-                Picker(L("component.imageControls.blockStyle"), selection: $blockStyleIndex) {
+                Picker("component.imageControls.blockStyle", selection: $blockStyleIndex) {
                     ForEach(ImageDemoHelpers.blockStyles.indices, id: \.self) { index in
                         Text(ImageDemoHelpers.blockStyleLabel(index)).tag(index)
                     }
@@ -75,7 +75,7 @@ struct ImageRenderingControls: View {
                 .disabled(
                     !ImageDemoHelpers.usesBlockStyle(
                         charsetIndex: charsetIndex, shapeAware: shapeAware))
-                Picker(L("component.imageControls.colour"), selection: $colorModeIndex) {
+                Picker("component.imageControls.colour", selection: $colorModeIndex) {
                     ForEach(ImageDemoHelpers.colorModes.indices, id: \.self) { index in
                         Text(ImageDemoHelpers.colorModeLabel(index)).tag(index)
                     }
@@ -83,8 +83,8 @@ struct ImageRenderingControls: View {
                 // Supersampling applies to every non-shape renderer: each
                 // sample (cell tone, half-cell pixel, braille dot) becomes
                 // an N×N area average.
-                Picker(L("component.imageControls.supersampling"), selection: $supersampling) {
-                    Text(L("component.imageControls.auto")).tag(0)
+                Picker("component.imageControls.supersampling", selection: $supersampling) {
+                    Text("component.imageControls.auto").tag(0)
                     ForEach(1...4, id: \.self) { Text("\($0)\u{D7}").tag($0) }
                 }
                 .disabled(
@@ -97,25 +97,25 @@ struct ImageRenderingControls: View {
                 // Shape-awareness: match glyphs by their measured in-cell
                 // ink distribution instead of overall luminance. Applies to
                 // every charset except a custom ramp.
-                Toggle(L("component.imageControls.shapeAware"), isOn: $shapeAware)
+                Toggle("component.imageControls.shapeAware", isOn: $shapeAware)
                     .disabled(!ImageDemoHelpers.usesShape(charsetIndex: charsetIndex))
                 // Charset size: how many glyphs the ideal subset keeps
                 // (0 = the full repertoire). Applies to ascii / unicode;
                 // the range tracks the charset's real ceiling.
                 Stepper(
-                    L("component.imageControls.glyphs"), value: $glyphCount,
+                    "component.imageControls.glyphs", value: $glyphCount,
                     in: 0...max(2, ImageDemoHelpers.maximumGlyphs(
                         charsetIndex: charsetIndex, shapeAware: shapeAware))
                 )
                 .disabled(!ImageDemoHelpers.usesGlyphCount(charsetIndex: charsetIndex))
                 if glyphCount == 0, ImageDemoHelpers.usesGlyphCount(charsetIndex: charsetIndex) {
-                    Text(L("component.imageControls.allGlyphs")).dim()
+                    Text("component.imageControls.allGlyphs").dim()
                 }
                 // Edge tracing applies to the shape-aware ascii/unicode
                 // charsets: cells on a clean light/dark boundary draw as
                 // directional line glyphs; the threshold picks how strong a
                 // gradient qualifies.
-                Toggle(L("component.imageControls.edgeLines"), isOn: $edgeLines)
+                Toggle("component.imageControls.edgeLines", isOn: $edgeLines)
                     .disabled(
                         !ImageDemoHelpers.usesEdgeTracing(
                             charsetIndex: charsetIndex, shapeAware: shapeAware))
@@ -123,7 +123,7 @@ struct ImageRenderingControls: View {
                     ImageDemoHelpers.usesEdgeTracing(
                         charsetIndex: charsetIndex, shapeAware: shapeAware)
                 {
-                    Text(L("component.imageControls.edgeThreshold")).dim()
+                    Text("component.imageControls.edgeThreshold").dim()
                     // The slider's own `%`-of-range read-out would mislead
                     // beside the raw threshold value shown after it.
                     Slider(value: $edgeThreshold, in: 0.3...2.0, step: 0.1)
@@ -173,8 +173,8 @@ struct ImageRenderingControls: View {
             guard !Self.ramps.contains(customRamp) else { return }
             recentRampsJSON = RecentValues.recording(customRamp, in: recentRampsJSON)
         }
-        let label = Text(L("component.imageControls.customRamp")).dim()
-        let field = TextField(L("component.imageControls.customRamp"), text: $customRamp)
+        let label = Text("component.imageControls.customRamp").dim()
+        let field = TextField("component.imageControls.customRamp", text: $customRamp)
             .onSubmit(record)
             .onEditingChanged { began in
                 if !began { record() }

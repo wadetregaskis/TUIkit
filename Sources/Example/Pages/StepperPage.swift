@@ -29,24 +29,24 @@ struct StepperPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.stepper.basicSection")) {
+            DemoSection("page.stepper.basicSection") {
                 // The label renders inline (SwiftUI parity); no separate Text needed.
-                Stepper(L("page.stepper.quantity"), value: $quantity)
+                Stepper("page.stepper.quantity", value: $quantity)
                     // .stepperTextStyle re-themes the stepper's text (arrows unaffected).
                     .stepperTextStyle { $0.bold = true; $0.foreground = .palette.accent }
             }
 
-            DemoSection(L("page.stepper.rangeSection")) {
+            DemoSection("page.stepper.rangeSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Stepper(L("page.stepper.rating"), value: $rating, in: 1...5)
-                    Stepper(L("page.stepper.volume"), value: $volume, in: 0...100, step: 10)
+                    Stepper("page.stepper.rating", value: $rating, in: 1...5)
+                    Stepper("page.stepper.volume", value: $volume, in: 0...100, step: 10)
                 }
             }
 
-            DemoSection(L("page.stepper.callbacksSection")) {
+            DemoSection("page.stepper.callbacksSection") {
                 HStack(spacing: 1) {
                     Stepper(
-                        L("page.stepper.color"),
+                        "page.stepper.color",
                         onIncrement: {
                             colorIndex = (colorIndex + 1) % colors.count
                         },
@@ -58,19 +58,19 @@ struct StepperPage: View {
                 }
             }
 
-            DemoSection(L("page.stepper.shiftSection")) {
+            DemoSection("page.stepper.shiftSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.stepper.shiftDescription"))
+                    Text("page.stepper.shiftDescription")
                         .foregroundStyle(.palette.foregroundSecondary)
                     // .shiftStepMultiplier scales the step while Shift is held,
                     // so a Shift+arrow jumps by 10× the normal step (1 → 10 here).
-                    Stepper(L("page.stepper.bigValue"), value: $bigValue, in: 0...1000, step: 1)
+                    Stepper("page.stepper.bigValue", value: $bigValue, in: 0...1000, step: 1)
                         .shiftStepMultiplier(10)
-                    ValueDisplayRow(L("page.stepper.bigValueLabel"), "\(bigValue)")
+                    ValueDisplayRow("page.stepper.bigValueLabel", "\(bigValue)")
                 }
             }
 
-            DemoSection(L("page.stepper.currentValuesSection")) {
+            DemoSection("page.stepper.currentValuesSection") {
                 VStack(alignment: .leading, spacing: 1) {
                     ValueDisplayRow("\(L("page.stepper.quantity")):", "\(quantity)")
                     ValueDisplayRow("\(L("page.stepper.ratingLabel")):", "\(rating)")
@@ -91,7 +91,7 @@ struct StepperPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.steppers"))
+            DemoAppHeader("menu.item.steppers")
         }
     }
 }

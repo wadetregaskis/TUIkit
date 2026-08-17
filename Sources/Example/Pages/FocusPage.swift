@@ -28,21 +28,21 @@ struct FocusPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.focus.sectionsSection")) {
+            DemoSection("page.focus.sectionsSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.focus.sectionsDescription"))
+                    Text("page.focus.sectionsDescription")
                         .foregroundStyle(.palette.foregroundSecondary)
 
                     HStack(spacing: 3) {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(L("page.focus.sectionA")).dim()
+                            Text("page.focus.sectionA").dim()
                             Button("A · One") {}.focusID("focus-a-one")
                             Button("A · Two") {}.focusID("focus-a-two")
                         }
                         .focusSection("focus-section-a")
 
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(L("page.focus.sectionB")).dim()
+                            Text("page.focus.sectionB").dim()
                             Button("B · One") {}.focusID("focus-b-one")
                             Button("B · Two") {}.focusID("focus-b-two")
                         }
@@ -50,14 +50,14 @@ struct FocusPage: View {
                     }
 
                     ValueDisplayRow(
-                        L("page.focus.focusedID"),
+                        "page.focus.focusedID",
                         focusManager?.currentFocusedID ?? "—")
                 }
             }
 
-            DemoSection(L("page.focus.focusableSection")) {
+            DemoSection("page.focus.focusableSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.focus.focusableExplain"))
+                    Text("page.focus.focusableExplain")
                         .foregroundStyle(.palette.foregroundSecondary)
                     // A single plain Text — not a control — made a Tab stop with
                     // .focusable() and bound to @FocusState via .focused(). It
@@ -71,11 +71,11 @@ struct FocusPage: View {
                 }
             }
 
-            DemoSection(L("page.focus.keyLoggerSection")) {
+            DemoSection("page.focus.keyLoggerSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.focus.keyLoggerDescription"))
+                    Text("page.focus.keyLoggerDescription")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    ValueDisplayRow(L("page.focus.lastKey"), lastKey)
+                    ValueDisplayRow("page.focus.lastKey", lastKey)
                 }
             }
 
@@ -89,7 +89,7 @@ struct FocusPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.focus"))
+            DemoAppHeader("menu.item.focus")
         }
     }
 

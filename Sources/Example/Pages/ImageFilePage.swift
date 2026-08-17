@@ -57,14 +57,14 @@ struct ImageFilePage: View {
         }
         .statusBarItems(statusBarItems)
         .appHeader {
-            DemoAppHeader(L("menu.item.imageFile"))
+            DemoAppHeader("menu.item.imageFile")
         }
     }
 
     @ViewBuilder private var imageContent: some View {
         if let path = Bundle.module.path(forResource: "demo-image", ofType: "jpg", inDirectory: "Resources") {
             Image(.file(path))
-                .imagePlaceholder(L("page.imageFile.loading"))
+                .imagePlaceholder("page.imageFile.loading")
                 .imagePlaceholderSpinner(true)
                 .zoomableImageScroll(zoom: zoom)
         } else {
@@ -77,7 +77,7 @@ struct ImageFilePage: View {
         let charsetCount = ImageDemoHelpers.Charset.allCases.count
         let colorModeCount = ImageDemoHelpers.colorModes.count
         return [
-            StatusBarItem(shortcut: Shortcut.escape, label: L("page.imageFile.back")),
+            StatusBarItem(shortcut: Shortcut.escape, label: "page.imageFile.back"),
             // c|C — lowercase cycles forward, uppercase cycles
             // backward. The "C" item is hidden so the bar shows
             // a single entry with the dual-key indicator.
@@ -135,7 +135,7 @@ struct ImageFilePage: View {
             StatusBarItem(shortcut: "-", label: "", key: .character("-"), displayInStatusBar: false) {
                 zoom = ImageDemoHelpers.zoomedOut(zoom)
             },
-            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: L("page.imageFile.scroll")),
+            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "page.imageFile.scroll"),
         ]
     }
 }

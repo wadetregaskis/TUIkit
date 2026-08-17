@@ -149,7 +149,7 @@ struct LayoutPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.layout.section.vstack")) {
+            DemoSection("page.layout.section.vstack") {
                 VStack(spacing: 0) {
                     Text("\(L("page.layout.item")) 1")
                     Text("\(L("page.layout.item")) 2")
@@ -158,43 +158,43 @@ struct LayoutPage: View {
                 .border(.brightBlack)
             }
 
-            DemoSection(L("page.layout.section.hstack")) {
+            DemoSection("page.layout.section.hstack") {
                 HStack(spacing: 2) {
-                    Text(L("page.layout.left"))
-                    Text(L("page.layout.center"))
-                    Text(L("page.layout.right"))
+                    Text("page.layout.left")
+                    Text("page.layout.center")
+                    Text("page.layout.right")
                 }
                 .border()
             }
 
-            DemoSection(L("page.layout.section.spacer")) {
+            DemoSection("page.layout.section.spacer") {
                 HStack {
-                    Text(L("page.layout.start"))
+                    Text("page.layout.start")
                     Spacer()
-                    Text(L("page.layout.end"))
+                    Text("page.layout.end")
                 }
                 .border()
             }
 
-            DemoSection(L("page.layout.section.paddingFrame")) {
+            DemoSection("page.layout.section.paddingFrame") {
                 HStack(spacing: 2) {
                     VStack {
                         Text(".padding()").dim()
-                        Text(L("page.layout.padded"))
+                        Text("page.layout.padded")
                             .frame(width: 25, alignment: .center)
                             .padding(EdgeInsets(all: 1))
                             .border()  // Uses appearance default
                     }
                     VStack {
                         Text(".frame()").dim()
-                        Text(L("page.layout.framed"))
+                        Text("page.layout.framed")
                             .frame(width: 15, alignment: .center)
                             .border()  // Uses appearance default
                     }
                 }
             }
 
-            DemoSection(L("page.layout.section.viewThatFits")) {
+            DemoSection("page.layout.section.viewThatFits") {
                 // A single row when there is room; the same items stacked
                 // vertically when the terminal is too narrow for the row.
                 ViewThatFits {
@@ -212,7 +212,7 @@ struct LayoutPage: View {
                 .border(.brightBlack)
             }
 
-            DemoSection(L("page.layout.section.zstack")) {
+            DemoSection("page.layout.section.zstack") {
                 // Children stack back-to-front; alignment positions them within
                 // the union of their sizes. Here a label is centred over a band.
                 ZStack(alignment: .center) {
@@ -222,9 +222,9 @@ struct LayoutPage: View {
                 .border(.brightBlack)
             }
 
-            DemoSection(L("page.layout.section.alignmentGuide")) {
+            DemoSection("page.layout.section.alignmentGuide") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.layout.guideExplain"))
+                    Text("page.layout.guideExplain")
                         .foregroundStyle(.palette.foregroundSecondary)
 
                     // 1 — A guide read off the view's OWN dimensions.
@@ -235,9 +235,9 @@ struct LayoutPage: View {
                     // than its widest child. The border is what makes that
                     // visible, and it is the whole point: a guide moves the
                     // line, and the line decides the stack's width.
-                    Text(L("page.layout.guideCase1"))
+                    Text("page.layout.guideCase1")
                         .foregroundStyle(.palette.foregroundTertiary)
-                    Toggle(L("page.layout.guideToggle"), isOn: $hangBullet)
+                    Toggle("page.layout.guideToggle", isOn: $hangBullet)
 
                     VStack(alignment: .leading, spacing: 0) {
                         if hangBullet {
@@ -247,8 +247,8 @@ struct LayoutPage: View {
                         } else {
                             Text("•").foregroundStyle(.palette.accent)
                         }
-                        Text(L("page.layout.guideItem"))
-                        Text(L("page.layout.guideItem2"))
+                        Text("page.layout.guideItem")
+                        Text("page.layout.guideItem2")
                     }
                     .border(.brightBlack)
 
@@ -259,18 +259,18 @@ struct LayoutPage: View {
                     // Stepping it moves one row's line while its neighbours
                     // stay put, which is the clearest way to see that alignment
                     // is per-child and not a property of the stack.
-                    Text(L("page.layout.guideCase2"))
+                    Text("page.layout.guideCase2")
                         .foregroundStyle(.palette.foregroundTertiary)
                     // No value in the label: `Stepper` prints its own read-out,
                     // and two copies of the same number read as a bug.
-                    Stepper(L("page.layout.guideOffsetLabel"), value: $guideOffset, in: -6...6)
+                    Stepper("page.layout.guideOffsetLabel", value: $guideOffset, in: -6...6)
 
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(L("page.layout.guideFixed"))
-                        Text(L("page.layout.guideMoving"))
+                        Text("page.layout.guideFixed")
+                        Text("page.layout.guideMoving")
                             .foregroundStyle(.palette.accent)
                             .alignmentGuide(.leading) { _ in Double(-guideOffset) }
-                        Text(L("page.layout.guideFixed2"))
+                        Text("page.layout.guideFixed2")
                     }
                     .border(.brightBlack)
 
@@ -281,7 +281,7 @@ struct LayoutPage: View {
                     // content — here the decimal point — and every row places
                     // it wherever its own text puts it. The numbers line up on
                     // the point even though they share no edge and no width.
-                    Text(L("page.layout.guideCase3"))
+                    Text("page.layout.guideCase3")
                         .foregroundStyle(.palette.foregroundTertiary)
 
                     VStack(alignment: .decimalPoint, spacing: 0) {
@@ -300,30 +300,30 @@ struct LayoutPage: View {
                 }
             }
 
-            DemoSection(L("page.layout.section.geometryReader")) {
+            DemoSection("page.layout.section.geometryReader") {
                 // The one thing an app could not work around before: reading the
                 // space it was actually given. Resize the terminal and watch both
                 // the numbers and the chosen arrangement change.
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.layout.geometryExplain"))
+                    Text("page.layout.geometryExplain")
                         .foregroundStyle(.palette.foregroundSecondary)
 
                     GeometryReader { proxy in
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(spacing: 1) {
-                                Text(L("page.layout.geometryOffered"))
+                                Text("page.layout.geometryOffered")
                                     .foregroundStyle(.palette.foregroundSecondary)
                                 Text("\(proxy.size.width)×\(proxy.size.height)")
                                     .foregroundStyle(.palette.accent)
                                     .bold()
-                                Text(L("page.layout.geometryCells"))
+                                Text("page.layout.geometryCells")
                                     .foregroundStyle(.palette.foregroundTertiary)
                             }
                             if proxy.size.width >= 60 {
-                                Text(L("page.layout.geometryWide"))
+                                Text("page.layout.geometryWide")
                                     .foregroundStyle(.palette.success)
                             } else {
-                                Text(L("page.layout.geometryNarrow"))
+                                Text("page.layout.geometryNarrow")
                                     .foregroundStyle(.palette.warning)
                             }
                         }
@@ -333,14 +333,14 @@ struct LayoutPage: View {
                 }
             }
 
-            DemoSection(L("page.layout.section.customLayout")) {
+            DemoSection("page.layout.section.customLayout") {
                 // `Flow` is a real custom Layout — no stack arranges things this
                 // way. `AnyLayout` erases the two so the switch keeps ONE
                 // identity, and the chips are not rebuilt when it flips.
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.layout.flowExplain"))
+                    Text("page.layout.flowExplain")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Toggle(L("page.layout.flowToggle"), isOn: $flowChipsLayout)
+                    Toggle("page.layout.flowToggle", isOn: $flowChipsLayout)
 
                     let layout = flowChipsLayout ? AnyLayout(Flow()) : AnyLayout(VStackLayout())
                     layout {
@@ -352,18 +352,18 @@ struct LayoutPage: View {
                 }
             }
 
-            DemoSection(L("page.layout.section.divider")) {
+            DemoSection("page.layout.section.divider") {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(L("page.layout.above"))
+                    Text("page.layout.above")
                     Divider()
-                    Text(L("page.layout.between"))
+                    Text("page.layout.between")
                     Divider(character: "═")
-                    Text(L("page.layout.below"))
+                    Text("page.layout.below")
                 }
                 .border(.brightBlack)
             }
 
-            DemoSection(L("page.layout.section.lazy")) {
+            DemoSection("page.layout.section.lazy") {
                 // Same API shape as VStack/HStack, but rows are realised lazily.
                 // Inside a ScrollView the LazyVStack windows to the visible
                 // viewport — only those rows render (and fire onAppear). Each row
@@ -372,11 +372,11 @@ struct LayoutPage: View {
                 // (wheel, or Tab to focus it and use ↑/↓/PageUp/PageDown) and
                 // watch the range-set slide.
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.layout.lazyExplain"))
+                    Text("page.layout.lazyExplain")
                         .foregroundStyle(.palette.foregroundSecondary)
 
                     HStack(spacing: 1) {
-                        Text(L("page.layout.lazyRendered"))
+                        Text("page.layout.lazyRendered")
                             .foregroundStyle(.palette.foregroundSecondary)
                         Text(rangeSetDescription(renderedRows))
                             .foregroundStyle(.palette.accent)
@@ -388,7 +388,7 @@ struct LayoutPage: View {
                     // rows (to size the scroll extent) that it never draws.
                     // Reported by the framework's own `.onRenderPass` hook.
                     HStack(spacing: 1) {
-                        Text(L("page.layout.lazyMeasured"))
+                        Text("page.layout.lazyMeasured")
                             .foregroundStyle(.palette.foregroundSecondary)
                         Text(rangeSetDescription(measuredRows))
                             .foregroundStyle(.palette.success)
@@ -428,7 +428,7 @@ struct LayoutPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.layout"))
+            DemoAppHeader("menu.item.layout")
         }
     }
 

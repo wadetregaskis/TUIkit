@@ -145,18 +145,18 @@ struct OverlaysPage: View {
                 overlayContent(for: presentedDemo)
             }
             .confirmationDialog(
-                L("page.overlays.confirm.title"),
+                "page.overlays.confirm.title",
                 isPresented: $showConfirm,
                 titleVisibility: .visible,
                 actions: {
-                    Button(L("page.overlays.confirm.delete"), role: .destructive) {
+                    Button("page.overlays.confirm.delete", role: .destructive) {
                         confirmChoice = L("page.overlays.confirm.deleted")
                     }
-                    Button(L("page.overlays.confirm.cancel"), role: .cancel) {
+                    Button("page.overlays.confirm.cancel", role: .cancel) {
                         confirmChoice = L("page.overlays.confirm.cancelled")
                     }
                 },
-                message: { Text(L("page.overlays.confirm.message")) })
+                message: { Text("page.overlays.confirm.message") })
             // Note: notifications are hosted once at the app root (see
             // `ExampleApp` in main.swift) so a toast posted here survives
             // navigating back to the menu, rather than vanishing with the page.
@@ -168,17 +168,17 @@ struct OverlaysPage: View {
     private var statusBarItems: [any StatusBarItemProtocol] {
         if showOverlay {
             return [
-                StatusBarItem(shortcut: Shortcut.escape, label: L("page.overlays.status.close")) {
+                StatusBarItem(shortcut: Shortcut.escape, label: "page.overlays.status.close") {
                     showOverlay = false
                 },
             ]
         } else {
             return [
-                StatusBarItem(shortcut: Shortcut.escape, label: L("page.overlays.status.back")) {
+                StatusBarItem(shortcut: Shortcut.escape, label: "page.overlays.status.back") {
                     onBack()
                 },
-                StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: L("page.overlays.status.nav")),
-                StatusBarItem(shortcut: Shortcut.enter, label: L("page.overlays.status.show")),
+                StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "page.overlays.status.nav"),
+                StatusBarItem(shortcut: Shortcut.enter, label: "page.overlays.status.show"),
             ]
         }
     }
@@ -199,12 +199,12 @@ struct OverlaysPage: View {
                 // it describes whichever one holds focus. Reading `@FocusState`
                 // in the body is what makes the description follow the arrows
                 // — a menu item's action only runs when you actually pick it.
-                Menu(L("page.overlays.selectDemo")) {
+                Menu("page.overlays.selectDemo") {
                     ForEach(OverlayDemo.allCases, id: \.self) { demo in
                         Button(demo.label) {
                             if demo.isNotification {
                                 NotificationService.current.post(
-                                    L("page.overlays.alert.successMessage")
+                                    "page.overlays.alert.successMessage"
                                 )
                             } else {
                                 presentedDemo = demo
@@ -220,55 +220,55 @@ struct OverlaysPage: View {
                 descriptionPanel
             }
 
-            DemoSection(L("page.overlays.confirm.section")) {
+            DemoSection("page.overlays.confirm.section") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.overlays.confirm.explain"))
+                    Text("page.overlays.confirm.explain")
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 2) {
                         // Clear the read-out as the dialog opens, so choosing
                         // the same answer twice running still reads as two
                         // answers rather than as nothing having happened.
-                        Button(L("page.overlays.confirm.trigger")) {
+                        Button("page.overlays.confirm.trigger") {
                             confirmChoice = "—"
                             showConfirm = true
                         }
-                        ValueDisplayRow(L("page.overlays.confirm.result"), confirmChoice)
+                        ValueDisplayRow("page.overlays.confirm.result", confirmChoice)
                     }
                 }
             }
 
-            DemoSection(L("page.overlays.variants.section")) {
+            DemoSection("page.overlays.variants.section") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.overlays.variants.explain"))
+                    Text("page.overlays.variants.explain")
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 2) {
                         // A popover anchors to the button that opened it, so
                         // this one is deliberately not centred on the screen.
-                        Button(L("page.overlays.variants.popover")) { showPopover = true }
+                        Button("page.overlays.variants.popover") { showPopover = true }
                             .popover(isPresented: $showPopover) {
                                 VStack(alignment: .leading) {
-                                    Text(L("page.overlays.variants.popoverTitle")).bold()
-                                    Text(L("page.overlays.variants.popoverBody"))
+                                    Text("page.overlays.variants.popoverTitle").bold()
+                                    Text("page.overlays.variants.popoverBody")
                                         .foregroundStyle(.palette.foregroundSecondary)
                                 }
                             }
 
-                        Button(L("page.overlays.variants.cover")) { showCover = true }
+                        Button("page.overlays.variants.cover") { showCover = true }
 
-                        Button(L("page.overlays.variants.sheet")) { showDetented = true }
+                        Button("page.overlays.variants.sheet") { showDetented = true }
                     }
                     // The terminal's stand-in for dragging a sheet's grabber:
                     // the bound selection, moved by a control the app owns.
-                    Picker(L("page.overlays.variants.detent"), selection: $detent) {
-                        Text(L("page.overlays.variants.detentMedium")).tag(PresentationDetent.medium)
-                        Text(L("page.overlays.variants.detentLarge")).tag(PresentationDetent.large)
+                    Picker("page.overlays.variants.detent", selection: $detent) {
+                        Text("page.overlays.variants.detentMedium").tag(PresentationDetent.medium)
+                        Text("page.overlays.variants.detentLarge").tag(PresentationDetent.large)
                         Text("8").tag(PresentationDetent.height(8))
                     }
                 }
             }
 
-            DemoSection(L("page.overlays.section.howItWorks")) {
-                Text(L("page.overlays.howItWorks.intro"))
+            DemoSection("page.overlays.section.howItWorks") {
+                Text("page.overlays.howItWorks.intro")
                     .foregroundStyle(.palette.foregroundSecondary)
                 Text("  .alert(isPresented:)        — \(L("page.overlays.howItWorks.alertLine"))")
                     .foregroundStyle(.palette.foregroundSecondary)
@@ -276,7 +276,7 @@ struct OverlaysPage: View {
                     .foregroundStyle(.palette.foregroundSecondary)
                 Text("  NotificationService.current.post() — \(L("page.overlays.howItWorks.notifLine"))")
                     .foregroundStyle(.palette.foregroundSecondary)
-                Text(L("page.overlays.howItWorks.summary"))
+                Text("page.overlays.howItWorks.summary")
                     .bold()
                     .foregroundStyle(.palette.accent)
             }
@@ -291,21 +291,21 @@ struct OverlaysPage: View {
         // belongs to its button, and is attached there.)
         .fullScreenCover(isPresented: $showCover) {
             VStack(spacing: 1) {
-                Text(L("page.overlays.variants.coverTitle")).bold()
-                Text(L("page.overlays.variants.coverBody"))
+                Text("page.overlays.variants.coverTitle").bold()
+                Text("page.overlays.variants.coverBody")
                     .foregroundStyle(.palette.foregroundSecondary)
-                Button(L("button.close")) { showCover = false }
+                Button("button.close") { showCover = false }
             }
         }
         .sheet(isPresented: $showDetented) {
-            Dialog(title: L("page.overlays.variants.sheetTitle")) {
-                Text(L("page.overlays.variants.sheetBody"))
-                Button(L("button.close")) { showDetented = false }
+            Dialog(title: "page.overlays.variants.sheetTitle") {
+                Text("page.overlays.variants.sheetBody")
+                Button("button.close") { showDetented = false }
             }
             .presentationDetents([.medium, .large, .height(8)], selection: $detent)
         }
         .appHeader {
-            DemoAppHeader(L("menu.item.overlays"))
+            DemoAppHeader("menu.item.overlays")
         }
     }
 
@@ -320,7 +320,7 @@ struct OverlaysPage: View {
 
                 Text("")
 
-                Text(L("page.overlays.apiLabel"))
+                Text("page.overlays.apiLabel")
                     .bold()
                     .foregroundStyle(.palette.accent)
                 Text("  \(selectedDemo.apiUsage)")
@@ -347,15 +347,15 @@ struct OverlaysPage: View {
     /// reach. That is what footers are for — and what the demo below shows.
     private var settingsDialog: some View {
         Dialog(
-            title: L("page.overlays.dialog.settingsTitle"),
+            title: "page.overlays.dialog.settingsTitle",
             borderColor: .palette.border, titleColor: .palette.accent
         ) {
             VStack(alignment: .leading) {
-                Text(L("page.overlays.dialog.themeDark")).foregroundStyle(.palette.foreground)
-                Text(L("page.overlays.dialog.languageEnglish")).foregroundStyle(.palette.foreground)
-                Text(L("page.overlays.dialog.notificationsOn")).foregroundStyle(.palette.foreground)
+                Text("page.overlays.dialog.themeDark").foregroundStyle(.palette.foreground)
+                Text("page.overlays.dialog.languageEnglish").foregroundStyle(.palette.foreground)
+                Text("page.overlays.dialog.notificationsOn").foregroundStyle(.palette.foreground)
                 Text("")
-                Text(L("page.overlays.dialog.noFooterHint"))
+                Text("page.overlays.dialog.noFooterHint")
                     .foregroundStyle(.palette.foregroundSecondary)
             }
         }
@@ -370,19 +370,19 @@ struct OverlaysPage: View {
     /// that has it.
     private var confirmDialog: some View {
         Dialog(
-            title: L("page.overlays.dialog.confirmTitle"),
+            title: "page.overlays.dialog.confirmTitle",
             borderColor: .palette.border, titleColor: .palette.accent,
             footerAlignment: .trailing
         ) {
-            Text(L("page.overlays.dialog.confirmBody")).foregroundStyle(.palette.foreground)
-            Text(L("page.overlays.dialog.confirmUndone")).foregroundStyle(.palette.foregroundSecondary)
+            Text("page.overlays.dialog.confirmBody").foregroundStyle(.palette.foreground)
+            Text("page.overlays.dialog.confirmUndone").foregroundStyle(.palette.foregroundSecondary)
         } footer: {
             HStack {
-                Button(L("page.overlays.button.cancel")) {
+                Button("page.overlays.button.cancel") {
                     showOverlay = false
                 }
                 .keyboardShortcut(.cancelAction)
-                Button(L("page.overlays.button.proceed")) {
+                Button("page.overlays.button.proceed") {
                     showOverlay = false
                 }
                 .buttonStyle(.primary)
@@ -417,18 +417,18 @@ struct OverlaysPage: View {
             // width actually buys back vertical room — resize the terminal
             // narrow and tall, then short and wide, to watch it decide.
             Dialog(
-                title: L("page.overlays.dialog.proseTitle"),
+                title: "page.overlays.dialog.proseTitle",
                 borderColor: .palette.border, titleColor: .palette.accent,
                 footerAlignment: .trailing
             ) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.overlays.dialog.proseIntro"))
+                    Text("page.overlays.dialog.proseIntro")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.overlays.dialog.proseParagraph1"))
+                    Text("page.overlays.dialog.proseParagraph1")
                         .foregroundStyle(.palette.foreground)
-                    Text(L("page.overlays.dialog.proseParagraph2"))
+                    Text("page.overlays.dialog.proseParagraph2")
                         .foregroundStyle(.palette.foreground)
-                    Text(L("page.overlays.dialog.proseParagraph3"))
+                    Text("page.overlays.dialog.proseParagraph3")
                         .foregroundStyle(.palette.foreground)
                 }
             } footer: {
@@ -437,12 +437,12 @@ struct OverlaysPage: View {
 
         case .dialogAuth:
             Dialog(
-                title: L("page.overlays.dialog.signInTitle"),
+                title: "page.overlays.dialog.signInTitle",
                 borderColor: .palette.border, titleColor: .palette.accent,
                 footerAlignment: .trailing
             ) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.overlays.dialog.enterCredentials"))
+                    Text("page.overlays.dialog.enterCredentials")
                         .foregroundStyle(.palette.foregroundSecondary)
                     // A Form, because that is where SwiftUI puts a field's label
                     // on screen at all. Measured against real macOS SwiftUI: a
@@ -457,15 +457,15 @@ struct OverlaysPage: View {
                     // "Username:" as a sibling Text (the first attempt here)
                     // matched neither.
                     Form {
-                        LabeledContent(L("page.overlays.dialog.username")) {
+                        LabeledContent("page.overlays.dialog.username") {
                             TextField(
                                 "", text: $authUsername,
-                                prompt: Text(L("page.overlays.dialog.usernamePrompt")))
+                                prompt: Text("page.overlays.dialog.usernamePrompt"))
                         }
-                        LabeledContent(L("page.overlays.dialog.password")) {
+                        LabeledContent("page.overlays.dialog.password") {
                             SecureField(
                                 "", text: $authPassword,
-                                prompt: Text(L("page.overlays.dialog.passwordPrompt")))
+                                prompt: Text("page.overlays.dialog.passwordPrompt"))
                         }
                     }
                 }
@@ -475,13 +475,13 @@ struct OverlaysPage: View {
                     // the dialog: the credential fields have no onSubmit, so
                     // Return falls through to the default button even while
                     // typing (macOS dialog semantics).
-                    Button(L("page.overlays.button.cancel")) {
+                    Button("page.overlays.button.cancel") {
                         authUsername = ""
                         authPassword = ""
                         showOverlay = false
                     }
                     .keyboardShortcut(.cancelAction)
-                    Button(L("page.overlays.button.signIn")) {
+                    Button("page.overlays.button.signIn") {
                         // Demo only — clear the password for safety.
                         authPassword = ""
                         showOverlay = false
@@ -515,33 +515,33 @@ struct OverlaysPage: View {
         switch demo {
         case .alertStandard:
             Alert(
-                title: L("page.overlays.alert.standardTitle"),
-                message: L("page.overlays.alert.standardMessage"),
+                title: "page.overlays.alert.standardTitle",
+                message: "page.overlays.alert.standardMessage",
                 borderColor: .palette.border,
                 titleColor: .palette.accent
             ) { EmptyView() }
         case .alertWarning:
             Alert(
-                title: L("page.overlays.alert.warningTitle"),
-                message: L("page.overlays.alert.warningMessage"),
+                title: "page.overlays.alert.warningTitle",
+                message: "page.overlays.alert.warningMessage",
                 titleColor: .palette.warning
             ) { EmptyView() }
         case .alertError:
             Alert(
-                title: L("page.overlays.alert.errorTitle"),
-                message: L("page.overlays.alert.errorMessage"),
+                title: "page.overlays.alert.errorTitle",
+                message: "page.overlays.alert.errorMessage",
                 titleColor: .palette.error
             ) { EmptyView() }
         case .alertInfo:
             Alert(
-                title: L("page.overlays.alert.infoTitle"),
-                message: L("page.overlays.alert.infoMessage"),
+                title: "page.overlays.alert.infoTitle",
+                message: "page.overlays.alert.infoMessage",
                 titleColor: .palette.info
             ) { EmptyView() }
         case .alertSuccess:
             Alert(
-                title: L("page.overlays.alert.successTitle"),
-                message: L("page.overlays.alert.successMessage"),
+                title: "page.overlays.alert.successTitle",
+                message: "page.overlays.alert.successMessage",
                 titleColor: .palette.success
             ) { EmptyView() }
         default:
@@ -559,7 +559,7 @@ struct OverlaysPage: View {
     /// the terminal. `footerAlignment: .trailing` places the button instead, and
     /// leaves the dialog free to size itself to its content.
     private var dismissButton: some View {
-        Button(L("page.overlays.button.dismiss")) {
+        Button("page.overlays.button.dismiss") {
             showOverlay = false
         }
         .buttonStyle(.primary)
@@ -577,10 +577,10 @@ struct OverlaysPage: View {
     /// layout wants expressing differently, not measuring harder.
     private var modalCustomBody: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(L("page.overlays.modal.title")).bold().foregroundStyle(.palette.accent)
-            Text(L("page.overlays.modal.line1")).foregroundStyle(.palette.foreground)
-            Text(L("page.overlays.modal.line2")).foregroundStyle(.palette.foregroundSecondary)
-            Text(L("page.overlays.modal.line3")).foregroundStyle(.palette.foregroundSecondary)
+            Text("page.overlays.modal.title").bold().foregroundStyle(.palette.accent)
+            Text("page.overlays.modal.line1").foregroundStyle(.palette.foreground)
+            Text("page.overlays.modal.line2").foregroundStyle(.palette.foregroundSecondary)
+            Text("page.overlays.modal.line3").foregroundStyle(.palette.foregroundSecondary)
             dismissButton
         }
         .padding(EdgeInsets(horizontal: 2, vertical: 1))

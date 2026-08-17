@@ -199,8 +199,8 @@ struct ThemePage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 1) {
 
-                DemoSection(L("page.theme.language")) {
-                    Picker(L("page.theme.languageLabel"), selection: languageSelection) {
+                DemoSection("page.theme.language") {
+                    Picker("page.theme.languageLabel", selection: languageSelection) {
                         ForEach(LocalizationService.Language.allCases, id: \.rawValue) { language in
                             Text(language.displayName).tag(language.rawValue)
                         }
@@ -208,7 +208,7 @@ struct ThemePage: View {
                     .pickerStyle(.radioGroup)
 
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(L("page.theme.keyDemoExplain"))
+                        Text("page.theme.keyDemoExplain")
                             .foregroundStyle(.palette.foregroundSecondary)
                         // Four spellings of one string, and only two of them
                         // move. The first three are the SAME source text,
@@ -225,8 +225,8 @@ struct ThemePage: View {
                     .border(.brightBlack)
                 }
 
-                DemoSection(L("page.theme.presetPalette")) {
-                    Picker(L("page.theme.presetLabel"), selection: presetSelection) {
+                DemoSection("page.theme.presetPalette") {
+                    Picker("page.theme.presetLabel", selection: presetSelection) {
                         ForEach(0..<PaletteRegistry.all.count, id: \.self) { index in
                             Text(PaletteRegistry.all[index].name).tag(PaletteRegistry.all[index].id)
                         }
@@ -234,8 +234,8 @@ struct ThemePage: View {
                     .pickerStyle(.radioGroup)
                 }
 
-                DemoSection(L("page.theme.borderAppearance")) {
-                    Picker(L("page.theme.appearanceLabel"), selection: appearanceSelection) {
+                DemoSection("page.theme.borderAppearance") {
+                    Picker("page.theme.appearanceLabel", selection: appearanceSelection) {
                         ForEach(0..<appearances.count, id: \.self) { index in
                             Text(appearances[index].name).tag(appearances[index].id)
                         }
@@ -243,23 +243,23 @@ struct ThemePage: View {
                     .pickerStyle(.radioGroup)
                 }
 
-                DemoSection(L("page.theme.chromeStyle")) {
+                DemoSection("page.theme.chromeStyle") {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(L("page.theme.chromeStyleDescription"))
+                        Text("page.theme.chromeStyleDescription")
                             .foregroundStyle(.palette.foregroundSecondary)
 
-                        Picker(L("page.theme.chrome.bothLabel"), selection: bothChromeSelection) {
+                        Picker("page.theme.chrome.bothLabel", selection: bothChromeSelection) {
                             ForEach(chromeNames, id: \.name) { entry in
                                 Text(entry.name).tag(entry.name)
                             }
                         }
                         .pickerStyle(.radioGroup)
 
-                        Text(L("page.theme.chrome.separately"))
+                        Text("page.theme.chrome.separately")
                             .foregroundStyle(.palette.foregroundSecondary)
                         HStack(spacing: 3) {
                             Picker(
-                                L("page.theme.chrome.headerLabel"),
+                                "page.theme.chrome.headerLabel",
                                 selection: chromeBinding(\.appHeaderStyle)
                             ) {
                                 ForEach(chromeNames, id: \.name) { entry in
@@ -267,7 +267,7 @@ struct ThemePage: View {
                                 }
                             }
                             Picker(
-                                L("page.theme.chrome.footerLabel"),
+                                "page.theme.chrome.footerLabel",
                                 selection: chromeBinding(\.statusBarStyle)
                             ) {
                                 ForEach(chromeNames, id: \.name) { entry in
@@ -278,17 +278,17 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection(L("page.theme.customBorder")) {
+                DemoSection("page.theme.customBorder") {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(L("page.theme.customBorderDescription"))
+                        Text("page.theme.customBorderDescription")
                             .foregroundStyle(.palette.foregroundSecondary)
 
                         HStack(spacing: 1) {
-                            Button(L("page.theme.borderRounded")) { applyBorderPreset("╭", "╮", "╰", "╯", "─", "│") }
+                            Button("page.theme.borderRounded") { applyBorderPreset("╭", "╮", "╰", "╯", "─", "│") }
                             Button("ASCII") { applyBorderPreset("+", "+", "+", "+", "-", "|") }
-                            Button(L("page.theme.borderStars")) { applyBorderPreset("*", "*", "*", "*", "*", "*") }
-                            Button(L("page.theme.borderBlocks")) { applyBorderPreset("█", "█", "█", "█", "█", "█") }
-                            Button(L("page.theme.borderDots")) { applyBorderPreset("·", "·", "·", "·", "·", "·") }
+                            Button("page.theme.borderStars") { applyBorderPreset("*", "*", "*", "*", "*", "*") }
+                            Button("page.theme.borderBlocks") { applyBorderPreset("█", "█", "█", "█", "█", "█") }
+                            Button("page.theme.borderDots") { applyBorderPreset("·", "·", "·", "·", "·", "·") }
                         }
 
                         HStack(spacing: 2) {
@@ -300,10 +300,10 @@ struct ThemePage: View {
                             borderCharField("│", $borderV)
                         }
 
-                        Button(L("page.theme.useBuiltInAppearance")) { styling.customBorder = nil }
+                        Button("page.theme.useBuiltInAppearance") { styling.customBorder = nil }
 
-                        Panel(L("page.theme.livePreviewPanel")) {
-                            Text(L("page.theme.boxUsesAppWideBorder"))
+                        Panel("page.theme.livePreviewPanel") {
+                            Text("page.theme.boxUsesAppWideBorder")
                         }
                     }
                     .onChange(of: [borderTL, borderTR, borderBL, borderBR, borderH, borderV]) {
@@ -314,12 +314,12 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection(L("page.theme.liveStyling")) {
+                DemoSection("page.theme.liveStyling") {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(L("page.theme.liveStylingDescription"))
+                        Text("page.theme.liveStylingDescription")
                         .foregroundStyle(.palette.foregroundSecondary)
 
-                        Picker(L("page.theme.tintLabel"), selection: tintSelection) {
+                        Picker("page.theme.tintLabel", selection: tintSelection) {
                             ForEach(0..<Self.tintOptions.count, id: \.self) { index in
                                 Text(Self.tintOptions[index].name).tag(Self.tintOptions[index].name)
                             }
@@ -327,17 +327,17 @@ struct ThemePage: View {
                         .pickerStyle(.radioGroup)
 
                         Toggle(
-                            L("page.theme.uppercaseSectionHeaders"),
+                            "page.theme.uppercaseSectionHeaders",
                             isOn: Binding(
                                 get: { styling.uppercaseSectionHeaders },
                                 set: { styling.uppercaseSectionHeaders = $0 }))
                         Toggle(
-                            L("page.theme.boldButtonText"),
+                            "page.theme.boldButtonText",
                             isOn: Binding(
                                 get: { styling.boldButtons },
                                 set: { styling.boldButtons = $0 }))
 
-                        Picker(L("page.theme.toggleCharacterSetLabel"), selection: checkboxSelection) {
+                        Picker("page.theme.toggleCharacterSetLabel", selection: checkboxSelection) {
                             // The app's default, and now a real option: it follows
                             // the terminal, including the tmux client changing
                             // under a running session.
@@ -350,7 +350,7 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection(L("page.theme.semanticColours")) {
+                DemoSection("page.theme.semanticColours") {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(0..<Self.semanticColors.count, id: \.self) { index in
                             swatchRow(
@@ -360,7 +360,7 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection(L("page.theme.customiseCompact")) {
+                DemoSection("page.theme.customiseCompact") {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(0..<Self.editableColors.count, id: \.self) { index in
                             ColorPicker(
@@ -370,9 +370,9 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection(L("page.theme.fullColourEditor")) {
+                DemoSection("page.theme.fullColourEditor") {
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(L("page.theme.fullColourEditorDescription"))
+                        Text("page.theme.fullColourEditorDescription")
                             .foregroundStyle(.palette.foregroundSecondary)
                         ForEach(0..<Self.editableColors.count, id: \.self) { index in
                             editorRow(index)
@@ -380,7 +380,7 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection(L("page.theme.livePreview")) {
+                DemoSection("page.theme.livePreview") {
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 2) {
                             Text("Accent").foregroundStyle(.palette.accent)
@@ -389,20 +389,20 @@ struct ThemePage: View {
                             Text("Error").foregroundStyle(.palette.error)
                             Text("Info").foregroundStyle(.palette.info)
                         }
-                        Panel(L("page.theme.samplePanel")) {
-                            Text(L("page.theme.bodyText"))
+                        Panel("page.theme.samplePanel") {
+                            Text("page.theme.bodyText")
                                 .foregroundStyle(.palette.foregroundSecondary)
                         }
                     }
                 }
 
                 KeyboardHelpSection(
-                    L("page.theme.themeHelp"),
+                    "page.theme.themeHelp",
                     shortcuts: [
-                        L("page.theme.help.choosePreset"),
-                        L("page.theme.help.moveFocus"),
-                        L("page.theme.help.cyclePalette"),
-                        L("page.theme.help.everyChange"),
+                        "page.theme.help.choosePreset",
+                        "page.theme.help.moveFocus",
+                        "page.theme.help.cyclePalette",
+                        "page.theme.help.everyChange",
                     ]
                 )
             }
@@ -416,7 +416,7 @@ struct ThemePage: View {
             }
         }
         .appHeader {
-            DemoAppHeader(L("menu.item.theme"))
+            DemoAppHeader("menu.item.theme")
         }
     }
 

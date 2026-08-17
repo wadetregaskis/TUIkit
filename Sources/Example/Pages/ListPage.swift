@@ -92,16 +92,16 @@ struct ListPage: View {
             content
         }
         .appHeader {
-            DemoAppHeader(L("menu.item.lists"))
+            DemoAppHeader("menu.item.lists")
         }
     }
 
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.list.searchableSection")) {
+            DemoSection("page.list.searchableSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.list.searchableExplain"))
+                    Text("page.list.searchableExplain")
                         .foregroundStyle(.palette.foregroundSecondary)
 
                     let matches = searchQuery.isEmpty
@@ -109,7 +109,7 @@ struct ListPage: View {
                         : Self.fruits.filter { $0.localizedCaseInsensitiveContains(searchQuery) }
                     Group {
                         if matches.isEmpty {
-                            Text(L("page.list.searchableEmpty")).dim()
+                            Text("page.list.searchableEmpty").dim()
                         } else {
                             List {
                                 ForEach(matches, id: \.self) { Text($0) }
@@ -122,14 +122,14 @@ struct ListPage: View {
                 }
             }
 
-            DemoSection(L("page.list.editableSection")) {
+            DemoSection("page.list.editableSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.list.editableInstruction"))
+                    Text("page.list.editableInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.rows.keyboardMoveHint"))
+                    Text("page.rows.keyboardMoveHint")
                         .foregroundStyle(.palette.foregroundTertiary)
                         .dim()
-                    Picker(L("page.list.reorderFeedback"), selection: $reorderFeedback) {
+                    Picker("page.list.reorderFeedback", selection: $reorderFeedback) {
                         ForEach(ReorderFeedbackChoice.allCases, id: \.rawValue) { choice in
                             Text(choice.label).tag(choice.rawValue)
                         }
@@ -167,7 +167,7 @@ struct ListPage: View {
                 // (↰) navigates up.
                 VStack(alignment: .leading, spacing: 0) {
                     Text(browserURL.path).dim()
-                    List(L("page.list.singleSelection"), selection: $singleSelection) {
+                    List("page.list.singleSelection", selection: $singleSelection) {
                         ForEach(FileBrowser.entries(at: browserURL)) { entry in
                             HStack(spacing: 1) {
                                 Text(entry.icon)
@@ -187,7 +187,7 @@ struct ListPage: View {
                 .frame(maxWidth: .infinity)
 
                 List(
-                    L("page.list.multiSelection"),
+                    "page.list.multiSelection",
                     selection: $multiSelection
                 ) {
                     ForEach(FileItem.sampleFiles) { file in
@@ -201,25 +201,25 @@ struct ListPage: View {
                 .frame(height: 10)
             }
 
-            DemoSection(L("page.list.currentSelections")) {
+            DemoSection("page.list.currentSelections") {
                 VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow(L("page.list.single"), singleSelection ?? L("page.list.none"))
+                    ValueDisplayRow("page.list.single", singleSelection ?? L("page.list.none"))
                     ValueDisplayRow(
-                        L("page.list.multi"),
+                        "page.list.multi",
                         multiSelection.isEmpty
                             ? L("page.list.none")
                             : multiSelection.sorted().joined(separator: ", ")
                     )
-                    Text(L("component.multiSelectHint"))
+                    Text("component.multiSelectHint")
                         .foregroundStyle(.palette.foregroundSecondary)
                 }
             }
 
             DemoSection(
-                L("page.list.wheelSection")
+                "page.list.wheelSection"
             ) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.list.wheelBody"))
+                    Text("page.list.wheelBody")
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     List("\(longLines.count) \(L("page.list.linesSuffix"))") {
@@ -233,14 +233,14 @@ struct ListPage: View {
             }
 
             DemoSection(
-                L("page.list.unfocusedSection")
+                "page.list.unfocusedSection"
             ) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.list.unfocusedBody"))
+                    Text("page.list.unfocusedBody")
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     List(
-                        L("page.list.transientPicker"),
+                        "page.list.transientPicker",
                         selection: $transientSelection
                     ) {
                         ForEach(FileItem.sampleFiles) { file in
@@ -254,15 +254,15 @@ struct ListPage: View {
                     .unfocusedSelectionVisibility(.hidden)
 
                     ValueDisplayRow(
-                        L("page.list.boundValue"),
+                        "page.list.boundValue",
                         transientSelection ?? L("page.list.none")
                     )
                 }
             }
 
-            DemoSection(L("page.list.stylesSection")) {
+            DemoSection("page.list.stylesSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.list.stylesBody"))
+                    Text("page.list.stylesBody")
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     // Untitled lists so the styles read purely as their box
@@ -306,12 +306,12 @@ struct ListPage: View {
             // Rows can be any height — a `List` measures each row's rendered
             // height and windows/scrolls by lines, so a two-line cell just works.
             // 12 items in an 8-row frame → it scrolls, with a scrollbar.
-            DemoSection(L("page.list.multiLineSection")) {
+            DemoSection("page.list.multiLineSection") {
                 VStack(alignment: .leading, spacing: 0) {
                     // Line- vs row-centric scrolling, live: with two-line rows,
                     // a wheel tick moves three LINES (the top row can rest
                     // partially clipped) or three whole ROWS.
-                    Toggle(L("demo.scrollGranularity.line"), isOn: $multiLineByLine)
+                    Toggle("demo.scrollGranularity.line", isOn: $multiLineByLine)
                     // How early the list scrolls to follow the moving
                     // selection: at the edge (default), 2 lines early, or
                     // keeping the selection centred.
@@ -326,7 +326,7 @@ struct ListPage: View {
             // rest of the row belongs to the list, to select — and the keyboard
             // divides the same way, Space to the selection and Return (or
             // Right / Left) to the disclosure.
-            DemoSection(L("page.list.treeSection")) {
+            DemoSection("page.list.treeSection") {
                 List(outlineDemoTree, children: \.children, selection: $treeSelection) { node in
                     Text(verbatim: node.id)
                 }
@@ -334,15 +334,15 @@ struct ListPage: View {
             }
 
             KeyboardHelpSection(
-                L("page.list.navigation"),
+                "page.list.navigation",
                 shortcuts: [
-                    L("page.list.help.navigate"),
-                    L("page.list.help.jump"),
-                    L("page.list.help.fastScroll"),
-                    L("page.list.help.select"),
-                    L("page.list.help.tree"),
-                    L("page.list.help.switch"),
-                    L("page.list.help.wheel"),
+                    "page.list.help.navigate",
+                    "page.list.help.jump",
+                    "page.list.help.fastScroll",
+                    "page.list.help.select",
+                    "page.list.help.tree",
+                    "page.list.help.switch",
+                    "page.list.help.wheel",
                 ]
             )
         }

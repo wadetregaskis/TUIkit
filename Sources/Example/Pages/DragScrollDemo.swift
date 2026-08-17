@@ -26,12 +26,12 @@ struct DragScrollDemoSection: View {
     }
 
     var body: some View {
-        DemoSection(L("page.mouse.dragScroll")) {
+        DemoSection("page.mouse.dragScroll") {
             VStack(alignment: .leading, spacing: 1) {
-                Text(L("page.mouse.dragScrollHint"))
+                Text("page.mouse.dragScrollHint")
                     .foregroundStyle(.palette.foregroundSecondary)
                 HStack(alignment: .top, spacing: 3) {
-                    Text(L("page.mouse.dragScrollTag"))
+                    Text("page.mouse.dragScrollTag")
                         .padding(EdgeInsets(horizontal: 1, vertical: 0))
                         .border(.palette.accent)
                         .draggable(FilingTag())

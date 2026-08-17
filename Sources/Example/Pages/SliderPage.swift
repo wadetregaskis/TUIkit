@@ -24,13 +24,13 @@ struct SliderPage: View {
             content
         }
         .appHeader {
-            DemoAppHeader(L("menu.item.sliders"))
+            DemoAppHeader("menu.item.sliders")
         }
     }
 
     /// A slider's own label, in the page's quiet caption colour.
-    private func caption(_ text: String) -> some View {
-        Text(text).foregroundStyle(.palette.foregroundSecondary)
+    private func caption(_ textKey: LocalizedStringKey) -> some View {
+        Text(textKey).foregroundStyle(.palette.foregroundSecondary)
     }
 
     @ViewBuilder private var content: some View {
@@ -41,15 +41,15 @@ struct SliderPage: View {
             // and shortens the track to fit, as macOS SwiftUI does. Written as
             // an adjacent `Text` in an HStack these rows looked identical, but
             // hand-rolled what the control now does itself.
-            DemoSection(L("page.slider.basicSection")) {
+            DemoSection("page.slider.basicSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Slider(value: $volume, label: { caption(L("page.slider.volume")) })
+                    Slider(value: $volume, label: { caption("page.slider.volume") })
                 }
             }
 
-            DemoSection(L("page.slider.trackStylesSection")) {
+            DemoSection("page.slider.trackStylesSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Slider(value: $volume, label: { caption(L("page.slider.block")) })
+                    Slider(value: $volume, label: { caption("page.slider.block") })
                         .trackStyle(.block)
                     // Truth in labelling: the row that says "shade" renders
                     // `.shade`, exactly as the ProgressView demo's "shade"
@@ -57,47 +57,47 @@ struct SliderPage: View {
                     // control. (`.shade`'s ▓ fill reads close to `.block`
                     // on most fonts by design; the visibly graded look is
                     // the separate `.shadeRamp` row below.)
-                    Slider(value: $volume, label: { caption(L("page.slider.shade")) })
+                    Slider(value: $volume, label: { caption("page.slider.shade") })
                         .trackStyle(.shade)
-                    Slider(value: $volume, label: { caption(L("page.slider.shadeRamp")) })
+                    Slider(value: $volume, label: { caption("page.slider.shadeRamp") })
                         .trackStyle(.shadeRamp())
-                    Slider(value: $volume, label: { caption(L("page.slider.dot")) })
+                    Slider(value: $volume, label: { caption("page.slider.dot") })
                         .trackStyle(.dot)
-                    Slider(value: $volume, label: { caption(L("page.slider.bar")) })
+                    Slider(value: $volume, label: { caption("page.slider.bar") })
                         .trackStyle(.bar)
                 }
             }
 
             // The same custom-style editor as the Progress page, previewing on
             // a Slider — one TrackConfiguration drives both controls.
-            DemoSection(L("page.trackEditor.section")) {
+            DemoSection("page.trackEditor.section") {
                 TrackStyleEditor(preview: .slider)
             }
 
-            DemoSection(L("page.slider.customRangesSection")) {
+            DemoSection("page.slider.customRangesSection") {
                 VStack(alignment: .leading, spacing: 1) {
                     Slider(
                         value: $brightness, in: 0...100, step: 5,
-                        label: { caption(L("page.slider.brightnessLabel")) })
+                        label: { caption("page.slider.brightnessLabel") })
                     Slider(
                         value: $rating, in: 1...5, step: 1,
-                        label: { caption(L("page.slider.ratingLabel")) })
+                        label: { caption("page.slider.ratingLabel") })
                     Slider(
                         value: $precision, in: 0...1, step: 0.05,
-                        label: { caption(L("page.slider.precisionLabel")) })
+                        label: { caption("page.slider.precisionLabel") })
                 }
             }
 
-            DemoSection(L("page.slider.currentValuesSection")) {
+            DemoSection("page.slider.currentValuesSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow(L("page.slider.volume"), String(format: "%.0f%%", volume * 100))
-                    ValueDisplayRow(L("page.slider.brightness"), String(format: "%.0f", brightness))
-                    ValueDisplayRow(L("page.slider.rating"), String(format: "%.0f", rating))
-                    ValueDisplayRow(L("page.slider.precision"), String(format: "%.2f", precision))
+                    ValueDisplayRow("page.slider.volume", String(format: "%.0f%%", volume * 100))
+                    ValueDisplayRow("page.slider.brightness", String(format: "%.0f", brightness))
+                    ValueDisplayRow("page.slider.rating", String(format: "%.0f", rating))
+                    ValueDisplayRow("page.slider.precision", String(format: "%.2f", precision))
                 }
             }
 
-            DemoSection(L("page.slider.themedSection")) {
+            DemoSection("page.slider.themedSection") {
                 VStack(alignment: .leading, spacing: 1) {
                     // Three sliders at the same value so the differences show:
                     //  • default;
@@ -106,24 +106,24 @@ struct SliderPage: View {
                     //    the digits only, not the padded field);
                     //  • .tint recolours the slider ITSELF — the filled rail and
                     //    the knob draw in the tint (the empty rail stays quiet).
-                    Slider(value: $volume, label: { caption(L("page.slider.default")) })
-                    Slider(value: $volume, label: { caption(L("page.slider.themed")) })
+                    Slider(value: $volume, label: { caption("page.slider.default") })
+                    Slider(value: $volume, label: { caption("page.slider.themed") })
                         .sliderTextStyle {
                             $0.bold = true
                             $0.underline = true
                             $0.foreground = .palette.success
                         }
-                    Slider(value: $volume, label: { caption(L("page.slider.tinted")) })
+                    Slider(value: $volume, label: { caption("page.slider.tinted") })
                         .tint(.rgb(255, 130, 40))
                 }
             }
 
             KeyboardHelpSection(shortcuts: [
-                L("page.slider.help.arrows"),
-                L("page.slider.help.plusMinus"),
-                L("page.slider.help.home"),
-                L("page.slider.help.end"),
-                L("page.slider.help.tab"),
+                "page.slider.help.arrows",
+                "page.slider.help.plusMinus",
+                "page.slider.help.home",
+                "page.slider.help.end",
+                "page.slider.help.tab",
             ])
         }
     }

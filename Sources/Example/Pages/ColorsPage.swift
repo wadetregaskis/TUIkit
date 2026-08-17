@@ -17,64 +17,64 @@ struct ColorsPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.colors.section.standard")) {
+            DemoSection("page.colors.section.standard") {
                 HStack(spacing: 2) {
-                    Text(L("page.colors.black")).foregroundStyle(.black).background(.white)
-                    Text(L("page.colors.red")).foregroundStyle(.red)
-                    Text(L("page.colors.green")).foregroundStyle(.green)
-                    Text(L("page.colors.yellow")).foregroundStyle(.yellow)
+                    Text("page.colors.black").foregroundStyle(.black).background(.white)
+                    Text("page.colors.red").foregroundStyle(.red)
+                    Text("page.colors.green").foregroundStyle(.green)
+                    Text("page.colors.yellow").foregroundStyle(.yellow)
                 }
                 HStack(spacing: 2) {
-                    Text(L("page.colors.blue")).foregroundStyle(.blue)
-                    Text(L("page.colors.magenta")).foregroundStyle(.magenta)
-                    Text(L("page.colors.cyan")).foregroundStyle(.cyan)
-                    Text(L("page.colors.white")).foregroundStyle(.white)
-                }
-            }
-
-            DemoSection(L("page.colors.section.bright")) {
-                HStack(spacing: 2) {
-                    Text(L("page.colors.brightRed")).foregroundStyle(.brightRed)
-                    Text(L("page.colors.brightGreen")).foregroundStyle(.brightGreen)
-                    Text(L("page.colors.brightYellow")).foregroundStyle(.brightYellow)
-                    Text(L("page.colors.brightBlue")).foregroundStyle(.brightBlue)
+                    Text("page.colors.blue").foregroundStyle(.blue)
+                    Text("page.colors.magenta").foregroundStyle(.magenta)
+                    Text("page.colors.cyan").foregroundStyle(.cyan)
+                    Text("page.colors.white").foregroundStyle(.white)
                 }
             }
 
-            DemoSection(L("page.colors.section.rgb")) {
+            DemoSection("page.colors.section.bright") {
                 HStack(spacing: 2) {
-                    Text(L("page.colors.orange")).foregroundStyle(.rgb(255, 128, 0))
-                    Text(L("page.colors.pink")).foregroundStyle(.rgb(255, 105, 180))
-                    Text(L("page.colors.teal")).foregroundStyle(.rgb(0, 128, 128))
-                    Text(L("page.colors.purple")).foregroundStyle(.rgb(128, 0, 128))
+                    Text("page.colors.brightRed").foregroundStyle(.brightRed)
+                    Text("page.colors.brightGreen").foregroundStyle(.brightGreen)
+                    Text("page.colors.brightYellow").foregroundStyle(.brightYellow)
+                    Text("page.colors.brightBlue").foregroundStyle(.brightBlue)
                 }
             }
 
-            DemoSection(L("page.colors.section.semantic")) {
+            DemoSection("page.colors.section.rgb") {
                 HStack(spacing: 2) {
-                    Text(L("page.colors.primary")).foregroundStyle(.primary)
-                    Text(L("page.colors.success")).foregroundStyle(.success)
-                    Text(L("page.colors.warning")).foregroundStyle(.warning)
-                    Text(L("page.colors.error")).foregroundStyle(.error)
+                    Text("page.colors.orange").foregroundStyle(.rgb(255, 128, 0))
+                    Text("page.colors.pink").foregroundStyle(.rgb(255, 105, 180))
+                    Text("page.colors.teal").foregroundStyle(.rgb(0, 128, 128))
+                    Text("page.colors.purple").foregroundStyle(.rgb(128, 0, 128))
                 }
             }
 
-            DemoSection(L("page.colors.section.gradients")) {
+            DemoSection("page.colors.section.semantic") {
+                HStack(spacing: 2) {
+                    Text("page.colors.primary").foregroundStyle(.primary)
+                    Text("page.colors.success").foregroundStyle(.success)
+                    Text("page.colors.warning").foregroundStyle(.warning)
+                    Text("page.colors.error").foregroundStyle(.error)
+                }
+            }
+
+            DemoSection("page.colors.section.gradients") {
                 VStack(alignment: .leading, spacing: 1) {
-                    GradientLine(label: L("page.colors.gradient.redBlue"),
+                    GradientLine(label: "page.colors.gradient.redBlue",
                                  stops: [(255, 0, 0), (0, 0, 255)])
-                    GradientLine(label: L("page.colors.gradient.yellowMagenta"),
+                    GradientLine(label: "page.colors.gradient.yellowMagenta",
                                  stops: [(255, 220, 0), (255, 0, 200)])
-                    GradientLine(label: L("page.colors.gradient.tealPurple"),
+                    GradientLine(label: "page.colors.gradient.tealPurple",
                                  stops: [(0, 180, 180), (140, 0, 200)])
-                    GradientLine(label: L("page.colors.gradient.fire"),
+                    GradientLine(label: "page.colors.gradient.fire",
                                  stops: [(120, 0, 0), (255, 80, 0), (255, 220, 0)])
-                    GradientLine(label: L("page.colors.gradient.rainbow"),
+                    GradientLine(label: "page.colors.gradient.rainbow",
                                  stops: [
                                     (255, 0, 0), (255, 165, 0), (255, 255, 0),
                                     (0, 200, 0), (0, 100, 255), (140, 0, 200),
                                  ])
-                    GradientLine(label: L("page.colors.gradient.grayscale"),
+                    GradientLine(label: "page.colors.gradient.grayscale",
                                  stops: [(0, 0, 0), (255, 255, 255)])
                 }
             }
@@ -83,7 +83,7 @@ struct ColorsPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.colors"))
+            DemoAppHeader("menu.item.colors")
         }
     }
 }
@@ -99,15 +99,15 @@ struct ColorsPage: View {
 /// painting happens in ``GradientStrip``, a `Renderable` that reads
 /// `context.availableWidth` at draw time.
 private struct GradientLine: View {
-    /// The label printed to the left of the gradient strip.
-    let label: String
+    /// The key for the label printed to the left of the gradient strip.
+    let label: LocalizedStringKey
 
     /// The colour stops to interpolate between, in RGB.
     let stops: [(r: UInt8, g: UInt8, b: UInt8)]
 
     var body: some View {
         HStack(spacing: 1) {
-            Text(label.padded(to: 22))
+            Text(label.localized.padded(to: 22))
                 .foregroundStyle(.palette.foregroundSecondary)
             GradientStrip(stops: stops)
                 .frame(maxWidth: .infinity)

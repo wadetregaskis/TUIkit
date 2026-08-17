@@ -26,89 +26,89 @@ struct FormPage: View {
     /// between them is the `formStyle`. (The bindings are shared too, so it is
     /// literally the same form shown twice.)
     @ViewBuilder private var formContent: some View {
-        Section(L("page.form.profile")) {
-            LabeledContent(L("page.form.name")) { TextField("", text: $name) }
-            LabeledContent(L("page.form.email")) { TextField("", text: $email) }
-            LabeledContent(L("page.form.password")) { SecureField("", text: $password) }
+        Section("page.form.profile") {
+            LabeledContent("page.form.name") { TextField("", text: $name) }
+            LabeledContent("page.form.email") { TextField("", text: $email) }
+            LabeledContent("page.form.password") { SecureField("", text: $password) }
         }
-        Section(L("page.form.appearance")) {
-            LabeledContent(L("page.form.theme")) {
+        Section("page.form.appearance") {
+            LabeledContent("page.form.theme") {
                 Picker("", selection: $theme) {
-                    Text(L("page.form.light")).tag(0)
-                    Text(L("page.form.dark")).tag(1)
-                    Text(L("page.form.system")).tag(2)
+                    Text("page.form.light").tag(0)
+                    Text("page.form.dark").tag(1)
+                    Text("page.form.system").tag(2)
                 }
             }
-            LabeledContent(L("page.form.density")) {
+            LabeledContent("page.form.density") {
                 Picker("", selection: $density) {
-                    Text(L("page.form.compact")).tag(0)
-                    Text(L("page.form.comfortable")).tag(1)
+                    Text("page.form.compact").tag(0)
+                    Text("page.form.comfortable").tag(1)
                 }
             }
-            LabeledContent(L("page.form.version"), value: "1.0.3")
+            LabeledContent("page.form.version", value: "1.0.3")
         }
-        Section(L("page.form.notifications")) {
+        Section("page.form.notifications") {
             // Checkboxes use their own (clickable) label and sit in the control
             // column, box first — the canonical macOS style. A multi-`Text` label
             // is SwiftUI's "title + explanatory text" form: the second line renders
             // below the title, indented to the label and in the secondary colour.
             Toggle(isOn: $push) {
-                Text(L("page.form.pushNotifications"))
-                Text(L("page.form.pushNotificationsDetail"))
+                Text("page.form.pushNotifications")
+                Text("page.form.pushNotificationsDetail")
             }
-            Toggle(L("page.form.marketingEmail"), isOn: $marketing)
-            LabeledContent(L("page.form.volume")) { Slider(value: $volume, in: 0...100) }
+            Toggle("page.form.marketingEmail", isOn: $marketing)
+            LabeledContent("page.form.volume") { Slider(value: $volume, in: 0...100) }
         }
-        Section(L("page.form.account")) {
-            LabeledContent(L("page.form.trustedDevices")) { Stepper("", value: $devices, in: 0...10) }
-            LabeledContent(L("page.form.status"), value: L("page.form.statusActive"))
+        Section("page.form.account") {
+            LabeledContent("page.form.trustedDevices") { Stepper("", value: $devices, in: 0...10) }
+            LabeledContent("page.form.status", value: L("page.form.statusActive"))
             // A push button is right-aligned, as on macOS.
-            Button(L("page.form.signOut"), role: .destructive) {}
+            Button("page.form.signOut", role: .destructive) {}
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            DemoSection(L("page.form.columnsSection")) {
+            DemoSection("page.form.columnsSection") {
                 Form { formContent }
             }
 
-            DemoSection(L("page.form.groupedSection")) {
+            DemoSection("page.form.groupedSection") {
                 Form { formContent }
                     .formStyle(.grouped)
             }
 
-            DemoSection(L("page.form.rowAlignmentSection")) {
+            DemoSection("page.form.rowAlignmentSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.form.rowAlignmentDescription"))
+                    Text("page.form.rowAlignmentDescription")
                         .foregroundStyle(.palette.foregroundSecondary)
                     // The wide field sets the content width; the short buttons then
                     // visibly differ: \"Default\" hugs the right edge, \"Overridden\"
                     // the left.
                     Form {
-                        LabeledContent(L("page.form.trustedDevicesAccount"), value: "3")
-                        Button(L("page.form.defaultButton")) {}
-                        Button(L("page.form.overriddenButton")) {}
+                        LabeledContent("page.form.trustedDevicesAccount", value: "3")
+                        Button("page.form.defaultButton") {}
+                        Button("page.form.overriddenButton") {}
                             .formRowAlignment(.leading)
                     }
                 }
             }
 
-            DemoSection(L("page.form.aboutSection")) {
+            DemoSection("page.form.aboutSection") {
                 VStack(alignment: .leading) {
-                    Text(L("page.form.aboutSameForm"))
+                    Text("page.form.aboutSameForm")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.form.aboutColumns1"))
+                    Text("page.form.aboutColumns1")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.form.aboutColumns2"))
+                    Text("page.form.aboutColumns2")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.form.aboutCheckbox1"))
+                    Text("page.form.aboutCheckbox1")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.form.aboutCheckbox2"))
+                    Text("page.form.aboutCheckbox2")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.form.aboutGrouped"))
+                    Text("page.form.aboutGrouped")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.form.aboutFocusHint")).dim()
+                    Text("page.form.aboutFocusHint").dim()
                 }
             }
 
@@ -116,7 +116,7 @@ struct FormPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.forms"), subtitle: "Form · LabeledContent · Section · formStyle(.columns / .grouped)")
+            DemoAppHeader("menu.item.forms", subtitle: "Form · LabeledContent · Section · formStyle(.columns / .grouped)")
         }
     }
 }

@@ -28,39 +28,39 @@ struct TogglePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.toggle.section.toggles")) {
+            DemoSection("page.toggle.section.toggles") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Toggle(L("page.toggle.enableNotifications"), isOn: $notificationsEnabled)
-                    Toggle(L("page.toggle.darkMode"), isOn: $darkModeEnabled)
-                    Toggle(L("page.toggle.showHiddenFiles"), isOn: $showHiddenFiles)
-                    Toggle(L("page.toggle.disabledOff"), isOn: .constant(false)).disabled()
-                    Toggle(L("page.toggle.disabledOn"), isOn: .constant(true)).disabled()
+                    Toggle("page.toggle.enableNotifications", isOn: $notificationsEnabled)
+                    Toggle("page.toggle.darkMode", isOn: $darkModeEnabled)
+                    Toggle("page.toggle.showHiddenFiles", isOn: $showHiddenFiles)
+                    Toggle("page.toggle.disabledOff", isOn: .constant(false)).disabled()
+                    Toggle("page.toggle.disabledOn", isOn: .constant(true)).disabled()
                 }
             }
 
-            DemoSection(L("page.toggle.section.explanatory")) {
+            DemoSection("page.toggle.section.explanatory") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.toggle.explanatoryNote"))
+                    Text("page.toggle.explanatoryNote")
                         .foregroundStyle(.palette.foregroundSecondary)
                     Toggle(isOn: $pushNotifications) {
-                        Text(L("page.toggle.pushNotifications"))
-                        Text(L("page.toggle.pushSubtitle"))
+                        Text("page.toggle.pushNotifications")
+                        Text("page.toggle.pushSubtitle")
                     }
                 }
             }
 
-            DemoSection(L("page.toggle.section.themeableLabel")) {
+            DemoSection("page.toggle.section.themeableLabel") {
                 VStack(alignment: .leading, spacing: 1) {
                     // Only the labels are restyled; the checkbox glyph is unaffected.
-                    Toggle(L("page.toggle.italicLabel"), isOn: $styledLabelA)
-                    Toggle(L("page.toggle.andThisOne"), isOn: $styledLabelB)
+                    Toggle("page.toggle.italicLabel", isOn: $styledLabelA)
+                    Toggle("page.toggle.andThisOne", isOn: $styledLabelB)
                 }
                 .toggleTextStyle { $0.italic = true; $0.foreground = .palette.info }
             }
 
-            DemoSection(L("page.toggle.section.toggleCharacterSet")) {
+            DemoSection("page.toggle.section.toggleCharacterSet") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.toggle.toggleCharacterSetNote"))
+                    Text("page.toggle.toggleCharacterSetNote")
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 4) {
                         // The "(default)" tag follows the terminal-adaptive
@@ -73,9 +73,9 @@ struct TogglePage: View {
                 }
             }
 
-            DemoSection(L("page.toggle.section.toggleStyle")) {
+            DemoSection("page.toggle.section.toggleStyle") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.toggle.toggleStyleNote"))
+                    Text("page.toggle.toggleStyleNote")
                         .foregroundStyle(.palette.foregroundSecondary)
                     Toggle("automatic", isOn: $styleDemoOn).toggleStyle(.automatic)
                     Toggle("checkbox", isOn: $styleDemoOn).toggleStyle(.checkbox)
@@ -83,10 +83,10 @@ struct TogglePage: View {
                 }
             }
 
-            DemoSection(L("page.toggle.section.keyboard")) {
+            DemoSection("page.toggle.section.keyboard") {
                 VStack(alignment: .leading) {
-                    Text(L("page.toggle.help.tab")).dim()
-                    Text(L("page.toggle.help.spaceEnter")).dim()
+                    Text("page.toggle.help.tab").dim()
+                    Text("page.toggle.help.spaceEnter").dim()
                 }
             }
 
@@ -94,7 +94,7 @@ struct TogglePage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.toggles"))
+            DemoAppHeader("menu.item.toggles")
         }
     }
 
@@ -104,13 +104,13 @@ struct TogglePage: View {
     private func checkboxColumn(_ name: String, style: ToggleCharacterSet) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(style == .automatic ? "\(name) (\(L("page.toggle.default")))" : name).dim()
-            Toggle(L("page.toggle.on"), isOn: .constant(true))
-            Toggle(L("page.toggle.off"), isOn: .constant(false))
+            Toggle("page.toggle.on", isOn: .constant(true))
+            Toggle("page.toggle.off", isOn: .constant(false))
             // The switch under the same glyph style — under `.ascii` a
             // bracketed track with a sliding knob (`[o ]` / `[ o]`) instead of
             // the block-glyph coloured track.
-            Toggle(L("page.toggle.on"), isOn: .constant(true)).toggleStyle(.switch)
-            Toggle(L("page.toggle.off"), isOn: .constant(false)).toggleStyle(.switch)
+            Toggle("page.toggle.on", isOn: .constant(true)).toggleStyle(.switch)
+            Toggle("page.toggle.off", isOn: .constant(false)).toggleStyle(.switch)
         }
         .toggleCharacterSet(style)
     }

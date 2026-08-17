@@ -47,12 +47,12 @@ struct PreferencesPage: View {
             // The header reads the count the children reported from BELOW.
             DemoSection("\(L("page.preferences.parentSection")) — \(L("page.preferences.childrenReporting")): \(reportedCount)") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.preferences.description"))
+                    Text("page.preferences.description")
                         .foregroundStyle(.palette.foregroundSecondary)
 
                     HStack(spacing: 2) {
-                        Button(L("page.preferences.addChild")) { rows += 1 }
-                        Button(L("page.preferences.removeChild")) { rows = max(0, rows - 1) }
+                        Button("page.preferences.addChild") { rows += 1 }
+                        Button("page.preferences.removeChild") { rows = max(0, rows - 1) }
                     }
 
                     // Each child publishes a count of 1 and a message; the
@@ -70,7 +70,7 @@ struct PreferencesPage: View {
                     }
                     .border(.brightBlack)
 
-                    ValueDisplayRow(L("page.preferences.lastMessage"), lastMessage.isEmpty ? "—" : lastMessage)
+                    ValueDisplayRow("page.preferences.lastMessage", lastMessage.isEmpty ? "—" : lastMessage)
                 }
             }
 
@@ -84,7 +84,7 @@ struct PreferencesPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.preferences"))
+            DemoAppHeader("menu.item.preferences")
         }
     }
 }

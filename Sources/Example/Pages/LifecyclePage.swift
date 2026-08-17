@@ -37,9 +37,9 @@ struct LifecyclePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.lifecycle.countersSection")) {
+            DemoSection("page.lifecycle.countersSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.lifecycle.description"))
+                    Text("page.lifecycle.description")
                         .foregroundStyle(.palette.foregroundSecondary)
 
                     VStack(alignment: .leading, spacing: 0) {
@@ -49,7 +49,7 @@ struct LifecyclePage: View {
                     }
                     .border(.brightBlack)
 
-                    ValueDisplayRow(L("page.lifecycle.lastEvent"), counters.lastEvent)
+                    ValueDisplayRow("page.lifecycle.lastEvent", counters.lastEvent)
                 }
                 // The hooks live on the section whose lifecycle they describe.
                 // onAppear runs on each appearance (revisit the page to see it
@@ -63,13 +63,13 @@ struct LifecyclePage: View {
                 }
             }
 
-            DemoSection(L("page.lifecycle.onChangeSection")) {
+            DemoSection("page.lifecycle.onChangeSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.lifecycle.onChangeDescription"))
+                    Text("page.lifecycle.onChangeDescription")
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 2) {
-                        Button(L("page.lifecycle.bump")) { counters.tick += 1 }
-                        ValueDisplayRow(L("page.lifecycle.tracked"), "\(counters.tick)")
+                        Button("page.lifecycle.bump") { counters.tick += 1 }
+                        ValueDisplayRow("page.lifecycle.tracked", "\(counters.tick)")
                     }
                 }
                 .onChange(of: counters.tick) {
@@ -78,13 +78,13 @@ struct LifecyclePage: View {
                 }
             }
 
-            DemoSection(L("page.lifecycle.refreshableSection")) {
+            DemoSection("page.lifecycle.refreshableSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.lifecycle.refreshableDescription"))
+                    Text("page.lifecycle.refreshableDescription")
                         .foregroundStyle(.palette.foregroundSecondary)
 
                     VStack(alignment: .leading, spacing: 1) {
-                        ValueDisplayRow(L("page.lifecycle.refreshCount"), "\(counters.refresh)")
+                        ValueDisplayRow("page.lifecycle.refreshCount", "\(counters.refresh)")
                         // The same refresh the key runs, reached through the
                         // environment — which is the point of `\.refresh`.
                         RefreshButton()
@@ -107,7 +107,7 @@ struct LifecyclePage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.lifecycle"))
+            DemoAppHeader("menu.item.lifecycle")
         }
     }
 
@@ -137,7 +137,7 @@ private struct RefreshButton: View {
     @Environment(\.refresh) private var refresh
 
     var body: some View {
-        Button(L("page.lifecycle.refreshNow")) {
+        Button("page.lifecycle.refreshNow") {
             // `@Environment` is nil outside a render, so the handle is
             // captured into a local for the action closure to keep.
             let action = refresh

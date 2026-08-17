@@ -79,7 +79,7 @@ struct NavigationPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(L("page.navigation.intro"))
+            Text("page.navigation.intro")
                 .foregroundStyle(.palette.foregroundSecondary)
 
             NavigationStack(path: $path) {
@@ -101,7 +101,7 @@ struct NavigationPage: View {
     /// The bottom of the stack. Its state is the point of the demo.
     private var rootScreen: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(L("page.navigation.root.instruction"))
+            Text("page.navigation.root.instruction")
 
             // A plain column, not a `List`. Every row here is a
             // `NavigationLink`, which is already its own focus stop, so a list
@@ -124,15 +124,15 @@ struct NavigationPage: View {
                 }
             }
 
-            LabeledContent(L("page.navigation.note")) {
-                TextField(L("page.navigation.notePlaceholder"), text: $note)
+            LabeledContent("page.navigation.note") {
+                TextField("page.navigation.notePlaceholder", text: $note)
             }
 
             // A view destination rather than a value one: there is no data to
             // route on, just one specific screen.
-            NavigationLink(L("page.navigation.about")) { aboutScreen }
+            NavigationLink("page.navigation.about") { aboutScreen }
         }
-        .navigationTitle(L("page.navigation.title.planets"))
+        .navigationTitle("page.navigation.title.planets")
     }
 
     private func planetScreen(_ planet: Planet) -> some View {
@@ -141,10 +141,10 @@ struct NavigationPage: View {
             Text("\(L("page.navigation.moons")): \(planet.moons)")
 
             if moons(of: planet).isEmpty {
-                Text(L("page.navigation.noMoons"))
+                Text("page.navigation.noMoons")
                     .foregroundStyle(.palette.foregroundSecondary)
             } else {
-                Text(L("page.navigation.pushAgain"))
+                Text("page.navigation.pushAgain")
                     .foregroundStyle(.palette.foregroundSecondary)
                 ForEach(moons(of: planet), id: \.name) { moon in
                     NavigationLink(moon.name, value: moon)
@@ -160,7 +160,7 @@ struct NavigationPage: View {
     private func moonScreen(_ moon: Moon) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text("\(moon.name) · \(moon.planet)").bold()
-            Text(L("page.navigation.moonBody"))
+            Text("page.navigation.moonBody")
                 .foregroundStyle(.palette.foregroundSecondary)
             // Two more levels below here, so the trail gets long enough to
             // elide. Feature and sample names are the demo's CONTENT, like the
@@ -207,17 +207,17 @@ struct NavigationPage: View {
 
     private var aboutScreen: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(L("page.navigation.aboutBody"))
+            Text("page.navigation.aboutBody")
             Spacer()
             rootButton
         }
-        .navigationTitle(L("page.navigation.about"))
+        .navigationTitle("page.navigation.about")
     }
 
     /// Jump straight back to the root from any depth — what a bound path buys
     /// you that the links alone do not.
     private var rootButton: some View {
-        Button(L("page.navigation.backToRoot")) { path.removeLast(path.count) }
+        Button("page.navigation.backToRoot") { path.removeLast(path.count) }
             .disabled(path.isEmpty)
     }
 }

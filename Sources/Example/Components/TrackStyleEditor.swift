@@ -132,38 +132,38 @@ struct TrackStyleEditor: View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(alignment: .top, spacing: 2) {
                 comboField(
-                    L("component.trackEditor.fill"), text: $fullGlyph, width: 9,
+                    "component.trackEditor.fill", text: $fullGlyph, width: 9,
                     predefined: fullGlyphs, recentsJSON: $recentFillsJSON)
                 comboField(
-                    L("component.trackEditor.ramp"), text: $rampText, width: 14,
+                    "component.trackEditor.ramp", text: $rampText, width: 14,
                     predefined: ramps, recentsJSON: $recentRampsJSON,
                     extraCompletions: [""]
                 ) {
                     // An explicit "no sub-cell ramp" choice: its completion is
                     // the empty string, which the configuration maps to nil.
-                    Text(L("component.trackEditor.rampNone")).textInputCompletion("")
+                    Text("component.trackEditor.rampNone").textInputCompletion("")
                 }
                 comboField(
-                    L("component.trackEditor.unfilled"), text: $unfilledName, width: 9,
+                    "component.trackEditor.unfilled", text: $unfilledName, width: 9,
                     predefined: unfilledGlyphs, recentsJSON: $recentUnfilledJSON,
                     extraCompletions: ["background"]
                 ) {
                     // The localized "solid background" option carries the
                     // stable token as its completion — a language switch must
                     // not strand the stored value.
-                    Text(L("component.trackEditor.background"))
+                    Text("component.trackEditor.background")
                         .textInputCompletion("background")
                 }
             }
             HStack(spacing: 2) {
-                Toggle(L("component.trackEditor.gradient"), isOn: $gradientEnabled)
+                Toggle("component.trackEditor.gradient", isOn: $gradientEnabled)
                 // Opens the modal gradient editor over the persisted stops.
                 // Only meaningful while the gradient is applied, so it
                 // disables with the toggle off.
-                Button(L("component.trackEditor.editGradient")) { editingGradient = true }
+                Button("component.trackEditor.editGradient") { editingGradient = true }
                     .disabled(!gradientEnabled)
             }
-            Text(L("component.trackEditor.comboHint"))
+            Text("component.trackEditor.comboHint")
                 .foregroundStyle(.palette.foregroundSecondary)
 
             switch preview {
@@ -179,7 +179,7 @@ struct TrackStyleEditor: View {
         }
         .modal(isPresented: $editingGradient) {
             GradientEditorPanel(
-                L("component.trackEditor.gradientTitle"),
+                "component.trackEditor.gradientTitle",
                 stops: gradientStopsBinding,
                 isPresented: $editingGradient)
         }
@@ -193,7 +193,7 @@ struct TrackStyleEditor: View {
     /// custom values are recorded: the pre-defined options (and any extra
     /// options' completions) already have a home above the divider.
     @ViewBuilder private func comboField(
-        _ title: String,
+        _ title: LocalizedStringKey,
         text: Binding<String>,
         width: Int,
         predefined: [String],

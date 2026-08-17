@@ -139,11 +139,11 @@ struct SplitViewPage: View {
             // room for the leading columns; `.prominentDetail` keeps the detail's
             // size and overlays/hides the leading columns instead; `.automatic`
             // resolves a sensible default for the context.
-            Picker(L("page.splitView.style"), selection: $styleName) {
-                Text(L("page.splitView.styleAutomatic")).tag("automatic")
-                Text(L("page.splitView.styleBalanced")).tag("balanced")
-                Text(L("page.splitView.styleProminentDetail")).tag("prominentDetail")
-                Text(L("page.splitView.styleSizeToFit")).tag("sizeToFit")
+            Picker("page.splitView.style", selection: $styleName) {
+                Text("page.splitView.styleAutomatic").tag("automatic")
+                Text("page.splitView.styleBalanced").tag("balanced")
+                Text("page.splitView.styleProminentDetail").tag("prominentDetail")
+                Text("page.splitView.styleSizeToFit").tag("sizeToFit")
             }
             .pickerStyle(.radioGroup)
             .padding(.horizontal, 1)
@@ -153,8 +153,8 @@ struct SplitViewPage: View {
             // arrow-resize one, which pins it. Reset releases every pin so the
             // columns re-flow to the automatic widths.
             HStack(spacing: 2) {
-                Toggle(L("page.splitView.resizable"), isOn: $resizable)
-                Button(L("page.splitView.resetWidths")) { widthResetToken += 1 }
+                Toggle("page.splitView.resizable", isOn: $resizable)
+                Button("page.splitView.resetWidths") { widthResetToken += 1 }
                     .disabled(!resizable)
             }
             .padding(.horizontal, 1)
@@ -162,7 +162,7 @@ struct SplitViewPage: View {
             styledSplitView
         }
         .appHeader {
-            DemoAppHeader(L("menu.item.splitView"))
+            DemoAppHeader("menu.item.splitView")
         }
     }
 
@@ -190,7 +190,7 @@ struct SplitViewPage: View {
     private var splitView: some View {
         NavigationSplitView(columnVisibility: $visibility) {
             // Sidebar: Folder list
-            List(L("page.splitView.folders"), selection: $selectedFolder) {
+            List("page.splitView.folders", selection: $selectedFolder) {
                 ForEach(Folder.samples) { folder in
                     HStack(spacing: 1) {
                         Text(folder.icon)
@@ -218,7 +218,7 @@ extension SplitViewPage {
         if messages.isEmpty {
             VStack {
                 Spacer()
-                Text(L("page.splitView.noMessages")).dim()
+                Text("page.splitView.noMessages").dim()
                 Spacer()
             }
         } else {
@@ -258,11 +258,11 @@ extension SplitViewPage {
                     .foregroundStyle(.palette.accent)
                     .padding(.bottom, 1)
                 HStack(spacing: 1) {
-                    Text(L("page.splitView.from")).foregroundStyle(.palette.foregroundSecondary)
+                    Text("page.splitView.from").foregroundStyle(.palette.foregroundSecondary)
                     Text(message.from)
                 }
                 HStack(spacing: 1) {
-                    Text(L("page.splitView.date")).foregroundStyle(.palette.foregroundSecondary)
+                    Text("page.splitView.date").foregroundStyle(.palette.foregroundSecondary)
                     Text(message.date)
                 }
 
@@ -274,7 +274,7 @@ extension SplitViewPage {
                 Spacer()
                 HStack {
                     Spacer()
-                    Text(L("page.splitView.selectMessage")).dim()
+                    Text("page.splitView.selectMessage").dim()
                     Spacer()
                 }
                 Spacer()

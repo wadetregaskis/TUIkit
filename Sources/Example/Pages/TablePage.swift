@@ -199,7 +199,7 @@ struct TablePage: View {
             // OR Return/Enter on the focused row activates it (via
             // `.onRowActivate`) — opening a folder in place; the ".." row (↰)
             // navigates up. Reads the live filesystem starting at $HOME.
-            Text(L("page.table.fileBrowserCaption"))
+            Text("page.table.fileBrowserCaption")
                 .foregroundStyle(.palette.foregroundSecondary)
             Text(browserURL.path).dim()
             Table(
@@ -209,14 +209,14 @@ struct TablePage: View {
                 TableColumn("", value: \BrowserEntry.icon)
                     .width(.fixed(2))
                 // `.fit` sizes the Name column to its widest entry.
-                TableColumn(L("page.table.column.name"), value: \BrowserEntry.name)
+                TableColumn("page.table.column.name", value: \BrowserEntry.name)
                     .width(.fit)
-                TableColumn(L("page.table.column.size"), value: \BrowserEntry.size)
+                TableColumn("page.table.column.size", value: \BrowserEntry.size)
                     .width(.fixed(10))
                     .alignment(.trailing)
-                TableColumn(L("page.table.column.modified"), value: \BrowserEntry.modified)
+                TableColumn("page.table.column.modified", value: \BrowserEntry.modified)
                     .width(.fixed(12))
-                TableColumn(L("page.table.column.type"), value: \BrowserEntry.typeLabel)
+                TableColumn("page.table.column.type", value: \BrowserEntry.typeLabel)
                     .width(.flexible)
             }
             // `.onRowActivate` is a `Table` modifier, so it chains before the
@@ -240,19 +240,19 @@ struct TablePage: View {
             // is height-constrained, so only it gets the line/row toggle.
             HStack(alignment: .top, spacing: 2) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(L("page.table.multiSelectionCaption"))
+                    Text("page.table.multiSelectionCaption")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("component.multiSelectHint"))
+                    Text("component.multiSelectHint")
                         .foregroundStyle(.palette.foregroundSecondary)
                     Table(
                         FileEntry.sampleFiles,
                         selection: $multiSelection
                     ) {
-                        TableColumn(L("page.table.column.name"), value: \FileEntry.name)
+                        TableColumn("page.table.column.name", value: \FileEntry.name)
                             .width(.fit)
                         // A narrow column with .lineLimit(2): the Details value wraps
                         // onto a second line, growing the row, and clips the rest.
-                        TableColumn(L("page.table.column.details"), value: \FileEntry.details)
+                        TableColumn("page.table.column.details", value: \FileEntry.details)
                             .width(.fixed(22))
                             .lineLimit(2)
                     }
@@ -260,10 +260,10 @@ struct TablePage: View {
                 .frame(maxWidth: .infinity)
 
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(L("page.table.wrappingCaption"))
+                    Text("page.table.wrappingCaption")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Toggle(L("demo.scrollGranularity.line"), isOn: $fixedHeightByLine)
-                    Toggle(L("page.table.useScrollbar"), isOn: $fixedHeightScrollbar)
+                    Toggle("demo.scrollGranularity.line", isOn: $fixedHeightByLine)
+                    Toggle("page.table.useScrollbar", isOn: $fixedHeightScrollbar)
                     // How early the table scrolls to follow the moving
                     // cursor: at the edge (default), 2 lines early, or centred.
                     FollowMarginPicker(selection: $fixedHeightFollowMargin)
@@ -276,7 +276,7 @@ struct TablePage: View {
                         TableColumn("#", value: \NoteEntry.index)
                             .width(.fixed(5))
                             .alignment(.trailing)
-                        TableColumn(L("page.table.column.details"), value: \NoteEntry.note)
+                        TableColumn("page.table.column.details", value: \NoteEntry.note)
                             .width(.flexible)
                             .lineLimit(3)
                     }
@@ -289,17 +289,17 @@ struct TablePage: View {
                 .frame(maxWidth: .infinity)
             }
 
-            Text(L("page.table.ratioCaption"))
+            Text("page.table.ratioCaption")
                 .foregroundStyle(.palette.foregroundSecondary)
             Table(FileEntry.sampleFiles, selection: $ratioSelection) {
                 // `.ratio` sizes each column to a fraction of the table's
                 // width: Name takes half, Size and Type split the rest.
-                TableColumn(L("page.table.column.name"), value: \FileEntry.name)
+                TableColumn("page.table.column.name", value: \FileEntry.name)
                     .width(.ratio(0.5))
-                TableColumn(L("page.table.column.size"), value: \FileEntry.size)
+                TableColumn("page.table.column.size", value: \FileEntry.size)
                     .width(.ratio(0.25))
                     .alignment(.trailing)
-                TableColumn(L("page.table.column.type"), value: \FileEntry.type)
+                TableColumn("page.table.column.type", value: \FileEntry.type)
                     .width(.ratio(0.25))
             }
             .frame(height: 6)
@@ -307,14 +307,14 @@ struct TablePage: View {
             // Animated cells: every string below derives from `liveTick`, which
             // a `.task` loop advances four times a second — spinner frames,
             // climbing percentages and a running clock, all in plain cells.
-            Text(L("page.table.liveCaption"))
+            Text("page.table.liveCaption")
                 .foregroundStyle(.palette.foregroundSecondary)
             Table(TransferEntry.liveTransfers(tick: liveTick), selection: $liveSelection) {
-                TableColumn(L("page.table.column.name"), value: \TransferEntry.name)
+                TableColumn("page.table.column.name", value: \TransferEntry.name)
                     .width(.fit)
-                TableColumn(L("page.table.column.status"), value: \TransferEntry.status)
+                TableColumn("page.table.column.status", value: \TransferEntry.status)
                     .width(.flexible)
-                TableColumn(L("page.table.column.elapsed"), value: \TransferEntry.elapsed)
+                TableColumn("page.table.column.elapsed", value: \TransferEntry.elapsed)
                     .width(.fixed(8))
                     .alignment(.trailing)
             }
@@ -324,17 +324,17 @@ struct TablePage: View {
             // section: same state machine, same feedback modes, and here the
             // modifier goes on the Table (its rows are values, not views, so
             // there is no ForEach to hang it on).
-            DemoSection(L("page.table.sortSection")) {
+            DemoSection("page.table.sortSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.table.sortInstruction"))
+                    Text("page.table.sortInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
                     Table(sortedTracks, selection: $sortSelection, sortOrder: $trackSort) {
-                        TableColumn(L("page.table.column.track"), value: \Track.title)
+                        TableColumn("page.table.column.track", value: \Track.title)
                             .width(.fit)
-                        TableColumn(L("page.table.column.artist"), value: \Track.artist)
+                        TableColumn("page.table.column.artist", value: \Track.artist)
                             .width(.flexible)
                         // Shows the "m:ss" string, orders by the Int behind it.
-                        TableColumn(L("page.table.column.length"), value: \Track.seconds) {
+                        TableColumn("page.table.column.length", value: \Track.seconds) {
                             $0.length
                         }
                         .width(.fixed(9))
@@ -347,24 +347,24 @@ struct TablePage: View {
                 }
             }
 
-            DemoSection(L("page.table.reorderSection")) {
+            DemoSection("page.table.reorderSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(L("page.table.reorderInstruction"))
+                    Text("page.table.reorderInstruction")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    Text(L("page.rows.keyboardMoveHint"))
+                    Text("page.rows.keyboardMoveHint")
                         .foregroundStyle(.palette.foregroundTertiary)
                         .dim()
-                    Picker(L("page.list.reorderFeedback"), selection: $reorderFeedback) {
+                    Picker("page.list.reorderFeedback", selection: $reorderFeedback) {
                         ForEach(ReorderFeedbackChoice.allCases, id: \.rawValue) { choice in
                             Text(choice.label).tag(choice.rawValue)
                         }
                     }
                     Table(playlist, selection: $playlistSelection) {
-                        TableColumn(L("page.table.column.track"), value: \Track.title)
+                        TableColumn("page.table.column.track", value: \Track.title)
                             .width(.fit)
-                        TableColumn(L("page.table.column.artist"), value: \Track.artist)
+                        TableColumn("page.table.column.artist", value: \Track.artist)
                             .width(.flexible)
-                        TableColumn(L("page.table.column.length"), value: \Track.length)
+                        TableColumn("page.table.column.length", value: \Track.length)
                             .width(.fixed(6))
                             .alignment(.trailing)
                     }
@@ -375,21 +375,21 @@ struct TablePage: View {
                 }
             }
 
-            DemoSection(L("page.table.currentSelections")) {
+            DemoSection("page.table.currentSelections") {
                 VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow(L("page.table.single"), singleSelection ?? L("page.table.none"))
-                    ValueDisplayRow(L("page.table.multi"), multiSelection.isEmpty ? L("page.table.none") : multiSelection.sorted().joined(separator: ", "))
+                    ValueDisplayRow("page.table.single", singleSelection ?? L("page.table.none"))
+                    ValueDisplayRow("page.table.multi", multiSelection.isEmpty ? L("page.table.none") : multiSelection.sorted().joined(separator: ", "))
                 }
             }
 
             KeyboardHelpSection(
-                L("page.table.navigation"),
+                "page.table.navigation",
                 shortcuts: [
-                    L("page.table.help.navigate"),
-                    L("page.table.help.jump"),
-                    L("page.table.help.fastScroll"),
-                    L("page.table.help.select"),
-                    L("page.table.help.switch"),
+                    "page.table.help.navigate",
+                    "page.table.help.jump",
+                    "page.table.help.fastScroll",
+                    "page.table.help.select",
+                    "page.table.help.switch",
                 ]
             )
 
@@ -400,7 +400,7 @@ struct TablePage: View {
             await runLiveTicker()
         }
         .appHeader {
-            DemoAppHeader(L("menu.item.tables"))
+            DemoAppHeader("menu.item.tables")
         }
     }
 

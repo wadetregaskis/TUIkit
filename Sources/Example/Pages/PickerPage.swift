@@ -24,36 +24,36 @@ struct PickerPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection(L("page.picker.menuStyle")) {
-                Picker(L("page.picker.favouriteFruit"), selection: $fruit) {
-                    Text(L("page.picker.apple")).tag("apple")
-                    Text(L("page.picker.banana")).tag("banana")
-                    Text(L("page.picker.cherry")).tag("cherry")
-                    Text(L("page.picker.dragonfruit")).tag("dragonfruit")
+            DemoSection("page.picker.menuStyle") {
+                Picker("page.picker.favouriteFruit", selection: $fruit) {
+                    Text("page.picker.apple").tag("apple")
+                    Text("page.picker.banana").tag("banana")
+                    Text("page.picker.cherry").tag("cherry")
+                    Text("page.picker.dragonfruit").tag("dragonfruit")
                 }
             }
 
-            DemoSection(L("page.picker.longMenu")) {
+            DemoSection("page.picker.longMenu") {
                 // More options than fit the screen: the drop-down windows them and
                 // shows a scrollbar (wheel, arrows, Home/End, and the bar all scroll).
-                Picker(L("page.picker.pickANumber"), selection: $number) {
+                Picker("page.picker.pickANumber", selection: $number) {
                     ForEach(1...200, id: \.self) { value in
                         Text("\(L("page.picker.number")) \(value)").tag(value)
                     }
                 }
             }
 
-            DemoSection(L("page.picker.radioGroupStyle")) {
-                Picker(L("page.picker.tshirtSize"), selection: $size) {
-                    Text(L("page.picker.small")).tag("small")
-                    Text(L("page.picker.medium")).tag("medium")
-                    Text(L("page.picker.large")).tag("large")
+            DemoSection("page.picker.radioGroupStyle") {
+                Picker("page.picker.tshirtSize", selection: $size) {
+                    Text("page.picker.small").tag("small")
+                    Text("page.picker.medium").tag("medium")
+                    Text("page.picker.large").tag("large")
                 }
                 .pickerStyle(.radioGroup)
             }
 
-            DemoSection(L("page.picker.inlineStyle")) {
-                Picker(L("page.picker.priority"), selection: $priority) {
+            DemoSection("page.picker.inlineStyle") {
+                Picker("page.picker.priority", selection: $priority) {
                     ForEach(1..<4) { level in
                         Text("\(L("page.picker.level")) \(level)").tag(level)
                     }
@@ -67,30 +67,30 @@ struct PickerPage: View {
             // renders as an inline field: Left/Right pick a component, Up/Down
             // or typing digits edit it, Page Up/Down move it by a coarse step
             // and Home/End to its limits (the active field pulses when focused).
-            DemoSection(L("page.picker.dateSection")) {
+            DemoSection("page.picker.dateSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    DatePicker(L("page.newControls.dateBoth"), selection: $date)
-                    DatePicker(L("page.newControls.dateOnly"), selection: $date, displayedComponents: .date)
-                    DatePicker(L("page.newControls.timeOnly"), selection: $date, displayedComponents: .hourAndMinute)
+                    DatePicker("page.newControls.dateBoth", selection: $date)
+                    DatePicker("page.newControls.dateOnly", selection: $date, displayedComponents: .date)
+                    DatePicker("page.newControls.timeOnly", selection: $date, displayedComponents: .hourAndMinute)
                 }
             }
 
-            DemoSection(L("page.picker.currentSelections")) {
+            DemoSection("page.picker.currentSelections") {
                 VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow(L("page.picker.fruitLabel"), fruit)
-                    ValueDisplayRow(L("page.picker.sizeLabel"), size)
-                    ValueDisplayRow(L("page.picker.priorityLabel"), "\(priority)")
-                    ValueDisplayRow(L("page.picker.numberLabel"), "\(number)")
+                    ValueDisplayRow("page.picker.fruitLabel", fruit)
+                    ValueDisplayRow("page.picker.sizeLabel", size)
+                    ValueDisplayRow("page.picker.priorityLabel", "\(priority)")
+                    ValueDisplayRow("page.picker.numberLabel", "\(number)")
                 }
             }
 
             KeyboardHelpSection(
-                L("page.picker.pickerNavigation"),
+                "page.picker.pickerNavigation",
                 shortcuts: [
-                    L("page.picker.help.moveFocus"),
-                    L("page.picker.help.openMenu"),
-                    L("page.picker.help.moveChoose"),
-                    L("page.picker.help.dateFields"),
+                    "page.picker.help.moveFocus",
+                    "page.picker.help.openMenu",
+                    "page.picker.help.moveChoose",
+                    "page.picker.help.dateFields",
                 ]
             )
 
@@ -98,7 +98,7 @@ struct PickerPage: View {
         }
         .scrollableDemoPage()
         .appHeader {
-            DemoAppHeader(L("menu.item.picker"))
+            DemoAppHeader("menu.item.picker")
         }
     }
 }

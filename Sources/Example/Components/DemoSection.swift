@@ -13,15 +13,35 @@ import TUIkit
 /// # Example
 ///
 /// ```swift
-/// DemoSection("Basic Features") {
+/// DemoSection("page.buttons.section.styles") {
 ///     Text("Feature 1")
 ///     Text("Feature 2")
 /// }
 /// ```
+///
+/// The title follows the framework's rule: a string **literal** is a
+/// `LocalizedStringKey` and is looked up, a computed `String` is displayed as
+/// given. An app's own components have to spell out the pair themselves — this
+/// one is the reference for the rest of the demo components.
 struct DemoSection<Content: View>: View {
     let title: String
     let content: Content
 
+    /// Creates a section with a localized title.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the section title.
+    ///   - content: The section's content.
+    init(_ titleKey: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.init(titleKey.localized, content: content)
+    }
+
+    /// Creates a section titled as written.
+    ///
+    /// - Parameters:
+    ///   - title: The section title.
+    ///   - content: The section's content.
+    @_disfavoredOverload
     init(_ title: String, @ViewBuilder content: () -> Content) {
         self.title = title
         self.content = content()

@@ -23,13 +23,39 @@ import TUIkit
 /// # Example
 ///
 /// ```swift
-/// .appHeader { DemoAppHeader("Buttons Demo") }
-/// .appHeader { DemoAppHeader("Main Menu", subtitle: "A SwiftUI-like framework") }
+/// .appHeader { DemoAppHeader("page.buttons.title") }
+/// .appHeader { DemoAppHeader("app.title", subtitle: "app.subtitle") }
 /// ```
+///
+/// Both are display prose, so both are localization keys — see ``DemoSection``
+/// for the pattern. The subtitle key is not optional, because `nil` has nothing
+/// to look up and would make the two initializers ambiguous.
 struct DemoAppHeader: View {
     let title: String
     let subtitle: String?
 
+    /// Creates a header with a localized title and subtitle.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The key for the page title.
+    ///   - subtitleKey: The key for the line beneath it.
+    init(_ titleKey: LocalizedStringKey, subtitle subtitleKey: LocalizedStringKey) {
+        self.init(titleKey.localized, subtitle: subtitleKey.localized)
+    }
+
+    /// Creates a header with a localized title and no subtitle.
+    ///
+    /// - Parameter titleKey: The key for the page title.
+    init(_ titleKey: LocalizedStringKey) {
+        self.init(titleKey.localized)
+    }
+
+    /// Creates a header shown as written.
+    ///
+    /// - Parameters:
+    ///   - title: The page title.
+    ///   - subtitle: The line beneath it, if any.
+    @_disfavoredOverload
     init(_ title: String, subtitle: String? = nil) {
         self.title = title
         self.subtitle = subtitle

@@ -51,9 +51,9 @@ struct ScrollAnchoringDemo: View {
     // MARK: - Section 1
 
     private var rowSection: some View {
-        DemoSection(L("page.scrollView.anchorSection")) {
+        DemoSection("page.scrollView.anchorSection") {
             VStack(alignment: .leading, spacing: 1) {
-                Text(L("page.scrollView.anchorBody"))
+                Text("page.scrollView.anchorBody")
                 .foregroundStyle(.palette.foregroundSecondary)
 
                 ScrollView {
@@ -71,15 +71,15 @@ struct ScrollAnchoringDemo: View {
                     "\(L("page.scrollView.anchorPick")): \(pickedRow)",
                     value: $pickedRow, in: 1...40)
                 HStack(spacing: 1) {
-                    Button(L("page.scrollView.anchorHold")) { rowAnchor = .row(pickedRow) }
-                    Button(L("page.scrollView.anchorRelease")) { rowAnchor = .window }
+                    Button("page.scrollView.anchorHold") { rowAnchor = .row(pickedRow) }
+                    Button("page.scrollView.anchorRelease") { rowAnchor = .window }
                 }
                 HStack(spacing: 1) {
-                    Button(L("page.scrollView.anchorInsert")) { insertAboveTarget() }
-                    Button(L("page.scrollView.anchorRemove")) { removeAboveTarget() }
-                    Button(L("page.scrollView.anchorReset")) { resetRows() }
+                    Button("page.scrollView.anchorInsert") { insertAboveTarget() }
+                    Button("page.scrollView.anchorRemove") { removeAboveTarget() }
+                    Button("page.scrollView.anchorReset") { resetRows() }
                 }
-                ValueDisplayRow(L("page.scrollView.anchorState"), describe(rowAnchor))
+                ValueDisplayRow("page.scrollView.anchorState", describe(rowAnchor))
             }
         }
     }
@@ -130,9 +130,9 @@ struct ScrollAnchoringDemo: View {
     // MARK: - Section 2
 
     private var selectionSection: some View {
-        DemoSection(L("page.scrollView.anchorSelSection")) {
+        DemoSection("page.scrollView.anchorSelSection") {
             VStack(alignment: .leading, spacing: 1) {
-                Text(L("page.scrollView.anchorSelBody"))
+                Text("page.scrollView.anchorSelBody")
                 .foregroundStyle(.palette.foregroundSecondary)
 
                 List(selection: $selection) {
@@ -154,13 +154,13 @@ struct ScrollAnchoringDemo: View {
                 .anchorPosition($selAnchor)
 
                 HStack(spacing: 1) {
-                    Button(L("page.scrollView.anchorInsert")) { insertAboveSelection() }
-                    Button(L("page.scrollView.anchorReset")) { resetSelection() }
+                    Button("page.scrollView.anchorInsert") { insertAboveSelection() }
+                    Button("page.scrollView.anchorReset") { resetSelection() }
                 }
                 ValueDisplayRow(
-                    L("page.scrollView.anchorSelSelection"),
+                    "page.scrollView.anchorSelSelection",
                     selection.map(String.init) ?? "—")
-                ValueDisplayRow(L("page.scrollView.anchorState"), describe(selAnchor))
+                ValueDisplayRow("page.scrollView.anchorState", describe(selAnchor))
             }
         }
     }
@@ -185,9 +185,9 @@ struct ScrollAnchoringDemo: View {
     // MARK: - Section 3
 
     private var edgeSection: some View {
-        DemoSection(L("page.scrollView.anchorEdgeSection")) {
+        DemoSection("page.scrollView.anchorEdgeSection") {
             VStack(alignment: .leading, spacing: 1) {
-                Text(L("page.scrollView.anchorEdgeBody"))
+                Text("page.scrollView.anchorEdgeBody")
                 .foregroundStyle(.palette.foregroundSecondary)
 
                 ScrollView {
@@ -210,22 +210,22 @@ struct ScrollAnchoringDemo: View {
                 .anchorPosition($edgeAnchor)
 
                 Picker(
-                    L("page.scrollView.anchorEdgePick"),
+                    "page.scrollView.anchorEdgePick",
                     selection: Binding(
                         get: { edgeAnchor != .top },
                         set: { edgeAnchor = $0 ? .bottom : .top })
                 ) {
-                    Text(L("page.scrollView.anchorEdgeTop")).tag(false)
-                    Text(L("page.scrollView.anchorEdgeBottom")).tag(true)
+                    Text("page.scrollView.anchorEdgeTop").tag(false)
+                    Text("page.scrollView.anchorEdgeBottom").tag(true)
                 }
                 HStack(spacing: 1) {
-                    Button(L("page.scrollView.anchorAppend")) { appendEdgeRow() }
-                    Button(L("page.scrollView.anchorPrepend")) { prependEdgeRow() }
-                    Button(L("page.scrollView.anchorReset")) { resetEdge() }
+                    Button("page.scrollView.anchorAppend") { appendEdgeRow() }
+                    Button("page.scrollView.anchorPrepend") { prependEdgeRow() }
+                    Button("page.scrollView.anchorReset") { resetEdge() }
                 }
                 // Scrolling the box by hand flips this to "released" — the
                 // §1.2 shadow-switch, visible. Matches the other two sections.
-                ValueDisplayRow(L("page.scrollView.anchorState"), describe(edgeAnchor))
+                ValueDisplayRow("page.scrollView.anchorState", describe(edgeAnchor))
             }
         }
     }

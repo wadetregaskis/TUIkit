@@ -104,6 +104,34 @@ its identity from it. If it would be wrong to translate it, it is not a key.
 > `String` — is the disfavoured overload and is displayed exactly as given,
 > which is why an app that resolves its own strings keeps working unchanged.
 
+#### Your own controls
+
+Nothing here is privileged: spell out the same pair and your components join in.
+``LocalizedStringKey/localized`` resolves the key, and `@_disfavoredOverload`
+is what makes a literal prefer the first initializer — without it `String` wins
+outright, because it is a string literal's default type.
+
+```swift
+struct FieldRow: View {
+    let label: String
+
+    init(_ labelKey: LocalizedStringKey) { self.init(labelKey.localized) }
+
+    @_disfavoredOverload
+    init(_ label: String) { self.label = label }
+
+    var body: some View { Text(label.padded(to: 20)) }
+}
+
+FieldRow("form.email")   // looked up
+FieldRow(person.name)    // shown as given
+```
+
+Resolving to a `String` — rather than storing the key and handing it to a
+`Text` — is what lets the row pad, truncate or align it, which a terminal
+control usually has to do. The Example app's `DemoSection`, `ValueDisplayRow`
+and `DemoAppHeader` are written exactly this way.
+
 Interpolation builds one key for every value, with `%@` where each value went:
 
 ```swift
