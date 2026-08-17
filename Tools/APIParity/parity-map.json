@@ -576,10 +576,6 @@
       "how": "Tab.title (String)",
       "why": "/Users/robot/Documents/TUIkit/Sources/TUIkit/Views/TabView.swift:22,33 — the tab's strip label is a plain String captured at init and rendered by the strip, rather than a defaulted Label view type."
     },
-    "DefaultTextFieldStyle": {
-      "how": "TextField's default rendering",
-      "why": "Same as PlainTextFieldStyle — /Users/robot/Documents/TUIkit/Sources/TUIkit/Views/TextField.swift renders the field surface + cursor with no style selection point."
-    },
     "DefaultToolbarItem": {
       "how": "SystemStatusBarItem.quit / .appearance / .theme",
       "why": "/Users/robot/Documents/TUIkit/Sources/TUIkit/StatusBar/SystemStatusBarItem.swift:22,35,48 — the concrete system-provided items, plus `SystemStatusBarItem.items(onQuit:onAppearance:onTheme:)` at :73 for re-binding their actions."
@@ -667,10 +663,6 @@
     "PlaceholderTextShapeStyle": {
       "how": "Palette.foregroundTertiary (as the field-prompt colour)",
       "why": "A TextField/SecureField prompt is drawn in palette.foregroundTertiary — Sources/TUIkit/Rendering/TextFieldContentRenderer.swift:174 (buildPromptContent). The role exists as a palette colour rather than as a ShapeStyle you can hand to .foregroundStyle."
-    },
-    "PlainTextFieldStyle": {
-      "how": "TextField's default (field surface, no border)",
-      "why": "/Users/robot/Documents/TUIkit/Sources/TUIkit/Views/TextEditor.swift:65, :191 — a text control draws as a field on the palette's field surface with no box; `.border()` opts into the boxed look. The plain rendering is the default and unnamed."
     },
     "ProgressViewStyle": {
       "how": "TrackStyle (+ TrackConfiguration)",
