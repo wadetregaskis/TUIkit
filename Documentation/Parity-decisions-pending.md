@@ -8,7 +8,13 @@ than shipped.
 
 Everything *not* on this list is ordinary work and is being done.
 
-Last reviewed: 2026-08-15.
+**Answered so far:** §9 (`Text.bold(_:)` and its siblings) — resolved by taking
+its option (a): `TextStyle`'s five cascaded flags became tri-state, the merge
+became nearest-wins, and the parameters followed. The reasoning is in those
+commits; the entry is gone from here rather than marked done, as this file's
+last section requires.
+
+Last reviewed: 2026-08-17.
 
 ---
 
@@ -178,75 +184,6 @@ and it will catch producers a future implementer forgets.
 
 ---
 
-## 9. `Text.bold(_:)` and its four siblings — whose style wins
-
-**The gap.** SwiftUI's `Text.bold(_:)`, `.italic(_:)`, `.underline(_:…)`,
-`.strikethrough(_:…)` take `_ isActive: Bool = true`. TUIkit's take no
-argument.
-
-**Why it needs a decision — found by shipping it and watching two tests
-fail.** Adding the parameter compiles and looks harmless, and it silently
-changes existing code. `Text("Hi").bold(false)` currently resolves to the
-CASCADING ``View/bold(_:)``, whose proximity rule makes an inner `false` beat
-an outer `.bold()`. Give `Text` its own `bold(_:)` and the call binds there
-instead — and TUIkit's merge is
-
-    effectiveStyle.isBold = effectiveStyle.isBold || (cascaded.bold ?? false)
-
-so a `Text` whose own `isBold` is `false` still renders bold under an outer
-`.bold()`. Two existing tests caught it (`StyleCascadeTests`
-`broadItalicModifier`, `innerOverridesOuter`); nothing else would have.
-
-**The fix is a model change, not a parameter.** `TextStyle`'s five flags are
-`Bool`, so "explicitly off" and "never asked" are the same value. They would
-have to become `Bool?` — the shape ``LineLimit`` already uses for exactly this
-reason ("the `Optional` around it carries *was one stated*") — and the merge
-would have to prefer a stated `false` over the cascade. That is SwiftUI's rule
-(the nearest wins), so the current OR is arguably wrong independently of this
-modifier.
-
-**Two corrections to an earlier draft of this entry, both of which shrink it.**
-
-1. It is *not* a public-API break. `TextStyle` **was** declared `public`, but
-   nothing public accepted or returned one: `Text.style` is internal
-   (`Sources/TUIkit/Views/Text.swift:33`), every construction site is an
-   internal local, and the only public member was `TextStyle.resolved(with:)` —
-   a method *on* the type, which only helps if you already had one. A caller
-   could write `TextStyle()` and then had nowhere to put it. Flipping the flags
-   to `Bool?` therefore changes no public signature; it changes what existing
-   apps *render*, which is the real cost, and the sweep over every
-   text-rendering path is the real work.
-
-2. `StyleAttributes` — the type the public styling surface actually traffics in
-   (`.buttonTextStyle { }`, `.pickerTextStyle { }`, `View.style(_:_:)`, all
-   `(inout StyleAttributes) -> Void`) — **already is** tri-state `Bool?`, and
-   its own documentation says the tri-state exists precisely so that "a subtree
-   [can] turn an attribute **on** and a descendant turn it **off** … matching
-   SwiftUI" (`Sources/TUIkit/Styling/StyleAttributes.swift:60`). So the shape
-   is not novel and the cascade already behaves correctly; the asymmetry is
-   confined to `Text`'s own flags, which is exactly why `Text.bold(false)`
-   would be weaker than `View.bold(false)`.
-
-`TextStyle` is now **internal** (done separately, on the owner's call). Nothing
-outside the module referenced it — the tests reach it through `@testable` — so
-the build was clean on the first try, which is itself the proof that the type
-was never load-bearing public API. The DocC index entries it occupied now point
-at ``StyleAttributes``, ``StyleScope`` and ``StyleCascade``, which is what a
-reader looking for "how do I style text" actually needs; being listed there and
-nowhere else is likely how the stray `public` survived this long.
-
-**Options.** (a) Make the five flags `Bool?`, fix the merge to let a stated
-value win, then add the parameters — one coherent change, with a sweep over
-every text-rendering path. (b) Add the parameters without the model change and
-accept that `Text.bold(false)` is weaker than `View.bold(false)` — rejected
-here as a trap, since the two spellings would differ invisibly. (c) Leave the
-argument-less spellings and record the four in `parity-map.json`.
-
-**Shipped in the meantime:** `Text.monospaced(_:)` and
-`Text.monospacedDigit()`, which are safe precisely because they are the
-identity — which overload a call binds to cannot change what it does.
-
----
 
 ## Recording the answers
 

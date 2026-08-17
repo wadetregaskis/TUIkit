@@ -234,9 +234,10 @@ extension Text {
     /// `MediumGuaranteedModifiers.swift` for the guarantee and the tests that
     /// pin it. Returns the text unchanged.
     ///
-    /// Safe to add alongside ``View/monospaced(_:)`` — unlike the style
-    /// toggles, both spellings are the identity, so which one a call binds to
-    /// cannot change what it does.
+    /// Safe to add alongside ``View/monospaced(_:)``: both spellings are the
+    /// identity, so which one a call binds to cannot change what it does. (The
+    /// emphasis toggles above needed more than that — see ``bold(_:)`` — but
+    /// they have it now.)
     ///
     /// - Parameter isActive: Ignored — a terminal cannot render
     ///   proportionally, so `false` cannot mean what it means in SwiftUI.
