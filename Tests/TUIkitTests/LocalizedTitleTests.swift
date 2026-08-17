@@ -461,6 +461,51 @@ struct LocalizedTitleTests {
             "Alert(actions:)")
     }
 
+    @Test("Alert presets")
+    func alertPresets() {
+        // The four styled presets used to default their titles to hardcoded
+        // English. They now come from the framework's own table, so they follow
+        // the selected language like everything else.
+        #expect(
+            Alert<EmptyView>.warning(message: "m").title
+                == LocalizationService.shared.string(for: LocalizationKey.Label.warning))
+        #expect(
+            Alert<EmptyView>.error(message: "m").title
+                == LocalizationService.shared.string(for: LocalizationKey.Label.error))
+        #expect(
+            Alert<EmptyView>.info(message: "m").title
+                == LocalizationService.shared.string(for: LocalizationKey.Label.info))
+        #expect(
+            Alert<EmptyView>.success(message: "m").title
+                == LocalizationService.shared.string(for: LocalizationKey.Label.success))
+
+        // …and that default is worth having: an isolated service in another
+        // language returns a different word for each. (Isolated, so the shared
+        // service — which every other test reads — is never re-pointed.)
+        let german = LocalizationService(
+            configDirectoryPath: NSTemporaryDirectory() + "tuikit-alert-\(UUID().uuidString)")
+        german.setLanguage(.german)
+        #expect(german.string(for: LocalizationKey.Label.warning) == "Warnung")
+        #expect(german.string(for: LocalizationKey.Label.success) == "Erfolg")
+
+        // A literal message is a key; a computed `String` is not, and still
+        // reaches the overload that keeps the localized default title.
+        #expect(Alert<EmptyView>.warning(message: "test.title.control").message == Self.translation)
+        #expect(Alert<EmptyView>.warning(message: Self.computedKey).message == Self.key)
+        #expect(
+            Alert<EmptyView>.warning(message: Self.computedKey).title
+                == LocalizationService.shared.string(for: LocalizationKey.Label.warning))
+        // An explicit literal title wins over the default and is looked up.
+        #expect(Alert<EmptyView>.error(title: "test.title.control", message: "m").title == Self.translation)
+        // The with-actions forms resolve identically. The receiver's own
+        // `Actions` has to be named because these presets are declared on the
+        // generic `Alert` and return an `Alert<A>` for a *different* `A` — a
+        // pre-existing wart, unrelated to localization.
+        #expect(
+            Alert<EmptyView>.info(message: "test.title.control") { Button("ok") {} }.message
+                == Self.translation)
+    }
+
     @Test("Card")
     func card() {
         expectLocalized(

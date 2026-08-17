@@ -29,6 +29,7 @@
   "label.error": "エラー",
   "label.warning": "警告",
   "label.info": "情報",
+  "label.success": "成功",
   "label.loading": "読み込み中",
   "label.empty": "空",
   "label.none": "なし",

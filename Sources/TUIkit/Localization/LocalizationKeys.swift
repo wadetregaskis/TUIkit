@@ -53,6 +53,7 @@ public enum LocalizationKey {
         case error = "label.error"
         case warning = "label.warning"
         case info = "label.info"
+        case success = "label.success"
         case loading = "label.loading"
         case empty = "label.empty"
         case none = "label.none"

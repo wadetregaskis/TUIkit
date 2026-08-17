@@ -29,6 +29,7 @@
   "label.error": "错误",
   "label.warning": "警告",
   "label.info": "信息",
+  "label.success": "成功",
   "label.loading": "加载中",
   "label.empty": "空",
   "label.none": "无",

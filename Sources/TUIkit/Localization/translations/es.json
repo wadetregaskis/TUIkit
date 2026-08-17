@@ -29,6 +29,7 @@
   "label.error": "Error",
   "label.warning": "Advertencia",
   "label.info": "Información",
+  "label.success": "Éxito",
   "label.loading": "Cargando",
   "label.empty": "Vacío",
   "label.none": "Ninguno",
