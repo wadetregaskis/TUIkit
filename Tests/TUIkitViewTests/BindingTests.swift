@@ -146,3 +146,72 @@ struct BindingDefaultedTests {
         #expect(profile.nickname == "ada")
     }
 }
+
+/// `Binding.init?(_:)` — the *other* answer to an optional binding, where
+/// absent means "no control at all" rather than "a control showing a stand-in".
+/// Its failability is what lets the view hierarchy branch, so these check that
+/// it fails and succeeds when it should, and that the binding it produces is
+/// live rather than a snapshot.
+@MainActor
+@Suite("Unwrapped optional bindings")
+struct BindingUnwrapTests {
+
+    private struct Profile { var nickname: String? }
+
+    @Test("nil produces no binding; a value produces one")
+    func failsOnlyWhenEmpty() {
+        nonisolated(unsafe) var profile = Profile(nickname: nil)
+        let root = Binding(get: { profile }, set: { profile = $0 })
+
+        #expect(Binding(root.nickname) == nil)
+        profile.nickname = "ada"
+        #expect(Binding(root.nickname)?.wrappedValue == "ada")
+    }
+
+    /// The distinction from `defaulted(to:)`: an empty optional is a *fact
+    /// about the value*, and the empty string is a perfectly ordinary one.
+    @Test("An empty string is a value, not an absence")
+    func emptyStringIsAValue() {
+        nonisolated(unsafe) var profile = Profile(nickname: "")
+        let root = Binding(get: { profile }, set: { profile = $0 })
+
+        #expect(Binding(root.nickname)?.wrappedValue.isEmpty == true)
+    }
+
+    @Test("Writing reaches the source")
+    func writingReachesTheSource() throws {
+        nonisolated(unsafe) var profile = Profile(nickname: "ada")
+        let root = Binding(get: { profile }, set: { profile = $0 })
+        let nickname = try #require(Binding(root.nickname))
+
+        nickname.wrappedValue = "grace"
+        #expect(profile.nickname == "grace")
+    }
+
+    @Test("It reads through to the source, not a copy taken at construction")
+    func readsThroughToTheSource() throws {
+        nonisolated(unsafe) var profile = Profile(nickname: "ada")
+        let root = Binding(get: { profile }, set: { profile = $0 })
+        let nickname = try #require(Binding(root.nickname))
+
+        profile.nickname = "grace"
+        #expect(nickname.wrappedValue == "grace")
+    }
+
+    /// The documented edge: the source going `nil` underneath an already-made
+    /// binding. Reading must not trap — the `if let` re-runs next frame and the
+    /// branch corrects itself, so the only question is what happens in between,
+    /// and the last known value is the answer that cannot crash.
+    @Test("A source emptied afterwards reads the value it had, not a crash")
+    func emptiedSourceFallsBack() throws {
+        nonisolated(unsafe) var profile = Profile(nickname: "ada")
+        let root = Binding(get: { profile }, set: { profile = $0 })
+        let nickname = try #require(Binding(root.nickname))
+
+        profile.nickname = nil
+        #expect(nickname.wrappedValue == "ada")
+        // And it is still writable, which is what puts the source back.
+        nickname.wrappedValue = "grace"
+        #expect(profile.nickname == "grace")
+    }
+}

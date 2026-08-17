@@ -170,7 +170,6 @@
   "Binding.index(after:)",
   "Binding.index(before:)",
   "Binding.indices",
-  "Binding.init(_:)",
   "Binding.startIndex",
   "Binding.subscript(_:)",
   "Binding.transaction",
@@ -1554,7 +1553,6 @@
  "labelDeviations": [
   "AnyView.init(erasing:)",
   "AppStorage.init(_:store:)",
-  "Binding.init(_:)",
   "Binding.subscript(_:)",
   "Button.init(_:image:action:)",
   "Button.init(_:image:role:action:)",

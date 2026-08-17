@@ -11,6 +11,48 @@
 // MARK: - Optional bindings
 
 extension Binding {
+    /// Unwraps a binding to an optional, or returns `nil` if there is nothing
+    /// in it — mirrors SwiftUI's `Binding(_:)`.
+    ///
+    /// This is the other answer to the question ``defaulted(to:)`` answers, and
+    /// which one you want depends on what "absent" means to the *interface*
+    /// rather than to the data:
+    ///
+    /// ```swift
+    /// // Absent means "off": show the control, decide what nil draws as.
+    /// Toggle(feature, isOn: $enabled[feature].defaulted(to: false))
+    ///
+    /// // Absent means "nothing to edit": show no control at all.
+    /// if let name = Binding($profile.nickname) {
+    ///     TextField("field.nickname", text: name)
+    /// } else {
+    ///     Button("button.addNickname") { profile.nickname = "" }
+    /// }
+    /// ```
+    ///
+    /// Being failable is the whole point: it moves the decision to a place
+    /// where the view hierarchy can branch, so the absent case gets its own
+    /// interface instead of a control editing a value that is not there.
+    ///
+    /// # It does not observe the source becoming nil
+    ///
+    /// Emptiness is checked **once**, when the binding is made. The returned
+    /// binding writes straight through, and if the source is set to `nil`
+    /// elsewhere a read falls back to the value that was present at
+    /// construction rather than trapping. The `if let` is re-evaluated on the
+    /// next frame — the tree is rebuilt every frame — so the branch corrects
+    /// itself immediately; this only decides what happens in between, and
+    /// returning the last known value is the answer that cannot crash. SwiftUI
+    /// behaves the same way, for the same reason.
+    ///
+    /// - Parameter base: A binding to an optional value.
+    public init?(_ base: Binding<Value?>) {
+        guard let initial = base.wrappedValue else { return nil }
+        self.init(
+            get: { base.wrappedValue ?? initial },
+            set: { base.wrappedValue = $0 })
+    }
+
     /// Substitutes a value for `nil`, producing a binding a control can take.
     ///
     /// A `Binding<Value?>` is what you get for anything that might be absent —
