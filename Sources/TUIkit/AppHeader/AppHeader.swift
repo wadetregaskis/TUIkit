@@ -40,8 +40,9 @@ extension AppHeader: Renderable {
         var lines: [String] = []
 
         // The box's walls eat two columns, so its content is laid out narrower;
-        // the other two styles get the full width.
-        let contentWidth = style == .bordered ? max(0, width - 2) : width
+        // the other two styles get the full width. Same figure the modifier
+        // proposed to the content, from the same place.
+        let contentWidth = max(0, width - style.contentWidthInset)
         for line in contentBuffer.lines {
             lines.append(line.padToVisibleWidth(contentWidth))
         }

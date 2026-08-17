@@ -25,9 +25,8 @@ public enum ChromeStyle: String, Sendable, Hashable, CaseIterable, Codable {
     /// Content, plus a full-width rule on the side facing the page — under the
     /// header, over the status bar.
     ///
-    /// The default, and the lightest thing that still reads as a boundary. The
-    /// two bars mirror each other, which is what makes a header and a footer
-    /// look like a pair.
+    /// The lightest thing that still reads as a boundary. The two bars mirror
+    /// each other, which is what makes a header and a footer look like a pair.
     ///
     /// ```
     /// My App                                    v1.0
@@ -38,10 +37,10 @@ public enum ChromeStyle: String, Sendable, Hashable, CaseIterable, Codable {
     /// ```
     case rule
 
-    /// Content inside a full box.
+    /// Content inside a full box, like a container view.
     ///
-    /// Heavier: two extra rows per bar and a wall down each side. Worth it when
-    /// the chrome should read as a distinct panel rather than a margin.
+    /// The default: two extra rows per bar and a wall down each side, so the
+    /// chrome reads as a panel of its own rather than as a margin.
     ///
     /// ```
     /// ╭──────────────────────────────────────────────╮
@@ -78,10 +77,16 @@ extension ChromeStyle {
         contentRows + chromeRows
     }
 
-    /// The column the bar's content starts at — past the box's left wall and
-    /// its one cell of padding, or 0 for the styles that draw no wall.
-    var contentColumnOffset: Int {
-        self == .bordered ? 2 : 0
+    /// How many columns the style's own drawing takes away from the bar's
+    /// content — a wall down each side of a box, nothing for the rest.
+    ///
+    /// Wanted in two places that must agree: the modifier lays the header
+    /// content out at `width - contentWidthInset`, and the renderer pads each
+    /// of those lines to the same figure before boxing them. Laying out at the
+    /// full width and boxing afterwards is what silently ate the last two cells
+    /// of every header ("TUIkit v0.6" for "TUIkit v0.6.0").
+    var contentWidthInset: Int {
+        self == .bordered ? BorderRenderer.borderWidthOverhead : 0
     }
 }
 

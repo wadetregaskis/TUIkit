@@ -8,7 +8,7 @@ The status bar is a row at the bottom of the terminal that shows keyboard shortc
 
 The status bar is hidden automatically when there are no active user items and no visible system items.
 
-The status bar shares its style type with the app header — see ``ChromeStyle`` — so the two framing bars can be set together with ``Scene/chromeStyle(_:)``. It defaults to ``ChromeStyle/rule``: one row of items under a full-width rule, mirroring the header's.
+The status bar shares its style type with the app header — see ``ChromeStyle`` — so the two framing bars can be set together with ``Scene/chromeStyle(_:)``. It defaults to ``ChromeStyle/bordered``: its items boxed like a container view, which the app header matches.
 
 ## Architecture
 
@@ -143,8 +143,8 @@ When there are no active items left, the status bar height becomes zero and it i
 
 Two styles are available:
 
-- **``ChromeStyle/rule``**: Items in a single line under a full-width rule (the default; the app header draws the same rule below its own content)
-- **``ChromeStyle/bordered``**: Items inside a bordered container
+- **``ChromeStyle/bordered``**: Items inside a bordered container (the default; the app header boxes its own content the same way)
+- **``ChromeStyle/rule``**: Items in a single line under a full-width rule, which the app header mirrors below its content
 - **``ChromeStyle/compact``**: Items alone, no rule and no border
 
 Set the style during app configuration or at runtime via the status bar state.

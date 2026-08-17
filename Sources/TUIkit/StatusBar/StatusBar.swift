@@ -68,7 +68,7 @@ public struct StatusBar: View {
     public init(
         userItems: [any StatusBarItemProtocol] = [],
         systemItems: [any StatusBarItemProtocol] = [],
-        style: ChromeStyle = .rule,
+        style: ChromeStyle = .bordered,
         alignment: StatusBarAlignment = .leading,
         highlightColor: Color = .cyan,
         labelColor: Color? = nil
@@ -91,7 +91,7 @@ public struct StatusBar: View {
     ///   - labelColor: The color for labels (default: nil, terminal default).
     public init(
         items: [any StatusBarItemProtocol],
-        style: ChromeStyle = .rule,
+        style: ChromeStyle = .bordered,
         alignment: StatusBarAlignment = .justified,
         highlightColor: Color = .cyan,
         labelColor: Color? = nil
@@ -113,7 +113,7 @@ public struct StatusBar: View {
     ///   - labelColor: The color for labels.
     ///   - builder: A closure that returns items.
     public init(
-        style: ChromeStyle = .rule,
+        style: ChromeStyle = .bordered,
         alignment: StatusBarAlignment = .justified,
         highlightColor: Color = .cyan,
         labelColor: Color? = nil,

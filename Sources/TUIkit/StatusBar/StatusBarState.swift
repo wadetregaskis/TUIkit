@@ -115,10 +115,10 @@ public final class StatusBarState: @unchecked Sendable {
 
     /// The current status bar style.
     ///
-    /// Defaults to ``ChromeStyle/rule`` so the bar mirrors the app header,
-    /// which draws the same rule on its own page-facing side. Set both at once
-    /// with ``Scene/chromeStyle(_:)``.
-    public var style: ChromeStyle = .rule
+    /// Defaults to ``ChromeStyle/bordered`` — a box, like a container view —
+    /// which the app header now matches. Set both at once with
+    /// ``Scene/chromeStyle(_:)``.
+    public var style: ChromeStyle = .bordered
 
     /// The horizontal alignment of items.
     public var alignment: StatusBarAlignment = .justified

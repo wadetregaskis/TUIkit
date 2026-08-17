@@ -327,13 +327,14 @@ struct StatusBarStateTests {
         #expect(state.height == 0)
     }
 
-    @Test("Height is 2 when only system items")
+    @Test("Height is 3 when only system items")
     func heightWithSystemItems() {
-        // System items are on by default, and the default style is `.rule`:
-        // one row of items under one rule, mirroring the app header's.
+        // System items are on by default, and the default style is
+        // `.bordered`: one row of items inside a box, which the app header
+        // matches.
         let state = StatusBarState()
-        #expect(state.style == .rule)
-        #expect(state.height == 2)
+        #expect(state.style == .bordered)
+        #expect(state.height == 3)
     }
 
     @Test("Height is 2 for the rule style")

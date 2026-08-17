@@ -52,7 +52,16 @@ extension AppHeaderModifier: Renderable {
 
         // Render the header content to a buffer and store it in state.
         // The RenderLoop will pick it up and render it separately.
-        let headerBuffer = TUIkit.renderToBuffer(header, context: context)
+        //
+        // At the width the STYLE leaves it, not the terminal's: a bordered
+        // header spends two columns on its walls, and content laid out at the
+        // full width simply lost its last two cells to the right wall
+        // ("TUIkit v0.6" for "TUIkit v0.6.0"). The style is known here because
+        // it lives on the same state object this writes into.
+        var headerContext = context
+        headerContext.availableWidth = max(
+            0, context.availableWidth - appHeader.style.contentWidthInset)
+        let headerBuffer = TUIkit.renderToBuffer(header, context: headerContext)
         appHeader.contentBuffer = headerBuffer
 
         return TUIkit.renderToBuffer(content, context: context)

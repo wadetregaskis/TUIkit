@@ -68,8 +68,8 @@ struct ExampleStyling: Equatable {
     /// Theme page. Two properties rather than one so the page can demonstrate
     /// both spellings of `Scene.chromeStyle(...)`: the picker drives them
     /// together, and unticking "match" lets them differ.
-    var appHeaderStyle: ChromeStyle = .rule
-    var statusBarStyle: ChromeStyle = .rule
+    var appHeaderStyle: ChromeStyle = .bordered
+    var statusBarStyle: ChromeStyle = .bordered
 }
 
 // MARK: - Content View (Page Router)

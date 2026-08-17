@@ -87,6 +87,51 @@ struct ChromeStyleTests {
         }
     }
 
+    @Test("Both bars default to the box")
+    func theDefaultIsBordered() {
+        // The default is a property of the app's look, and the two bars have
+        // separate defaults in separate types — so it is exactly the kind of
+        // thing that drifts apart unnoticed (a boxed header over a ruled
+        // footer looks like a bug).
+        #expect(AppHeaderState().style == .bordered)
+        #expect(StatusBarState().style == .bordered)
+        #expect(StatusBar(items: []).style == .bordered)
+    }
+
+    @Test("A boxed header lays its content out inside the walls")
+    func borderedHeaderContentIsNotClippedByTheWall() {
+        // Two halves that have to agree about one number, and used not to: the
+        // modifier proposes the width the content lays out at, the renderer
+        // boxes what comes back. Proposing the full terminal width and boxing
+        // afterwards fed the last two cells of every header to the right wall
+        // — on the Example, "TUIkit v0.6" for "TUIkit v0.6.0". So this drives
+        // both halves, and looks at TRAILING text, which is where it shows.
+        let width = 40
+        for style in ChromeStyle.allCases {
+            let state = AppHeaderState()
+            state.style = style
+            let context = makeRenderContext(width: width, height: 10) { environment, _ in
+                environment.appHeader = state
+            }
+            _ = renderToBuffer(
+                Text("page").appHeader {
+                    HStack {
+                        Text("Title")
+                        Spacer()
+                        Text("v1.0.0")
+                    }
+                },
+                context: context)
+
+            let boxed = renderToBuffer(
+                AppHeader(contentBuffer: state.contentBuffer ?? FrameBuffer(), style: style),
+                context: makeRenderContext(width: width, height: 10))
+            let row = boxed.lines[style == .bordered ? 1 : 0].stripped
+            #expect(row.contains("v1.0.0"), "\(style) clipped the trailing text: \(row)")
+            #expect(boxed.lines.allSatisfy { $0.strippedLength == width }, "\(style)")
+        }
+    }
+
     @Test("A boxed header shifts its content's click targets inside the wall")
     func borderedHeaderShiftsRegions() {
         // The header content can hold a Button; boxing it moves those cells

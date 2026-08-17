@@ -41,10 +41,10 @@ final class AppHeaderState: @unchecked Sendable {
     /// The height from the previous render pass, used as an estimate
     /// for layout calculations before the current pass populates the buffer.
     ///
-    /// Defaults to 2 (typical header: 1 content line + 1 divider line) to avoid
-    /// content shifting on the first frame when an app header is present.
+    /// Defaults to 3 (typical header: 1 content line inside a box's two rules)
+    /// to avoid content shifting on the first frame when a header is present.
     /// Apps without a header will have this reset to 0 after the first frame.
-    private var previousHeight: Int = 2
+    private var previousHeight: Int = 3
 
     /// Whether the header has content to display.
     var hasContent: Bool {
@@ -54,9 +54,10 @@ final class AppHeaderState: @unchecked Sendable {
 
     /// How the header frames itself against the page.
     ///
-    /// Defaults to ``ChromeStyle/rule`` — the thin divider that mirrors the
-    /// status bar's. Set both at once with ``Scene/chromeStyle(_:)``.
-    var style: ChromeStyle = .rule
+    /// Defaults to ``ChromeStyle/bordered`` — a box, like a container view,
+    /// matching the status bar's. Set both at once with
+    /// ``Scene/chromeStyle(_:)``.
+    var style: ChromeStyle = .bordered
 
     /// The height of the header in terminal lines: its content plus whatever
     /// chrome the style draws around it, or 0 when no content is set.
