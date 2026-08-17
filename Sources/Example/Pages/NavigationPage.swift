@@ -47,12 +47,11 @@ struct NavigationPage: View {
     /// from any screen — the reason to hold one rather than let the stack.
     @State private var path = NavigationPath()
 
-    /// Root state that must survive a push. If this empties when you come back,
-    /// something is wrong.
+    /// Root state that must survive a push — the demo's whole point. If this
+    /// empties when you come back, something is wrong. (A second copy of the
+    /// same proof used to live on the planet list as a selection binding; it
+    /// bought nothing this does not, and cost the list a redundant focus stop.)
     @State private var note = ""
-
-    /// Root selection, for the same reason.
-    @State private var selection: String?
 
     private let planets = [
         Planet(name: "Mercury", moons: 0),
@@ -104,7 +103,13 @@ struct NavigationPage: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(L("page.navigation.root.instruction"))
 
-            List(selection: $selection) {
+            // A plain column, not a `List`. Every row here is a
+            // `NavigationLink`, which is already its own focus stop, so a list
+            // around them added a SECOND cursor over the same five targets:
+            // Tab walked the links, then landed on the list to walk them again
+            // with the arrows. A list earns its own cursor when it is the only
+            // way to reach its rows — these rows reach themselves.
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(planets) { planet in
                     NavigationLink(value: planet) {
                         HStack {
@@ -116,7 +121,6 @@ struct NavigationPage: View {
                                 .foregroundStyle(.palette.foregroundSecondary)
                         }
                     }
-                    .tag(planet.name)
                 }
             }
 

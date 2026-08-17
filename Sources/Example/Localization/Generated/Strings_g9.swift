@@ -15,7 +15,7 @@ extension ExampleStrings {
         "en": [
             "menu.item.navigation": "Navigation",
             "page.navigation.title": "Navigation",
-            "page.navigation.intro": "A NavigationStack pushes a screen over its root and gives you a way back: the ‹ Back button, Escape, or dismiss(). Walk in, then come back — the note you typed and the row you picked are still there, because the root keeps rendering (off-screen) while a screen is on top.",
+            "page.navigation.intro": "A NavigationStack pushes a screen over its root and gives you a way back: the ‹ Back button, Escape, or dismiss(). Walk in, then come back — the note you typed is still there, because the root keeps rendering (off-screen) while a screen is on top.",
             "page.navigation.depth": "Path depth:",
             "page.navigation.root.instruction": "Pick a planet — Return, Space, or a click pushes it.",
             "page.navigation.moons": "Moons",
@@ -32,7 +32,7 @@ extension ExampleStrings {
         "de": [
             "menu.item.navigation": "Navigation",
             "page.navigation.title": "Navigation",
-            "page.navigation.intro": "Ein NavigationStack schiebt einen Bildschirm über seine Wurzel und bietet einen Weg zurück: die Schaltfläche ‹ Zurück, Escape oder dismiss(). Gehen Sie hinein und kommen Sie zurück — die eingegebene Notiz und die gewählte Zeile sind noch da, denn die Wurzel wird weiter (unsichtbar) gezeichnet, während ein Bildschirm darüber liegt.",
+            "page.navigation.intro": "Ein NavigationStack schiebt einen Bildschirm über seine Wurzel und bietet einen Weg zurück: die Schaltfläche ‹ Zurück, Escape oder dismiss(). Gehen Sie hinein und kommen Sie zurück — die eingegebene Notiz ist noch da, denn die Wurzel wird weiter (unsichtbar) gezeichnet, während ein Bildschirm darüber liegt.",
             "page.navigation.depth": "Pfadtiefe:",
             "page.navigation.root.instruction": "Wählen Sie einen Planeten — Return, Leertaste oder ein Klick schiebt ihn auf den Stapel.",
             "page.navigation.moons": "Monde",
@@ -49,7 +49,7 @@ extension ExampleStrings {
         "fr": [
             "menu.item.navigation": "Navigation",
             "page.navigation.title": "Navigation",
-            "page.navigation.intro": "Un NavigationStack empile un écran au-dessus de sa racine et offre un retour : le bouton ‹ Retour, Échap ou dismiss(). Entrez puis revenez — la note saisie et la ligne choisie sont toujours là, car la racine continue d'être dessinée (hors écran) pendant qu'un écran la recouvre.",
+            "page.navigation.intro": "Un NavigationStack empile un écran au-dessus de sa racine et offre un retour : le bouton ‹ Retour, Échap ou dismiss(). Entrez puis revenez — la note saisie est toujours là, car la racine continue d'être dessinée (hors écran) pendant qu'un écran la recouvre.",
             "page.navigation.depth": "Profondeur du chemin :",
             "page.navigation.root.instruction": "Choisissez une planète — Entrée, Espace ou un clic l'empile.",
             "page.navigation.moons": "Lunes",
@@ -66,7 +66,7 @@ extension ExampleStrings {
         "it": [
             "menu.item.navigation": "Navigazione",
             "page.navigation.title": "Navigazione",
-            "page.navigation.intro": "Un NavigationStack impila una schermata sopra la radice e offre un ritorno: il pulsante ‹ Indietro, Esc o dismiss(). Entra e torna — la nota digitata e la riga scelta sono ancora lì, perché la radice continua a essere disegnata (fuori schermo) mentre una schermata la copre.",
+            "page.navigation.intro": "Un NavigationStack impila una schermata sopra la radice e offre un ritorno: il pulsante ‹ Indietro, Esc o dismiss(). Entra e torna — la nota digitata è ancora lì, perché la radice continua a essere disegnata (fuori schermo) mentre una schermata la copre.",
             "page.navigation.depth": "Profondità del percorso:",
             "page.navigation.root.instruction": "Scegli un pianeta — Invio, Spazio o un clic lo impila.",
             "page.navigation.moons": "Lune",
@@ -83,7 +83,7 @@ extension ExampleStrings {
         "es": [
             "menu.item.navigation": "Navegación",
             "page.navigation.title": "Navegación",
-            "page.navigation.intro": "Un NavigationStack apila una pantalla sobre su raíz y ofrece un regreso: el botón ‹ Atrás, Esc o dismiss(). Entra y vuelve — la nota escrita y la fila elegida siguen ahí, porque la raíz se sigue dibujando (fuera de pantalla) mientras una pantalla la cubre.",
+            "page.navigation.intro": "Un NavigationStack apila una pantalla sobre su raíz y ofrece un regreso: el botón ‹ Atrás, Esc o dismiss(). Entra y vuelve — la nota escrita sigue ahí, porque la raíz se sigue dibujando (fuera de pantalla) mientras una pantalla la cubre.",
             "page.navigation.depth": "Profundidad de la ruta:",
             "page.navigation.root.instruction": "Elige un planeta — Intro, Espacio o un clic lo apila.",
             "page.navigation.moons": "Lunas",
@@ -100,7 +100,7 @@ extension ExampleStrings {
         "zh": [
             "menu.item.navigation": "导航",
             "page.navigation.title": "导航",
-            "page.navigation.intro": "NavigationStack 会在根视图之上推入一个屏幕，并提供返回方式：‹ 返回按钮、Escape 或 dismiss()。进去再回来——你输入的备注和选中的行都还在，因为屏幕覆盖期间根视图仍在（屏幕外）继续渲染。",
+            "page.navigation.intro": "NavigationStack 会在根视图之上推入一个屏幕，并提供返回方式：‹ 返回按钮、Escape 或 dismiss()。进去再回来——你输入的备注还在，因为屏幕覆盖期间根视图仍在（屏幕外）继续渲染。",
             "page.navigation.depth": "路径深度：",
             "page.navigation.root.instruction": "选择一颗行星——回车、空格或点击即可推入。",
             "page.navigation.moons": "卫星",
@@ -117,7 +117,7 @@ extension ExampleStrings {
         "ja": [
             "menu.item.navigation": "ナビゲーション",
             "page.navigation.title": "ナビゲーション",
-            "page.navigation.intro": "NavigationStack はルートの上に画面をプッシュし、戻る手段を用意します：‹ 戻るボタン、Escape、または dismiss()。入ってから戻ってみてください——入力したメモも選んだ行もそのままです。画面が上にある間もルートは（画面外で）描画され続けるからです。",
+            "page.navigation.intro": "NavigationStack はルートの上に画面をプッシュし、戻る手段を用意します：‹ 戻るボタン、Escape、または dismiss()。入ってから戻ってみてください——入力したメモはそのままです。画面が上にある間もルートは（画面外で）描画され続けるからです。",
             "page.navigation.depth": "パスの深さ:",
             "page.navigation.root.instruction": "惑星を選んでください——Return、Space、クリックでプッシュされます。",
             "page.navigation.moons": "衛星",
