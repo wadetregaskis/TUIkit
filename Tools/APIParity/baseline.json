@@ -1451,7 +1451,6 @@
   "View.navigationDocument(_:)",
   "View.navigationLinkIndicatorVisibility(_:)",
   "View.navigationTransition(_:)",
-  "View.offset(_:)",
   "View.onContinueUserActivity(_:perform:)",
   "View.onGeometryChange(for:of:action:)",
   "View.onInteractiveResizeChange(_:)",
