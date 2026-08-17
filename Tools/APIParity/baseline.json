@@ -1434,7 +1434,6 @@
   "View.labelsVisibility(_:)",
   "View.layoutDirectionBehavior(_:)",
   "View.lineHeight(_:)",
-  "View.lineLimit(_:reservesSpace:)",
   "View.listItemTint(_:)",
   "View.listRowInsets(_:_:)",
   "View.luminanceToAlpha()",
