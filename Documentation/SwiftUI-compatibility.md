@@ -269,6 +269,7 @@ Image("Logo")        // asset catalog   Image(.file("logo.png"))   // rasterised
                                         Image(.url("https://…/x.png"))
 Label("Star", systemImage: "star.fill") Label("Star", systemImage: "star.fill")  // glyph, Apple only
 Image(systemName: "star.fill")          Image(systemName: "star.fill")            // the glyph alone
+Button("Save", systemImage: "tray") { } Button("Save", systemImage: "tray") { }   // and on the controls
 ```
 
 **Bitmap / vector `Image` stays out.** A cell grid can't blit a bitmap or render
@@ -299,6 +300,30 @@ and `SFSymbol` resolves nothing, so code stays correct; the glyph simply appears
 codepoint table is Apple's own, extracted deterministically from the SF Symbols
 app (`Tools/GenerateSFSymbols`), and the Private-Use width/advance is handled the
 same way as VS-16 emoji. See `SFSymbol` for the full rules.
+
+**The `systemImage:` shorthand now reaches the controls**, not just `Label`:
+`Button(_:systemImage:action:)` and `Button(_:systemImage:role:action:)`,
+`Toggle(_:systemImage:isOn:)`, `Picker(_:systemImage:selection:content:)` and
+`ContentUnavailableView(_:systemImage:description:)` (Sources/TUIkit/SFSymbols/
+`ControlSymbolInitializers.swift`). Each builds the `Label` the long spelling
+would have built, so each inherits the fallback above whole — an unresolvable
+name renders the plain control, byte for byte, which is what the tests pin
+rather than a glyph they could only see on some hosts. `Button` is the one that
+had to adapt: it is not generic over its label, so the icon reaches it through
+the composed-label path (`ButtonStyleConfiguration.labelView`) rather than the
+string one — the two paths are otherwise interchangeable, which that byte
+comparison now also proves.
+
+**The `image:` spelling of all five stays out**, and is the clearer half of the
+rule: it names an `ImageResource` — a constant Xcode generates from an asset
+catalogue, whose value is a bitmap at some scale factor. A terminal app has
+neither the catalogue nor anywhere to put a bitmap, so there is no honest
+implementation, and by the second of the two rules at the top of this document
+the call must therefore fail to compile rather than quietly drop the icon.
+Recorded as a family in `parity-map.json`. The difference
+between the two spellings is exactly the difference between a *character* and a
+*picture*: an SF Symbol is the former, and that is the whole reason it can be in
+a terminal at all.
 
 ### 2.5 Theming is `palette` / `appearance`; there is no `colorScheme`
 

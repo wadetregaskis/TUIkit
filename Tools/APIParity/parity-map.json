@@ -130,6 +130,16 @@
         "View.searchSuggestions(_:for:)"
       ],
       "why": "SwiftUI can put a searchable field's suggestions in two places — a pop-up menu, or in the content beneath the field — so it needs a placement type and a per-placement visibility. TUIkit has one place: the field's drop-down (Sources/TUIkit/Views/TextInputSuggestions.swift, the same DropdownMenu the Picker uses). `View.searchSuggestions(_:)` and `View.searchCompletion(_:)` are implemented against it. Shipping the `for:` overload would mean either honouring one case of an OptionSet and silently ignoring the other — the partial-seam shape declined twice in Documentation/Parity-decisions-pending.md — or inventing an in-content suggestions surface, which is a feature rather than parity plumbing."
+    },
+    {
+      "match": [
+        "Label.init(_:image:)",
+        "Button.init(_:image:*",
+        "Toggle.init(_:image:*",
+        "Picker.init(_:image:*",
+        "ContentUnavailableView.init(_:image:*"
+      ],
+      "why": "The `image:` spelling of these initializers names an `ImageResource` — a symbol the Xcode build generates from an asset catalogue, whose value is a raster bitmap at one of several scale factors. A terminal app has neither: no asset catalogue in the build (SwiftPM resources are files, not named image constants), and no way to place a bitmap in a cell. The `systemImage:` spelling of every one of these IS implemented (Sources/TUIkit/SFSymbols/ControlSymbolInitializers.swift), because an SF Symbol is a character: it resolves to a Private-Use scalar the terminal font may carry, and falls back to the title alone when it does not."
     }
   ],
   "renamed": {

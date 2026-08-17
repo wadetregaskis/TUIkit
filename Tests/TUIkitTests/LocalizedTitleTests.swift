@@ -238,6 +238,38 @@ struct LocalizedTitleTests {
             Label(Self.computedKey, systemImage: "star"), "Label")
     }
 
+    /// The `systemImage:` convenience initializers add a THIRD overload to each
+    /// of these controls, so the literal now has one more candidate to lose to.
+    /// Same rule, and it has to be re-pinned per control rather than inferred
+    /// from the plain overloads passing above.
+    @Test("systemImage overloads")
+    func systemImageOverloads() {
+        let toggleBox = Box(false)
+        let pickerBox = Box(1)
+        expectLocalized(
+            Button("test.title.control", systemImage: "star") {},
+            Button(Self.computedKey, systemImage: "star") {}, "Button(systemImage:)")
+        expectLocalized(
+            Button("test.title.control", systemImage: "star", role: .destructive) {},
+            Button(Self.computedKey, systemImage: "star", role: .destructive) {},
+            "Button(systemImage:role:)")
+        expectLocalized(
+            Toggle("test.title.control", systemImage: "star", isOn: toggleBox.binding),
+            Toggle(Self.computedKey, systemImage: "star", isOn: toggleBox.binding),
+            "Toggle(systemImage:)")
+        expectLocalized(
+            Picker("test.title.control", systemImage: "star", selection: pickerBox.binding) {
+                Text("a").tag(1)
+            },
+            Picker(Self.computedKey, systemImage: "star", selection: pickerBox.binding) {
+                Text("a").tag(1)
+            }, "Picker(systemImage:)")
+        expectLocalized(
+            ContentUnavailableView("test.title.control", systemImage: "star"),
+            ContentUnavailableView(Self.computedKey, systemImage: "star"),
+            "ContentUnavailableView(systemImage:)")
+    }
+
     @Test("LabeledContent")
     func labeledContent() {
         expectLocalized(
