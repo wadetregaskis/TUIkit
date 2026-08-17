@@ -449,6 +449,69 @@ struct FocusIndicatorAnimationTests {
         #expect(focused(picker.disabled(true)).animatedCells.isEmpty)
     }
 
+    // MARK: - Menu row
+
+    @Test("A focused menu row hands over its whole bar")
+    func menuRowBar() {
+        // The other producers hand over a mark — a cap, a bullet, a caret. A
+        // menu row hands over the ROW: the highlight spans it, so the run has
+        // to be as wide as the row is and start at its first cell, or the
+        // replay leaves a strip of the previous colour behind.
+        let buffer = focused(
+            Menu("Demos") {
+                Button("First") {}
+                Button("Second") {}
+            }
+            .menuStyle(.inline))
+        #expect(buffer.animatedCells.count == 1, "one bar, on the focused row only")
+        expectAnimates(buffer, runs: 1, "menu row bar")
+        let run = buffer.animatedCells[0]
+        // The bar is as wide as the ROW — the rows share a width, so the
+        // focused one's bar reaches past its own label to the widest — and it
+        // sits inside the menu's frame rather than at the buffer's edge.
+        // (`expectAnimates` is what proves it covers the cells actually drawn.)
+        #expect(run.offsetX > 0, "the menu's border and padding precede the row")
+        #expect(
+            run.width >= "Second".count,
+            "the bar spans the row, not just its own label: \(run.width)")
+        #expect(
+            run.frames.allSatisfy { $0.strippedLength == run.width },
+            "every frame is the same width")
+    }
+
+    @Test("The menu bar moves down the menu with the focus")
+    func menuRowBarFollowsFocus() {
+        // A menu is a list, so a run left on row 0 repaints the wrong item
+        // forever — and still looks plausible, because every row's bar is the
+        // same colour. Only its position tells them apart.
+        let menu = Menu("Demos") {
+            Button("First") {}
+            Button("Second") {}
+            Button("Third") {}
+        }
+        .menuStyle(.inline)
+        let context = makeRenderContext(width: 40, height: 8)
+        _ = renderToBuffer(menu, context: context)  // registers the rows
+        context.environment.focusManager?.focusNext()
+        let buffer = renderToBuffer(menu, context: context)
+        #expect(buffer.animatedCells.count == 1)
+        #expect(buffer.animatedCells[0].offsetY > 0, "the bar followed the focus down")
+        expectReplayIsIdentity(buffer, "the moved bar does not match the drawn row")
+    }
+
+    @Test("An unfocused or disabled menu row animates nothing")
+    func menuRowBarStill() {
+        let menu = Menu("Demos") {
+            Button("First") {}
+            Button("Second") {}
+        }
+        .menuStyle(.inline)
+        let context = makeRenderContext(width: 40, height: 8)
+        context.environment.focusManager!.register(FocusSentinel())
+        #expect(renderToBuffer(menu, context: context).animatedCells.isEmpty)
+        #expect(focused(menu.disabled(true)).animatedCells.isEmpty)
+    }
+
     @Test("A button keeps its runs through the tree a page wraps it in")
     func capsSurviveRealChrome() {
         // The producer and the propagation both have to hold for the page to

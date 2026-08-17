@@ -2651,3 +2651,57 @@ width. There was no effect.
   warm cache must not invoke the row builder once. The pre-existing
   "Subscripting builds exactly the touched rows" now asserts **zero** builds —
   subscripting a memoized ordinal no longer constructs anything.
+
+## 39. The last focus-indicator producer: the menu row (2026-08-16)
+
+Fourth and last of the four named in §13, and the largest number in the app.
+The Example's **main menu sat at 35.0% of a core while idle**, emitting
+654 bytes/s. That shape is the finding: the fewest bytes and the most CPU of
+any screen — a whole view walk ~30×/s that changes almost nothing on screen.
+The `menu` scenario in `Tools/Profiling/drive.py` traces at 99.2% inclusive in
+`renderFrame` with no hot leaf, i.e. 32 inline rows re-rendered to recolour one.
+
+### Why this one resisted the pattern the other three used
+
+The others hand over a *mark* — a cap, a bullet, a chip — and a mark is one
+glyph the producer can redraw per colour. A menu row's indicator is the ROW: a
+full-width bar under whatever the row draws. Worse, `_MenuItemRow.foreground`
+was `palette.readableText(on: highlight)`, so the *text* colour moved with the
+bar; a run could not be built by recolouring the drawn line.
+
+Both halves resolved at once, and the second is a fix in its own right:
+
+- **The bar moved out of the row.** `_MenuItemRowBar` (a `Renderable`, because
+  `ButtonStyle.makeBody` composes views and has nowhere to hang
+  `animatedCells`) renders the row once *without* a background, then paints the
+  cycle over the finished line — one `applyPersistentBackground` per step, each
+  self-contained. 16 recolourings of one rendered line, not 16 renders.
+- **The text stopped moving.** The focused row keeps `palette.foreground`, like
+  the `Picker` drop-down and `List`'s focused row already do. Text that changes
+  colour mid-breath reads as a glitch, and the alternative could flip from the
+  light end of the palette to the dark one partway through a cycle. The pair is
+  already measured: `PaletteContrastAuditTests` holds `foreground` over *both*
+  pulse endpoints for every shipped palette — which is what bounds
+  `ViewConstants.focusPulseMax` in the first place.
+
+### Measured
+
+| screen | idle CPU before | after | bytes/s | writes/s |
+|---|---|---|---|---|
+| **main menu** | **35.0%** | **0.3%** | 654 → 793 | 2.2 (unchanged) |
+| Overlays & Modals | 10.4% | **0.2%** | | |
+| Menus | 3.5% | 2.8% | 9016 | (animates legitimately) |
+
+The write rate is the check that matters, and it is unchanged at 2.2/s — with
+the same three background colours written (`48;5;16`, `22`, `28`) over a 6 s
+window, before and after. It still breathes; it simply no longer walks the view
+tree to do it. (2.2/s rather than ~20/s because the 256-colour cube quantises
+this ramp to three distinct shades, so the ticks between them write nothing —
+`lastSteps` per clock, from §11.)
+
+Bytes/s rose 21%, which is the known per-run splice overhead (one dead escape
+per run per tick, §10) applied to a run 20 cells wide.
+
+All four producers named in §13 are now converted. What remains above 3% idle
+is the **scrollbar** (Scroll View 27.0, Picker 24.5, Lists 8.5, Tables) —
+the awkward one, because the whole bar pulses, so it wants one run per bar row.

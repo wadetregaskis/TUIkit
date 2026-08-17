@@ -20,33 +20,114 @@
 /// picks it up without the caller styling anything.
 struct _MenuItemButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
+        _MenuItemRowBar(configuration: configuration)
+    }
+}
+
+// MARK: - The breathing bar
+
+/// Draws the focused row's highlight, and hands the run loop the whole breath
+/// as finished lines rather than reading the clock (see ``AnimatedCellRun``).
+///
+/// This is where the row's *bar* lives, not in ``_MenuItemRow`` itself, for one
+/// reason: painted here it is one persistent background over the finished line,
+/// so the cycle is 16 recolourings of a line that was rendered once. Painted
+/// inside the row it would be part of the row's own styling, and every step
+/// would mean rendering the row again.
+///
+/// Why it matters: 32 rows resolving the live emphasis held the Example's main
+/// menu at **35.5% of a core while idle** at 604 bytes/s — the fewest bytes and
+/// the most CPU of any screen, i.e. an entire view walk ~30×/s to recolour one
+/// row.
+private struct _MenuItemRowBar: View, Renderable, Layoutable {
+    let configuration: ButtonStyleConfiguration
+
+    var body: Never {
+        fatalError("_MenuItemRowBar renders via Renderable")
+    }
+
+    /// The row without the bar — what is measured, and what each step of the
+    /// cycle is painted over.
+    private var row: _MenuItemRow {
         _MenuItemRow(configuration: configuration)
+    }
+
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(row, proposal: proposal, context: context)
+    }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        var buffer = TUIkit.renderToBuffer(row, context: context)
+        guard configuration.isFocused else { return buffer }
+
+        let palette = context.environment.palette
+        let cycle = context.environment.selectionEmphasis.cycle(true)
+        let dim = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
+        let bright = palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
+
+        // Squared off first: the bar spans the row, and a short line would
+        // otherwise be painted only as far as it happens to reach, leaving the
+        // highlight ragged on a multi-line label.
+        let width = buffer.lines.map(\.strippedLength).max() ?? 0
+        let plain = buffer.lines.map { $0.padToVisibleWidth(width) }
+
+        // Each step is self-contained — its own background in front and a reset
+        // behind — because a frame the loop splices in cannot lean on an escape
+        // that happens to sit earlier in the line.
+        func painted(_ line: String, _ color: Color) -> String {
+            ANSIRenderer.applyPersistentBackground(line, color: color) + ANSIRenderer.reset
+        }
+
+        let now = cycle.colorNow(dim: dim, bright: bright)
+        buffer.lines = plain.map { painted($0, now) }
+
+        // A still cycle (`.selectionIndicatorStyle(.none)`, or a blink at rest)
+        // was already drawn above; replaying it would emit bytes per tick to
+        // change nothing. Measuring passes leave no runs at all.
+        guard cycle.isAnimating, !context.isMeasuring else { return buffer }
+        buffer.animatedCells += plain.indices.compactMap { index in
+            cycle.run(dim: dim, bright: bright, offsetX: 0, offsetY: index) {
+                painted(plain[index], $0)
+            }
+        }
+        return buffer
     }
 }
 
 // MARK: - Row
 
 /// One menu row. A separate view because `ButtonStyle.makeBody` composes views
-/// and has no render context: the palette and the pulse phase have to come from
-/// the environment (the same shape as the gradient editor's `_StopChipStyle`).
+/// and has no render context: the palette has to come from the environment (the
+/// same shape as the gradient editor's `_StopChipStyle`).
 private struct _MenuItemRow: View {
     let configuration: ButtonStyleConfiguration
 
     @Environment(\.palette) private var palette
-
-    /// The shared focus-emphasis clock — the same one the `Picker` drop-down,
-    /// `List` rows and every other focused control resolve through, so a menu
-    /// row breathes in step with them and honours `.selectionIndicatorStyle`.
-    /// Reading it while focused is also volatile, which keeps the row out of any
-    /// render memo so the highlight animates instead of freezing on frame one.
-    @Environment(\.selectionEmphasis) private var emphasis
 
     /// The width the highlight bar should span, injected by the menu once it
     /// knows it. See ``EnvironmentValues/menuRowWidth``.
     @Environment(\.menuRowWidth) private var menuRowWidth
     @Environment(\.menuRowInset) private var menuRowInset
 
+    @ViewBuilder
     var body: some View {
+        // Inside the background, so the highlight covers the breathing room
+        // rather than leaving gutters the eye reads as part of the bar and the
+        // pointer cannot hit. An INLINE menu leaves this 0 and takes its
+        // margin from the column's own padding, which is outside the row.
+        let content = columns.padding(.horizontal, menuRowInset)
+        // The focused row draws no background of its own: ``_MenuItemRowBar``
+        // paints its bar over the finished line, and a background here would
+        // sit *inside* that paint — the inner code wins for the cells it
+        // covers — leaving the bar showing only in the gaps.
+        if let background {
+            content.background(background)
+        } else {
+            content
+        }
+    }
+
+    private var columns: some View {
         // The bar spans the menu's interior — but ONLY once the menu has
         // measured itself. Filling with `.frame(maxWidth: .infinity)` instead
         // would make every row measure as flexible, the stack would measure at
@@ -66,12 +147,6 @@ private struct _MenuItemRow: View {
                     .frame(width: hintWidth, alignment: .trailing)
             }
         }
-        // Inside the background, so the highlight covers the breathing room
-        // rather than leaving gutters the eye reads as part of the bar and the
-        // pointer cannot hit. An INLINE menu leaves this 0 and takes its
-        // margin from the column's own padding, which is outside the row.
-        .padding(.horizontal, menuRowInset)
-        .background(background)
     }
 
     private var row: some View {
@@ -101,7 +176,7 @@ private struct _MenuItemRow: View {
     }
 
     /// The hint is secondary information — dimmed, except on the highlight bar
-    /// where it has to share the label's readable-against-accent colour.
+    /// where it comes up to full strength alongside the label.
     private var hintForeground: Color {
         guard configuration.isEnabled, !configuration.isFocused else { return foreground }
         return palette.foregroundSecondary
@@ -125,36 +200,33 @@ private struct _MenuItemRow: View {
 
     /// The row's text colour. A destructive role keeps its error tint whatever
     /// the row's state — matching SwiftUI, where the role overrides the style.
+    ///
+    /// The focused row keeps the ordinary foreground rather than picking a
+    /// colour against the bar. Two reasons, and the first is the real one: the
+    /// bar MOVES, so a colour chosen against it moves too, and text that
+    /// changes colour mid-breath reads as a glitch. (It could also flip from
+    /// the light end of the palette to the dark one partway through a cycle.)
+    /// And the pair is already measured — `PaletteContrastAuditTests` holds
+    /// `foreground` over both pulse endpoints, for every shipped palette,
+    /// which is exactly what bounds ``ViewConstants/focusPulseMax``. It is
+    /// what the `Picker` drop-down and `List`'s focused row do as well.
     private var foreground: Color {
         if !configuration.isEnabled {
             return palette.foreground.opacity(ViewConstants.disabledForeground, over: palette.background)
         }
         if configuration.role == .destructive { return palette.error }
-        // On the highlight bar, pick whichever of the palette's text colours
-        // actually reads against it.
-        return configuration.isFocused ? palette.readableText(on: highlight) : palette.foreground
+        return palette.foreground
     }
 
-    /// The row's background: the pulsing accent bar under the keyboard cursor, a
-    /// quieter tint under the pointer, nothing otherwise.
-    private var background: Color {
-        if configuration.isFocused { return highlight }
+    /// The row's own background: a quiet tint under the pointer, the page
+    /// colour otherwise — and *nothing* under the keyboard cursor, whose
+    /// breathing bar ``_MenuItemRowBar`` paints over the finished line.
+    private var background: Color? {
+        if configuration.isFocused { return nil }
         if configuration.isHovered {
             return palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
         }
         return palette.background
-    }
-
-    /// The focused bar, between the same two endpoints the `Picker` drop-down
-    /// uses — and now on the same clock as well. It used to read `pulsePhase`
-    /// directly, which is a different timer: 2.0 s per cycle against the
-    /// selection clock's 0.8 s, so a menu row visibly lagged every other
-    /// highlight on screen, and `.selectionIndicatorStyle(.none/.blink)` did
-    /// not reach it at all.
-    private var highlight: Color {
-        emphasis(configuration.isFocused).color(
-            dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
-            bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background))
     }
 }
 
