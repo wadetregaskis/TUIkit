@@ -52,12 +52,24 @@ private struct AddedOptionalArguments: View {
                 .alert("alert.title", isPresented: $isPresented) {
                     Button("button.ok") {}
                 }
-                // TUIkit adds style: between the colour and the width.
+                // TUIkit adds style: BETWEEN the colour and the width, which
+                // is the case a prefix rule would miss: Swift lets a call skip
+                // a defaulted parameter from anywhere, not just the tail.
                 .border(.red, width: 2)
                 // TUIkit spells this fixedSize(horizontal:vertical:), both
                 // defaulted to true — so this means what SwiftUI means.
                 .fixedSize()
+                // Two fully-defaulted EdgeInsets initialisers exist, so this
+                // also pins that the call is not AMBIGUOUS — the symbol diff
+                // can see that some overload accepts it, never that exactly
+                // one does. (Swift's "fewer defaulted arguments" tie-break
+                // picks `init(horizontal:vertical:)`; both are all-zero.)
                 .padding(EdgeInsets())
+            // Another mid-list default: showsIndicators: sits between the axes
+            // and the content closure.
+            ScrollView(.vertical) {
+                Text("scrolled")
+            }
         }
     }
 }

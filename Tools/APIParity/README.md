@@ -66,20 +66,33 @@ function may append parameters of its own after SwiftUI's — `.alert` carries
 those as absences, and the report claiming TUIkit has no `.alert` is simply
 false; a report that cries wolf is one nobody reads.
 
-So a SwiftUI key is counted as **compatible** when its labels are an exact
-PREFIX of some TUIkit overload's and every extra label after the prefix carries
-a default — read out of the declaration fragments, which is where a symbol
-graph renders ` = nil`. Nothing looser qualifies: a reordering, an inserted
-parameter, or an extra one that is *required* genuinely fails to compile and
-stays a gap.
+So a SwiftUI key is counted as **compatible** when its labels are an
+order-preserving SUBSEQUENCE of some TUIkit overload's and every label the call
+skips over carries a default — read out of the declaration fragments, which is
+where a symbol graph renders ` = nil`. Subsequence rather than prefix because
+that is Swift's actual rule: a defaulted parameter can be omitted from
+*anywhere*, so `f(a: 1, c: 2)` binds to `f(a:b:c:)`, while the arguments that
+remain may not be reordered (SE-0060). Requiring a prefix was sound but
+incomplete, and missed `border(_:width:)` and `ScrollView(_:content:)` for
+exactly that reason — in both, the added parameter sits in the middle.
 
-The limit is worth stating, because it is the one way this could mislead: the
-rule proves the call **compiles**, not that it **means** the same thing.
-`fixedSize()` reaches `fixedSize(horizontal:vertical:)` whatever those defaults
-are, and it is only correct because TUIkit defaults both to `true` as SwiftUI
-does — flip one and the match here becomes a silent behaviour difference. That
-is why every compatible symbol is printed in full rather than folded into a
-count, and why each one also appears in the compile corpus below.
+Nothing looser qualifies: a reordering, or an extra parameter that is
+*required*, genuinely fails to compile and stays a gap.
+
+Two limits are worth stating, because they are the ways this could mislead.
+
+1. It proves the call **compiles**, not that it **means** the same thing.
+   `fixedSize()` reaches `fixedSize(horizontal:vertical:)` whatever those
+   defaults are, and is only correct because TUIkit defaults both to `true` as
+   SwiftUI does — flip one and the match becomes a silent behaviour difference.
+2. It proves *some* overload accepts those labels, never that exactly one does.
+   Two equally-good candidates would make the call ambiguous and therefore
+   uncompilable, and the reported "`<-`" is a satisfying overload rather than
+   the one resolution picks.
+
+Both are why every compatible symbol is printed in full rather than folded into
+a count, and why each also appears in the compile corpus below — where the
+compiler, not the model of it, has the last word.
 
 ### Label deviations are reported separately
 

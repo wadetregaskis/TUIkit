@@ -104,9 +104,10 @@ def load_symbols(directory, modules, collect_defaults=False):
     purpose: this compares vocabulary, and a signature diff belongs to the
     compile corpus (see the README), not here.
 
-    With `collect_defaults`, also returns how many TRAILING parameters of each
-    function carry a default value — what ``source_compatible`` needs to tell
-    an added optional argument from a changed signature.
+    With `collect_defaults`, also returns which parameters of each function
+    carry a default value — what ``source_compatible`` needs to tell an added
+    optional argument from a changed signature. An overloaded key keeps every
+    overload's flags, because they are what distinguishes them here.
     """
     wanted = set(modules)
     symbols = {}
@@ -136,23 +137,21 @@ def load_symbols(directory, modules, collect_defaults=False):
             key = ".".join(parts)
             symbols.setdefault(key, kind)
             if collect_defaults:
-                trailing = trailing_defaults(symbol)
-                if trailing:
-                    defaults[key] = max(defaults.get(key, 0), trailing)
+                defaults.setdefault(key, []).append(defaulted_parameters(symbol))
     return (symbols, defaults) if collect_defaults else symbols
 
 
-def trailing_defaults(symbol):
-    """How many of this function's LAST parameters have a default value.
+def defaulted_parameters(symbol):
+    """Which of this function's parameters have a default, in order.
 
     Read off `declarationFragments`, which is where a symbol graph renders
     ` = nil`; the per-parameter fragments omit defaults entirely. The scan
     walks the fragment list rather than the rendered string because a
     parameter list is full of commas, angle brackets and `->` that no amount
     of bracket-counting parses reliably: `externalParam` starts a parameter,
-    and a `text` fragment holding `=` before the next one means that parameter
-    is defaulted. It stops when the parameter list closes, so the `==` in a
-    `where` clause cannot be mistaken for a default on the last parameter.
+    and an `=` before the next one means that parameter is defaulted. It stops
+    when the parameter list closes, so the `==` in a `where` clause cannot be
+    mistaken for a default on the last parameter.
     """
     fragments = symbol.get("declarationFragments") or []
     depth, started, closed, defaulted = 0, False, False, []
@@ -177,58 +176,29 @@ def trailing_defaults(symbol):
                     defaulted[-1] = True
         elif kind == "externalParam" and depth == 1:
             defaulted.append(False)
-    count = 0
-    for flag in reversed(defaulted):
-        if not flag:
-            break
-        count += 1
-    return count
+    return defaulted
 
 
-def source_compatible(swiftui, tuikit, tuikit_defaults):
-    """Absent SwiftUI symbols that a SwiftUI call site nonetheless compiles to.
+def omittable(wanted, labels, defaulted):
+    """Can `wanted` be spelled by omitting only DEFAULTED parameters?
 
-    TUIkit is aiming at SOURCE compatibility, not identical declarations, so a
-    TUIkit function may add optional parameters of its own after SwiftUI's:
-    `alert(_:isPresented:actions:message:)` is spelled
-    `alert(_:isPresented:actions:message:borderStyle:borderColor:titleColor:)`
-    here, and the SwiftUI call compiles verbatim because the three extras are
-    defaulted. Comparing argument labels alone cannot see that, so those read
-    as gaps — the report claiming TUIkit has no `.alert`, which is false, and
-    a report that cries wolf is one nobody reads.
+    Swift lets a call skip a defaulted parameter from ANYWHERE in the list, not
+    just the tail — `f(a: 1, c: 2)` binds to `f(a:b:c:)` when `b` has one — but
+    it does NOT let the remaining arguments be reordered (SE-0060). So the test
+    is an order-preserving subsequence, and every parameter the call skips over
+    must carry a default.
 
-    The test is deliberately narrow: SwiftUI's labels must be an exact PREFIX
-    of a TUIkit overload's, and every extra label after the prefix must carry
-    a default. Anything else — a reordering, an inserted parameter, an extra
-    one that is required — genuinely does not compile and stays a gap.
-
-    What it proves is that the call COMPILES, not that it MEANS the same
-    thing: `fixedSize()` reaches `fixedSize(horizontal:vertical:)` whatever
-    those defaults are, and it is only right because TUIkit defaults both to
-    `true` as SwiftUI does. Flipping such a default would turn a match here
-    into a silent behaviour difference, which is why every one of these is
-    printed rather than quietly folded into the explained count.
+    The match is greedy from the left, which is what Swift does with unlabelled
+    parameters: given `f(_ a: Int = 0, _ b: Int)`, `f(5)` binds 5 to `a` and
+    then fails for want of `b` rather than quietly meaning `b: 5`.
     """
-    by_name = {}
-    for key in tuikit:
-        name, labels = signature(key)
-        if labels is not None:
-            by_name.setdefault(name, []).append((labels, key))
-    satisfied = {}
-    for key in swiftui:
-        if key in tuikit:
-            continue
-        name, labels = signature(key)
-        if labels is None or name not in by_name:
-            continue
-        for other_labels, other in by_name[name]:
-            extra = len(other_labels) - len(labels)
-            if extra <= 0 or other_labels[:len(labels)] != labels:
-                continue
-            if tuikit_defaults.get(other, 0) >= extra:
-                satisfied[key] = other
-                break
-    return satisfied
+    index = 0
+    for position, label in enumerate(labels):
+        if index < len(wanted) and wanted[index] == label:
+            index += 1
+        elif not defaulted[position]:
+            return False
+    return index == len(wanted)
 
 
 def unavailable(symbol):
@@ -317,6 +287,66 @@ def label_deviations(swiftui, tuikit):
     return found
 
 
+def source_compatible(swiftui, tuikit, tuikit_defaults):
+    """Absent SwiftUI symbols that a SwiftUI call site nonetheless compiles to.
+
+    TUIkit is aiming at SOURCE compatibility, not identical declarations, so a
+    TUIkit function may add optional parameters of its own:
+    `alert(_:isPresented:actions:message:)` is spelled
+    `alert(_:isPresented:actions:message:borderStyle:borderColor:titleColor:)`
+    here, and `border(_:width:)` is `border(_:style:width:)`. The SwiftUI call
+    compiles verbatim in both cases. Comparing argument labels alone cannot see
+    that, so those read as gaps — the report claiming TUIkit has no `.alert`,
+    which is false, and a report that cries wolf is one nobody reads.
+
+    The extras need not be trailing: `omittable` implements Swift's actual rule
+    — skip any DEFAULTED parameter, from anywhere, but never reorder what is
+    left. Requiring a prefix instead (the first version of this) was sound but
+    incomplete, and missed `border(_:width:)` and `ScrollView(_:content:)`
+    precisely because the added parameter sits in the middle.
+
+    What it proves is that the call COMPILES, not that it MEANS the same
+    thing: `fixedSize()` reaches `fixedSize(horizontal:vertical:)` whatever
+    those defaults are, and it is only right because TUIkit defaults both to
+    `true` as SwiftUI does. Flipping such a default would turn a match here
+    into a silent behaviour difference, which is why every one of these is
+    printed rather than quietly folded into the explained count — and why each
+    also appears in `CompileCorpus.swift`, where the compiler has the last word.
+    """
+    by_name = {}
+    for key in tuikit:
+        name, labels = signature(key)
+        if labels is not None:
+            by_name.setdefault(name, []).append((labels, key))
+    # The value recorded is A satisfying overload, not necessarily the one
+    # Swift's overload resolution would pick, and not a promise that exactly
+    # one qualifies — two equally-good candidates would make the call
+    # ambiguous and so uncompilable. `CompileCorpus.swift` is what rules that
+    # out; this can only ever say "something here accepts those labels".
+    satisfied = {}
+    for key in sorted(swiftui):
+        if key in tuikit:
+            continue
+        name, labels = signature(key)
+        if labels is None or name not in by_name:
+            continue
+        for other_labels, other in sorted(by_name[name]):
+            if len(other_labels) <= len(labels):
+                continue
+            # One entry per overload sharing the key; any of them satisfying
+            # the call is enough, and only the one whose arity matches its own
+            # flag list can be judged at all.
+            for defaulted in tuikit_defaults.get(other, []):
+                if len(defaulted) != len(other_labels):
+                    continue
+                if omittable(labels, other_labels, defaulted):
+                    satisfied[key] = other
+                    break
+            if key in satisfied:
+                break
+    return satisfied
+
+
 def compare(swiftui, tuikit, parity_map, compatible=None):
     absent = {key: kind for key, kind in swiftui.items() if key not in tuikit}
     compatible = compatible or {}
@@ -403,8 +433,9 @@ def report(swiftui, tuikit, gaps, explained, stale, deviations, baseline, compat
 
     if compatible:
         print("\nSpelled with extra OPTIONAL arguments — SwiftUI's call site compiles "
-              "verbatim.\nListed in full: the rule proves compilation, not meaning "
-              "(see `source_compatible`).")
+              "verbatim.\nListed in full: the rule proves SOME overload accepts those "
+              "labels, not what the\ncall means nor which overload wins "
+              "(see `source_compatible` and CompileCorpus.swift).")
         for key in sorted(compatible):
             print(f"  {key}\n      <- {compatible[key]}")
 
