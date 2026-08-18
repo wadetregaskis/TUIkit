@@ -90,6 +90,42 @@ extension PresentationDetentsProviding {
     }
 }
 
+// MARK: - Carrying the resolved height to the sheet's box
+
+/// The height a detented sheet's outermost *container* must render at, or `nil`
+/// when the sheet is not detented.
+private struct SheetDetentHeightKey: EnvironmentKey {
+    static let defaultValue: Int? = nil
+}
+
+extension EnvironmentValues {
+    /// The height the presented sheet's box must take, set by the modal host
+    /// when the content named a detent.
+    ///
+    /// A detent is a height for the *sheet*, and in SwiftUI the sheet is a card
+    /// with its own material, so the height is always something you can see. A
+    /// terminal sheet has no material of its own — the presented content **is**
+    /// the sheet — so the height has to reach the content's own box, which is
+    /// what this value does: the outermost container (``Dialog``, ``Panel``,
+    /// ``Card``, `.border()`) renders exactly this tall and encloses the
+    /// leftover as empty interior.
+    ///
+    /// Consumed by that outermost container, which clears it for its children
+    /// — the same one-shot discipline `focusIndicatorColor` follows, and for the
+    /// same reason: a `Panel` nested inside a detented `Dialog` must not also
+    /// stretch to the sheet's height.
+    ///
+    /// Content with no box (a bare `Text`) has nothing to stretch, so it keeps
+    /// its own size. The alternative — padding the presented buffer out to the
+    /// detent — is what this replaced: those rows were blank, unstyled and
+    /// *opaque*, so they punched a hole through the dialog's page rather than
+    /// belonging to anything.
+    var sheetDetentHeight: Int? {
+        get { self[SheetDetentHeightKey.self] }
+        set { self[SheetDetentHeightKey.self] = newValue }
+    }
+}
+
 /// The wrapper `.presentationDetents(_:)` produces. Renders and measures as its
 /// content; carrying the detents is its whole job.
 struct _PresentationDetentsView<Content: View>: View, PresentationDetentsProviding {

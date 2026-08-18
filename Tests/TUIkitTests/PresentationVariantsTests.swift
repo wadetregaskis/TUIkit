@@ -151,26 +151,52 @@ struct PresentationVariantsTests {
         #expect(PresentationDetent.fraction(0).resolved(in: 20) == 1)
     }
 
-    @Test("A detent sizes the sheet it is applied to")
+    /// A detent is a height for the sheet, and the sheet here is the content's
+    /// own box — so the BOX is that tall, enclosing the leftover as empty
+    /// interior. It used to be imposed as a fixed frame around the box instead,
+    /// which is top-aligned: the dialog stayed content-sized and the remaining
+    /// rows went out as blank, unstyled, opaque overlay lines that punched a
+    /// hole through the page below it.
+    @Test("A detent sizes the sheet's box, and the box encloses the slack")
     func detentSizesTheSheet() {
+        let buffer = renderToBuffer(
+            Text("page").sheet(isPresented: .constant(true)) {
+                Panel("title") { Text("one line") }
+                    .presentationDetents([.medium])
+            },
+            context: context(width: 30, height: 20))
+        #expect(buffer.overlays.count == 1)
+        // Half of 20, not the three rows the panel would take by itself.
+        let lines = buffer.overlays[0].content.lines.map(\.stripped)
+        #expect(lines.count == 10)
+        // Every row belongs to the box: the last one is its bottom border, and
+        // the slack rows before it carry side walls, not blanks.
+        #expect(lines.last?.contains("─") == true, "last row is not the border: \(lines)")
+        #expect(lines.allSatisfy { !$0.trimmingCharacters(in: .whitespaces).isEmpty },
+                "a blank row escaped the box: \(lines)")
+    }
+
+    /// Content with no box has nothing to stretch, so it keeps its own size —
+    /// and, crucially, gains no opaque skirt underneath it.
+    @Test("Boxless sheet content keeps its size rather than gaining blank rows")
+    func detentLeavesBoxlessContentAlone() {
         let buffer = renderToBuffer(
             Text("page").sheet(isPresented: .constant(true)) {
                 Text("one line").presentationDetents([.medium])
             },
             context: context(width: 30, height: 20))
-        #expect(buffer.overlays.count == 1)
-        // Half of 20, not the one row the content would take by itself.
-        #expect(buffer.overlays[0].content.height == 10)
+        #expect(buffer.overlays[0].content.height == 1)
     }
 
     @Test("Without a selection the smallest detent wins")
     func smallestDetentIsTheDefault() {
         let buffer = renderToBuffer(
             Text("page").sheet(isPresented: .constant(true)) {
-                Text("x").presentationDetents([.large, .medium, .height(3)])
+                Panel("t") { Text("x") }
+                    .presentationDetents([.large, .medium, .height(5)])
             },
             context: context(width: 30, height: 20))
-        #expect(buffer.overlays[0].content.height == 3)
+        #expect(buffer.overlays[0].content.height == 5)
     }
 
     @Test("A selection binding chooses among the detents")
@@ -178,10 +204,30 @@ struct PresentationVariantsTests {
         // The terminal's stand-in for dragging a grabber: a bound selection.
         let buffer = renderToBuffer(
             Text("page").sheet(isPresented: .constant(true)) {
-                Text("x").presentationDetents([.large, .medium], selection: .constant(.large))
+                Panel("t") { Text("x") }
+                    .presentationDetents([.large, .medium], selection: .constant(.large))
             },
             context: context(width: 30, height: 20))
         #expect(buffer.overlays[0].content.height == 20)
+    }
+
+    /// The height belongs to the sheet's own box and to that box alone: a panel
+    /// nested inside a detented one must not stretch to the sheet's height too.
+    @Test("Only the outermost box takes the detent's height")
+    func nestedBoxesDoNotAlsoStretch() {
+        let buffer = renderToBuffer(
+            Text("page").sheet(isPresented: .constant(true)) {
+                Panel("outer") { Panel("inner") { Text("x") } }
+                    .presentationDetents([.large])
+            },
+            context: context(width: 30, height: 20))
+        let lines = buffer.overlays[0].content.lines.map(\.stripped)
+        #expect(lines.count == 20)
+        // The inner panel is three rows near the top, not a second 18-row box:
+        // its bottom border lands well above the outer one.
+        let borders = lines.enumerated().filter { $0.element.contains("─") }.map(\.offset)
+        #expect(borders.count == 4, "expected two boxes' worth of borders: \(lines)")
+        #expect(borders[2] < 8, "the inner box stretched too: \(lines)")
     }
 
     @Test("Detents are read only from the content's outermost view")
@@ -193,12 +239,12 @@ struct PresentationVariantsTests {
         // the documented behaviour, not a silent half-application.
         let buried = renderToBuffer(
             Text("page").sheet(isPresented: .constant(true)) {
-                Text("x").presentationDetents([.large]).padding()
+                Panel("t") { Text("x") }.presentationDetents([.large]).padding()
             },
             context: context(width: 30, height: 20))
         let outermost = renderToBuffer(
             Text("page").sheet(isPresented: .constant(true)) {
-                Text("x").padding().presentationDetents([.large])
+                Panel("t") { Text("x") }.padding().presentationDetents([.large])
             },
             context: context(width: 30, height: 20))
         #expect(outermost.overlays[0].content.height == 20)

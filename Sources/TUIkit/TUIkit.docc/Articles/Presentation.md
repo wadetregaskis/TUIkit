@@ -62,7 +62,17 @@ that, applied to the sheet's **content**:
 share of it, and `.height(_:)` an exact number of **rows** (a terminal has no
 `CGFloat`).
 
-Two things to know. It must be the content's **outermost** modifier — the
+The height goes to the sheet's own **box**. In SwiftUI a sheet is a card with
+its own material, so a detent is always visible as that card; a terminal sheet
+has no material of its own — the content *is* the sheet — so the outermost
+container in it (``Dialog``, ``Panel``, ``Card``, `.border()`) renders exactly
+that tall and encloses the slack as empty interior. Content that can fill the
+space fills it as usual: a `List`, a `ScrollView`, anything with a `Spacer`
+sees the detent as its available height. Content with no box has nothing to
+stretch, so it keeps its own size — a detent cannot make a bare `Text` taller,
+and does not try by painting blank rows under it.
+
+Two more things to know. It must be the content's **outermost** modifier — the
 detent is the height the content is rendered *into*, so it has to be readable
 before that render happens, which is why it rides the view's type rather than a
 preference. (An `if` in the sheet's builder is fine; another presentation

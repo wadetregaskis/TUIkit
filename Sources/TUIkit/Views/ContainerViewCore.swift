@@ -94,6 +94,13 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         let hasBorder = style.hasBorder
         var innerContext = base.forBorderedContent(hasBorder: hasBorder)
         innerContext.environment.focusIndicatorColor = nil
+        // A detented sheet's height belongs to the box, and to this box only —
+        // see ``EnvironmentValues/sheetDetentHeight``. Consumed here so a
+        // nested container does not stretch to the sheet's height as well.
+        let sheetHeight = base.environment.sheetDetentHeight.map {
+            min($0, max(0, base.availableHeight))
+        }
+        innerContext.environment.sheetDetentHeight = nil
         let innerWidthAvailable = innerContext.availableWidth
 
         // The body and footer are distinct structural children, so they get
@@ -195,9 +202,12 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         let footerPresent = hasFooter && footerFinalHeight > 0
         let separator = (footerPresent && style.showFooterSeparator) ? 1 : 0
         // Top + bottom border rows / left + right border columns only when bordered.
+        // A sheet's detent overrides the content's own answer — the box IS the
+        // named height, and `renderToBuffer` pads its body to match.
         let totalHeight =
-            borderRows / 2 + bodyHeight + separator + (footerPresent ? footerFinalHeight : 0)
-            + borderRows / 2
+            sheetHeight
+            ?? (borderRows / 2 + bodyHeight + separator + (footerPresent ? footerFinalHeight : 0)
+                + borderRows / 2)
         let totalWidth = innerWidth + (hasBorder ? 2 : 0)
 
         // Width-flexibility is render-derived, not inherited from the body's
@@ -230,6 +240,12 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         // Consume focus indicator so nested containers don't also show it.
         let indicatorColor = context.environment.focusIndicatorColor
         innerContext.environment.focusIndicatorColor = nil
+        // Likewise the sheet detent's height: this box takes it, its children
+        // do not (see ``EnvironmentValues/sheetDetentHeight``).
+        let sheetHeight = context.environment.sheetDetentHeight.map {
+            min($0, max(0, context.availableHeight))
+        }
+        innerContext.environment.sheetDetentHeight = nil
 
         // Distinct identities for the body and footer (see `sizeThatFits` — must
         // match it exactly so the two passes agree on identity, hence on
@@ -264,13 +280,28 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         let bodyAvailableHeight = max(0, innerAvailableHeight - footerHeight)
         var bodyContext = bodyInner
         bodyContext.availableHeight = bodyAvailableHeight
-        let bodyBuffer =
+        var bodyBuffer =
             style.scrollsOverflowingBody
             ? scrollableBody(
                 availableHeight: bodyAvailableHeight, innerWidth: innerContext.availableWidth,
                 context: bodyContext)
             : TUIkit.renderToBuffer(content.padding(padding), context: bodyContext)
                 .clamped(toWidth: innerContext.availableWidth, height: bodyAvailableHeight)
+
+        // A sheet's detent names a height for the box, so a body that does not
+        // fill it gets the rest as empty interior — rows the border encloses,
+        // rather than blank rows below the box. Content that CAN fill already
+        // did: it was offered `bodyAvailableHeight`, which the host set from
+        // the detent.
+        if let sheetHeight {
+            let bodyTarget = max(0, sheetHeight - chromeHeight - footerHeight)
+            if bodyBuffer.height < bodyTarget, !bodyBuffer.isEmpty {
+                bodyBuffer.lines.append(
+                    contentsOf: repeatElement(
+                        String(repeating: " ", count: bodyBuffer.width),
+                        count: bodyTarget - bodyBuffer.height))
+            }
+        }
 
         // Bordering empty content with no footer produces nothing
         // (e.g. `EmptyView().border()`).

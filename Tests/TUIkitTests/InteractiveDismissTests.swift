@@ -112,16 +112,20 @@ struct InteractiveDismissTests {
     /// together one is necessarily inside the other, so it has to be found
     /// through the outer one — and it has to work identically either way round,
     /// which is exactly the kind of asymmetry nobody would think to check.
+    ///
+    /// The detent's height is observed through a `Panel`, because that is where
+    /// a detent lands: on the sheet's own box. Boxless content has nothing to
+    /// stretch and keeps its size, so a bare `Text` would prove nothing here.
     @Test("it composes with presentationDetents in both orders", arguments: [true, false])
     func composesWithDetents(dismissOutermost: Bool) {
         let outcome = present(
             Text(verbatim: "page").sheet(isPresented: .constant(true)) {
                 if dismissOutermost {
-                    Text(verbatim: "body")
+                    Panel("box") { Text(verbatim: "body") }
                         .presentationDetents([.height(7)])
                         .interactiveDismissDisabled()
                 } else {
-                    Text(verbatim: "body")
+                    Panel("box") { Text(verbatim: "body") }
                         .interactiveDismissDisabled()
                         .presentationDetents([.height(7)])
                 }

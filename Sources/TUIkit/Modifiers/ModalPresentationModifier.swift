@@ -205,9 +205,17 @@ extension ModalPresentationModifier: Renderable {
         switch style {
         case .sheet:
             if let detentHeight {
+                // The height goes to the sheet's own box, via the environment
+                // (``EnvironmentValues/sheetDetentHeight``) — NOT as a frame
+                // around it. A fixed frame is top-aligned and a `Dialog` sizes
+                // to its content, so wrapping left the leftover rows as blank,
+                // unstyled, opaque overlay lines: a hole punched through the
+                // page below the dialog, belonging to nothing.
+                var detentContext = modalContext
+                detentContext.availableHeight = detentHeight
+                detentContext.environment.sheetDetentHeight = detentHeight
                 modalBuffer = renderPresentedDialog(
-                    modal.frame(height: detentHeight), context: modalContext,
-                    capHeight: detentHeight)
+                    modal, context: detentContext, capHeight: detentHeight)
             } else {
                 modalBuffer = renderPresentedDialog(
                     modal, context: modalContext, capHeight: overlayHeight)
