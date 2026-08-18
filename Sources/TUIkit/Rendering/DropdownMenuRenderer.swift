@@ -290,6 +290,78 @@ enum DropdownMenu {
             at: 0)
     }
 
+    /// One option row's mouse handler: hover on the way past, and the choice on
+    /// the way up.
+    ///
+    /// Its own function because the popup's handler wiring is otherwise long
+    /// enough to hide it, and because the release case answers three separate
+    /// questions (was this the opening click, is this a choice, does the menu
+    /// close) that read better with nothing else around them.
+    @MainActor
+    private static func rowHandler(
+        index: Int,
+        tracks: @escaping (MouseButton) -> Bool,
+        mouseDispatcher: MouseEventDispatcher,
+        onHover: @escaping (Int) -> Void,
+        onActivate: @escaping (Int) -> Void,
+        onDismiss: @escaping () -> Void
+    ) -> HitTestRegion.HandlerID {
+        mouseDispatcher.register { event in
+            switch event.phase {
+            case .entered:
+                // Hover follows the cursor across the popup: whichever
+                // option row is under the cursor becomes highlighted.
+                onHover(index)
+                return true
+            case .exited:
+                // Leave the highlight where it is when the cursor leaves.
+                return true
+            case .dragged where tracks(event.button):
+                // The same thing with the button held — a Mac menu tracks
+                // press-and-hold, and a terminal reports a held move as a
+                // DRAG, not as motion, so `.entered` never fires for it.
+                onHover(index)
+                return true
+            case .pressed where tracks(event.button):
+                // The press is not the commitment — the release is. Handing
+                // the rest of the gesture back to live hit-testing
+                // (``MouseEventDispatcher/handOffGesture()``) is what lets
+                // you press one row, slide onto another and get the one you
+                // let go on; drag capture would send every later event back
+                // to the row you started on, so sliding off the menu
+                // entirely would still have run it.
+                mouseDispatcher.handOffGesture()
+                return true
+            case .released where tracks(event.button):
+                // Not every release over a row is a choice. A menu tall
+                // enough is placed OVER the control that opened it — a Mac
+                // pop-up button's menu covers it deliberately — so the
+                // release ending the opening click lands on a row it was
+                // never aimed at. That click is spent on opening the menu;
+                // consumed here, it leaves the menu up to be picked from.
+                guard !mouseDispatcher.endsPopupOpeningClick(event) else { return true }
+                let endsHold = mouseDispatcher.endsHeldGesture(event)
+                onActivate(index)
+                // A press-and-HOLD ends here whatever the item's
+                // `.menuActionDismissBehavior` says. That modifier keeps a
+                // menu of settings up so more than one can be flipped —
+                // with CLICKS, which the menu is still there to receive.
+                // A held gesture has no such second act: the button is up,
+                // the tracking session that opened the menu is over, and
+                // leaving it on screen strands it in a state its own
+                // gesture no longer supports. macOS does not arbitrate this
+                // for us, because it has no stay-open menus to arbitrate:
+                // SwiftUI's `MenuActionDismissBehavior.disabled` is
+                // `@available(macOS, unavailable)`, and AppKit's tracking
+                // model ends every menu session on the mouse-up.
+                if endsHold { onDismiss() }
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
     // MARK: - Line drawing
 
     /// Draws the bordered popup lines for the visible window.
@@ -455,46 +527,9 @@ enum DropdownMenu {
             case .rendered(_, let isSelectable) where isSelectable: break
             default: continue
             }
-            let mouseHandlerID = mouseDispatcher.register { event in
-                switch event.phase {
-                case .entered:
-                    // Hover follows the cursor across the popup: whichever
-                    // option row is under the cursor becomes highlighted.
-                    onHover(index)
-                    return true
-                case .exited:
-                    // Leave the highlight where it is when the cursor leaves.
-                    return true
-                case .dragged where tracks(event.button):
-                    // The same thing with the button held — a Mac menu tracks
-                    // press-and-hold, and a terminal reports a held move as a
-                    // DRAG, not as motion, so `.entered` never fires for it.
-                    onHover(index)
-                    return true
-                case .pressed where tracks(event.button):
-                    // The press is not the commitment — the release is. Handing
-                    // the rest of the gesture back to live hit-testing
-                    // (``MouseEventDispatcher/handOffGesture()``) is what lets
-                    // you press one row, slide onto another and get the one you
-                    // let go on; drag capture would send every later event back
-                    // to the row you started on, so sliding off the menu
-                    // entirely would still have run it.
-                    mouseDispatcher.handOffGesture()
-                    return true
-                case .released where tracks(event.button):
-                    // Not every release over a row is a choice. A menu tall
-                    // enough is placed OVER the control that opened it — a Mac
-                    // pop-up button's menu covers it deliberately — so the
-                    // release ending the opening click lands on a row it was
-                    // never aimed at. That click is spent on opening the menu;
-                    // consumed here, it leaves the menu up to be picked from.
-                    guard !mouseDispatcher.endsPopupOpeningClick(event) else { return true }
-                    onActivate(index)
-                    return true
-                default:
-                    return false
-                }
-            }
+            let mouseHandlerID = rowHandler(
+                index: index, tracks: tracks, mouseDispatcher: mouseDispatcher,
+                onHover: onHover, onActivate: onActivate, onDismiss: onDismiss)
             buffer.hitTestRegions.append(
                 HitTestRegion(
                     offsetX: 1,

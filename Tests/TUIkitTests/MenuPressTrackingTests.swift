@@ -227,6 +227,73 @@ struct MenuPressTrackingTests {
         #expect(chosen == "—", "and nothing was chosen by letting go of the label")
     }
 
+    /// A menu of SETTINGS asks to stay open behind a choice
+    /// (`.menuActionDismissBehavior(.disabled)`), so more than one can be
+    /// flipped without re-opening it. A press-and-HOLD is the one gesture that
+    /// overrules it: the button is up, the tracking session that opened the
+    /// menu is over, and leaving it on screen strands it in a state its own
+    /// gesture cannot continue. There is no macOS behaviour to copy here —
+    /// SwiftUI's `MenuActionDismissBehavior.disabled` is
+    /// `@available(macOS, unavailable)` — and AppKit's tracking model ends
+    /// every menu session on the mouse-up.
+    private func settingsMenu(_ chosen: @escaping (String) -> Void = { _ in }) -> some View {
+        Menu("View") {
+            Button("Hidden files") { chosen("Hidden files") }
+            Button("Sizes") { chosen("Sizes") }
+            Button("Extensions") { chosen("Extensions") }
+        }
+        .menuActionDismissBehavior(.disabled)
+        .selectionIndicatorStyle(.none)
+    }
+
+    @Test("A held release closes even a menu that asked to stay open")
+    func heldReleaseClosesAStayOpenMenu() throws {
+        let (tui, context) = harness()
+        var chosen = "—"
+        let view = settingsMenu { chosen = $0 }
+
+        renderArmed(view, tui: tui, context: context)
+        press(tui, context, x: 2, y: 0)
+        let opened = renderArmed(view, tui: tui, context: context)
+        let target = try row(opened, "Sizes")
+        drag(tui, x: target.x, y: target.y)
+        renderArmed(view, tui: tui, context: context)
+        release(tui, x: target.x, y: target.y)
+
+        #expect(chosen == "Sizes", "the release still chose the row it landed on")
+        #expect(
+            renderArmed(view, tui: tui, context: context).overlays.isEmpty,
+            "and the menu went away with the gesture that was holding it")
+    }
+
+    @Test("Clicking rows in a stay-open menu keeps it open, as asked")
+    func clickingAStayOpenMenuKeepsIt() throws {
+        let (tui, context) = harness()
+        var chosen: [String] = []
+        let view = settingsMenu { chosen.append($0) }
+
+        // Click the label: down and up without moving, which opens the menu and
+        // leaves it up (the other half of the Mac model).
+        renderArmed(view, tui: tui, context: context)
+        press(tui, context, x: 2, y: 0)
+        renderArmed(view, tui: tui, context: context)
+        release(tui, context, x: 2, y: 0)
+        let opened = renderArmed(view, tui: tui, context: context)
+
+        // Then click two rows in place. This is what `.disabled` is for, and it
+        // must keep working: nothing here is a held gesture.
+        for label in ["Hidden files", "Sizes"] {
+            let target = try row(opened, label)
+            press(tui, context, x: target.x, y: target.y)
+            renderArmed(view, tui: tui, context: context)
+            release(tui, x: target.x, y: target.y)
+            #expect(
+                !renderArmed(view, tui: tui, context: context).overlays.isEmpty,
+                "\(label) was chosen without dismissing the menu")
+        }
+        #expect(chosen == ["Hidden files", "Sizes"], "both flips ran: \(chosen)")
+    }
+
     /// The other end of tracking: having taken the gesture, the menu owes the
     /// user an answer to letting go of it. Releasing on a row runs the row;
     /// releasing anywhere else — the page behind, the menu's own frame, a

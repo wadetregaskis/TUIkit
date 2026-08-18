@@ -59,6 +59,20 @@ public struct MenuActionDismissBehavior: Equatable, Sendable {
     /// Choosing an item leaves the menu open, so more than one can be chosen
     /// without re-opening it. Escape and an outside click still close it —
     /// this governs the ITEMS, not the menu's other exits.
+    ///
+    /// One gesture overrules it: a menu opened by **press-and-hold** closes on
+    /// the release that ends the hold, even here. That release is the end of a
+    /// tracking session, not a click — the button is up and the gesture holding
+    /// the menu is over, so keeping it on screen would strand it in a state the
+    /// user has no way to continue. The clicks this behaviour exists for still
+    /// work: click to open, then click item after item.
+    ///
+    /// - Note: TUI-specific in a small way. SwiftUI declares this case
+    ///   `@available(macOS, unavailable)` — a Mac menu always closes behind a
+    ///   choice — so on the only platform family a terminal resembles there is
+    ///   no behaviour to copy. TUIkit offers it anyway (a settings menu wants
+    ///   it, and iOS has had it since 16.4), which is why the press-and-hold
+    ///   rule above had to be decided rather than inherited.
     public static let disabled = Self("disabled")
 
     /// Whether an item's action should close the menu it fired from.
