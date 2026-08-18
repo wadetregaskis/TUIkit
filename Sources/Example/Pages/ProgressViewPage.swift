@@ -38,6 +38,11 @@ struct ProgressViewPage: View {
     /// Which style the top "Determinate" section is currently showing.
     @State private var determinateStyleIndex = 0
 
+    /// Whether the gradient rows below measure their ramp across the whole bar
+    /// (the default, so a colour always marks the same value) or across the
+    /// lit part (so it follows the fill). Watch `shadeRamp(g)` as it changes.
+    @State private var gradientScaling = TrackGradientScaling.track
+
     /// Whether the gradient-editor dialog is up.
     @State private var editingGradient = false
 
@@ -87,6 +92,11 @@ struct ProgressViewPage: View {
 
             DemoSection("page.progressView.determinateStyles") {
                 VStack(alignment: .leading, spacing: 0) {
+                    Picker("page.progressView.gradientScaling", selection: $gradientScaling) {
+                        Text("page.progressView.gradientScalingTrack").tag(TrackGradientScaling.track)
+                        Text("page.progressView.gradientScalingFill").tag(TrackGradientScaling.fill)
+                    }
+                    .pickerStyle(.inline)
                     HStack(spacing: 1) {
                         Text("Style        ").dim()
                         Text("    Progress       ").dim().frame(width: 24)
@@ -150,6 +160,7 @@ struct ProgressViewPage: View {
                                 emptyStyle: .background))
                     )
                 }
+                .trackGradientScaling(gradientScaling)
             }
 
             // Build-your-own TrackConfiguration: every ingredient the named

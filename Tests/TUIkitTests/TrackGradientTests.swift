@@ -104,3 +104,69 @@ struct TrackGradientTests {
         #expect(triples.count >= 4, "built-in rainbow spans many colours: \(triples)")
     }
 }
+
+// MARK: - Scaling
+
+/// What the gradient is measured across — the bar, or the lit part of it.
+///
+/// The distinction is the difference between a gradient that means something
+/// ("red past 80%") and one that is decoration: compressed into the fill, the
+/// last lit cell is the last colour at every value, so a half-full bar ends in
+/// the same red a full one does.
+@MainActor
+@Suite("Track gradient scaling")
+struct TrackGradientScalingTests {
+
+    /// A three-stop ramp with unmistakable endpoints, on a 10-cell bar.
+    private func render(_ fraction: Double, _ scaling: TrackGradientScaling) -> String {
+        TrackRenderer.render(
+            fraction: fraction, width: 10,
+            style: .shadeRamp(gradient: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)]),
+            filledColor: .rgb(1, 2, 3),
+            emptyColor: .rgb(9, 9, 9),
+            accentColor: .rgb(7, 7, 7),
+            gradientScaling: scaling)
+    }
+
+    private func hasForeground(_ output: String, _ code: String) -> Bool {
+        output.contains("38;2;\(code)")
+    }
+
+    @Test("Pinned to the bar, half full stops halfway along the ramp")
+    func trackScalingStopsHalfway() {
+        let output = render(0.5, .track)
+        #expect(hasForeground(output, "0;0;0"), "the ramp still starts at its first stop")
+        #expect(
+            !hasForeground(output, "255;0;0"),
+            "…and a half-full bar has not reached the last one: \(output.debugDescription)")
+    }
+
+    @Test("Compressed into the fill, half full still ends at the last stop")
+    func fillScalingReachesTheEnd() {
+        let output = render(0.5, .fill)
+        #expect(hasForeground(output, "0;0;0"))
+        #expect(
+            hasForeground(output, "255;0;0"),
+            "the ramp is squeezed into the lit part: \(output.debugDescription)")
+    }
+
+    @Test("A full bar looks the same either way")
+    func fullBarAgrees() {
+        // Nothing to compress at 100%, so the two spellings must not diverge —
+        // the property that makes `.track` a safe default.
+        #expect(render(1.0, .track) == render(1.0, .fill))
+    }
+
+    @Test("The default is the bar")
+    func defaultIsTrack() {
+        // Both halves of the default: the environment value a view reads, and
+        // the renderer's own parameter for callers that pass none.
+        #expect(EnvironmentValues().trackGradientScaling == .track)
+        let defaulted = TrackRenderer.render(
+            fraction: 0.5, width: 10,
+            style: .shadeRamp(gradient: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)]),
+            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7))
+        #expect(defaulted == render(0.5, .track))
+        #expect(defaulted != render(0.5, .fill), "…and the two really do differ")
+    }
+}

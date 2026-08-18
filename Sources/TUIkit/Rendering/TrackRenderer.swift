@@ -34,6 +34,8 @@ enum TrackRenderer {
     ///   - filledColor: The color for filled portions.
     ///   - emptyColor: The color for empty portions.
     ///   - accentColor: The color for accent elements (e.g., dot head).
+    ///   - gradientScaling: What a fill gradient is measured across — the whole
+    ///     bar (the default) or only the lit part. See ``TrackGradientScaling``.
     /// - Returns: An ANSI-styled string representing the track.
     static func render(
         fraction: Double,
@@ -41,7 +43,8 @@ enum TrackRenderer {
         style: TrackStyle,
         filledColor: Color,
         emptyColor: Color,
-        accentColor: Color
+        accentColor: Color,
+        gradientScaling: TrackGradientScaling = .track
     ) -> String {
         guard width > 0 else { return "" }
 
@@ -56,31 +59,38 @@ enum TrackRenderer {
         case .block:
             return renderConfigured(
                 fraction: fraction, width: width, config: .block,
-                filledColor: filledColor, emptyColor: emptyColor)
+                filledColor: filledColor, emptyColor: emptyColor,
+                gradientScaling: gradientScaling)
         case .blockFine:
             return renderConfigured(
                 fraction: fraction, width: width, config: .blockFine,
-                filledColor: filledColor, emptyColor: emptyColor)
+                filledColor: filledColor, emptyColor: emptyColor,
+                gradientScaling: gradientScaling)
         case .shade:
             return renderConfigured(
                 fraction: fraction, width: width, config: .shade,
-                filledColor: filledColor, emptyColor: emptyColor)
+                filledColor: filledColor, emptyColor: emptyColor,
+                gradientScaling: gradientScaling)
         case .bar:
             return renderConfigured(
                 fraction: fraction, width: width, config: .bar,
-                filledColor: filledColor, emptyColor: emptyColor)
+                filledColor: filledColor, emptyColor: emptyColor,
+                gradientScaling: gradientScaling)
         case .braille:
             return renderConfigured(
                 fraction: fraction, width: width, config: .braille,
-                filledColor: filledColor, emptyColor: emptyColor)
+                filledColor: filledColor, emptyColor: emptyColor,
+                gradientScaling: gradientScaling)
         case .shadeRamp(let gradient):
             return renderConfigured(
                 fraction: fraction, width: width, config: .shadeRamp(gradient: gradient),
-                filledColor: filledColor, emptyColor: emptyColor)
+                filledColor: filledColor, emptyColor: emptyColor,
+                gradientScaling: gradientScaling)
         case .custom(let config):
             return renderConfigured(
                 fraction: fraction, width: width, config: config,
-                filledColor: filledColor, emptyColor: emptyColor)
+                filledColor: filledColor, emptyColor: emptyColor,
+                gradientScaling: gradientScaling)
 
         // The head / marker / segment families are structurally distinct
         // (single indicator, no fractional fill ramp) and keep their own paths.
@@ -167,7 +177,8 @@ extension TrackRenderer {
         width: Int,
         config: TrackConfiguration,
         filledColor: Color,
-        emptyColor: Color
+        emptyColor: Color,
+        gradientScaling: TrackGradientScaling
     ) -> String {
         let fillChars = Array(config.fill.isEmpty ? "█" : config.fill)
         let emptyChars: [Character]
@@ -192,7 +203,7 @@ extension TrackRenderer {
                 fraction: fraction, width: width, quantum: quantum,
                 fillChars: fillChars, emptyChars: emptyChars,
                 config: config, filledColor: filledColor, emptyColor: emptyColor,
-                paintsBackground: paintsBackground)
+                paintsBackground: paintsBackground, gradientScaling: gradientScaling)
         }
 
         // A ramp of n glyphs gives n+1 sub-cell steps; no ramp means whole-cell
@@ -218,14 +229,20 @@ extension TrackRenderer {
         // plain-text copy (no styling) still shows where the progress was.
         let trackBackground: Color? = paintsBackground ? emptyColor : nil
 
-        // Optional per-cell colour fade across the lit cells.
+        // Optional per-cell colour fade. What it is measured across is the
+        // caller's choice (``TrackGradientScaling``): the whole bar, so a
+        // colour always marks the same value, or the lit part, so the ramp
+        // follows the fill. Compressing into the lit part is what this always
+        // did, and it makes a gradient meant as a SCALE ("red past 80%") lie —
+        // at 10% the bar's one lit cell is the last colour.
+        let gradientSpan = gradientScaling == .track ? width : litCellCount
         func fillColour(at index: Int) -> Color {
-            guard let gradient = config.fillGradient, litCellCount > 1 else {
+            guard let gradient = config.fillGradient, gradientSpan > 1 else {
                 return filledColor
             }
             return gradientColor(
                 stops: gradient,
-                parameter: Double(index) / Double(litCellCount - 1),
+                parameter: Double(index) / Double(gradientSpan - 1),
                 fallback: filledColor)
         }
 
@@ -288,7 +305,8 @@ extension TrackRenderer {
         config: TrackConfiguration,
         filledColor: Color,
         emptyColor: Color,
-        paintsBackground: Bool
+        paintsBackground: Bool,
+        gradientScaling: TrackGradientScaling
     ) -> String {
         let effectiveWidth = (width / quantum) * quantum
         guard effectiveWidth > 0 else { return "" }
@@ -306,13 +324,15 @@ extension TrackRenderer {
         let hasPartial = ramp != nil && partialStep > 0 && totalSteps / stepsPerBlock < steps
         let targetCells = litSteps * quantum
 
+        // As in `renderConfigured`: the ramp spans the bar or the lit part.
+        let gradientSpan = gradientScaling == .track ? steps * quantum : targetCells
         func fillColour(atCell cell: Int) -> Color {
-            guard let gradient = config.fillGradient, targetCells > 1 else {
+            guard let gradient = config.fillGradient, gradientSpan > 1 else {
                 return filledColor
             }
             return gradientColor(
                 stops: gradient,
-                parameter: Double(cell) / Double(targetCells - 1),
+                parameter: Double(cell) / Double(gradientSpan - 1),
                 fallback: filledColor)
         }
 

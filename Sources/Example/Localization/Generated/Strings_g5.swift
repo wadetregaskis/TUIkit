@@ -15,6 +15,9 @@
 extension ExampleStrings {
     static let g5: [String: [String: String]] = [
         "en": [
+            "page.progressView.gradientScaling": "Gradient spans",
+            "page.progressView.gradientScalingTrack": "The bar",
+            "page.progressView.gradientScalingFill": "The fill",
             // Picker
             "page.picker.menuStyle": "Menu Style (Drop-down)",
             "page.picker.favouriteFruit": "Favourite Fruit",
@@ -197,6 +200,9 @@ extension ExampleStrings {
             "page.contentUnavailable.help.tabFocuses": "[Tab] focuses the action button, [Enter]/[Space] activates it",
         ],
         "de": [
+            "page.progressView.gradientScaling": "Verlauf erstreckt sich über",
+            "page.progressView.gradientScalingTrack": "Den Balken",
+            "page.progressView.gradientScalingFill": "Die Füllung",
             // Picker
             "page.picker.menuStyle": "Menüstil (Aufklappmenü)",
             "page.picker.favouriteFruit": "Lieblingsobst",
@@ -379,6 +385,9 @@ extension ExampleStrings {
             "page.contentUnavailable.help.tabFocuses": "[Tab] fokussiert die Aktionsschaltfläche, [Enter]/[Leertaste] aktiviert sie",
         ],
         "fr": [
+            "page.progressView.gradientScaling": "Le dégradé couvre",
+            "page.progressView.gradientScalingTrack": "La barre",
+            "page.progressView.gradientScalingFill": "Le remplissage",
             // Picker
             "page.picker.menuStyle": "Style menu (liste déroulante)",
             "page.picker.favouriteFruit": "Fruit préféré",
@@ -561,6 +570,9 @@ extension ExampleStrings {
             "page.contentUnavailable.help.tabFocuses": "[Tab] cible le bouton d'action, [Entrée]/[Espace] l'active",
         ],
         "it": [
+            "page.progressView.gradientScaling": "Il gradiente copre",
+            "page.progressView.gradientScalingTrack": "La barra",
+            "page.progressView.gradientScalingFill": "Il riempimento",
             // Picker
             "page.picker.menuStyle": "Stile menu (a discesa)",
             "page.picker.favouriteFruit": "Frutto preferito",
@@ -743,6 +755,9 @@ extension ExampleStrings {
             "page.contentUnavailable.help.tabFocuses": "[Tab] mette a fuoco il pulsante d'azione, [Invio]/[Spazio] lo attiva",
         ],
         "es": [
+            "page.progressView.gradientScaling": "El degradado abarca",
+            "page.progressView.gradientScalingTrack": "La barra",
+            "page.progressView.gradientScalingFill": "El relleno",
             // Picker
             "page.picker.menuStyle": "Estilo menú (desplegable)",
             "page.picker.favouriteFruit": "Fruta favorita",
@@ -925,6 +940,9 @@ extension ExampleStrings {
             "page.contentUnavailable.help.tabFocuses": "[Tab] enfoca el botón de acción, [Intro]/[Espacio] lo activa",
         ],
         "zh": [
+            "page.progressView.gradientScaling": "渐变范围",
+            "page.progressView.gradientScalingTrack": "整条进度条",
+            "page.progressView.gradientScalingFill": "已填充部分",
             // Picker
             "page.picker.menuStyle": "菜单样式（下拉）",
             "page.picker.favouriteFruit": "最爱的水果",
@@ -1107,6 +1125,9 @@ extension ExampleStrings {
             "page.contentUnavailable.help.tabFocuses": "[Tab] 聚焦操作按钮，[Enter]/[空格] 激活它",
         ],
         "ja": [
+            "page.progressView.gradientScaling": "グラデーションの範囲",
+            "page.progressView.gradientScalingTrack": "バー全体",
+            "page.progressView.gradientScalingFill": "塗りつぶし部分",
             // Picker
             "page.picker.menuStyle": "メニュースタイル（ドロップダウン）",
             "page.picker.favouriteFruit": "好きな果物",

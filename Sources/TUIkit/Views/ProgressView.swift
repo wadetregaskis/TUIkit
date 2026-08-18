@@ -427,7 +427,8 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
             style: style,
             filledColor: palette.foregroundSecondary,
             emptyColor: palette.foregroundTertiary,
-            accentColor: palette.accent
+            accentColor: palette.accent,
+            gradientScaling: context.environment.trackGradientScaling
         )
     }
 }

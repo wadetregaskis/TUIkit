@@ -491,7 +491,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             valueStyle: context.environment.styleCascade.resolve(
                 for: [.all, .text, .control(.slider)]),
             isDisabled: isDisabled,
-            showsValue: showsValue
+            showsValue: showsValue,
+            gradientScaling: context.environment.trackGradientScaling
         )
 
         var buffer = FrameBuffer(text: content)
@@ -767,7 +768,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         trackWidth: Int,
         valueStyle: StyleAttributes,
         isDisabled: Bool,
-        showsValue: Bool
+        showsValue: Bool,
+        gradientScaling: TrackGradientScaling
     ) -> String {
         // Arrow colors:
         //   - Focused: pulsing accent
@@ -798,7 +800,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             style: trackStyle,
             filledColor: isDisabled ? palette.foregroundTertiary : palette.foregroundSecondary,
             emptyColor: palette.foregroundTertiary,
-            accentColor: palette.accent
+            accentColor: palette.accent,
+            gradientScaling: gradientScaling
         )
 
         // Build arrows

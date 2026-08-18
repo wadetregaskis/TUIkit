@@ -290,7 +290,8 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
             style: trackStyle(for: style),
             filledColor: palette.foregroundSecondary,
             emptyColor: palette.foregroundTertiary,
-            accentColor: palette.accent
+            accentColor: palette.accent,
+            gradientScaling: context.environment.trackGradientScaling
         )
         return minPart + bar + maxPart
     }
