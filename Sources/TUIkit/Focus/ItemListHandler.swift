@@ -292,7 +292,16 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// nothing to close — leaves the subtree instead of the list.
     private func handleDisclosureKey(_ event: KeyEvent) -> Bool {
         if event.key == .right {
-            return setFocusedRowExpanded(true, includingDescendants: event.alt)
+            if setFocusedRowExpanded(true, includingDescendants: event.alt) { return true }
+            // Nothing opened — a leaf, or a branch already open. In a TREE the
+            // key is still the tree's: it is consumed and does nothing, rather
+            // than falling through to move the focus sideways out of the
+            // outline. Pressing Right on an open folder to see what happens
+            // should not land you in the control next to the list.
+            //
+            // A list that is not a tree keeps its fall-through: it has no use
+            // for Right at all, so nothing is taken away.
+            return outlineActivation != nil
         }
         if setFocusedRowExpanded(false, includingDescendants: event.alt) { return true }
         return moveFocusOutOfSubtree()

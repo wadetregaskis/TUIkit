@@ -440,8 +440,8 @@ struct OutlineGroupTests {
 
     /// The recursive form keeps the plain form's fall-through rules: a leaf has
     /// no subtree, and a subtree already fully open has nothing to do.
-    @Test("Option-Right falls through on a leaf and on an already-open subtree")
-    func optionRightFallsThroughWithNothingToOpen() throws {
+    @Test("Option-Right is consumed on a leaf and on an already-open subtree")
+    func optionRightIsConsumedWithNothingToOpen() throws {
         let (tui, context) = harness(width: 40, height: 20)
         let view = List(tree, children: \.children) { node in Text(verbatim: node.id) }
         frame(view, tui: tui, context: context)
@@ -450,9 +450,11 @@ struct OutlineGroupTests {
         _ = focus.dispatchKeyEvent(KeyEvent(key: .right, alt: true))
         frame(view, tui: tui, context: context)
         var row = try #require(focus.currentFocused)
+        // Consumed, not fallen through: Right is the tree's key whether or not
+        // it has anything to open — see `rightIsTheTreesKey`.
         #expect(
-            row.handleKeyEvent(KeyEvent(key: .right, alt: true)) == false,
-            "the subtree is already open all the way down")
+            row.handleKeyEvent(KeyEvent(key: .right, alt: true)),
+            "the subtree is already open all the way down, and the key stays here")
 
         // "README" is a leaf: three rows down once "Sources" is open.
         for _ in 0..<4 {
@@ -460,7 +462,7 @@ struct OutlineGroupTests {
         }
         frame(view, tui: tui, context: context)
         row = try #require(focus.currentFocused)
-        #expect(row.handleKeyEvent(KeyEvent(key: .right, alt: true)) == false, "a leaf")
+        #expect(row.handleKeyEvent(KeyEvent(key: .right, alt: true)), "a leaf")
         // ⌥← has nothing to fold on a leaf, so it walks out of the subtree
         // exactly as a plain Left does — see `leftWalksOutOfTheSubtree`.
         #expect(row.handleKeyEvent(KeyEvent(key: .left, alt: true)), "a leaf: Left walks out")
@@ -474,8 +476,17 @@ struct OutlineGroupTests {
     /// element declines is claimed one level up by the focus manager, which
     /// treats the pair as previous/next within the section and always reports
     /// it handled. What matters here is that the row doesn't take it first.
-    @Test("Left and Right fall through on a leaf and on a closed branch")
-    func arrowsFallThroughWhenThereIsNothingToOpen() throws {
+    /// Right belongs to the TREE, whether or not there is anything to open.
+    ///
+    /// It used to fall through when nothing opened — on a leaf, and on a branch
+    /// already open — which handed the key to the focus system and moved the
+    /// cursor sideways OUT of the outline. Pressing Right on an open folder to
+    /// see what happens should not land you in the control beside the list.
+    ///
+    /// Left keeps its own ladder (see `leftWalksOutOfTheSubtree`): it collapses,
+    /// then walks out of the subtree, and only leaves the list from the top row.
+    @Test("Right is consumed inside a tree even when nothing opens")
+    func rightIsTheTreesKey() throws {
         let (tui, context) = harness(width: 40, height: 20)
         let view = List(tree, children: \.children) { node in Text(verbatim: node.id) }
         frame(view, tui: tui, context: context)
@@ -487,15 +498,24 @@ struct OutlineGroupTests {
             row.handleKeyEvent(KeyEvent(key: .left)) == false,
             "Left on an already-closed branch is not consumed")
 
-        // Move to "README", a leaf: Right still has nothing to open. Left does
-        // NOT fall through here — see `leftWalksOutOfTheSubtree`, where it goes
-        // to the top of the tree instead of leaking to the next view.
-        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        // Right opens it, and a second Right — nothing left to open — is
+        // consumed rather than escaping the list.
+        #expect(row.handleKeyEvent(KeyEvent(key: .right)), "Right opens the branch")
         frame(view, tui: tui, context: context)
         row = try #require(focus.currentFocused)
-        #expect(row.handleKeyEvent(KeyEvent(key: .right)) == false, "Right on a leaf")
-        let rendered = lines(frame(view, tui: tui, context: context))
-        #expect(rendered.contains { $0.contains("TUIkit") } == false, "nothing opened: \(rendered)")
+        #expect(
+            row.handleKeyEvent(KeyEvent(key: .right)),
+            "Right on an already-open branch stays in the tree")
+
+        // …and on a leaf, likewise: consumed, and the tree does not move.
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .end))
+        frame(view, tui: tui, context: context)
+        row = try #require(focus.currentFocused)
+        let before = lines(frame(view, tui: tui, context: context))
+        #expect(row.handleKeyEvent(KeyEvent(key: .right)), "Right on a leaf is still the tree's")
+        #expect(
+            lines(frame(view, tui: tui, context: context)) == before,
+            "and it opened nothing: \(before)")
     }
 
     /// Left's ladder, once there is nothing left to close: up to the parent,
