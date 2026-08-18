@@ -208,6 +208,10 @@ type_name:
     # both live in TextFieldValue.swift beside the initializers that build them.
     - _FieldValueFormatting
     - _FormattedFieldBody
+    # The drawing half of ContainerView. Internal (not private) because the two
+    # outgrew one file: the public view stayed in ContainerView.swift and its
+    # core moved to ContainerViewCore.swift.
+    - _ContainerViewCore
     # Applied by ContextMenuModifier so a menu's Buttons render as menu rows;
     # internal (not private) because the style and the modifier that applies it
     # live in different files.
