@@ -213,6 +213,11 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     private func contentContext(_ context: RenderContext, stripHeight: Int) -> RenderContext {
         var child = context.withBranchIdentity("tab-\(tabs[selectedIndex].value)")
         child.availableHeight = max(0, context.availableHeight - stripHeight)
+        // The body is painted on the strip's surface, so anything inside that
+        // draws a surface of its own has to step off THAT, not off the page.
+        // Without this a `TextField` in a tab computed "a step above the page"
+        // — which is the tab's own colour — and disappeared into it.
+        child.environment.surfaceBackground = surfaceColor(child.environment.palette)
         return child
     }
 

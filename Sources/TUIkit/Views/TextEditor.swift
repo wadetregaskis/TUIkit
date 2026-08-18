@@ -193,7 +193,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         // tint multiplied toward black — dark grey behind black text on Basic).
         let fieldBackground: Color? = isDisabled
             ? nil
-            : palette.fieldBackground.resolve(with: palette)
+            : (context.environment.surfaceBackground.map { palette.fieldBackground(on: $0) }
+                ?? palette.fieldBackground).resolve(with: palette)
 
         // The caret honours `.textCursor(_:)` exactly like TextField: same
         // shape, same blink/pulse animation, same speed — one setting styles

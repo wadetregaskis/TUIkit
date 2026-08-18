@@ -33,6 +33,11 @@ struct TabViewPage: View {
     @State private var compactSelection = 0
     @State private var borderedSelection = 0
     @State private var notify = true
+    /// The two fields the tabs carry — a text control inside a tab is where the
+    /// field's own surface has to be told what it sits on, or it comes out the
+    /// tab's colour (see ``Palette/fieldBackground(on:)``).
+    @State private var displayName = "Ada"
+    @State private var statusMessage = ""
     @State private var volume = 0.6
     // The bordered demo's own switch. It reads as a sibling of `notify` above
     // but belongs to a different `TabView`, and the two demos are independent —
@@ -82,6 +87,11 @@ struct TabViewPage: View {
                             Text("Ada Lovelace").bold()
                             Text("page.tabView.firstProgrammer")
                                 .foregroundStyle(.palette.foregroundSecondary)
+                            HStack {
+                                Text("page.tabView.displayName")
+                                TextField("page.tabView.displayNamePrompt", text: $displayName)
+                                    .frame(width: 18)
+                            }
                         }
                     }
                     Tab("page.tabView.settings", value: 1) {
@@ -108,7 +118,16 @@ struct TabViewPage: View {
                         }
                     }
                     Tab("page.tabView.status", value: 2) {
-                        Toggle("page.tabView.online", isOn: $online)
+                        VStack(alignment: .leading) {
+                            Toggle("page.tabView.online", isOn: $online)
+                            HStack {
+                                Text("page.tabView.statusMessage")
+                                TextField(
+                                    "page.tabView.statusMessagePrompt", text: $statusMessage
+                                )
+                                .frame(width: 22)
+                            }
+                        }
                     }
                     Tab("page.tabView.help", value: 3) {
                         Text("page.tabView.helpSwitchTabs")

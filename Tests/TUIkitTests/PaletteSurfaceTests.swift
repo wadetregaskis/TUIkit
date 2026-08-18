@@ -91,6 +91,34 @@ struct PaletteSurfaceTests {
         }
     }
 
+    @Test("A field inside another surface steps off THAT, not off the page")
+    func fieldOnASurfaceIsSeparate() {
+        // A `TextField` in a `TabView`'s body asked for "a surface on the page"
+        // and got the tab's own colour — the two took the same step from the
+        // same place — so the field vanished into the tab it sat in.
+        for palette in palettes {
+            let tab = palette.liftedBackground.resolve(with: palette)
+            let field = palette.fieldBackground(on: tab).resolve(with: palette)
+            let gap = String(format: "%.1f", field.lightnessDifference(from: tab))
+            #expect(
+                SystemPalette.isVisiblySeparate(field, from: tab),
+                "\(palette.id): a field on the tab surface is ΔL* \(gap) off it")
+        }
+    }
+
+    @Test("On the page, a field is still the palette's own field colour")
+    func fieldOnThePageIsUnchanged() {
+        // The generalisation must not quietly re-derive the ordinary case: a
+        // palette that states a chrome tone still gets it for its fields.
+        for palette in palettes {
+            let page = palette.background.resolve(with: palette)
+            #expect(
+                palette.fieldBackground(on: page).resolve(with: palette)
+                    == palette.fieldBackground.resolve(with: palette),
+                "\(palette.id): the page case changed")
+        }
+    }
+
     @Test("The surface keeps the page's hue")
     func surfaceKeepsTheHue() {
         // A step toward black or white desaturates as it goes: the phosphor

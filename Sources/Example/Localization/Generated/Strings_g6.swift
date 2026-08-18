@@ -13,6 +13,10 @@
 extension ExampleStrings {
     static let g6: [String: [String: String]] = [
         "en": [
+            "page.tabView.displayName": "Display name",
+            "page.tabView.displayNamePrompt": "How you appear",
+            "page.tabView.statusMessage": "Status message",
+            "page.tabView.statusMessagePrompt": "What are you working on?",
             // TabView page
             "page.tabView.compactStyle": "Compact Style (no chrome)",
             "page.tabView.profile": "Profile",
@@ -84,6 +88,10 @@ extension ExampleStrings {
             "page.form.aboutFocusHint": "[Tab] move focus · the whole checkbox row (box + label) is clickable",
         ],
         "de": [
+            "page.tabView.displayName": "Anzeigename",
+            "page.tabView.displayNamePrompt": "Wie du erscheinst",
+            "page.tabView.statusMessage": "Statusmeldung",
+            "page.tabView.statusMessagePrompt": "Woran arbeitest du?",
             // TabView page
             "page.tabView.compactStyle": "Kompakter Stil (ohne Rahmen)",
             "page.tabView.profile": "Profil",
@@ -155,6 +163,10 @@ extension ExampleStrings {
             "page.form.aboutFocusHint": "[Tab] verschiebt den Fokus · die ganze Kontrollkästchen-Zeile (Feld + Beschriftung) ist anklickbar",
         ],
         "fr": [
+            "page.tabView.displayName": "Nom affiché",
+            "page.tabView.displayNamePrompt": "Comment vous apparaissez",
+            "page.tabView.statusMessage": "Message de statut",
+            "page.tabView.statusMessagePrompt": "Sur quoi travaillez-vous ?",
             // TabView page
             "page.tabView.compactStyle": "Style compact (sans cadre)",
             "page.tabView.profile": "Profil",
@@ -226,6 +238,10 @@ extension ExampleStrings {
             "page.form.aboutFocusHint": "[Tab] déplace le focus · toute la ligne de la case à cocher (case + libellé) est cliquable",
         ],
         "it": [
+            "page.tabView.displayName": "Nome visualizzato",
+            "page.tabView.displayNamePrompt": "Come appari",
+            "page.tabView.statusMessage": "Messaggio di stato",
+            "page.tabView.statusMessagePrompt": "A cosa stai lavorando?",
             // TabView page
             "page.tabView.compactStyle": "Stile compatto (senza cornice)",
             "page.tabView.profile": "Profilo",
@@ -297,6 +313,10 @@ extension ExampleStrings {
             "page.form.aboutFocusHint": "[Tab] sposta il focus · l'intera riga della casella (casella + etichetta) è cliccabile",
         ],
         "es": [
+            "page.tabView.displayName": "Nombre visible",
+            "page.tabView.displayNamePrompt": "Cómo apareces",
+            "page.tabView.statusMessage": "Mensaje de estado",
+            "page.tabView.statusMessagePrompt": "¿En qué estás trabajando?",
             // TabView page
             "page.tabView.compactStyle": "Estilo compacto (sin marco)",
             "page.tabView.profile": "Perfil",
@@ -368,6 +388,10 @@ extension ExampleStrings {
             "page.form.aboutFocusHint": "[Tab] mueve el foco · toda la fila de la casilla (casilla + etiqueta) es interactiva",
         ],
         "zh": [
+            "page.tabView.displayName": "显示名称",
+            "page.tabView.displayNamePrompt": "别人看到的名字",
+            "page.tabView.statusMessage": "状态信息",
+            "page.tabView.statusMessagePrompt": "你在忙什么？",
             // TabView page
             "page.tabView.compactStyle": "紧凑样式（无边框）",
             "page.tabView.profile": "个人资料",
@@ -439,6 +463,10 @@ extension ExampleStrings {
             "page.form.aboutFocusHint": "[Tab] 移动焦点 · 整个复选框行（方框 + 标签）均可点击",
         ],
         "ja": [
+            "page.tabView.displayName": "表示名",
+            "page.tabView.displayNamePrompt": "ほかの人に見える名前",
+            "page.tabView.statusMessage": "ステータス",
+            "page.tabView.statusMessagePrompt": "いま何をしていますか？",
             // TabView page
             "page.tabView.compactStyle": "コンパクトスタイル（枠なし）",
             "page.tabView.profile": "プロフィール",

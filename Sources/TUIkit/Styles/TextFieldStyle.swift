@@ -158,7 +158,14 @@ struct FieldChrome {
     /// Builds the chrome for a style, tinting the caps toward the accent while
     /// hovered so the affordance reads as "clickable" without mimicking the
     /// focused look.
-    init(style: any TextFieldStyle, palette: any Palette, isHovered: Bool) {
+    /// - Parameter background: what the field is drawn ON — the page, or the
+    ///   surface of a container that painted one (a `TabView`'s body). The
+    ///   field's own surface is derived from it, so a field inside a tab does
+    ///   not come out the same colour as the tab.
+    init(
+        style: any TextFieldStyle, palette: any Palette, isHovered: Bool,
+        on background: Color? = nil
+    ) {
         guard style.drawsFieldSurface else {
             self.width = 0
             self.open = ""
@@ -166,7 +173,9 @@ struct FieldChrome {
             self.surface = nil
             return
         }
-        let surface = palette.fieldBackground.resolve(with: palette)
+        let surface =
+            (background.map { palette.fieldBackground(on: $0) } ?? palette.fieldBackground)
+            .resolve(with: palette)
         let capColor =
             isHovered
             ? Color.lerp(surface, palette.accent.resolve(with: palette), phase: 0.35)

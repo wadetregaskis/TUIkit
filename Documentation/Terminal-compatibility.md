@@ -101,6 +101,12 @@ the emoji-class clusters below unless noted.
   scales the page's channels rather than mixing toward black or white, because
   mixing desaturates: a phosphor palette's near-black page mixed 10% toward
   white is grey, and a green terminal grew grey text fields.
+
+  The step is taken from whatever is actually **behind** the control, not always
+  from the page: a `TextField` inside a `TabView`'s body asked for "a surface on
+  the page" and got the tab's own colour, both being the same step from the same
+  place. A container that paints a surface publishes it
+  (`EnvironmentValues.surfaceBackground`); the field derives from that.
 - **VS-16 pictographic emoji** (❤️ ✏️ ☎️ 🖥️ 🛡️ …): paints 2,
   **advances 1** ("Bug A" — see `Emoji rendering bugs in macOS Sequoia's
   Terminal.app.md` for the full investigation). Compensated with CUF(1) by

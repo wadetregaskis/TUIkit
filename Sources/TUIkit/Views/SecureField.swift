@@ -296,7 +296,7 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         // style draws (two cap cells, or none for `.plain`).
         let chrome = FieldChrome(
             style: context.environment.textFieldStyle, palette: palette,
-            isHovered: false)
+            isHovered: false, on: context.environment.surfaceBackground)
         let contentWidth = max(minContentWidth, context.availableWidth - chrome.width)
 
         let persistedFocusID = FocusRegistration.persistFocusID(
@@ -376,7 +376,7 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         // at all.
         let hoveredChrome = FieldChrome(
             style: context.environment.textFieldStyle, palette: palette,
-            isHovered: isHovered)
+            isHovered: isHovered, on: context.environment.surfaceBackground)
         var buffer = FrameBuffer(
             text: hoveredChrome.open + fieldContent.line + hoveredChrome.close)
 

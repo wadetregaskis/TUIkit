@@ -128,6 +128,20 @@ extension Palette {
 
     public var fieldBackground: Color { liftedBackground }
 
+    /// The field surface for a field drawn on `surface` instead of on the page.
+    ///
+    /// On the page this is ``fieldBackground`` itself — including any tone the
+    /// palette stated for its chrome. Anywhere else it is a step off whatever
+    /// is actually behind the field (``lifted(from:)``), because the palette's
+    /// one answer is the page's answer, and a container that already took that
+    /// step would hand the field its own colour back.
+    public func fieldBackground(on surface: Color) -> Color {
+        let page = background.resolve(with: self)
+        let resolved = surface.resolve(with: self)
+        guard resolved != page else { return fieldBackground }
+        return lifted(from: resolved)
+    }
+
     /// A surface that sits ON the page and must be visible as one: the tab
     /// strip's island, the field behind editable text.
     ///
@@ -164,10 +178,23 @@ extension Palette {
     /// grey.
     public var liftedBackground: Color {
         let base = background.resolve(with: self)
-        let text = foreground.resolve(with: self)
-
         let stated = appHeaderBackground.resolve(with: self)
+        // The palette's own opinion wins when it can be seen; otherwise derive.
         if Self.isVisiblySeparate(stated, from: base) { return stated }
+        return lifted(from: base)
+    }
+
+    /// The same step, taken from an arbitrary surface rather than from the page
+    /// — what a control drawn INSIDE another surface needs.
+    ///
+    /// ``liftedBackground`` answers "a surface on the page", and a `TextField`
+    /// asking that question while sitting in a `TabView`'s body got the tab's
+    /// own colour back: the two surfaces are one step off the page each, which
+    /// is to say the same step, and the field vanished into the tab. Stepping
+    /// from what is actually behind the control keeps the field a field
+    /// wherever it is put.
+    public func lifted(from base: Color) -> Color {
+        let text = foreground.resolve(with: self)
 
         // Away from the text first, then toward it. The second walk is the one
         // that can cost readability, so only it carries the guard.

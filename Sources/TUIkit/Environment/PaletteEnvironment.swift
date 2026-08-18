@@ -66,3 +66,26 @@ extension EnvironmentValues {
         set { self[PaletteManagerKey.self] = newValue }
     }
 }
+
+// MARK: - Enclosing Surface
+
+/// Environment key for the surface a subtree is drawn on.
+private struct SurfaceBackgroundKey: EnvironmentKey {
+    static let defaultValue: Color? = nil
+}
+
+extension EnvironmentValues {
+    /// The colour of the surface the current subtree is painted on, when a
+    /// container painted one — `nil` when that is just the page.
+    ///
+    /// A control that draws its own surface (a `TextField`'s well) has to know
+    /// what is behind it, because "a step off the page" and "a step off *this*"
+    /// are the same colour when the container is itself a step off the page:
+    /// a field inside a `TabView`'s body drew the tab's own tone and vanished
+    /// into it. Read it through ``Palette/fieldBackground(on:)`` rather than
+    /// directly, so the derivation stays in one place.
+    var surfaceBackground: Color? {
+        get { self[SurfaceBackgroundKey.self] }
+        set { self[SurfaceBackgroundKey.self] = newValue }
+    }
+}

@@ -54,6 +54,34 @@ struct TabViewTests {
                 "unselected tab content is hidden: \(out)")
     }
 
+    @Test("A field inside a tab does not come out the tab's own colour")
+    func fieldInsideATabIsVisible() {
+        // The tab body is painted on the strip's surface, and a `TextField`
+        // deriving "a surface above the page" got exactly that surface back —
+        // the two are the same step from the same place — so the field was
+        // invisible inside the tab it sat in. It now steps off what is actually
+        // behind it (``EnvironmentValues/surfaceBackground``).
+        withColorDepth(.truecolor) {
+            let context = makeRenderContext(width: 40, height: 8)
+            let palette = context.environment.palette
+            let tabSurface = palette.liftedBackground.resolve(with: palette)
+            let rendered = renderToBuffer(
+                TabView(selection: .constant(0)) {
+                    Tab("One", value: 0) { TextField("prompt", text: .constant("x")) }
+                }, context: context
+            ).lines.joined(separator: "\n")
+
+            func code(_ color: Color) -> String {
+                let rgb = color.resolve(with: palette).rgbComponents!
+                return "48;2;\(rgb.red);\(rgb.green);\(rgb.blue)"
+            }
+            #expect(rendered.contains(code(tabSurface)), "the tab still paints its surface")
+            #expect(
+                rendered.contains(code(palette.fieldBackground(on: tabSurface))),
+                "and the field paints one of its own: \(rendered.debugDescription)")
+        }
+    }
+
     @Test("Bordered style: folder tabs on a content box, border opens under the active tab")
     func borderedBox() {
         let lines = renderToBuffer(
