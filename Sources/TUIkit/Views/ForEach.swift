@@ -139,7 +139,14 @@ extension ForEach: ChildViewProvider {
     /// transparent (the wrapper is Renderable, adds no identity).
     private func makeChild(for element: Data.Element) -> ChildView {
         let key = identityKey(element[keyPath: idKeyPath])
-        if let equatableElement = element as? any Equatable {
+        // A row carrying an explicit `.alignmentGuide` is handed over bare. The
+        // memo wrapper is `Renderable` and opaque, so a container reading its
+        // children's guides finds none on a wrapped row and falls back to the
+        // `AlignmentID`'s default — silently un-aligning exactly the rows the
+        // caller went out of their way to place. The static witness costs
+        // nothing (it is `false` for every row in almost every tree) and the
+        // memo is forfeited only for the rows that cannot survive it.
+        if !Content._providesAlignmentGuide, let equatableElement = element as? any Equatable {
             // The row view is NOT built here. `_MemoizedRow` takes the element
             // and this `ForEach`'s content closure and builds the row only if
             // the memo misses — which, in steady state, it mostly does not.

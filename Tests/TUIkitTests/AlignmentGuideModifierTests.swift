@@ -8,6 +8,16 @@ import Testing
 
 @testable import TUIkit
 
+/// The line a decimal point sits on — the Layout page's own custom alignment,
+/// reproduced here because a `ForEach` over it is what regressed.
+private enum DecimalPointID: AlignmentID {
+    static func defaultValue(in context: ViewDimensions) -> Double { 0 }
+}
+
+extension HorizontalAlignment {
+    fileprivate static let decimalPoint = Self(DecimalPointID.self)
+}
+
 /// `.alignmentGuide` moves the line a container aligns a child on. The property
 /// that makes it worth having — and the one every case here turns on — is that
 /// a container can end up **wider (or taller) than its largest child**, because
@@ -29,6 +39,20 @@ struct AlignmentGuideModifierTests {
             return stripped.count - stripped.drop(while: { $0 == " " }).count
         }
     }
+
+    /// Numbers whose whole parts differ in width, so a decimal-point guide is
+    /// visibly not the same as aligning on either edge. `Hashable` because that
+    /// is what routes a `ForEach` row through the element-keyed memo.
+    private struct Amount: Hashable {
+        let whole: String
+        let fraction: String
+    }
+
+    private static let amounts = [
+        Amount(whole: "7", fraction: "50"),
+        Amount(whole: "1240", fraction: "05"),
+        Amount(whole: "96", fraction: "125"),
+    ]
 
     // MARK: - The basic shape
 
@@ -74,6 +98,40 @@ struct AlignmentGuideModifierTests {
             context: makeRenderContext(width: 30, height: 4))
 
         #expect(indents(buffer) == [0, 1])
+    }
+
+    @Test("A ForEach row keeps its guide, Equatable element or not")
+    func forEachRowsHonourTheGuide() {
+        // `ForEach` wraps a row in the element-keyed value memo when the element
+        // is `Equatable`, and the memo is `Renderable` — opaque to the stack's
+        // guide query. Every row of the Layout page's decimal-point column read
+        // back as unguided and the whole column drew flush left, under a caption
+        // explaining that it lines up on the point.
+        //
+        // `Amount` is `Hashable` (so `Equatable`) on purpose: that is the branch
+        // that broke. The `Int` control below takes the same branch and is here
+        // to prove the assertion is about the guide, not the element type.
+        let guided = renderToBuffer(
+            VStack(alignment: .decimalPoint, spacing: 0) {
+                ForEach(Self.amounts, id: \.self) { amount in
+                    Text("\(amount.whole).\(amount.fraction)")
+                        .alignmentGuide(.decimalPoint) { _ in Double(amount.whole.count) }
+                }
+            },
+            context: makeRenderContext(width: 30, height: 4))
+
+        // Widest whole part is 4 ("1240"), so each row is indented by the
+        // difference — the point lands in one column for all three.
+        #expect(indents(guided) == [3, 0, 2])
+
+        let unguided = renderToBuffer(
+            VStack(alignment: .decimalPoint, spacing: 0) {
+                ForEach(Self.amounts, id: \.self) { amount in
+                    Text("\(amount.whole).\(amount.fraction)")
+                }
+            },
+            context: makeRenderContext(width: 30, height: 4))
+        #expect(indents(unguided) == [0, 0, 0], "the control: no guide, no movement")
     }
 
     @Test("A guide survives the scroll viewport window")
