@@ -290,9 +290,20 @@ struct LayoutPage: View {
                                 Text(amount.whole)
                                 Text(".")
                                     .foregroundStyle(.palette.accent)
-                                    .alignmentGuide(.decimalPoint) { $0[.leading] }
                                 Text(amount.fraction)
                                     .foregroundStyle(.palette.foregroundSecondary)
+                            }
+                            // The guide sits on the ROW, not on the `.` inside
+                            // it: a stack reads the guides of the children it
+                            // places, and a guide set deeper down does not
+                            // travel up through the row to reach it. (SwiftUI
+                            // resolves a custom alignment recursively, so there
+                            // the guide can sit on the point itself — the gap
+                            // is recorded in `SwiftUI-compatibility.md`.) The
+                            // line is still the content's own: the point sits
+                            // exactly past the whole part.
+                            .alignmentGuide(.decimalPoint) { _ in
+                                Double(amount.whole.strippedLength)
                             }
                         }
                     }
