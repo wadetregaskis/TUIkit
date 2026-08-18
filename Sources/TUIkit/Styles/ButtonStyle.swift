@@ -392,12 +392,20 @@ private struct _ButtonStyleBody: View, Renderable {
                 configuration.label, into: context.availableWidth, chrome: chromeWidth)
             let paddedLabel = padding + labelText + padding
 
-            let foregroundColor: Color =
+            let restingColor: Color =
                 isDisabled
                 ? palette.foregroundTertiary.opacity(
                     ViewConstants.disabledForeground, over: palette.background)
                 : (cascadeForeground?.resolve(with: palette)
                     ?? baseForeground?.resolve(with: palette) ?? palette.accent)
+            // A plain button has no face to light up — no caps, no fill, it
+            // draws straight onto the page — so the pointer lifts the colour it
+            // already has (``Palette/hoveredForeground(_:)``), which is also
+            // what gives `Link` its hover: a link IS a plain button. The lift
+            // keeps whatever hue is in force, so a cascade colour or a
+            // destructive role still reads as itself.
+            let foregroundColor =
+                isHovered ? palette.hoveredForeground(restingColor) : restingColor
 
             var textStyle = TextStyle()
             textStyle.foregroundColor = foregroundColor
@@ -542,10 +550,18 @@ private struct _ButtonStyleBody: View, Renderable {
                 ? faded
                 : faded.ensuringRenderedContrast(
                     atLeast: ViewConstants.disabledLabelContrastFloor, against: buttonBg)
+        } else if appearance.isPlain {
+            // Ahead of the cascade branch, not after it: a plain button's only
+            // affordance IS the colour of its label — no caps, no fill, it
+            // draws straight onto the page — so the pointer has to be able to
+            // lift whatever colour is in force, the app's included. The lift
+            // keeps the hue, so the label still reads as itself.
+            let resting =
+                cascadeForeground?.resolve(with: palette)
+                ?? baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary
+            labelFg = isHovered ? palette.hoveredForeground(resting) : resting
         } else if let cascadeForeground {
             labelFg = cascadeForeground.resolve(with: palette)
-        } else if appearance.isPlain {
-            labelFg = baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary
         } else {
             labelFg = (baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary)
                 .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)

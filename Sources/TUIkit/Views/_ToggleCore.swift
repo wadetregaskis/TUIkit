@@ -460,17 +460,19 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                 labelContext.environment.foregroundStyle =
                     palette.foregroundTertiary.opacity(
                         ViewConstants.disabledForeground, over: palette.background)
-            } else if isHovered, labelContext.environment.foregroundStyle == nil,
-                labelContext.environment.styleCascade
-                    .resolve(for: [.all, .text, .control(.toggle)]).foreground == nil
-            {
+            } else if isHovered {
                 // The whole row answers the pointer, not just the indicator: the
-                // whole row is what the click hits. Only when the colour is the
-                // framework's own, though — an app that coloured the label, by
-                // modifier or by `.toggleTextStyle`, keeps exactly the colour it
-                // asked for, the same rule ``ButtonStyle`` follows.
+                // whole row is what the click hits. Whatever colour is in force
+                // is what gets lifted — the app's own included, since the lift
+                // keeps its hue and a colour nobody lifts is a colour that never
+                // answers. Same rule as a plain `Button`'s label.
+                let base =
+                    labelContext.environment.foregroundStyle
+                    ?? labelContext.environment.styleCascade
+                        .resolve(for: [.all, .text, .control(.toggle)]).foreground
+                    ?? palette.foreground
                 labelContext.environment.foregroundStyle =
-                    palette.hoveredForeground(palette.foreground)
+                    palette.hoveredForeground(base)
             }
 
             let built = builtInStyleBuffer(

@@ -243,6 +243,45 @@ struct ButtonTests {
         )
     }
 
+    @Test("A plain button lifts its label colour under the pointer")
+    func plainButtonHoverLiftsTheLabel() {
+        // A plain button draws straight onto the page — no caps, no fill — so
+        // the face swap the standard style uses has nothing to swap. Its label
+        // colour is the whole affordance, and before this it had none at all:
+        // `.buttonStyle(.plain)` (and therefore every `Link`) simply did not
+        // answer the pointer.
+        withColorDepth(.truecolor) {
+            let context = createTestContext()
+            let dispatcher = context.environment.mouseEventDispatcher!
+            dispatcher.setActiveSupport(.full)
+            context.environment.focusManager!.register(FocusSentinel())
+
+            let view = Button("Plain") {}.buttonStyle(.plain)
+            let before = ansiRendered(view, context: context)
+            let regions = renderToBuffer(view, context: context).hitTestRegions
+            dispatcher.setRegions(regions)
+            guard let region = regions.first else {
+                Issue.record("expected a hit-test region from a plain Button")
+                return
+            }
+            _ = dispatcher.dispatch(
+                MouseEvent(
+                    button: .none, phase: .moved,
+                    x: region.offsetX + 1, y: region.offsetY))
+            let after = ansiRendered(view, context: context)
+
+            let palette = context.environment.palette
+            func code(_ color: Color) -> String {
+                let rgb = color.resolve(with: palette).rgbComponents!
+                return "38;2;\(rgb.red);\(rgb.green);\(rgb.blue)"
+            }
+            #expect(before.contains(code(palette.accent)), "accent at rest: \(before)")
+            #expect(
+                after.contains(code(palette.hoveredForeground(palette.accent))),
+                "lifted under the pointer: \(after)")
+        }
+    }
+
     @Test("Hover .exited restores Button's un-hovered tint")
     func hoverExitRestoresTint() {
         let context = createTestContext()

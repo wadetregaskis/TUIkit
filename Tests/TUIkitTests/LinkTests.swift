@@ -27,6 +27,56 @@ struct LinkTests {
 
     private let url = URL(string: "https://example.com/docs")!
 
+    /// Claims auto-focus so the link under test renders unfocused — a focused
+    /// control suppresses its hover affordance, and the two renders would
+    /// otherwise be identical for the wrong reason.
+    private final class LinkFocusSentinel: Focusable {
+        let focusID = "link-hover-sentinel"
+        func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
+    }
+
+    /// The one affordance a link has. SwiftUI's `Link` is accent-coloured and
+    /// leaves hover to the pointer cursor; a terminal has no cursor to change,
+    /// so the colour does the work.
+    ///
+    /// The accent reaches the label through the button's TEXT STYLE rather than
+    /// a `.foregroundStyle` on the label itself: a colour written on the label
+    /// beats the one the style hands down, and it is the style that knows about
+    /// the pointer. Routed the other way this test fails.
+    @Test("A link lifts its colour under the pointer")
+    func hoverLiftsTheLinkColour() {
+        withColorDepth(.truecolor) {
+            let context = makeRenderContext(width: 40, height: 4)
+            let dispatcher = context.environment.mouseEventDispatcher!
+            dispatcher.setActiveSupport(.full)
+            context.environment.focusManager!.register(LinkFocusSentinel())
+
+            let view = Link("swift.org", destination: url)
+            let before = renderToBuffer(view, context: context).lines.joined()
+            let regions = renderToBuffer(view, context: context).hitTestRegions
+            dispatcher.setRegions(regions)
+            guard let region = regions.first else {
+                Issue.record("expected a hit-test region from Link")
+                return
+            }
+            _ = dispatcher.dispatch(
+                MouseEvent(
+                    button: .none, phase: .moved,
+                    x: region.offsetX + 1, y: region.offsetY))
+            let after = renderToBuffer(view, context: context).lines.joined()
+
+            let palette = context.environment.palette
+            func code(_ color: Color) -> String {
+                let rgb = color.resolve(with: palette).rgbComponents!
+                return "38;2;\(rgb.red);\(rgb.green);\(rgb.blue)"
+            }
+            #expect(before.contains(code(palette.accent)), "accent at rest: \(before)")
+            #expect(
+                after.contains(code(palette.hoveredForeground(palette.accent))),
+                "lifted under the pointer: \(after)")
+        }
+    }
+
     @Test("OpenURLAction invokes its handler with the URL")
     func openURLActionFires() {
         let sink = URLSink()

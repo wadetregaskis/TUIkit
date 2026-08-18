@@ -142,11 +142,17 @@ private struct _Link<Label: View>: View {
         let destination = self.destination
         // `.underline(_:)` cascades to every Text in the label subtree, so a
         // string title, a `Label`, or an SF-Symbol label all underline together.
+        //
+        // The accent arrives through the button's own text style rather than as
+        // a `.foregroundStyle` on the label. Both put the same colour on screen,
+        // but a colour written on the label wins over the one the style hands
+        // down — and it is the STYLE that knows whether the pointer is over the
+        // link. Routed this way, `.plain`'s hover lift applies to a link like
+        // any other plain button, which is the whole affordance a link has.
         return Button(action: { open(destination) }, label: {
-            label
-                .underline(underline)
-                .foregroundStyle(.palette.accent)
+            label.underline(underline)
         })
         .buttonStyle(.plain)
+        .buttonTextStyle { $0.foreground = .palette.accent }
     }
 }
