@@ -197,8 +197,27 @@ struct NavigationPage: View {
 
     /// Named surface features, deliberately long enough that the trail has to
     /// elide at ordinary terminal widths.
+    /// Two real, named surface features per moon — IAU names, not invented
+    /// ones. Every moon used to show Luna's, which made four screens of the
+    /// demo say the same thing and quietly taught the reader that the trail
+    /// they were walking did not depend on where they had walked.
     private static func features(of moon: Moon) -> [Feature] {
-        ["Tranquillitatis Basin", "Copernicus Rim"].map { Feature(name: $0, moon: moon.name) }
+        let names: [String] =
+            switch moon.name {
+            case "Luna": ["Mare Tranquillitatis", "Copernicus Crater"]
+            // Phobos is dominated by one crater a third of its width, and by
+            // the grooves radiating from it.
+            case "Phobos": ["Stickney Crater", "Kepler Dorsum"]
+            // Deimos has exactly two named craters, both named for writers who
+            // wrote about Martian moons before anyone had seen them.
+            case "Deimos": ["Swift Crater", "Voltaire Crater"]
+            case "Io": ["Loki Patera", "Pele"]
+            case "Europa": ["Conamara Chaos", "Pwyll Crater"]
+            case "Ganymede": ["Galileo Regio", "Uruk Sulcus"]
+            case "Callisto": ["Valhalla Basin", "Asgard Basin"]
+            default: []
+            }
+        return names.map { Feature(name: $0, moon: moon.name) }
     }
 
     private static func samples(at feature: Feature) -> [Sample] {
