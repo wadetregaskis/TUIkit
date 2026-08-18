@@ -86,8 +86,12 @@ public struct SystemPalette: Palette, Hashable {
 
         // Backgrounds
         self.background = Color.hsl(hue, tuning.bgSaturation, 3)
-        self.statusBarBackground = Color.hsl(hue, tuning.barSaturation, 10)
-        self.appHeaderBackground = Color.hsl(hue, tuning.barSaturation, 7)
+        // One tone for both bars: the header and the status bar are the same
+        // chrome at opposite ends of the page, and lighting one of them more
+        // than the other (they were 10 and 7) reads as a mistake.
+        let barBackground = Color.hsl(hue, tuning.barSaturation, 7)
+        self.statusBarBackground = barBackground
+        self.appHeaderBackground = barBackground
         self.overlayBackground = Color.hsl(hue, tuning.bgSaturation, 3)
 
         // Foregrounds. Tertiary is floored against the background — the

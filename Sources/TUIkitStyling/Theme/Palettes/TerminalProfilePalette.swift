@@ -121,12 +121,15 @@ public struct TerminalProfilePalette: Palette, Hashable {
         // foreground below body-text contrast — saturated mid-dark profiles
         // (Grass green, Red Sands brick) lose their light text on a lightened
         // bar, so those flip to darkened bars instead.
-        self.statusBarBackground = Self.barBackground(
-            background: background, foreground: foreground,
-            darkBackground: darkBackground, step: darkBackground ? 0.10 : 0.06)
-        self.appHeaderBackground = Self.barBackground(
+        //
+        // One step for both: the header and the status bar are the same chrome
+        // at opposite ends of the page, and stepping one further than the other
+        // (they were 0.16 and 0.10) reads as a mistake rather than a decision.
+        let barBackground = Self.barBackground(
             background: background, foreground: foreground,
             darkBackground: darkBackground, step: darkBackground ? 0.16 : 0.10)
+        self.statusBarBackground = barBackground
+        self.appHeaderBackground = barBackground
         self.overlayBackground = background
 
         // The dimming ladder keeps each step's hue but is floored so even

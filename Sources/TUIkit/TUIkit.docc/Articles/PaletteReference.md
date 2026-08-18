@@ -41,7 +41,9 @@ The 16 built-in palettes are instances of ``SystemPalette`` (the 6 phosphor pres
 
 | Category | Tokens | Purpose |
 |----------|--------|---------|
-| **Background** | `background`, `statusBarBackground`, `appHeaderBackground`, `overlayBackground` | App background, status bar, overlays |
+| **Background** | `background`, `statusBarBackground`, `appHeaderBackground`, `overlayBackground` | App background, chrome bars, overlays |
+
+The header and the status bar are one material: `statusBarBackground` defaults to `appHeaderBackground` (which in turn defaults to `background`), so a palette states its chrome tone once and both ends of the page take it. Every built-in does. Override `statusBarBackground` only for a palette that genuinely wants the two ends to differ.
 | **Foreground** | `foreground`, `foregroundSecondary`, `foregroundTertiary`, `foregroundQuaternary` | Primary through quaternary (dimmest) text |
 | **Accent** | `accent` | Interactive elements, highlights |
 | **Semantic** | `success`, `warning`, `error`, `info` | Status indicators |
@@ -189,7 +191,7 @@ The violet preset takes a base hue (270°) and derives all color tokens using HS
 | `error` | hsl(90, 85%, 65%) | Lime green (270+180=90°) |
 | `info` | hsl(210, 70%, 70%) | Sky blue (270−60=210°) |
 | `border` | hsl(270, 40%, 25%) | Dark purple border |
-| `statusBarBackground` | hsl(270, 35%, 8%) | Very dark violet |
+| `statusBarBackground` | hsl(270, 35%, 7%) | Very dark violet (the header's tone too) |
 
 ## Blue
 

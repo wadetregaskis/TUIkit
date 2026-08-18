@@ -39,10 +39,32 @@ struct PaletteDefaultTests {
         #expect(palette.foregroundTertiary == palette.foreground)
     }
 
+    /// Transitively, through `appHeaderBackground` — the status bar follows the
+    /// header rather than the page, so a palette that states only a header tone
+    /// gets both bars in it.
     @Test("Defaults derive statusBarBackground from background")
     func defaultStatusBarBackground() {
         let palette = MinimalPalette()
         #expect(palette.statusBarBackground == palette.background)
+    }
+
+    @Test("A stated header tone carries to the status bar")
+    func statusBarFollowsTheHeader() {
+        struct HeaderOnlyPalette: Palette {
+            let id = "header-only"
+            let name = "Header Only"
+            let background = Color.rgb(0, 0, 0)
+            let appHeaderBackground = Color.rgb(40, 40, 40)
+            let foreground = Color.rgb(255, 255, 255)
+            let accent = Color.rgb(0, 128, 255)
+            let success = Color.rgb(0, 200, 0)
+            let warning = Color.rgb(200, 160, 0)
+            let error = Color.rgb(200, 0, 0)
+            let info = Color.rgb(0, 160, 200)
+            let border = Color.rgb(80, 80, 80)
+        }
+        let palette = HeaderOnlyPalette()
+        #expect(palette.statusBarBackground == palette.appHeaderBackground)
     }
 
     @Test("Defaults derive appHeaderBackground from background")

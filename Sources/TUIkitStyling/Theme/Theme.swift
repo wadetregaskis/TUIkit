@@ -30,9 +30,18 @@ public protocol Palette: Cyclable {
     var background: Color { get }
 
     /// Status bar background.
+    ///
+    /// Defaults to ``appHeaderBackground``: the header and the status bar are
+    /// the same chrome, one strip at each end of the page, and a palette that
+    /// tinted them differently read as an accident rather than a decision.
+    /// State it only for a palette that genuinely wants the two ends to differ.
     var statusBarBackground: Color { get }
 
     /// App header background.
+    ///
+    /// The stated tone for the app's chrome — the status bar follows it, and it
+    /// is also what ``liftedBackground`` reads as the palette's "a surface sits
+    /// here" answer.
     var appHeaderBackground: Color { get }
 
     /// Dimming overlay background for alerts and dialogs.
@@ -101,7 +110,7 @@ public protocol Palette: Cyclable {
 extension Palette {
     // MARK: - Background Defaults
 
-    public var statusBarBackground: Color { background }
+    public var statusBarBackground: Color { appHeaderBackground }
     public var appHeaderBackground: Color { background }
     public var overlayBackground: Color { background }
 

@@ -195,6 +195,23 @@ struct PaletteContrastAuditTests {
             }
         }
     }
+
+    // MARK: - One chrome, both ends
+
+    /// The app header and the status bar are the same chrome — one strip at
+    /// each end of the page — so a palette must not tint them differently. Both
+    /// built-in families used to: the presets lit the status bar to L=10 and
+    /// the header to L=7, and the terminal profiles stepped them 0.10 and 0.16
+    /// from the page. The result read as an accident, because it was one.
+    @Test("Both bars are the same colour in every shipped palette")
+    func barsShareOneTone() {
+        for palette in Self.allPalettes {
+            #expect(
+                palette.statusBarBackground.resolve(with: palette)
+                    == palette.appHeaderBackground.resolve(with: palette),
+                "\(palette.name): status bar \(Self.hex(palette.statusBarBackground)) ≠ header \(Self.hex(palette.appHeaderBackground))")
+        }
+    }
 }
 
 extension PaletteContrastAuditTests {
