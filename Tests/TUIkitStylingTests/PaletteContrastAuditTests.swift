@@ -101,8 +101,15 @@ struct PaletteContrastAuditTests {
                 foreground: palette.foreground, background: palette.fieldBackground,
                 minimum: 4.5),
             AuditedPair(
-                name: "tertiary/fieldBackground",  // the prompt text
-                foreground: palette.foregroundTertiary, background: palette.fieldBackground,
+                // The prompt text, built the way `TextFieldContentRenderer`
+                // builds it: `foregroundTertiary` is derived against the PAGE,
+                // and the field is a step off the page, so what is drawn is the
+                // tertiary floored against the field it lands on.
+                name: "prompt/fieldBackground",
+                foreground: palette.foregroundTertiary.ensuringRenderedContrast(
+                    atLeast: ViewConstants.disabledLabelContrastFloor,
+                    against: palette.fieldBackground.resolve(with: palette)),
+                background: palette.fieldBackground,
                 minimum: 2.4),
         ] + controlSurfacePairs(for: palette)
     }

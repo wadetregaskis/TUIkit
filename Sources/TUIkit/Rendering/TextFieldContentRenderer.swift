@@ -106,7 +106,7 @@ struct TextFieldContentRenderer {
                 cursorTimer: cursorTimer,
                 background: backgroundColor,
                 width: contentWidth,
-                foregroundOverride: palette.foregroundTertiary,
+                foregroundOverride: Self.promptColor(palette: palette, on: backgroundColor),
                 displayOverride: { index, text in
                     text[text.index(text.startIndex, offsetBy: index)]
                 }
@@ -179,7 +179,25 @@ struct TextFieldContentRenderer {
         // prompt must not push the field wider than its neighbours.
         let (truncated, cells) = promptText.ansiAwarePrefixWithWidth(visibleCount: width)
         let paddedPrompt = truncated + String(repeating: " ", count: width - cells)
-        return ANSIRenderer.colorize(paddedPrompt, foreground: palette.foregroundTertiary, background: background)
+        return ANSIRenderer.colorize(
+            paddedPrompt, foreground: Self.promptColor(palette: palette, on: background),
+            background: background)
+    }
+
+    /// The placeholder's colour, floored against the surface it is drawn on.
+    ///
+    /// `foregroundTertiary` is derived against the PAGE, and a field is not the
+    /// page — it is a surface a step off it, which is the whole point of
+    /// ``Palette/liftedBackground``. Taken raw, the prompt kept the contrast it
+    /// had somewhere else: on Violet it landed at 1.3:1 against the field it was
+    /// actually painted on. The floor is the disabled one, not the label one —
+    /// a placeholder is meant to be quieter than real content, just not
+    /// invisible.
+    private static func promptColor(palette: any Palette, on background: Color?) -> Color {
+        let tertiary = palette.foregroundTertiary.resolve(with: palette)
+        guard let background else { return tertiary }
+        return tertiary.ensuringRenderedContrast(
+            atLeast: ViewConstants.disabledLabelContrastFloor, against: background)
     }
 
     // MARK: - Unfocused Text

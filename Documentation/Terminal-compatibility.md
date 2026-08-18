@@ -88,6 +88,19 @@ the emoji-class clusters below unless noted.
   both states in the *identical* cube entry. `LabelContrastTests` pins all
   three properties across the sixteen built-in palettes: readable, recessive,
   and tellable apart.
+
+  A **surface** (a text field, a tab island) is a different question and takes a
+  different measure: not "can this be read on that" but "are these two shades
+  visibly different", which a contrast ratio cannot answer — it flattens at both
+  ends of the range, scoring two plainly different near-blacks at 1.08 and two
+  plainly different creams at 1.05. `Palette.liftedBackground` uses perceived
+  lightness (CIE L\*, `Color.perceivedLightness`) and steps the page's own colour
+  until the surface is ΔL\* 10 off it, measured **both** raw and through the cube
+  (half the floor there, since the cube's own snapping does some of the work and
+  its sparse regions would otherwise drag the step to an extreme). The step
+  scales the page's channels rather than mixing toward black or white, because
+  mixing desaturates: a phosphor palette's near-black page mixed 10% toward
+  white is grey, and a green terminal grew grey text fields.
 - **VS-16 pictographic emoji** (❤️ ✏️ ☎️ 🖥️ 🛡️ …): paints 2,
   **advances 1** ("Bug A" — see `Emoji rendering bugs in macOS Sequoia's
   Terminal.app.md` for the full investigation). Compensated with CUF(1) by

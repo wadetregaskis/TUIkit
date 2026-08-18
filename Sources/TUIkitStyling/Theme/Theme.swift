@@ -131,67 +131,173 @@ extension Palette {
     /// A surface that sits ON the page and must be visible as one: the tab
     /// strip's island, the field behind editable text.
     ///
-    /// ``appHeaderBackground`` when the palette gave it a value of its own, and
-    /// otherwise a small step from ``background`` toward ``foreground``.
+    /// ``appHeaderBackground`` when the palette stated a tone that can actually
+    /// be seen against the page, and otherwise the page's own hue with its
+    /// lightness stepped until it can.
     ///
     /// The fallback is the whole point. `appHeaderBackground` itself defaults to
-    /// `background`, so a palette that never overrode it — Green, Novel, Red
-    /// Sands and Solid Colors among the built-ins — handed every "subtle lift"
-    /// caller the page colour: fields and tab chips drew a background exactly
-    /// equal to what was already there, which is the same as drawing none.
+    /// `background`, so a palette that never overrode it handed every "subtle
+    /// lift" caller the page colour: fields and tab chips drew a background
+    /// exactly equal to what was already there, which is the same as drawing
+    /// none.
     ///
-    /// Toward the FOREGROUND rather than a fixed lighten or darken, because the
-    /// palettes disagree about which way is up: a light page needs its surfaces
-    /// darker and a dark page needs them lighter, and the foreground is the
-    /// palette's own statement of which end it lives at. It also keeps the hue,
-    /// so a green page lifts to a green surface rather than a grey one.
+    /// **How far** is measured in ``Color/perceivedLightness`` (see
+    /// ``surfaceSeparation``), not in contrast ratios and not in cube entries.
+    /// A cube-entry difference is a yes/no that says nothing about size — Man
+    /// Page's stated tone and Novel's derived one both cleared it while sitting
+    /// ΔL\* 0.5 and 3.4 from their pages, which is to say invisibly. And a
+    /// contrast *ratio* cannot judge shades of the same colour at all: it
+    /// flattens at both ends of the range, scoring two plainly different
+    /// near-blacks at 1.08 and two plainly different creams at 1.05.
+    ///
+    /// **Which way** is away from the text where there is room for it — a well,
+    /// not a highlight, and moving away from the text can only improve its
+    /// contrast. Where there is not (a page already at its extreme: Basic's
+    /// white, Homebrew's black, Man Page's near-white cream), the surface comes
+    /// toward the text instead, and stops before the text stops being readable
+    /// on it.
+    ///
+    /// Both directions are a **lightness** step in the page's own hue, so a
+    /// green page lifts to a green surface and a brick page to a brick one.
+    /// Stepping toward black or white in RGB instead — which is what this did —
+    /// desaturates as it goes, and on the phosphor palettes it turned the field
+    /// grey.
     public var liftedBackground: Color {
         let base = background.resolve(with: self)
-        let stated = appHeaderBackground.resolve(with: self)
-        // Compared after DOWNSAMPLING, not in truecolour. Several palettes state
-        // a header tone a hair off the page — distinct as 24-bit numbers, the
-        // same cube entry on a 256-colour terminal, and therefore invisible
-        // exactly where a surface most needs to be seen. Green, Novel, Red Sands
-        // and Solid Colors were all in that state, and comparing raw values
-        // called them "stated" and left them flat.
-        if stated.downsampledToPalette256() != base.downsampledToPalette256() { return stated }
-
-        // AWAY from the text first — a well, not a highlight. Stepping toward
-        // the foreground is the obvious move and it is the wrong one: it eats
-        // the very contrast the text needs, and measurably so (Novel's tertiary
-        // and Red Sands' foreground both fell under the readability floor at a
-        // 20% step). Away from the text, contrast can only improve.
         let text = foreground.resolve(with: self)
-        let away = Color.lerp(base, Self.extreme(furthestFrom: text), phase: Self.surfaceRecess)
-        if away.downsampledToPalette256() != base.downsampledToPalette256() { return away }
 
-        // …unless the page is already AT that extreme, where there is nowhere
-        // further to go. Then the surface has to come toward the text, and the
-        // contrast it costs is small precisely because the page is extreme.
-        return Color.lerp(base, text, phase: Self.surfaceLift)
+        let stated = appHeaderBackground.resolve(with: self)
+        if Self.isVisiblySeparate(stated, from: base) { return stated }
+
+        // Away from the text first, then toward it. The second walk is the one
+        // that can cost readability, so only it carries the guard.
+        let textIsLighter = (text.perceivedLightness ?? 0) > (base.perceivedLightness ?? 0)
+        if let away = Self.surface(steppingFrom: base, lighter: !textIsLighter) { return away }
+        if let toward = Self.surface(steppingFrom: base, lighter: textIsLighter, readableFor: text) {
+            return toward
+        }
+        // Nothing cleared the floor in either direction (a mid-grey page whose
+        // text sits right beside it, say). The best available step still beats
+        // the page colour, which is what "no surface at all" would draw.
+        return Self.surface(steppingFrom: base, lighter: !textIsLighter, orBestEffort: true)
+            ?? base
+    }
+
+    /// Whether `candidate` reads as a different shade from `page` — both as the
+    /// palette states it and as a 256-colour terminal will paint it, since a
+    /// step that survives one and not the other is invisible on half the
+    /// terminals in use.
+    static func isVisiblySeparate(_ candidate: Color, from page: Color) -> Bool {
+        guard candidate.lightnessDifference(from: page) >= surfaceSeparation else { return false }
+        return candidate.downsampledToPalette256().lightnessDifference(
+            from: page.downsampledToPalette256()) >= surfaceSeparation / 2
+    }
+
+    /// Walks the page's own colour up or down in brightness until the surface
+    /// is visibly separate from it.
+    ///
+    /// - Parameters:
+    ///   - base: the page colour.
+    ///   - lighter: which way to walk.
+    ///   - text: when given, the colour that has to stay readable on the result
+    ///     — the guard for walking *toward* the text.
+    ///   - orBestEffort: return the furthest step reached even if it never
+    ///     cleared the floor, rather than `nil`.
+    /// - Returns: the surface, or `nil` when this direction ran out of range
+    ///   (or out of readability) first.
+    static func surface(
+        steppingFrom base: Color, lighter: Bool, readableFor text: Color? = nil,
+        orBestEffort: Bool = false
+    ) -> Color? {
+        var factor = 1.0
+        var best: Color?
+        while factor > 0, factor < Self.surfaceFactorLimit {
+            factor += lighter ? surfaceStep : -surfaceStep
+            let candidate = scaled(base, by: factor)
+            if let text,
+                text.downsampledToPalette256().contrastRatio(
+                    against: candidate.downsampledToPalette256()) < ViewConstants.labelContrastFloor
+            {
+                break  // one step further would be unreadable; stop at what we have
+            }
+            best = candidate
+            if isVisiblySeparate(candidate, from: base) { return candidate }
+            // Saturation — every channel pinned at an end — is the only real
+            // stall. A step that rounds back onto the page is NOT one: scaling
+            // a channel of 5 by 1.04 lands on 5 again, and a near-black page
+            // needs several steps before the arithmetic bites.
+            if candidate.isSaturated(atWhite: lighter) { break }
+        }
+        return orBestEffort ? best : nil
+    }
+
+    /// `base` with every channel scaled by `factor` — brighter above 1, darker
+    /// below.
+    ///
+    /// Scaling rather than mixing toward black or white, because mixing
+    /// desaturates as it goes: a phosphor palette's near-black page mixed 10%
+    /// toward white is grey, not dark green, and the field then reads as a hole
+    /// in the theme rather than part of it. Scaling holds the channel ratios, so
+    /// the surface keeps the page's hue.
+    ///
+    /// A page with nothing to scale (Homebrew's and Pro's pure black) is the one
+    /// case that has to mix: there is no hue to preserve and no product but
+    /// zero, so the step becomes a lerp toward the extreme.
+    private static func scaled(_ base: Color, by factor: Double) -> Color {
+        guard let (red, green, blue) = base.rgbComponents else { return base }
+        func channels(_ factor: Double) -> Color {
+            func channel(_ value: UInt8) -> UInt8 {
+                UInt8(clamping: Int((Double(value) * factor).rounded()))
+            }
+            return Color.rgb(channel(red), channel(green), channel(blue))
+        }
+
+        // Brightening a page whose brightest channel is already near 255 would
+        // clip it, and clipping ONE channel is what shifts the hue — Solid
+        // Colors' cream came out 29° yellower. So the scaling stops at the
+        // factor that just fits, and what is left of the request is delivered
+        // as a blend toward white, which is what more light on a nearly-lit
+        // surface actually looks like: same hue, less saturation.
+        let brightest = Double(max(red, green, blue))
+        if factor > 1, brightest > 0, factor * brightest > 255 {
+            let fits = 255 / brightest
+            return Color.lerp(channels(fits), Color.rgb(255, 255, 255), phase: 1 - fits / factor)
+        }
+
+        let scaled = channels(factor)
+        guard scaled == base else { return scaled }
+        // Nothing to scale at all (a pure black page): mix instead.
+        return Color.lerp(
+            base, factor > 1 ? Color.rgb(255, 255, 255) : Color.rgb(0, 0, 0),
+            phase: min(1, abs(factor - 1)))
     }
 
     /// Black or white, whichever `color` is further from — the direction a
-    /// surface moves to get out of the text's way.
-    private static func extreme(furthestFrom color: Color) -> Color {
+    /// colour moves to get out of another one's way.
+    static func extreme(furthestFrom color: Color) -> Color {
         (color.relativeLuminance ?? 0) > 0.5 ? Color.rgb(0, 0, 0) : Color.rgb(255, 255, 255)
     }
 
-    /// How far ``liftedBackground`` steps toward the foreground.
+    /// How far apart a surface and its page have to be, in
+    /// ``Color/perceivedLightness``.
     ///
-    /// Small enough that the surface reads as the same material as the page —
-    /// the point is a boundary, not a panel — and large enough to survive the
-    /// 256-colour cube, where anything finer rounds back onto the background
-    /// and the lift disappears on exactly the terminal least able to spare it.
-    /// 0.20 is the measured floor: at 0.14 the Novel profile's cream page and
-    /// brown text still land on one cube entry.
-    static var surfaceLift: Double { 0.20 }
+    /// 10 is the measured value. The palettes that read as having no surface at
+    /// all sat at ΔL\* 0.5–5.9 (Man Page 0.5, Ocean 2.9, Novel 3.4, Blue 3.8),
+    /// and the ones nobody complained about at 8.7–18.7 (Basic 8.7, Red Sands
+    /// 9.5, Solid Colors 14.3, Homebrew 15.2, Green 18.7). 10 clears the whole
+    /// first group and leaves the second where it is — and, applied as a target
+    /// rather than a per-palette constant, it makes a field look like the same
+    /// affordance on every theme instead of ranging from invisible to a panel.
+    static var surfaceSeparation: Double { 10 }
 
-    /// How far the recessed (away-from-text) surface steps toward its extreme.
-    /// Larger than ``surfaceLift`` because it can afford to be: moving away
-    /// from the text costs no contrast, and pages that are already near an
-    /// extreme need a bigger push to clear the 256-colour cube at all.
-    static var surfaceRecess: Double { 0.35 }
+    /// How much brighter (or darker) each step of the surface walk makes the
+    /// page. Fine enough that the result overshoots the floor by little, coarse
+    /// enough to terminate quickly.
+    static var surfaceStep: Double { 0.04 }
+
+    /// Where the brightening walk gives up: a surface eight times the page's own
+    /// brightness has stopped being "the page, lit" whatever the arithmetic says.
+    static var surfaceFactorLimit: Double { 8 }
 
     // MARK: - Control faces
 
