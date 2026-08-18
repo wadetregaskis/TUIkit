@@ -527,11 +527,12 @@ struct ScrollViewRenderingTests {
         #expect(!text.contains("more lines above"))
     }
 
-    @Test("showsIndicators: false suppresses the chrome")
-    func showsIndicatorsFalseSuppresses() {
-        let view = ScrollView(showsIndicators: false) {
+    @Test(".scrollIndicators(.hidden) suppresses the chrome")
+    func hiddenVisibilitySuppresses() {
+        let view = ScrollView {
             VStack { ForEach(0..<50, id: \.self) { Text("Row \($0)") } }
         }
+        .scrollIndicators(.hidden)
         let buffer = renderToBuffer(view, context: makeContext(width: 30, height: 6))
         let text = buffer.lines.map(\.stripped).joined(separator: "\n")
         #expect(!text.contains("more lines below"))

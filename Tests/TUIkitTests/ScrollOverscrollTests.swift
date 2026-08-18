@@ -194,11 +194,12 @@ struct ScrollOverscrollTests {
     }
 
     private func longContent() -> some View {
-        ScrollView(showsIndicators: false) {
+        ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(0..<40, id: \.self) { Text("line \($0)") }
             }
         }
+        .scrollIndicators(.hidden)
     }
 
     @Test("The excursion slides the content and leaves blank rows behind it")
@@ -244,12 +245,13 @@ struct ScrollOverscrollTests {
         }
         let dispatcher = ctx.environment.mouseEventDispatcher!
         let tapped = Flag()
-        let view = ScrollView(showsIndicators: false) {
+        let view = ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Button("Press") { tapped.value = true }
                 ForEach(0..<40, id: \.self) { Text("line \($0)") }
             }
         }
+        .scrollIndicators(.hidden)
 
         let first = renderToBuffer(view, context: ctx)
         dispatcher.setRegions(first.hitTestRegions)

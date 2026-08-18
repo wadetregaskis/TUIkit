@@ -111,7 +111,7 @@ struct MeasureCascadeTests {
                 .frame(width: 30)
                 VStack {
                     Panel("Log", padding: EdgeInsets(horizontal: 1)) {
-                        ScrollView(showsIndicators: true) {
+                        ScrollView {
                             VStack(alignment: .leading) { Text("a") }
                         }
                     }

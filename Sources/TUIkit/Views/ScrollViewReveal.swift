@@ -113,7 +113,7 @@ extension _ScrollViewCore {
             let viewportTop = handler.scrollOffset
             let viewportBottom = handler.scrollOffset + viewportHeight
 
-            // When showsIndicators is true, the visible buffer overwrites its
+            // With the text indicator style the visible buffer overwrites its
             // top and / or bottom rows with the 'N more above / below' chrome
             // whenever there's content off-screen in that direction. Reserve a
             // row for those indicators when computing the target scrollOffset,
@@ -134,9 +134,9 @@ extension _ScrollViewCore {
             // chrome that never renders.
             let indicatorsFit = viewportHeight >= 3
             let topIndicatorShows =
-                indicatorsActive && showsIndicators && indicatorsFit && viewportTop > 0
+                indicatorsActive && indicatorsFit && viewportTop > 0
             let bottomIndicatorShows =
-                indicatorsActive && showsIndicators && indicatorsFit
+                indicatorsActive && indicatorsFit
                 && viewportBottom < handler.contentHeight
             // The follow margin widens both the fire condition and the snap
             // targets below, so the revealed control keeps that much context
@@ -163,7 +163,7 @@ extension _ScrollViewCore {
                 // every reveal by exactly one line.
                 let proposed = regionTop - margin
                 let topIndicatorRow =
-                    (indicatorsActive && showsIndicators && indicatorsFit && proposed > 0) ? 1 : 0
+                    (indicatorsActive && indicatorsFit && proposed > 0) ? 1 : 0
                 handler.scrollOffset =
                     max(0, min(handler.maxOffset, proposed - topIndicatorRow))
             } else if regionBottom > visibleBottom {
@@ -171,7 +171,7 @@ extension _ScrollViewCore {
                 // leaving 1 row for the bottom indicator if one appears.
                 let proposed = regionBottom - viewportHeight + margin
                 let bottomIndicatorWouldAppear =
-                    indicatorsActive && showsIndicators && indicatorsFit
+                    indicatorsActive && indicatorsFit
                     && (proposed + viewportHeight < handler.contentHeight)
                 handler.scrollOffset = max(
                     0,

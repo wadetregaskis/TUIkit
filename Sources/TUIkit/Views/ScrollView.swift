@@ -36,12 +36,12 @@ import TUIkitCore
 ///
 /// # Indicators
 ///
-/// When content extends beyond the viewport, "N more above" /
-/// "N more below" indicators appear at the top and bottom edges
-/// of the visible area, matching the indicators used by `List`.
-/// Pass `showsIndicators: false` to suppress them — note that
-/// scrolling itself still works, it's only the visual indicator
-/// that disappears.
+/// When content extends beyond the viewport an indicator appears:
+/// a scrollbar beside the content by default, or the "N more above" /
+/// "N more below" lines under `.scrollIndicatorStyle(.text)`, matching
+/// the indicators used by `List`. `.scrollIndicators(.hidden)` suppresses
+/// them — note that scrolling itself still works, it's only the visual
+/// indicator that disappears.
 ///
 /// # Example
 ///
@@ -76,10 +76,6 @@ public struct ScrollView<Content: View>: View {
     /// or both). Both are fully implemented.
     public let axes: Axis.Set
 
-    /// Whether to show "N more above / below" indicators at the
-    /// viewport edges when content extends beyond them.
-    public let showsIndicators: Bool
-
     /// The content of the scroll view.
     public let content: Content
 
@@ -93,17 +89,21 @@ public struct ScrollView<Content: View>: View {
     ///
     /// - Parameters:
     ///   - axes: The scrollable axes (default `.vertical`).
-    ///   - showsIndicators: Whether to show edge indicators
-    ///     (default `true`).
     ///   - content: A ViewBuilder that defines the content to
     ///     scroll.
+    ///
+    /// - Note: SwiftUI's `showsIndicators:` variant is deliberately absent —
+    ///   it is soft-deprecated there in favour of `scrollIndicators(_:)`, and
+    ///   TUIkit does not carry deprecated spellings (see
+    ///   `Documentation/SwiftUI-compatibility.md`). It was also a second,
+    ///   hidden answer to the question `\.verticalScrollIndicatorVisibility`
+    ///   already answers, which is exactly the confusion that splitting
+    ///   visibility from style set out to end.
     public init(
         _ axes: Axis.Set = .vertical,
-        showsIndicators: Bool = true,
         @ViewBuilder content: () -> Content
     ) {
         self.axes = axes
-        self.showsIndicators = showsIndicators
         self.content = content()
         self.explicitFocusID = nil
         self.isDisabled = false
@@ -112,7 +112,6 @@ public struct ScrollView<Content: View>: View {
     public var body: some View {
         _ScrollViewCore(
             axes: axes,
-            showsIndicators: showsIndicators,
             content: content,
             explicitFocusID: explicitFocusID,
             isDisabled: isDisabled
@@ -145,7 +144,6 @@ extension ScrollView {
 extension ScrollView: @preconcurrency Equatable where Content: Equatable {
     public static func == (lhs: ScrollView<Content>, rhs: ScrollView<Content>) -> Bool {
         lhs.axes == rhs.axes
-            && lhs.showsIndicators == rhs.showsIndicators
             && lhs.content == rhs.content
             && lhs.explicitFocusID == rhs.explicitFocusID
             && lhs.isDisabled == rhs.isDisabled
@@ -200,7 +198,6 @@ final class LastViewportBox: @unchecked Sendable {
 struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
     let axes: Axis.Set
-    let showsIndicators: Bool
     let content: Content
     let explicitFocusID: String?
     let isDisabled: Bool
@@ -306,11 +303,9 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// Asked at `overflowing: true`: the indicators gate themselves on whether
     /// there IS content above or below, so what is being decided here is which
     /// indicator this view uses — and deciding it must not trigger the content
-    /// measure `.automatic` would otherwise need. The legacy
-    /// `ScrollView(showsIndicators:)` parameter still vetoes.
+    /// measure `.automatic` would otherwise need.
     private func drawsTextIndicators(_ context: RenderContext) -> Bool {
-        showsIndicators
-            && context.environment.verticalScrollIndicators(overflowing: true).text
+        context.environment.verticalScrollIndicators(overflowing: true).text
     }
 
     /// One line per edge when the "N more" indicators are what occupies the
@@ -690,16 +685,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     private func resolveScrollbars(
         viewportWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
     ) -> (vertical: Bool, horizontal: Bool, settled: (width: Int, height: Int)?) {
-        // The legacy `ScrollView(showsIndicators:)` parameter is a veto over
-        // BOTH axes and both styles — it predates the environment setting and
-        // reads as "no indicators on this view". It vetoes the text form in
-        // `drawsTextIndicators`; without the same veto here, an `.automatic`
-        // default (the shipped one since #555) would hand a bar to the very
-        // views that asked for nothing.
-        let verticalPolicy =
-            showsIndicators ? context.environment.verticalScrollIndicatorVisibility : .hidden
-        let horizontalPolicy =
-            showsIndicators ? context.environment.horizontalScrollIndicatorVisibility : .hidden
+        let verticalPolicy = context.environment.verticalScrollIndicatorVisibility
+        let horizontalPolicy = context.environment.horizontalScrollIndicatorVisibility
         // Only the scrollbar style reserves anything on the vertical axis; the
         // text indicators replace a viewport line rather than a column, and
         // decide themselves, after the render, from what is actually hidden.

@@ -21,9 +21,9 @@ import TUIkit
 ///      that ScrollView happily wraps anything, and that inner
 ///      controls still respond to clicks and keyboard input
 ///      inside it.
-///   3. The same content with `showsIndicators: false` to show
-///      how to suppress the 'N more lines above / below' chrome
-///      without disabling scrolling.
+///   3. The same content under `.scrollIndicators(.hidden)` to show
+///      how to suppress the indicator chrome without disabling
+///      scrolling.
 struct ScrollViewPage: View {
     @State var searchText: String = ""
     @State var counter: Int = 0
@@ -238,13 +238,14 @@ struct ScrollViewPage: View {
                     Text("page.scrollView.indicatorsOffBody")
                     .foregroundStyle(.palette.foregroundSecondary)
 
-                    ScrollView(showsIndicators: false) {
+                    ScrollView {
                         VStack(alignment: .leading) {
                             ForEach(loremLines, id: \.self) { line in
                                 Text(line)
                             }
                         }
                     }
+                    .scrollIndicators(.hidden)
                     .frame(height: 5)
                 }
             }

@@ -154,14 +154,15 @@ struct ScrollViewRenderTests {
         #expect(!buffer.lines[0].stripped.contains("lines above"))
     }
 
-    @Test("showsIndicators:false suppresses the indicator and shows raw content")
+    @Test(".scrollIndicators(.hidden) suppresses the indicator and shows raw content")
     func indicatorsSuppressed() {
         let buffer = renderToBuffer(
-            ScrollView(showsIndicators: false) {
+            ScrollView {
                 VStack(alignment: .leading) {
                     ForEach(0..<20) { Text("Line \($0)") }
                 }
-            },
+            }
+            .scrollIndicators(.hidden),
             context: textCtx(width: 20, height: 6)
         )
         #expect(buffer.lines.count == 6)

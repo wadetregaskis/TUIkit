@@ -43,7 +43,7 @@ private struct FramedColumnsView: View {
                 ToggleColumn(seed: mix(config.seed, 4), rows: rowsPerCard)
                 VStack {
                     Panel(Synth.name(mix(config.seed, 5)), padding: EdgeInsets(horizontal: 1)) {
-                        ScrollView(showsIndicators: true) {
+                        ScrollView {
                             VStack(alignment: .leading) {
                                 ForEach(0..<rowsPerCard * 2, id: \.self) { line in
                                     Text(Synth.name(mix(config.seed, 100 + line)))

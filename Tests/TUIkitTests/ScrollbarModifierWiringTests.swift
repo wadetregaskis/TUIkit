@@ -255,33 +255,6 @@ struct ScrollbarModifierWiringTests {
         #expect(byDefault.contains("\u{25B2}") || byDefault.contains("\u{25BC}"))
     }
 
-    /// `ScrollView(showsIndicators:)` predates the environment setting and
-    /// reads as "no indicators on this view". It vetoed the text form all
-    /// along; once `.automatic` became the shipped default it had to veto the
-    /// bar as well, or the views that asked for nothing would be the ones
-    /// getting a bar.
-    @Test("showsIndicators: false vetoes the bar, not just the text")
-    func showsIndicatorsFalseVetoesTheBar() {
-        func lastColumn(_ showsIndicators: Bool) -> [Character] {
-            let tui = TUIContext()
-            let view = ScrollView(showsIndicators: showsIndicators) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(0..<60, id: \.self) { Text("row \($0)") }
-                }
-            }
-            return renderToBuffer(view, context: makeContext(tui: tui))
-                .lines.map { $0.stripped.last ?? " " }
-        }
-        let suppressed = lastColumn(false)
-        #expect(
-            !suppressed.contains("\u{25B2}") && !suppressed.contains("\u{25BC}"),
-            "no bar when the view asked for no indicators: \(String(suppressed))")
-        let shown = lastColumn(true)
-        #expect(
-            shown.contains("\u{25B2}") && shown.contains("\u{25BC}"),
-            "…and the same content does get one otherwise: \(String(shown))")
-    }
-
     @Test("Two axis-specific calls compose rather than clobbering")
     func axisCallsCompose() {
         // The reason the modifier TRANSFORMS the environment instead of setting
