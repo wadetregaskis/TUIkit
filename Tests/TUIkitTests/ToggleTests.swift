@@ -361,14 +361,17 @@ private final class ToggleFocusSentinel: Focusable {
     func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
 }
 
-/// A toggle answers the pointer the way a `Button` does: the control's face
-/// lights up under it.
+/// A toggle answers the pointer by LIFTING its foreground — the colour it
+/// draws with, stepped away from the page until the terminal can show the
+/// difference.
 ///
-/// It used to answer by recolouring the indicator to
-/// ``Palette/hoveredControlFace`` — a *fill* colour used as a foreground. That
-/// is 2.1–4.3:1 against the page on the built-in palettes, so hovering faded
-/// the checkbox from the full foreground toward the background: the pointer
-/// made an enabled toggle look disabled, which is worse than no affordance.
+/// Two wrong answers preceded it. It recoloured the indicator to
+/// ``Palette/hoveredControlFace``, a *fill* colour used as a foreground, which
+/// moved the glyph TOWARD the page: the pointer made an enabled toggle look
+/// disabled. Then it painted that fill as a row background, which a toggle has
+/// no business doing — unlike a `Button` it owns no background, it draws over
+/// whatever its parent drew, so any colour it paints there is a guess about
+/// someone else's view.
 @MainActor
 @Suite("Toggle hover", .serialized)
 struct ToggleHoverTests {
@@ -395,40 +398,84 @@ struct ToggleHoverTests {
         return (before, renderToBuffer(view, context: context).lines)
     }
 
-    @Test("Hovering paints the toggle's row with the hover face")
-    func hoverPaintsTheFace() {
+    @Test("Hovering lifts the indicator and label to the hovered foreground")
+    func hoverLiftsTheForeground() {
         let context = createTestContext()
         let palette = context.environment.palette
         let (before, after) = beforeAndAfterHover(
             Toggle("Hover me", isOn: .constant(false)), context: context)
 
-        let face = ANSIRenderer.backgroundCode(for: palette.hoveredControlFace)
-        #expect(!before.joined().contains(face), "no face at rest: \(before)")
-        #expect(after.joined().contains(face), "the hovered row carries the face: \(after)")
+        let lifted = ANSIRenderer.colorize(
+            "Hover me", foreground: palette.hoveredForeground(palette.foreground))
+        #expect(!before.joined().contains(lifted), "not lifted at rest: \(before)")
+        #expect(after.joined().contains(lifted), "lifted under the pointer: \(after)")
     }
 
-    @Test("Hovering does not fade the indicator toward the background")
-    func hoverDoesNotFadeTheIndicator() {
-        // The exact shape of the old bug: the bracket drawn in the FILL colour.
-        // Spelled with `.ascii`, whose bracketed indicator is the one that
-        // carried it.
+    @Test("Hovering paints no background of its own")
+    func hoverPaintsNoBackground() {
+        // The whole reason the lift is a foreground: a toggle draws over its
+        // parent's background. Any background code it emits is a colour it
+        // invented for someone else's view.
         let context = createTestContext()
-        let palette = context.environment.palette
-        let (_, after) = beforeAndAfterHover(
-            Toggle("Hover me", isOn: .constant(false)).toggleCharacterSet(.ascii),
-            context: context)
-
-        let fadedBracket = ANSIRenderer.colorize("[", foreground: palette.hoveredControlFace)
-        #expect(
-            !after.joined().contains(fadedBracket),
-            "the fill colour must not be used as the indicator's foreground: \(after)")
+        let (before, after) = beforeAndAfterHover(
+            Toggle("Hover me", isOn: .constant(false)), context: context)
+        #expect(!before.joined().contains("48;"), "no background at rest: \(before)")
+        #expect(!after.joined().contains("48;"), "and none under the pointer either: \(after)")
     }
 
-    @Test("The hover face covers exactly the clickable row")
+    @Test("The lift never reads as the disabled fade")
+    func hoverNeverLooksDisabled() {
+        // The exact shape of the first wrong answer: a hover that moved the
+        // glyph TOWARD the page, so the pointer made the control look switched
+        // off. Eleven palettes have room to lift away from the page outright;
+        // the five whose text is already at the extreme (Basic, Man Page,
+        // Ocean, Silver Aerogel, Solid Colors) lift in hue toward the accent
+        // instead. Either way it has to stay clear of the one colour that means
+        // "you cannot click this".
+        for palette in PaletteRegistry.all {
+            let page = palette.background
+            let disabled = palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
+            let hovered = palette.hoveredForeground(palette.foreground)
+            #expect(
+                hovered.contrastRatio(against: page) > disabled.contrastRatio(against: page),
+                "\(palette.name): the hovered foreground is dimmer than the disabled one")
+        }
+    }
+
+    @Test("The lifted foreground is still readable on every palette")
+    func hoverStaysReadable() {
+        for palette in PaletteRegistry.all {
+            let hovered = palette.hoveredForeground(palette.foreground)
+                .downsampledToPalette256()
+            let page = palette.background.resolve(with: palette).downsampledToPalette256()
+            let ratio = hovered.contrastRatio(against: page)
+            #expect(
+                ratio >= ViewConstants.labelContrastFloor,
+                "\(palette.name): a hovered label at \(String(format: "%.2f", ratio)):1")
+        }
+    }
+
+    @Test("The lift survives the 256-colour cube on every built-in palette")
+    func hoverIsVisibleOnEveryPalette() {
+        // A lift finer than the cube is no lift at all on the terminals least
+        // able to spare one — the rule `hoveredControlFace` and
+        // `liftedBackground` already follow.
+        for palette in PaletteRegistry.all {
+            let resting = palette.foreground.resolve(with: palette).downsampledToPalette256()
+            let hovered = palette.hoveredForeground(palette.foreground)
+                .downsampledToPalette256()
+            #expect(
+                hovered.rgbComponents! != resting.rgbComponents!,
+                "\(palette.name): the hovered foreground quantises back onto the resting one")
+        }
+    }
+
+    @Test("The lift covers exactly the clickable row")
     func hoverStopsAtTheClickRow() {
         // An explanatory subtitle is not a click target (see
         // `toggleSubtitleIsNotClickable`), so it is not part of the affordance
-        // either — what lights up is what the pointer can actually hit.
+        // either — what answers is what the pointer can actually hit.
         let context = createTestContext()
         let palette = context.environment.palette
         let (_, after) = beforeAndAfterHover(
@@ -438,34 +485,17 @@ struct ToggleHoverTests {
             },
             context: context)
 
-        let face = ANSIRenderer.backgroundCode(for: palette.hoveredControlFace)
+        let lift = ANSIRenderer.colorize(
+            "Title", foreground: palette.hoveredForeground(palette.foreground))
         #expect(after.count >= 2, "expected a title and a subtitle row: \(after)")
-        #expect(after[0].contains(face), "the title row lights up: \(after[0])")
-        #expect(!after[1].contains(face), "the subtitle row does not: \(after[1])")
-    }
-
-    @Test("The hovered label stays readable on every built-in palette")
-    func hoverLabelIsFlooredOnEveryPalette() {
-        // The face is an accent tint, and the palette foreground lands on it as
-        // close as 2.1:1 (Red Sands), 2.66 (Ocean), 2.77 (Red) — under the
-        // label floor. A framework-chosen label colour is therefore floored
-        // against the face, hue-preserving, exactly as `ButtonStyle` floors the
-        // label it paints on a button's fill — and judged THROUGH the
-        // 256-colour cube, because that is the pair the reader sees. On the
-        // palettes already above the floor the flooring returns the colour
-        // unchanged, so this pins the untouched case too.
-        for palette in PaletteRegistry.all {
-            let context = makeRenderContext(width: 80, height: 24) { environment, _ in
-                environment.palette = palette
-            }
-            let (_, after) = beforeAndAfterHover(
-                Toggle("Hover me", isOn: .constant(false)), context: context)
-            let floored = palette.foreground.ensuringRenderedContrast(
-                atLeast: ViewConstants.labelContrastFloor, against: palette.hoveredControlFace)
-            #expect(
-                after.joined().contains(ANSIRenderer.colorize("Hover me", foreground: floored)),
-                "\(palette.name): the hovered label must be drawn floored against the face")
-        }
+        #expect(after[0].contains(lift), "the title row lifts: \(after[0])")
+        #expect(
+            !after[1].contains("Explanatory subtitle\(ANSIRenderer.reset)")
+                || !after[1].contains(
+                    ANSIRenderer.colorize(
+                        "Explanatory subtitle",
+                        foreground: palette.hoveredForeground(palette.foreground))),
+            "the subtitle row does not: \(after[1])")
     }
 
     @Test("A disabled toggle has nothing to hover")

@@ -234,6 +234,67 @@ extension Palette {
         return accent
     }
 
+    /// A foreground lifted to answer the pointer.
+    ///
+    /// A control with no fill of its own — a toggle, a link, a radio button —
+    /// cannot answer a hover with a *face* the way a `Button` does. It draws
+    /// over whatever its parent drew, so painting a background behind it is
+    /// both wrong (the colour is a guess about someone else's view) and ugly.
+    /// It answers with its foreground instead: the same colour, stepped AWAY
+    /// from the page until the terminal can show the difference.
+    ///
+    /// Away from the page rather than toward the accent, for two reasons. A
+    /// hover has to be visible on every palette, and the phosphor presets set
+    /// `accent` to the foreground's own hue — a step toward the accent is no
+    /// step at all there. And away from the page cannot be mistaken for the one
+    /// thing a hover must never look like: a fade TOWARD the background, which
+    /// reads as disabled. (The toggle spent a while doing exactly that, and the
+    /// pointer made an enabled control look switched off.)
+    ///
+    /// Compared after downsampling — like ``hoveredControlFace`` and
+    /// ``liftedBackground``, and for the same reason: a lift finer than the
+    /// 256-colour cube is no lift at all on the terminals least able to spare
+    /// one, and a hover should look the same everywhere.
+    public func hoveredForeground(_ base: Color) -> Color {
+        let resolved = base.resolve(with: self)
+        let page = background.resolve(with: self)
+        let resting = resolved.downsampledToPalette256()
+
+        /// The first step toward `target` the cube can tell from `resolved`,
+        /// or nil when that whole direction quantises back onto it.
+        func stepped(toward target: Color) -> Color? {
+            var phase = Self.hoverForegroundLift
+            while phase < 1.0 {
+                let candidate = Color.lerp(resolved, target, phase: phase)
+                if candidate.downsampledToPalette256() != resting { return candidate }
+                phase += Self.hoverForegroundLift
+            }
+            return target.downsampledToPalette256() != resting ? target : nil
+        }
+
+        // 1. Away from the page: brighter on a dark palette, darker on a light
+        //    one. Contrast can only improve, so the lift can never be mistaken
+        //    for the fade a disabled control gets.
+        if let lifted = stepped(toward: Self.extreme(furthestFrom: page)) { return lifted }
+        // 2. …unless the colour is already AT that extreme — white text on
+        //    black, black on cream — where there is nowhere further to go. Then
+        //    toward the accent, which lifts in hue instead of in lightness.
+        if let tinted = stepped(toward: accent.resolve(with: self)) { return tinted }
+        // 3. …and if the accent is that same colour again, the only direction
+        //    left is toward the page. One step, so it reads as a touch rather
+        //    than the fade that means "disabled" — and no built-in palette gets
+        //    this far.
+        return stepped(toward: page) ?? resolved
+    }
+
+    /// How coarsely ``hoveredForeground(_:)`` searches for a visible step.
+    ///
+    /// Coarser than ``hoverTintStep``: a fill is read as an area and a small
+    /// shift registers, while a foreground is read as a few glyphs and has to
+    /// move further to be noticed at all. Every built-in palette resolves in
+    /// one or two steps.
+    static var hoverForegroundLift: Double { 0.22 }
+
     /// How coarsely ``hoveredControlFace`` searches for a visible step.
     ///
     /// Fine enough that a palette needing only a nudge gets one, coarse enough
