@@ -1,18 +1,28 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
-//  DisabledContrastTests.swift
+//  LabelContrastTests.swift
 //
-//  A disabled control still has to be READABLE. It had not been: the label
-//  colour was faded against the page background and then painted on the
-//  control's accent-tinted face, skipping the contrast floor its sibling
-//  branches apply — 1.05–1.62:1 on every built-in palette, and on five of them
-//  the 256-colour cube quantised foreground and background to the SAME entry,
-//  so a disabled button rendered as an empty box. (`Tools/Smoke/tui_screens.py`
-//  caught it as "invisible text (fg==bg==005f00)".)
+//  A control's label has to be READABLE — in every state, on every palette,
+//  and at the colours the terminal actually paints. Two defects, both of them
+//  a floor applied to the wrong pair:
+//
+//    * DISABLED: the label colour was faded against the page background and
+//      then painted on the control's accent-tinted face, skipping the contrast
+//      floor its sibling branches apply — 1.05–1.62:1 on every built-in
+//      palette, and on five of them the 256-colour cube quantised foreground
+//      and background to the SAME entry, so a disabled button rendered as an
+//      empty box. (`Tools/Smoke/tui_screens.py` caught it as "invisible text
+//      (fg==bg==005f00)".)
+//    * ENABLED, semantic: the floor WAS applied, but in truecolor, and the
+//      cube then moved the face out from under it. Green's face is its accent
+//      at 20% over black (#003300) and the nearest cube green is #005f00 —
+//      3.5× the luminance — so `.destructive`'s red cleared 3:1 where it was
+//      measured and sat at 2.61:1 where it was read.
 //
 //  These read the colours back out of the emitted SGR rather than recomputing
 //  the formula, so they fail if the wiring changes as well as if the arithmetic
-//  does — and they sweep every registered palette, because the defect was
-//  invisible on eleven of the sixteen.
+//  does; they measure the QUANTISED pair, which is the pair on screen; and they
+//  sweep every registered palette, because both defects were invisible on most
+//  of the sixteen.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -23,8 +33,8 @@ import Testing
 @testable import TUIkitStyling
 
 @MainActor
-@Suite("Disabled controls stay readable")
-struct DisabledContrastTests {
+@Suite("Control labels stay readable")
+struct LabelContrastTests {
 
     /// A rendered control's first explicit foreground/background pair.
     private struct Painted {
@@ -36,6 +46,14 @@ struct DisabledContrastTests {
         /// cleared it can collapse back onto its own background.
         var quantised: (foreground: Color, background: Color) {
             (foreground.downsampledToPalette256(), background.downsampledToPalette256())
+        }
+
+        /// The contrast the reader actually gets. Measured through the cube for
+        /// the reason above: a ratio computed on colours no terminal paints is
+        /// a ratio nobody sees.
+        var renderedRatio: Double {
+            let shown = quantised
+            return shown.foreground.contrastRatio(against: shown.background)
         }
     }
 
@@ -90,6 +108,41 @@ struct DisabledContrastTests {
         ]
     }
 
+    /// The enabled controls whose label colour is the FRAMEWORK's — a semantic
+    /// tint that must survive being painted on the accent-tinted face. An
+    /// app-supplied colour is deliberately left alone (see `ButtonStyle`), so
+    /// there is nothing here to sweep for it.
+    private func semanticControls() -> [(name: String, label: String, view: AnyView)] {
+        [
+            (".destructive style", "Delete", AnyView(Button("Delete") {}.buttonStyle(.destructive))),
+            ("role: .destructive", "Erase", AnyView(Button("Erase", role: .destructive) {})),
+            (".success style", "Save", AnyView(Button("Save") {}.buttonStyle(.success))),
+            (".primary style", "Go", AnyView(Button("Go") {}.buttonStyle(.primary))),
+            ("default style", "Open", AnyView(Button("Open") {})),
+        ]
+    }
+
+    @Test("a semantic label clears the floor at the colours the terminal paints")
+    func semanticLabelsClearTheRenderedFloor() throws {
+        // `.destructive` under Green is the reported case: red text on the
+        // green button face, "impossible to read". It measured 3.56:1 in
+        // truecolor and 2.61:1 on screen.
+        for palette in PaletteRegistry.all {
+            for control in semanticControls() {
+                let painted = try #require(
+                    paint(control.view, label: control.label, palette: palette),
+                    "\(control.name) under \(palette.name) painted no explicit colours")
+                #expect(
+                    painted.renderedRatio >= ViewConstants.labelContrastFloor - 0.01,
+                    """
+                    \(control.name) under \(palette.name) is at \
+                    \(String(format: "%.2f", painted.renderedRatio)):1 as rendered, below the \
+                    \(ViewConstants.labelContrastFloor):1 floor
+                    """)
+            }
+        }
+    }
+
     /// The defect exactly as the render lint sees it: two colours that are one
     /// colour by the time they reach the screen.
     @Test("no palette paints a disabled label in its own background colour")
@@ -111,28 +164,52 @@ struct DisabledContrastTests {
         }
     }
 
-    @Test("a disabled label clears the contrast floor on every palette")
+    @Test("a disabled label clears its (lower) contrast floor on every palette")
     func clearsTheFloor() throws {
         for palette in PaletteRegistry.all {
             for control in disabledControls() {
                 let painted = try #require(
                     paint(control.view, label: control.label, palette: palette))
-                let ratio = painted.foreground.contrastRatio(against: painted.background)
+                let ratio = painted.renderedRatio
                 #expect(
-                    ratio >= ViewConstants.labelContrastFloor - 0.01,
+                    ratio >= ViewConstants.disabledLabelContrastFloor - 0.01,
                     """
                     \(control.name) under \(palette.name) is at \
                     \(String(format: "%.2f", ratio)):1, below the \
-                    \(ViewConstants.labelContrastFloor):1 floor
+                    \(ViewConstants.disabledLabelContrastFloor):1 disabled floor
                     """)
             }
         }
     }
 
+    /// Recessive is not enough on its own: the two states must also be
+    /// TELLABLE APART. Pinning both to the same 3:1 rendered floor put six
+    /// palettes' disabled and enabled labels on the identical cube entry —
+    /// readable, and indistinguishable, which is the same defect wearing a
+    /// different hat.
+    @Test("a disabled label is never the same colour as an enabled one")
+    func disabledIsDistinguishable() throws {
+        for palette in PaletteRegistry.all {
+            let off = try #require(
+                paint(Button("Label") {}.disabled(true), label: "Label", palette: palette))
+            let on = try #require(paint(Button("Label") {}, label: "Label", palette: palette))
+            #expect(
+                off.quantised.foreground != on.quantised.foreground,
+                """
+                \(palette.name) draws a disabled label in the same 256-colour \
+                entry as an enabled one
+                """)
+        }
+    }
+
     /// The floor must not be raised so far that "disabled" out-shouts
     /// "enabled" — which is what ruled a 4:1 disabled floor out, where eight of
-    /// the sixteen palettes inverted by a whole ratio point. A future bump has
-    /// to keep this true.
+    /// the sixteen palettes inverted by a whole ratio point, and what
+    /// ``ViewConstants/disabledLabelContrastFloor`` exists to prevent now that
+    /// the floor is judged through the cube: pinned to the same 3:1 as enabled,
+    /// six palettes drew both states in the IDENTICAL entry and Grass drew the
+    /// disabled label brighter (4.47:1 against 3.13). A future bump has to keep
+    /// this true.
     ///
     /// The tolerance is deliberately loose. On a dim palette BOTH labels get
     /// pinned to the same floor and land within a hundredth of each other,
@@ -146,8 +223,8 @@ struct DisabledContrastTests {
             let off = try #require(
                 paint(Button("Label") {}.disabled(true), label: "Label", palette: palette))
             let on = try #require(paint(Button("Label") {}, label: "Label", palette: palette))
-            let offRatio = off.foreground.contrastRatio(against: off.background)
-            let onRatio = on.foreground.contrastRatio(against: on.background)
+            let offRatio = off.renderedRatio
+            let onRatio = on.renderedRatio
             #expect(
                 offRatio <= onRatio + tolerance,
                 """

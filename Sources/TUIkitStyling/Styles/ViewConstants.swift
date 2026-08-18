@@ -52,8 +52,27 @@ public enum ViewConstants {
     /// control's accent-tinted face was landing at 1.0–1.6 there, and the
     /// 256-colour cube then quantised five of the sixteen built-in palettes to
     /// a foreground and background that were the *same entry* — a disabled
-    /// button that read as an empty box. See ``Color/ensuringContrast(atLeast:against:)``.
+    /// button that read as an empty box.
+    ///
+    /// Applied with ``Color/ensuringRenderedContrast(atLeast:against:)``, not
+    /// the plain floor: the cube moves the FACE too, and a label that clears
+    /// this against the true colour can be under it against the drawn one.
     public static let labelContrastFloor: Double = 3.0
+
+    /// The floor for a **disabled** label, which is lower on purpose.
+    ///
+    /// WCAG exempts inactive components from its contrast minimum, and the
+    /// reason is exactly this one: on a 256-colour terminal the cube leaves very
+    /// few entries above a control's own face, and pinning both states to
+    /// ``labelContrastFloor`` lands them on the SAME one — Green, Homebrew, Red,
+    /// Ocean, Red Sands and Amber all drew a disabled button's label in the
+    /// identical colour to an enabled one. A disabled label only has to stay
+    /// legible and clearly off the face; it must not compete with the live
+    /// control beside it.
+    ///
+    /// 2.4, which is where Green picks `#00af00` (2.71:1) instead of collapsing
+    /// onto the enabled label's `#00d700` (4.07:1).
+    public static let disabledLabelContrastFloor: Double = 2.4
 
     /// Accent opacity for selection indicator bullets.
     public static let selectionIndicator: Double = 0.60

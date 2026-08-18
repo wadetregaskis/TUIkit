@@ -450,16 +450,17 @@ struct ToggleHoverTests {
         // close as 2.1:1 (Red Sands), 2.66 (Ocean), 2.77 (Red) — under the
         // label floor. A framework-chosen label colour is therefore floored
         // against the face, hue-preserving, exactly as `ButtonStyle` floors the
-        // label it paints on a button's fill. On the palettes already above the
-        // floor `ensuringContrast` returns the colour unchanged, so this pins
-        // the untouched case too.
+        // label it paints on a button's fill — and judged THROUGH the
+        // 256-colour cube, because that is the pair the reader sees. On the
+        // palettes already above the floor the flooring returns the colour
+        // unchanged, so this pins the untouched case too.
         for palette in PaletteRegistry.all {
             let context = makeRenderContext(width: 80, height: 24) { environment, _ in
                 environment.palette = palette
             }
             let (_, after) = beforeAndAfterHover(
                 Toggle("Hover me", isOn: .constant(false)), context: context)
-            let floored = palette.foreground.ensuringContrast(
+            let floored = palette.foreground.ensuringRenderedContrast(
                 atLeast: ViewConstants.labelContrastFloor, against: palette.hoveredControlFace)
             #expect(
                 after.joined().contains(ANSIRenderer.colorize("Hover me", foreground: floored)),

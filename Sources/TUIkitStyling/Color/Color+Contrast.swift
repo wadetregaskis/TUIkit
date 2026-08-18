@@ -53,7 +53,42 @@ extension Color {
     /// (extreme minimums against mid-tone backgrounds), the closer of black /
     /// white is returned. Colours without RGB components return unchanged.
     public func ensuringContrast(atLeast minimum: Double, against background: Color) -> Color {
-        guard contrastRatio(against: background) < minimum else { return self }
+        flooring(atLeast: minimum, against: background, asRendered: false)
+    }
+
+    /// ``ensuringContrast(atLeast:against:)``, judged on the colours the
+    /// terminal will actually paint.
+    ///
+    /// A 256-colour terminal snaps every colour to the 6×6×6 cube, and the snap
+    /// is not small. The Green palette's button face is its accent at 20% over
+    /// black — `#003300` — and the cube's nearest green level is 95, not 51, so
+    /// what is drawn is `#005f00`: **3.5× the luminance** the label was floored
+    /// against. A `.destructive` label cleared 3:1 on the colour it was measured
+    /// against and landed at 2.61:1 on the one it was read on.
+    ///
+    /// Compared after downsampling on *every* terminal, not only where the depth
+    /// demands it, so a label looks the same everywhere —
+    /// ``Palette/hoveredControlFace`` follows the same rule, for the same reason.
+    ///
+    /// Use this for text drawn **on a fill** (a control's face); the plain floor
+    /// is right for deriving a palette, where the pair is a design decision
+    /// rather than two specific cells.
+    public func ensuringRenderedContrast(
+        atLeast minimum: Double, against background: Color
+    ) -> Color {
+        flooring(atLeast: minimum, against: background, asRendered: true)
+    }
+
+    /// The shared walk behind both floors. `asRendered` measures every candidate
+    /// — and the background — through the 256-colour cube.
+    private func flooring(
+        atLeast minimum: Double, against background: Color, asRendered: Bool
+    ) -> Color {
+        let target = asRendered ? background.downsampledToPalette256() : background
+        func ratio(_ color: Color) -> Double {
+            (asRendered ? color.downsampledToPalette256() : color).contrastRatio(against: target)
+        }
+        guard ratio(self) < minimum else { return self }
         guard let (red, green, blue) = rgbComponents else { return self }
         let (hue, saturation, lightness) = Self.rgbToHSL(red: red, green: green, blue: blue)
 
@@ -62,8 +97,7 @@ extension Color {
         func firstSatisfying(step: Double) -> Double? {
             var candidate = lightness + step
             while candidate >= 0, candidate <= 100 {
-                if Self.hsl(hue, saturation, candidate).contrastRatio(against: background)
-                    >= minimum {
+                if ratio(Self.hsl(hue, saturation, candidate)) >= minimum {
                     return candidate
                 }
                 candidate += step
@@ -85,8 +119,7 @@ extension Color {
         case (nil, nil):
             let white = Self.rgb(255, 255, 255)
             let black = Self.rgb(0, 0, 0)
-            return white.contrastRatio(against: background) >= black.contrastRatio(against: background)
-                ? white : black
+            return ratio(white) >= ratio(black) ? white : black
         }
     }
 }

@@ -150,7 +150,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// app's own is left alone.
     private static func readable(_ color: Color, on face: Color?) -> Color {
         guard let face else { return color }
-        return color.ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: face)
+        return color.ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: face)
     }
 
     /// One animated colour of an indicator, taken as a whole cycle.

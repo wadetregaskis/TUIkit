@@ -372,12 +372,13 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             // same 256-colour entry as the face under it.
             labelFg = palette.foregroundTertiary
                 .opacity(ViewConstants.disabledForeground, over: palette.background)
-                .ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
+                .ensuringRenderedContrast(
+                    atLeast: ViewConstants.disabledLabelContrastFloor, against: buttonBg)
         } else if isFocused {
-            labelFg = palette.accent.ensuringContrast(
+            labelFg = palette.accent.ensuringRenderedContrast(
                 atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         } else {
-            labelFg = palette.foregroundSecondary.ensuringContrast(
+            labelFg = palette.foregroundSecondary.ensuringRenderedContrast(
                 atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         }
 

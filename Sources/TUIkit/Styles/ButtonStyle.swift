@@ -468,12 +468,13 @@ private struct _ButtonStyleBody: View, Renderable {
             // the same 256-colour entry and the label disappears completely.
             labelFg = palette.foregroundTertiary
                 .opacity(ViewConstants.disabledForeground, over: palette.background)
-                .ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
+                .ensuringRenderedContrast(
+                    atLeast: ViewConstants.disabledLabelContrastFloor, against: buttonBg)
         } else if let cascadeForeground {
             labelFg = cascadeForeground.resolve(with: palette)
         } else {
             labelFg = (baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary)
-                .ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
+                .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         }
 
         // Caps match the background normally, pulsing to accent when focused —
@@ -539,15 +540,15 @@ private struct _ButtonStyleBody: View, Renderable {
                 .opacity(ViewConstants.disabledForeground, over: palette.background)
             labelFg = appearance.isPlain
                 ? faded
-                : faded.ensuringContrast(
-                    atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
+                : faded.ensuringRenderedContrast(
+                    atLeast: ViewConstants.disabledLabelContrastFloor, against: buttonBg)
         } else if let cascadeForeground {
             labelFg = cascadeForeground.resolve(with: palette)
         } else if appearance.isPlain {
             labelFg = baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary
         } else {
             labelFg = (baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary)
-                .ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
+                .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         }
 
         // Plain: focus-indicator prefix + the label, no caps or background.

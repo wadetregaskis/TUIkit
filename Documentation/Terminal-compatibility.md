@@ -71,15 +71,23 @@ the emoji-class clusters below unless noted.
 ### Output behaviour
 
 - **Colour:** no truecolor — 256-colour palette is the ceiling
-  (`ColorDepth` quantises). Framework-chosen label colours are floored at
-  `ViewConstants.labelContrastFloor` (3:1) **in truecolor**, against the face
-  they are drawn on, and quantisation then erodes that — measured across the
-  sixteen built-in palettes, a colour sitting exactly on the floor comes out
-  between 1.4:1 and 4.7:1 once mapped into the cube. What IS guaranteed after
-  quantisation is that a label and its background never land on the *same*
-  entry; `DisabledContrastTests` pins both properties. Closing the remaining
-  gap means flooring in the depth the frame will actually be rendered at,
-  which is a change to `ensuringContrast` rather than to any one control.
+  (`ColorDepth` quantises). Framework-chosen label colours are floored
+  **through the cube**: `Color.ensuringRenderedContrast(atLeast:against:)`
+  measures each candidate — and the face — after `downsampledToPalette256()`,
+  so the ratio that is guaranteed is the one on screen. It has to be, because
+  the cube moves the FACE as well as the label: Green's button face is its
+  accent at 20% over black (`#003300`) and the nearest cube green is `#005f00`,
+  **3.5× the luminance**, so a `.destructive` label cleared 3:1 where it was
+  measured and sat at 2.61:1 where it was read. (Floored in truecolor instead,
+  a colour sitting exactly on the floor came out anywhere between 1.4:1 and
+  4.7:1 once mapped into the cube.)
+
+  Two floors, because one is not enough here: `labelContrastFloor` (3:1) for a
+  live label, `disabledLabelContrastFloor` (2.4:1) for a disabled one — WCAG
+  exempts inactive components, and pinned to the same 3:1 six palettes drew
+  both states in the *identical* cube entry. `LabelContrastTests` pins all
+  three properties across the sixteen built-in palettes: readable, recessive,
+  and tellable apart.
 - **VS-16 pictographic emoji** (❤️ ✏️ ☎️ 🖥️ 🛡️ …): paints 2,
   **advances 1** ("Bug A" — see `Emoji rendering bugs in macOS Sequoia's
   Terminal.app.md` for the full investigation). Compensated with CUF(1) by
