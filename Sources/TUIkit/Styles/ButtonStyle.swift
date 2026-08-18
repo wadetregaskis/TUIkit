@@ -441,10 +441,7 @@ private struct _ButtonStyleBody: View, Renderable {
         // background. Hover bumps the tint slightly so the
         // affordance reads as "I am clickable" without the
         // pulsing animation that focus uses.
-        let buttonBgOpacity = isHovered
-            ? ViewConstants.hoverBackground
-            : ViewConstants.focusBorderDim
-        let buttonBg = palette.accent.opacity(buttonBgOpacity, over: palette.background)
+        let buttonBg = isHovered ? palette.hoveredControlFace : palette.restingControlFace
 
         // Label foreground: a scoped cascade colour wins (in every state);
         // otherwise the style/role's own colour is used in every state too. A
@@ -528,9 +525,7 @@ private struct _ButtonStyleBody: View, Renderable {
 
         // Computed up front so the standard path can floor its default label
         // colour against the face it sits on; the plain path ignores it.
-        let buttonBg = palette.accent.opacity(
-            isHovered ? ViewConstants.hoverBackground : ViewConstants.focusBorderDim,
-            over: palette.background)
+        let buttonBg = isHovered ? palette.hoveredControlFace : palette.restingControlFace
 
         // Same rules as the string path: cascade wins untouched; framework
         // colours are floored against the face (see makeStandardBody).

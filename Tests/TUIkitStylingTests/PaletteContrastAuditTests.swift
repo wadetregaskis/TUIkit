@@ -196,6 +196,41 @@ struct PaletteContrastAuditTests {
         }
     }
 
+    // MARK: - Hover has to be visible
+
+    /// Hovering a control tints its face a step further into the accent. The
+    /// step used to be a fixed opacity (0.20 → 0.32), which is a clear
+    /// difference in 24-bit colour and *no* difference on a 256-colour
+    /// terminal for nine of these sixteen palettes — Green, Amber, Red, Violet,
+    /// Homebrew, Man Page, Novel, Ocean and Red Sands each quantised both tints
+    /// onto one cube entry, so the pointer changed nothing on screen.
+    ///
+    /// The floor is therefore stated where it bites: after downsampling.
+    @Test("Hovering changes the face on every shipped palette")
+    func hoverIsVisibleEverywhere() {
+        for palette in Self.allPalettes {
+            let resting = palette.restingControlFace.resolve(with: palette)
+            let hovered = palette.hoveredControlFace.resolve(with: palette)
+            #expect(
+                resting.downsampledToPalette256() != hovered.downsampledToPalette256(),
+                "\(palette.name): hover \(Self.hex(hovered)) is the same cube entry as rest \(Self.hex(resting))")
+        }
+    }
+
+    /// …and no further than it has to be. A palette the cube already separated
+    /// keeps the tint it had, so this is a fix for the terminals that needed it
+    /// rather than a louder hover for everyone.
+    @Test("A palette the cube already separated is left alone")
+    func hoverDoesNotOvershoot() {
+        // Blue's 0.20 and 0.32 tints land on different cube entries as they
+        // are, so its hover must still be exactly the 0.32 one.
+        let blue = SystemPalette(.blue)
+        #expect(
+            blue.hoveredControlFace.resolve(with: blue)
+                == blue.accent.opacity(ViewConstants.hoverBackground, over: blue.background)
+                .resolve(with: blue))
+    }
+
     // MARK: - One chrome, both ends
 
     /// The app header and the status bar are the same chrome — one strip at

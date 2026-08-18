@@ -125,7 +125,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         } else if isHovered {
             // Hover bumps the brackets to a partial accent tint
             // so the affordance reads without the focused pulse.
-            resting = palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
+            resting = palette.hoveredControlFace
         } else {
             resting = palette.foreground
         }

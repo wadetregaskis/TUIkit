@@ -361,10 +361,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // Same hover treatment as Button: bump the background
         // tint while the cursor is hovering and the control
         // isn't focused. Caps and label colour are unchanged.
-        let buttonBgOpacity = isHovered
-            ? ViewConstants.hoverBackground
-            : ViewConstants.focusBorderDim
-        let buttonBg = palette.accent.opacity(buttonBgOpacity, over: palette.background)
+        let buttonBg = isHovered ? palette.hoveredControlFace : palette.restingControlFace
 
         // The label colours are floored (hue-preserving) against the face
         // they sit on, like Button labels — see ButtonStyle.makeStandardBody.

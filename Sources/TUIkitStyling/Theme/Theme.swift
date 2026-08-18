@@ -192,6 +192,54 @@ extension Palette {
     /// from the text costs no contrast, and pages that are already near an
     /// extreme need a bigger push to clear the 256-colour cube at all.
     static var surfaceRecess: Double { 0.35 }
+
+    // MARK: - Control faces
+
+    /// The accent tint an unfocused control's face rests at — a button's fill,
+    /// a picker's, a toggle's brackets.
+    public var restingControlFace: Color {
+        accent.opacity(ViewConstants.focusBorderDim, over: background)
+    }
+
+    /// The face while the pointer is over the control (and it is not focused).
+    ///
+    /// A step further into the accent than ``restingControlFace``, and — this
+    /// is the part a fixed opacity cannot do — far enough that the *terminal*
+    /// can show the difference. The two used to be 0.20 and 0.32, which is a
+    /// clear difference in 24-bit colour and no difference at all on a
+    /// 256-colour terminal for **nine of the sixteen** built-in palettes: Green,
+    /// Amber, Red, Violet, Homebrew, Man Page, Novel, Ocean and Red Sands all
+    /// quantised both tints onto one cube entry, so hovering those themes did
+    /// nothing visible.
+    ///
+    /// So the tint walks toward the accent until the cube separates it, and
+    /// stops at the first step that does — the smallest visible difference,
+    /// rather than a louder constant that would out-shout focus on the palettes
+    /// that never needed it. Compared after downsampling on every terminal, not
+    /// only where the depth demands it, so a hover looks the same everywhere
+    /// (the rule ``liftedBackground`` already follows, for the same reason).
+    public var hoveredControlFace: Color {
+        let resting = restingControlFace.resolve(with: self).downsampledToPalette256()
+        var tint = ViewConstants.hoverBackground
+        while tint < 1.0 {
+            let candidate = accent.opacity(tint, over: background)
+            if candidate.resolve(with: self).downsampledToPalette256() != resting {
+                return candidate
+            }
+            tint += Self.hoverTintStep
+        }
+        // The accent itself, which is as far as this direction goes. A palette
+        // whose accent cannot be told from its own 20% tint has nothing left to
+        // hover with.
+        return accent
+    }
+
+    /// How coarsely ``hoveredControlFace`` searches for a visible step.
+    ///
+    /// Fine enough that a palette needing only a nudge gets one, coarse enough
+    /// that the search is a handful of iterations on a render path: the worst
+    /// built-in (Homebrew's near-black green) resolves in five.
+    static var hoverTintStep: Double { 0.06 }
 }
 
 extension Palette {
