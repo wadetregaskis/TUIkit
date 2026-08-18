@@ -121,10 +121,11 @@ struct RefreshableTests {
         let harness = Harness()
         nonisolated(unsafe) var runs = 0
         nonisolated(unsafe) var release = false
-        let action = RefreshAction {
-            runs += 1
-            while !release { await Task.yield() }
-        }
+        let action = RefreshAction(
+            {
+                runs += 1
+                while !release { await Task.yield() }
+            }, state: RefreshAction.RunState())
 
         // Two calls through the environment, the second while the first is in
         // flight — the shape a second click on "Refresh Now" makes.
@@ -249,10 +250,47 @@ struct RefreshableTests {
         // Closures cannot be compared; identity can, and identity is what
         // SwiftUI's Equatable conformance means — it lets `onChange(of:)` see
         // a genuinely different refreshable rather than firing every frame.
-        let action = RefreshAction {}
-        let sameAction = action
-        #expect(sameAction == action)
-        #expect(action != RefreshAction {})
+        //
+        // The identity is the RUN STATE, not the closure: the closure is
+        // rebuilt with the view every frame, and two frames of the same
+        // `.refreshable` have to compare equal.
+        let state = RefreshAction.RunState()
+        let handle = RefreshAction({}, state: state)
+        let nextFrame = RefreshAction({}, state: state)
+        let other = RefreshAction({}, state: RefreshAction.RunState())
+        #expect(handle == nextFrame)
+        #expect(handle != other)
+    }
+
+    @Test("The in-flight state survives the view being rebuilt each frame")
+    func inFlightSurvivesRebuild() async {
+        // Every other test here renders ONE stored view value twice, which is
+        // the single shape in which a flag stored beside the closure appears to
+        // work. An app rebuilds `body` every frame, so the modifier — and the
+        // flag with it — was a new value each time: the run set the flag on the
+        // frame that started it, and every frame after asked a freshly-zeroed
+        // one. The indicator never drew.
+        let harness = Harness()
+        nonisolated(unsafe) var release = false
+        func rebuilt() -> some View {
+            VStack {
+                Text("one")
+                Text("two")
+            }
+            .refreshable { while !release { await Task.yield() } }
+        }
+
+        let idle = harness.frame(rebuilt())
+        harness.press(.character("r"), ctrl: true)
+        await settle()
+        let busy = harness.frame(rebuilt())
+
+        #expect(
+            busy.lines != idle.lines,
+            "a rebuilt frame still has to know a refresh is running: \(busy.lines)")
+
+        release = true
+        await settle()
     }
 
     @Test("The size does not change while a refresh runs")

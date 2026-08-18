@@ -29,26 +29,22 @@ import TUIkitView
 /// ``View/refreshable(action:)``, which is what makes
 /// `refresh == nil` a usable "there is nothing to refresh here" test.
 public struct RefreshAction: Equatable, Sendable {
-    /// The action, boxed so two handles to the SAME `.refreshable` compare
-    /// equal — closures cannot be compared, but identity can, and identity is
-    /// what SwiftUI's `Equatable` conformance actually means here.
-    private let box: ActionBox
-
-    /// Reference identity for the action, its storage, and whether it is in
-    /// flight.
+    /// Whether a run is in flight, and the identity of the `.refreshable` this
+    /// handle belongs to.
     ///
-    /// The in-flight flag lives HERE, not in the modifier, because coalescing
-    /// has to hold for every way of asking. It used to be a `@State` box that
-    /// only the <kbd>Ctrl</kbd>-<kbd>R</kbd> handler consulted, so a "Reload"
-    /// button reaching the same refresh through ``EnvironmentValues/refresh``
-    /// stacked a second run on the first — same action, same refresh, different
-    /// answer depending on how you triggered it.
-    private final class ActionBox: @unchecked Sendable {
-        let action: @Sendable () async -> Void
+    /// **Separate from the closure on purpose.** A view value is rebuilt every
+    /// frame, so a flag stored beside the closure is a *new* flag every frame:
+    /// the run Ctrl-R started set the flag on the frame that started it, and
+    /// every frame after asked a freshly-zeroed one. The indicator therefore
+    /// never drew — and, less visibly, a second Ctrl-R a frame later coalesced
+    /// against nothing and started a second run. The state is persisted by
+    /// ``RefreshableModifier`` in `StateStorage` and handed to each frame's
+    /// action, so every frame shares one answer.
+    final class RunState: @unchecked Sendable {
         private let lock = NSLock()
         private var running = false
 
-        init(_ action: @escaping @Sendable () async -> Void) { self.action = action }
+        init() {}
 
         /// Claims the right to run, or reports that someone else already has.
         func beginIfIdle() -> Bool {
@@ -72,15 +68,19 @@ public struct RefreshAction: Equatable, Sendable {
         }
     }
 
-    init(_ action: @escaping @Sendable () async -> Void) {
-        self.box = ActionBox(action)
+    private let state: RunState
+    private let action: @Sendable () async -> Void
+
+    init(_ action: @escaping @Sendable () async -> Void, state: RunState) {
+        self.action = action
+        self.state = state
     }
 
     /// Whether this refresh is currently running.
     ///
     /// What the in-flight indicator draws from, and what makes a second request
     /// a no-op rather than a second run.
-    public var isRunning: Bool { box.isRunning }
+    public var isRunning: Bool { state.isRunning }
 
     /// Runs the refresh action and waits for it to finish.
     ///
@@ -89,15 +89,18 @@ public struct RefreshAction: Equatable, Sendable {
     /// over a running one, and it must not matter whether the request came from
     /// the key binding or from a button reaching this through the environment.
     public func callAsFunction() async {
-        guard box.beginIfIdle() else { return }
+        guard state.beginIfIdle() else { return }
         await MainActor.run { AppState.shared.setNeedsRender() }
-        await box.action()
-        box.finish()
+        await action()
+        state.finish()
         await MainActor.run { AppState.shared.setNeedsRender() }
     }
 
+    /// Two handles to the same `.refreshable` are equal. The run state carries
+    /// that identity — it is the part that persists across frames, where the
+    /// closure is rebuilt with the view every time.
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.box === rhs.box
+        lhs.state === rhs.state
     }
 }
 
@@ -152,22 +155,52 @@ extension View {
     ///   spinner shows until it returns.
     /// - Returns: A view that refreshes on <kbd>Ctrl</kbd>-<kbd>R</kbd>.
     public func refreshable(action: @escaping @Sendable () async -> Void) -> some View {
-        RefreshableModifier(content: self, action: RefreshAction(action))
+        RefreshableModifier(content: self, action: action)
     }
+}
+
+/// Where ``RefreshableModifier`` keeps its persistent state. A namespace of
+/// its own because a generic type cannot hold static stored properties.
+private enum RefreshableStateIndex {
+    static let runState = 0
 }
 
 /// Publishes a ``RefreshAction`` to its subtree, binds it to
 /// <kbd>Ctrl</kbd>-<kbd>R</kbd>, and shows a spinner while it runs.
 public struct RefreshableModifier<Content: View>: View {
     let content: Content
-    let action: RefreshAction
+    let action: @Sendable () async -> Void
 
     /// Not used during rendering — ``Renderable`` conformance takes priority.
     public var body: some View { content }
+
+    /// This frame's handle to the refresh: the closure just built, bound to the
+    /// run state that has been there all along.
+    ///
+    /// Measuring gets a throwaway state rather than touching storage — a
+    /// measure pass must allocate none, and nothing it publishes can start a
+    /// run. What a measured child can still see is that
+    /// ``EnvironmentValues/refresh`` is non-nil, which is the only thing about
+    /// it that affects layout.
+    func resolvedAction(_ context: RenderContext) -> RefreshAction {
+        guard !context.isMeasuring, let storage = context.stateStorage else {
+            return RefreshAction(action, state: RefreshAction.RunState())
+        }
+        // Marked active or the end-of-pass prune collects it, and the next
+        // frame allocates a fresh state — which is the bug this method exists
+        // to fix, wearing a different hat.
+        storage.markActive(context.identity)
+        let key = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: RefreshableStateIndex.runState)
+        let box: StateBox<RefreshAction.RunState> = storage.storage(
+            for: key, default: RefreshAction.RunState())
+        return RefreshAction(action, state: box.value)
+    }
 }
 
 extension RefreshableModifier: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let action = resolvedAction(context)
         let childContext = context.withEnvironment(
             context.environment.setting(\.refresh, to: action))
 
@@ -227,6 +260,7 @@ extension RefreshableModifier: Layoutable {
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureChild(
             content, proposal: proposal,
-            context: context.withEnvironment(context.environment.setting(\.refresh, to: action)))
+            context: context.withEnvironment(
+                context.environment.setting(\.refresh, to: resolvedAction(context))))
     }
 }
