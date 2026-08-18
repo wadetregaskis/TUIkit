@@ -195,6 +195,65 @@ struct AnimatedRunSplicingTests {
             "\(before.debugDescription)")
     }
 
+    /// A frame is usually several coloured pieces, and each piece ends with a
+    /// reset — `colorize(arrow) + colorize(label)` for a scroll indicator,
+    /// `colorize("●") + " "` for a button's focus gutter, `colorize("[") + mark
+    /// + colorize("]")` for an ASCII toggle. A background stated only in FRONT
+    /// of all that survives to the first reset and no further, so the first
+    /// piece kept the line's surface and every piece after it punched through:
+    /// the "N more above" arrow was right and its label was white, the `●` was
+    /// right and the cell beside it was white, `[` was right and `x]` was white.
+    @Test("The background survives every reset inside the frame")
+    func patchRestatesTheBackgroundAfterInnerResets() {
+        let reset = "\u{1B}[0m"
+        let frame = "\u{1B}[38;5;77m▲\(reset)\u{1B}[38;5;77m 3 more lines above \(reset)"
+        let patched = FrameBuffer.patchingAnimatedCells(
+            in: styledRow(), with: frame, atColumn: 0, width: frame.strippedLength)
+
+        // Every visible cell of the run must have the line's background in force.
+        let runCells = patched.ansiAwarePrefix(visibleCount: frame.strippedLength)
+        for column in 0..<frame.strippedLength {
+            #expect(
+                runCells.ansiSGRStateAt(visibleColumn: column).renderedBackground
+                    == "\u{1B}[48;5;16m",
+                "column \(column) lost the surface: \(runCells.debugDescription)")
+        }
+    }
+
+    /// The same thing with a frame the framework actually builds, rather than
+    /// one written to have an inner reset: the focus gutter every plain button
+    /// and disclosure row opens with is `colorize("●") + " "`, so the reset
+    /// lands between the two cells and the blank one is what went white.
+    @MainActor
+    @Test("A real focus-gutter frame keeps its surface across both cells")
+    func realFocusGutterFrameKeepsItsSurface() {
+        let palette = SystemPalette(.green)
+        let frame = BorderRenderer.focusIndicatorPrefix(
+            isFocused: true, emphasis: .steady(isFocused: true), palette: palette)
+        #expect(frame.strippedLength == BorderRenderer.focusIndicatorWidth)
+
+        let patched = FrameBuffer.patchingAnimatedCells(
+            in: styledRow(), with: frame, atColumn: 0,
+            width: BorderRenderer.focusIndicatorWidth)
+        let runCells = patched.ansiAwarePrefix(visibleCount: BorderRenderer.focusIndicatorWidth)
+        #expect(
+            runCells.ansiSGRStateAt(visibleColumn: 1).renderedBackground == "\u{1B}[48;5;16m",
+            "the cell after the bullet lost the surface: \(runCells.debugDescription)")
+    }
+
+    @Test("A frame's trailing reset is left bare")
+    func patchDoesNotAppendADeadBackground() {
+        // Nothing follows it inside the run, and `insertOverlay` restores the
+        // line's own styling where the suffix begins — so a background there
+        // would be bytes per tick, per run, for no change on screen.
+        let frame = "\u{1B}[38;5;77m□\u{1B}[0m"
+        let patched = FrameBuffer.patchingAnimatedCells(
+            in: styledRow(), with: frame, atColumn: 0, width: 1)
+        #expect(
+            !patched.contains("\u{1B}[0m\u{1B}[48;5;16m\u{1B}[48;5;16m"),
+            "\(patched.debugDescription)")
+    }
+
     @Test("A line with no background of its own gains none")
     func patchAddsNothingOnADefaultBackground() {
         // The terminal's own background is a legitimate answer — a bare

@@ -904,14 +904,43 @@ extension FrameBuffer {
     /// column, and *only* the background — the foreground, bold and underline in
     /// force there belong to the glyph being replaced, not to the surface under
     /// it.
+    ///
+    /// The background is re-stated after every reset *inside* the frame, not
+    /// only in front of it, for the same reason `applyPersistentBackground`
+    /// does it: a frame is often several coloured pieces (`colorize(arrow) +
+    /// colorize(label)`, `colorize("[") + mark + colorize("]")`, a glyph and
+    /// the blank cell after it), and each piece ends with a reset. A leading
+    /// background alone survives only to the first of them — which is why the
+    /// "N more above" arrow kept its surface while its label did not, why a
+    /// focused button's `●` kept it and the space beside it did not, and why an
+    /// ASCII toggle kept it for `[` and nothing after.
     public static func patchingAnimatedCells(
         in line: String, with frame: String, atColumn column: Int, width: Int
     ) -> String {
         let background = line.ansiSGRStateAt(visibleColumn: column).renderedBackground
         return insertOverlay(
             base: line.padToVisibleWidth(max(line.strippedLength, column + width)),
-            overlay: background + frame,
+            overlay: background + restating(background, afterResetsIn: frame),
             atColumn: column)
+    }
+
+    /// `frame` with `background` re-stated after every reset that has cells
+    /// after it.
+    ///
+    /// A trailing reset is left bare deliberately: nothing follows it inside the
+    /// run, and `insertOverlay` restores the line's own styling where the suffix
+    /// begins — so a background there would be bytes emitted per tick, per run,
+    /// to change nothing.
+    private static func restating(_ background: String, afterResetsIn frame: String) -> String {
+        guard !background.isEmpty, frame.contains(ansiReset) else { return frame }
+        var rebuilt = ""
+        var remainder = Substring(frame)
+        while let reset = remainder.range(of: ansiReset) {
+            rebuilt += remainder[..<reset.upperBound]
+            remainder = remainder[reset.upperBound...]
+            if !remainder.isEmpty { rebuilt += background }
+        }
+        return rebuilt + remainder
     }
 }
 
