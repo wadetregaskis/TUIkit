@@ -426,6 +426,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let listHasFocus = FocusRegistration.isFocused(
             context: context, focusID: persistedFocusID)
         handler.publishEscapeClaim(context: context, isFocused: listHasFocus)
+        // The Bottom follow carries the cursor only for the list that owns it.
+        handler.isFocusEngaged = listHasFocus
 
         let origin = windowOrigin(
             handler: handler, source: source, showsScrollbar: wantsScrollbar)
@@ -569,6 +571,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let listHasFocus = FocusRegistration.isFocused(
             context: context, focusID: persistedFocusID)
         handler.publishEscapeClaim(context: context, isFocused: listHasFocus)
+        // The Bottom follow carries the cursor only for the list that owns it.
+        handler.isFocusEngaged = listHasFocus
         return PopulatedRenderState(
             handler: handler,
             focusID: persistedFocusID,

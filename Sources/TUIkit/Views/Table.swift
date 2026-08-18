@@ -778,6 +778,8 @@ where Value.ID: Hashable {
         let tableHasFocus = FocusRegistration.isFocused(
             context: context, focusID: persistedFocusID)
         handler.publishEscapeClaim(context: context, isFocused: tableHasFocus)
+        // See `_ListCore`: the Bottom follow only moves a cursor someone is on.
+        handler.isFocusEngaged = tableHasFocus
 
         if overflowing {
             // The landing slot is drawn among the rows and takes one of their
@@ -847,6 +849,8 @@ where Value.ID: Hashable {
         FocusRegistration.register(context: context, handler: handler)
         let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         handler.publishEscapeClaim(context: context, isFocused: tableHasFocus)
+        // See `_ListCore`: the Bottom follow only moves a cursor someone is on.
+        handler.isFocusEngaged = tableHasFocus
 
         // The handler's accessor, not a raw `scrollOffset..<min(…)`: the
         // persisted offset can exceed a freshly-shrunk `data.count` during a
@@ -1056,6 +1060,8 @@ where Value.ID: Hashable {
         FocusRegistration.register(context: context, handler: handler)
         let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         handler.publishEscapeClaim(context: context, isFocused: tableHasFocus)
+        // See `_ListCore`: the Bottom follow only moves a cursor someone is on.
+        handler.isFocusEngaged = tableHasFocus
 
         let window = rowWindow(
             scrollOffset: handler.scrollOffset, count: data.count,

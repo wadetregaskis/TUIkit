@@ -193,12 +193,13 @@ struct ListEdgeAnchorTests {
     /// documented release path ("arrowing up moves the offset off the tail")
     /// could never engage because the cursor was reset before it could reach
     /// the viewport's top edge.
-    @Test("Arrow-up walks off the tail; appends still carry the cursor")
+    @Test("Arrow-up off the tail detaches the follow, and returning re-engages it")
     func arrowUpEscapesTheGlue() {
         let handler = ItemListHandler<Int>(
             focusID: "list", itemCount: 40, viewportHeight: 8,
             selectionMode: .single, canBeFocused: true)
         handler.declaredAnchorMode = .bottom
+        handler.isFocusEngaged = true
 
         handler.applyAnchorHold()
         #expect(handler.scrollOffset == handler.maxOffset, "opens glued to the tail")
@@ -208,16 +209,28 @@ struct ListEdgeAnchorTests {
         // moves — and the following steady glued render must leave it there.
         handler.moveFocus(by: -1, wrap: false)
         #expect(handler.focusedIndex == 38)
+        let detachedAt = handler.scrollOffset
         handler.applyAnchorHold()
         #expect(handler.focusedIndex == 38, "a steady glued frame must not snap the cursor back")
-        #expect(handler.scrollOffset == handler.maxOffset, "the follow itself stays engaged")
 
-        // Rows arrive: the tail advances, and the cursor comes along — that is
-        // what follow-the-log means; the newest row is the interesting one.
+        // Rows arrive. The user has chosen a row, so neither it nor the
+        // viewport moves out from under them — that choice is what detaches
+        // the follow.
         handler.itemCount = 45
         handler.applyAnchorHold()
-        #expect(handler.scrollOffset == handler.maxOffset, "followed the new tail")
-        #expect(handler.focusedIndex == 44, "and carried the cursor to it")
+        #expect(handler.focusedIndex == 38, "the chosen row stays chosen")
+        #expect(handler.scrollOffset == detachedAt, "and stays where they left it")
+
+        // Walking the cursor back to the last row re-engages the follow, the
+        // same way scrolling back to the tail does — the reveal that follows a
+        // cursor move is what puts the viewport back on the tail, so the test
+        // performs it too.
+        handler.focusedIndex = 44
+        handler.ensureFocusedItemVisible()
+        handler.itemCount = 50
+        handler.applyAnchorHold()
+        #expect(handler.scrollOffset == handler.maxOffset, "following again")
+        #expect(handler.focusedIndex == 49, "and carrying the cursor once more")
     }
 
     /// A list shorter than its viewport appends at offset 0 forever, so an
@@ -240,6 +253,27 @@ struct ListEdgeAnchorTests {
         handler.itemCount = 7
         handler.applyAnchorHold()
         #expect(handler.focusedIndex == 6, "an append carries the cursor, offset or no offset")
+    }
+
+    /// The same list with the focus on it: the cursor move is then the user's,
+    /// and it detaches — an append must not drag them to the newest row.
+    /// (Without focus there is no cursor anyone is looking at, which is why the
+    /// test above still carries.)
+    @Test("A focused short list stops carrying once the user picks a row")
+    func focusedShortListDetaches() {
+        let handler = ItemListHandler<Int>(
+            focusID: "list", itemCount: 5, viewportHeight: 8,
+            selectionMode: .single, canBeFocused: true)
+        handler.declaredAnchorMode = .bottom
+        handler.isFocusEngaged = true
+
+        handler.applyAnchorHold()
+        #expect(handler.focusedIndex == 4, "opens on the tail row")
+
+        handler.moveFocus(by: -1, wrap: false)
+        handler.itemCount = 7
+        handler.applyAnchorHold()
+        #expect(handler.focusedIndex == 3, "the row they chose is still the row they are on")
     }
 
     /// Top and Window ask for nothing beyond "leave the offset alone", so the

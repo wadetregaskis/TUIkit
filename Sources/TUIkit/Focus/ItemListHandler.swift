@@ -597,6 +597,27 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// always reads as an advance (the opening placement carries the cursor).
     var bottomFollowItemCount = -1
 
+    /// The row the Bottom follow last parked the focus cursor on, or `nil` when
+    /// it has never carried it.
+    ///
+    /// How the follow tells its own cursor move from the user's: finding the
+    /// cursor somewhere else means they moved it, and their place in the list
+    /// outranks the newest row. See ``followBottomEdge()``.
+    var bottomFollowCursor: Int?
+
+    /// The last row index the Bottom follow saw, so a cursor walked back onto
+    /// the tail re-engages the follow even though rows have arrived since (the
+    /// CURRENT tail is one of the new rows, which the user has never seen).
+    var bottomFollowTail = -1
+
+    /// Whether this list holds the focus, as of the last render.
+    ///
+    /// Set by the owning view alongside the rest of the per-frame wiring. The
+    /// Bottom follow reads it: an unfocused list has no cursor anyone is
+    /// looking at, so it scrolls without moving one — anchoring a log view must
+    /// not put a highlight on a row the user never chose.
+    var isFocusEngaged = false
+
     /// Binding for single selection mode (optional ID).
     var singleSelection: Binding<SelectionValue?>?
 

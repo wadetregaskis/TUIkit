@@ -105,7 +105,23 @@ extension ItemListHandler {
     /// follow (positional, as ever), and arrowing back down to the tail
     /// re-engages it.
     private func followBottomEdge() {
+        // Recorded whatever happens below: re-engagement compares against the
+        // tail as the USER last saw it, not the one the newest rows just made.
+        let tailBefore = bottomFollowTail
+        defer { bottomFollowTail = tailRowIndex }
         guard scrollOffset >= bottomFollowBound else { return }
+        // The cursor is the user's place in the list, and it outranks the tail.
+        // Once they have moved it off the row this follow parked it on, the
+        // follow is over — it must not keep scrolling, or the row they went to
+        // is dragged out from under them on the next append, which is exactly
+        // what "moving the selection up from the bottom doesn't break the
+        // anchor" was. Scrolling back to the tail re-engages it (positional, as
+        // ever), and so does walking the cursor back to the last row.
+        if isFocusEngaged, let carried = bottomFollowCursor,
+            focusedIndex != carried, focusedIndex != tailBefore
+        {
+            return
+        }
         let offsetBefore = scrollOffset
         // `settledMaxOffset`, not `maxOffset`: the latter early-outs to a cheap
         // LOWER bound while the offset is nowhere near the tail (so as not to
@@ -123,9 +139,22 @@ extension ItemListHandler {
         // The tail sits on a whole-row boundary, so any line-granularity clip
         // carried from the previous top row no longer describes anything.
         scrollTopClipLines = 0
-        // `selectableIndices` is empty for an all-content list, meaning "every
-        // row" — the same fallback the End key uses.
-        focusedIndex = selectableIndices.max() ?? max(0, itemCount - 1)
+        // The cursor comes too. Measured, not assumed: gating this on
+        // `isFocusEngaged` — so an unfocused log view would scroll without
+        // lighting a row — leaves the follow inert, because
+        // `ensureFocusedItemVisible()` runs for every list and drags the
+        // viewport back to whatever row the cursor is on. Detaching the cursor
+        // from the anchor needs that reveal to know the anchor owns the offset;
+        // until then the two move together.
+        focusedIndex = tailRowIndex
+        bottomFollowCursor = focusedIndex
+    }
+
+    /// The last row a cursor can sit on. `selectableIndices` is empty for an
+    /// all-content list, meaning "every row" — the same fallback the End key
+    /// uses.
+    private var tailRowIndex: Int {
+        selectableIndices.max() ?? max(0, itemCount - 1)
     }
 
     /// Drops the row-hold memo, so re-designating the same row later adopts it
