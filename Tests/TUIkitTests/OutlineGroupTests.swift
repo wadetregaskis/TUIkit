@@ -461,7 +461,9 @@ struct OutlineGroupTests {
         frame(view, tui: tui, context: context)
         row = try #require(focus.currentFocused)
         #expect(row.handleKeyEvent(KeyEvent(key: .right, alt: true)) == false, "a leaf")
-        #expect(row.handleKeyEvent(KeyEvent(key: .left, alt: true)) == false, "a leaf")
+        // ⌥← has nothing to fold on a leaf, so it walks out of the subtree
+        // exactly as a plain Left does — see `leftWalksOutOfTheSubtree`.
+        #expect(row.handleKeyEvent(KeyEvent(key: .left, alt: true)), "a leaf: Left walks out")
     }
 
     /// A key a row cannot use must fall through, or the list swallows it from
@@ -485,14 +487,74 @@ struct OutlineGroupTests {
             row.handleKeyEvent(KeyEvent(key: .left)) == false,
             "Left on an already-closed branch is not consumed")
 
-        // Move to "README", a leaf: neither key applies.
+        // Move to "README", a leaf: Right still has nothing to open. Left does
+        // NOT fall through here — see `leftWalksOutOfTheSubtree`, where it goes
+        // to the top of the tree instead of leaking to the next view.
         _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
         frame(view, tui: tui, context: context)
         row = try #require(focus.currentFocused)
         #expect(row.handleKeyEvent(KeyEvent(key: .right)) == false, "Right on a leaf")
-        #expect(row.handleKeyEvent(KeyEvent(key: .left)) == false, "Left on a leaf")
         let rendered = lines(frame(view, tui: tui, context: context))
         #expect(rendered.contains { $0.contains("TUIkit") } == false, "nothing opened: \(rendered)")
+    }
+
+    /// Left's ladder, once there is nothing left to close: up to the parent,
+    /// then to the top of the tree, and only then out of the list.
+    ///
+    /// It used to fall through the moment it met a row it could not close — on
+    /// a leaf, or on a branch already shut — so a single Left inside a tree
+    /// threw the focus at whatever view came next, which is not what any
+    /// outline view does with the key.
+    ///
+    /// Where the cursor landed is read with Space through a selection binding,
+    /// the same way `listRowsAreNodes` reads it: the row's id is the node's.
+    @Test("Left walks out of the subtree before it leaves the list")
+    func leftWalksOutOfTheSubtree() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        let selection = Selection()
+        let view = List(tree, children: \.children, selection: selection.binding) { node in
+            Text(verbatim: node.id)
+        }
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        // Open "Sources" and step onto its child "TUIkit".
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .right))
+        frame(view, tui: tui, context: context)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        frame(view, tui: tui, context: context)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .space))
+        #expect(selection.value == "TUIkit", "the cursor is on the child")
+
+        // 1 — a closed child branch: Left goes UP to "Sources", not out.
+        var row = try #require(focus.currentFocused)
+        #expect(row.handleKeyEvent(KeyEvent(key: .left)), "Left is consumed by the tree")
+        frame(view, tui: tui, context: context)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .space))
+        #expect(selection.value == "Sources", "…and landed on the parent")
+
+        // 2 — "Sources" is open, so this Left closes it (the first rung).
+        row = try #require(focus.currentFocused)
+        #expect(row.handleKeyEvent(KeyEvent(key: .left)), "Left closed the branch")
+        let closed = lines(frame(view, tui: tui, context: context))
+        #expect(closed.contains { $0.contains("TUIkit") } == false, "\(closed)")
+
+        // 3 — a root row that is not the first: Left goes to the top.
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .down))
+        frame(view, tui: tui, context: context)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .space))
+        #expect(selection.value == "README", "the cursor is on the second root")
+        row = try #require(focus.currentFocused)
+        #expect(row.handleKeyEvent(KeyEvent(key: .left)), "Left is still the tree's")
+        frame(view, tui: tui, context: context)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .space))
+        #expect(selection.value == "Sources", "…and landed on the first row")
+
+        // 4 — and only now does it leave.
+        row = try #require(focus.currentFocused)
+        #expect(
+            row.handleKeyEvent(KeyEvent(key: .left)) == false,
+            "Left on the first row falls through to the next view")
     }
 
     /// An app that gives its rows an action gets it — Return is theirs, and the

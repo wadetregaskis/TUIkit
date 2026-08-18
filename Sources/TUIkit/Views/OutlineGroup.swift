@@ -161,6 +161,14 @@ protocol OutlineRowActivating {
     ///   through to whatever else wants it.
     @discardableResult
     func setRowExpanded(_ id: AnyHashable, to target: Bool?, includingDescendants: Bool) -> Bool
+
+    /// The row this one sits under, or `nil` for a root row (and for an id this
+    /// frame's tree does not know).
+    ///
+    /// Left needs it: on a row that is not an open branch, the key walks OUT of
+    /// the subtree instead of dying — the outline-view behaviour, where Left
+    /// either closes what you are in or takes you to what contains it.
+    func parentRowID(of id: AnyHashable) -> AnyHashable?
 }
 
 /// The mutable half of ``OutlineRowActivating``, refreshed every pass.
@@ -168,6 +176,10 @@ final class OutlineActivation: @unchecked Sendable {
     /// Installed by ``OutlineGroup/extractListRows(context:)`` with that
     /// frame's real expansion box captured. `nil` before the first render.
     var apply: ((AnyHashable, Bool?, Bool) -> Bool)?
+
+    /// This frame's child → parent map, in the ids the LIST knows rows by.
+    /// Installed alongside ``apply``; `nil` before the first render.
+    var parentOf: ((AnyHashable) -> AnyHashable?)?
 }
 
 /// The frame's tree, in the shape a disclosure keystroke needs to read it:
@@ -364,6 +376,11 @@ extension OutlineGroup: OutlineRowActivating {
     ) -> Bool {
         activation.apply?(id, target, includingDescendants) ?? false
     }
+
+    /// Also `nonisolated`, and for the same reason.
+    nonisolated func parentRowID(of id: AnyHashable) -> AnyHashable? {
+        activation.parentOf?(id)
+    }
 }
 
 extension OutlineGroup: ListRowExtractor {
@@ -389,6 +406,12 @@ extension OutlineGroup: ListRowExtractor {
         // descendants of a closed branch were never flattened into `nodes`, and
         // the element is what still knows where they are.
         var branchElement: [AnyHashable: Data.Element] = [:]
+        // Child → parent, in the list's own ids. Read off the flattening rather
+        // than the data: `nodes` is depth-first, so the parent of a row is the
+        // nearest one before it at a shallower depth, and that is true whatever
+        // the list decided to key its rows by.
+        var parentRowID: [AnyHashable: AnyHashable] = [:]
+        var ancestry: [(depth: Int, id: AnyHashable)] = []
         var rows: [ListRow<RowID>] = []
         rows.reserveCapacity(nodes.count)
         for (index, node) in nodes.enumerated() {
@@ -396,6 +419,9 @@ extension OutlineGroup: ListRowExtractor {
             if node.isBranch {
                 branchElement[AnyHashable(rowID)] = node.element
             }
+            while let deepest = ancestry.last, deepest.depth >= node.depth { ancestry.removeLast() }
+            if let parent = ancestry.last { parentRowID[AnyHashable(rowID)] = parent.id }
+            ancestry.append((depth: node.depth, id: AnyHashable(rowID)))
             let view = row(for: node, expansion: expansion, rowOwnsFocus: true)
             let rowContext = context.withChildIdentity(
                 erasedType: _OutlineRow<Data.Element, ID, Leaf>.self,
@@ -409,6 +435,7 @@ extension OutlineGroup: ListRowExtractor {
         }
         let index = OutlineSubtreeIndex(
             branches: branchElement, idOf: idKeyPath, branchesUnder: subtreeBranchWalk())
+        activation.parentOf = { parentRowID[$0] }
         activation.apply = { erased, target, includingDescendants in
             guard let affected = index.affected(erased, includingDescendants: includingDescendants)
             else { return false }

@@ -279,6 +279,49 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
             AnyHashable(id), to: expanded, includingDescendants: includingDescendants)
     }
 
+    /// Right opens the focused branch; Left closes it, and — when there is
+    /// nothing to close — leaves the subtree instead of the list.
+    private func handleDisclosureKey(_ event: KeyEvent) -> Bool {
+        if event.key == .right {
+            return setFocusedRowExpanded(true, includingDescendants: event.alt)
+        }
+        if setFocusedRowExpanded(false, includingDescendants: event.alt) { return true }
+        return moveFocusOutOfSubtree()
+    }
+
+    /// Left's second act, once there is nothing left to close: move the cursor
+    /// OUT of the subtree it is in rather than letting the key escape the list.
+    ///
+    /// The ladder is the one an outline view uses, and each rung answers "where
+    /// is 'out' from here?":
+    ///
+    /// 1. The parent row, when this row has one — up one level.
+    /// 2. The first row, when it does not — a root row's "out" is the top of
+    ///    the tree, which is where a fold-everything-up gesture lands you.
+    /// 3. Nothing, when the cursor is already on the first row. Only then does
+    ///    Left leave, so the key reaches the next view exactly once the outline
+    ///    has run out of places to go — instead of, as before, on the first
+    ///    press that met a leaf.
+    ///
+    /// - Returns: Whether the cursor moved. `false` on a list that is not a
+    ///   tree, so a plain list's Left is untouched.
+    private func moveFocusOutOfSubtree() -> Bool {
+        guard let outlineActivation, focusedIndex >= 0 else { return false }
+        if let id = id(at: focusedIndex),
+            let parent = outlineActivation.parentRowID(of: AnyHashable(id))?.base
+                as? SelectionValue,
+            let parentIndex = index(of: parent)
+        {
+            focusedIndex = parentIndex
+            ensureFocusedItemVisible()
+            return true
+        }
+        guard focusedIndex > 0 else { return false }
+        focusedIndex = 0
+        ensureFocusedItemVisible()
+        return true
+    }
+
     /// Deletes the focused row when the enclosing `ForEach` is deletable.
     ///
     /// The focus index IS the data offset here — `onDelete` is wired only for
@@ -762,17 +805,16 @@ extension ItemListHandler {
             return true
 
         // A tree's own keys, and the reason the row does not have to spend
-        // Space or Return on disclosure: Right opens the focused branch, Left
-        // closes it. Both fall through on a leaf, on a node already in that
-        // state, and on a list that is not a tree at all — the list has no
-        // other use for either key, so nothing is taken away.
+        // Space or Return on disclosure: Right opens the focused branch. It
+        // falls through on a leaf, on a node already open, and on a list that
+        // is not a tree at all — the list has no other use for the key, so
+        // nothing is taken away.
         //
-        // Held with Option they carry that state down the WHOLE subtree, which
+        // Held with Option it carries that state down the WHOLE subtree, which
         // is the outline-view gesture people already know from the Finder: ⌥→
         // opens everything under the branch, ⌥← folds it all away again.
         case .right, .left:
-            return setFocusedRowExpanded(
-                event.key == .right, includingDescendants: event.alt)
+            return handleDisclosureKey(event)
 
         case .delete, .backspace:
             return deleteFocusedRow()
