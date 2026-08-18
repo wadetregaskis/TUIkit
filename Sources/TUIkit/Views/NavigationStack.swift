@@ -383,12 +383,20 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
     /// Only the clickable ones are Buttons, so only they are Tab stops — the
     /// separators would otherwise put dead entries in the focus ring, and the
     /// current screen is not somewhere to navigate to.
+    ///
+    /// Three weights, loudest last: the punctuation recedes, a screen you can
+    /// go back to is quiet until the focus or the pointer lifts it
+    /// (``_NavigationCrumbButtonStyle``), and the screen you are on is bold.
     @ViewBuilder
     private func crumbView(_ crumb: NavigationCrumbs.Crumb, coordinator: NavigationCoordinator) -> some View {
         if let depth = crumb.popsTo {
-            // The plain style's own focus-indicator prefix supplies the lead.
-            Button(crumb.label) { coordinator.pop(coordinator.depth - depth) }
-                .buttonStyle(.plain)
+            // The lead rides in the label: this style reserves no cells of its
+            // own, so nothing else would space the trail.
+            Button(NavigationCrumbs.lead + crumb.label) { coordinator.pop(coordinator.depth - depth) }
+                .buttonStyle(_NavigationCrumbButtonStyle())
+        } else if crumb.isChrome {
+            Text(NavigationCrumbs.lead + crumb.label)
+                .foregroundStyle(Color.palette.foregroundTertiary)
         } else {
             Text(NavigationCrumbs.lead + crumb.label).bold()
         }

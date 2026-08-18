@@ -23,6 +23,18 @@ enum NavigationCrumbs {
         /// The depth clicking it returns to, or `nil` for the current screen
         /// (which is where you already are) and for the elision marker.
         let popsTo: Int?
+        /// Whether this is punctuation rather than a screen — the `›` between
+        /// crumbs, and the `…` standing in for the ones that did not fit.
+        ///
+        /// Not derivable from the label: an untitled screen reads `…` too, and
+        /// it is a screen, drawn like one.
+        let isChrome: Bool
+
+        init(label: String, popsTo: Int?, isChrome: Bool = false) {
+            self.label = label
+            self.popsTo = popsTo
+            self.isChrome = isChrome
+        }
     }
 
     /// The trail for `titles`, or `nil` when even its shortest form will not
@@ -47,13 +59,15 @@ enum NavigationCrumbs {
         func build(_ parts: [(depth: Int, label: String)], elided: Bool) -> [Crumb] {
             var crumbs: [Crumb] = []
             for (index, part) in parts.enumerated() {
-                if index > 0 { crumbs.append(Crumb(label: Self.separator, popsTo: nil)) }
+                if index > 0 {
+                    crumbs.append(Crumb(label: Self.separator, popsTo: nil, isChrome: true))
+                }
                 let isCurrent = part.depth == (titles.count - 1)
                 crumbs.append(Crumb(label: part.label, popsTo: isCurrent ? nil : part.depth))
             }
             if elided, crumbs.count > 2 {
-                crumbs.insert(Crumb(label: "…", popsTo: nil), at: 1)
-                crumbs.insert(Crumb(label: Self.separator, popsTo: nil), at: 1)
+                crumbs.insert(Crumb(label: "…", popsTo: nil, isChrome: true), at: 1)
+                crumbs.insert(Crumb(label: Self.separator, popsTo: nil, isChrome: true), at: 1)
             }
             return crumbs
         }
@@ -75,21 +89,20 @@ enum NavigationCrumbs {
     /// measures (see Terminal-compatibility.md).
     static var separator: String { "\u{203A}" }
 
-    /// The blank cells every crumb sits behind, separators included.
+    /// The blank cell every crumb sits behind, separators included.
     ///
-    /// Not decoration, and not a free choice: a plain `Button` always reserves
-    /// two cells for its focus indicator, filled with spaces when it is not
-    /// focused, so that focusing one does not shove the rest of the row sideways
-    /// (see ``PlainButtonStyle``). The clickable crumbs are plain Buttons, so
-    /// they get those two cells whether anyone plans for them or not.
+    /// One cell, uniformly, which is what makes the trail read as evenly spaced
+    /// (`Planets › Mars › Deimos`) and what makes ``width(_:)`` match what lands
+    /// on the screen — a trail measured without it overruns by a cell per crumb,
+    /// which is exactly where the fallback to the Back button would misfire.
     ///
-    /// Giving the same two cells to the separators and to the current screen —
-    /// which are Text, and would otherwise sit flush — is what makes the trail
-    /// read as evenly spaced instead of `Planets ›   Mars › Deimos`, and what
-    /// makes ``width(_:)`` match what actually lands on the screen. A trail
-    /// measured without them overflows by two cells per clickable crumb, which
-    /// is exactly where the fallback to the Back button would misfire.
-    static var lead: String { "  " }
+    /// It was two cells while the clickable crumbs were plain `Button`s: that
+    /// style reserves two for its focus bullet whether or not anyone plans for
+    /// them, so the separators and the current screen had to be padded to match
+    /// or the row read as ragged. ``_NavigationCrumbButtonStyle`` puts the focus
+    /// in the crumb's own text instead, so nothing reserves anything and the
+    /// trail spaces itself.
+    static var lead: String { " " }
 
     /// What a crumb occupies on screen: its lead plus its label.
     private static func width(_ crumbs: [Crumb]) -> Int {

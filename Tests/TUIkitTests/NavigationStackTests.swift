@@ -117,8 +117,11 @@ struct NavigationStackTests {
     /// named after.
     @Test("the Back button goes too, in the narrow bar")
     func backButtonHiddenWhenNarrow() {
-        #expect(pushedBar(hidingBack: false, width: 12).contains("\u{2039}"), "‹ Back is drawn")
-        #expect(!pushedBar(hidingBack: true, width: 12).contains("\u{2039}"))
+        // Eight cells: ` Home › one` needs eleven, and a two-crumb trail has no
+        // middle to elide, so this is the width where the bar has to give up
+        // the trail entirely.
+        #expect(pushedBar(hidingBack: false, width: 8).contains("\u{2039}"), "‹ Back is drawn")
+        #expect(!pushedBar(hidingBack: true, width: 8).contains("\u{2039}"))
     }
 
     /// Default `true`, matching SwiftUI, and a screen that says nothing keeps

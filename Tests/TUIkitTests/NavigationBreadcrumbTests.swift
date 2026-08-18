@@ -39,7 +39,7 @@ struct NavigationBreadcrumbTests {
     @Test("Every crumb shows when they fit")
     func fullTrail() {
         let crumbs = trail(["Library", "Albums", "Track"], width: 80)
-        #expect(rendered(crumbs) == "  Library  ›  Albums  ›  Track")
+        #expect(rendered(crumbs) == " Library › Albums › Track")
     }
 
     @Test("Only the earlier crumbs navigate")
@@ -63,21 +63,21 @@ struct NavigationBreadcrumbTests {
 
         // One cell narrower than the full trail forces the elision.
         let crumbs = trail(titles, width: full.count - 1)
-        #expect(rendered(crumbs) == "  Library  ›  …  ›  Track", "got: \(rendered(crumbs))")
+        #expect(rendered(crumbs) == " Library › … › Track", "got: \(rendered(crumbs))")
         // …and the surviving root still navigates, which is the point of
         // keeping that end rather than the nearest parent.
         #expect(crumbs?.first?.popsTo == 0)
     }
 
-    @Test("The width budget counts the clickable crumbs' button chrome")
-    func widthCountsButtonChrome() {
+    @Test("The width budget counts the blanks the crumbs sit behind")
+    func widthCountsTheLead() {
         // The regression this pins: a trail measured on labels alone fits at a
-        // width where the rendered bar — two reserved cells per crumb — does
-        // not, so the trail is drawn and then runs off the end instead of
+        // width where the rendered bar — one blank cell per crumb — does not,
+        // so the trail is drawn and then runs off the end instead of
         // degrading. One cell under the true width must not fit.
         let titles = ["Library", "Albums", "Track"]
         let full = rendered(trail(titles, width: 200))
-        #expect(full == "  Library  ›  Albums  ›  Track")
+        #expect(full == " Library › Albums › Track")
         #expect(trail(titles, width: full.count) != nil)
         #expect(rendered(trail(titles, width: full.count - 1)) != full)
     }
@@ -94,7 +94,7 @@ struct NavigationBreadcrumbTests {
         // An empty title would otherwise collapse two separators together and
         // read as a trail one level shorter than it is.
         let crumbs = trail(["Library", "", "Track"], width: 80)
-        #expect(rendered(crumbs) == "  Library  ›  …  ›  Track", "got: \(rendered(crumbs))")
+        #expect(rendered(crumbs) == " Library › … › Track", "got: \(rendered(crumbs))")
         #expect(crumbs?.count == 5, "an untitled screen still gets a crumb")
     }
 }
@@ -153,5 +153,126 @@ struct NavigationTitleMemoryTests {
         coordinator.recordTitle("Deep", atDepth: 3)
         #expect(coordinator.titles(upTo: 3).count == 4)
         #expect(coordinator.titles(upTo: 3).last == "Deep")
+    }
+}
+
+// MARK: - Appearance
+
+/// How a crumb shows its states. The trail is a row of words, not a row of
+/// controls, so its focus cue is the word itself: `.plain`'s two-cell bullet
+/// landed against the preceding `›` (`Albums  ›●  Track`) and forced the whole
+/// trail to double-space around it.
+@MainActor
+@Suite("Navigation crumb appearance", .serialized)
+struct NavigationCrumbAppearanceTests {
+
+    private struct Item: Hashable {
+        let name: String
+    }
+
+    /// Parks the focus so a crumb can be rendered *un*-focused: the first
+    /// registrant with a fresh `FocusManager` is auto-focused, and every crumb
+    /// rendered as a lone root shares one identity path — so without this the
+    /// crumb under test is always the focused one.
+    private final class FocusSentinel: Focusable {
+        let focusID = "crumb-test-sentinel"
+        func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
+    }
+
+    private func crumb(_ label: String) -> some View {
+        Button(label) {}.buttonStyle(_NavigationCrumbButtonStyle())
+    }
+
+    /// The truecolor SGR a colour renders as, for asserting about a specific
+    /// palette entry rather than about "some escape changed".
+    private func code(_ color: Color, _ palette: any Palette) -> String {
+        let rgb = color.resolve(with: palette).rgbComponents!
+        return "38;2;\(rgb.red);\(rgb.green);\(rgb.blue)"
+    }
+
+    @Test("A focused crumb breathes its own text, with no bullet beside it")
+    func focusIsTheTextItself() {
+        withColorDepth(.truecolor) {
+            let context = makeRenderContext(width: 40, height: 3)
+            let palette = context.environment.palette
+            // First registrant takes the focus, which is the crumb under test.
+            let buffer = renderToBuffer(crumb(" Library"), context: context)
+
+            #expect(!buffer.lines.joined().contains(String(BorderRenderer.focusIndicator)))
+            // The whole breath is handed to the run loop, so a focused bar does
+            // not cost a screen render per tick.
+            #expect(buffer.animatedCells.count == 1, "one run: \(buffer.animatedCells.count)")
+            let frames = buffer.animatedCells.first?.frames ?? []
+            #expect(frames.count > 1, "a pulse is more than one frame")
+            #expect(
+                frames.contains { $0.contains(code(palette.accent, palette)) },
+                "the bright end is the accent")
+            #expect(
+                frames.contains { $0.contains(code(palette.foregroundSecondary, palette)) },
+                "the dim end is where an unfocused crumb rests")
+            #expect(frames.allSatisfy { !$0.contains(String(BorderRenderer.focusIndicator)) })
+        }
+    }
+
+    @Test("An unfocused crumb is quiet, and still")
+    func restingCrumbIsQuiet() {
+        withColorDepth(.truecolor) {
+            let context = makeRenderContext(width: 40, height: 3)
+            let palette = context.environment.palette
+            context.environment.focusManager!.register(FocusSentinel())
+            let buffer = renderToBuffer(crumb(" Albums"), context: context)
+
+            #expect(buffer.lines.joined().contains(code(palette.foregroundSecondary, palette)))
+            #expect(buffer.animatedCells.isEmpty, "nothing to animate when nothing is focused")
+        }
+    }
+
+    @Test("The pointer lifts a resting crumb")
+    func hoverLiftsACrumb() {
+        withColorDepth(.truecolor) {
+            let context = makeRenderContext(width: 40, height: 3)
+            let dispatcher = context.environment.mouseEventDispatcher!
+            dispatcher.setActiveSupport(.full)
+            let palette = context.environment.palette
+            context.environment.focusManager!.register(FocusSentinel())
+
+            let view = crumb(" Albums")
+            let regions = renderToBuffer(view, context: context).hitTestRegions
+            dispatcher.setRegions(regions)
+            guard let region = regions.first else {
+                Issue.record("expected a hit-test region from a crumb")
+                return
+            }
+            _ = dispatcher.dispatch(
+                MouseEvent(
+                    button: .none, phase: .moved, x: region.offsetX + 2, y: region.offsetY))
+
+            let hovered = renderToBuffer(view, context: context).lines.joined()
+            #expect(
+                hovered.contains(
+                    code(palette.hoveredForeground(palette.foregroundSecondary), palette)),
+                "lifted under the pointer: \(hovered)")
+        }
+    }
+
+    @Test("The bar spaces its trail with single blanks")
+    func theBarSpacesItselfSingly() {
+        var path = NavigationPath()
+        path.append(Item(name: "Deimos"))
+        let binding = Binding(get: { path }, set: { path = $0 })
+
+        let bar = renderToBuffer(
+            NavigationStack(path: binding) {
+                Text("root").navigationTitle("Planets")
+                    .navigationDestination(for: Item.self) { item in
+                        Text("body").navigationTitle(item.name)
+                    }
+            }, context: makeRenderContext(width: 40, height: 8)
+        ).lines[0].stripped
+
+        #expect(
+            bar.hasPrefix(" Planets \(NavigationCrumbs.separator) Deimos"),
+            "one blank between each part: \(bar)")
+        #expect(!bar.contains(String(BorderRenderer.focusIndicator)), "no bullet in the bar: \(bar)")
     }
 }

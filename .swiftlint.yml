@@ -216,6 +216,10 @@ type_name:
     # internal (not private) because the style and the modifier that applies it
     # live in different files.
     - _MenuItemButtonStyle
+    # Applied by NavigationStack so a breadcrumb renders as a word in a trail
+    # rather than as a button; internal (not private) for the same reason —
+    # the style has its own file, the bar that applies it another.
+    - _NavigationCrumbButtonStyle
     # The two built-in MenuStyle bodies, one per file; internal because the
     # styles that return them live in MenuStyle.swift.
     - _InlineMenuCore
