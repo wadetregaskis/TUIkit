@@ -348,3 +348,132 @@ struct ToggleActionHandlerIntegrationTests {
         #expect(isOn == false)
     }
 }
+
+// MARK: - Hover
+
+/// Claims auto-focus so the toggle under test renders **unfocused**. The first
+/// `Focusable` to register with a fresh `FocusManager` is auto-focused, and a
+/// focused toggle suppresses its hover affordance (focus is the more emphatic
+/// one) — without this the hovered and un-hovered renders are identical and the
+/// tests below pass for the wrong reason. Same sentinel `ButtonTests` uses.
+private final class ToggleFocusSentinel: Focusable {
+    let focusID = "toggle-hover-sentinel"
+    func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
+}
+
+/// A toggle answers the pointer the way a `Button` does: the control's face
+/// lights up under it.
+///
+/// It used to answer by recolouring the indicator to
+/// ``Palette/hoveredControlFace`` — a *fill* colour used as a foreground. That
+/// is 2.1–4.3:1 against the page on the built-in palettes, so hovering faded
+/// the checkbox from the full foreground toward the background: the pointer
+/// made an enabled toggle look disabled, which is worse than no affordance.
+@MainActor
+@Suite("Toggle hover", .serialized)
+struct ToggleHoverTests {
+
+    /// Renders `view` unfocused, then again after the pointer moves onto it.
+    private func beforeAndAfterHover(
+        _ view: some View, context: RenderContext
+    ) -> (before: [String], after: [String]) {
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.full)
+        context.environment.focusManager!.register(ToggleFocusSentinel())
+
+        let before = renderToBuffer(view, context: context).lines
+        let regions = renderToBuffer(view, context: context).hitTestRegions
+        dispatcher.setRegions(regions)
+        guard let region = regions.first else {
+            Issue.record("expected a hit-test region from Toggle")
+            return (before, before)
+        }
+        _ = dispatcher.dispatch(
+            MouseEvent(
+                button: .none, phase: .moved,
+                x: region.offsetX + 1, y: region.offsetY))
+        return (before, renderToBuffer(view, context: context).lines)
+    }
+
+    @Test("Hovering paints the toggle's row with the hover face")
+    func hoverPaintsTheFace() {
+        let context = createTestContext()
+        let palette = context.environment.palette
+        let (before, after) = beforeAndAfterHover(
+            Toggle("Hover me", isOn: .constant(false)), context: context)
+
+        let face = ANSIRenderer.backgroundCode(for: palette.hoveredControlFace)
+        #expect(!before.joined().contains(face), "no face at rest: \(before)")
+        #expect(after.joined().contains(face), "the hovered row carries the face: \(after)")
+    }
+
+    @Test("Hovering does not fade the indicator toward the background")
+    func hoverDoesNotFadeTheIndicator() {
+        // The exact shape of the old bug: the bracket drawn in the FILL colour.
+        // Spelled with `.ascii`, whose bracketed indicator is the one that
+        // carried it.
+        let context = createTestContext()
+        let palette = context.environment.palette
+        let (_, after) = beforeAndAfterHover(
+            Toggle("Hover me", isOn: .constant(false)).toggleCharacterSet(.ascii),
+            context: context)
+
+        let fadedBracket = ANSIRenderer.colorize("[", foreground: palette.hoveredControlFace)
+        #expect(
+            !after.joined().contains(fadedBracket),
+            "the fill colour must not be used as the indicator's foreground: \(after)")
+    }
+
+    @Test("The hover face covers exactly the clickable row")
+    func hoverStopsAtTheClickRow() {
+        // An explanatory subtitle is not a click target (see
+        // `toggleSubtitleIsNotClickable`), so it is not part of the affordance
+        // either — what lights up is what the pointer can actually hit.
+        let context = createTestContext()
+        let palette = context.environment.palette
+        let (_, after) = beforeAndAfterHover(
+            Toggle(isOn: .constant(false)) {
+                Text("Title")
+                Text("Explanatory subtitle")
+            },
+            context: context)
+
+        let face = ANSIRenderer.backgroundCode(for: palette.hoveredControlFace)
+        #expect(after.count >= 2, "expected a title and a subtitle row: \(after)")
+        #expect(after[0].contains(face), "the title row lights up: \(after[0])")
+        #expect(!after[1].contains(face), "the subtitle row does not: \(after[1])")
+    }
+
+    @Test("The hovered label stays readable on every built-in palette")
+    func hoverLabelIsFlooredOnEveryPalette() {
+        // The face is an accent tint, and the palette foreground lands on it as
+        // close as 2.1:1 (Red Sands), 2.66 (Ocean), 2.77 (Red) — under the
+        // label floor. A framework-chosen label colour is therefore floored
+        // against the face, hue-preserving, exactly as `ButtonStyle` floors the
+        // label it paints on a button's fill. On the palettes already above the
+        // floor `ensuringContrast` returns the colour unchanged, so this pins
+        // the untouched case too.
+        for palette in PaletteRegistry.all {
+            let context = makeRenderContext(width: 80, height: 24) { environment, _ in
+                environment.palette = palette
+            }
+            let (_, after) = beforeAndAfterHover(
+                Toggle("Hover me", isOn: .constant(false)), context: context)
+            let floored = palette.foreground.ensuringContrast(
+                atLeast: ViewConstants.labelContrastFloor, against: palette.hoveredControlFace)
+            #expect(
+                after.joined().contains(ANSIRenderer.colorize("Hover me", foreground: floored)),
+                "\(palette.name): the hovered label must be drawn floored against the face")
+        }
+    }
+
+    @Test("A disabled toggle has nothing to hover")
+    func disabledNeverHovers() {
+        let context = createTestContext()
+        let buffer = renderToBuffer(
+            Toggle("Disabled", isOn: .constant(false)).disabled(), context: context)
+        #expect(
+            buffer.hitTestRegions.isEmpty,
+            "a disabled toggle registers no region, so it never enters the hover state")
+    }
+}

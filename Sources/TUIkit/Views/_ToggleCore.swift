@@ -68,13 +68,14 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
 
     /// The styled checkbox indicator (■/□ by default, `[x]`/`[ ]` under
     /// `.toggleCharacterSet(.ascii)`) for the toggle's current state, themed for
-    /// focus / hover / disabled.
+    /// focus / disabled, and floored against the hover face when it has one.
     private func styledToggleIndicator(
-        isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool, context: RenderContext
+        isOnValue: Bool, isDisabled: Bool, isFocused: Bool, hoverFace: Color?,
+        context: RenderContext
     ) -> (text: String, animation: AnimatedCellRun?) {
         let palette = context.environment.palette
         let brackets = bracketCycle(
-            isDisabled: isDisabled, isFocused: isFocused, isHovered: isHovered, context: context)
+            isDisabled: isDisabled, isFocused: isFocused, hoverFace: hoverFace, context: context)
 
         // The checkbox glyphs come from the configurable ``ToggleCharacterSet`` (■/□
         // by default, `[x]`/`[ ]` under `.toggleCharacterSet(.ascii)`).
@@ -92,7 +93,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                 // its colour is free to show state — accent when checked, plus the
                 // focus / hover / disabled tints the brackets would otherwise carry.
                 let markColor =
-                    (isOnValue && !isDisabled && !isFocused) ? palette.accent : bracketColor
+                    (isOnValue && !isDisabled && !isFocused)
+                    ? Self.readable(palette.accent, on: hoverFace) : bracketColor
                 return ANSIRenderer.colorize(mark, foreground: markColor)
             }
             // Two-tone bracketed (ASCII): the brackets show focus while the
@@ -102,7 +104,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                 + ANSIRenderer.colorize(
                     mark,
                     foreground: indicatorMarkColor(
-                        isOnValue: isOnValue, isDisabled: isDisabled, context: context))
+                        isOnValue: isOnValue, isDisabled: isDisabled, hoverFace: hoverFace,
+                        context: context))
                 + ANSIRenderer.colorize(style.closeBracket, foreground: bracketColor)
         }
         return (draw(brackets.now), brackets.run(draw: draw))
@@ -114,18 +117,21 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// (An unfocused-but-enabled control must stay readable — dimming it
     /// to the disabled style made the brackets almost invisible against
     /// the terminal background.)
+    ///
+    /// Hover is NOT a colour here. It used to swap the brackets to
+    /// ``Palette/hoveredControlFace`` — a *fill* colour used as a foreground,
+    /// so the pointer made the indicator fade toward the page rather than light
+    /// up, which reads as "disabled". Hover paints the row's face instead (see
+    /// ``paintHoverFace(_:face:width:rows:)``); `hoverFace` is here only so the
+    /// glyph stays readable on top of it.
     private func bracketCycle(
-        isDisabled: Bool, isFocused: Bool, isHovered: Bool, context: RenderContext
+        isDisabled: Bool, isFocused: Bool, hoverFace: Color?, context: RenderContext
     ) -> IndicatorCycle {
         let palette = context.environment.palette
         let resting: Color
         if isDisabled {
             resting = palette.foregroundTertiary.opacity(
                 ViewConstants.disabledForeground, over: palette.background)
-        } else if isHovered {
-            // Hover bumps the brackets to a partial accent tint
-            // so the affordance reads without the focused pulse.
-            resting = palette.hoveredControlFace
         } else {
             resting = palette.foreground
         }
@@ -133,8 +139,18 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             isFocused: isFocused && !isDisabled,
             dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
             bright: palette.accent,
-            resting: resting,
+            resting: Self.readable(resting, on: hoverFace),
             context: context)
+    }
+
+    /// `color`, floored (hue-preserving) against the face it is about to be
+    /// drawn on — a no-op when there is no face, and when the colour already
+    /// clears the floor. The same rule ``ButtonStyle`` applies to the label it
+    /// paints on a button's fill: a framework-chosen colour is floored, and the
+    /// app's own is left alone.
+    private static func readable(_ color: Color, on face: Color?) -> Color {
+        guard let face else { return color }
+        return color.ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: face)
     }
 
     /// One animated colour of an indicator, taken as a whole cycle.
@@ -179,14 +195,14 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// foreground when off, dimmed when disabled — the state channel the
     /// brackets (focus channel) don't carry.
     private func indicatorMarkColor(
-        isOnValue: Bool, isDisabled: Bool, context: RenderContext
+        isOnValue: Bool, isDisabled: Bool, hoverFace: Color?, context: RenderContext
     ) -> Color {
         let palette = context.environment.palette
         if isDisabled {
             return palette.foregroundTertiary.opacity(
                 ViewConstants.disabledForeground, over: palette.background)
         }
-        return isOnValue ? palette.accent : palette.foreground
+        return Self.readable(isOnValue ? palette.accent : palette.foreground, on: hoverFace)
     }
 
     /// A switch track: a two-cell knob (██, or ⬛︎ under the `.emoji` checkbox
@@ -206,7 +222,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// the two never look alike. The knob is the background colour so it contrasts
     /// the track on light and dark terminals alike (dimmed to match when disabled).
     private func styledSwitchIndicator(
-        isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool, context: RenderContext
+        isOnValue: Bool, isDisabled: Bool, isFocused: Bool, hoverFace: Color?,
+        context: RenderContext
     ) -> (text: String, animation: AnimatedCellRun?) {
         let palette = context.environment.palette
         // The knob follows the checkbox style's glyph repertoire (see
@@ -221,16 +238,18 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             // Bracketed (ASCII) switch: `[o ]` off, `[ o]` on — the knob slides
             // like the coloured-track switch, inside the same bracket chrome as
             // the `[x]` checkbox. Two-tone like the checkbox: brackets carry
-            // focus / hover / disabled, the knob carries state (accent when on,
+            // focus / disabled, the knob carries state (accent when on,
             // foreground when off). No background colours at all, keeping the
             // style honest for terminals/fonts where the block glyphs are the
             // reason `.ascii` was chosen.
             let brackets = bracketCycle(
-                isDisabled: isDisabled, isFocused: isFocused, isHovered: isHovered, context: context)
+                isDisabled: isDisabled, isFocused: isFocused, hoverFace: hoverFace,
+                context: context)
             let knob = ANSIRenderer.colorize(
                 SwitchIndicatorGlyphs.asciiKnob,
                 foreground: indicatorMarkColor(
-                    isOnValue: isOnValue, isDisabled: isDisabled, context: context))
+                    isOnValue: isOnValue, isDisabled: isDisabled, hoverFace: hoverFace,
+                    context: context))
             let track = isOnValue ? " " + knob : knob + " "
             func draw(_ bracketColor: Color) -> String {
                 ANSIRenderer.colorize(style.openBracket, foreground: bracketColor)
@@ -293,17 +312,17 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// on) on a distinct background, so it reads as a switch rather than a
     /// checkbox; the others use the checkbox glyph.
     private func builtInStyleBuffer(
-        isSwitch: Bool, isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool,
+        isSwitch: Bool, isOnValue: Bool, isDisabled: Bool, isFocused: Bool, hoverFace: Color?,
         labelContext: RenderContext, palette: any Palette, context: RenderContext
     ) -> (buffer: FrameBuffer, clickWidth: Int, clickHeight: Int) {
         let styledIndicator =
             isSwitch
             ? styledSwitchIndicator(
                 isOnValue: isOnValue, isDisabled: isDisabled,
-                isFocused: isFocused, isHovered: isHovered, context: context)
+                isFocused: isFocused, hoverFace: hoverFace, context: context)
             : styledToggleIndicator(
                 isOnValue: isOnValue, isDisabled: isDisabled,
-                isFocused: isFocused, isHovered: isHovered, context: context)
+                isFocused: isFocused, hoverFace: hoverFace, context: context)
 
         let composed = composeLabelBuffer(
             indicator: styledIndicator.text, labelContext: labelContext,
@@ -315,7 +334,28 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         if !context.isMeasuring, let animation = styledIndicator.animation {
             buffer.animatedCells = [animation]
         }
+        paintHoverFace(
+            &buffer, face: hoverFace, rows: composed.titleRows)
         return (buffer, composed.titleWidth, composed.titleRows)
+    }
+
+    /// Fills the toggle's clickable row(s) with the hover face, so the control
+    /// lights up under the pointer the way a `Button`'s fill does.
+    ///
+    /// Exactly the rows the hit region covers: an explanatory subtitle is not a
+    /// click target, so it is not part of the affordance either. The fill is
+    /// terminated with a reset at each row's right edge — nothing caps it
+    /// otherwise, and the tint would bleed across whatever is composited beside
+    /// the toggle (the same trap `_ListCore`'s selected row hit).
+    ///
+    /// The switch track paints its own background per cell, so it keeps its
+    /// colour and the face shows around it.
+    private func paintHoverFace(_ buffer: inout FrameBuffer, face: Color?, rows: Int) {
+        guard let face else { return }
+        for index in 0..<min(rows, buffer.lines.count) {
+            buffer.lines[index] =
+                buffer.lines[index].withPersistentBackground(face) + ANSIRenderer.reset
+        }
     }
 
     /// Composes a built-in toggle's buffer from its indicator and label.
@@ -414,6 +454,9 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         let hoverBox: StateBox<Bool> = stateStorage.storage(
             for: hoverKey, default: false)
         let isHovered = !isDisabled && !isFocused && hoverBox.value
+        // The face the row is painted with while hovered — the same fill a
+        // `Button` swaps to, so the two controls answer the pointer alike.
+        let hoverFace: Color? = isHovered ? palette.hoveredControlFace : nil
 
         // The built-in styles render procedurally (focus glow + `ToggleCharacterSet`
         // glyphs); a custom `ToggleStyle` renders through its `makeBody`. Either
@@ -440,11 +483,23 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                 labelContext.environment.foregroundStyle =
                     palette.foregroundTertiary.opacity(
                         ViewConstants.disabledForeground, over: palette.background)
+            } else if let hoverFace, labelContext.environment.foregroundStyle == nil,
+                labelContext.environment.styleCascade
+                    .resolve(for: [.all, .text, .control(.toggle)]).foreground == nil
+            {
+                // The label now sits on an accent tint, and the palette
+                // foreground lands as close as 2.1:1 on it (Red Sands). Floored
+                // only when the colour is the framework's own — an app that
+                // coloured the label, by modifier or by `.toggleTextStyle`,
+                // keeps exactly the colour it asked for. Same rule as
+                // ``ButtonStyle``.
+                labelContext.environment.foregroundStyle = Self.readable(
+                    palette.foreground, on: hoverFace)
             }
 
             let built = builtInStyleBuffer(
                 isSwitch: toggleStyle is SwitchToggleStyle, isOnValue: isOnValue, isDisabled: isDisabled, isFocused: isFocused,
-                isHovered: isHovered, labelContext: labelContext, palette: palette,
+                hoverFace: hoverFace, labelContext: labelContext, palette: palette,
                 context: context)
             buffer = built.buffer
             clickWidth = built.clickWidth
