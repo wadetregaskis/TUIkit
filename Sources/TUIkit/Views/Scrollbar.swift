@@ -19,14 +19,21 @@ public enum ScrollbarArrows: Sendable, Hashable, CaseIterable {
     case double
 }
 
-/// When a scrollbar is shown — SwiftUI's `ScrollIndicatorVisibility`, under a
-/// name that sits with ``ScrollbarArrows`` and ``ScrollbarEdges``.
+/// *Whether* a scrolling view says it can scroll — SwiftUI's
+/// `ScrollIndicatorVisibility`, spelled the same.
+///
+/// This is one half of the question; ``ScrollIndicatorStyle`` is the other.
+/// Visibility governs whether ANY indicator is drawn, style governs which one.
+/// SwiftUI has only the one half because a graphical scroll view has only one
+/// kind of indicator — a terminal also has the "42 more rows below" line, and
+/// conflating "show me nothing" with "show me the other kind" would leave no
+/// way to ask for nothing at all.
 ///
 /// The case names are SwiftUI's, which is what matters at a call site: nobody
 /// writes the type, they write `.scrollIndicators(.visible)`.
-public enum ScrollbarVisibility: Sendable, Hashable, CaseIterable {
-    /// Let the scrolling view decide — here, show the scrollbar while the
-    /// content overflows its viewport.
+public enum ScrollIndicatorVisibility: Sendable, Hashable, CaseIterable {
+    /// Let the scrolling view decide — here, show an indicator while the
+    /// content overflows its viewport. The default.
     ///
     /// SwiftUI defines `.automatic` as deferring to "the policies of the
     /// component accepting the visibility configuration", which is a
@@ -35,22 +42,50 @@ public enum ScrollbarVisibility: Sendable, Hashable, CaseIterable {
     /// A terminal has neither, so the policy is stated here, and overflow is
     /// the only thing there is to go on.
     case automatic
-    /// Always reserve the scrollbar (even when everything fits).
+    /// Always show the indicator (even when everything fits).
+    ///
+    /// A scrollbar then draws a full-length thumb. The text style has nothing
+    /// to say about content that isn't there, so it still draws nothing —
+    /// ``automatic`` and ``visible`` are the same thing for it.
     case visible
-    /// Do not show a scrollbar.
+    /// Do not show any indicator.
     case hidden
-    /// Never show a scrollbar.
+    /// Never show any indicator.
     ///
     /// In SwiftUI this differs from ``hidden``: that one is a request a
     /// platform convention may still override, this one is unconditional.
-    /// Nothing here can override a hidden bar, so the two behave identically —
-    /// it exists so that source written against SwiftUI compiles and means
-    /// what it says.
+    /// Nothing here can override a hidden indicator, so the two behave
+    /// identically — it exists so that source written against SwiftUI compiles
+    /// and means what it says.
     case never
 }
 
-extension ScrollbarVisibility {
-    /// Whether a bar is drawn, given whether the content overflows.
+/// *Which* indicator a scrolling view draws, when ``ScrollIndicatorVisibility``
+/// says to draw one.
+///
+/// TUI-specific: SwiftUI has no equivalent because it has only one kind of
+/// indicator to choose from.
+public enum ScrollIndicatorStyle: Sendable, Hashable, CaseIterable {
+    /// A scrollbar along the trailing edge (vertical) or the bottom
+    /// (horizontal): a thumb sized to the visible fraction and positioned at
+    /// sub-cell precision, so it shows *where* in the content the viewport is.
+    /// Costs one column (or row) of the viewport, for the bar's whole length.
+    ///
+    /// The default, and the only style the horizontal axis has.
+    case scrollbar
+    /// A line of text at each edge that has content behind it — "3 more rows
+    /// above", "42 more rows below". Names *how much* is hidden rather than
+    /// showing where the viewport sits, and costs a row only at an edge that
+    /// actually has something to report.
+    ///
+    /// Vertical only: there is no horizontal equivalent, so a horizontally
+    /// scrolling view under this style still draws its bar.
+    case text
+}
+
+extension ScrollIndicatorVisibility {
+    /// Whether an indicator is drawn at all, given whether the content
+    /// overflows.
     ///
     /// The one place the four cases are turned into a yes/no. Every scrolling
     /// view asked this question by hand before, as `!= .hidden && (== .visible
@@ -59,14 +94,57 @@ extension ScrollbarVisibility {
     ///
     /// - Parameter overflowing: Whether the content exceeds its viewport.
     ///   An autoclosure because deciding that can mean measuring the whole
-    ///   content, and the common cases (``hidden``, ``visible``) never need to
-    ///   know — which is what keeps the default path free of that walk.
-    func showsBar(overflowing: @autoclosure () -> Bool) -> Bool {
+    ///   content, and the fixed cases (``hidden``, ``visible``, ``never``)
+    ///   never need to know.
+    func showsIndicator(overflowing: @autoclosure () -> Bool) -> Bool {
         switch self {
         case .visible: true
         case .automatic: overflowing()
         case .hidden, .never: false
         }
+    }
+}
+
+/// What a scrolling view draws this frame to show that it scrolls: at most one
+/// of a bar and the text lines, resolved from a visibility and a style.
+///
+/// The two are separate flags rather than an enum because the arithmetic reads
+/// them separately — a bar narrows the content by a column for its whole
+/// height, text steals a row at an overflowing edge — and because "neither" is
+/// a real answer (``ScrollIndicatorVisibility/hidden``).
+struct ResolvedScrollIndicators {
+    /// A scrollbar is reserved down the trailing edge.
+    let bar: Bool
+    /// "N more above / below" lines are reserved at the overflowing edges.
+    let text: Bool
+
+    /// Nothing is drawn: the content scrolls silently.
+    static let none = Self(bar: false, text: false)
+}
+
+extension EnvironmentValues {
+    /// The vertical indicator this subtree's scrolling views draw.
+    ///
+    /// - Parameter overflowing: Whether the content exceeds its viewport.
+    ///   An autoclosure for the reason ``ScrollIndicatorVisibility/showsIndicator(overflowing:)``
+    ///   takes one: only ``ScrollIndicatorVisibility/automatic`` has to know,
+    ///   and finding out can mean measuring the whole content.
+    func verticalScrollIndicators(
+        overflowing: @autoclosure () -> Bool
+    ) -> ResolvedScrollIndicators {
+        guard verticalScrollIndicatorVisibility.showsIndicator(overflowing: overflowing())
+        else { return .none }
+        switch scrollIndicatorStyle {
+        case .scrollbar: return ResolvedScrollIndicators(bar: true, text: false)
+        case .text: return ResolvedScrollIndicators(bar: false, text: true)
+        }
+    }
+
+    /// Whether this subtree's horizontally scrolling views reserve a bottom
+    /// scrollbar. There is no horizontal text indicator, so the style does not
+    /// enter into it — a `.text` subtree still gets its horizontal bar.
+    func showsHorizontalScrollbar(overflowing: @autoclosure () -> Bool) -> Bool {
+        horizontalScrollIndicatorVisibility.showsIndicator(overflowing: overflowing())
     }
 }
 
@@ -87,23 +165,25 @@ public struct ScrollbarEdges: OptionSet, Sendable {
 
 // MARK: - Environment & modifiers
 
-// Hidden by default: scrollbars are opt-in, so their *absence* (the common
-// case) carries no cost — which is exactly what lets a Table skip sizing its
-// content when no scrollbar exposes the scroll position.
+// `.automatic` by default, as in SwiftUI: a view that scrolls says so.
 //
-// A deliberate divergence from SwiftUI, whose default is `.automatic`. The
-// gap is smaller than it reads: `.automatic` there resolves through the user's
-// *Show scroll bars* preference, which on a trackpad Mac means overlay
-// scrollers that are invisible until you scroll. What is not the same is the
-// cost — an `.automatic` here has to MEASURE the content to find out whether it
-// overflows, on every scrolling view on the screen, so making it the default
-// would put that walk in every app that never asked for a bar.
-private struct VerticalScrollbarVisibilityKey: EnvironmentKey {
-    static let defaultValue: ScrollbarVisibility = .hidden
+// It is not free — `.automatic` has to know whether the content overflows, and
+// on a ScrollView finding that out means measuring the content — but the
+// alternative was worse than the cost. With scrollbars opt-in, the only way to
+// get a plain scrolling view was to leave the visibility alone, so `.hidden`
+// had to keep drawing the text indicators to say anything at all; there was
+// then no value of this that meant "no indicator", and asking for one silently
+// switched styles instead. See ``ScrollIndicatorStyle``.
+private struct VerticalScrollIndicatorVisibilityKey: EnvironmentKey {
+    static let defaultValue: ScrollIndicatorVisibility = .automatic
 }
 
-private struct HorizontalScrollbarVisibilityKey: EnvironmentKey {
-    static let defaultValue: ScrollbarVisibility = .hidden
+private struct HorizontalScrollIndicatorVisibilityKey: EnvironmentKey {
+    static let defaultValue: ScrollIndicatorVisibility = .automatic
+}
+
+private struct ScrollIndicatorStyleKey: EnvironmentKey {
+    static let defaultValue: ScrollIndicatorStyle = .scrollbar
 }
 
 private struct ScrollbarArrowsKey: EnvironmentKey {
@@ -115,24 +195,36 @@ private struct ScrollbarProportionalKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// Whether scrolling views in this subtree draw a VERTICAL scrollbar —
+    /// Whether scrolling views in this subtree draw a VERTICAL indicator —
     /// SwiftUI's `\.verticalScrollIndicatorVisibility`. Defaults to
-    /// ``ScrollbarVisibility/hidden`` (opt-in).
+    /// ``ScrollIndicatorVisibility/automatic``.
     ///
     /// Set through ``View/scrollIndicators(_:axes:)``; two values rather than
     /// one because that modifier takes an axis set, and a view scrolling both
-    /// ways must be able to show one bar and not the other.
-    public internal(set) var verticalScrollIndicatorVisibility: ScrollbarVisibility {
-        get { self[VerticalScrollbarVisibilityKey.self] }
-        set { self[VerticalScrollbarVisibilityKey.self] = newValue }
+    /// ways must be able to show one indicator and not the other.
+    public internal(set) var verticalScrollIndicatorVisibility: ScrollIndicatorVisibility {
+        get { self[VerticalScrollIndicatorVisibilityKey.self] }
+        set { self[VerticalScrollIndicatorVisibilityKey.self] = newValue }
     }
 
     /// Whether scrolling views in this subtree draw a HORIZONTAL scrollbar —
     /// SwiftUI's `\.horizontalScrollIndicatorVisibility`. Defaults to
-    /// ``ScrollbarVisibility/hidden`` (opt-in).
-    public internal(set) var horizontalScrollIndicatorVisibility: ScrollbarVisibility {
-        get { self[HorizontalScrollbarVisibilityKey.self] }
-        set { self[HorizontalScrollbarVisibilityKey.self] = newValue }
+    /// ``ScrollIndicatorVisibility/automatic``.
+    public internal(set) var horizontalScrollIndicatorVisibility: ScrollIndicatorVisibility {
+        get { self[HorizontalScrollIndicatorVisibilityKey.self] }
+        set { self[HorizontalScrollIndicatorVisibilityKey.self] = newValue }
+    }
+
+    /// Which indicator scrolling views in this subtree draw, when their
+    /// visibility says to draw one. Defaults to
+    /// ``ScrollIndicatorStyle/scrollbar``.
+    ///
+    /// Set through ``View/scrollIndicatorStyle(_:)``. One value for both axes:
+    /// only the vertical axis has a choice to make (see
+    /// ``ScrollIndicatorStyle/text``).
+    public internal(set) var scrollIndicatorStyle: ScrollIndicatorStyle {
+        get { self[ScrollIndicatorStyleKey.self] }
+        set { self[ScrollIndicatorStyleKey.self] = newValue }
     }
 
     /// The end-arrow style for scrollbars in this subtree. Defaults to
@@ -152,30 +244,27 @@ extension EnvironmentValues {
 
 extension View {
     /// Sets whether scrolling views (``ScrollView``, ``Table``, ``List``) within
-    /// this view draw a scrollbar.
+    /// this view show that they scroll.
     ///
-    /// Mirrors SwiftUI's `scrollIndicators(_:axes:)`. A visible scrollbar
-    /// reserves one cell on its edge (the right edge for vertical scrolling)
-    /// and shows a thumb proportional to the visible region, at sub-cell
-    /// precision.
+    /// Mirrors SwiftUI's `scrollIndicators(_:axes:)`, and governs *whether* an
+    /// indicator is drawn, not which one — that is
+    /// ``View/scrollIndicatorStyle(_:)``. So `.hidden` and `.never` mean no
+    /// indicator of any kind, and the default,
+    /// ``ScrollIndicatorVisibility/automatic``, shows one whenever the content
+    /// overflows its viewport.
     ///
     /// ```swift
-    /// ScrollView { content }.scrollIndicators(.visible)
+    /// ScrollView { content }.scrollIndicators(.hidden)   // scrolls silently
     /// ScrollView([.horizontal, .vertical]) { grid }
-    ///     .scrollIndicators(.automatic, axes: .vertical)   // one bar, on demand
+    ///     .scrollIndicators(.visible, axes: .vertical)   // always, one axis
     /// ```
     ///
-    /// **Off by default**, which is a deliberate divergence:
-    /// ``ScrollbarVisibility/automatic`` has to measure a view's content to
-    /// find out whether it overflows, so as a default it would put that walk
-    /// in every app that never asked for a bar. Ask for it where you want it.
-    ///
     /// - Parameters:
-    ///   - visibility: When the bar is drawn.
+    ///   - visibility: When an indicator is drawn.
     ///   - axes: Which axes it applies to. Defaults to both.
     /// - Returns: A view whose scrolling descendants follow the setting.
     public func scrollIndicators(
-        _ visibility: ScrollbarVisibility,
+        _ visibility: ScrollIndicatorVisibility,
         axes: Axis.Set = [.horizontal, .vertical]
     ) -> some View {
         // Each axis is written only when named, which is what lets two calls
@@ -191,6 +280,23 @@ extension View {
         .transformEnvironment(\.horizontalScrollIndicatorVisibility) {
             if axes.contains(.horizontal) { $0 = visibility }
         }
+    }
+
+    /// Sets which indicator scrolling views within this view draw — a
+    /// scrollbar (the default) or "N more above / below" text.
+    ///
+    /// TUI-specific, and orthogonal to ``View/scrollIndicators(_:axes:)``:
+    /// visibility decides whether anything is drawn, this decides what. A view
+    /// whose indicators are hidden draws nothing whatever this says.
+    ///
+    /// ```swift
+    /// List(rows) { … }.scrollIndicatorStyle(.text)   // "42 more rows below"
+    /// ```
+    ///
+    /// - Parameter style: The indicator to draw.
+    /// - Returns: A view whose scrolling descendants follow the setting.
+    public func scrollIndicatorStyle(_ style: ScrollIndicatorStyle) -> some View {
+        environment(\.scrollIndicatorStyle, style)
     }
 
     /// Sets the end-arrow style of scrollbars within this view.

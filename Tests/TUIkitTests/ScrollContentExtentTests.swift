@@ -35,7 +35,9 @@ struct ScrollContentExtentTests {
     }
 
     private func lines<V: View>(_ view: V, width: Int = 40, height: Int = viewport) -> [String] {
-        renderToBuffer(view, context: context(width: width, height: height))
+        // Predates the visibility/style split (#555): these assertions are about
+        // the "N more" lines, which are now a style. The default is a scrollbar.
+        renderToBuffer(view.scrollIndicatorStyle(.text), context: context(width: width, height: height))
             .lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
     }
 

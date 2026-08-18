@@ -28,6 +28,10 @@ struct MenuTests {
         // neighbour's items be read back as this test's.
         environment.statusBar = StatusBarState()
         environment.focusManager = FocusManager()
+        // Predates the visibility/style split (#555): these assertions are written
+        // against the "N more above / below" lines, which are now a style. The
+        // shipped default is a scrollbar; cases about THAT ask for it by name.
+        environment.scrollIndicatorStyle = .text
         environment.applyRuntimeServices(from: tui)
         if let overlayContentHeight { environment.overlayContentHeight = overlayContentHeight }
         return (

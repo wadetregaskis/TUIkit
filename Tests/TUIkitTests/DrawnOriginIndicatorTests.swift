@@ -36,6 +36,9 @@ struct DrawnOriginIndicatorTests {
         init() {
             env.focusManager = FocusManager()
             env.applyRuntimeServices(from: tui)
+            // Predates the visibility/style split (#555): this suite is about the
+            // "N more" arithmetic, which is now a style. The default is a scrollbar.
+            env.scrollIndicatorStyle = .text
             tui.mouseEventDispatcher.setActiveSupport(.full)
             tui.dragAndDropSession.dispatcher = tui.mouseEventDispatcher
         }

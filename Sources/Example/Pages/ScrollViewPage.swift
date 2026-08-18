@@ -30,7 +30,11 @@ struct ScrollViewPage: View {
     @State var sliderValue: Double = 50
 
     // Live scrollbar settings for the configurable demo below.
-    @State var barVisibility: ScrollbarVisibility = .visible
+    @State var barVisibility: ScrollIndicatorVisibility = .visible
+    /// WHICH indicator, as opposed to whether — the other half of the pair
+    /// (#555). Picking the text form leaves the visibility picker above it
+    /// still meaningful: `.hidden` then draws neither.
+    @State var indicatorStyle: ScrollIndicatorStyle = .scrollbar
     @State var barArrows: ScrollbarArrows = .single
     @State var barProportional: Bool = true
     @State var barClickBehavior: ScrollbarClickBehavior = .page
@@ -169,6 +173,7 @@ struct ScrollViewPage: View {
                     .frame(height: 10)
                     .border(.palette.border)
                     .scrollIndicators(barVisibility)
+                    .scrollIndicatorStyle(indicatorStyle)
                     .scrollbarArrows(barArrows)
                     .scrollbarProportionalThumb(barProportional)
                     .scrollbarClickBehavior(barClickBehavior)
@@ -189,10 +194,17 @@ struct ScrollViewPage: View {
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     Picker("page.scrollView.visibility", selection: $barVisibility) {
-                        Text("page.scrollView.visibility.automatic").tag(ScrollbarVisibility.automatic)
-                        Text("page.scrollView.visibility.visible").tag(ScrollbarVisibility.visible)
-                        Text("page.scrollView.visibility.hidden").tag(ScrollbarVisibility.hidden)
+                        Text("page.scrollView.visibility.automatic").tag(ScrollIndicatorVisibility.automatic)
+                        Text("page.scrollView.visibility.visible").tag(ScrollIndicatorVisibility.visible)
+                        Text("page.scrollView.visibility.hidden").tag(ScrollIndicatorVisibility.hidden)
                     }
+                    Picker("page.scrollView.indicatorStyle", selection: $indicatorStyle) {
+                        Text("page.scrollView.indicatorStyle.scrollbar")
+                            .tag(ScrollIndicatorStyle.scrollbar)
+                        Text("page.scrollView.indicatorStyle.text").tag(ScrollIndicatorStyle.text)
+                    }
+                    Text("page.scrollView.indicatorStyleNote")
+                    .foregroundStyle(.palette.foregroundSecondary)
                     Picker("page.scrollView.endArrows", selection: $barArrows) {
                         Text("page.scrollView.arrows.none").tag(ScrollbarArrows.none)
                         Text("page.scrollView.arrows.single").tag(ScrollbarArrows.single)

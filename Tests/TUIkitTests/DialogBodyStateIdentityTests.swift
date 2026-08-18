@@ -50,6 +50,10 @@ struct DialogBodyStateIdentityTests {
         let fm = FocusManager()
         var env = EnvironmentValues()
         env.focusManager = fm
+        // Predates the visibility/style split (#555): these assertions are written
+        // against the "N more above / below" lines, which are now a style. The
+        // shipped default is a scrollbar; cases about THAT ask for it by name.
+        env.scrollIndicatorStyle = .text
         env.applyRuntimeServices(from: tui)
         let context = RenderContext(
             availableWidth: 40, availableHeight: height, environment: env, tuiContext: tui)

@@ -12,7 +12,12 @@ import Testing
 
 @MainActor
 private func createTestContext(width: Int = 80, height: Int = 24) -> RenderContext {
-    makeRenderContext(width: width, height: height)
+    // Predates the visibility/style split (#555): this suite's assertions are
+    // written against the "N more above / below" lines, which are now a style
+    // rather than the shipped default (a scrollbar).
+    makeRenderContext(width: width, height: height) { environment, _ in
+        environment.scrollIndicatorStyle = .text
+    }
 }
 
 // MARK: - List Rendering Tests
@@ -391,6 +396,7 @@ struct ListRenderingTests {
             ForEach(items, id: \.self) { Text($0) }
         }
         .scrollIndicators(.automatic)
+        .scrollIndicatorStyle(.scrollbar)
         .frame(height: 8)
 
         let before = renderToBuffer(view, context: context)
@@ -653,6 +659,10 @@ struct ListRenderingTests {
         let tui = TUIContext()
         var environment = EnvironmentValues()
         environment.focusManager = FocusManager()
+        // Predates the visibility/style split (#555): these assertions are written
+        // against the "N more above / below" lines, which are now a style. The
+        // shipped default is a scrollbar; cases about THAT ask for it by name.
+        environment.scrollIndicatorStyle = .text
         environment.applyRuntimeServices(from: tui)
         tui.mouseEventDispatcher.setActiveSupport(.full)
         var context = RenderContext(

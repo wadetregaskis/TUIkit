@@ -28,20 +28,17 @@ extension View {
     /// unwrapped, as they fill the viewport by design.
     func scrollableDemoPage() -> some View {
         // `.scrollIndicators` is an ENVIRONMENT value, so it reaches every
-        // scrollable in the subtree — SwiftUI-parity behaviour, matching
-        // `.scrollIndicators`. That is right for the modifier and wrong here:
-        // the page wants a bar for ITSELF, but the demos inside it are showing
-        // off their own chrome choices, and the page's `.automatic` was
-        // overriding all of them. It is why the "Indicators off — fully naked"
-        // section had a scrollbar, and why the section titled "naked ScrollView
-        // with default indicators" showed a bar instead of the indicators its
-        // own prose promises (a bar supersedes them).
+        // scrollable in the subtree — SwiftUI-parity behaviour. Writing it
+        // here says the same thing for the page and for the demos inside it,
+        // which is fine now that it says only WHETHER (#555): the demos each
+        // decide WHICH indicator with `.scrollIndicatorStyle`, and one that
+        // wants no chrome at all still says so itself and wins, its write
+        // being the deeper one.
         //
-        // Restore the framework default (`.hidden`, i.e. opt-in) for the
-        // content; the outer write is the one `_ScrollViewCore` reads for the
-        // page's own bar. Demos that want a bar still ask for one explicitly
-        // and still win, since their write is deeper.
-        ScrollView { self.scrollIndicators(.hidden) }
+        // This page used to reset the content to `.hidden` to keep its own bar
+        // off the demos. That would now strip their indicators entirely rather
+        // than swapping a bar for the "N more" lines, so it is gone.
+        ScrollView { self }
             .scrollIndicators(.automatic)
     }
 }

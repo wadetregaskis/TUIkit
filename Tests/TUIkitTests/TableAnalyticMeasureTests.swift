@@ -70,8 +70,8 @@ struct TableAnalyticMeasureTests {
 
     @Test(
         "Analytic measure equals rendered size across the configuration matrix",
-        arguments: [0, 1, 3, 12, 40, 150], [ScrollbarVisibility.automatic, .visible, .hidden])
-    func analyticMatchesRender(rowCount: Int, barVisibility: ScrollbarVisibility) {
+        arguments: [0, 1, 3, 12, 40, 150], [ScrollIndicatorVisibility.automatic, .visible, .hidden])
+    func analyticMatchesRender(rowCount: Int, barVisibility: ScrollIndicatorVisibility) {
         for (width, height) in [(20, 8), (40, 12), (80, 24), (120, 43)] {
             for wide in [false, true] {
                 let data = rows(rowCount, wide: wide)
@@ -168,8 +168,8 @@ struct TableAnalyticMeasureTests {
 
     @Test(
         "Multi-line measure equals rendered size across the configuration matrix",
-        arguments: [1, 2, 5, 20, 90], [ScrollbarVisibility.automatic, .visible, .hidden])
-    func multiLineMatchesRender(rowCount: Int, barVisibility: ScrollbarVisibility) {
+        arguments: [1, 2, 5, 20, 90], [ScrollIndicatorVisibility.automatic, .visible, .hidden])
+    func multiLineMatchesRender(rowCount: Int, barVisibility: ScrollIndicatorVisibility) {
         for (width, height) in [(24, 9), (40, 12), (80, 24), (120, 43)] {
             for wide in [false, true] {
                 let data = rows(rowCount, wide: wide)

@@ -430,7 +430,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.isFocusEngaged = listHasFocus
 
         let origin = windowOrigin(
-            handler: handler, source: source, showsScrollbar: wantsScrollbar)
+            handler: handler, source: source,
+            drawsTextIndicators: handler.drawsScrollIndicators)
 
         // Reserve a line for each scroll indicator that is actually
         // present at this offset, so the rows plus indicators fill
@@ -442,7 +443,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Deliberately not defaulted anywhere below: an implicit default is
         // exactly how these window rules drift apart.
         let lineGranularity = context.environment.scrollGranularity == .line
-        if wantsScrollbar {
+        if !handler.drawsScrollIndicators {
+            // Nothing comes out of the content area: a bar spends a column, and
+            // hidden indicators spend nothing at all.
             visibleRows = calculateVisibleRows(
                 source: source, origin: origin, viewportHeight: rowBudget,
                 lineGranularity: lineGranularity)
@@ -729,13 +732,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let overflowing = rowsOverflow(
             source, targetContentHeight: contentHeight,
             plusLines: handler.dropSlotAddsRow ? 1 : 0)
-        // A scrollbar (opt-in via `.scrollIndicators`) supersedes the "N more"
-        // text indicators: it marks the off-screen rows itself, so the rows then
-        // fill the whole content area with no reserved indicator line. Decided
-        // before the offset-1 snap below, which only saves an indicator line a
-        // bar doesn't have.
-        let showsScrollbar = context.environment.verticalScrollIndicatorVisibility
-            .showsBar(overflowing: overflowing)
+        // Which indicator this list draws, if any: a bar down the trailing
+        // edge (the default), the "N more" text lines, or — when the visibility
+        // says so — nothing at all. Decided before the offset-1 snap below,
+        // which only saves an indicator line a bar doesn't have.
+        let indicators = context.environment.verticalScrollIndicators(overflowing: overflowing)
+        let showsScrollbar = indicators.bar
         // Clamp the offset against the largest possible visible-row
         // count (one indicator, at an end); the exact viewport is
         // finalised in resolveVisibleWindow once the offset is known.
@@ -744,11 +746,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.contentHeight = contentHeight
         // A scrollbar draws no "N more" indicator line, so the scroll-bound
         // arithmetic must not reserve one (else the bottom over-scrolls, leaving
-        // a blank row-height remainder). Threaded from `wantsScrollbar`.
+        // a blank row-height remainder).
         handler.showsScrollbar = showsScrollbar
-        // A List swaps its indicators for the bar: the scrollbar compose path
-        // emits no "N more" lines at all.
-        handler.drawsScrollIndicators = !showsScrollbar
+        // …and neither does a list whose indicators are hidden outright, which
+        // is why this is the resolved answer rather than `!showsScrollbar`.
+        handler.drawsScrollIndicators = indicators.text
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled
         // Captured at render so Shift+arrow can accelerate the focus cursor at
@@ -768,7 +770,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // terminal) and pulling any existing excursion back inside it.
         handler.resolveOverscroll(
             environment: context.environment, contentHeight: contentHeight,
-            reservesIndicatorLine: overflowing)
+            reservesIndicatorLine: indicators.text && overflowing)
         // Captured at render so a USER wheel scroll can release a bound anchor
         // to `.window` at event time. (The list's ARROW keys move the selection,
         // which the spec shadow-switches to Row, not Window — that needs the
@@ -811,7 +813,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // Never rest at offset 1 — see `settleRestingOffset`, which both
             // List and Table call so the rule cannot drift between them again.
             handler.settleRestingOffset(
-                overflowing: overflowing, showsScrollbar: showsScrollbar,
+                overflowing: overflowing, drawsTextIndicators: indicators.text,
                 firstRowHeight: source.row(at: 0).buffer.height)
         }
 
@@ -917,14 +919,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // whether anything will be painted re-renders the whole page ~20 times
         // a second to draw nothing. Same class as the Stepper's ungated
         // `pulsePhase` read (8ebc3385).
+        // …and a list whose indicators are hidden draws none of it: this path
+        // also serves `.scrollIndicators(.hidden)`, which reaches it precisely
+        // BECAUSE there is no bar to send it down the other one.
         let drawsIndicator =
-            origin.offset > 0 || origin.topClip > 0 || handler.hasContentBelow
+            handler.drawsScrollIndicators
+            && (origin.offset > 0 || origin.topClip > 0 || handler.hasContentBelow)
         let indicatorEmphasis =
             drawsIndicator
             ? scrollIndicatorEmphasis(isFocused: listHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
 
-        if origin.offset > 0 || origin.topClip > 0 {
+        if handler.drawsScrollIndicators, origin.offset > 0 || origin.topClip > 0 {
             topIndicator = renderScrollIndicator(
                 direction: .up,
                 count: max(1, origin.offset),
@@ -941,7 +947,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // `scrollTopClipLines`), so the list's height never changes with
         // which rows happen to be visible. Row granularity keeps whole rows.
         let indicatorLines =
-            (topIndicator == nil ? 0 : 1) + (handler.hasContentBelow ? 1 : 0)
+            (topIndicator == nil ? 0 : 1)
+            + (handler.drawsScrollIndicators && handler.hasContentBelow ? 1 : 0)
         let rowLineBudget: Int? =
             context.environment.scrollGranularity == .line
             ? max(1, contentHeight - indicatorLines)
@@ -1006,7 +1013,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 budget: rowLineBudget ?? max(1, contentHeight - indicatorLines))
         }
 
-        if handler.hasContentBelow {
+        if handler.drawsScrollIndicators, handler.hasContentBelow {
             bottomIndicator = renderScrollIndicator(
                 direction: .down,
                 count: handler.rowsBelow,
@@ -2038,14 +2045,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// puts every row a line off its band (exactly how the `Table` broke
     /// before it did the same).
     ///
-    /// A scrollbar spends no indicator line, so there is nothing to absorb:
-    /// that path draws from the handler's raw position.
+    /// A view drawing no "N more" line spends none, so there is nothing to
+    /// absorb: a scrollbar (which costs a column) and hidden indicators (which
+    /// cost nothing) both draw from the handler's raw position.
     private func windowOrigin(
         handler: ItemListHandler<SelectionValue>,
         source: RowSource<SelectionValue>,
-        showsScrollbar: Bool
+        drawsTextIndicators: Bool
     ) -> WindowOrigin {
-        guard !showsScrollbar else { return (handler.scrollOffset, handler.scrollTopClipLines) }
+        guard drawsTextIndicators else {
+            return (handler.scrollOffset, handler.scrollTopClipLines)
+        }
         return handler.resolvedWindowOrigin(firstRowHeight: source.row(at: 0).buffer.height)
     }
 

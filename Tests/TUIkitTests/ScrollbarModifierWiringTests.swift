@@ -120,7 +120,7 @@ struct ScrollbarModifierWiringTests {
     /// explicit setting still wins.
     @Test("scrollIndicators reaches nested scrollables, and the inner one wins")
     func visibilityPropagatesButInnerWins() {
-        func innerHasBar(outer: ScrollbarVisibility, inner: ScrollbarVisibility?) -> Bool {
+        func innerHasBar(outer: ScrollIndicatorVisibility, inner: ScrollIndicatorVisibility?) -> Bool {
             let tui = TUIContext()
             var content: any View = ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -141,14 +141,14 @@ struct ScrollbarModifierWiringTests {
         #expect(
             innerHasBar(outer: .automatic, inner: nil),
             "an inner scrollable inherits the ancestor's .automatic")
-        // `ScrollbarVisibility.hidden` spelled out, not `.hidden`. The `inner`
+        // `ScrollIndicatorVisibility.hidden` spelled out, not `.hidden`. The `inner`
         // parameter is an Optional, and inside a `#expect` expansion an
         // implicit member in an Optional position can bind to `View.hidden()`
         // — reachable because `Optional` conforms to `View` — instead of to
         // the enum case. It compiles clean and the expectation then fails on a
         // render that is perfectly correct. See HitTestingModifier.swift.
         #expect(
-            !innerHasBar(outer: .automatic, inner: ScrollbarVisibility.hidden),
+            !innerHasBar(outer: .automatic, inner: ScrollIndicatorVisibility.hidden),
             "its own .hidden overrides the ancestor")
         #expect(
             innerHasBar(outer: .hidden, inner: .visible),
@@ -161,12 +161,16 @@ struct ScrollbarModifierWiringTests {
     ///
     /// Both are read off one render of a view that overflows BOTH ways, so a
     /// per-axis setting has something to be wrong about in either direction.
-    private func bars(_ apply: (AnyView) -> any View) -> (vertical: Bool, horizontal: Bool) {
+    private func bars(
+        overflowing: Bool = true, _ apply: (AnyView) -> any View
+    ) -> (vertical: Bool, horizontal: Bool) {
         let tui = TUIContext()
+        let rows = overflowing ? 60 : 2
+        let rule = overflowing ? " ————————————————————————————" : ""
         let content = AnyView(
             ScrollView([.horizontal, .vertical]) {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(0..<60, id: \.self) { Text("row \($0) ————————————————————————————") }
+                    ForEach(0..<rows, id: \.self) { Text("row \($0)\(rule)") }
                 }
             }
             .frame(width: 20, height: 6))
@@ -177,13 +181,17 @@ struct ScrollbarModifierWiringTests {
             horizontal: lines.contains { $0.contains("\u{25C0}") || $0.contains("\u{25B6}") })
     }
 
-    @Test("Both bars are off by default")
-    func hiddenByDefault() {
-        // The deliberate divergence from SwiftUI, and the reason for it: an
-        // `.automatic` default would make every scrolling view measure its
-        // content to find out whether it overflows.
+    @Test("Both bars are automatic by default — drawn only when overflowing")
+    func automaticByDefault() {
+        // SwiftUI's default, and reachable here since #555 split the question
+        // in two: `.automatic` decides WHETHER, the style decides WHAT. Only
+        // the bar style measures, so the automatic default costs nothing in a
+        // subtree that asked for the "N more" text or for no indicator at all.
+        let fitting = bars(overflowing: false) { $0 }
+        #expect(!fitting.vertical && !fitting.horizontal, "nothing to indicate: \(fitting)")
+
         let drawn = bars { $0 }
-        #expect(!drawn.vertical && !drawn.horizontal, "\(drawn)")
+        #expect(drawn.vertical && drawn.horizontal, "both axes overflow: \(drawn)")
     }
 
     @Test(".never draws no bar, exactly as .hidden does")
@@ -192,26 +200,86 @@ struct ScrollbarModifierWiringTests {
         // convention may override, `.never` is unconditional — and nothing here
         // can override a hidden bar, so the two must agree. The case exists so
         // that source written against SwiftUI compiles and means what it says.
-        let never = bars { $0.scrollIndicators(ScrollbarVisibility.never) }
+        let never = bars { $0.scrollIndicators(ScrollIndicatorVisibility.never) }
         #expect(!never.vertical && !never.horizontal, "\(never)")
 
         // …and it overrides an ancestor that asked for one, which is the half
         // that would pass by accident if `.never` simply did nothing.
         let overridden = bars {
-            AnyView($0.scrollIndicators(ScrollbarVisibility.never).scrollIndicators(.visible))
+            AnyView($0.scrollIndicators(ScrollIndicatorVisibility.never).scrollIndicators(.visible))
         }
         #expect(!overridden.vertical && !overridden.horizontal, "\(overridden)")
     }
 
     @Test("axes: names which bar the setting is about")
     func axesSelectsTheBar() {
-        let verticalOnly = bars { $0.scrollIndicators(.visible, axes: .vertical) }
-        #expect(verticalOnly.vertical, "asked for the vertical bar: \(verticalOnly)")
-        #expect(!verticalOnly.horizontal, "and only that one: \(verticalOnly)")
+        // Both axes are automatic by default and this content overflows both
+        // ways, so the argument shows in what it takes AWAY: hiding one axis
+        // must leave the other's bar standing.
+        let horizontalOnly = bars { $0.scrollIndicators(.hidden, axes: .vertical) }
+        #expect(!horizontalOnly.vertical, "hid the named axis: \(horizontalOnly)")
+        #expect(horizontalOnly.horizontal, "and only that one: \(horizontalOnly)")
 
-        let horizontalOnly = bars { $0.scrollIndicators(.visible, axes: .horizontal) }
-        #expect(horizontalOnly.horizontal, "asked for the horizontal bar: \(horizontalOnly)")
-        #expect(!horizontalOnly.vertical, "and only that one: \(horizontalOnly)")
+        let verticalOnly = bars { $0.scrollIndicators(.hidden, axes: .horizontal) }
+        #expect(!verticalOnly.horizontal, "hid the named axis: \(verticalOnly)")
+        #expect(verticalOnly.vertical, "and only that one: \(verticalOnly)")
+    }
+
+    /// The point of splitting the question in two (#555): `.hidden` used to
+    /// mean "no BAR", and an overflowing view fell back to the "N more lines"
+    /// text — so there was no way to ask for no indicator at all, and no way
+    /// to ask for the text form without also giving up automatic visibility.
+    @Test("Hidden draws neither indicator, whichever style is selected")
+    func hiddenDrawsNeitherIndicator() {
+        func screen(_ apply: (AnyView) -> any View) -> String {
+            let tui = TUIContext()
+            let content = AnyView(
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(0..<60, id: \.self) { Text("row \($0)") }
+                    }
+                }
+                .frame(width: 20, height: 6))
+            return renderToBuffer(AnyView(apply(content)), context: makeContext(tui: tui))
+                .lines.map(\.stripped).joined()
+        }
+        for style in [ScrollIndicatorStyle.scrollbar, .text] {
+            let drawn = screen { $0.scrollIndicatorStyle(style).scrollIndicators(.hidden) }
+            #expect(!drawn.contains("\u{25B2}"), "no ▲ under \(style): \(drawn)")
+            #expect(!drawn.contains("\u{25BC}"), "no ▼ under \(style): \(drawn)")
+            #expect(!drawn.contains("more rows"), "and no text either under \(style): \(drawn)")
+        }
+        // The same content DOES indicate itself when nothing hides it, so the
+        // expectations above are not passing on a view that simply fits.
+        let byDefault = screen { $0 }
+        #expect(byDefault.contains("\u{25B2}") || byDefault.contains("\u{25BC}"))
+    }
+
+    /// `ScrollView(showsIndicators:)` predates the environment setting and
+    /// reads as "no indicators on this view". It vetoed the text form all
+    /// along; once `.automatic` became the shipped default it had to veto the
+    /// bar as well, or the views that asked for nothing would be the ones
+    /// getting a bar.
+    @Test("showsIndicators: false vetoes the bar, not just the text")
+    func showsIndicatorsFalseVetoesTheBar() {
+        func lastColumn(_ showsIndicators: Bool) -> [Character] {
+            let tui = TUIContext()
+            let view = ScrollView(showsIndicators: showsIndicators) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<60, id: \.self) { Text("row \($0)") }
+                }
+            }
+            return renderToBuffer(view, context: makeContext(tui: tui))
+                .lines.map { $0.stripped.last ?? " " }
+        }
+        let suppressed = lastColumn(false)
+        #expect(
+            !suppressed.contains("\u{25B2}") && !suppressed.contains("\u{25BC}"),
+            "no bar when the view asked for no indicators: \(String(suppressed))")
+        let shown = lastColumn(true)
+        #expect(
+            shown.contains("\u{25B2}") && shown.contains("\u{25BC}"),
+            "…and the same content does get one otherwise: \(String(shown))")
     }
 
     @Test("Two axis-specific calls compose rather than clobbering")
@@ -220,11 +288,13 @@ struct ScrollbarModifierWiringTests {
         // it: an unnamed axis has to keep what it inherited, and a plain
         // `.environment` write would reset it to the default. Written as two
         // calls precisely because that is the shape a caller reaches for.
-        let both = bars {
+        let neither = bars {
             AnyView(
-                $0.scrollIndicators(.visible, axes: .horizontal)
-                    .scrollIndicators(.visible, axes: .vertical))
+                $0.scrollIndicators(.hidden, axes: .horizontal)
+                    .scrollIndicators(.hidden, axes: .vertical))
         }
-        #expect(both.vertical && both.horizontal, "each call kept the other's axis: \(both)")
+        #expect(
+            !neither.vertical && !neither.horizontal,
+            "each call kept the other's axis hidden: \(neither)")
     }
 }

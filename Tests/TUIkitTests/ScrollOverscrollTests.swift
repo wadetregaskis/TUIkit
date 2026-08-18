@@ -187,7 +187,9 @@ struct ScrollOverscrollTests {
     // MARK: - Through a real render
 
     private func lines(_ view: some View, height: Int = 8) -> [String] {
-        renderToBuffer(view, context: makeRenderContext(width: 20, height: height))
+        // Predates the visibility/style split (#555): these assertions are about
+        // the "N more" lines, which are now a style. The default is a scrollbar.
+        renderToBuffer(view.scrollIndicatorStyle(.text), context: makeRenderContext(width: 20, height: height))
             .lines.map(\.stripped)
     }
 

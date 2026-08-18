@@ -170,10 +170,12 @@ struct TablePage: View {
     @State var notesSelection: Int?
     @State var fixedHeightByLine = true
     @State var fixedHeightFollowMargin = FollowMarginChoice.none.rawValue
-    /// Which overflow affordance the "Fixed height" table shows. A scrollbar
-    /// SUPERSEDES the "N more above/below" lines rather than joining them —
-    /// with a bar the rows get the whole content area and nothing reserves an
-    /// indicator line — so one toggle picks between them.
+    /// Which overflow affordance the "Fixed height" table shows. The two are
+    /// alternatives, not layers: a bar spends a column and the "N more
+    /// above/below" lines spend a viewport line, so a view draws one or the
+    /// other and one toggle picks. That is what `.scrollIndicatorStyle` is —
+    /// WHICH indicator, kept separate from `.scrollIndicators`, which is
+    /// WHETHER one is shown at all (both are automatic here).
     @State var fixedHeightScrollbar = true
     @State var browserURL: URL = FileBrowser.seedDirectory()
     @State var liveSelection: Int?
@@ -281,7 +283,7 @@ struct TablePage: View {
                             .lineLimit(3)
                     }
                     .frame(height: 20)
-                    .scrollIndicators(fixedHeightScrollbar ? .visible : .hidden)
+                    .scrollIndicatorStyle(fixedHeightScrollbar ? .scrollbar : .text)
                     .scrollGranularity(fixedHeightByLine ? .line : .row)
                     .scrollFollowMargin(
                         FollowMarginChoice(rawValue: fixedHeightFollowMargin)?.margin ?? .none)

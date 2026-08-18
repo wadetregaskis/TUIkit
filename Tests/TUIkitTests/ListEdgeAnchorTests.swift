@@ -57,6 +57,10 @@ struct ListEdgeAnchorTests {
         tui: TUIContext, fm: FocusManager
     ) -> [String] {
         var env = EnvironmentValues()
+        // This suite predates the visibility/style split (#555): it is about the
+        // "N more above / below" arithmetic, which is now a style rather than
+        // the default. Ask for it by name; the default is a scrollbar.
+        env.scrollIndicatorStyle = .text
         env.focusManager = fm
         env.applyRuntimeServices(from: tui)
         env.defaultScrollAnchor = declared

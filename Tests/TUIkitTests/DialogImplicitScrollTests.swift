@@ -21,6 +21,10 @@ struct DialogImplicitScrollTests {
     private func context(width: Int, height: Int, tui: TUIContext) -> RenderContext {
         var environment = EnvironmentValues()
         environment.focusManager = FocusManager()
+        // Predates the visibility/style split (#555): these assertions are written
+        // against the "N more above / below" lines, which are now a style. The
+        // shipped default is a scrollbar; cases about THAT ask for it by name.
+        environment.scrollIndicatorStyle = .text
         environment.applyRuntimeServices(from: tui)
         return RenderContext(
             availableWidth: width, availableHeight: height,

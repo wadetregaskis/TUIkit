@@ -66,7 +66,7 @@ public struct MenuActionDismissBehavior: Equatable, Sendable {
     /// A computed answer rather than `!= .disabled` at the call site, so
     /// adding a spelling later is a decision made here once instead of a
     /// silent vote for dismissal everywhere — the same trap
-    /// ``ScrollbarVisibility/showsBar(overflowing:)`` exists to close.
+    /// ``ScrollIndicatorVisibility/showsIndicator(overflowing:)`` exists to close.
     var dismissesMenu: Bool {
         switch self {
         case .disabled: false

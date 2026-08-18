@@ -30,6 +30,7 @@ struct ScrollbarFocusPulseTests {
             }
         }
         .scrollIndicators(.visible)
+        .scrollIndicatorStyle(.scrollbar)
         .frame(height: 6)
 
         func frame() -> FrameBuffer {
@@ -38,6 +39,10 @@ struct ScrollbarFocusPulseTests {
             // one, the overflowing ScrollView auto-focuses itself.
             if focused { environment.focusManager = focusManager }
             environment.applyRuntimeServices(from: tuiContext)
+            // Predates the visibility/style split (#555): these assertions are written
+            // against the "N more above / below" lines, which are now a style. The
+            // shipped default is a scrollbar; cases about THAT ask for it by name.
+            environment.scrollIndicatorStyle = .text
             let context = RenderContext(
                 availableWidth: 20, availableHeight: 6,
                 environment: environment, tuiContext: tuiContext)
@@ -101,8 +106,10 @@ struct ScrollbarFocusPulseTests {
                 ForEach(0..<30, id: \.self) { i in Text("line \(i)") }
             }
         }
-        // .automatic (default) with a short frame → no bar, just indicators.
+        // Automatic visibility with the text style: overflowing, so indicated —
+        // and the indicator it reaches for is the "N more" lines, not a bar.
         .frame(height: 6)
+        .scrollIndicatorStyle(.text)
 
         func frame() -> FrameBuffer {
             var environment = EnvironmentValues()

@@ -224,9 +224,16 @@ struct DialogRenderTests {
     /// given — is unchanged and still asserted.
     @Test("Narrow dialog wraps and scrolls its body rather than overflowing")
     func dialogNarrowBodyWrapsAndScrolls() {
+        // The "▼ N" style, spelled out: at twelve columns the default bar's
+        // own column and its two-cell gap leave the body three cells to wrap
+        // into, and every word ellipsises. That is a fair trade at ordinary
+        // widths and a poor one here, but which indicator to spend the space
+        // on is the caller's call (#555) — this case is about the wrapping.
         let buffer = renderToBuffer(
             Dialog(title: "LongTitleName") { Text("body text wide") },
-            context: createTestContext(width: 12, height: 6))
+            context: makeRenderContext(width: 12, height: 6) { env, _ in
+                env.scrollIndicatorStyle = .text
+            })
         let lines = buffer.lines.map { $0.stripped }
         #expect(lines.allSatisfy { $0.count <= 12 }, "never wider than offered: \(lines)")
         #expect(lines.contains { $0.contains("body") }, "the body renders: \(lines)")

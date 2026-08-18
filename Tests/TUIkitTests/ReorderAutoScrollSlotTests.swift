@@ -48,6 +48,10 @@ struct ReorderAutoScrollSlotTests {
         init(rows: [String], feedback: RowReorderFeedback) {
             self.rows = rows
             env.focusManager = FocusManager()
+            // Predates the visibility/style split (#555): these assertions are written
+            // against the "N more above / below" lines, which are now a style. The
+            // shipped default is a scrollbar; cases about THAT ask for it by name.
+            env.scrollIndicatorStyle = .text
             env.rowReorderFeedback = feedback
             env.applyRuntimeServices(from: tui)
             tui.mouseEventDispatcher.setActiveSupport(.full)

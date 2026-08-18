@@ -182,6 +182,9 @@ struct ScrollGranularityTests {
                 Text((1...linesPerRow).map { "\(name)-\($0)" }.joined(separator: "\n"))
             }
         }
+        // The "N more" lines are what this case is about (#555): the default is
+        // a scrollbar, which spends a column rather than the line at issue here.
+        .scrollIndicatorStyle(.text)
         .frame(height: 11)
 
         func renderOnce() -> FrameBuffer {
@@ -229,7 +232,9 @@ struct ScrollGranularityTests {
                 Text((1...linesPerRow).map { "\(name)-\($0)" }.joined(separator: "\n"))
             }
         }
-        .scrollIndicators(showsScrollbar ? .visible : .hidden)
+        // `showsScrollbar` picks the STYLE, not the visibility (#555): before the
+        // split, `.hidden` was the only way to ask for the "N more" lines.
+        .scrollIndicatorStyle(showsScrollbar ? .scrollbar : .text)
         .frame(height: frameHeight)
 
         func renderOnce() -> FrameBuffer {
@@ -304,6 +309,9 @@ struct ScrollGranularityTests {
                 Text((1...3).map { "\(name)-\($0)" }.joined(separator: "\n"))
             }
         }
+        // The "N more" lines are what this case is about (#555): the default is
+        // a scrollbar, which spends a column rather than the line at issue here.
+        .scrollIndicatorStyle(.text)
         .frame(height: 11)
 
         func renderOnce() -> String {
@@ -433,6 +441,7 @@ struct ScrollGranularityTests {
                 }
                 .frame(height: 12)
                 .scrollIndicators(.visible)
+                .scrollIndicatorStyle(.scrollbar)
                 .scrollGranularity(granularity)
             }
         }

@@ -33,6 +33,10 @@ struct ListRowDropDestinationTests {
         let tui = TUIContext()
         var env = EnvironmentValues()
         env.focusManager = FocusManager()
+        // Predates the visibility/style split (#555): these assertions are written
+        // against the "N more above / below" lines, which are now a style. The
+        // shipped default is a scrollbar; cases about THAT ask for it by name.
+        env.scrollIndicatorStyle = .text
         env.applyRuntimeServices(from: tui)
         tui.mouseEventDispatcher.setActiveSupport(.full)
         let context = RenderContext(
@@ -405,6 +409,9 @@ struct ListRowDropDestinationTests {
         let tui = TUIContext()
         var env = EnvironmentValues()
         env.focusManager = FocusManager()
+        // The "▼ N more rows below" style, spelled out: this case reads the
+        // count off that line, which the default bar does not draw (#555).
+        env.scrollIndicatorStyle = .text
         env.applyRuntimeServices(from: tui)
         tui.mouseEventDispatcher.setActiveSupport(.full)
         let context = RenderContext(

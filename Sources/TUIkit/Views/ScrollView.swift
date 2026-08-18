@@ -284,7 +284,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// edge indicators are active they replace the viewport's first/last
     /// line, so the request is stamped with one row of headroom per edge.
     private func consumedSeek(
-        handler: ScrollViewHandler, wantsScrollbar: Bool, context: RenderContext
+        handler: ScrollViewHandler, drawsTextIndicators: Bool, context: RenderContext
     ) -> ScrollToRequest? {
         guard !context.isMeasuring else { return nil }
         // A `.scrollPosition` write is the same request a `scrollTo` makes; it
@@ -293,17 +293,32 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         guard var seek = handler.pendingScrollTo ?? positionSeek(context: context) else {
             return nil
         }
-        seek.topInset = edgeInset(wantsScrollbar: wantsScrollbar)
+        seek.topInset = edgeInset(drawsTextIndicators: drawsTextIndicators)
         seek.bottomInset = seek.topInset
         return seek
+    }
+
+    /// Whether the "N more above / below" lines are this view's vertical
+    /// indicator — the other half of ``ScrollIndicatorVisibility``'s question,
+    /// and the reason a `.hidden` scroll view now draws nothing at all rather
+    /// than falling back to these.
+    ///
+    /// Asked at `overflowing: true`: the indicators gate themselves on whether
+    /// there IS content above or below, so what is being decided here is which
+    /// indicator this view uses — and deciding it must not trigger the content
+    /// measure `.automatic` would otherwise need. The legacy
+    /// `ScrollView(showsIndicators:)` parameter still vetoes.
+    private func drawsTextIndicators(_ context: RenderContext) -> Bool {
+        showsIndicators
+            && context.environment.verticalScrollIndicators(overflowing: true).text
     }
 
     /// One line per edge when the "N more" indicators are what occupies the
     /// viewport's first and last line. Shared by the seek path and the
     /// designated-anchor reveal so a row cannot be placed under an indicator
     /// by one and not the other.
-    private func edgeInset(wantsScrollbar: Bool) -> Int {
-        showsIndicators && !wantsScrollbar ? 1 : 0
+    private func edgeInset(drawsTextIndicators: Bool) -> Int {
+        drawsTextIndicators ? 1 : 0
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -376,11 +391,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         if !context.isMeasuring { handler.hasOpened = true }
 
         let pendingSeek = consumedSeek(
-            handler: handler, wantsScrollbar: wantsScrollbar, context: context)
+            handler: handler, drawsTextIndicators: drawsTextIndicators(context), context: context)
         var (fullBuffer, contentSlice, seekOffset) = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
-            seek: pendingSeek, edgeInset: edgeInset(wantsScrollbar: wantsScrollbar),
+            seek: pendingSeek, edgeInset: edgeInset(drawsTextIndicators: drawsTextIndicators(context)),
             context: context, settledExtents: bars.settled)
         if !context.isMeasuring { handler.pendingScrollTo = nil }
         // A sliced reply (Stage 6): the buffer holds only the rendered band;
@@ -426,7 +441,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             fullBuffer: fullBuffer,
             viewportHeight: contentViewportHeight,
             regionOriginY: contentSlice?.originY ?? 0,
-            indicatorsActive: !wantsScrollbar,
+            indicatorsActive: drawsTextIndicators(context),
             suppressed: seekOffset != nil,
             context: context)
         coverSnappedViewport(
@@ -544,7 +559,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // view, with the content it advertises never visible at any offset.
         // Content always wins the last lines: indicators need 3+ rows (both
         // may show and at least one content line survives).
-        if showsIndicators && !wantsScrollbar && visibleBuffer.height >= 3 {
+        if drawsTextIndicators(context), visibleBuffer.height >= 3 {
             visibleBuffer = applyScrollIndicators(
                 to: visibleBuffer,
                 handler: handler,
@@ -675,15 +690,30 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     private func resolveScrollbars(
         viewportWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
     ) -> (vertical: Bool, horizontal: Bool, settled: (width: Int, height: Int)?) {
-        let verticalPolicy = context.environment.verticalScrollIndicatorVisibility
-        let horizontalPolicy = context.environment.horizontalScrollIndicatorVisibility
-        var wantsScrollbar = verticalPolicy == .visible
+        // The legacy `ScrollView(showsIndicators:)` parameter is a veto over
+        // BOTH axes and both styles — it predates the environment setting and
+        // reads as "no indicators on this view". It vetoes the text form in
+        // `drawsTextIndicators`; without the same veto here, an `.automatic`
+        // default (the shipped one since #555) would hand a bar to the very
+        // views that asked for nothing.
+        let verticalPolicy =
+            showsIndicators ? context.environment.verticalScrollIndicatorVisibility : .hidden
+        let horizontalPolicy =
+            showsIndicators ? context.environment.horizontalScrollIndicatorVisibility : .hidden
+        // Only the scrollbar style reserves anything on the vertical axis; the
+        // text indicators replace a viewport line rather than a column, and
+        // decide themselves, after the render, from what is actually hidden.
+        // The horizontal axis has no text form, so its bar stands whatever the
+        // style says.
+        let verticalBar = context.environment.scrollIndicatorStyle == .scrollbar
+        var wantsScrollbar = verticalBar && verticalPolicy == .visible
         var wantsHorizontalBar = horizontal && horizontalPolicy == .visible
         // Only an axis that asked to be told whether it overflows is worth
         // measuring for, and measuring is the expensive part — so a view with
         // `.visible` down one side and nothing on the other still measures
-        // nothing at all.
-        let measuresVertical = verticalPolicy == .automatic
+        // nothing at all, and neither does one whose bars are hidden or whose
+        // vertical indicator is the text form.
+        let measuresVertical = verticalBar && verticalPolicy == .automatic
         let measuresHorizontal = horizontal && horizontalPolicy == .automatic
         guard measuresVertical || measuresHorizontal else {
             return (wantsScrollbar, wantsHorizontalBar, nil)

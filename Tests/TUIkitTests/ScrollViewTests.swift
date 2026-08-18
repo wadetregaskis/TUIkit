@@ -16,6 +16,10 @@ private func makeContext(width: Int = 40, height: Int = 8) -> RenderContext {
     let tuiContext = TUIContext()
     var environment = EnvironmentValues()
     environment.focusManager = FocusManager()
+    // Predates the visibility/style split (#555): these assertions are written
+    // against the "N more above / below" lines, which are now a style. The
+    // shipped default is a scrollbar; cases about THAT ask for it by name.
+    environment.scrollIndicatorStyle = .text
     environment.applyRuntimeServices(from: tuiContext)
     return RenderContext(
         availableWidth: width,
@@ -268,6 +272,7 @@ struct ScrollViewRenderingTests {
             Text("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")  // 36 columns
         }
         .scrollIndicators(.automatic)
+        .scrollIndicatorStyle(.scrollbar)
         let context = makeContext(width: 10, height: 4)
         _ = renderToBuffer(view, context: context)  // settle the lazily-measured extent
         let text = renderToBuffer(view, context: context).lines.map(\.stripped).joined(separator: "\n")
@@ -282,6 +287,7 @@ struct ScrollViewRenderingTests {
             Text("short")
         }
         .scrollIndicators(.automatic)
+        .scrollIndicatorStyle(.scrollbar)
         let context = makeContext(width: 20, height: 4)
         _ = renderToBuffer(view, context: context)
         let text = renderToBuffer(view, context: context).lines.map(\.stripped).joined(separator: "\n")
@@ -296,6 +302,7 @@ struct ScrollViewRenderingTests {
             Text("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")  // 36 columns
         }
         .scrollIndicators(.automatic)
+        .scrollIndicatorStyle(.scrollbar)
         let context = makeContext(width: 12, height: 4)
         let dispatcher = context.environment.mouseEventDispatcher!
         dispatcher.setActiveSupport(.standard)

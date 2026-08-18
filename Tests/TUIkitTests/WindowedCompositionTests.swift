@@ -32,6 +32,10 @@ struct WindowedCompositionTests {
     ) -> [String] {
         var environment = EnvironmentValues()
         environment.focusManager = focusManager
+        // Predates the visibility/style split (#555): these assertions are written
+        // against the "N more above / below" lines, which are now a style. The
+        // shipped default is a scrollbar; cases about THAT ask for it by name.
+        environment.scrollIndicatorStyle = .text
         environment.applyRuntimeServices(from: tuiContext)
         let context = RenderContext(
             availableWidth: width, availableHeight: Self.viewport,
@@ -62,6 +66,7 @@ struct WindowedCompositionTests {
             }
         }
         .scrollIndicators(.visible)
+        .scrollIndicatorStyle(.scrollbar)
         .frame(height: Self.viewport)
 
         renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)

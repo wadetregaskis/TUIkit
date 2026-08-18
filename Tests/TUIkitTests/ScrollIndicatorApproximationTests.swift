@@ -29,6 +29,10 @@ struct ScrollIndicatorApproximationTests {
         _ view: V, tuiContext: TUIContext, focusManager: FocusManager
     ) -> [String] {
         var environment = EnvironmentValues()
+        // This suite predates the visibility/style split (#555): it is about the
+        // "N more above / below" arithmetic, which is now a style rather than
+        // the default. Ask for it by name; the default is a scrollbar.
+        environment.scrollIndicatorStyle = .text
         environment.focusManager = focusManager
         environment.applyRuntimeServices(from: tuiContext)
         let context = RenderContext(

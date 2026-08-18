@@ -45,6 +45,16 @@ private func tableContext(width: Int = 30, height: Int = 8, explicitWidth: Bool 
     return context
 }
 
+/// The same table viewport asking for the "▲/▼ N more rows" style, for the
+/// cases written against those lines. Since #555 they are a style rather than
+/// the default (a scrollbar, which spends a column instead).
+@MainActor
+private func textIndicatorContext(width: Int = 30, height: Int = 8) -> RenderContext {
+    var context = tableContext(width: width, height: height)
+    context.environment.scrollIndicatorStyle = .text
+    return context
+}
+
 @MainActor
 private func strippedLines(_ view: some View, context: RenderContext) -> [String] {
     renderToBuffer(view, context: context).lines.map { $0.stripped }
@@ -365,22 +375,27 @@ struct TableRenderTests {
         #expect(joined.contains { blocks.contains($0) }, "scrollbar thumb block present: \(lines)")
     }
 
-    @Test("Scrollbars are off by default — the table is unchanged")
-    func noScrollbarByDefault() {
+    @Test("An overflowing table draws a scrollbar by default; the text is a style")
+    func scrollbarIsTheDefaultStyle() {
+        // Visibility and style are separate questions (#555). Left alone, an
+        // overflowing table is automatically indicated, and the indicator it
+        // reaches for is a bar — the "▼ N more rows below" line is a style the
+        // caller asks for, and the two never show together.
         let rows = (0..<12).map { Row(id: "\($0)", name: "Row \($0)", size: "\($0)K") }
-        let lines = strippedLines(
-            Table(rows, selection: .constant(String?.none)) {
-                TableColumn("Name", value: \Row.name)
-            },
-            context: tableContext(width: 30, height: 8)
-        )
-        let joined = lines.joined()
-        // The "N more rows below" text indicator legitimately uses ▼, so the telltale
-        // of a scrollbar is its block-glyph thumb, which a default table lacks.
+        let view = Table(rows, selection: .constant(String?.none)) {
+            TableColumn("Name", value: \Row.name)
+        }
+        // The "N more rows below" text indicator legitimately uses ▼, so the
+        // telltale of a scrollbar is its block-glyph thumb.
         let blocks: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇"]
-        #expect(!joined.contains { blocks.contains($0) }, "no scrollbar thumb by default: \(lines)")
-        // The text "N more rows below" indicator is shown instead.
-        #expect(joined.lowercased().contains("more"))
+
+        let byDefault = strippedLines(view, context: tableContext(width: 30, height: 8)).joined()
+        #expect(byDefault.contains { blocks.contains($0) }, "a thumb by default: \(byDefault)")
+        #expect(!byDefault.contains("more rows below"), "and not the text as well")
+
+        let asText = strippedLines(view, context: textIndicatorContext(width: 30, height: 8)).joined()
+        #expect(!asText.contains { blocks.contains($0) }, "the text style spends no column: \(asText)")
+        #expect(asText.contains("more rows below"))
     }
 
     @Test("Narrow columns truncate cell values with an ellipsis")
@@ -426,7 +441,7 @@ struct TableRenderTests {
                 TableColumn("Name", value: \Row.name)
                 TableColumn("Size", value: \Row.size)
             },
-            context: tableContext(width: 30, height: 8)
+            context: textIndicatorContext(width: 30, height: 8)
         )
 
         expectClosedBorder(lines)

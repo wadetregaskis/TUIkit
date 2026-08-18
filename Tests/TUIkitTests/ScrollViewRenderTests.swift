@@ -15,8 +15,24 @@ import Testing
 @Suite("ScrollView rendering")
 struct ScrollViewRenderTests {
 
+    /// The shipped defaults: automatic visibility, scrollbar style.
     private func ctx(width: Int, height: Int) -> RenderContext {
-        RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
+        RenderContext(
+            availableWidth: width, availableHeight: height,
+            environment: EnvironmentValues(), tuiContext: TUIContext()
+        ).isolatingRenderCache()
+    }
+
+    /// The same viewport asking for the "N more lines above / below" style,
+    /// for the tests that count those lines. It is a style rather than the
+    /// default since #555 — the default bar spends a column instead.
+    private func textCtx(width: Int, height: Int) -> RenderContext {
+        var environment = EnvironmentValues()
+        environment.scrollIndicatorStyle = .text
+        return RenderContext(
+            availableWidth: width, availableHeight: height,
+            environment: environment, tuiContext: TUIContext()
+        ).isolatingRenderCache()
     }
 
     // MARK: - Fills its viewport
@@ -48,7 +64,7 @@ struct ScrollViewRenderTests {
             ScrollView {
                 VStack(alignment: .leading) { Text("only line") }
             },
-            context: ctx(width: 20, height: 6)
+            context: textCtx(width: 20, height: 6)
         )
         let joined = buffer.lines.map { $0.stripped }.joined()
         #expect(!joined.contains("more lines above"))
@@ -70,7 +86,7 @@ struct ScrollViewRenderTests {
                     Spacer()
                 }
             },
-            context: ctx(width: 20, height: 8)
+            context: textCtx(width: 20, height: 8)
         )
         let joined = buffer.lines.map { $0.stripped }.joined()
         #expect(!joined.contains("more lines below"), "3 lines + Spacer fit in 8 rows: \(buffer.lines.map { $0.stripped })")
@@ -85,7 +101,7 @@ struct ScrollViewRenderTests {
                     Spacer()
                 }
             },
-            context: ctx(width: 20, height: 8)
+            context: textCtx(width: 20, height: 8)
         )
         let lines = buffer.lines.map { $0.stripped }
         let indicator = lines.first { $0.contains("lines below") } ?? ""
@@ -107,7 +123,7 @@ struct ScrollViewRenderTests {
                     Text("bottom")
                 }
             },
-            context: ctx(width: 20, height: 8)
+            context: textCtx(width: 20, height: 8)
         )
         let lines = buffer.lines.map { $0.stripped }
         #expect(lines.count == 8, "fills the viewport: \(lines)")
@@ -126,7 +142,7 @@ struct ScrollViewRenderTests {
                     ForEach(0..<20) { Text("Line \($0)") }
                 }
             },
-            context: ctx(width: 20, height: 6)
+            context: textCtx(width: 20, height: 6)
         )
         #expect(buffer.lines.count == 6)
         // At rest (offset 0) the top shows real content, the bottom row is
@@ -146,7 +162,7 @@ struct ScrollViewRenderTests {
                     ForEach(0..<20) { Text("Line \($0)") }
                 }
             },
-            context: ctx(width: 20, height: 6)
+            context: textCtx(width: 20, height: 6)
         )
         #expect(buffer.lines.count == 6)
         let joined = buffer.lines.map { $0.stripped }.joined()
@@ -225,22 +241,32 @@ struct ScrollViewRenderTests {
         #expect(track.contains { $0 != " " }, "the thumb is visible: \(lastColumn)")
     }
 
-    @Test("Scrollbars are hidden by default — the viewport is unchanged")
-    func hiddenScrollbarByDefault() {
-        let buffer = renderToBuffer(
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(0..<20, id: \.self) { Text("line \($0)") }
-                }
-            },
-            context: ctx(width: 20, height: 6)
-        )
-        let lastColumn = buffer.lines.map { $0.stripped.last ?? " " }
+    @Test("A scrollbar is the default style; the 'N more' lines are opt-in")
+    func scrollbarIsTheDefaultStyle() {
+        // Visibility and style are separate questions (#555). Left alone, an
+        // overflowing ScrollView is automatically indicated, and the indicator
+        // it reaches for is a bar — the "N more lines below" text is a style
+        // the caller asks for.
+        let content = ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<20, id: \.self) { Text("line \($0)") }
+            }
+        }
+        let byDefault = renderToBuffer(content, context: ctx(width: 20, height: 6))
+        let lastColumn = byDefault.lines.map { $0.stripped.last ?? " " }
         #expect(
-            !lastColumn.contains("▲") && !lastColumn.contains("▼"),
-            "no scrollbar by default: \(lastColumn)")
-        // The text "N more lines below" indicator is still shown.
-        #expect(buffer.lines.map { $0.stripped }.joined().contains("lines below"))
+            lastColumn.first == "▲" && lastColumn.last == "▼",
+            "a bar by default: \(lastColumn)")
+        #expect(
+            !byDefault.lines.map { $0.stripped }.joined().contains("lines below"),
+            "and not the text as well")
+
+        let asText = renderToBuffer(content, context: textCtx(width: 20, height: 6))
+        let textColumn = asText.lines.map { $0.stripped.last ?? " " }
+        #expect(
+            !textColumn.contains("▲") && !textColumn.contains("▼"),
+            "the text style spends no column: \(textColumn)")
+        #expect(asText.lines.map { $0.stripped }.joined().contains("lines below"))
     }
 
     // MARK: - Single-pass convergence (no one-frame lag, no oscillation)

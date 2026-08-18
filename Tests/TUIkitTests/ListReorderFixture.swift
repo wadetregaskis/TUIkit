@@ -44,6 +44,11 @@ final class ListReorderFixture {
         self.reorderable = reorderable
         env.focusManager = FocusManager()
         env.rowReorderFeedback = feedback
+        // The "▲/▼ N more" style, spelled out: what these cases read off the
+        // screen is row geometry — where the slot sits, which rows are blank —
+        // and the default bar (#555) would put a track cell in every line's
+        // last column. The reorder behaviour under test is the same either way.
+        env.scrollIndicatorStyle = .text
         env.applyRuntimeServices(from: tui)
         tui.mouseEventDispatcher.setActiveSupport(.full)
     }

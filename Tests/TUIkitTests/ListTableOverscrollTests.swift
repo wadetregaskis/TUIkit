@@ -36,15 +36,21 @@ struct ListTableOverscrollTests {
 
     private static let items = (0..<40).map(Item.init(id:))
 
+    /// Since #555 the visibility and the style are separate questions, and
+    /// these cases care about both: the default here is the "▲/▼ N more" style,
+    /// automatically shown, because the arithmetic below counts the line those
+    /// indicators take out of the content area. The bar cases name themselves.
     private func context(
         width: Int = 28, height: Int = 8, top: ScrollOverscroll = .none,
-        bar: ScrollbarVisibility = .hidden
+        bar: ScrollIndicatorVisibility = .automatic,
+        style: ScrollIndicatorStyle = .text
     ) -> RenderContext {
         makeRenderContext(width: width, height: height) { environment, tui in
             environment.mouseEventDispatcher = tui.mouseEventDispatcher
             environment.scrollOverscrollTop = top
             environment.verticalScrollIndicatorVisibility = bar
             environment.horizontalScrollIndicatorVisibility = bar
+            environment.scrollIndicatorStyle = style
         }
     }
 
@@ -146,7 +152,7 @@ struct ListTableOverscrollTests {
 
     @Test("A List's scrollbar stays put while the rows slide")
     func listScrollbarDoesNotSlide() {
-        let ctx = context(top: .rows(2), bar: .visible)
+        let ctx = context(top: .rows(2), bar: .visible, style: .scrollbar)
         let (before, after) = pushingUp(list(), context: ctx)
         #expect(
             slide(before, after) == 2,
@@ -164,7 +170,7 @@ struct ListTableOverscrollTests {
 
     @Test("A Table's scrollbar stays put while the rows slide")
     func tableScrollbarDoesNotSlide() {
-        let ctx = context(top: .rows(2), bar: .visible)
+        let ctx = context(top: .rows(2), bar: .visible, style: .scrollbar)
         let (before, after) = pushingUp(table(), context: ctx)
         #expect(
             slide(before, after) == 2,

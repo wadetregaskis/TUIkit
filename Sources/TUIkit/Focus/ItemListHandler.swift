@@ -175,6 +175,14 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// against `contentHeight` MINUS these — see ``rowLineBudget``.
     var drawsScrollIndicators = true
 
+    /// Whether a "▲/▼ N more" line comes out of the content area this frame.
+    ///
+    /// The two flags are set together by the views (a bar and the text lines
+    /// are alternatives), but both have to be consulted: `showsScrollbar`
+    /// alone was the old proxy for "spends no line", and it misses the case
+    /// this cannot — indicators hidden outright, which spends nothing either.
+    var reservesIndicatorLine: Bool { drawsScrollIndicators && !showsScrollbar }
+
     /// A closure giving the height in lines of row `i`, for rows that can span
     /// multiple lines — `List` rows are arbitrary views and `Table` cells can
     /// wrap, so both wire this. `nil` (single-line tables, plus the handler's
@@ -238,9 +246,10 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
         var top = extent
         while top > 0 {
             // Reserve the "above" indicator's line only when there IS one — a
-            // scrollbar draws no such line, so its rows fill the full height.
+            // scrollbar draws no such line and hidden indicators draw nothing at
+            // all, so in both cases the rows fill the full height.
             let budget =
-                (showsScrollbar || top - 1 == 0) ? contentHeight : contentHeight - 1
+                (!reservesIndicatorLine || top - 1 == 0) ? contentHeight : contentHeight - 1
             // The row a hovering drag borrows (``dropSlotAddsRow``) sits past
             // the last real one and has no data to measure: it is the slot,
             // one blank line. Asking `rowHeight` for it indexes past the data.
@@ -1074,7 +1083,7 @@ extension ItemListHandler {
         // The landing slot is drawn among the rows and takes one of their
         // lines — the same subtraction `_ListCore` makes before its walk.
         var budget = contentHeight - (dropSlotAddsRow ? 1 : 0)
-        if !showsScrollbar, drawsScrollIndicators {
+        if reservesIndicatorLine {
             // A scrollbar spends a column, not a line, so it reserves nothing.
             // Otherwise: a line for "▲ N more" whenever anything is hidden
             // above…
@@ -1124,7 +1133,7 @@ extension ItemListHandler {
     /// drawing, exactly as the rows, the bands and the click mapping do.
     ///
     /// Normally the disagreement cannot be seen, because
-    /// ``settleRestingOffset(overflowing:showsScrollbar:firstRowHeight:)``
+    /// ``settleRestingOffset(overflowing:drawsTextIndicators:firstRowHeight:)``
     /// snaps a resting offset of 1 down to 0. It deliberately does not while a
     /// drop slot hovers — a viewport being steered is not resting — and there
     /// two frames drawing identical rows disagreed about how many were below,
@@ -1345,7 +1354,7 @@ extension ItemListHandler {
             }
         } else {
             let safeRows =
-                (showsScrollbar || itemCount <= contentHeight)
+                (!reservesIndicatorLine || itemCount <= contentHeight)
                 ? contentHeight
                 : max(1, contentHeight - 2)
             let tail = min(

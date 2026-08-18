@@ -46,14 +46,21 @@ struct TableReorderDragTests {
         init(
             rows: [String] = ["a", "b", "c", "d", "e"], reorderable: Bool = true,
             feedback: RowReorderFeedback = .live,
-            scrollbar: ScrollbarVisibility = .hidden
+            scrollbar: ScrollIndicatorVisibility = .automatic
         ) {
             self.rows = rows
             self.reorderable = reorderable
             env.focusManager = FocusManager()
+            // The "▲/▼ N more" style, spelled out. Since #555 the visibility
+            // and the style are separate questions, and the cases below read
+            // row geometry off the screen: which line the indicator took, where
+            // a slot sits. The `scrollbar:` argument answers the first question
+            // — the cases that want a bar pass `.visible` AND ask for the bar
+            // style, which is what the two together mean.
+            env.scrollIndicatorStyle = scrollbar == .visible ? .scrollbar : .text
             env.rowReorderFeedback = feedback
+            // Vertical only: a `Table` has no horizontal bar to configure.
             env.verticalScrollIndicatorVisibility = scrollbar
-            env.horizontalScrollIndicatorVisibility = scrollbar
             env.applyRuntimeServices(from: tui)
             tui.mouseEventDispatcher.setActiveSupport(.full)
         }
@@ -601,6 +608,9 @@ struct TableReorderDragTests {
         let tui = TUIContext()
         var env = EnvironmentValues()
         env.focusManager = FocusManager()
+        // The "▼ N rows below" style, spelled out: this case reads the count
+        // off that line, which the default bar does not draw (#555).
+        env.scrollIndicatorStyle = .text
         env.applyRuntimeServices(from: tui)
         tui.mouseEventDispatcher.setActiveSupport(.full)
 

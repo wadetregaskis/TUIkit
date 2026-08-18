@@ -38,7 +38,7 @@ struct TableScrollIndicatorTests {
         tui: TUIContext, fm: FocusManager,
         twoLineRows: Bool = false,
         granularity: ScrollGranularity = .row,
-        scrollbar: ScrollbarVisibility = .hidden
+        scrollbar: ScrollIndicatorVisibility = .hidden
     ) -> [String] {
         renderBuffer(
             tui: tui, fm: fm, twoLineRows: twoLineRows, granularity: granularity,
@@ -50,7 +50,7 @@ struct TableScrollIndicatorTests {
         tui: TUIContext, fm: FocusManager,
         twoLineRows: Bool = false,
         granularity: ScrollGranularity = .row,
-        scrollbar: ScrollbarVisibility = .hidden
+        scrollbar: ScrollIndicatorVisibility = .hidden
     ) -> FrameBuffer {
         let rows = (0..<20).map(Note.init(id:))
         let table = Table(rows, selection: .constant(Int?.none)) {
@@ -63,8 +63,12 @@ struct TableScrollIndicatorTests {
         var env = EnvironmentValues()
         env.focusManager = fm
         env.scrollGranularity = granularity
-        env.verticalScrollIndicatorVisibility = scrollbar
-        env.horizontalScrollIndicatorVisibility = scrollbar
+        // The suite predates the visibility/style split (#555): `scrollbar` here
+        // has always meant "bar or 'N more' lines", which is now a STYLE. Both
+        // are visible on demand; the knob picks which one is drawn.
+        env.scrollIndicatorStyle = scrollbar == .visible ? .scrollbar : .text
+        env.verticalScrollIndicatorVisibility = .automatic
+        env.horizontalScrollIndicatorVisibility = .automatic
         env.applyRuntimeServices(from: tui)
         let context = RenderContext(
             availableWidth: 30, availableHeight: Self.height, environment: env, tuiContext: tui)

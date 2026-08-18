@@ -28,6 +28,10 @@ struct RevealDirectionalityTests {
         var environment = EnvironmentValues()
         environment.focusManager = focusManager
         environment.applyRuntimeServices(from: tuiContext)
+        // Predates the visibility/style split (#555): these reveal assertions are
+        // written against the "N more" lines, which are now a style rather than
+        // the default. The one test wanting a bar asks for it on its own view.
+        environment.scrollIndicatorStyle = .text
         let context = RenderContext(
             availableWidth: 30, availableHeight: height,
             environment: environment, tuiContext: tuiContext)
@@ -153,6 +157,7 @@ struct RevealDirectionalityTests {
             }
         }
         .scrollIndicators(.visible)
+        .scrollIndicatorStyle(.scrollbar)  // this case is about the BAR
         .frame(height: 8)
 
         renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, height: 8)

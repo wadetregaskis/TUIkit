@@ -23,9 +23,10 @@ extension ItemListHandler {
     ///
     /// Three things are not "resting", and each is skipped:
     ///
-    /// - **A scrollbar is drawn.** It has no indicator line to save, so there
-    ///   is nothing to win — and the snap would undo a single up/down-arrow
-    ///   click on the bar (0↔1).
+    /// - **The "N more" lines are not what this view draws.** A scrollbar
+    ///   spends a column and hidden indicators spend nothing, so in neither
+    ///   case is there an indicator line to save — and with a bar the snap
+    ///   would undo a single up/down-arrow click on it (0↔1).
     /// - **A line-granular step landed mid-row.** A wheel tick over multi-line
     ///   rows legitimately rests at row 1 (one three-line tick over three-line
     ///   rows), and snapping it back makes the list unscrollable whenever the
@@ -37,15 +38,17 @@ extension ItemListHandler {
     /// - Parameters:
     ///   - overflowing: Whether the content is taller than the viewport. A list
     ///     that fits has no indicator to save in the first place.
-    ///   - showsScrollbar: Whether a scrollbar is drawn instead of the text
-    ///     indicators.
+    ///   - drawsTextIndicators: Whether the "N more" lines are the indicator
+    ///     this view draws. There is no indicator line to save when a scrollbar
+    ///     is drawn instead (it spends a column), nor when the view's
+    ///     indicators are hidden altogether.
     ///   - firstRowHeight: The first row's height in lines — only consulted
     ///     under line granularity, hence `@autoclosure`: a `List` resolves it by
     ///     building the row, which is not worth doing on the frames (nearly all
     ///     of them) that fail the cheap tests first.
     func settleRestingOffset(
         overflowing: Bool,
-        showsScrollbar: Bool,
+        drawsTextIndicators: Bool,
         firstRowHeight: @autoclosure () -> Int
     ) {
         // Not while the user is STEERING this control. The rule is about where
@@ -62,7 +65,7 @@ extension ItemListHandler {
         // measured from it, while steps stay on `scrollOffset` — which is what
         // makes them able to leave the duplicate at all. See
         // ``ScrollableOffsetState/drawnOffset``.
-        guard overflowing, !showsScrollbar, scrollOffset == 1,
+        guard overflowing, drawsTextIndicators, scrollOffset == 1,
             !isAutoScrolling, !isReordering, externalDropSlot == nil
         else { return }
         let restingMidRow =
@@ -84,7 +87,7 @@ extension ItemListHandler {
     /// moves.
     ///
     /// Resolution only, never a state change — which is why this is a query
-    /// and ``settleRestingOffset(overflowing:showsScrollbar:firstRowHeight:)``
+    /// and ``settleRestingOffset(overflowing:drawsTextIndicators:firstRowHeight:)``
     /// is a mutation. The handler must keep counting fine steps: a clip
     /// snapped back to zero would be re-made by the next step and snapped
     /// again, stalling the wheel at the top forever. Only the drawing absorbs

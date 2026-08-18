@@ -30,6 +30,16 @@ private func listContext(width: Int = 30, height: Int = 8, explicitWidth: Bool =
     return context
 }
 
+/// The same list viewport asking for the "▲/▼ N more rows" style, for the
+/// cases written against those lines. Since #555 they are a style rather than
+/// the default (a scrollbar, which spends a column instead).
+@MainActor
+private func textIndicatorContext(width: Int = 30, height: Int = 8) -> RenderContext {
+    var context = listContext(width: width, height: height)
+    context.environment.scrollIndicatorStyle = .text
+    return context
+}
+
 /// The ANSI-stripped lines of a rendered view.
 @MainActor
 private func strippedLines(_ view: some View, context: RenderContext) -> [String] {
@@ -226,7 +236,7 @@ struct ListRenderTests {
             List(selection: .constant(String?.none)) {
                 ForEach((0..<20).map { "Item \($0)" }, id: \.self) { Text($0) }
             },
-            context: listContext(width: 30, height: 8)
+            context: textIndicatorContext(width: 30, height: 8)
         )
 
         expectClosedBorder(lines)
@@ -262,18 +272,26 @@ struct ListRenderTests {
         #expect(!joined.contains("more rows below"), "bar replaces the text indicator: \(lines)")
     }
 
-    @Test("Lists draw no scrollbar by default")
-    func noScrollbarByDefault() {
-        let lines = strippedLines(
-            List(selection: .constant(String?.none)) {
-                ForEach((0..<20).map { "Item \($0)" }, id: \.self) { Text($0) }
-            },
-            context: listContext(width: 30, height: 8)
-        )
-        // The "N more rows below" indicator uses ▼; the telltale of a scrollbar is its
-        // block-glyph thumb, which a default list lacks.
+    @Test("An overflowing list draws a scrollbar by default; the text is a style")
+    func scrollbarIsTheDefaultStyle() {
+        // Visibility and style are separate questions (#555). Left alone, an
+        // overflowing list is automatically indicated, and the indicator it
+        // reaches for is a bar — the "▼ N more rows below" line is a style the
+        // caller asks for, and the two never show together.
+        let view = List(selection: .constant(String?.none)) {
+            ForEach((0..<20).map { "Item \($0)" }, id: \.self) { Text($0) }
+        }
+        // The telltale of a bar is its block-glyph thumb; the text indicator's
+        // own ▼ would not distinguish them.
         let blocks: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇"]
-        #expect(!lines.joined().contains { blocks.contains($0) }, "no scrollbar thumb by default: \(lines)")
+
+        let byDefault = strippedLines(view, context: listContext(width: 30, height: 8)).joined()
+        #expect(byDefault.contains { blocks.contains($0) }, "a thumb by default: \(byDefault)")
+        #expect(!byDefault.contains("more rows below"), "and not the text as well")
+
+        let asText = strippedLines(view, context: textIndicatorContext(width: 30, height: 8)).joined()
+        #expect(!asText.contains { blocks.contains($0) }, "the text style spends no column: \(asText)")
+        #expect(asText.contains("more rows below"))
     }
 
     @Test("A List scrollbar measures multi-line rows in lines, not rows")
@@ -291,6 +309,7 @@ struct ListRenderTests {
             }
         }
         .scrollIndicators(.visible)
+        .scrollIndicatorStyle(.scrollbar)
         let buffer = renderToBuffer(view, context: context)
         let lines = buffer.lines.map { $0.stripped }
         expectClosedBorder(lines)

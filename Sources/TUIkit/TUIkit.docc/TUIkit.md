@@ -168,7 +168,8 @@ struct MyApp: App {
 - ``ScrollFollowMargin``
 - ``ScrollGranularity``
 - ``ScrollOverscroll``
-- ``ScrollbarVisibility``
+- ``ScrollIndicatorVisibility``
+- ``ScrollIndicatorStyle``
 - ``ScrollbarArrows``
 - ``ScrollbarEdges``
 - ``ScrollbarClickBehavior``
