@@ -577,10 +577,15 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
             // Selected but not focused: solid accent
             indicatorColor = palette.accent
         } else if isHovered {
-            // Hovered (and neither focused nor selected):
-            // dim accent — reads as "you can pick me" without
-            // mimicking the focused or selected look.
-            indicatorColor = palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background)
+            // Hovered (and neither focused nor selected): the resting colour
+            // LIFTED, not a tint of its own. It used to be the accent at
+            // `focusBorderDim`, and on a 256-colour terminal that landed on the
+            // same cube entry as the dim resting colour — measured on Green,
+            // hovering an unselected item changed `#005f00` to `#005f00`, which
+            // is to say it did nothing at all.
+            indicatorColor = palette.hoveredForeground(
+                palette.foregroundTertiary.opacity(
+                    ViewConstants.disabledForeground, over: palette.background))
         } else {
             // Unselected, unfocused, unhovered: dimmed.
             indicatorColor = palette.foregroundTertiary.opacity(
@@ -595,6 +600,16 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         var labelContext = context
         if labelContext.environment.controlKind == nil {
             labelContext.environment.controlKind = .radioButton
+        }
+        // The whole row is the click target, so the whole row answers the
+        // pointer — indicator and label together, the way a `Toggle` does.
+        if isHovered, !isDisabled {
+            let base =
+                labelContext.environment.foregroundStyle
+                ?? labelContext.environment.styleCascade
+                    .resolve(for: [.all, .text, .control(.radioButton)]).foreground
+                ?? palette.foreground
+            labelContext.environment.foregroundStyle = palette.hoveredForeground(base)
         }
         let labelView = item.labelBuilder()
         let labelBuffer = labelView.renderToBuffer(context: labelContext)

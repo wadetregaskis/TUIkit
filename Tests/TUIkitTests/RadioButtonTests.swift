@@ -202,6 +202,53 @@ struct RadioButtonGroupTests {
         #expect(content.contains("\u{1b}["))
     }
 
+    /// Claims auto-focus so the group under test renders unfocused — a focused
+    /// item suppresses its own hover.
+    private final class RadioFocusSentinel: Focusable {
+        let focusID = "radio-hover-sentinel"
+        func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
+    }
+
+    @Test("Hovering an unselected item lifts it visibly")
+    func hoverLiftsTheItem() {
+        // It used to tint the indicator to the accent at `focusBorderDim`,
+        // which on a 256-colour terminal lands on the SAME cube entry as the
+        // dim resting colour: measured live on Green, hovering an unselected
+        // radio changed `#005f00` to `#005f00`. The lift is measured through
+        // the cube instead, so it cannot vanish that way.
+        withColorDepth(.truecolor) {
+            let context = createTestContext()
+            let dispatcher = context.environment.mouseEventDispatcher!
+            dispatcher.setActiveSupport(.full)
+            context.environment.focusManager!.register(RadioFocusSentinel())
+
+            let view = RadioButtonGroup(selection: .constant("a")) {
+                RadioButtonItem("a", "First")
+                RadioButtonItem("b", "Second")
+            }
+            let before = renderToBuffer(view, context: context).lines.joined()
+            let regions = renderToBuffer(view, context: context).hitTestRegions
+            dispatcher.setRegions(regions)
+            guard let second = regions.last else {
+                Issue.record("expected a hit-test region per radio item")
+                return
+            }
+            _ = dispatcher.dispatch(
+                MouseEvent(
+                    button: .none, phase: .moved,
+                    x: second.offsetX + 1, y: second.offsetY))
+            let after = renderToBuffer(view, context: context).lines.joined()
+
+            #expect(before != after, "the pointer has to change something: \(after)")
+            let palette = context.environment.palette
+            let lifted = palette.hoveredForeground(palette.foreground)
+            let rgb = lifted.resolve(with: palette).rgbComponents!
+            #expect(
+                after.contains("38;2;\(rgb.red);\(rgb.green);\(rgb.blue)"),
+                "the hovered item's label is lifted: \(after)")
+        }
+    }
+
     @Test("Disabled group uses tertiary color")
     func disabledGroup() {
         let context = createTestContext()
