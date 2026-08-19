@@ -276,7 +276,7 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
 
             // If this section is active, hand its borders the breathing ●
             // (never active during measurement).
-            sectionContext.environment.focusIndicator = FocusIndicatorEmphasis.activeSection(
+            sectionContext.environment.focusIndicator = AnimatedColor.activeSection(
                 !columnContext.isMeasuring && (focusManager?.isActiveSection(sectionID) ?? false),
                 in: context.environment)
 

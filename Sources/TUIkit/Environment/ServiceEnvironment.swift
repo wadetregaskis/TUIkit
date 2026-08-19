@@ -96,7 +96,7 @@ private struct CursorTimerKey: EnvironmentKey {
 
 /// EnvironmentKey for the active section's breathing ● in the current subtree.
 private struct FocusIndicatorKey: EnvironmentKey {
-    static let defaultValue: FocusIndicatorEmphasis? = nil
+    static let defaultValue: AnimatedColor? = nil
 }
 
 /// EnvironmentKey for the drag-and-drop session.
@@ -206,7 +206,7 @@ extension EnvironmentValues {
     /// The breathing ● the first border encountered in this subtree should
     /// draw — and every frame of it, so that border can hand the run loop a
     /// run rather than have the whole page re-render per tick.
-    var focusIndicator: FocusIndicatorEmphasis? {
+    var focusIndicator: AnimatedColor? {
         get { self[FocusIndicatorKey.self] }
         set { self[FocusIndicatorKey.self] = newValue }
     }

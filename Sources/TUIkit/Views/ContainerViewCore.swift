@@ -530,7 +530,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         borderStyle: BorderStyle,
         borderColor: AnimatedColor,
         context: RenderContext,
-        focusIndicator: FocusIndicatorEmphasis? = nil
+        focusIndicator: AnimatedColor? = nil
     ) -> FrameBuffer {
         let palette = context.environment.palette
         let borderNow = borderColor.current
@@ -545,7 +545,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                     color: borderNow,
                     title: titleText,
                     titleColor: titleColor?.resolve(with: palette) ?? palette.accent,
-                    focusIndicatorColor: focusIndicator?.colorNow
+                    focusIndicatorColor: focusIndicator?.current
                 )
             )
         } else {
@@ -554,7 +554,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                     style: borderStyle,
                     innerWidth: innerWidth,
                     color: borderNow,
-                    focusIndicatorColor: focusIndicator?.colorNow
+                    focusIndicatorColor: focusIndicator?.current
                 )
             )
         }
@@ -688,7 +688,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         innerWidth: Int,
         borderStyle: BorderStyle,
         borderColor: AnimatedColor,
-        focusIndicator: FocusIndicatorEmphasis?,
+        focusIndicator: AnimatedColor?,
         lineCount: Int,
         palette: any Palette
     ) -> [AnimatedCellRun] {
@@ -712,7 +712,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                 dividerRow: dividerRow(bodyBuffer: bodyBuffer, footerBuffer: footerBuffer),
                 palette: palette)
         } else if let indicatorRun = showsIndicator
-            ? focusIndicator?.run(offsetX: 1, offsetY: 0) : nil
+            ? focusIndicator?.focusIndicatorRun(offsetX: 1, offsetY: 0) : nil
         {
             // The section's ● breathes on its own, at the one cell the top
             // border just drew it in — `BorderRenderer.showsFocusIndicator` is
@@ -746,7 +746,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
     @MainActor
     private func borderRuns(
         _ borderColor: AnimatedColor,
-        indicator: FocusIndicatorEmphasis?,
+        indicator: AnimatedColor?,
         borderStyle: BorderStyle,
         innerWidth: Int,
         lineCount: Int,
@@ -759,8 +759,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         var runs: [AnimatedCellRun] = []
 
         if let top = borderColor.run(offsetX: 0, offsetY: 0, drawAtStep: { step, colour in
-            let dot = indicator.map { $0.cycle.colors(dim: $0.dim, bright: $0.bright) }
-                .map { $0[step % max(1, $0.count)] }
+            let dot = indicator?.color(atStep: step)
             guard let titleText else {
                 return BorderRenderer.standardTopBorder(
                     style: borderStyle, innerWidth: innerWidth, color: colour,

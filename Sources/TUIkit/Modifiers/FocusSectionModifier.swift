@@ -63,7 +63,7 @@ extension FocusSectionModifier: Renderable {
         // the shades the cube can actually show. As a CYCLE rather than a live
         // phase, so the border can leave a run behind instead of the page
         // re-rendering on every tick.
-        sectionContext.environment.focusIndicator = FocusIndicatorEmphasis.activeSection(
+        sectionContext.environment.focusIndicator = AnimatedColor.activeSection(
             !context.isMeasuring && (focusManager?.isActiveSection(sectionID) ?? false),
             in: context.environment)
 

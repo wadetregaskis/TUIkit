@@ -1,0 +1,48 @@
+//  🖥️ TUIkit — Terminal UI Kit for Swift
+//  FocusIndicatorColor.swift
+//
+//  Created by Wade Tregaskis
+//  License: MIT
+
+import TUIkitCore
+
+extension AnimatedColor {
+    /// The breathing ● an ACTIVE focus section shows in its border, or `nil`
+    /// when the section is not active — which is also the value that means
+    /// "draw no ●".
+    ///
+    /// A section decides *whether* the indicator is showing; the border that
+    /// draws the box is the only thing that knows *where* it lands. Passing a
+    /// plain `Color` between them was enough to draw it and not enough to
+    /// animate it: the colour had to be resolved from the live clock as the
+    /// section rendered, which marks the whole frame as having consulted that
+    /// clock, so every tick of the pulse re-rendered the entire page to repaint
+    /// one cell.
+    ///
+    /// The two endpoints are decided here, once, because both producers — a
+    /// ``FocusSectionModifier`` and a ``NavigationSplitView`` column — want the
+    /// same ●, and a second copy of the arithmetic is a second thing to drift.
+    @MainActor
+    static func activeSection(_ isActive: Bool, in environment: EnvironmentValues) -> Self? {
+        guard isActive else { return nil }
+        let accent = environment.palette.accent
+        return environment.selectionEmphasis.animatedColor(
+            true,
+            dim: accent.opacity(ViewConstants.focusBorderDim, over: environment.palette.background),
+            bright: accent)
+    }
+
+    /// The ● drawn in this colour — the one description of that glyph, shared
+    /// by the border that draws it and the run that replays it.
+    func focusIndicatorGlyph(_ colour: Color) -> String {
+        String(BorderRenderer.focusIndicator).styled(foreground: colour)
+    }
+
+    /// The run that breathes the ● at `(offsetX, offsetY)`, or `nil` when the
+    /// indicator style does not animate (a still ● was already drawn, and a run
+    /// would rewrite it on every tick to no visible effect).
+    @MainActor
+    func focusIndicatorRun(offsetX: Int, offsetY: Int) -> AnimatedCellRun? {
+        run(offsetX: offsetX, offsetY: offsetY) { focusIndicatorGlyph($0) }
+    }
+}
