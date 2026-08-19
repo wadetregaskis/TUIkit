@@ -112,7 +112,17 @@ public struct AnimatedCellRun: Sendable, Equatable {
     /// so replaying it would emit bytes for no change. Producers are allowed to
     /// build one anyway (a disabled control, a cursor style with no blink) and
     /// let this filter it out, rather than each having to decide not to.
-    public var isAnimating: Bool { frames.count > 1 }
+    ///
+    /// Several frames that are all the SAME picture is the same thing, and it
+    /// happens for real: on a 256-colour terminal a pulse walks the shades the
+    /// cube can show, and on a dim palette in a narrow hue that can be one
+    /// shade. Keeping such a run alive holds the animation clock open forever
+    /// to repaint a picture that cannot change.
+    public var isAnimating: Bool {
+        guard frames.count > 1 else { return false }
+        let first = frames[0]
+        return frames.contains { $0 != first }
+    }
 
     /// The frame to show at `step` of the driving clock.
     public func frame(at step: Int) -> String {

@@ -281,10 +281,16 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
     ///   reverts to.
     private func enterSection(depth: Int, context: RenderContext) -> String? {
         let focusManager = context.environment.focusManager
+        // Not while rendering as a modal's dimmed backdrop: that pass carries a
+        // THROWAWAY focus manager, so the deactivation would land on an object
+        // nobody reads — and consuming `renderedDepth` here would spend the
+        // trigger, so the real manager would never hear about the pop at all.
+        // The page under a presentation is not navigating; it is a picture.
+        guard let focusManager, !focusManager.isBackdrop else { return nil }
         let base = context.identity.path
         if coordinator.renderedDepth > depth {
             for deeper in stride(from: coordinator.renderedDepth, to: depth, by: -1) {
-                focusManager?.deactivateSection(id: Self.sectionID(base: base, depth: deeper))
+                focusManager.deactivateSection(id: Self.sectionID(base: base, depth: deeper))
             }
         }
         let pushed = coordinator.renderedDepth < depth
@@ -294,7 +300,7 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         // Registration is per-frame presence: sections are rebuilt every pass,
         // so the section has to be declared again each time or its controls
         // have nowhere to register.
-        focusManager?.registerSection(id: sectionID)
+        focusManager.registerSection(id: sectionID)
         // Activation is NOT. It is a transition — it remembers the section it
         // leaves, drops the focus, and restores this one's memory — so calling
         // it every frame while something else is active (an alert or sheet
@@ -302,7 +308,7 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         // pass: the dialog's control was focused for under a frame, a field in
         // it was torn down and restarted continuously, and the render loop
         // spun at the frame cap for as long as the dialog was up.
-        if pushed { focusManager?.activateSection(id: sectionID) }
+        if pushed { focusManager.activateSection(id: sectionID) }
         return sectionID
     }
 

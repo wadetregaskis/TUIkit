@@ -316,6 +316,20 @@ struct AnimationTickStrideTests {
         for step in 0..<8 { #expect(smooth.ticksUntilChange(after: step) == 1) }
     }
 
+    @Test("Frames that are all the same picture are not an animation")
+    func identicalFramesAreStill() {
+        // Real, not theoretical: on a 256-colour terminal a pulse walks the
+        // shades the cube can paint, and on a dim palette in a narrow hue that
+        // can come to one shade. Such a run would hold the clock open forever
+        // to repaint a picture that cannot change.
+        let still = AnimatedCellRun(
+            offsetX: 0, offsetY: 0, width: 1, frames: ["●", "●", "●"], clock: .cursor)
+        #expect(!still.isAnimating)
+        let moving = AnimatedCellRun(
+            offsetX: 0, offsetY: 0, width: 1, frames: ["●", "●", "○"], clock: .cursor)
+        #expect(moving.isAnimating)
+    }
+
     @Test("A run that never changes may be waited out entirely")
     func stillRunsWaitACycle() {
         // Not an animation at all (`isAnimating` filters these out before the
