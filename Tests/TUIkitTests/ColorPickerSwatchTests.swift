@@ -50,6 +50,34 @@ struct ColorPickerSwatchTests {
         #expect(!out.contains("█●█"), "no marker when nothing is pointing at it: \(out)")
     }
 
+    @Test("A focused swatch hands its bullet to the run loop")
+    func focusBulletIsARun() {
+        // The bullet breathes. Building that from the live clock is what forced
+        // a full re-render of the page on every tick; it leaves a run instead,
+        // over the one cell it drew into.
+        let context = makeRenderContext(width: 60, height: 4)
+        let buffer = renderToBuffer(picker(), context: context)
+        let runs = buffer.animatedCells
+        #expect(runs.count == 1, "the focused swatch left no run")
+        #expect(runs[0].isAnimating, "the run is a still picture")
+        #expect(runs[0].width == 1, "the bullet is one cell")
+        #expect(runs[0].frames.allSatisfy { $0.stripped == "●" }, "the pulse is colour-only")
+        // The run has to land on the centre cell of the swatch — replaying the
+        // step it was rendered at must change nothing on screen.
+        let replayed = buffer.composited(
+            with: FrameBuffer(lines: [runs[0].frame(at: 0)]),
+            at: (x: runs[0].offsetX, y: runs[0].offsetY))
+        #expect(replayed.lines.map { $0.stripped } == buffer.lines.map { $0.stripped },
+            "the run does not sit on the bullet")
+    }
+
+    @Test("An unfocused swatch animates nothing")
+    func restingSwatchIsStill() {
+        let context = makeRenderContext(width: 60, height: 4)
+        context.environment.focusManager!.register(FocusSentinel())
+        #expect(renderToBuffer(picker(), context: context).animatedCells.isEmpty)
+    }
+
     @Test("A focused swatch marks its CENTRE CELL and keeps its colour")
     func focusIsACentreBullet() {
         withColorDepth(.truecolor) {

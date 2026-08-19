@@ -4,6 +4,8 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import TUIkitCore
+
 // MARK: - Swatch Style
 
 /// A button whose whole body is a 3-cell block of one colour, using its CENTRE
@@ -50,16 +52,19 @@ struct _ColorSwatchCells: View {
 
     @Environment(\.palette) private var palette
 
-    /// The shared focus clock — resolved ONLY while focused (resolving a
-    /// focused emphasis is the volatile read that keeps the clock ticking, and
-    /// an ungated one would keep every swatch on the page redrawing forever).
+    /// The shared focus clock — asked for a CYCLE, and only while focused. The
+    /// cycle is computed from the static formula, so the swatch can hand its
+    /// bullet to the run loop; asking for the live phase instead would mark the
+    /// frame as having consulted the clock and re-render the whole page on
+    /// every tick, to repaint one cell.
     @Environment(\.selectionEmphasis) private var emphasis
 
     var body: some View {
         // Semantic colours have no components of their own, and both the fill
         // and the bullet's contrast need concrete ones.
         let fill = color.resolve(with: palette)
-        let bullet = indicator(on: fill)
+        let cycle = emphasis.cycle(isFocused)
+        let bullet = indicator(on: fill, cycle: cycle)
         return HStack(spacing: 0) {
             Text("█").foregroundStyle(fill).background(fill)
             Text(bullet == nil ? "█" : "●")
@@ -67,26 +72,50 @@ struct _ColorSwatchCells: View {
                 .background(fill)
             Text("█").foregroundStyle(fill).background(fill)
         }
+        // The bullet is the CENTRE cell, hence offset 1. Composition, not a
+        // `Renderable` core, so the runs are declared rather than written onto
+        // a buffer — see ``View/animatedCells(_:)``.
+        .animatedCells(bulletRuns(on: fill, cycle: cycle))
     }
 
     /// The bullet's colour for the current state, or `nil` for no bullet — an
     /// unadorned swatch cell. Contrast comes from `Palette.readableText(on:)`,
     /// so the bullet reads on any colour the swatch can hold.
-    private func indicator(on fill: Color) -> Color? {
-        let readable = palette.readableText(on: fill)
+    private func indicator(on fill: Color, cycle: SelectionEmphasisCycle) -> Color? {
         if isFocused {
             // Focused: the bullet pulses whether or not this swatch is
             // selected — activating (Enter / Space / click) selects it.
-            let dim = readable.opacity(ViewConstants.focusPulseMin, over: fill)
-            return emphasis(true).color(dim: dim, bright: readable)
+            let (dim, bright) = pulseEndpoints(on: fill)
+            return cycle.colorNow(dim: dim, bright: bright)
         }
-        if isSelected { return readable }
+        if isSelected { return palette.readableText(on: fill) }
         if isHovered {
             // A dim bullet: "you can pick me", without mimicking the selected
             // or focused look.
-            return readable.opacity(ViewConstants.focusBorderDim, over: fill)
+            return palette.readableText(on: fill).opacity(
+                ViewConstants.focusBorderDim, over: fill)
         }
         return nil
+    }
+
+    /// The two ends of the focused bullet's breath. One definition: the drawn
+    /// bullet and the run that replays it have to agree, or the loop's first
+    /// tick jumps to a different colour than the render left.
+    private func pulseEndpoints(on fill: Color) -> (dim: Color, bright: Color) {
+        let readable = palette.readableText(on: fill)
+        return (readable.opacity(ViewConstants.focusPulseMin, over: fill), readable)
+    }
+
+    /// The run that breathes the centre cell, or none when the swatch is not
+    /// focused (nothing moves) or the indicator style does not animate.
+    private func bulletRuns(on fill: Color, cycle: SelectionEmphasisCycle) -> [AnimatedCellRun] {
+        guard isFocused else { return [] }
+        let (dim, bright) = pulseEndpoints(on: fill)
+        return [
+            cycle.run(dim: dim, bright: bright, offsetX: 1, offsetY: 0) { colour in
+                ANSIRenderer.colorize("●", foreground: colour, background: fill)
+            }
+        ].compactMap { $0 }
     }
 }
 
