@@ -126,7 +126,11 @@ public struct SelectableListRow<SelectionValue: Hashable & Sendable>: Sendable {
     /// buffer: the leading selection gutter is added around the buffer, so a
     /// background inside it starts one cell late and leaves the row's first
     /// cell at the terminal default.
-    var backgroundOverride: Color?
+    ///
+    /// A ``RowBackground`` rather than a `Color` so the slot can BREATHE the
+    /// way the cursor row does — through the same machinery, so the slot's
+    /// lines get their runs without a second path to maintain.
+    var backgroundOverride: RowBackground = .none
 
     /// The rendered content buffer.
     ///

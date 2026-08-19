@@ -306,4 +306,28 @@ struct FocusIndicatorContainerAnimationTests {
                 context: context
             ).animatedCells.isEmpty)
     }
+
+    // MARK: - The reorder slot in hand
+
+    @Test("A keyboard-held reorder slot breathes")
+    func heldSlotPulses() {
+        // A keyboard move has no pointer to say where the row is, so the slot
+        // says it — with the SAME pulse a focused, selected row uses. That came
+        // from the live clock, so holding a row re-rendered the page ~20 times
+        // a second for as long as you held it.
+        let fixture = ListReorderFixture(items: (0..<6).map { "row\($0)" }, feedback: .dimmed)
+        _ = fixture.render()
+        _ = fixture.env.focusManager?.dispatchKeyEvent(
+            KeyEvent(key: .character("r"), ctrl: true))
+        let held = fixture.render()
+
+        #expect(fixture.handler?.reorder?.active == true, "a hold is in flight")
+        #expect(!held.animatedCells.isEmpty, "the slot does not breathe")
+        for run in held.animatedCells {
+            #expect(run.isAnimating)
+            #expect(
+                Set(run.frames.map(\.stripped)).count == 1, "the pulse moved a glyph")
+        }
+        expectReplayIsIdentity(held, "the slot's run does not match the drawn cells")
+    }
 }

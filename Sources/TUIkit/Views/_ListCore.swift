@@ -1660,13 +1660,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// drag has the pointer itself to say where the row is.
     private func heldSlotBackground(
         handler: ItemListHandler<SelectionValue>, context: RenderContext, palette: any Palette
-    ) -> Color? {
-        guard handler.isKeyboardMove else { return nil }
-        return SelectionIndicator.resolve(isFocused: true, context: context)
-            .color(
-                dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
-                bright: palette.accent.opacity(
-                    ViewConstants.focusPulseMax, over: palette.background))
+    ) -> RowBackground {
+        guard handler.isKeyboardMove else { return .none }
+        // Literally the same pulse, from the same place: the sentence above is
+        // a claim the code now cannot break.
+        return .focusedSelection(in: context, palette: palette)
     }
 
     /// The same buffer with every line drawn faint — `.dimmed`'s preview of the
@@ -2281,15 +2279,21 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         context: RenderContext,
         palette: any Palette
     ) -> RenderedRow {
-        let background = row.backgroundOverride.map(RowBackground.fixed) ?? rowBackground(
-            rowType: row.type,
-            isFocused: isFocused,
-            isSelected: isSelected,
-            sectionContentIndex: sectionContentIndex,
-            style: style,
-            context: context,
-            palette: palette
-        )
+        // A row that names its own background (the reorder slot) keeps it; the
+        // rest ask their type and state.
+        let background: RowBackground
+        if case .none = row.backgroundOverride {
+            background = rowBackground(
+                rowType: row.type,
+                isFocused: isFocused,
+                isSelected: isSelected,
+                sectionContentIndex: sectionContentIndex,
+                style: style,
+                context: context,
+                palette: palette)
+        } else {
+            background = row.backgroundOverride
+        }
 
         // Check for badge on the row (only for content rows, on first line only)
         let badge = row.badge
