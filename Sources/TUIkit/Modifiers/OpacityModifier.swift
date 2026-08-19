@@ -35,6 +35,15 @@ extension View {
     ///   toward the palette background rather than toward whatever the view
     ///   happens to sit on. The two agree except over a non-background fill.
     ///
+    /// Changed inside ``withAnimation(_:_:)``, it fades rather than jumps —
+    /// this view is ``Animatable``, and opacity is what it interpolates:
+    ///
+    /// ```swift
+    /// Text("Saved")
+    ///     .opacity(hasSaved ? 1 : 0)
+    ///     .animation(.easeInOut(duration: 0.4), value: hasSaved)
+    /// ```
+    ///
     /// - Parameter opacity: `0` (invisible) through `1` (unchanged).
     /// - Returns: A view whose colours are blended toward the background.
     public func opacity(_ opacity: Double) -> some View {
@@ -45,10 +54,22 @@ extension View {
 /// Blends everything `content` draws toward the palette background.
 struct _OpacityView<Content: View>: View {
     let content: Content
-    let opacity: Double
+    var opacity: Double
 
     var body: Never {
         fatalError("_OpacityView renders via Renderable")
+    }
+}
+
+extension _OpacityView: Animatable {
+    /// Opacity is the one continuous thing about this view, so a change to it
+    /// inside ``withAnimation(_:_:)`` is a fade rather than a jump.
+    ///
+    /// A `var` rather than a `let` above only so this setter has somewhere to
+    /// write; nothing else mutates it.
+    var animatableData: Double {
+        get { opacity }
+        set { opacity = newValue }
     }
 }
 
