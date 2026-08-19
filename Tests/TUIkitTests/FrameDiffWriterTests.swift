@@ -446,6 +446,54 @@ struct FrameDiffWriterIncrementalReuseTests {
         #expect(writer.rowsBuiltInLastBuild == 1)
     }
 
+    @Test("An animation replay must not poison the reuse cache")
+    func replayPatchDoesNotPoisonReuse() {
+        // The freeze this pins: a focus indicator stuck mid-breath the instant
+        // focus moved away, on every control whose RAW line is the same focused
+        // or not (only its `AnimatedCellRun` differed).
+        //
+        // The replay patches a run's current frame into the line on screen and
+        // commits that through `writeContentDiff`, so the diff baseline holds
+        // the PATCHED line. The reuse read its "previously built" lines from
+        // that same store, so the next render handed the patched line back as
+        // "what the builder would produce" — which then equalled the baseline,
+        // so the row was never written again and the pulse colour stayed put.
+        let writer = FrameDiffWriter(isAppleTerminal: false)
+        let terminal = MockTerminal()
+        let width = 20, height = 4
+        let rows = ["alpha", "beta"]
+
+        let built = buildAndCommit(writer, rows, width: width, height: height, terminal: terminal)
+
+        // A tick: the run's current frame spliced into row 0, committed the way
+        // `RenderLoop.replayAnimations` commits it.
+        var patched = built
+        patched[0] = built[0] + "[PULSE]"
+        writer.writeContentDiff(
+            newLines: patched, terminal: terminal, startRow: 1,
+            terminalWidth: width, bgCode: bg, reset: reset
+        )
+
+        // The next frame renders the same raw content (the row looks the same
+        // unfocused as focused) …
+        let again = writer.buildOutputLines(
+            buffer: makeBuffer(rows), terminalWidth: width, terminalHeight: height,
+            bgCode: bg, reset: reset, reusingFor: .content
+        )
+        #expect(again == built, "the build handed back the patch: \(again[0].debugDescription)")
+
+        // … and because it differs from what is on screen, it is written, which
+        // is what puts the row back to its resting appearance.
+        terminal.reset()
+        writer.writeContentDiff(
+            newLines: again, terminal: terminal, startRow: 1,
+            terminalWidth: width, bgCode: bg, reset: reset
+        )
+        #expect(
+            terminal.writtenOutput.contains { $0.contains("alpha") },
+            "the patched row was never repainted: \(terminal.writtenOutput)")
+    }
+
     @Test("A parameter change invalidates all reuse")
     func parameterChangeRebuildsEveryRow() {
         let writer = FrameDiffWriter(isAppleTerminal: false)
@@ -496,11 +544,16 @@ struct FrameDiffWriterIncrementalReuseTests {
         _ = writer.buildOutputLines(buffer: statusBuffer, terminalWidth: 20, terminalHeight: height,
                                     bgCode: bg, reset: reset, reusingFor: .statusBar)
 
-        // Re-building content does NOT consult the status-bar cache: with no
-        // previousContentLines committed, content cannot reuse and rebuilds all,
-        // independent of the status-bar region's state.
-        _ = writer.buildOutputLines(buffer: contentBuffer, terminalWidth: 20, terminalHeight: height,
+        // Content changing rebuilds content …
+        _ = writer.buildOutputLines(buffer: makeBuffer(["CHANGED"]), terminalWidth: 20,
+                                    terminalHeight: height,
                                     bgCode: bg, reset: reset, reusingFor: .content)
-        #expect(writer.rowsBuiltInLastBuild == height)
+        #expect(writer.rowsBuiltInLastBuild == 1)
+
+        // … and leaves the status bar's own cache untouched: it still reuses
+        // every row, which it could not do if the two shared one cache.
+        _ = writer.buildOutputLines(buffer: statusBuffer, terminalWidth: 20, terminalHeight: height,
+                                    bgCode: bg, reset: reset, reusingFor: .statusBar)
+        #expect(writer.rowsBuiltInLastBuild == 0)
     }
 }

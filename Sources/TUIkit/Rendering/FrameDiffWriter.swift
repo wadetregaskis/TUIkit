@@ -132,6 +132,19 @@ final class FrameDiffWriter {
         var rawLines: [String] = []
         var rawHeight = 0
         var params: LineParams?
+
+        /// What the last *build* produced for each row.
+        ///
+        /// Deliberately not the diff's `previousXxxLines`, which the reuse used
+        /// to read: those are what is ON SCREEN, and an animation replay writes
+        /// PATCHED lines there (a run's current frame spliced into the line it
+        /// sits on). Reusing one of those as "what the builder would produce"
+        /// hands the next render the pulse colour that happened to be showing —
+        /// and since it then equals the diff baseline, that row is never written
+        /// again. A focus indicator froze mid-breath the moment focus moved
+        /// away, because the row it left behind renders the same raw line
+        /// focused or not; only its animated run differed.
+        var builtLines: [String] = []
     }
 
     private var contentReuse = LineReuseCache()
@@ -232,9 +245,10 @@ extension FrameDiffWriter {
     /// one-row selection move re-renders the whole screen but changes one row).
     ///
     /// Reuse state is keyed by `region` (each region has its own previous built
-    /// lines and background colour). Must be paired every frame with the
-    /// matching `writeXxxDiff`, which updates the built-line cache this reads —
-    /// as it is in `RenderLoop`.
+    /// lines and background colour) and is self-contained: the cache holds the
+    /// lines this builder produced, NOT the lines the diff last wrote. The two
+    /// are the same after an ordinary frame and differ after an animation
+    /// replay, which patches a run's current frame into what is on screen.
     func buildOutputLines(
         buffer: FrameBuffer,
         terminalWidth: Int,
@@ -247,8 +261,8 @@ extension FrameDiffWriter {
         let emptyLine = bgCode + eraseLine + reset
         let params = LineParams(width: terminalWidth, bgCode: bgCode, reset: reset)
 
-        let previousBuilt = previousLines(for: region)
         let cache = reuseCache(for: region)
+        let previousBuilt = cache.builtLines
         // A row is reusable only when every parameter feeding `buildLine` is
         // unchanged; otherwise the cached built line is stale.
         let canReuse = cache.params == params
@@ -287,7 +301,9 @@ extension FrameDiffWriter {
         }
 
         setReuseCache(
-            LineReuseCache(rawLines: buffer.lines, rawHeight: buffer.height, params: params),
+            LineReuseCache(
+                rawLines: buffer.lines, rawHeight: buffer.height, params: params,
+                builtLines: lines),
             for: region
         )
         rowsBuiltInLastBuild = builtCount
@@ -376,14 +392,6 @@ extension FrameDiffWriter {
         let mainWithBg = compensated.replacing(reset, with: reset + bgCode)
         let padding = max(0, terminalWidth - clippedWidth)
         return bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset
-    }
-
-    private func previousLines(for region: OutputRegion) -> [String] {
-        switch region {
-        case .content: return previousContentLines
-        case .statusBar: return previousStatusBarLines
-        case .appHeader: return previousAppHeaderLines
-        }
     }
 
     private func reuseCache(for region: OutputRegion) -> LineReuseCache {
