@@ -16,10 +16,11 @@ extension EnvironmentValues {
     ///
     /// A built-in control draws its own focus affordance, so it never needs
     /// this. It exists for the case where the focusable thing is *your* view:
-    /// ``View/contextMenu(menuItems:)`` makes whatever it is
-    /// attached to a focus stop (a menu you cannot reach is a menu you cannot
-    /// open from the keyboard), and only that content knows what part of itself
-    /// should say so.
+    /// ``View/focusable(_:)`` makes one a Tab stop, and
+    /// ``View/contextMenu(menuItems:)`` does the same for whatever it is
+    /// attached to (a menu you cannot reach is a menu you cannot open from the
+    /// keyboard). Either way only that content knows what part of itself should
+    /// say so.
     ///
     /// Pair it with ``EnvironmentValues/selectionEmphasis`` to get an
     /// affordance that keeps step with every built-in control and honours
@@ -34,12 +35,14 @@ extension EnvironmentValues {
     ///
     ///     var body: some View {
     ///         Text("Right-click me")
-    ///             .border(color: isFocused
-    ///                 ? emphasis(true).color(dim: palette.border, bright: palette.accent)
-    ///                 : palette.border)
+    ///             .border(emphasis(isFocused).color(
+    ///                 dim: palette.border, bright: palette.accent))
     ///     }
     /// }
     /// ```
+    ///
+    /// That reads the clock as it renders, which costs a full render pass per
+    /// tick of the pulse. See <doc:AnimatingYourOwnView> for the cheap route.
     public var isFocused: Bool {
         get { self[IsFocusedKey.self] }
         set { self[IsFocusedKey.self] = newValue }

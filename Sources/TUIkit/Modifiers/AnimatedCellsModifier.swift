@@ -29,8 +29,8 @@ extension View {
     ///
     /// - Note: This is the low-level route, and it requires the view to know
     ///   where its own cells are. When what animates is a colour something else
-    ///   paints — a border, a background — hand that modifier an
-    ///   ``AnimatedColor`` instead and let it place the runs.
+    ///   paints — a border, a background — hand that modifier an animated
+    ///   colour instead and let it place the runs.
     ///
     /// - Parameter runs: The animated spans, positioned within this view.
     /// - Returns: A view whose buffer carries those runs.
