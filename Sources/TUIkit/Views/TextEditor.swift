@@ -437,9 +437,13 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         func emitCaret(_ underlying: Character, cells: Int, appearance: CaretAppearance) {
             switch appearance.shape {
             case .block:
+                // Floored against the caret's current colour — see the twin in
+                // `TextFieldContentRenderer.caretCells`.
                 emitClipped(
                     underlying, cells: cells,
-                    foreground: palette.background, background: appearance.color)
+                    foreground: palette.background.ensuringRenderedContrast(
+                        atLeast: ViewConstants.labelContrastFloor, against: appearance.color),
+                    background: appearance.color)
             case .underscore where cells == 1 && underlying != " ":
                 flush()
                 var style = TextStyle()

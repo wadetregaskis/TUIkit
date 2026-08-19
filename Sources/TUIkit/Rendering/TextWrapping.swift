@@ -350,7 +350,7 @@ enum TextWrapping {
         flushNarrowRun()
         // Trailing spaces are content when they fit (the space walk preserves
         // them the same way); at a break they'd be consumed anyway.
-        if pendingSpaces > 0, !line.isEmpty, lineWidth + pendingSpaces <= width {
+        if pendingSpaces > 0, !line.isEmpty, lineWidth + pendingSpaces <= budget {
             line += String(repeating: " ", count: pendingSpaces)
             lineWidth += pendingSpaces
         }

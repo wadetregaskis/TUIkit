@@ -489,8 +489,16 @@ struct TextFieldContentRenderer {
         }
         switch shape {
         case .block:
+            // Floored against the caret's CURRENT colour, per frame: the block
+            // is the cursor's colour and the character is punched out of it, so
+            // a palette whose caret sits near its own "text on the caret" tone
+            // drew the character invisibly — and the caret pulses, so the pair
+            // has to be judged at the shade actually being drawn, not once.
             return ANSIRenderer.colorize(
-                String(underlying), foreground: colors.blockText, background: state.color)
+                String(underlying),
+                foreground: colors.blockText.ensuringRenderedContrast(
+                    atLeast: ViewConstants.labelContrastFloor, against: state.color),
+                background: state.color)
         case .underscore where cells == 1 && underlying != " ":
             return ANSIRenderer.colorize(
                 String(underlying), foreground: state.color, background: colors.background,

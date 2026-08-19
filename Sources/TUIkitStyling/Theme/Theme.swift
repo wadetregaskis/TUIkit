@@ -404,8 +404,15 @@ extension Palette {
 
     /// Black or white, whichever `color` is further from — the direction a
     /// colour moves to get out of another one's way.
+    ///
+    /// Judged in ``Color/perceivedLightness``, like every other "which of these
+    /// is lighter" question in this file. A relative-luminance threshold reads
+    /// the middle of the range wrongly: Silver Aerogel's `#929292` page is
+    /// plainly a light grey (L\* 61) and luminance calls it dark (0.29), so the
+    /// hover lift walked TOWARD the page instead of away from it — dimming the
+    /// affordance it exists to brighten, and on a light palette erasing it.
     static func extreme(furthestFrom color: Color) -> Color {
-        (color.relativeLuminance ?? 0) > 0.5 ? Color.rgb(0, 0, 0) : Color.rgb(255, 255, 255)
+        (color.perceivedLightness ?? 0) > 50 ? Color.rgb(0, 0, 0) : Color.rgb(255, 255, 255)
     }
 
     /// How far a **plane** sits from what is behind it, in

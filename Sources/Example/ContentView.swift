@@ -281,6 +281,11 @@ struct ContentView: View {
         ]
 
         if case .character(let ch) = key, let page = mapping[ch] {
+            // The menu's own rows set both, and `MainMenuPage.defaultFocus`
+            // puts the cursor back on `menuSelection` — so a quick-jump that
+            // moved only `currentPage` sent you back to whichever page you had
+            // last opened by clicking, rather than to the one you just left.
+            menuSelection = page
             currentPage = page
             return true
         }
