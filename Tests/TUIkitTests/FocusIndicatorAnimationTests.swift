@@ -578,6 +578,17 @@ struct FocusIndicatorAnimationTests {
         #expect(buffer.animatedCells.map(\.offsetX).max() == buffer.lines[0].strippedLength - 1)
     }
 
+    @Test("The arrows stay pinned at every width the slider is given")
+    func sliderArrowsAcrossWidths() {
+        // The right arrow's column is computed from the track width, which is
+        // whatever layout granted minus the chrome — and clamps at the narrow
+        // end. A single width proves nothing about the clamp.
+        for width in 8...48 {
+            let buffer = focused(Slider(value: .constant(0.5)), width: width)
+            expectArrowsPinned(buffer, "slider arrows at width \(width)")
+        }
+    }
+
     @Test("An unfocused or disabled slider animates nothing")
     func sliderArrowsStill() {
         let context = makeRenderContext(width: 40, height: 8)
