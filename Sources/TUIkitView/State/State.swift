@@ -29,10 +29,25 @@ public final class AppState: Sendable {
     /// Internal state protected by a lock.
     private struct StateData: Sendable {
         var needsRender = false
+        var pendingTransaction: Transaction?
         var pendingAnimationClocks: Set<AnimationClock> = []
         var needsCacheClear = false
         var shouldExit = false
         var observers: [@Sendable () -> Void] = []
+
+        /// Stamps the change being recorded with whatever ``Transaction`` is in
+        /// force where it was made — the seam that makes
+        /// ``withAnimation(_:_:)`` reach the render that follows it.
+        ///
+        /// Only an *explicit* transaction is recorded. A plain
+        /// `setNeedsRender()` leaves whatever an earlier animated change put
+        /// here, because the two mean different things: without this,
+        /// `withAnimation { a = 1 }` followed by an unrelated `b = 2` before
+        /// the next frame would drop the animation on the floor.
+        mutating func recordAmbientTransaction() {
+            guard let ambient = Transaction.ambient else { return }
+            pendingTransaction = ambient
+        }
     }
 
     /// Lock protecting all mutable state.
@@ -56,6 +71,7 @@ extension AppState {
     public func setNeedsRender() {
         let observers = lock.withLock { state -> [@Sendable () -> Void] in
             state.needsRender = true
+            state.recordAmbientTransaction()
             return state.observers
         }
         // Call observers outside the lock to avoid potential deadlocks
@@ -88,6 +104,25 @@ extension AppState {
         }
     }
 
+    /// Takes the transaction the pending change was made under, clearing it.
+    ///
+    /// Called once by the run loop at the start of each render pass. The pass
+    /// publishes it as ``EnvironmentValues/transaction`` so every view affected
+    /// by the change can see how it was meant to arrive.
+    ///
+    /// A frame coalesces every change made since the last one, so a frame with
+    /// two animated changes in it renders both under the *last* transaction —
+    /// there is one pass and it can only run under one. Two animations of
+    /// genuinely different lengths in one frame want
+    /// ``View/animation(_:value:)``, which scopes the animation to a subtree
+    /// and a value rather than to the whole update.
+    public func consumePendingTransaction() -> Transaction? {
+        lock.withLock { state in
+            defer { state.pendingTransaction = nil }
+            return state.pendingTransaction
+        }
+    }
+
     /// Takes the clocks that have ticked since the last call, clearing them.
     public func consumePendingAnimationClocks() -> Set<AnimationClock> {
         lock.withLock { state in
@@ -108,6 +143,7 @@ extension AppState {
         let observers = lock.withLock { state -> [@Sendable () -> Void] in
             state.needsRender = true
             state.needsCacheClear = true
+            state.recordAmbientTransaction()
             return state.observers
         }
         for observer in observers {

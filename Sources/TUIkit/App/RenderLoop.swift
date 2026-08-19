@@ -426,6 +426,12 @@ extension RenderLoop {
         // frame's `now` so the loop's next-firing query agrees with them exactly.
         environment.animationScheduler = animationScheduler
         environment.frameNowNanos = frameNowNanos
+        // The transaction the pending change was made under — how
+        // `withAnimation` reaches the render that follows it. Consumed (not
+        // merely read) so it applies to exactly one pass: the one that first
+        // shows the change. A frame that renders for some other reason must
+        // not restart animations that already began.
+        environment.transaction = AppState.shared.consumePendingTransaction() ?? Transaction()
         // Install a fresh volatile-read tracker at the render root so that, after
         // the frame, we can tell whether anything actually consumed the pulse
         // clock (the row memo reuses this same tracker further down). Likewise
