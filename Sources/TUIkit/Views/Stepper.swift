@@ -572,6 +572,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         let incrementID = mouseDispatcher.register(
             arrowHandler(
                 timer: incrementTimer,
+                hoverBox: hoverBox,
                 focusManager: focusManager,
                 focusID: persistedFocusID,
                 action: { handler.increment(times: 1) }
@@ -589,6 +590,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         let decrementID = mouseDispatcher.register(
             arrowHandler(
                 timer: decrementTimer,
+                hoverBox: hoverBox,
                 focusManager: focusManager,
                 focusID: persistedFocusID,
                 action: { handler.decrement(times: 1) }
@@ -651,13 +653,29 @@ private struct _StepperCore: View, Renderable, Layoutable {
     /// hold drives the supplied timer (which fires the action
     /// once immediately, then repeats at a fixed cadence).
     /// Release or drag-off stops the timer.
+    /// The arrow regions sit INSIDE the row region, and the dispatcher hands
+    /// entry/exit to the innermost one — so crossing onto an arrow told the row
+    /// it had been left, and the stepper lost its hover highlight exactly when
+    /// the pointer reached the thing it was aiming for. Each arrow keeps the
+    /// row's hover flag in step.
     private func arrowHandler(
         timer: AutoRepeatTimer,
+        hoverBox: StateBox<Bool>,
         focusManager: FocusManager?,
         focusID: String,
         action: @escaping @MainActor () -> Void
     ) -> @MainActor (MouseEvent) -> Bool {
         { event in
+            switch event.phase {
+            case .entered:
+                hoverBox.value = true
+                return true
+            case .exited:
+                hoverBox.value = false
+                return true
+            default:
+                break
+            }
             guard event.button == .left else { return false }
             switch event.phase {
             case .pressed:

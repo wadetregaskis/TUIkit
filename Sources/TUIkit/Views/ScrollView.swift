@@ -533,8 +533,17 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             excursion < 0
             ? Array(repeating: blank, count: gap) + buffer.lines.dropLast(gap)
             : Array(buffer.lines.dropFirst(gap)) + Array(repeating: blank, count: gap)
-        return buffer.replacingLines(
+        var slid = buffer.replacingLines(
             lines, width: width, uniformWidth: true, overlayShiftY: -excursion)
+        // `replacingLines` shifts the runs with everything else, but a slide
+        // pushes rows OUT of the viewport: a run that went with them would keep
+        // repainting, on a clock, over whatever now occupies that row — or off
+        // the buffer entirely. Kept or dropped whole, the same rule the window
+        // applies.
+        slid.animatedCells = slid.animatedCells.filter {
+            $0.offsetY >= 0 && $0.offsetY < lines.count
+        }
+        return slid
     }
 
     /// Composes the scroll chrome over the windowed content: the "N more
@@ -973,6 +982,14 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // lines they describe.
         let visibleRuns = full.animatedCells.compactMap { run -> AnimatedCellRun? in
             guard run.offsetY >= viewportTop, run.offsetY < viewportBottom else { return nil }
+            // Horizontally too, and for the same reason: a run carried past
+            // either edge keeps repainting at a column that is no longer its
+            // own. Off the left it patches at a negative column, which pads the
+            // row out to the run's width and makes the line WIDER than the
+            // terminal — it then wraps and smears the row below, and the diff
+            // writer, which believes that row is untouched, never repairs it.
+            let shiftedX = run.offsetX + dx
+            guard shiftedX >= 0, shiftedX + run.width <= viewportWidth else { return nil }
             return run.shifted(byX: dx, y: -scrollOffset)
         }
 
@@ -1006,6 +1023,9 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // The indicators' own runs, so a focused scroll view breathes them
         // without the page being rendered again on every tick of the clock.
         var runs: [AnimatedCellRun] = []
+        /// The rows the indicators overwrite — whatever the content had
+        /// animating on them goes with them.
+        var replacedRows: Set<Int> = []
 
         if handler.hasContentAbove, !lines.isEmpty {
             // Indicator rows are padded to full viewport width
@@ -1022,6 +1042,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 locale: locale
             )
             lines[0] = indicator.text.padToVisibleWidth(width)
+            replacedRows.insert(0)
             if let animation = indicator.animation { runs.append(animation) }
         }
 
@@ -1037,6 +1058,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 locale: locale
             )
             lines[lines.count - 1] = indicator.text.padToVisibleWidth(width)
+            replacedRows.insert(lines.count - 1)
             // The renderer builds every run at row 0 — it does not know which
             // row its caller put the indicator on — so move this one down to
             // the row it was actually drawn on.
@@ -1045,6 +1067,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             }
         }
         var result = buffer.replacingLines(lines)
+        // The indicator OVERWROTE those rows, so whatever the content had
+        // animating on them is gone with them — a surviving run would repaint a
+        // focus ring's cells over the "▲ 3 more above" text, on a clock, for as
+        // long as the row stayed the first one.
+        result.animatedCells = result.animatedCells.filter { !replacedRows.contains($0.offsetY) }
         result.animatedCells += runs
         return result
     }

@@ -1074,9 +1074,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             var onScreen: [Int: Int] = [:]
             onScreen.reserveCapacity(visibleRows.count)
             for entry in visibleRows { onScreen[entry.index] = entry.row.buffer.height }
+            // DATA rows only. A reorder decorates the window with a landing
+            // slot carrying the sentinel index −1, and when that slot is the
+            // last entry the upper bound came out `-1 + 1 == 0` against a lower
+            // bound past it — an inverted Range, which traps. `Table`'s twin
+            // takes its range from the handler for exactly this reason.
+            let dataRows = visibleRows.filter { $0.index != ItemListHandler<SelectionValue>.reorderSlotRowIndex }
             let visible =
-                (visibleRows.first?.index ?? origin.offset)
-                ..< ((visibleRows.last?.index).map { $0 + 1 } ?? origin.offset)
+                (dataRows.first?.index ?? origin.offset)
+                ..< ((dataRows.last?.index).map { $0 + 1 } ?? origin.offset)
             let metrics = ScrollExtentEstimator.lineMetrics(
                 visible: visible, count: source.count, topClip: origin.topClip,
                 precision: context.environment.scrollExtentPrecision,

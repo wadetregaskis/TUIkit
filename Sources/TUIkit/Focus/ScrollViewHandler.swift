@@ -203,8 +203,15 @@ extension ScrollViewHandler {
 extension ScrollViewHandler {
 
     /// Jumps to the top of the content.
+    ///
+    /// Cancels any pending tail seek. `scrollToBottom` arms one so an End
+    /// pressed while content is still streaming in pins to the tail rather
+    /// than to wherever the tail happened to be — but the flag outlived the
+    /// intent: a Home straight after an End set the offset to 0 and the seek,
+    /// still armed, pulled it back to the bottom on the next frame.
     public func scrollToTop() {
         scrollOffset = 0
+        seekingTail = false
         clearOverscroll()
     }
 
@@ -221,6 +228,14 @@ extension ScrollViewHandler {
     public func userScrollToBottom() {
         engageEdgeAnchor(.bottom)
         scrollToBottom()
+    }
+
+    /// The protocol's user Home jump, interposed for the same reason its
+    /// bottom twin is: the edge anchor has to be engaged deliberately, and the
+    /// tail seek cancelled, before the offset moves.
+    public func userScrollToTop() {
+        engageEdgeAnchor(.top)
+        scrollToTop()
     }
 }
 

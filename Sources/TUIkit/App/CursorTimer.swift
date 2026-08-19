@@ -219,6 +219,15 @@ extension CursorTimer {
     func reset() {
         elapsedTicks = 0
         stride = 1
+        // The in-flight sleep was sized for the OLD stride: leaving it to
+        // finish would add that whole stride to a counter that has just been
+        // zeroed, so a focus change during a long sleep (the quantised pulse
+        // holds a shade for several ticks) jumped the clock past the bright
+        // start the reset exists to give it. Cancelling ends the sleep with a
+        // CancellationError the loop already returns on; the render that
+        // always follows a focus change starts the timer again.
+        task?.cancel()
+        task = nil
     }
 }
 

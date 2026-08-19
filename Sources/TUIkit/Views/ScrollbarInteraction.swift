@@ -109,8 +109,10 @@ extension ScrollbarRenderer {
                 // idles until a drag moves the target further (same direction).
                 let remaining = target - state.scrollOffset
                 if repeating.delta > 0 && remaining > 0 {
+                    state.releaseAnchorOnUserScroll()
                     state.scroll(by: min(repeating.delta, remaining))
                 } else if repeating.delta < 0 && remaining < 0 {
+                    state.releaseAnchorOnUserScroll()
                     state.scroll(by: max(repeating.delta, remaining))
                 }
             } else {
@@ -255,9 +257,17 @@ extension ScrollbarRenderer {
             let viewport = state.viewportHeight
 
             func jumpOrDrag(topCell: Int) {
+                let before = state.scrollOffset
                 state.scrollOffset = offset(
                     forThumbTopCell: topCell, trackLen: trackLen, extent: extent,
                     viewport: viewport, proportional: proportional)
+                // Dragging the thumb IS a user scroll, so it releases a bound
+                // anchor exactly as the wheel and the keys do. Writing the
+                // offset directly left the anchor engaged, and the next frame
+                // snapped the view straight back to the anchored row — the
+                // thumb moved and nothing else did. Gated on actual movement,
+                // so a no-op drag stays idempotent.
+                if state.scrollOffset != before { state.releaseAnchorOnUserScroll() }
             }
 
             // The offset at which a page hold should stop — where the thumb sits
@@ -301,6 +311,9 @@ extension ScrollbarRenderer {
                         // track stays held — but the repeat stops once the thumb
                         // reaches the mouse and never reverses (see driveAutoRepeat).
                         let pageDelta = (hit == .trackBefore) ? -max(1, viewport) : max(1, viewport)
+                        // A user scroll, so it releases a bound anchor — see
+                        // `jumpOrDrag`.
+                        state.releaseAnchorOnUserScroll()
                         state.scroll(by: pageDelta)
                         state.scrollbarRepeat = ScrollbarRepeat(
                             delta: pageDelta, stopAtOffset: pageStopTarget(at: position))
