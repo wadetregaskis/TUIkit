@@ -765,6 +765,56 @@ struct FocusIndicatorAnimationTests {
         #expect(unselected.animatedCells.isEmpty, "an unselected cursor row is breathing")
     }
 
+    // MARK: - "N more" scroll indicators
+
+    /// A focused, overflowing list drawing text indicators rather than a bar.
+    private func indicatorList(scrolled: Bool) -> FrameBuffer {
+        let list = List(selection: .constant(String?.none)) {
+            ForEach((0..<40).map { "Row \($0)" }, id: \.self) { Text($0) }
+        }
+        .scrollIndicatorStyle(.text)
+        let context = makeRenderContext(width: 30, height: 8)
+        var buffer = renderToBuffer(list, context: context)
+        guard scrolled else { return buffer }
+        // Scroll so BOTH indicators are showing — the top one only exists once
+        // something is above the window.
+        for _ in 0..<10 { _ = context.environment.focusManager!.dispatchKeyEvent(KeyEvent(key: .down)) }
+        buffer = renderToBuffer(list, context: context)
+        return buffer
+    }
+
+    @Test("A focused list's \"N more\" indicators hand their cells over")
+    func scrollIndicatorsAnimate() {
+        // The scrollbar-less focus cue. It used to resolve the clock as it
+        // rendered, which re-rendered the page on every tick to recolour one
+        // short line at each end.
+        let buffer = indicatorList(scrolled: true)
+        let text = buffer.lines.map(\.stripped)
+        guard let topRow = text.firstIndex(where: { $0.contains("▲") }),
+            let bottomRow = text.lastIndex(where: { $0.contains("▼") })
+        else {
+            Issue.record("expected both indicators: \(text)")
+            return
+        }
+        let rows = Set(buffer.animatedCells.map(\.offsetY))
+        #expect(rows.contains(topRow), "the ▲ indicator left no run")
+        #expect(rows.contains(bottomRow), "the ▼ indicator left no run")
+        expectReplayIsIdentity(buffer, "an indicator run does not match the drawn cells")
+    }
+
+    @Test("An unfocused list's indicators animate nothing")
+    func scrollIndicatorsStill() {
+        let context = makeRenderContext(width: 30, height: 8)
+        context.environment.focusManager!.register(FocusSentinel())
+        let buffer = renderToBuffer(
+            List(selection: .constant(String?.none)) {
+                ForEach((0..<40).map { "Row \($0)" }, id: \.self) { Text($0) }
+            }
+            .scrollIndicatorStyle(.text),
+            context: context)
+        #expect(buffer.animatedCells.isEmpty)
+    }
+
     // MARK: - Composers that assemble rows by hand
 
     // A container that concatenates child STRINGS gets none of what the child

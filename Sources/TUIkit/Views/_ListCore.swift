@@ -916,27 +916,25 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// clip and the overscroll slide have had their say about where those
         /// lines actually ended up.
         var pulseRuns: [(y: Int, frames: [String])] = []
-        var topIndicator: String?
-        var bottomIndicator: String?
+        var topIndicator: (text: String, animation: AnimatedCellRun?)?
+        var bottomIndicator: (text: String, animation: AnimatedCellRun?)?
 
         // A focused list with no scrollbar pulses its "N more" indicators as
         // its focus cue (in addition to the pulsing cursor row) — the
         // scrollbar-less counterpart to the bar's own pulse.
-        // Resolve the emphasis ONLY when an indicator will actually be drawn:
-        // resolving consults the cursor clock, and that read is what tells the
-        // demand-driven loop the frame consumed it. Asking before knowing
-        // whether anything will be painted re-renders the whole page ~20 times
-        // a second to draw nothing. Same class as the Stepper's ungated
-        // `pulsePhase` read (8ebc3385).
-        // …and a list whose indicators are hidden draws none of it: this path
-        // also serves `.scrollIndicators(.hidden)`, which reaches it precisely
-        // BECAUSE there is no bar to send it down the other one.
+        //
+        // A CYCLE, not this tick's colour: the indicator hands its own cells to
+        // the run loop and reads no clock, the way `ScrollView`'s already does.
+        // Built ONLY when an indicator will actually be drawn — a list whose
+        // indicators are hidden draws none of it, and this path also serves
+        // `.scrollIndicators(.hidden)`, which reaches it precisely BECAUSE
+        // there is no bar to send it down the other one.
         let drawsIndicator =
             handler.drawsScrollIndicators
             && (origin.offset > 0 || origin.topClip > 0 || handler.hasContentBelow)
-        let indicatorEmphasis =
+        let indicatorCycle =
             drawsIndicator
-            ? scrollIndicatorEmphasis(isFocused: listHasFocus, context: context) : nil
+            ? scrollIndicatorCycle(isFocused: listHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
 
         if handler.drawsScrollIndicators, origin.offset > 0 || origin.topClip > 0 {
@@ -946,7 +944,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 unit: .rows,
                 width: rowWidth,
                 palette: palette,
-                emphasis: indicatorEmphasis,
+                cycle: indicatorCycle,
                 locale: numberLocale
             )
         }
@@ -1042,7 +1040,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 unit: .rows,
                 width: rowWidth,
                 palette: palette,
-                emphasis: indicatorEmphasis,
+                cycle: indicatorCycle,
                 locale: numberLocale
             )
         }
@@ -1063,23 +1061,30 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private func slideAndWrap(
         rowLines: [String], ranges: [VisibleRowRange],
         pulseRuns: [(y: Int, frames: [String])],
-        topIndicator: String?, bottomIndicator: String?,
+        topIndicator: (text: String, animation: AnimatedCellRun?)?,
+        bottomIndicator: (text: String, animation: AnimatedCellRun?)?,
         handler: ItemListHandler<SelectionValue>, rowWidth: Int
     ) -> (lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun]) {
         let blank = String(repeating: " ", count: max(0, rowWidth))
         let slidRows = handler.overscrollState.slid(rowLines, blank: blank)
         let topOffset = topIndicator == nil ? 0 : 1
-        let assembled = [topIndicator].compactMap { $0 } + slidRows
-            + [bottomIndicator].compactMap { $0 }
+        let assembled = [topIndicator?.text].compactMap { $0 } + slidRows
+            + [bottomIndicator?.text].compactMap { $0 }
         let moved = slidRanges(ranges, handler: handler, lineCount: slidRows.count)
             .map {
                 (rowIndex: $0.rowIndex, yStart: $0.yStart + topOffset, height: $0.height,
                  type: $0.type)
             }
-        return (
-            assembled, moved,
-            slidRuns(
-                pulseRuns, handler: handler, lineCount: slidRows.count, topOffset: topOffset))
+        var runs = slidRuns(
+            pulseRuns, handler: handler, lineCount: slidRows.count, topOffset: topOffset)
+        // The indicators are chrome, not rows: the slide moves the rows past
+        // them and leaves them where they are, so their runs sit at the first
+        // and last assembled lines whatever the rows did.
+        if let top = topIndicator?.animation { runs.append(top.shifted(byX: 0, y: 0)) }
+        if let bottom = bottomIndicator?.animation {
+            runs.append(bottom.shifted(byX: 0, y: assembled.count - 1))
+        }
+        return (assembled, moved, runs)
     }
 
     /// One run per breathing line, moved by the overscroll slide the way

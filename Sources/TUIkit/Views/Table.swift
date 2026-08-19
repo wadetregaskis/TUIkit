@@ -1346,17 +1346,23 @@ where Value.ID: Hashable {
         // a second to draw nothing. Same class as the Stepper's ungated
         // `pulsePhase` read (8ebc3385).
         let drawsIndicator = drawsText && (window.showAbove || window.showBelow)
-        let indicatorEmphasis =
+        let indicatorCycle =
             drawsIndicator
-            ? scrollIndicatorEmphasis(isFocused: tableHasFocus, context: context) : nil
+            ? scrollIndicatorCycle(isFocused: tableHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
         var lines: [String] = []
+        /// The indicators' own runs. They are chrome — the rows slide past them
+        /// — so each sits at the assembled line it was appended to, whatever
+        /// the rows did.
+        var chromeRuns: [AnimatedCellRun] = []
         if window.showAbove, drawsText {
-            lines.append(renderScrollIndicator(
+            let indicator = renderScrollIndicator(
                 direction: .up, count: max(1, window.range.lowerBound),
                 unit: .rows,
-                width: contentWidth, palette: palette, emphasis: indicatorEmphasis,
-                locale: numberLocale))
+                width: contentWidth, palette: palette, cycle: indicatorCycle,
+                locale: numberLocale)
+            if let run = indicator.animation { chromeRuns.append(run.shifted(byX: 0, y: 0)) }
+            lines.append(indicator.text)
         }
         // Line granularity fills the content area EXACTLY: the bottom row may
         // be partially clipped (the top row already can be, via
@@ -1422,11 +1428,15 @@ where Value.ID: Hashable {
             pulseRuns, slide: -handler.overscrollState.excursion, topOffset: rowsTop,
             lineCount: rowsTop + slidableRows.count)
         if window.showBelow, drawsText {
-            lines.append(renderScrollIndicator(
+            let indicator = renderScrollIndicator(
                 direction: .down, count: data.count - window.range.upperBound,
                 unit: .rows,
-                width: contentWidth, palette: palette, emphasis: indicatorEmphasis,
-                locale: numberLocale))
+                width: contentWidth, palette: palette, cycle: indicatorCycle,
+                locale: numberLocale)
+            if let run = indicator.animation {
+                chromeRuns.append(run.shifted(byX: 0, y: lines.count))
+            }
+            lines.append(indicator.text)
         }
         // A scrolled/overflowing table fills its content area EXACTLY,
         // whatever the granularity: whole rows can underfill under row
@@ -1439,7 +1449,7 @@ where Value.ID: Hashable {
                 lines.append(String(repeating: " ", count: contentWidth))
             }
         }
-        guard showsBar else { return (lines, runs) }
+        guard showsBar else { return (lines, runs + chromeRuns) }
         // The bar is the rightmost interior column, merged in by absolute line
         // index so an overscroll slide moves the rows and leaves it where it
         // is (§1.5) — the same composition the single-line path uses.
@@ -1451,7 +1461,7 @@ where Value.ID: Hashable {
             lines.enumerated().map { index, line in
                 line + (index < bar.count ? bar[index] : emptyCell)
             },
-            runs)
+            runs + chromeRuns)
     }
 
     /// Renders one (possibly multi-line) row: the selection indicator on the first
@@ -1764,24 +1774,29 @@ where Value.ID: Hashable {
         // …and only when they are this table's indicator at all: hidden ones
         // draw nothing, and the bar has its own compose path.
         let drawsText = handler.drawsScrollIndicators
-        let indicatorEmphasis =
+        let indicatorCycle =
             drawsText && (handler.hasContentAbove || handler.hasContentBelow)
-            ? scrollIndicatorEmphasis(isFocused: tableHasFocus, context: context) : nil
+            ? scrollIndicatorCycle(isFocused: tableHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
         // The "N more" indicators are chrome — they describe where the content
         // sits — so the rows are collected separately and only they slide (§1.5).
         var lines: [String] = []
         var rowLines: [String] = []
+        /// The indicators' own runs, at the assembled lines they were appended
+        /// to — the rows slide past them, so those positions are final.
+        var chromeRuns: [AnimatedCellRun] = []
         if drawsText, handler.hasContentAbove {
-            lines.append(renderScrollIndicator(
+            let indicator = renderScrollIndicator(
                 direction: .up,
                 count: handler.rowsAbove,
                 unit: .rows,
                 width: contentWidth,
                 palette: palette,
-                emphasis: indicatorEmphasis,
+                cycle: indicatorCycle,
                 locale: numberLocale
-            ))
+            )
+            if let run = indicator.animation { chromeRuns.append(run.shifted(byX: 0, y: 0)) }
+            lines.append(indicator.text)
         }
         let visibleRange = handler.visibleRange
         // A reorder drag takes the dragged row out and opens a slot where it
@@ -1845,20 +1860,24 @@ where Value.ID: Hashable {
         let runs = rowRuns(
             pulseRuns, slide: slide, topOffset: rowsTop, lineCount: rowsTop + rowLines.count)
         if drawsText, handler.hasContentBelow {
-            lines.append(renderScrollIndicator(
+            let indicator = renderScrollIndicator(
                 direction: .down,
                 count: handler.rowsBelow,
                 unit: .rows,
                 width: contentWidth,
                 palette: palette,
-                emphasis: indicatorEmphasis,
+                cycle: indicatorCycle,
                 locale: numberLocale
-            ))
+            )
+            if let run = indicator.animation {
+                chromeRuns.append(run.shifted(byX: 0, y: lines.count))
+            }
+            lines.append(indicator.text)
         }
         // The row lines are handed back separately for a `.cursor` drag's
         // floating preview; the press frame is drawn in plain data order, so
         // indexing them by `visibleRange` offset is exact.
-        return (lines, handler.onMove == nil ? [] : rowLines, runs)
+        return (lines, handler.onMove == nil ? [] : rowLines, runs + chromeRuns)
     }
 
     // MARK: - Reorder drag

@@ -32,29 +32,11 @@ enum ScrollIndicatorUnit {
     }
 }
 
-/// The per-frame emphasis colour for a scrollable's "N more" indicators — a
-/// pulsing accent while the scrollable holds keyboard focus, or `nil` (resting
-/// `foregroundTertiary`) otherwise. The scrollbar-less counterpart to
-/// ``ScrollbarColors/focusIndicating(isFocused:context:)``: a focused
-/// ScrollView / List / Table with no scrollbar shows its focus by breathing
-/// the edge indicators. Uses the shared ``SelectionIndicator`` convention, so
-/// it honours `.selectionIndicatorStyle` and the cursor clock (an idle
-/// indicator costs nothing).
-@MainActor
-func scrollIndicatorEmphasis(isFocused: Bool, context: RenderContext) -> Color? {
-    guard isFocused else { return nil }
-    let palette = context.environment.palette
-    return SelectionIndicator.resolve(isFocused: true, context: context)
-        .color(dim: palette.foregroundTertiary, bright: palette.accent)
-}
-
 /// The indicator's emphasis across a whole cycle, for a focused scrollable.
 ///
-/// The counterpart to ``scrollIndicatorEmphasis(isFocused:context:)``: that one
-/// resolves THIS TICK's colour and consults the clock to do it, which keeps the
-/// clock ticking and re-renders the whole page every tick. This one builds the
-/// cycle, which reads no clock, so the indicator's cells can be handed to the
-/// run loop instead.
+/// Reads no clock — it builds the cycle from the static formula — so the
+/// indicator's cells can be handed to the run loop instead of the page being
+/// re-rendered on every tick to recolour them.
 @MainActor
 func scrollIndicatorCycle(isFocused: Bool, context: RenderContext) -> SelectionEmphasisCycle? {
     guard isFocused else { return nil }
@@ -138,18 +120,21 @@ func renderScrollIndicator(
     width: Int,
     palette: any Palette,
     approximate: Bool = false,
-    emphasis: Color? = nil,
     locale: Locale = .current
 ) -> String {
     scrollIndicatorParts(
         direction: direction, count: count, unit: unit, width: width,
         approximate: approximate, locale: locale
-    ).line(color: emphasis ?? palette.foregroundTertiary)
+    ).line(color: palette.foregroundTertiary)
 }
 
-/// The same indicator, drawn from a whole emphasis cycle instead of one tick's
-/// colour — plus the ``AnimatedCellRun`` that lets the run loop breathe those
-/// cells with no view involved.
+/// The same indicator, drawn from a whole emphasis cycle — plus the
+/// ``AnimatedCellRun`` that lets the run loop breathe those cells with no view
+/// involved.
+///
+/// The overload above is the still one, for a caller that only wants the
+/// indicator's WIDTH (the table measures its column against it) or has no
+/// focus to show.
 ///
 /// The run covers the arrow and its label and nothing else: the leading blanks
 /// that centre the indicator are not part of the animation, and repainting them
