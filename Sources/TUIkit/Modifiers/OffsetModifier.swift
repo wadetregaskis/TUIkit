@@ -44,10 +44,17 @@ extension OffsetView: Renderable, Layoutable {
         // the background). The displaced drawing floats as an overlay layer,
         // carrying the content's hit regions (and any layers it emitted
         // itself) so interaction follows the visible position.
-        var empty = FrameBuffer()
-        empty.overlays.append(
+        // The slot still has to EXIST, though. A buffer with no lines is not
+        // "a blank view" to a stack — it is "no child": `appendVertically`
+        // drops it, spacing and all, so every sibling after an offset view
+        // moved up into its place and the floated drawing composited on top of
+        // whatever took it. Zero-WIDTH lines reserve the rows and paint no
+        // cells, which is exactly the shape this needs: the footprint the
+        // measure pass promised, and nothing drawn in it.
+        var placeholder = FrameBuffer(lines: Array(repeating: "", count: rendered.height))
+        placeholder.overlays.append(
             OverlayLayer(offsetX: x, offsetY: y, content: rendered, level: .popover))
-        return empty
+        return placeholder
     }
 }
 
