@@ -742,14 +742,29 @@ extension MouseEventDispatcher {
     /// (either an `.entered` on a new region or an `.exited`
     /// on the previous one), so the AppRunner re-renders the
     /// view tree to reflect the new hover state. Pure motion
-    /// inside the already-hovered region returns `false` —
-    /// re-rendering for every cursor twitch would peg the run
-    /// loop.
+    /// inside the already-hovered region is offered to that
+    /// handler as a localized `.moved`, and re-renders only if
+    /// it says the move meant something — re-rendering for
+    /// every cursor twitch would peg the run loop, and most
+    /// handlers care only about entering and leaving.
     private func dispatchMotion(_ event: MouseEvent) -> Bool {
         let currentRegion = matchingRegions(at: event.x, y: event.y).first
         let currentID = currentRegion?.handlerID
 
-        guard currentID != lastHoveredHandlerID else { return false }
+        // Still inside the same region: some controls are not one target but
+        // many — a scrollbar's arrows and thumb share one region, and the cell
+        // under the pointer is what lifts — so the move is offered to the
+        // handler, which answers whether it changed anything.
+        if currentID == lastHoveredHandlerID {
+            guard let currentID, let handler = handlers[currentID], let region = currentRegion
+            else { return false }
+            let moved = MouseEvent(
+                button: .none, phase: .moved,
+                x: event.x - region.offsetX, y: event.y - region.localOriginY,
+                shift: event.shift, ctrl: event.ctrl, meta: event.meta
+            )
+            return handler(moved)
+        }
 
         var fired = false
 

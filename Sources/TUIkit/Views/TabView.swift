@@ -232,7 +232,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // draws a surface of its own has to step off THAT, not off the page.
         // Without this a `TextField` in a tab computed "a step above the page"
         // — which is the tab's own colour — and disappeared into it.
-        child.environment.surfaceBackground = surfaceColor(child.environment.palette)
+        child.environment.surfaceBackground = surfaceColor(context)
         return child
     }
 
@@ -549,7 +549,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     private func renderBordered(
         selectedIndex: Int, isFocused: Bool, palette: any Palette, context: RenderContext
     ) -> FrameBuffer {
-        let surface = surfaceColor(palette)
+        let surface = surfaceColor(context)
         let border = palette.border
         let insets = resolvedContentInsets(style: .bordered, context: context)
         let alignment = context.environment.tabViewHeaderAlignment
@@ -675,11 +675,21 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     /// read as one continuous surface without an accent fill washing out the
     /// content. Follows `appHeaderBackground` when the palette states one, and
     /// otherwise a derived step off the page — never the page colour itself.
-    private func surfaceColor(_ palette: any Palette) -> Color {
+    private func surfaceColor(_ context: RenderContext) -> Color {
+        let palette = context.environment.palette
+        // A tab body inside another tab body steps off THAT, not off the page —
+        // the same rule a field follows (`Palette.fieldBackground(on:)`), at
+        // the plane's step. Asking for "a surface on the page" from inside one
+        // returned the enclosing tab's own colour, so the inner island was
+        // invisible. (This view publishes `surfaceBackground` for its children,
+        // which is what a nested one reads here.)
+        if let inherited = context.environment.surfaceBackground {
+            return palette.lifted(from: inherited).resolve(with: palette)
+        }
         // `liftedBackground`, not `appHeaderBackground`: the latter defaults to
         // the page background, so on a palette that never overrode it the strip
         // painted the colour that was already there and the island vanished.
-        palette.liftedBackground.resolve(with: palette)
+        return palette.liftedBackground.resolve(with: palette)
     }
 
     /// The interior padding around each tab's content. An explicit
@@ -799,7 +809,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     private func renderCompact(
         selectedIndex: Int, isFocused: Bool, palette: any Palette, context: RenderContext
     ) -> FrameBuffer {
-        let surface = surfaceColor(palette)
+        let surface = surfaceColor(context)
         let insets = resolvedContentInsets(style: .compact, context: context)
         let alignment = context.environment.tabViewHeaderAlignment
         let chip = ActiveChipCycle(

@@ -137,22 +137,48 @@ struct DispatcherHoverTransitionTests {
         #expect(!anyCall)
     }
 
-    @Test("Dispatch returns true when a transition fires, false otherwise")
+    @Test("Dispatch returns true when a transition fires, and lets a handler claim a move")
     func dispatchReturnValueReflectsTransition() {
         let dispatcher = MouseEventDispatcher()
         dispatcher.setActiveSupport(.full)
         dispatcher.beginRenderPass()
-        let id = dispatcher.register { _ in true }
+        // The ordinary hover handler: entering and leaving matter, moving
+        // inside does not.
+        let id = dispatcher.register { $0.phase != .moved }
         dispatcher.setRegions([
             HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 10, handlerID: id)
         ])
 
         // Enter → transition → true (forces a re-render)
         #expect(dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 3, y: 3)))
-        // Stay → no transition → false (no re-render needed)
+        // Stay → the handler declines the move → false (no re-render needed)
         #expect(!dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 4, y: 4)))
         // Leave → transition → true
         #expect(dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 50, y: 50)))
+    }
+
+    @Test("A handler that cares WHERE in its region the pointer is hears the move")
+    func motionInsideAHoveredRegionIsDelivered() {
+        // A scrollbar is one region and many targets: its arrows and its thumb
+        // share a column, and the cell under the pointer is what lifts. Without
+        // the move, the highlight stuck to whichever cell the pointer happened
+        // to enter on.
+        let dispatcher = MouseEventDispatcher()
+        dispatcher.setActiveSupport(.full)
+        dispatcher.beginRenderPass()
+        var seen: [(MousePhase, Int)] = []
+        let id = dispatcher.register { event in
+            seen.append((event.phase, event.y))
+            return true
+        }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 1, height: 10, handlerID: id)
+        ])
+
+        _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 0, y: 2))
+        _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 0, y: 5))
+        #expect(seen.map(\.0) == [.entered, .moved], "\(seen)")
+        #expect(seen.map(\.1) == [2, 5], "localized to the region: \(seen)")
     }
 }
 

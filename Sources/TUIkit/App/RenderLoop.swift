@@ -204,6 +204,10 @@ internal final class RenderLoop<A: App> {
     /// The last frame written, for ``replayAnimations(steps:)``.
     private var replayable: ReplayableFrame?
 
+    /// Whether the previous frame drew a status bar, so its appearing or
+    /// disappearing can invalidate the diff — see where it is set.
+    private var lastFrameHadStatusBar = false
+
     /// What the last render reported, so the run loop can decide whether an
     /// animation tick can be replayed without rendering again.
     private(set) var lastActivity = RenderActivity(
@@ -508,15 +512,14 @@ extension RenderLoop {
         //     terminal-space, so its events arrive with
         //     y >= contentHeight. Status-bar regions need
         //     offsetY shifted by +contentHeight.
-        let appHeaderBuffer: FrameBuffer? = appHeader.hasContent
-            ? buildAppHeaderBuffer(
-                terminalWidth: terminalWidth, environment: environment)
-            : nil
+        let appHeaderBuffer: FrameBuffer? =
+            appHeader.hasContent
+            ? buildAppHeaderBuffer(terminalWidth: terminalWidth, environment: environment) : nil
 
-        let statusBarBuffer: FrameBuffer? = statusBar.hasItems
-            ? buildStatusBarBuffer(
-                terminalWidth: terminalWidth, environment: environment)
-            : nil
+        let statusBarBuffer: FrameBuffer? =
+            statusBar.hasItems
+            ? buildStatusBarBuffer(terminalWidth: terminalWidth, environment: environment) : nil
+        noteStatusBarPresence(statusBarBuffer != nil)
 
         var mergedRegions = buffer.hitTestRegions
         if let appHeaderBuffer {
@@ -948,6 +951,21 @@ extension RenderLoop {
         }
 
         terminal.endFrame()
+    }
+
+    /// Invalidates the diff when the status bar appears or disappears.
+    ///
+    /// A bar that went away and came back is not "unchanged". While it is
+    /// hidden the content area grows into its row and paints over it, but the
+    /// diff's record of that region still describes the old bar — so a bar
+    /// restored with byte-identical items compared equal and was never written,
+    /// leaving the bottom row blank with the shortcuts gone. The app header
+    /// self-heals the same way when its height turns out different from the
+    /// estimate.
+    private func noteStatusBarPresence(_ present: Bool) {
+        guard present != lastFrameHadStatusBar else { return }
+        lastFrameHadStatusBar = present
+        diffWriter.invalidate()
     }
 
     /// Stores and returns what this frame reported, so the run loop can decide
