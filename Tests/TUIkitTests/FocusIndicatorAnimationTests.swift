@@ -530,6 +530,77 @@ struct FocusIndicatorAnimationTests {
         #expect(buffer.animatedCells.allSatisfy { $0.offsetX > 0 && $0.offsetY > 0 })
     }
 
+    // MARK: - Slider and stepper arrows
+
+    /// The cell column a glyph occupies in a rendered row.
+    ///
+    /// Measured in CELLS, not characters: the styled line carries escape
+    /// sequences and the arrows themselves may not be one character wide, so
+    /// counting either would put the expected column somewhere the arrow is
+    /// not — which is exactly the mistake these tests exist to catch.
+    private func column(of glyph: String, in line: String) -> Int? {
+        let bare = line.stripped
+        guard let range = bare.range(of: glyph) else { return nil }
+        return String(bare[bare.startIndex..<range.lowerBound]).strippedLength
+    }
+
+    /// Both arrows of an arrow-pair control sit exactly where they were drawn.
+    private func expectArrowsPinned(
+        _ buffer: FrameBuffer, _ what: Comment,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        expectAnimates(buffer, runs: 2, what, sourceLocation: sourceLocation)
+        let line = buffer.lines[0]
+        let expected = [
+            column(of: TerminalSymbols.leftArrow, in: line),
+            column(of: TerminalSymbols.rightArrow, in: line),
+        ].compactMap { $0 }.sorted()
+        #expect(
+            buffer.animatedCells.map(\.offsetX).sorted() == expected,
+            "\(what): the runs are not on the arrows", sourceLocation: sourceLocation)
+        #expect(
+            buffer.animatedCells.allSatisfy { $0.offsetY == 0 },
+            "\(what): an arrow left its row", sourceLocation: sourceLocation)
+    }
+
+    @Test("A focused slider hands over both arrows")
+    func sliderArrows() {
+        expectArrowsPinned(focused(Slider(value: .constant(0.5))), "slider arrows")
+    }
+
+    @Test("A slider without its value read-out still places the right arrow")
+    func sliderArrowsWithoutValue() {
+        // `.sliderShowsValue(false)` drops the trailing field, so the right
+        // arrow ENDS the control instead of sitting inside it — the case where
+        // an offset computed from the wrong layout falls off the end entirely.
+        let buffer = focused(Slider(value: .constant(0.5)).sliderShowsValue(false))
+        expectArrowsPinned(buffer, "slider arrows, no read-out")
+        #expect(buffer.animatedCells.map(\.offsetX).max() == buffer.lines[0].strippedLength - 1)
+    }
+
+    @Test("An unfocused or disabled slider animates nothing")
+    func sliderArrowsStill() {
+        let context = makeRenderContext(width: 40, height: 8)
+        context.environment.focusManager!.register(FocusSentinel())
+        #expect(renderToBuffer(Slider(value: .constant(0.5)), context: context)
+            .animatedCells.isEmpty)
+        #expect(focused(Slider(value: .constant(0.5)).disabled(true)).animatedCells.isEmpty)
+    }
+
+    @Test("A focused stepper hands over both arrows")
+    func stepperArrows() {
+        expectArrowsPinned(focused(Stepper("Count", value: .constant(5))), "stepper arrows")
+    }
+
+    @Test("An unfocused or disabled stepper animates nothing")
+    func stepperArrowsStill() {
+        let context = makeRenderContext(width: 40, height: 8)
+        context.environment.focusManager!.register(FocusSentinel())
+        #expect(renderToBuffer(Stepper("Count", value: .constant(5)), context: context)
+            .animatedCells.isEmpty)
+        #expect(focused(Stepper("Count", value: .constant(5)).disabled(true)).animatedCells.isEmpty)
+    }
+
     // MARK: - Composers that assemble rows by hand
 
     // A container that concatenates child STRINGS gets none of what the child

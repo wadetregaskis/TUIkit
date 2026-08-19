@@ -471,27 +471,32 @@ private struct _StepperCore: View, Renderable, Layoutable {
             for: hoverKey, default: false)
         let isHovered = !isDisabled && !isFocused && hoverBox.value
 
+        // The whole cycle, not the live phase. Asking for the phase is a
+        // VOLATILE read: it tells the run loop this frame consumed the clock,
+        // so every tick re-renders the entire page to repaint two arrows. The
+        // cycle is computed from the static formula instead, and the arrows are
+        // left behind as ``AnimatedCellRun``s for the loop to advance alone.
+        // Still asked for only when the pulse is actually drawn — an unfocused
+        // stepper animates nothing, and a still cycle earns no runs.
+        let cycle = context.environment.selectionEmphasis.cycle(
+            isFocused && !isDisabled && !context.isMeasuring)
+
         // Build the stepper content
         let content = buildContent(
             isFocused: isFocused,
             isHovered: isHovered,
             palette: palette,
-            // Resolve the clock ONLY when the pulse is actually drawn — the
-            // same condition `buildContent` uses to consume it. Resolving a
-            // FOCUSED emphasis is a VOLATILE read: it tells the run loop this
-            // frame consumed the clock, which keeps the clock ticking and
-            // re-renders the whole page many times a second. An unfocused
-            // stepper does not use the phase, so reading it kept every page
-            // with a stepper anywhere on it rendering forever, drawing an
-            // identical frame.
-            emphasis: context.environment.selectionEmphasis(
-                isFocused && !isDisabled && !context.isMeasuring),
+            emphasis: cycle,
             valueStyle: context.environment.styleCascade.resolve(
                 for: [.all, .text, .control(.stepper)]),
             isDisabled: isDisabled
         )
 
         var buffer = FrameBuffer(text: content)
+        if !context.isMeasuring {
+            buffer.animatedCells = arrowRuns(
+                cycle: cycle, palette: palette, totalWidth: buffer.width)
+        }
 
         attachMouseHandlers(
             to: &buffer,
@@ -705,12 +710,42 @@ private struct _StepperCore: View, Renderable, Layoutable {
         return box.value
     }
 
+    /// The two endpoints a focused stepper's arrows breathe between.
+    ///
+    /// One definition, because the drawn arrow and the run that replays it must
+    /// agree: a run built from different endpoints would jump to another colour
+    /// the moment the loop took over from the render.
+    private func focusPulseEndpoints(palette: any Palette) -> (dim: Color, bright: Color) {
+        (palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background), palette.accent)
+    }
+
+    /// The runs that breathe the two arrows, so the loop can advance them
+    /// without walking the view tree. Empty unless the stepper is focused and
+    /// the indicator style actually animates.
+    ///
+    /// The offsets are the same two cells the arrow hit-test regions claim —
+    /// `0` and `width - 1` — because the arrows are what those regions are
+    /// drawn over.
+    @MainActor
+    private func arrowRuns(
+        cycle: SelectionEmphasisCycle, palette: any Palette, totalWidth: Int
+    ) -> [AnimatedCellRun] {
+        guard cycle.isAnimating, totalWidth > 1 else { return [] }
+        let (dim, bright) = focusPulseEndpoints(palette: palette)
+        return [
+            cycle.run(TerminalSymbols.leftArrow, dim: dim, bright: bright, offsetX: 0, offsetY: 0),
+            cycle.run(
+                TerminalSymbols.rightArrow, dim: dim, bright: bright,
+                offsetX: totalWidth - 1, offsetY: 0),
+        ].compactMap { $0 }
+    }
+
     /// Builds the rendered stepper content.
     private func buildContent(
         isFocused: Bool,
         isHovered: Bool,
         palette: any Palette,
-        emphasis: SelectionEmphasis,
+        emphasis: SelectionEmphasisCycle,
         valueStyle: StyleAttributes,
         isDisabled: Bool
     ) -> String {
@@ -727,8 +762,8 @@ private struct _StepperCore: View, Renderable, Layoutable {
             valueColor = palette.foregroundTertiary
         } else if isFocused {
             // Pulse between 35% and 100% accent
-            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
-            arrowColor = emphasis.color(dim: dimAccent, bright: palette.accent)
+            let (dimAccent, brightAccent) = focusPulseEndpoints(palette: palette)
+            arrowColor = emphasis.colorNow(dim: dimAccent, bright: brightAccent)
             valueColor = palette.foreground
         } else if isHovered {
             arrowColor = palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
