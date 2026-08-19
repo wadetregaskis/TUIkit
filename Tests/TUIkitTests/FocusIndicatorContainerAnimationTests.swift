@@ -282,4 +282,28 @@ struct FocusIndicatorContainerAnimationTests {
             context: context)
         #expect(buffer.animatedCells.isEmpty)
     }
+
+    // MARK: - Colour grids
+
+    @Test("A focused 256-colour grid hands over its cursor swatch")
+    func color256GridCursor() {
+        let buffer = renderToBuffer(
+            _Color256GridCore(selection: .constant(Color.palette(1)), focusID: "grid-anim"),
+            context: makeRenderContext(width: 80, height: 24))
+        expectAnimates(buffer, runs: 1, "256-colour grid cursor")
+        // The cursor swatch and nothing else — a run per swatch would be 256
+        // runs repainting cells that never change.
+        #expect(buffer.animatedCells[0].width > 0)
+    }
+
+    @Test("An unfocused 256-colour grid animates nothing")
+    func color256GridStill() {
+        let context = makeRenderContext(width: 80, height: 24)
+        context.environment.focusManager!.register(FocusSentinel())
+        #expect(
+            renderToBuffer(
+                _Color256GridCore(selection: .constant(Color.palette(1)), focusID: "grid-still"),
+                context: context
+            ).animatedCells.isEmpty)
+    }
 }

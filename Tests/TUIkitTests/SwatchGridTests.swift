@@ -157,31 +157,41 @@ struct SwatchGridRenderTests {
         let entries: [Color] = (0..<4).map { Color.rgb(0, UInt8($0 * 60), 0) }
         let fm = FocusManager()
         let tui = TUIContext()
-        func markForeground(style: SelectionIndicatorStyle, phase: Double) -> String {
+        /// The grid's buffer under a given indicator style, focused.
+        func render(style: SelectionIndicatorStyle) -> FrameBuffer {
             var env = EnvironmentValues()
             env.focusManager = fm
-            env.pulsePhase = phase  // no cursor timer in tests → helper falls back to this
             env.selectionIndicatorStyle = style
             let ctx = RenderContext(
                 availableWidth: 16, availableHeight: 3, environment: env, tuiContext: tui)
             fm.beginRenderPass()
-            let line = renderToBuffer(
+            let buffer = renderToBuffer(
                 _SwatchGridCore(
-                    entries: entries, columns: 4, selection: .constant(entries[1]), focusID: "sg-anim"),
-                context: ctx
-            ).lines.first ?? ""
+                    entries: entries, columns: 4, selection: .constant(entries[1]),
+                    focusID: "sg-anim"),
+                context: ctx)
             fm.endRenderPass()
-            guard let r = line.range(of: "38;2;") else { return "none" }
-            return String(line[r.upperBound...].prefix(11))
+            return buffer
         }
-        _ = markForeground(style: SelectionIndicatorStyle(), phase: 0)  // first render auto-focuses
-        // pulse (the default): the mark colour tracks the phase — it breathes.
-        #expect(markForeground(style: SelectionIndicatorStyle(animation: .pulse), phase: 0.0)
-            != markForeground(style: SelectionIndicatorStyle(animation: .pulse), phase: 1.0),
-            "pulse: the focused mark animates with the phase")
-        // none: steady regardless of phase (focus shown by colour/bold alone).
-        #expect(markForeground(style: SelectionIndicatorStyle(animation: .none), phase: 0.0)
-            == markForeground(style: SelectionIndicatorStyle(animation: .none), phase: 1.0),
+        _ = render(style: SelectionIndicatorStyle())  // first render auto-focuses
+
+        // Not "the output tracks the phase": the grid no longer reads the phase
+        // as it renders — that read re-rendered the whole panel on every tick.
+        // It leaves ONE run, over the cursor swatch, and the breathing is there.
+        let pulsing = render(style: SelectionIndicatorStyle(animation: .pulse))
+        #expect(pulsing.animatedCells.count == 1, "the focused mark left no run")
+        let run = pulsing.animatedCells[0]
+        #expect(run.isAnimating, "pulse: the focused mark animates")
+        #expect(
+            Set(run.frames.map(\.stripped)).count == 1, "the pulse moved the mark's glyphs")
+        // And it sits on the swatch it was drawn from.
+        let replayed = pulsing.composited(
+            with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
+        #expect(replayed.lines.map(\.stripped) == pulsing.lines.map(\.stripped),
+            "the run does not sit on the cursor swatch")
+
+        // none: steady, so there is nothing for the loop to advance.
+        #expect(render(style: SelectionIndicatorStyle(animation: .none)).animatedCells.isEmpty,
             "none: the mark is steady")
     }
 

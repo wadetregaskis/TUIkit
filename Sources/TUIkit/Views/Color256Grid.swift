@@ -301,7 +301,11 @@ struct _Color256GridCore: View, Renderable {
             FocusRegistration.register(context: context, handler: handler)
         }
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
-        let indicator = SelectionIndicator.resolve(isFocused: isFocused, context: context)
+        // The CYCLE, not this tick's colour: the cursor swatch's mark is handed
+        // to the run loop rather than rebuilt by re-rendering the whole panel
+        // (and the page behind it) on every tick.
+        let cycle = context.environment.selectionEmphasis.cycle(isFocused)
+        let indicator = cycle.frames[cycle.step % max(1, cycle.frames.count)]
 
         // Fold the palette to whatever the width on offer allows — 3 cube blocks
         // across and unwrapped strips when there is room, narrower profiles when
@@ -314,6 +318,22 @@ struct _Color256GridCore: View, Renderable {
         handler.placements = cells
 
         var buffer = FrameBuffer(lines: lines)
+        // One run, over the cursor swatch alone: it is the only cell whose
+        // appearance moves, and `cells` already says exactly where it landed.
+        if !context.isMeasuring, cycle.isAnimating,
+            let placement = cells.first(where: { $0.index == handler.cursor })
+        {
+            buffer.animatedCells = [
+                AnimatedCellRun(
+                    offsetX: placement.x, offsetY: placement.y, width: cellWidth,
+                    frames: cycle.frames.map {
+                        Self.cellText(
+                            index: placement.index, cellWidth: cellWidth, isCursor: true,
+                            indicator: $0, showNumbers: showNumbers)
+                    },
+                    clock: .cursor)
+            ]
+        }
 
         // Mouse: clicking any swatch commits its index (fixes the grid ignoring
         // clicks). One handler per cell so the click maps to an exact index
@@ -393,7 +413,7 @@ struct _Color256GridCore: View, Renderable {
     /// contrasting foreground so it stays visible on any colour, including
     /// mid-grey, and (when focused) animates per ``SelectionIndicatorStyle``.
     static func renderGrid(
-        cursor: Int, indicator: SelectionIndicator.Resolution, cellWidth: Int, showNumbers: Bool,
+        cursor: Int, indicator: SelectionEmphasis, cellWidth: Int, showNumbers: Bool,
         arrangement: Palette256Layout.Arrangement = Palette256Layout.preferred
     ) -> (lines: [String], cells: [Palette256Layout.Cell]) {
         let rows = Palette256Layout.rows(arrangement)
@@ -426,9 +446,9 @@ struct _Color256GridCore: View, Renderable {
 
     /// The rendered content of one swatch: the selection check, the palette index
     /// (in `showNumbers` mode), or a plain colour block.
-    private static func cellText(
+    static func cellText(
         index: Int, cellWidth: Int, isCursor: Bool,
-        indicator: SelectionIndicator.Resolution, showNumbers: Bool
+        indicator: SelectionEmphasis, showNumbers: Bool
     ) -> String {
         let color = Color.palette(UInt8(index))
         let foreground = contrast(forIndex: index)

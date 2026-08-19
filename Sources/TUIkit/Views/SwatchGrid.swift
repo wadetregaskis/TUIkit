@@ -137,9 +137,12 @@ struct _SwatchGridCore: View, Renderable {
             FocusRegistration.register(context: context, handler: handler)
         }
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
-        // Resolve the focused-selection animation once (the phase is shared across
-        // cells); each cell applies it against its own colour.
-        let indicator = SelectionIndicator.resolve(isFocused: isFocused, context: context)
+        // The CYCLE, not this tick's colour: the cursor swatch's mark is handed
+        // to the run loop rather than rebuilt by re-rendering the whole panel
+        // on every tick. Resolved once (the phase is shared across cells); each
+        // cell applies it against its own colour.
+        let cycle = context.environment.selectionEmphasis.cycle(isFocused)
+        let indicator = cycle.frames[cycle.step % max(1, cycle.frames.count)]
 
         // Whether to draw the cursor marker at all. With exactMatchOnly, only
         // when the bound colour is genuinely one of the swatches (the cursor
@@ -165,6 +168,27 @@ struct _SwatchGridCore: View, Renderable {
             lines.append(contentsOf: sublines)
         }
         var buffer = FrameBuffer(lines: lines)
+        // One run, over the cursor swatch's marked sub-line alone: it is the
+        // only cell whose appearance moves. Its column is the cell's, its row
+        // the `markRow` sub-line of the cell's row — the same two numbers the
+        // draw above used.
+        if !context.isMeasuring, cycle.isAnimating, markerVisible,
+            handler.cursor >= 0, handler.cursor < entries.count
+        {
+            let row = handler.cursor / columns
+            let col = handler.cursor % columns
+            buffer.animatedCells = [
+                AnimatedCellRun(
+                    offsetX: col * cellWidth, offsetY: row * max(1, cellHeight) + markRow,
+                    width: cellWidth,
+                    frames: cycle.frames.map {
+                        cellText(
+                            entries[handler.cursor], cellWidth: cellWidth, palette: palette,
+                            isCursor: true, indicator: $0)
+                    },
+                    clock: .cursor)
+            ]
+        }
 
         // Mouse: clicking a swatch commits it. One handler per cell.
         if !context.isMeasuring, let dispatcher = context.environment.mouseEventDispatcher {
@@ -203,7 +227,7 @@ struct _SwatchGridCore: View, Renderable {
     /// colour and the contrasting tone — breathing/blinking/steady — and is bold.
     private func cellText(
         _ color: Color, cellWidth: Int, palette: any Palette, isCursor: Bool,
-        indicator: SelectionIndicator.Resolution
+        indicator: SelectionEmphasis
     ) -> String {
         guard isCursor else {
             return ANSIRenderer.colorize(String(repeating: " ", count: cellWidth), background: color)
