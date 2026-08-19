@@ -58,6 +58,15 @@ final class NavigationCoordinator {
     /// Writes the path back. See ``read``.
     var write: ([AnyHashable]) -> Void = { _ in }
 
+    /// The depth the last render pass drew, so a pop can be told from a push.
+    ///
+    /// Each depth is its own focus section, and a section only gives its
+    /// remembered focus back when it is *deactivated* — so the stack has to
+    /// notice that it has come back UP and say which levels it left. Nothing
+    /// else in the tree knows: a frame at depth 1 looks the same whether it
+    /// arrived from 0 or from 2.
+    var renderedDepth = 0
+
     /// The title each depth showed while it was the top screen, indexed by
     /// depth (0 is the root).
     ///

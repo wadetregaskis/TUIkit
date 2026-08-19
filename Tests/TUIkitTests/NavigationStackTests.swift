@@ -29,6 +29,64 @@ struct NavigationStackTests {
             .lines.map(\.stripped)
     }
 
+    // MARK: - Focus across a push
+
+    /// A frame with the run loop's own pass bracketing, so focus registration
+    /// and `@State` behave as they do live.
+    private func frame(
+        _ view: some View, tui: TUIContext, fm: FocusManager
+    ) -> [String] {
+        var env = EnvironmentValues()
+        env.focusManager = fm
+        env.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 12, environment: env, tuiContext: tui)
+        tui.stateStorage.beginRenderPass()
+        fm.beginRenderPass()
+        let lines = renderToBuffer(view, context: context).lines.map(\.stripped)
+        fm.endRenderPass()
+        tui.stateStorage.endRenderPass()
+        return lines
+    }
+
+    @Test("Coming back from a screen restores the focus the level was holding")
+    func popRestoresTheFocusOfTheLevelReturnedTo() {
+        // The bug: every level's controls registered in one section, so a pop
+        // put the focus on whichever registered FIRST. Walk into the second
+        // planet and back, and you were on the first one.
+        var path: [Item] = []
+        let binding = Binding(get: { path }, set: { path = $0 })
+        let view = NavigationStack(path: binding) {
+            VStack(alignment: .leading, spacing: 0) {
+                Button("alpha") {}.focusID("link-alpha")
+                Button("beta") {}.focusID("link-beta")
+            }
+            .navigationDestination(for: Item.self) { item in
+                Button("inside \(item.name)") {}.focusID("link-inside")
+            }
+        }
+        let tui = TUIContext()
+        let fm = FocusManager()
+
+        _ = frame(view, tui: tui, fm: fm)
+        fm.focus(id: "link-beta")
+        _ = frame(view, tui: tui, fm: fm)
+        #expect(fm.isFocused(id: "link-beta"), "the second link took the focus")
+
+        // Push: the screen's own control takes the focus, in its own section.
+        path = [Item(name: "one")]
+        let pushed = frame(view, tui: tui, fm: fm)
+        #expect(pushed.contains { $0.contains("inside one") }, "the screen is up: \(pushed)")
+        #expect(fm.isFocused(id: "link-inside"), "the screen's control has the focus")
+
+        // Pop: the level returned to gets its own focus back.
+        path = []
+        _ = frame(view, tui: tui, fm: fm)
+        #expect(
+            fm.isFocused(id: "link-beta"),
+            "the pop landed somewhere else — focus memory per depth is the point")
+    }
+
     // MARK: - Path
 
     @Test("An empty path shows the root")

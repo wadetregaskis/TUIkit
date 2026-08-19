@@ -229,6 +229,19 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         var base = context
         base.environment.navigationCoordinator = coordinator
 
+        // Each depth is its own focus section, so walking into a screen and
+        // back restores the focus the level you left was holding — the same
+        // thing a dismissed modal does. Without it the pop landed on whichever
+        // control registered first, so returning from a planet always put the
+        // focus back on the first planet rather than on the one you opened.
+        //
+        // Before anything renders: the level being returned TO registers its
+        // focusables during this pass, and it must do so with the deeper
+        // section already gone.
+        if !context.isMeasuring, let section = enterSection(depth: elements.count, context: context) {
+            base.environment.activeFocusSectionID = section
+        }
+
         guard let top = elements.last else {
             return TUIkit.renderToBuffer(
                 root, context: base.withChildIdentity(type: type(of: root)))
@@ -255,6 +268,38 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         }
 
         return renderScreen(top: top, context: base)
+    }
+
+    /// Activates the focus section for `depth`, deactivating any deeper ones
+    /// this stack had entered — deepest first, so each level hands its focus
+    /// back up the way it was given.
+    ///
+    /// - Returns: the section the screen and its bar should register in, or
+    ///   `nil` at the root: depth 0 has no section of its own. The root is
+    ///   ordinary page content and belongs in whatever section the page is
+    ///   already using, which is also where the deepest `deactivateSection`
+    ///   reverts to.
+    private func enterSection(depth: Int, context: RenderContext) -> String? {
+        let focusManager = context.environment.focusManager
+        let base = context.identity.path
+        if coordinator.renderedDepth > depth {
+            for deeper in stride(from: coordinator.renderedDepth, to: depth, by: -1) {
+                focusManager?.deactivateSection(id: Self.sectionID(base: base, depth: deeper))
+            }
+        }
+        coordinator.renderedDepth = depth
+        guard depth > 0 else { return nil }
+        let sectionID = Self.sectionID(base: base, depth: depth)
+        focusManager?.registerSection(id: sectionID)
+        focusManager?.activateSection(id: sectionID)
+        return sectionID
+    }
+
+    /// A focus section per stack, per depth. Structural identity, never the
+    /// pushed value: two stacks on one page must not share a section, and the
+    /// same value pushed twice is two different places to come back to.
+    static func sectionID(base: String, depth: Int) -> String {
+        "navigation-\(base)-\(depth)"
     }
 
     /// Renders the pushed screen with its navigation bar above it.
