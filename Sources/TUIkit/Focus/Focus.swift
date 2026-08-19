@@ -1270,13 +1270,19 @@ extension FocusManager {
                 && Self.focusID($0.focusID, addressesSubtreeAt: path)
         }
         guard !stops.isEmpty else { return false }
-        let current = focusedID.flatMap { id in stops.firstIndex { $0.focusID == id } }
+        // Only while the cursor is actually IN this subtree. The handler that
+        // calls this is registered per section, not per control, so a menu
+        // sharing a page with other controls would otherwise answer a Page Down
+        // aimed at the page itself — moving its own cursor instead of scrolling
+        // what the user was looking at.
+        guard let current = focusedID.flatMap({ id in stops.firstIndex { $0.focusID == id } })
+        else { return false }
         let target: Int
         switch jump {
         case .first: target = 0
         case .last: target = stops.count - 1
-        case .forward(let by): target = min(stops.count - 1, (current ?? -1) + max(1, by))
-        case .backward(let by): target = max(0, (current ?? stops.count) - max(1, by))
+        case .forward(let by): target = min(stops.count - 1, current + max(1, by))
+        case .backward(let by): target = max(0, current - max(1, by))
         }
         let moved = target != current
         if moved {

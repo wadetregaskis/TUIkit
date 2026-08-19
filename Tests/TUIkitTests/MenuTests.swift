@@ -150,6 +150,33 @@ struct MenuTests {
         }
     }
 
+    @Test("A menu leaves the paging keys alone when the cursor is elsewhere")
+    func inlinePagingIsScopedToTheCursor() {
+        // The handler is registered per SECTION, not per control, so a menu
+        // sharing a page with other controls would otherwise answer a Page Down
+        // aimed at the page — moving its own cursor instead of scrolling what
+        // the reader was looking at.
+        let (tui, context) = harness(height: 9)
+        let view = VStack(alignment: .leading, spacing: 0) {
+            Button("outside") {}.focusID("outside")
+            Menu("Menu") {
+                ForEach(0..<8, id: \.self) { index in Button("Item \(index)") {} }
+            }
+            .menuStyle(.inline)
+        }
+
+        _ = renderArmed(view, tui: tui, context: context)
+        context.environment.focusManager!.focus(id: "outside")
+        _ = renderArmed(view, tui: tui, context: context)
+
+        #expect(
+            !tui.keyEventDispatcher.dispatch(KeyEvent(key: .pageDown)),
+            "the menu answered a key aimed past it")
+        #expect(
+            context.environment.focusManager!.isFocused(id: "outside"),
+            "and it moved the focus it does not own")
+    }
+
     @Test("Every row of a menu is the same width, and the menu hugs its widest")
     func inlineRowsShareOneWidth() {
         let (tui, context) = harness()
