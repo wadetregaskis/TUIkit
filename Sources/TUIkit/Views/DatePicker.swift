@@ -342,26 +342,51 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         // inverts the terminal's default colours and collapses to dark-on-dark
         // on a mid-tone theme), so it's readable on every palette and visibly
         // breathes while focused, the same affordance List/Picker rows use.
-        // Gated on `!isMeasuring` so the measure pass never reads the clock;
-        // it's colour-only, so width is identical whether or not it's applied.
-        let activeHighlight: Color? = (isFocused && !context.isMeasuring)
-            ? context.environment.selectionEmphasis(true).color(
-                dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
-                bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background))
-            : nil
+        //
+        // The whole cycle, not the live phase: reading the phase marks the frame
+        // as having consulted the clock, so every tick re-rendered the page to
+        // repaint two or three cells. The block is left as an
+        // ``AnimatedCellRun`` instead. Gated on `!isMeasuring` so the measure
+        // pass never asks at all; it's colour-only, so the width is identical
+        // whether or not it's applied.
+        let cycle = context.environment.selectionEmphasis.cycle(
+            isFocused && !context.isMeasuring)
+        let dimBlock = palette.accent.opacity(
+            ViewConstants.focusPulseMin, over: palette.background)
+        let brightBlock = palette.accent.opacity(
+            ViewConstants.focusPulseMax, over: palette.background)
+        let activeHighlight: Color? = isFocused && !context.isMeasuring
+            ? cycle.colorNow(dim: dimBlock, bright: brightBlock) : nil
+
+        /// The active component's cell on its block — one description, used for
+        /// the frame drawn now and for every frame of the run that replays it.
+        func activeCell(_ text: String, on block: Color) -> String {
+            var style = TextStyle()
+            style.backgroundColor = block
+            style.foregroundColor = palette.foreground
+            style.isUnderlined = !isDisabled
+            return ANSIRenderer.render(text, with: style.resolved(with: palette))
+        }
 
         var line = ""
+        var runs: [AnimatedCellRun] = []
         for cell in cells {
             var style = TextStyle()
             if cell.kind == nil {
                 // Separators (the "-", ":" and spaces) stay quiet.
                 style.foregroundColor = palette.foregroundSecondary
-            } else if let activeKind, cell.kind == activeKind, let activeHighlight {
+            } else if let activeKind, cell.kind == activeKind, activeHighlight != nil {
                 // Bright text on the pulsing accent block — the same
                 // high-contrast, readable affordance List/Picker focused rows use.
-                style.backgroundColor = activeHighlight
-                style.foregroundColor = palette.foreground
-                style.isUnderlined = !isDisabled
+                // The block breathes on its own, at the column it lands in.
+                if let run = cycle.run(
+                    dim: dimBlock, bright: brightBlock, offsetX: line.strippedLength, offsetY: 0,
+                    draw: { activeCell(cell.text, on: $0) })
+                {
+                    runs.append(run)
+                }
+                line += activeCell(cell.text, on: cycle.colorNow(dim: dimBlock, bright: brightBlock))
+                continue
             } else {
                 // Every editable component is underlined so the field reads as
                 // fillable even before it takes focus.
@@ -377,6 +402,7 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         }
 
         var buffer = FrameBuffer(lines: [line])
+        buffer.animatedCells = runs
         registerMouse(context: context, buffer: &buffer, handler: handler, cells: cells, isDisabled: isDisabled)
         return buffer
     }

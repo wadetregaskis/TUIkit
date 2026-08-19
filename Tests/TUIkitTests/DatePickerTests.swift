@@ -350,24 +350,47 @@ struct DatePickerTests {
     /// once — measure-pass side effects, the bare-SGR-7 inverted-highlight
     /// trap, and opacity-dims-toward-black — so all three contracts get
     /// pinned here.
-    private func renderFocused(pulsePhase: Double, isMeasuring: Bool = false) -> String {
+    private func focusedBuffer(isMeasuring: Bool = false) -> FrameBuffer {
         let sink = DateSink(localDate(2026, 3, 5, 9, 7))
-        var context = makeRenderContext(width: 40, height: 3) { env, _ in
-            env.pulsePhase = pulsePhase
-        }
+        var context = makeRenderContext(width: 40, height: 3)
         context.isMeasuring = isMeasuring
         // The first focusable auto-focuses under makeRenderContext, so the
         // picker's active component is highlighted.
         return renderToBuffer(DatePicker("When", selection: sink.binding), context: context)
-            .lines.joined(separator: "\n")
     }
 
-    @Test("The focused field's pulse animates (different phases → different colours)")
+    private func renderFocused(isMeasuring: Bool = false) -> String {
+        focusedBuffer(isMeasuring: isMeasuring).lines.joined(separator: "\n")
+    }
+
+    @Test("The focused field hands its pulsing block to the run loop")
     func pulseAnimates() {
-        let low = renderFocused(pulsePhase: 0.0)
-        let high = renderFocused(pulsePhase: 1.0)
-        #expect(low != high, "the highlight breathes with the pulse phase")
-        #expect(low.stripped == high.stripped, "the pulse is colour-only (no glyph change)")
+        // Not "the output changes with the phase": the picker no longer reads
+        // the phase as it renders — that read is what forced a full re-render
+        // of the page per tick. It leaves a run instead, and the run is where
+        // the breathing now lives.
+        let buffer = focusedBuffer()
+        #expect(buffer.animatedCells.count == 1, "the active component left no run")
+        let run = buffer.animatedCells[0]
+        #expect(run.isAnimating, "the run is a still picture")
+        #expect(
+            Set(run.frames.map(\.stripped)).count == 1,
+            "the pulse is colour-only (no glyph change)")
+        // The run has to sit on the cells that were drawn — replaying the step
+        // it was rendered at must change nothing.
+        let replayed = buffer.composited(
+            with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
+        #expect(replayed.lines.map(\.stripped) == buffer.lines.map(\.stripped),
+            "the run does not sit on the highlighted component")
+    }
+
+    @Test("An unfocused field animates nothing")
+    func unfocusedIsStill() {
+        let sink = DateSink(localDate(2026, 3, 5, 9, 7))
+        let context = makeRenderContext(width: 40, height: 3)
+        context.environment.focusManager!.register(DatePickerFocusSentinel())
+        let buffer = renderToBuffer(DatePicker("When", selection: sink.binding), context: context)
+        #expect(buffer.animatedCells.isEmpty)
     }
 
     @Test("The highlight uses explicit colours, never bare SGR 7 reverse-video")
@@ -376,17 +399,28 @@ struct DatePickerTests {
         // palette's, collapsing to dark-on-dark on mid-tone themes (the
         // inverted-highlight trap). The highlight must carry explicit
         // foreground + background parameters instead.
-        let out = renderFocused(pulsePhase: 0.5)
+        let out = renderFocused()
         #expect(!out.contains("\u{1B}[7m"), "no bare reverse-video")
         #expect(out.contains("38;2;"), "explicit foreground colour")
         // The background arrives in a combined SGR (e.g. ESC[4;38;…;48;…m).
         #expect(out.contains("48;2;"), "explicit background colour")
     }
 
-    @Test("The measure pass is pulse-independent (no phase read while measuring)")
+    @Test("The measure pass neither pulses nor leaves a run")
     func measureIgnoresPulse() {
-        let a = renderFocused(pulsePhase: 0.0, isMeasuring: true)
-        let b = renderFocused(pulsePhase: 1.0, isMeasuring: true)
-        #expect(a == b, "measure output is byte-identical across pulse phases")
+        // A measure that asked for an animating emphasis would keep the clock
+        // alive from a pass that draws nothing, and a run left on a measure
+        // buffer describes cells that were never on screen.
+        let measured = focusedBuffer(isMeasuring: true)
+        #expect(measured.animatedCells.isEmpty)
+        #expect(!measured.lines.joined().contains("48;2;"), "no highlight while measuring")
     }
+}
+
+/// Claims auto-focus before the picker renders, so the picker draws unfocused.
+/// The first `Focusable` to register with a fresh `FocusManager` takes the
+/// focus, which is what makes an "unfocused control" testable at all.
+private final class DatePickerFocusSentinel: Focusable {
+    let focusID = "date-picker-focus-sentinel"
+    func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
 }
