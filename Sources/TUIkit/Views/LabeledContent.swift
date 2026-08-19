@@ -47,10 +47,17 @@ public struct LabeledContent<Label: View, Content: View>: View {
         // Standalone layout (outside a Form): label leading, content trailing.
         // Inside a Form, the form lays the label/content out itself (pillar
         // alignment) and this body is not used.
+        //
+        // The leftover goes to the CONTENT, not to a spacer beside it. A
+        // `Spacer` is width-flexible and so is a `TextField`, and the stack
+        // distributes to flexible children evenly — so a labelled field came
+        // out with half the line spent on the gap in front of it. A flexible
+        // frame gives the content the whole remainder and aligns a fixed-width
+        // content (the `value:` overloads' `Text`) at its trailing edge, which
+        // is where the spacer used to put it.
         HStack(spacing: 1) {
             label
-            Spacer(minLength: 1)
-            content
+            content.frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 }
