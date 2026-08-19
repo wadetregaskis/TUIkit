@@ -243,12 +243,13 @@ type_name:
     - _MemoizedRow
     - _SplitDividerHandler
     - _DialogDragHandler
-    # The gradient editor's stop-chip button style, its pulse-reading centre
-    # cell, and the live-reorder drag handle (own file, so internal rather
-    # than file-private), plus the shared drag-handle plumbing they and
+    # The swatch button style shared by ColorPicker and the gradient editor's
+    # stop chips, and its pulse-reading cells; the gradient strip's
+    # live-reorder drag handle (own file, so internal rather than
+    # file-private), plus the shared drag-handle plumbing it and
     # DraggableModifier both use.
-    - _StopChipStyle
-    - _StopChipCentreCell
+    - _ColorSwatchButtonStyle
+    - _ColorSwatchCells
     - _StopChipDragHandle
     - _DragHandle
     # Shared treatment for controls' own label views: the disabled-dimming

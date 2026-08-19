@@ -199,7 +199,7 @@ public struct GradientEditorPanel: View {
     /// The CENTRE cell doubles as the state indicator: a readable-contrast
     /// bullet marks the stop the panel below is editing, pulsing while the
     /// chip holds keyboard focus, dim as a hover or drop-target hint
-    /// (``_StopChipStyle``). Every state re-colours that one cell in place,
+    /// (``_ColorSwatchButtonStyle``). Every state re-colours that one cell in place,
     /// so nothing ever shifts.
     ///
     /// Chips also reorder LIVE: dragging one moves its stop through the
@@ -226,7 +226,7 @@ public struct GradientEditorPanel: View {
     private func stopChip(index: Int, color: Color, isSelected: Bool) -> some View {
         _StopChipDragHandle(
             content: Button("") { selectedStop = index }
-                .buttonStyle(_StopChipStyle(color: color, isSelected: isSelected)),
+                .buttonStyle(_ColorSwatchButtonStyle(color: color, isSelected: isSelected)),
             index: index,
             stopCount: stops.wrappedValue.count,
             grab: { selectedStop = index },
@@ -237,10 +237,9 @@ public struct GradientEditorPanel: View {
             })
     }
 
-    /// The cell width of every stop chip: a 3-cell swatch — wide enough to
-    /// read as a block of colour, and odd so the state bullet has a true
-    /// centre.
-    static let stopChipWidth = 3
+    /// The cell width of every stop chip — the shared swatch width, so the
+    /// strip's drag geometry cannot drift from what the chips actually draw.
+    static let stopChipWidth = _ColorSwatchButtonStyle.width
 
     /// Insert / remove / reorder controls for the selected stop.
     private var actionRow: some View {

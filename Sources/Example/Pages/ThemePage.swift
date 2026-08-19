@@ -6,11 +6,12 @@
 
 import TUIkit
 
-/// Theme demo page — switch presets, change the border appearance, inspect the
-/// **full set** of semantic colours, and build a **custom theme** by editing
-/// them with the compact inline `ColorPicker` or the full modal
-/// `ColorPickerPanel` (RGB / HSL / HSB / CMYK tabs, the palette's semantic
-/// roles, and the 256-colour grid).
+/// Theme demo page — switch presets, change the border appearance, and build a
+/// **custom theme** by editing the palette's colours: **every** one of them,
+/// one row each, with the inline `ColorPicker` channels at the end of the row
+/// and the full modal `ColorPickerPanel` (RGB / HSL / HSB / CMYK tabs, the
+/// palette's semantic roles, and the 256-colour grid) a click or `Return` away
+/// on the row's swatch.
 ///
 /// Everything here is **global and live**: the page edits `ExampleApp`'s
 /// app-wide `palette` (`@Binding`), which drives the scene's `.palette(...)`, so
@@ -21,10 +22,6 @@ struct ThemePage: View {
     @Binding var palette: CustomizablePalette
     @Binding var styling: ExampleStyling
     @Environment(\.appearanceManager) private var appearanceManager
-
-    /// Index into ``editableColors`` currently open in the full modal colour
-    /// editor (``ColorPickerPanel``), or `nil` when it is dismissed.
-    @State private var editing: Int?
 
     /// The six editable characters of the custom border (single chars, typeable
     /// in ASCII; box-drawing glyphs come from the preset buttons). Default to an
@@ -45,8 +42,10 @@ struct ThemePage: View {
         ("Info", .palette.info),
     ]
 
-    /// The semantic colours, paired with editable key paths, for display + editing.
-    private static let semanticColors: [(name: String, keyPath: WritableKeyPath<CustomizablePalette, Color>)] = [
+    /// Every colour a ``Palette`` defines, paired with its editable key path —
+    /// named exactly as the protocol names them, because this page is also
+    /// where you look up which colour is which.
+    private static let themeColors: [(name: String, keyPath: WritableKeyPath<CustomizablePalette, Color>)] = [
         ("background", \.background),
         ("statusBarBackground", \.statusBarBackground),
         ("appHeaderBackground", \.appHeaderBackground),
@@ -65,17 +64,10 @@ struct ThemePage: View {
         ("cursorColor", \.cursorColor),
     ]
 
-    /// The subset offered for editing (the most visually impactful colours).
-    private static let editableColors: [(name: String, keyPath: WritableKeyPath<CustomizablePalette, Color>)] = [
-        ("Accent", \.accent),
-        ("Foreground", \.foreground),
-        ("Background", \.background),
-        ("Success", \.success),
-        ("Warning", \.warning),
-        ("Error", \.error),
-        ("Info", \.info),
-        ("Border", \.border),
-    ]
+    /// The label column, sized to the longest name so the swatches and channel
+    /// sliders line up down the whole section (the names are ASCII, so
+    /// characters are cells).
+    private static let colorLabelWidth = themeColors.map { $0.name.count }.max() ?? 18
 
     /// The chrome styles offered by the picker, with their display names.
     private static var chromeNames: [(name: String, style: ChromeStyle)] {
@@ -190,12 +182,6 @@ struct ThemePage: View {
                 }
             }
         )
-        // Drives the modal colour editor: true while a colour is open for editing.
-        let editingBinding = Binding(
-            get: { editing != nil },
-            set: { if !$0 { editing = nil } }
-        )
-
         ScrollView {
             VStack(alignment: .leading, spacing: 1) {
 
@@ -350,34 +336,20 @@ struct ThemePage: View {
                     }
                 }
 
-                DemoSection("page.theme.semanticColours") {
+                DemoSection("page.theme.colours") {
+                    // One row per colour, and one row is the whole editor: the
+                    // name, a swatch that opens the full modal editor, and the
+                    // channel sliders that edit it in place.
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(0..<Self.semanticColors.count, id: \.self) { index in
-                            swatchRow(
-                                Self.semanticColors[index].name,
-                                palette[keyPath: Self.semanticColors[index].keyPath])
-                        }
-                    }
-                }
-
-                DemoSection("page.theme.customiseCompact") {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(0..<Self.editableColors.count, id: \.self) { index in
-                            ColorPicker(
-                                Self.editableColors[index].name,
-                                selection: colorBinding(Self.editableColors[index].keyPath))
-                        }
-                    }
-                }
-
-                DemoSection("page.theme.fullColourEditor") {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("page.theme.fullColourEditorDescription")
+                        Text("page.theme.coloursDescription")
                             .foregroundStyle(.palette.foregroundSecondary)
-                        ForEach(0..<Self.editableColors.count, id: \.self) { index in
-                            editorRow(index)
+                        ForEach(0..<Self.themeColors.count, id: \.self) { index in
+                            ColorPicker(
+                                Self.themeColors[index].name,
+                                selection: colorBinding(Self.themeColors[index].keyPath))
                         }
                     }
+                    .colorPickerLabelWidth(Self.colorLabelWidth)
                 }
 
                 DemoSection("page.theme.livePreview") {
@@ -401,51 +373,16 @@ struct ThemePage: View {
                     shortcuts: [
                         "page.theme.help.choosePreset",
                         "page.theme.help.moveFocus",
+                        "page.theme.help.openSwatch",
                         "page.theme.help.cyclePalette",
                         "page.theme.help.everyChange",
                     ]
                 )
             }
         }
-        .modal(isPresented: editingBinding) {
-            if let index = editing {
-                ColorPickerPanel(
-                    Self.editableColors[index].name,
-                    selection: colorBinding(Self.editableColors[index].keyPath),
-                    isPresented: editingBinding)
-            }
-        }
         .appHeader {
             DemoAppHeader("menu.item.theme")
         }
-    }
-
-    /// A row in the full-editor section: a live swatch, the colour's name, and a
-    /// button that opens the modal ``ColorPickerPanel`` for that colour.
-    @ViewBuilder
-    private func editorRow(_ index: Int) -> some View {
-        let entry = Self.editableColors[index]
-        HStack(spacing: 1) {
-            Text("███").foregroundStyle(palette[keyPath: entry.keyPath])
-            Button("\(L("page.theme.edit")) \(entry.name)…") { editing = index }
-        }
-    }
-
-    /// A read-only swatch row: a colour block, the semantic name, and its RGB
-    /// (so dark colours that blend into the background are still identifiable).
-    @ViewBuilder
-    private func swatchRow(_ name: String, _ color: Color) -> some View {
-        HStack(spacing: 1) {
-            Text("███").foregroundStyle(color)
-            Text(name).frame(width: 22, alignment: .leading)
-                .foregroundStyle(.palette.foreground)
-            Text(rgbText(color)).foregroundStyle(.palette.foregroundTertiary)
-        }
-    }
-
-    private func rgbText(_ color: Color) -> String {
-        guard let c = color.rgbComponents else { return "—" }
-        return "rgb(\(c.red), \(c.green), \(c.blue))"
     }
 
     /// A `Color` binding onto one stored colour of the app palette. Writing

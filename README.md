@@ -211,7 +211,7 @@ Available presets (`SystemPalette.Preset`):
 .palette(TerminalProfilePalette(.homebrew))
 ```
 
-`PaletteRegistry.all` enumerates all 16 built-in palettes (`.phosphorPresets` + `.terminalProfiles`), with `PaletteRegistry.palette(withId:)` / `palette(withName:)` lookups. Custom palettes conform to `Palette` directly, and the modal `ColorPicker` lets users edit colours interactively.
+`PaletteRegistry.all` enumerates all 16 built-in palettes (`.phosphorPresets` + `.terminalProfiles`), with `PaletteRegistry.palette(withId:)` / `palette(withName:)` lookups. Custom palettes conform to `Palette` directly, and the `ColorPicker` lets users edit colours interactively — R/G/B inline, or the full modal editor from a click or `Return` on its swatch.
 
 ## Internationalization
 

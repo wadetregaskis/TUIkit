@@ -8,12 +8,19 @@
 
 /// A control for editing an RGB ``Color``.
 ///
-/// Mirrors SwiftUI's `ColorPicker(_:selection:)` signature. SwiftUI opens the
-/// platform colour panel from a swatch; a terminal has none, so this renders an
-/// inline editor instead — a live swatch plus one ``Slider`` per channel (R, G,
-/// B, each 0–255). Tab moves focus between the channel sliders; the arrow keys
-/// adjust the focused channel. (There is no opacity channel — terminal colours
-/// have no alpha — so `supportsOpacity` is omitted.)
+/// Mirrors SwiftUI's `ColorPicker(_:selection:)` signature, and its two halves:
+/// the swatch **opens the full colour editor** — SwiftUI's platform colour
+/// panel, here ``ColorPickerPanel`` as a modal — and, since a terminal row has
+/// space SwiftUI's control does not, the rest of the row edits the colour in
+/// place: one ``Slider`` per channel (R, G, B, each 0–255). Tab moves focus
+/// between the swatch and the channel sliders; the arrow keys adjust the
+/// focused channel; Return, Space or a click on the swatch opens the panel.
+/// (There is no opacity channel — terminal colours have no alpha — so
+/// `supportsOpacity` is omitted.)
+///
+/// The swatch shows focus and hover in its centre cell — a bullet, pulsing
+/// while focused — rather than by re-colouring itself, because its colour is
+/// its content (``_ColorSwatchButtonStyle``).
 ///
 /// ```swift
 /// @State var tint: Color = .rgb(80, 160, 255)
@@ -27,6 +34,12 @@ public struct ColorPicker: View {
     private let title: String
     private let selection: Binding<Color>
     private let step: Double
+
+    /// True while the full ``ColorPickerPanel`` is up for this picker.
+    @State private var isEditing = false
+
+    /// How wide the label column is — see ``TUIkit/View/colorPickerLabelWidth(_:)``.
+    @Environment(\.colorPickerLabelWidth) private var labelWidth
 
     /// Creates a colour picker over an RGB binding, with a localized label.
     ///
@@ -60,14 +73,28 @@ public struct ColorPicker: View {
         // where the G looks like a suffix of the previous channel's value).
         HStack(spacing: 2) {
             Text(title)
-                .frame(width: 18, alignment: .leading)
+                .frame(width: labelWidth, alignment: .leading)
                 .foregroundStyle(.palette.foregroundSecondary)
-            // Live swatch in the colour being edited.
-            Text("███").foregroundStyle(selection.wrappedValue)
+            swatch
             channel("R", 0)
             channel("G", 1)
             channel("B", 2)
         }
+    }
+
+    /// The live swatch, and the way into the full editor: a button whose whole
+    /// body is the colour, opening ``ColorPickerPanel`` on the same binding.
+    /// The panel edits live and restores the opening colour on Cancel or `Esc`,
+    /// so the two editors are two views of one value, not two values.
+    private var swatch: some View {
+        Button("") { isEditing = true }
+            .buttonStyle(_ColorSwatchButtonStyle(color: selection.wrappedValue))
+            .modal(isPresented: $isEditing) {
+                // `title` is already localized (the key overload resolves it in
+                // init), so the String overload takes it — a second lookup
+                // would search for the resolved text as a key.
+                ColorPickerPanel(title, selection: selection, isPresented: $isEditing)
+            }
     }
 
     /// A labelled slider bound to one RGB channel (0 = red, 1 = green, 2 = blue).
@@ -120,5 +147,46 @@ public struct ColorPicker: View {
                 selection.wrappedValue = .rgb(components.red, components.green, components.blue)
             }
         )
+    }
+}
+
+// MARK: - Label Width
+
+private struct ColorPickerLabelWidthKey: EnvironmentKey {
+    /// Wide enough for the names a single picker usually carries ("Accent",
+    /// "Background"), which is what the control was written against.
+    static let defaultValue = 18
+}
+
+extension EnvironmentValues {
+    /// The width of a ``ColorPicker``'s label column. See
+    /// ``TUIkit/View/colorPickerLabelWidth(_:)``.
+    public var colorPickerLabelWidth: Int {
+        get { self[ColorPickerLabelWidthKey.self] }
+        set { self[ColorPickerLabelWidthKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Sets the width of the label column in every ``ColorPicker`` in this view.
+    ///
+    /// A picker's label sits in a fixed-width column so that a *stack* of them
+    /// lines up: swatch under swatch, channel under channel. The default fits
+    /// the short names a picker usually carries; widen it for a column of
+    /// longer ones, so they neither wrap nor push the editors out of line.
+    ///
+    /// ```swift
+    /// VStack(alignment: .leading, spacing: 0) {
+    ///     ForEach(colors) { ColorPicker($0.name, selection: binding(for: $0)) }
+    /// }
+    /// .colorPickerLabelWidth(20)   // "foregroundQuaternary" fits
+    /// ```
+    ///
+    /// TUI-specific: SwiftUI sizes a picker's label to its text and aligns a
+    /// column of them with a `Form` or a `Grid`.
+    ///
+    /// - Parameter width: The column width in cells.
+    public func colorPickerLabelWidth(_ width: Int) -> some View {
+        environment(\.colorPickerLabelWidth, width)
     }
 }

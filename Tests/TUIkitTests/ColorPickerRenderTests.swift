@@ -29,12 +29,25 @@ struct ColorPickerRenderTests {
 
     @Test("Inline ColorPicker draws its title, a live swatch and R/G/B channel sliders")
     func inlineColorPickerChrome() {
-        let out = joined(ColorPicker("Accent", selection: .constant(.red)), w: 60, h: 4)
+        // Focus parked elsewhere: the swatch is a control now, and a focused
+        // one wears a bullet in its middle cell.
+        let context = makeRenderContext(width: 60, height: 4)
+        context.environment.focusManager!.register(SwatchFocusSentinel())
+        let out = renderToBuffer(ColorPicker("Accent", selection: .constant(.red)), context: context)
+            .lines.map { $0.stripped }.joined(separator: "\n")
         #expect(out.contains("Accent"), "title shown: \(out)")
-        #expect(out.contains("███"), "live swatch shown")
+        #expect(out.contains("███"), "live swatch shown: \(out)")
         // One labelled slider per RGB component (label + slider's left arrow).
         #expect(out.contains("R ◀") && out.contains("G ◀") && out.contains("B ◀"),
                 "three labelled channel sliders: \(out)")
+    }
+
+    /// Parks focus so the swatch can be rendered *un*-focused: it is the
+    /// picker's first registrant, and a fresh `FocusManager` auto-focuses
+    /// whoever registers first.
+    private final class SwatchFocusSentinel: Focusable {
+        let focusID = "colorpicker-swatch-sentinel"
+        func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
     }
 
     @Test("Inline channels: full slider chrome, gapped fixed-width right-aligned values")
