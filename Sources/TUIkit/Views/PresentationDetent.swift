@@ -111,7 +111,7 @@ extension EnvironmentValues {
     /// leftover as empty interior.
     ///
     /// Consumed by that outermost container, which clears it for its children
-    /// — the same one-shot discipline `focusIndicatorColor` follows, and for the
+    /// — the same one-shot discipline `focusIndicator` follows, and for the
     /// same reason: a `Panel` nested inside a detented `Dialog` must not also
     /// stretch to the sheet's height.
     ///

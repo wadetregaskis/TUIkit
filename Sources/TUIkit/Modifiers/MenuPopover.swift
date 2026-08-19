@@ -319,7 +319,7 @@ func presentMenuPopover<Items: View>(
     // stops an enclosing section's indicator leaking in. (The FRAME still
     // breathes — the drop-down renderer draws its own border on the shared
     // `SelectionEmphasis` clock, so two menus on one screen agree.)
-    menuContext.environment.focusIndicatorColor = nil
+    menuContext.environment.focusIndicator = nil
 
     var menuBuffer = renderMenuPopup(
         items, context: menuContext, controller: controller, dismiss: dismiss)

@@ -92,11 +92,11 @@ private struct CursorTimerKey: EnvironmentKey {
     static let defaultValue: CursorTimer? = nil
 }
 
-// MARK: - Focus Indicator Color
+// MARK: - Focus Indicator
 
-/// EnvironmentKey for the focus indicator color in the current subtree.
-private struct FocusIndicatorColorKey: EnvironmentKey {
-    static let defaultValue: Color? = nil
+/// EnvironmentKey for the active section's breathing ● in the current subtree.
+private struct FocusIndicatorKey: EnvironmentKey {
+    static let defaultValue: FocusIndicatorEmphasis? = nil
 }
 
 /// EnvironmentKey for the drag-and-drop session.
@@ -203,10 +203,12 @@ extension EnvironmentValues {
         set { self[CursorTimerKey.self] = newValue }
     }
 
-    /// The focus indicator color for the first border encountered in this subtree.
-    var focusIndicatorColor: Color? {
-        get { self[FocusIndicatorColorKey.self] }
-        set { self[FocusIndicatorColorKey.self] = newValue }
+    /// The breathing ● the first border encountered in this subtree should
+    /// draw — and every frame of it, so that border can hand the run loop a
+    /// run rather than have the whole page re-render per tick.
+    var focusIndicator: FocusIndicatorEmphasis? {
+        get { self[FocusIndicatorKey.self] }
+        set { self[FocusIndicatorKey.self] = newValue }
     }
 
     /// The ID of the focus section that child views should register in.

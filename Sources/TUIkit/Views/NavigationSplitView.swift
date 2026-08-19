@@ -274,17 +274,11 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             var sectionContext = columnContext
             sectionContext.environment.activeFocusSectionID = sectionID
 
-            // If this section is active, set the focus indicator color for borders (never active during measurement)
-            if !columnContext.isMeasuring && (focusManager?.isActiveSection(sectionID) ?? false) {
-                let accentColor = context.environment.palette.accent
-                let dimColor = accentColor.opacity(
-                    ViewConstants.focusBorderDim, over: context.environment.palette.background)
-                sectionContext.environment.focusIndicatorColor =
-                    context.environment.selectionEmphasis(true)
-                    .color(dim: dimColor, bright: accentColor)
-            } else {
-                sectionContext.environment.focusIndicatorColor = nil
-            }
+            // If this section is active, hand its borders the breathing ●
+            // (never active during measurement).
+            sectionContext.environment.focusIndicator = FocusIndicatorEmphasis.activeSection(
+                !columnContext.isMeasuring && (focusManager?.isActiveSection(sectionID) ?? false),
+                in: context.environment)
 
             var buffer = renderColumn(column, context: sectionContext)
 

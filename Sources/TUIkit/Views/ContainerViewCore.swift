@@ -93,7 +93,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         // width when borderless), matching render.
         let hasBorder = style.hasBorder
         var innerContext = base.forBorderedContent(hasBorder: hasBorder)
-        innerContext.environment.focusIndicatorColor = nil
+        innerContext.environment.focusIndicator = nil
         // A detented sheet's height belongs to the box, and to this box only —
         // see ``EnvironmentValues/sheetDetentHeight``. Consumed here so a
         // nested container does not stretch to the sheet's height as well.
@@ -238,8 +238,8 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         var innerContext = context.forBorderedContent(hasBorder: hasBorder)
 
         // Consume focus indicator so nested containers don't also show it.
-        let indicatorColor = context.environment.focusIndicatorColor
-        innerContext.environment.focusIndicatorColor = nil
+        let indicator = context.environment.focusIndicator
+        innerContext.environment.focusIndicator = nil
         // Likewise the sheet detent's height: this box takes it, its children
         // do not (see ``EnvironmentValues/sheetDetentHeight``).
         let sheetHeight = context.environment.sheetDetentHeight.map {
@@ -345,7 +345,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                 borderStyle: effectiveBorderStyle,
                 borderColor: borderColor,
                 context: context,
-                focusIndicatorColor: indicatorColor
+                focusIndicator: indicator
             )
             : renderBorderless(
                 bodyBuffer: bodyBuffer,
@@ -525,7 +525,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         borderStyle: BorderStyle,
         borderColor: Color,
         context: RenderContext,
-        focusIndicatorColor: Color? = nil
+        focusIndicator: FocusIndicatorEmphasis? = nil
     ) -> FrameBuffer {
         let palette = context.environment.palette
         var lines: [String] = []
@@ -539,7 +539,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                     color: borderColor,
                     title: titleText,
                     titleColor: titleColor?.resolve(with: palette) ?? palette.accent,
-                    focusIndicatorColor: focusIndicatorColor
+                    focusIndicatorColor: focusIndicator?.colorNow
                 )
             )
         } else {
@@ -548,7 +548,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                     style: borderStyle,
                     innerWidth: innerWidth,
                     color: borderColor,
-                    focusIndicatorColor: focusIndicatorColor
+                    focusIndicatorColor: focusIndicator?.colorNow
                 )
             )
         }
@@ -669,6 +669,16 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         if let footerBuf = footerBuffer, !footerBuf.isEmpty {
             let footerRow = 1 + bodyBuffer.lines.count + (style.showFooterSeparator ? 1 : 0)
             carriedRuns += footerBuf.shiftedAnimatedCells(byX: 1, y: footerRow)
+        }
+        // The section's ● breathes on its own, at the one cell the top border
+        // just drew it in — `BorderRenderer.showsFocusIndicator` is the SAME
+        // condition the border drew under, so a box too narrow for the ● leaves
+        // no run repainting a corner.
+        if let indicatorRun = focusIndicator.flatMap({ indicator in
+            BorderRenderer.showsFocusIndicator(innerWidth: innerWidth, hasTitle: title != nil)
+                ? indicator.run(offsetX: 1, offsetY: 0) : nil
+        }) {
+            carriedRuns.append(indicatorRun)
         }
         result.animatedCells = carriedRuns
         return result

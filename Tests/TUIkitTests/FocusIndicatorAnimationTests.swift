@@ -601,6 +601,63 @@ struct FocusIndicatorAnimationTests {
         #expect(focused(Stepper("Count", value: .constant(5)).disabled(true)).animatedCells.isEmpty)
     }
 
+    // MARK: - Focus section indicator
+
+    /// Two bordered boxes, each its own focus section, rendered twice: the first
+    /// pass registers both sections, the second draws them with `active`
+    /// activated — which is also the real sequence, since a section cannot be
+    /// activated before it exists.
+    ///
+    /// Two, because one section on its own is always the active one: an
+    /// "inactive section" only exists where there is another to be active
+    /// instead.
+    private func sectionBuffer(width: Int = 30, active: String = "first") -> FrameBuffer {
+        let view = VStack {
+            Box { Button("Play") {} }.focusSection("first")
+            Box { Button("Stop") {} }.focusSection("second")
+        }
+        let context = makeRenderContext(width: width, height: 12)
+        _ = renderToBuffer(view, context: context)
+        context.environment.focusManager!.activateSection(id: active)
+        return renderToBuffer(view, context: context)
+    }
+
+    /// The runs sitting on a box's top border row — the ●, and nothing else.
+    private func borderRuns(_ buffer: FrameBuffer, row: Int) -> [AnimatedCellRun] {
+        buffer.animatedCells.filter { $0.offsetY == row }
+    }
+
+    @Test("The ACTIVE section's border hands over its ●, and only it")
+    func sectionIndicator() {
+        let buffer = sectionBuffer(active: "first")
+        let top = borderRuns(buffer, row: 0)
+        #expect(top.count == 1, "the active section's ● is not on its top border")
+        #expect(top.first?.offsetX == 1, "the ● sits just inside the corner")
+        // The inactive box below it draws no ●, so its border row is bare. Its
+        // top border is three rows down (border, button, border).
+        #expect(borderRuns(buffer, row: 3).isEmpty, "an inactive section is breathing")
+        expectReplayIsIdentity(buffer, "the section ● does not match the drawn cells")
+    }
+
+    @Test("Activating the other section moves the ● to it")
+    func sectionIndicatorFollowsActivation() {
+        // A run left on the old section would pulse a box that no longer holds
+        // the focus — and still look plausible, because something is breathing.
+        let buffer = sectionBuffer(active: "second")
+        #expect(borderRuns(buffer, row: 0).isEmpty, "the ● stayed on the deactivated section")
+        #expect(borderRuns(buffer, row: 3).count == 1, "the ● did not follow the activation")
+    }
+
+    @Test("A box too narrow for a ● leaves no run on its border")
+    func sectionIndicatorNarrow() {
+        // `BorderRenderer` declines to draw the ● when the inner width has no
+        // cell to spare. A run left behind anyway would repaint the corner
+        // forever — the exact failure two copies of that condition invite.
+        let buffer = sectionBuffer(width: 3)
+        #expect(borderRuns(buffer, row: 0).isEmpty)
+        expectReplayIsIdentity(buffer, "a narrow box repainted its own border")
+    }
+
     // MARK: - Composers that assemble rows by hand
 
     // A container that concatenates child STRINGS gets none of what the child

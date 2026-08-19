@@ -53,23 +53,19 @@ extension FocusSectionModifier: Renderable {
         var sectionContext = context
         sectionContext.environment.activeFocusSectionID = sectionID
 
-        // If this section is active, compute the breathing indicator color.
-        // The first border view in the subtree will consume this and render ●.
+        // If this section is active, hand the subtree the breathing indicator.
+        // The first border view in it will consume this and render ●.
         // Never active during measurement.
-        if !context.isMeasuring && (focusManager?.isActiveSection(sectionID) ?? false) {
-            let accentColor = context.environment.palette.accent
-            let dimColor = accentColor.opacity(
-                ViewConstants.focusBorderDim, over: context.environment.palette.background)
-            // Through the shared focus clock, so a section's ● breathes at the
-            // same rate as every control inside it and honours
-            // `.selectionIndicatorStyle(_:)` — and, on a 256-colour terminal,
-            // walks the shades the cube can actually show.
-            sectionContext.environment.focusIndicatorColor =
-                context.environment.selectionEmphasis(true)
-                .color(dim: dimColor, bright: accentColor)
-        } else {
-            sectionContext.environment.focusIndicatorColor = nil
-        }
+        //
+        // Through the shared focus clock, so a section's ● breathes at the same
+        // rate as every control inside it and honours
+        // `.selectionIndicatorStyle(_:)` — and, on a 256-colour terminal, walks
+        // the shades the cube can actually show. As a CYCLE rather than a live
+        // phase, so the border can leave a run behind instead of the page
+        // re-rendering on every tick.
+        sectionContext.environment.focusIndicator = FocusIndicatorEmphasis.activeSection(
+            !context.isMeasuring && (focusManager?.isActiveSection(sectionID) ?? false),
+            in: context.environment)
 
         return TUIkit.renderToBuffer(content, context: sectionContext)
     }

@@ -60,6 +60,18 @@ extension BorderRenderer {
 // MARK: - Border Rendering
 
 extension BorderRenderer {
+    /// Whether a top border of this width actually draws the focus ●.
+    ///
+    /// One definition, because two things depend on the answer: the border
+    /// draws the glyph, and the container leaves an ``AnimatedCellRun`` over the
+    /// cell it landed in. Disagree, and the run repaints a corner forever.
+    ///
+    /// A titled border always has room — the title is truncated to fit around
+    /// the ● — while a plain one needs an inner cell to spare.
+    static func showsFocusIndicator(innerWidth: Int, hasTitle: Bool) -> Bool {
+        hasTitle || max(0, innerWidth) > 1
+    }
+
     /// Renders a plain top border line.
     ///
     ///     ┌──────────────┐
@@ -77,13 +89,16 @@ extension BorderRenderer {
         color: Color,
         focusIndicatorColor: Color? = nil
     ) -> String {
+        // (The room check lives in `showsFocusIndicator` — see below.)
         // A border can be asked to draw into a terminal narrower than its own
         // two frame characters, making `innerWidth` (width - 2) negative — and a
         // negative count traps `String(repeating:count:)`. Clamp on the way in:
         // every count below derives from this, so one clamp covers them all, and
         // a degenerate border is drawn (and clipped) instead of killing the app.
         let innerWidth = max(0, innerWidth)
-        if let indicatorColor = focusIndicatorColor, innerWidth > 1 {
+        if let indicatorColor = focusIndicatorColor,
+            showsFocusIndicator(innerWidth: innerWidth, hasTitle: false)
+        {
             // ╭●──────────────╮
             let leftCorner = ANSIRenderer.colorize(String(style.topLeft), foreground: color)
             let indicator = ANSIRenderer.colorize(String(focusIndicator), foreground: indicatorColor)
