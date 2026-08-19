@@ -333,11 +333,14 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             }
         }
 
-        // Read the focus clock ONLY when a divider is focused/dragged or
-        // hovered, so the demand-driven loop keeps the pulse animating just for
-        // those cases (a static split with no active/hovered divider stays idle).
+        // Ask for the cycle ONLY when a divider is focused/dragged or hovered,
+        // so the demand-driven loop keeps the pulse animating just for those
+        // cases (a static split with no active/hovered divider stays idle) —
+        // and as a CYCLE rather than a live phase, so the divider's cells are
+        // left as runs for the loop to advance instead of the whole split
+        // re-rendering on every tick.
         let anyDividerPulsing = dividerInfos.contains { $0.isActive || $0.isHovered }
-        let emphasis = context.environment.selectionEmphasis(anyDividerPulsing)
+        let cycle = context.environment.selectionEmphasis.cycle(anyDividerPulsing)
 
         // Combine buffers horizontally, inserting the (possibly resizable)
         // dividers between them.
@@ -347,7 +350,7 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             dividerInfos: dividerInfos,
             resizable: resizable,
             palette: context.environment.palette,
-            emphasis: emphasis,
+            cycle: cycle,
             availableHeight: context.availableHeight
         )
     }
@@ -668,7 +671,7 @@ extension _NavigationSplitViewCore {
         dividerInfos: [DividerRenderInfo],
         resizable: Bool,
         palette: any Palette,
-        emphasis: SelectionEmphasis,
+        cycle: SelectionEmphasisCycle,
         availableHeight: Int
     ) -> FrameBuffer {
         guard !buffers.isEmpty else { return FrameBuffer() }
@@ -692,7 +695,7 @@ extension _NavigationSplitViewCore {
                     : DividerRenderInfo(isActive: false, isHovered: false, mouseHandlerID: nil)
                 let dividerBuffer = buildDividerColumn(
                     info: info, height: maxHeight, resizable: resizable,
-                    palette: palette, emphasis: emphasis)
+                    palette: palette, cycle: cycle)
                 result.appendHorizontally(dividerBuffer, spacing: 0)
                 result.appendHorizontally(paddedBuffer, spacing: 0)
             }
@@ -841,9 +844,8 @@ extension _NavigationSplitViewCore {
     /// - **Hovered** (`isHovered`): just the grip dots pulse — a quiet hint
     ///   that's not distracting when the cursor merely passes over.
     ///
-    /// `emphasis` describes a focused element only when some divider is active
-    /// or hovered (see `renderToBuffer`), so an untouched split animates
-    /// nothing. A
+    /// `cycle` animates only when some divider is active or hovered (see
+    /// `renderToBuffer`), so an untouched split animates nothing. A
     /// non-resizable divider is a plain space column (the historical separator);
     /// its drag hit-test region spans the full height, so a drag works anywhere
     /// along it, not just on the dots.
@@ -852,7 +854,7 @@ extension _NavigationSplitViewCore {
         height: Int,
         resizable: Bool,
         palette: any Palette,
-        emphasis: SelectionEmphasis
+        cycle: SelectionEmphasisCycle
     ) -> FrameBuffer {
         let h = max(0, height)
         guard resizable, h > 0 else {
@@ -863,25 +865,33 @@ extension _NavigationSplitViewCore {
         let center = h / 2
         let gripRows = Set([center - 1, center, center + 1].filter { $0 >= 0 && $0 < h })
 
-        // Grip foreground: a quiet dot, pulsing toward the accent while hovered.
-        let dotColor = info.isHovered
-            ? emphasis.color(
-                dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
-                bright: palette.accent)
-            : palette.foregroundTertiary
-
-        // Background: pulses across the whole divider while focused / dragging
-        // (same min/max the List focus-pulse uses).
-        let background: Color? = info.isActive
-            ? emphasis.color(
-                dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
-                bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background))
-            : nil
-
-        let lines: [String] = (0..<h).map { row in
+        /// One divider cell as it looks at a given point in the pulse.
+        ///
+        /// A single closure rather than a colour computed up front, because a
+        /// divider can pulse two things at once — the grip dots while hovered,
+        /// the background while focused or dragging — and the runs below have
+        /// to reproduce exactly what was drawn here, not an approximation of it.
+        func cell(row: Int, at emphasis: SelectionEmphasis) -> String {
             let isGrip = gripRows.contains(row)
-            // Render each cell as a self-contained styled string — it ends with
-            // a reset — so the pulsing background stays scoped to the divider's
+            // Grip foreground: a quiet dot, pulsing toward the accent while
+            // hovered.
+            let dotColor = info.isHovered
+                ? emphasis.color(
+                    dim: palette.accent.opacity(
+                        ViewConstants.focusBorderDim, over: palette.background),
+                    bright: palette.accent)
+                : palette.foregroundTertiary
+            // Background: pulses across the whole divider while focused /
+            // dragging (same min/max the List focus-pulse uses).
+            let background: Color? = info.isActive
+                ? emphasis.color(
+                    dim: palette.accent.opacity(
+                        ViewConstants.focusPulseMin, over: palette.background),
+                    bright: palette.accent.opacity(
+                        ViewConstants.focusPulseMax, over: palette.background))
+                : nil
+            // Each cell is a self-contained styled string — it ends with a
+            // reset — so the pulsing background stays scoped to the divider's
             // single column. `withPersistentBackground` deliberately does NOT
             // emit a trailing reset (it is built for full-width row fills), so
             // using it here let the background bleed into the next column to the
@@ -892,7 +902,17 @@ extension _NavigationSplitViewCore {
                 background: background)
         }
 
+        let now = cycle.frames[cycle.step % cycle.frames.count]
+        let lines: [String] = (0..<h).map { cell(row: $0, at: now) }
+
         var buffer = FrameBuffer(lines: lines)
+        // One run per row: a run covers one row, and the divider is one column
+        // wide. Rows that look the same at every point in the cycle — the plain
+        // spaces of a merely-hovered divider — produce a still run, which the
+        // loop drops.
+        buffer.animatedCells = (0..<h).compactMap { row in
+            cycle.run(offsetX: 0, offsetY: row) { cell(row: row, at: $0) }
+        }.filter(\.isAnimating)
         if let id = info.mouseHandlerID {
             buffer.hitTestRegions.append(
                 HitTestRegion(

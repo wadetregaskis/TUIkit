@@ -277,12 +277,26 @@ public struct SelectionEmphasisCycle: Sendable {
     public func run(
         dim: Color, bright: Color, offsetX: Int, offsetY: Int, draw: (Color) -> String
     ) -> AnimatedCellRun? {
+        run(offsetX: offsetX, offsetY: offsetY) { draw($0.color(dim: dim, bright: bright)) }
+    }
+
+    /// A run for an element whose appearance is not one colour between two
+    /// endpoints — a cell that pulses its background AND its glyph, say, or one
+    /// that blinks rather than fades. `draw` is handed the whole emphasis for
+    /// each frame and returns the finished cells.
+    ///
+    /// The other `run` overloads are this one with a colour picked for the
+    /// caller, so every route produces the same frames on the same clock.
+    @MainActor
+    public func run(
+        offsetX: Int, offsetY: Int, draw: (SelectionEmphasis) -> String
+    ) -> AnimatedCellRun? {
         // A still cycle earns no run: the render already drew that picture, and
         // replaying it would emit bytes per tick to change nothing.
         guard isAnimating else { return nil }
         // One finished, styled string per step, so the loop's per-tick work is
         // an array index.
-        let drawn = colors(dim: dim, bright: bright).map(draw)
+        let drawn = frames.map(draw)
         guard let first = drawn.first else { return nil }
         return AnimatedCellRun(
             offsetX: offsetX,

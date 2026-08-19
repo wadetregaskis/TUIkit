@@ -712,6 +712,39 @@ struct NavigationSplitViewResizeTests {
             "divider background bled into the next column: \(raw.debugDescription)")
     }
 
+    @Test("A focused divider hands its cells to the run loop")
+    func focusedDividerAnimatesWithoutRerendering() {
+        // The divider's background pulses down its whole column while focused.
+        // Built from the live clock that costs a full re-render of the split on
+        // every tick; as runs it costs the loop an array index. The runs must
+        // also describe exactly the cells that were drawn — see the replay
+        // check below, which is what the loop actually does on a tick.
+        let context = resizeContext(width: 60, height: 12)
+        let fm = context.environment.focusManager!
+        let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+
+        _ = frame(view, context)
+        #expect(frame(view, context).animatedCells.isEmpty, "an untouched split animates")
+
+        fm.activateSection(id: dividerSectionID(in: fm) ?? "")
+        let buffer = frame(view, context)
+        let gripColumn = gripX(buffer)
+        #expect(gripColumn != nil)
+        // One run per row of the divider column, and nowhere else.
+        #expect(buffer.animatedCells.count == buffer.height)
+        #expect(buffer.animatedCells.allSatisfy { $0.offsetX == gripColumn && $0.width == 1 })
+        #expect(Set(buffer.animatedCells.map(\.offsetY)) == Set(0..<buffer.height))
+
+        // Replaying the step the frame was drawn at must change nothing.
+        for run in buffer.animatedCells {
+            let replayed = buffer.composited(
+                with: FrameBuffer(lines: [run.frame(at: 0)]),
+                at: (x: run.offsetX, y: run.offsetY))
+            #expect(replayed.lines.map(\.stripped) == buffer.lines.map(\.stripped),
+                "the divider run does not sit on the cells it was drawn from")
+        }
+    }
+
     @Test("navigationSplitViewResizable(false) removes the handle and divider section")
     func optOut() {
         let context = resizeContext()
