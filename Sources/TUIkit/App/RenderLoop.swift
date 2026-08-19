@@ -1,9 +1,11 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
 //  RenderLoop.swift
 //
-//  Created by LAYERED.work
-//  License: MIT  assembly, and status bar output.
+//  Manages the rendering pipeline: scene rendering, environment
+//  assembly, and status bar output.
 //
+//  Created by LAYERED.work
+//  License: MIT
 
 // MARK: - Environment Snapshot
 
