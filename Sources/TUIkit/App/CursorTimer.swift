@@ -71,6 +71,23 @@ final class CursorTimer {
     /// The running animation task, or `nil` if stopped.
     private var task: Task<Void, Never>?
 
+    /// How many ticks to advance per wake-up.
+    ///
+    /// One by default — the finest step, and what a view that builds its
+    /// appearance from the phase as it renders needs. A frame whose animation
+    /// is all pre-rendered runs can say exactly when the picture next changes
+    /// (`RenderLoop.ticksUntilNextChange(from:)`), and the clock then sleeps
+    /// through the ticks in between instead of waking to compare two identical
+    /// pictures. The tick COUNT still advances by the stride, so every phase
+    /// formula keeps its wall-clock meaning.
+    private var stride = 1
+
+    /// Sets how far the next wake-up jumps. Takes effect after the current
+    /// sleep, which is at most one tick long.
+    func advanceInSteps(of ticks: Int) {
+        stride = max(1, ticks)
+    }
+
     /// The render notifier to trigger re-renders.
     private weak var renderNotifier: AppState?
 
@@ -174,13 +191,14 @@ extension CursorTimer {
         let tickNanos = UInt64(tickIntervalMs) * 1_000_000
         task = Task { [weak self] in
             while !Task.isCancelled {
+                let steps = self?.stride ?? 1
                 do {
-                    try await Task.sleep(nanoseconds: tickNanos)
+                    try await Task.sleep(nanoseconds: tickNanos * UInt64(steps))
                 } catch {
                     return  // cancelled
                 }
                 guard let self else { return }
-                self.elapsedTicks += 1
+                self.elapsedTicks += steps
                 self.renderNotifier?.setNeedsAnimationTick(.cursor)
             }
         }
@@ -191,6 +209,7 @@ extension CursorTimer {
         task?.cancel()
         task = nil
         elapsedTicks = 0
+        stride = 1
     }
 
     /// Resets the cursor animation to the visible/bright state.
@@ -199,6 +218,7 @@ extension CursorTimer {
     /// starts in a visible state.
     func reset() {
         elapsedTicks = 0
+        stride = 1
     }
 }
 

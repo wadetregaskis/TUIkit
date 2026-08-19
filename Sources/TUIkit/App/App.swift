@@ -440,7 +440,14 @@ extension AppRunner {
             steps[clock] = cursorTimer.elapsedTicks
         }
         guard steps.count == ticked.count else { return false }
-        return renderer.replayAnimations(steps: steps)
+        let served = renderer.replayAnimations(steps: steps)
+        if served {
+            // The runs are unchanged, but the step is not: recompute how far
+            // the clock may sleep from where it now is.
+            cursorTimer.advanceInSteps(
+                of: renderer.ticksUntilNextChange(from: cursorTimer.elapsedTicks))
+        }
+        return served
     }
 
     fileprivate func renderFrame(
@@ -464,7 +471,15 @@ extension AppRunner {
         let clockLive =
             activity.usesPulse || activity.usesCursor
             || activity.animatedClocks.contains(.cursor)
-        if clockLive { cursorTimer.start() } else { cursorTimer.stop() }
+        if clockLive {
+            // Sleep through the ticks that cannot change a cell — see
+            // `RenderLoop.ticksUntilNextChange(from:)`.
+            cursorTimer.advanceInSteps(
+                of: renderer.ticksUntilNextChange(from: cursorTimer.elapsedTicks))
+            cursorTimer.start()
+        } else {
+            cursorTimer.stop()
+        }
         let deadline = scheduler.nextFiring(after: frameNow).map { UInt64(bitPattern: $0) }
         // Re-evaluate the mouse-tracking mode (modifiers may elevate it this
         // frame); only re-emitted when it actually changes.

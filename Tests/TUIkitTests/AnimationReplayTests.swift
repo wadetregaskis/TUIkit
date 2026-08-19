@@ -289,3 +289,39 @@ struct ANSIStateAtColumnTests {
         #expect(line.ansiSGRStateAt(visibleColumn: 2).renderedBackground == "\u{1B}[48;5;40m")
     }
 }
+
+// MARK: - Sleeping through the ticks that change nothing
+
+@Suite("Animation tick stride")
+struct AnimationTickStrideTests {
+
+    @Test("A run says how long until it looks different")
+    func runReportsItsNextChange() {
+        // A blink: two frames, each held for half the cycle. From the first
+        // tick of a frame there are three ticks to wait, from the last, one.
+        let blink = AnimatedCellRun(
+            offsetX: 0, offsetY: 0, width: 1,
+            frames: ["a", "a", "a", "b", "b", "b"], clock: .cursor)
+        #expect(blink.ticksUntilChange(after: 0) == 3)
+        #expect(blink.ticksUntilChange(after: 1) == 2)
+        #expect(blink.ticksUntilChange(after: 2) == 1)
+        #expect(blink.ticksUntilChange(after: 3) == 3)
+    }
+
+    @Test("Every tick counts when every tick differs")
+    func smoothRunsNeverSkip() {
+        // Truecolor: the ramp moves on every tick, so nothing may be skipped.
+        let smooth = AnimatedCellRun(
+            offsetX: 0, offsetY: 0, width: 1, frames: ["a", "b", "c", "d"], clock: .cursor)
+        for step in 0..<8 { #expect(smooth.ticksUntilChange(after: step) == 1) }
+    }
+
+    @Test("A run that never changes may be waited out entirely")
+    func stillRunsWaitACycle() {
+        // Not an animation at all (`isAnimating` filters these out before the
+        // loop sees them) — the answer must still be finite.
+        let still = AnimatedCellRun(
+            offsetX: 0, offsetY: 0, width: 1, frames: ["a", "a"], clock: .cursor)
+        #expect(still.ticksUntilChange(after: 0) == 2)
+    }
+}

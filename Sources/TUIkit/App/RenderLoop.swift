@@ -960,6 +960,25 @@ extension RenderLoop {
         return lastActivity
     }
 
+    /// How many ticks the clock may sleep before anything on screen would look
+    /// different — 1 whenever that cannot be known.
+    ///
+    /// A frame whose animation is entirely in ``AnimatedCellRun``s knows
+    /// exactly: each run carries its whole cycle, already rendered, so the next
+    /// tick that changes a cell is a lookup. A frame where some view built its
+    /// appearance from the phase *while rendering* does not — only that view
+    /// knows what it would draw next — so the clock keeps its finest step.
+    ///
+    /// This is what makes the quantised pulse cheap on a 256-colour terminal:
+    /// the ramp repeats each shade it can actually paint for two or three
+    /// ticks, and there is no reason to wake for the repeats.
+    func ticksUntilNextChange(from step: Int) -> Int {
+        guard !lastActivity.usesPulse, !lastActivity.usesCursor else { return 1 }
+        let runs = replayable?.runs ?? []
+        guard !runs.isEmpty else { return 1 }
+        return runs.map { $0.ticksUntilChange(after: step) }.min() ?? 1
+    }
+
     /// Advances the animated cells of the frame already on screen, without
     /// rendering anything.
     ///

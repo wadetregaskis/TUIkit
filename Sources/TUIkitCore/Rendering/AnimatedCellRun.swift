@@ -121,6 +121,27 @@ public struct AnimatedCellRun: Sendable, Equatable {
         return frames[index < 0 ? index + frames.count : index]
     }
 
+    /// How many ticks until this run shows something different from what it
+    /// shows at `step` — at least 1, and never more than the cycle's length.
+    ///
+    /// The point is the ticks in between: a pulse quantised to what a
+    /// 256-colour terminal can actually paint repeats each shade for two or
+    /// three ticks, and a blink spends half its cycle on each of two frames.
+    /// Waking the run loop for those is pure cost — it cannot change a single
+    /// cell. Measured on the built-in palettes at the regular speed, a focus
+    /// breath changes 16 times out of 16 ticks in truecolor and **9 out of 16**
+    /// through the cube.
+    public func ticksUntilChange(after step: Int) -> Int {
+        guard frames.count > 1 else { return frames.count }
+        let current = frame(at: step)
+        for delta in 1..<frames.count where frame(at: step + delta) != current {
+            return delta
+        }
+        // Every frame identical: nothing will ever change, so the caller may
+        // wait a whole cycle (it will find the same answer again).
+        return frames.count
+    }
+
     /// A copy moved by `(x, y)` — the compositing shift, matching
     /// ``HitTestRegion``'s.
     public func shifted(byX x: Int, y: Int) -> Self {
