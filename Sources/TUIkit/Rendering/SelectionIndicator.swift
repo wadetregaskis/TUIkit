@@ -142,12 +142,30 @@ public struct SelectionEmphasis: Equatable, Sendable {
     /// An unfocused-but-selected indicator stays at `bright` (steady, visible);
     /// a focused one animates between the two per the style.
     public func color(dim: Color, bright: Color) -> Color {
+        color(dim: dim, bright: bright, ramp: Self.pulseRamp(dim: dim, bright: bright))
+    }
+
+    /// The colour this frame, against a ramp the caller already has.
+    ///
+    /// Building the ramp walks a couple of hundred candidate shades, and it
+    /// depends only on the two endpoints and the terminal's depth — not on the
+    /// frame. A cycle asked for all of its colours was rebuilding the identical
+    /// ramp once per frame.
+    func color(dim: Color, bright: Color, ramp: [Color]?) -> Color {
         guard isFocused else { return bright }
         switch animation {
         case .none: return bright
         case .blink: return blinkOn ? bright : dim
-        case .pulse: return Self.pulsed(dim: dim, bright: bright, phase: phase)
+        case .pulse: return Self.pulsed(dim: dim, bright: bright, phase: phase, ramp: ramp)
         }
+    }
+
+    /// The shades this terminal can actually show between the two endpoints, or
+    /// `nil` where the colour space is continuous and no ramp is needed.
+    static func pulseRamp(dim: Color, bright: Color) -> [Color]? {
+        let depth = ColorDepth.current
+        guard depth < .truecolor else { return nil }
+        return Color.pulseRamp(from: dim, to: bright, depth: depth)
     }
 
     /// The pulse position, snapped to the shades this terminal can actually
@@ -160,10 +178,10 @@ public struct SelectionEmphasis: Equatable, Sendable {
     /// turns GREY, which reads as a glitch rather than a dim. Walking the
     /// distinct, in-hue shades at even intervals instead gives every one of them
     /// the same screen time. See ``Color/pulseRamp(from:to:depth:samples:)``.
-    private static func pulsed(dim: Color, bright: Color, phase: Double) -> Color {
-        let depth = ColorDepth.current
-        guard depth < .truecolor else { return Color.lerp(dim, bright, phase: phase) }
-        let ramp = Color.pulseRamp(from: dim, to: bright, depth: depth)
+    private static func pulsed(
+        dim: Color, bright: Color, phase: Double, ramp: [Color]?
+    ) -> Color {
+        guard let ramp else { return Color.lerp(dim, bright, phase: phase) }
         guard ramp.count > 1 else { return ramp[0] }
         let step = Int((phase * Double(ramp.count)).rounded(.down))
         return ramp[min(max(0, step), ramp.count - 1)]
@@ -232,7 +250,10 @@ public struct SelectionEmphasisCycle: Sendable {
     /// The colour at each frame, for an element with these two endpoints.
     @MainActor
     public func colors(dim: Color, bright: Color) -> [Color] {
-        frames.map { $0.color(dim: dim, bright: bright) }
+        // One ramp for the whole cycle: it depends on the endpoints and the
+        // terminal's depth, not on which frame is being coloured.
+        let ramp = SelectionEmphasis.pulseRamp(dim: dim, bright: bright)
+        return frames.map { $0.color(dim: dim, bright: bright, ramp: ramp) }
     }
 
     /// The colour to draw *right now* — `colors(dim:bright:)` at ``step``.
