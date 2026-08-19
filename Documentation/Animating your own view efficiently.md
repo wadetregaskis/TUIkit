@@ -1,7 +1,13 @@
 # Animating your own view efficiently
 
-*Scoping note, 2026-08-19. Nothing here is implemented beyond what §2 says is
-already public; §5 is a menu of options, not a plan.*
+*Scoping note, 2026-08-19. **Status: §6.1 and §6.2 are done** — see the
+per-option notes below. §6.3 is deliberately deferred until a real case wants
+it, and §6.4 is the destination rather than a plan.*
+
+*Standing constraint on §6.4: when the SwiftUI-style API can do all of this
+correctly and at the same cost, the TUIkit-specific spellings it replaces —
+``AnimatedColor``, `animatedCells(_:)`, `SelectionEmphasisCycle` — come out.
+They are steps toward that, not a parallel surface to maintain beside it.*
 
 ## 1. The question
 
@@ -151,11 +157,18 @@ a single offset.
 Roughly in order of cost, and they compose — 5.1 is a prerequisite for nothing
 and 5.4 subsumes 5.2.
 
-### 5.1 Publish what already works, and document it
+### 5.1 Publish what already works, and document it — **DONE**
 
 Make `View.animatedCells(_:)` public; publish a styled-string helper (a narrow
 public face on `ANSIRenderer.colorize`, not the whole type); add a DocC article
 built around the `Renderable` recipe in §2.
+
+Shipped as `View.animatedCells(_:)`, `String.styled(foreground:…)` and the
+`AnimatingYourOwnView` article. A fourth thing turned out to be missing and went
+with it: `.focusable()` made a view a Tab stop and never published
+`\.isFocused`, so an app's own control could hold the focus with no way to say
+so. `PublicAnimationAPITests` imports TUIkit *without* `@testable`, so the
+recipe is checked against the surface an app actually sees.
 
 - **Buys:** the ceiling. Anything the built-ins can do, an app can do.
 - **Costs:** public API surface that hands out a footgun — a run whose offset,
@@ -190,7 +203,23 @@ which cells they painted.
   a value; a `Color` case means every existing modifier gets it for free but
   every `switch` over colours has to answer for it.
 
-### 5.3 Automatic runs by diffing pre-rendered phases
+**DONE**, as a distinct type — which is also the right shape for something
+meant to be deleted when §5.4 lands. `.border(_:style:width:)` takes one;
+`ContextMenuTarget` went from 4.8% of a core to 0.2% with the target focused.
+`FocusIndicatorEmphasis` was retired onto it, as predicted.
+
+Two things learned in the doing. A border is not one run: the rules are whole
+lines (rebuilt through the same `BorderRenderer` calls, so a title comes along)
+and the walls are two single cells per row sharing one frame set. And a focus
+section's ● lives *in* the top border's line, so when the border animates the ●
+must be folded into those frames rather than left as a second claim on the same
+cell.
+
+The cost of a *still* `AnimatedColor` is the thing to watch: every bordered
+container in a frame builds one, and the first cut stored it as a one-element
+array — +1.1% per frame on `table`. It stores a constant as a colour now.
+
+### 5.3 Automatic runs by diffing pre-rendered phases — **deferred**
 
 ```swift
 PhaseAnimator(emphasis.cycle(isFocused)) { phase in
@@ -233,6 +262,8 @@ alternatives to it.
 
 ## 6. Recommendation
 
+*(1 and 2 are done; 3 and 4 stand as written.)*
+
 1. **5.1 now** — it is small, it unblocks anyone who needs the ceiling today,
    and the escape hatch should exist whatever else is built. Publish
    `animatedCells(_:)`, publish a colorize helper, write the article.
@@ -256,7 +287,7 @@ Each is a straight conversion of the kind already done a dozen times:
 | `heldSlotBackground` — the keyboard reorder hold | `_ListCore` |
 | `DropdownMenuRenderer` — the pop-up menu's highlight | `DropdownMenuRenderer.swift` |
 | `Color256Grid`, `SwatchGrid` — the cursor marker | the colour-picker panel |
-| `ContextMenuTarget` | `Example` — blocked on §3.2, i.e. on 5.1 or 5.2 |
+| ~~`ContextMenuTarget`~~ | **done** — `Example`, via `.border(AnimatedColor)` |
 
 `grep -n 'SelectionIndicator.resolve\|selectionEmphasis(' Sources/` is the
 running list: the direct call is the expensive route, `.cycle(` is the cheap
