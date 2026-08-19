@@ -388,7 +388,7 @@ struct DatePickerTests {
     func unfocusedIsStill() {
         let sink = DateSink(localDate(2026, 3, 5, 9, 7))
         let context = makeRenderContext(width: 40, height: 3)
-        context.environment.focusManager!.register(DatePickerFocusSentinel())
+        context.environment.focusManager!.register(FocusSentinel())
         let buffer = renderToBuffer(DatePicker("When", selection: sink.binding), context: context)
         #expect(buffer.animatedCells.isEmpty)
     }
@@ -415,12 +415,4 @@ struct DatePickerTests {
         #expect(measured.animatedCells.isEmpty)
         #expect(!measured.lines.joined().contains("48;2;"), "no highlight while measuring")
     }
-}
-
-/// Claims auto-focus before the picker renders, so the picker draws unfocused.
-/// The first `Focusable` to register with a fresh `FocusManager` takes the
-/// focus, which is what makes an "unfocused control" testable at all.
-private final class DatePickerFocusSentinel: Focusable {
-    let focusID = "date-picker-focus-sentinel"
-    func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
 }

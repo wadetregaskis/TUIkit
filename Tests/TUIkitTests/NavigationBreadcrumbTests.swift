@@ -170,15 +170,6 @@ struct NavigationCrumbAppearanceTests {
         let name: String
     }
 
-    /// Parks the focus so a crumb can be rendered *un*-focused: the first
-    /// registrant with a fresh `FocusManager` is auto-focused, and every crumb
-    /// rendered as a lone root shares one identity path — so without this the
-    /// crumb under test is always the focused one.
-    private final class FocusSentinel: Focusable {
-        let focusID = "crumb-test-sentinel"
-        func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
-    }
-
     private func crumb(_ label: String) -> some View {
         Button(label) {}.buttonStyle(_NavigationCrumbButtonStyle())
     }

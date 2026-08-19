@@ -681,6 +681,7 @@ where Value.ID: Hashable {
         }
 
         let contentLines: [String]
+        var contentRuns: [AnimatedCellRun] = []
         let renderState: PopulatedRenderState?
         if data.isEmpty {
             contentLines = [emptyPlaceholder]
@@ -697,6 +698,7 @@ where Value.ID: Hashable {
                 context: context, stateStorage: stateStorage, palette: palette,
                 columnWidths: columnWidths, contentInnerWidth: contentInnerWidth)
             contentLines = result.lines
+            contentRuns = result.runs
             renderState = result.state
         } else {
             let result = buildPopulatedContent(
@@ -708,6 +710,7 @@ where Value.ID: Hashable {
                 innerWidth: innerWidth
             )
             contentLines = result.lines
+            contentRuns = result.runs
             renderState = result.state
         }
 
@@ -723,7 +726,7 @@ where Value.ID: Hashable {
             // full interior, keeping every line the same width.
             VStack(alignment: .leading, spacing: 0) {
                 _TableHeaderView(line: headerLine)
-                _TableContentView(lines: contentLines)
+                _TableContentView(lines: contentLines, runs: contentRuns)
             }
         }
         var buffer = TUIkit.renderToBuffer(container, context: context)
@@ -745,7 +748,7 @@ where Value.ID: Hashable {
         columnWidths: [Int],
         showsScrollbar: Bool = false,
         innerWidth: Int
-    ) -> (lines: [String], state: PopulatedRenderState) {
+    ) -> (lines: [String], runs: [AnimatedCellRun], state: PopulatedRenderState) {
         // Multi-line cells (any column with a line limit above 1) take a separate,
         // height-aware layout path. Single-line tables keep the original
         // row-per-line path below completely untouched.
@@ -803,6 +806,7 @@ where Value.ID: Hashable {
 
         return (
             lines: composed.lines,
+            runs: composed.runs,
             state: PopulatedRenderState(
                 handler: handler,
                 focusID: persistedFocusID,
@@ -830,7 +834,7 @@ where Value.ID: Hashable {
         palette: any Palette,
         columnWidths: [Int],
         contentInnerWidth: Int
-    ) -> (lines: [String], state: PopulatedRenderState) {
+    ) -> (lines: [String], runs: [AnimatedCellRun], state: PopulatedRenderState) {
         let contentHeight = max(1, context.availableHeight - 3)
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context, explicitFocusID: focusID, defaultPrefix: "table", propertyIndex: 1)
@@ -884,22 +888,29 @@ where Value.ID: Hashable {
         // be several lines tall and the entries no longer map one-to-one onto
         // lines. Same shape as `composeRowLines`.
         var drawnHeights: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)] = []
+        /// The breathing rows' lines and every frame of each, at their position
+        /// among `rowLines` — turned into runs once the clip and the slide have
+        /// settled where those lines actually ended up.
+        var pulseRuns: [(y: Int, frames: [String])] = []
         rowLines.reserveCapacity(contentHeight)
         for entry in drawn {
             switch entry {
             case .row(let rowIndex):
-                rowLines.append(padded(renderRow(
+                let row = renderRow(
                     item: data[rowIndex], columnWidths: columnWidths,
                     isFocused: handler.isCursorRow(rowIndex) && tableHasFocus,
                     isSelected: handler.isSelected(at: rowIndex),
-                    rowWidth: contentInnerWidth, context: context, palette: palette)))
+                    rowWidth: contentInnerWidth, context: context, palette: palette)
+                collect(
+                    line: row.line, frames: row.pulseFrames, into: &rowLines,
+                    runs: &pulseRuns, transform: padded)
                 drawnHeights.append((entry, 1))
             case .slot:
                 let slot = reorderSlotLines(
                     handler: handler, columnWidths: columnWidths, rowWidth: contentInnerWidth,
                     context: context, palette: palette)
-                rowLines.append(contentsOf: slot.map(padded))
-                drawnHeights.append((entry, slot.count))
+                collect(slot, into: &rowLines, runs: &pulseRuns, transform: padded)
+                drawnHeights.append((entry, slot.lines.count))
             }
         }
         // See `composeRowLines`: clipped away from the slot, never through it.
@@ -920,6 +931,10 @@ where Value.ID: Hashable {
 
         return (
             lines,
+            // The runs travel exactly as the hit bands do — same slide, no
+            // indicator line on this path — so a run and the band it belongs to
+            // can never end up on different rows.
+            rowRuns(pulseRuns, slide: slide, topOffset: 0, lineCount: lines.count),
             PopulatedRenderState(
                 handler: handler, focusID: persistedFocusID, visibleRange: visibleRange,
                 scrollOffsetAbove: 0, visibleRowHeights: [], hasScrollbar: true,
@@ -945,7 +960,7 @@ where Value.ID: Hashable {
         columnWidths: [Int],
         showsScrollbar: Bool,
         innerWidth: Int
-    ) -> (lines: [String], state: PopulatedRenderState) {
+    ) -> (lines: [String], runs: [AnimatedCellRun], state: PopulatedRenderState) {
         // 3 = top border + column header + bottom border.
         let contentHeight = max(1, context.availableHeight - 3)
 
@@ -1091,22 +1106,18 @@ where Value.ID: Hashable {
                 window: window, contentHeight: contentHeight,
                 height: heightOf, context: context, palette: palette)
             : []
-        let lines = composeMultiLineRows(
+        let composed = composeMultiLineRows(
             window: window, handler: handler, tableHasFocus: tableHasFocus,
             columnWidths: columnWidths, innerWidth: innerWidth,
             contentHeight: contentHeight, bar: bar, context: context)
 
-        // The first row's on-screen height is net of the line-granularity top
-        // clip — the mouse row-mapping walks these heights from the first
-        // visible line, so they must be as-rendered.
-        var visibleRowHeights = window.range.map(heightOf)
-        if topClip > 0, !visibleRowHeights.isEmpty {
-            visibleRowHeights[0] = max(1, visibleRowHeights[0] - topClip)
-        }
+        let visibleRowHeights = onScreenRowHeights(
+            window.range, height: heightOf, topClip: topClip)
         publishMultiLineRowBands(
             handler: handler, range: window.range, heights: visibleRowHeights)
         return (
-            lines: lines,
+            lines: composed.lines,
+            runs: composed.runs,
             state: PopulatedRenderState(
                 handler: handler,
                 focusID: persistedFocusID,
@@ -1315,7 +1326,7 @@ where Value.ID: Hashable {
         contentHeight: Int,
         bar: [String],
         context: RenderContext
-    ) -> [String] {
+    ) -> (lines: [String], runs: [AnimatedCellRun]) {
         let palette = context.environment.palette
         // Every line — focused-row backgrounds and indicators included — is padded
         // to the *content* width (the columns), not the full interior, so a focused
@@ -1362,12 +1373,19 @@ where Value.ID: Hashable {
         // The rows are collected apart from the indicator chrome so that only
         // they take an overscroll slide (§1.5).
         var slidableRows: [String] = []
+        /// The breathing row's lines and every frame of each, at their position
+        /// among `slidableRows` — see `collect`.
+        var pulseRuns: [(y: Int, frames: [String])] = []
         for rowIndex in window.range {
-            var rowLines = renderMultiLineRow(
+            let rendered = renderMultiLineRow(
                 item: data[rowIndex],
                 isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
                 isSelected: handler.isSelected(at: rowIndex),
                 columnWidths: columnWidths, rowWidth: contentWidth, context: context, palette: palette)
+            var rowLines = rendered.lines
+            // Clipped alongside the lines, so `pulseFrames[i]` stays the frames
+            // of `rowLines[i]`.
+            var pulseFrames = rendered.pulseFrames
             // Line granularity: the top row enters partially, its first lines
             // scrolled off above the viewport. Clip by the WINDOW's resolved
             // origin, not the handler's raw state — the window may have
@@ -1375,21 +1393,34 @@ where Value.ID: Hashable {
             // more" indicator), and clipping it here anyway made that line
             // silently vanish while every row sat one line above its hit band.
             if rowIndex == window.range.lowerBound, window.topClip > 0 {
-                rowLines.removeFirst(min(window.topClip, rowLines.count - 1))
+                let clipped = min(window.topClip, rowLines.count - 1)
+                rowLines.removeFirst(clipped)
+                pulseFrames?.removeFirst(clipped)
             }
             // …and the bottom row leaves partially, clipped at the budget.
             if let rowLineBudget {
                 let remaining = rowLineBudget - rowLinesEmitted
                 if remaining <= 0 { break }
                 if rowLines.count > remaining {
-                    rowLines.removeLast(rowLines.count - remaining)
+                    let dropped = rowLines.count - remaining
+                    rowLines.removeLast(dropped)
+                    pulseFrames?.removeLast(dropped)
                 }
             }
-            slidableRows.append(contentsOf: rowLines)
+            collect(
+                RenderedRow(lines: rowLines, pulseFrames: pulseFrames),
+                into: &slidableRows, runs: &pulseRuns)
             rowLinesEmitted += rowLines.count
         }
+        // The rows' own coordinates start below whatever indicator lines are
+        // already in `lines`; `slid` shifts them by −excursion, exactly as the
+        // bands are shifted elsewhere.
+        let rowsTop = lines.count
         lines.append(contentsOf: handler.overscrollState.slid(
             slidableRows, blank: String(repeating: " ", count: max(0, contentWidth))))
+        let runs = rowRuns(
+            pulseRuns, slide: -handler.overscrollState.excursion, topOffset: rowsTop,
+            lineCount: rowsTop + slidableRows.count)
         if window.showBelow, drawsText {
             lines.append(renderScrollIndicator(
                 direction: .down, count: data.count - window.range.upperBound,
@@ -1408,7 +1439,7 @@ where Value.ID: Hashable {
                 lines.append(String(repeating: " ", count: contentWidth))
             }
         }
-        guard showsBar else { return lines }
+        guard showsBar else { return (lines, runs) }
         // The bar is the rightmost interior column, merged in by absolute line
         // index so an overscroll slide moves the rows and leaves it where it
         // is (§1.5) — the same composition the single-line path uses.
@@ -1416,9 +1447,11 @@ where Value.ID: Hashable {
         while lines.count < contentHeight {
             lines.append(String(repeating: " ", count: contentWidth))
         }
-        return lines.enumerated().map { index, line in
-            line + (index < bar.count ? bar[index] : emptyCell)
-        }
+        return (
+            lines.enumerated().map { index, line in
+                line + (index < bar.count ? bar[index] : emptyCell)
+            },
+            runs)
     }
 
     /// Renders one (possibly multi-line) row: the selection indicator on the first
@@ -1432,7 +1465,7 @@ where Value.ID: Hashable {
         rowWidth: Int,
         context: RenderContext,
         palette: any Palette
-    ) -> [String] {
+    ) -> RenderedRow {
         let spacing = asciiSpaces(columnSpacing)
         let visual = rowVisualState(
             isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
@@ -1452,6 +1485,12 @@ where Value.ID: Hashable {
 
         var lines: [String] = []
         lines.reserveCapacity(layout.height)
+        // Only a breathing row needs its lines kept bare: everything else would
+        // be an array built per row per frame and thrown away.
+        let pulseColors = visual.background.pulseColors
+        /// The same lines WITHOUT their background, kept so a pulse can be
+        /// applied to each of them per step (see the single-line path).
+        var bareLines: [String] = []
         for lineIndex in 0..<layout.height {
             // The indicator shows only on the first line; continuation lines keep
             // the same two-cell gutter so the columns line up beneath it.
@@ -1475,14 +1514,22 @@ where Value.ID: Hashable {
                 }
             }
 
-            if let bgColor = visual.backgroundColor {
+            guard case .none = visual.background else {
                 content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
-                lines.append(content.withPersistentBackground(bgColor))
-            } else {
-                lines.append(content)
+                if pulseColors != nil { bareLines.append(content) }
+                lines.append(content.withPersistentBackground(visual.background.colorNow))
+                continue
             }
+            lines.append(content)
         }
-        return lines
+        // Same recolour-the-finished-line trick the single-line path uses: one
+        // recolouring per step, not one render of the row per step.
+        guard let pulseColors else { return RenderedRow(lines: lines) }
+        return RenderedRow(
+            lines: lines,
+            pulseFrames: bareLines.map { bare in
+                pulseColors.map { bare.withPersistentBackground($0) }
+            })
     }
 
     /// Fetches (or creates) the persistent ``ItemListHandler``
@@ -1706,7 +1753,7 @@ where Value.ID: Hashable {
         innerWidth: Int,
         context: RenderContext,
         palette: any Palette
-    ) -> (lines: [String], rowLines: [String]) {
+    ) -> (lines: [String], rowLines: [String], runs: [AnimatedCellRun]) {
         let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
         // Resolve the emphasis ONLY when an indicator will actually be drawn:
         // resolving consults the cursor clock, and that read is what tells the
@@ -1746,10 +1793,13 @@ where Value.ID: Hashable {
         // in hand, so a multi-row drag opens a gap several lines tall and the
         // rows after it are no longer one line per entry.
         var drawnHeights: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)] = []
+        /// The breathing rows' lines and every frame of each, at their position
+        /// among `rowLines` — see `collect`.
+        var pulseRuns: [(y: Int, frames: [String])] = []
         for entry in drawn {
             switch entry {
             case .row(let rowIndex):
-                rowLines.append(renderRow(
+                let row = renderRow(
                     item: data[rowIndex],
                     columnWidths: columnWidths,
                     isFocused: handler.isCursorRow(rowIndex) && tableHasFocus,
@@ -1757,14 +1807,16 @@ where Value.ID: Hashable {
                     rowWidth: contentWidth,
                     context: context,
                     palette: palette
-                ))
+                )
+                collect(
+                    line: row.line, frames: row.pulseFrames, into: &rowLines, runs: &pulseRuns)
                 drawnHeights.append((entry, 1))
             case .slot:
                 let slot = reorderSlotLines(
                     handler: handler, columnWidths: columnWidths, rowWidth: contentWidth,
                     context: context, palette: palette)
-                rowLines.append(contentsOf: slot)
-                drawnHeights.append((entry, slot.count))
+                collect(slot, into: &rowLines, runs: &pulseRuns)
+                drawnHeights.append((entry, slot.lines.count))
             }
         }
         // A drag never changes how much is on screen, so an overrun is clipped —
@@ -1785,8 +1837,13 @@ where Value.ID: Hashable {
             clipOverrun(&rowLines, to: drawnBudget, drawn: drawnHeights)
             - handler.overscrollState.excursion
         publishRowBands(handler: handler, drawn: drawnHeights, slide: slide)
+        // The rows start below whatever "N more above" indicator is already in
+        // `lines`; their runs take the same slide the bands just did.
+        let rowsTop = lines.count
         lines.append(contentsOf: handler.overscrollState.slid(
             rowLines, blank: String(repeating: " ", count: max(0, contentWidth))))
+        let runs = rowRuns(
+            pulseRuns, slide: slide, topOffset: rowsTop, lineCount: rowsTop + rowLines.count)
         if drawsText, handler.hasContentBelow {
             lines.append(renderScrollIndicator(
                 direction: .down,
@@ -1801,7 +1858,7 @@ where Value.ID: Hashable {
         // The row lines are handed back separately for a `.cursor` drag's
         // floating preview; the press frame is drawn in plain data order, so
         // indexing them by `visibleRange` offset is exact.
-        return (lines, handler.onMove == nil ? [] : rowLines)
+        return (lines, handler.onMove == nil ? [] : rowLines, runs)
     }
 
     // MARK: - Reorder drag
@@ -1816,7 +1873,7 @@ where Value.ID: Hashable {
         rowWidth: Int,
         context: RenderContext,
         palette: any Palette
-    ) -> [String] {
+    ) -> RenderedRow {
         // A keyboard move has no pointer to say where the row is, so the slot
         // says it: the row you are steering reads as emphasis, not as a hole.
         // (`isFocused` rather than a bespoke colour — the pulse a focused row
@@ -1832,28 +1889,38 @@ where Value.ID: Hashable {
         guard handler.effectiveReorderFeedback == .dimmed, !sources.isEmpty else {
             // A keyboard move never takes the `.cursor` path: it resolves that
             // to `.dimmed`, precisely because there is no pointer to carry a row.
-            return Array(repeating: blank, count: max(1, sources.count))
+            return RenderedRow(lines: Array(repeating: blank, count: max(1, sources.count)))
         }
         // The row the cursor is on stays at full strength while the rest of the
         // block goes faint — the slot's pulse covers all of them, so without
         // this a multi-row hold marks no row in particular. `nil` for one row
         // and for every mouse drag: see `reorderPrimaryHeldRow`.
         let primary = handler.reorderPrimaryHeldRow
-        return sources.map { source in
-            let line = renderRow(
+        let rendered = sources.map { source -> (line: String, frames: [String]?) in
+            let row = renderRow(
                 item: data[source], columnWidths: columnWidths,
                 isFocused: held, isSelected: held, rowWidth: rowWidth,
                 context: context, palette: palette)
-            guard source != primary else { return line }
+            let line = row.line
+            let frames = row.pulseFrames
+            guard source != primary else { return (line, frames) }
             // ADDITIVE, as it is in `_ListCore`: the emphasis says "you are
             // steering this", the dim says "it is not in the list right now",
             // and both are true at once. Substituting one for the other is why
             // a Table stopped dimming as soon as the move came from the
             // keyboard. Persistent: `renderRow` emits a reset per styled run —
             // starting with the selection-indicator gutter, so a bare wrapper
-            // died at cell one.
-            return ANSIRenderer.applyPersistentDim(line)
+            // died at cell one. The dim goes onto every frame of the pulse for
+            // the same reason it goes onto the drawn line: a run that replayed
+            // the undimmed row would un-dim it on the first tick.
+            return (
+                ANSIRenderer.applyPersistentDim(line),
+                frames.map { $0.map(ANSIRenderer.applyPersistentDim) })
         }
+        return RenderedRow(
+            lines: rendered.map(\.line),
+            pulseFrames: rendered.contains { $0.frames != nil }
+                ? rendered.map { $0.frames ?? [] } : nil)
     }
 
     /// Hands this frame's drawn row geometry to the shared publisher.
@@ -1911,6 +1978,58 @@ where Value.ID: Hashable {
     ///
     /// `publishRowBands` discards bands whose `yStart` goes negative — "slid off
     /// the top" — which is exactly right for rows dropped from the front.
+    /// Appends a rendered row's lines to `lines`, and its pulse frames to
+    /// `runs` at the positions those lines landed in.
+    ///
+    /// One place, because every path that draws rows has to keep the two in
+    /// step: a run is spliced over cells by position, so a line appended
+    /// without its frames stops breathing, and frames recorded at the wrong
+    /// index repaint the row above or below — every tick, until something else
+    /// forces a full render.
+    ///
+    /// `transform` is whatever the path does to each line on the way in (the
+    /// scrollbar path pads them to the content width); it is applied to the
+    /// frames too, or the run would claim a different span than its line
+    /// occupies.
+    private func collect(
+        line: String, frames: [String]?, into lines: inout [String],
+        runs: inout [(y: Int, frames: [String])], transform: (String) -> String = { $0 }
+    ) {
+        if let frames { runs.append((y: lines.count, frames: frames.map(transform))) }
+        lines.append(transform(line))
+    }
+
+    /// The multi-line form: see the single-line overload above.
+    private func collect(
+        _ rendered: RenderedRow, into lines: inout [String],
+        runs: inout [(y: Int, frames: [String])], transform: (String) -> String = { $0 }
+    ) {
+        let base = lines.count
+        lines.append(contentsOf: rendered.lines.map(transform))
+        guard let pulseFrames = rendered.pulseFrames else { return }
+        for (offset, frames) in pulseFrames.enumerated() where !frames.isEmpty {
+            runs.append((y: base + offset, frames: frames.map(transform)))
+        }
+    }
+
+    /// The collected pulse frames as runs, moved the way the row bands are
+    /// moved: by the overscroll `slide`, then past any "N more above" indicator.
+    ///
+    /// A run whose line was slid off the top, or clipped off the bottom, is
+    /// dropped rather than left claiming cells that are no longer its own.
+    @MainActor
+    private func rowRuns(
+        _ pulseRuns: [(y: Int, frames: [String])], slide: Int, topOffset: Int, lineCount: Int
+    ) -> [AnimatedCellRun] {
+        pulseRuns.compactMap { run in
+            let y = run.y + slide + topOffset
+            guard y >= topOffset, y < lineCount, let first = run.frames.first else { return nil }
+            return AnimatedCellRun(
+                offsetX: 0, offsetY: y, width: first.strippedLength,
+                frames: run.frames, clock: .cursor)
+        }
+    }
+
     private func clipOverrun(
         _ lines: inout [String], to budget: Int,
         drawn: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)]
@@ -1972,6 +2091,20 @@ where Value.ID: Hashable {
         session.begin(
             payload: RowReorderPayload(), preview: FrameBuffer(lines: carried),
             grabX: grabX, grabY: handler.reorderHeldRowsAboveGrab.count)
+    }
+
+    /// The visible rows' heights AS RENDERED — the first row's is net of the
+    /// line-granularity top clip, because the mouse row-mapping walks these
+    /// from the first visible line and a full-height first row would put every
+    /// row below it off its hit band.
+    private func onScreenRowHeights(
+        _ range: Range<Int>, height: (Int) -> Int, topClip: Int
+    ) -> [Int] {
+        var heights = range.map(height)
+        if topClip > 0, !heights.isEmpty {
+            heights[0] = max(1, heights[0] - topClip)
+        }
+        return heights
     }
 
     /// The multi-line path's bands: rows of different heights, no slot (that
@@ -2647,7 +2780,7 @@ where Value.ID: Hashable {
         rowWidth: Int,
         context: RenderContext,
         palette: any Palette,
-    ) -> String {
+    ) -> (line: String, pulseFrames: [String]?) {
         let visualState = rowVisualState(
             isFocused: isFocused,
             isSelected: isSelected,
@@ -2701,9 +2834,36 @@ where Value.ID: Hashable {
             }
         }
 
-        guard let bgColor = visualState.backgroundColor else { return content }
-        content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
-        return content.withPersistentBackground(bgColor)
+        // The background is applied to the FINISHED line, so a pulse is one
+        // recolouring of it per step rather than one render of the row per step
+        // — the same trick the menu row's bar uses. It works only because the
+        // row itself paints no background of its own: an inner one would beat
+        // the outer paint for the cells it covers.
+        guard case .none = visualState.background else {
+            content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
+            guard let colors = visualState.background.pulseColors else {
+                return (content.withPersistentBackground(visualState.background.colorNow), nil)
+            }
+            let frames = colors.map { content.withPersistentBackground($0) }
+            return (frames[visualState.background.stepNow], frames)
+        }
+        // A bare line, not a one-element array: a table renders every visible
+        // row every frame, and the allocator is where its time goes (see the
+        // one-SGR-introducer notes above). The multi-line and slot paths do
+        // produce several lines, and say so with `RenderedRow`.
+        return (content, nil)
+    }
+
+    /// A row's rendered lines, plus — when its background breathes — every frame
+    /// of each line, ready to become an ``AnimatedCellRun`` once the caller
+    /// knows where among the content lines it ended up.
+    ///
+    /// The twin of `_ListCore.RenderedRow`, for the same reason and with the
+    /// same contract: `pulseFrames[line][step]`, index-aligned with `lines`, so
+    /// whatever clipping the caller applies to one it applies to the other.
+    private struct RenderedRow {
+        let lines: [String]
+        var pulseFrames: [[String]]?
     }
 
     /// The floating row a `.cursor` drag carries: the row's VALUES, condensed.
@@ -2734,22 +2894,23 @@ where Value.ID: Hashable {
         return "  " + cells.joined(separator: gap)
     }
 
-    /// Determines indicator symbol, indicator color, and background color for a table row.
+    /// Determines indicator symbol, indicator color, and background for a table row.
     private func rowVisualState(
         isFocused: Bool,
         isSelected: Bool,
         context: RenderContext,
         palette: any Palette
-    ) -> (indicator: String, indicatorColor: Color, backgroundColor: Color?) {
+    ) -> (indicator: String, indicatorColor: Color, background: RowBackground) {
         if isFocused && isSelected {
-            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
-            let bg = SelectionIndicator.resolve(isFocused: true, context: context)
-                .color(
-                    dim: dimAccent,
-                    bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background))
-            return ("●", palette.accent, bg)
+            // The cursor row of a focused table breathes. As a CYCLE, not a
+            // live phase: the phase read marks the frame as having consulted
+            // the clock, so the whole page was re-rendered on every tick to
+            // recolour one row. The caller turns the cycle into
+            // ``AnimatedCellRun``s over the row's own lines. Same colour pair
+            // as `_ListCore`'s cursor row, from the same place.
+            return ("●", palette.accent, .focusedSelection(in: context, palette: palette))
         } else if isFocused {
-            return (" ", palette.foregroundTertiary, palette.focusBackground)
+            return (" ", palette.foregroundTertiary, .fixed(palette.focusBackground))
         } else if isSelected {
             // Selected row while the table itself doesn't have
             // focus. Same model as _ListCore: the
@@ -2758,11 +2919,14 @@ where Value.ID: Hashable {
             // the row's visual state into the same as an
             // unselected unfocused row.
             if context.environment.unfocusedSelectionVisibility == .hidden {
-                return (" ", palette.foregroundTertiary, nil)
+                return (" ", palette.foregroundTertiary, .none)
             }
-            return ("●", palette.accent.opacity(ViewConstants.selectionIndicator, over: palette.background), nil)
+            return (
+                "●",
+                palette.accent.opacity(ViewConstants.selectionIndicator, over: palette.background),
+                .none)
         } else {
-            return (" ", palette.foregroundTertiary, nil)
+            return (" ", palette.foregroundTertiary, .none)
         }
     }
 
@@ -2797,12 +2961,21 @@ where Value.ID: Hashable {
 private struct _TableContentView: View, Renderable {
     let lines: [String]
 
+    /// The breathing row's cells, already positioned among `lines` — the header
+    /// above and the container around shift them along with the lines.
+    var runs: [AnimatedCellRun] = []
+
     var body: Never {
         fatalError("_TableContentView renders via Renderable")
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        FrameBuffer(lines: lines)
+        var buffer = FrameBuffer(lines: lines)
+        // A measure pass draws nothing, so a run left on it would describe
+        // cells that were never on screen — and keep the clock alive from a
+        // pass that produced no frame.
+        if !context.isMeasuring { buffer.animatedCells = runs }
+        return buffer
     }
 }
 

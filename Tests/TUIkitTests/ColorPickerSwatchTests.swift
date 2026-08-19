@@ -17,13 +17,6 @@ import Testing
 @Suite("ColorPicker swatch")
 struct ColorPickerSwatchTests {
 
-    /// Parks focus so the swatch can be rendered *un*-focused (a fresh
-    /// `FocusManager` auto-focuses its first registrant, which is the swatch).
-    private final class FocusSentinel: Focusable {
-        let focusID = "swatch-test-sentinel"
-        func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
-    }
-
     private func picker(_ color: Color = .rgb(200, 40, 40)) -> ColorPicker {
         ColorPicker("Accent", selection: .constant(color))
     }

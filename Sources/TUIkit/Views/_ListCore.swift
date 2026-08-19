@@ -2334,33 +2334,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let pulseFrames: [[String]]?
     }
 
-    /// What a row draws behind itself.
-    private enum RowBackground {
-        /// No background at all.
-        case none
-        /// One colour, every frame.
-        case fixed(Color)
-        /// A breathing colour: the whole cycle and the two ends it runs between,
-        /// so the row can be handed to the run loop rather than re-rendered on
-        /// every tick of it.
-        case pulsing(SelectionEmphasisCycle, dim: Color, bright: Color)
-
-        init(_ color: Color?) {
-            self = color.map(Self.fixed) ?? .none
-        }
-
-        /// The colour to draw with in the frame being rendered now.
-        @MainActor
-        var colorNow: Color? {
-            switch self {
-            case .none: return nil
-            case .fixed(let color): return color
-            case .pulsing(let cycle, let dim, let bright):
-                return cycle.colorNow(dim: dim, bright: bright)
-            }
-        }
-    }
-
     /// The background a row shows for its type and visual state — a fixed
     /// colour, or (for the cursor row of a focused list) a whole pulse.
     private func rowBackground(
@@ -2383,12 +2356,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 // the clock, so the whole page was re-rendered on every tick to
                 // recolour one row. The caller turns the cycle into
                 // ``AnimatedCellRun``s over the row's own lines.
-                return .pulsing(
-                    context.environment.selectionEmphasis.cycle(true),
-                    dim: palette.accent.opacity(
-                        ViewConstants.focusPulseMin, over: palette.background),
-                    bright: palette.accent.opacity(
-                        ViewConstants.focusPulseMax, over: palette.background))
+                return .focusedSelection(in: context, palette: palette)
             } else if isFocused {
                 return .fixed(palette.focusBackground)
             } else if isSelected {

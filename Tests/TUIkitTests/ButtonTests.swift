@@ -22,19 +22,6 @@ private func ansiRendered<V: View>(_ view: V, context: RenderContext) -> String 
     renderToBuffer(view, context: context).lines.joined(separator: "\n")
 }
 
-/// Sentinel focusable used by the hover tests to claim auto-focus
-/// before the button under test renders. The first `Focusable` to
-/// register with a fresh `FocusManager` is auto-focused (so screens
-/// open with a focused element), and a focused `Button` suppresses
-/// its hover affordance (see the `isHovered && !isFocused` clamp in
-/// the standard button style). Without this sentinel, the button
-/// renders identically before and after a hover event because the
-/// hover state is silently suppressed.
-private final class FocusSentinel: Focusable {
-    let focusID = "test-focus-sentinel"
-    func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
-}
-
 // MARK: - Button Tests
 
 @MainActor

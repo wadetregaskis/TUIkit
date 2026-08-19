@@ -29,65 +29,11 @@ import Testing
 @Suite("Focus indicator animation")
 struct FocusIndicatorAnimationTests {
 
-    // MARK: - Shared assertions
-
-    /// Renders `view` against a context whose fresh `FocusManager` auto-focuses
-    /// the first focusable — i.e. the control under test.
-    private func focused(_ view: some View, width: Int = 40) -> FrameBuffer {
-        renderToBuffer(view, context: makeRenderContext(width: width, height: 8))
-    }
-
-    /// Asserts the run describes the cells that were actually drawn.
-    ///
-    /// Splicing a run's *current* frame back over the buffer is precisely what
-    /// the run loop does on a tick. At the step the view rendered at, that must
-    /// change nothing — so any disagreement about where the run sits, or how
-    /// wide it is, shows up here as shifted or clobbered glyphs.
-    private func expectReplayIsIdentity(
-        _ buffer: FrameBuffer, at step: Int = 0,
-        _ comment: Comment? = nil, sourceLocation: SourceLocation = #_sourceLocation
-    ) {
-        let before = visible(buffer)
-        for run in buffer.animatedCells {
-            let replayed = buffer.composited(
-                with: FrameBuffer(lines: [run.frame(at: step)]),
-                at: (x: run.offsetX, y: run.offsetY))
-            #expect(
-                visible(replayed) == before, comment ?? "run \(run) moved the cells",
-                sourceLocation: sourceLocation)
-        }
-    }
-
-    /// A buffer's rows as the terminal shows them: no styling, and no trailing
-    /// blanks — compositing squares a buffer's rows off to its widest line, so
-    /// a short row picks up padding that never reaches the screen. Anything a
-    /// misplaced run would actually do (shift a glyph, overwrite one, split a
-    /// wide character) still shows up here.
-    private func visible(_ buffer: FrameBuffer) -> [String] {
-        buffer.lines.map { line in
-            String(line.stripped.reversed().drop(while: { $0 == " " }).reversed())
-        }
-    }
-
-    /// The full contract for a control that should be animating.
-    private func expectAnimates(
-        _ buffer: FrameBuffer, runs expected: Int,
-        _ what: Comment, sourceLocation: SourceLocation = #_sourceLocation
-    ) {
-        #expect(
-            buffer.animatedCells.count == expected, "\(what): wrong number of runs",
-            sourceLocation: sourceLocation)
-        #expect(
-            buffer.animatedCells.allSatisfy { $0.isAnimating }, "\(what): a run is a still picture",
-            sourceLocation: sourceLocation)
-        expectReplayIsIdentity(buffer, "\(what): the run does not match the drawn cells")
-    }
-
     // MARK: - Button
 
     @Test("A focused bracketed button hands over both caps")
     func bracketedButtonCaps() {
-        let buffer = focused(Button("Save") {})
+        let buffer = focusedRender(Button("Save") {})
         expectAnimates(buffer, runs: 2, "bracketed button")
 
         // The caps are the ends of the control and nothing between them.
@@ -98,7 +44,7 @@ struct FocusIndicatorAnimationTests {
 
     @Test("A focused plain button hands over its indicator prefix")
     func plainButtonPrefix() {
-        let buffer = focused(Button("Save") {}.buttonStyle(.plain))
+        let buffer = focusedRender(Button("Save") {}.buttonStyle(.plain))
         expectAnimates(buffer, runs: 1, "plain button")
         #expect(buffer.animatedCells[0].offsetX == 0)
         #expect(buffer.animatedCells[0].width == BorderRenderer.focusIndicatorWidth)
@@ -109,7 +55,7 @@ struct FocusIndicatorAnimationTests {
         // The `@ViewBuilder` path composes an HStack rather than assembling a
         // string, so it arrives at its geometry differently and is pinned
         // separately.
-        let buffer = focused(Button {} label: { Text("Save") })
+        let buffer = focusedRender(Button {} label: { Text("Save") })
         expectAnimates(buffer, runs: 2, "view-label button")
         let width = buffer.lines[0].strippedLength
         #expect(buffer.animatedCells.map(\.offsetX).sorted() == [0, width - 1])
@@ -128,9 +74,9 @@ struct FocusIndicatorAnimationTests {
     func disabledButtonIsStill() {
         // Disabled controls never register for focus, but the style is handed
         // `isFocused` independently — so this pins the style's own guard.
-        #expect(focused(Button("Save") {}.disabled(true)).animatedCells.isEmpty)
+        #expect(focusedRender(Button("Save") {}.disabled(true)).animatedCells.isEmpty)
         #expect(
-            focused(Button("Save") {}.buttonStyle(.plain).disabled(true)).animatedCells.isEmpty)
+            focusedRender(Button("Save") {}.buttonStyle(.plain).disabled(true)).animatedCells.isEmpty)
     }
 
     @Test("A button whose style does not animate hands over nothing")
@@ -139,7 +85,7 @@ struct FocusIndicatorAnimationTests {
         // alone. There is no cycle, so there is nothing for the loop to replay
         // — and a one-frame run would cost bytes per tick to redraw what is
         // already on screen.
-        let buffer = focused(Button("Save") {}.selectionIndicatorStyle(.none))
+        let buffer = focusedRender(Button("Save") {}.selectionIndicatorStyle(.none))
         #expect(buffer.animatedCells.isEmpty)
     }
 
@@ -148,7 +94,7 @@ struct FocusIndicatorAnimationTests {
         // A frame that did not occupy exactly `width` cells would shove the
         // rest of the row sideways on some ticks and not others — the reflow
         // the whole mechanism exists to avoid.
-        for run in focused(Button("Save") {}).animatedCells {
+        for run in focusedRender(Button("Save") {}).animatedCells {
             #expect(run.frames.allSatisfy { $0.strippedLength == run.width }, "run: \(run)")
         }
     }
@@ -326,7 +272,7 @@ struct FocusIndicatorAnimationTests {
             RadioButtonItem("a", "Alpha")
             RadioButtonItem("b", "Bravo")
         }.disabled(true)
-        #expect(focused(disabled).animatedCells.isEmpty)
+        #expect(focusedRender(disabled).animatedCells.isEmpty)
     }
 
     // MARK: - Tab chip
@@ -393,7 +339,7 @@ struct FocusIndicatorAnimationTests {
                         .toggleCharacterSet(.ascii))
             ),
         ] {
-            let buffer = focused(view)
+            let buffer = focusedRender(view)
             expectAnimates(buffer, runs: 1, "\(name) toggle")
             #expect(buffer.animatedCells[0].offsetX == 0, "\(name): the indicator opens the row")
             #expect(buffer.animatedCells[0].offsetY == 0, "\(name): on the first row")
@@ -413,7 +359,7 @@ struct FocusIndicatorAnimationTests {
                 .animatedCells.isEmpty)
         // A disabled toggle never registers for focus, and its indicator is
         // drawn from the disabled branch, which has no cycle at all.
-        #expect(focused(Toggle("On", isOn: .constant(true)).disabled(true)).animatedCells.isEmpty)
+        #expect(focusedRender(Toggle("On", isOn: .constant(true)).disabled(true)).animatedCells.isEmpty)
     }
 
     // MARK: - Picker
@@ -422,7 +368,7 @@ struct FocusIndicatorAnimationTests {
     func pickerCaps() {
         // The collapsed control is a bracketed button in all but name, so it
         // shares `ButtonCapCycle` — and must pin the same geometry.
-        let buffer = focused(
+        let buffer = focusedRender(
             Picker("Fruit", selection: .constant("a")) {
                 Text("Apple").tag("a")
                 Text("Banana").tag("b")
@@ -446,7 +392,7 @@ struct FocusIndicatorAnimationTests {
             Text("Banana").tag("b")
         }
         #expect(renderToBuffer(picker, context: context).animatedCells.isEmpty)
-        #expect(focused(picker.disabled(true)).animatedCells.isEmpty)
+        #expect(focusedRender(picker.disabled(true)).animatedCells.isEmpty)
     }
 
     // MARK: - Menu row
@@ -457,7 +403,7 @@ struct FocusIndicatorAnimationTests {
         // menu row hands over the ROW: the highlight spans it, so the run has
         // to be as wide as the row is and start at its first cell, or the
         // replay leaves a strip of the previous colour behind.
-        let buffer = focused(
+        let buffer = focusedRender(
             Menu("Demos") {
                 Button("First") {}
                 Button("Second") {}
@@ -509,7 +455,7 @@ struct FocusIndicatorAnimationTests {
         let context = makeRenderContext(width: 40, height: 8)
         context.environment.focusManager!.register(FocusSentinel())
         #expect(renderToBuffer(menu, context: context).animatedCells.isEmpty)
-        #expect(focused(menu.disabled(true)).animatedCells.isEmpty)
+        #expect(focusedRender(menu.disabled(true)).animatedCells.isEmpty)
     }
 
     @Test("A button keeps its runs through the tree a page wraps it in")
@@ -523,7 +469,7 @@ struct FocusIndicatorAnimationTests {
                 Button("Save") {}.padding().border()
             }
         }
-        let buffer = focused(page)
+        let buffer = focusedRender(page)
         expectAnimates(buffer, runs: 2, "button inside real chrome")
         // Indented by the padding and border it is wrapped in, so this is not
         // accidentally passing on an un-shifted run.
@@ -565,7 +511,7 @@ struct FocusIndicatorAnimationTests {
 
     @Test("A focused slider hands over both arrows")
     func sliderArrows() {
-        expectArrowsPinned(focused(Slider(value: .constant(0.5))), "slider arrows")
+        expectArrowsPinned(focusedRender(Slider(value: .constant(0.5))), "slider arrows")
     }
 
     @Test("A slider without its value read-out still places the right arrow")
@@ -573,7 +519,7 @@ struct FocusIndicatorAnimationTests {
         // `.sliderShowsValue(false)` drops the trailing field, so the right
         // arrow ENDS the control instead of sitting inside it — the case where
         // an offset computed from the wrong layout falls off the end entirely.
-        let buffer = focused(Slider(value: .constant(0.5)).sliderShowsValue(false))
+        let buffer = focusedRender(Slider(value: .constant(0.5)).sliderShowsValue(false))
         expectArrowsPinned(buffer, "slider arrows, no read-out")
         #expect(buffer.animatedCells.map(\.offsetX).max() == buffer.lines[0].strippedLength - 1)
     }
@@ -584,7 +530,7 @@ struct FocusIndicatorAnimationTests {
         // whatever layout granted minus the chrome — and clamps at the narrow
         // end. A single width proves nothing about the clamp.
         for width in 8...48 {
-            let buffer = focused(Slider(value: .constant(0.5)), width: width)
+            let buffer = focusedRender(Slider(value: .constant(0.5)), width: width)
             expectArrowsPinned(buffer, "slider arrows at width \(width)")
         }
     }
@@ -595,12 +541,12 @@ struct FocusIndicatorAnimationTests {
         context.environment.focusManager!.register(FocusSentinel())
         #expect(renderToBuffer(Slider(value: .constant(0.5)), context: context)
             .animatedCells.isEmpty)
-        #expect(focused(Slider(value: .constant(0.5)).disabled(true)).animatedCells.isEmpty)
+        #expect(focusedRender(Slider(value: .constant(0.5)).disabled(true)).animatedCells.isEmpty)
     }
 
     @Test("A focused stepper hands over both arrows")
     func stepperArrows() {
-        expectArrowsPinned(focused(Stepper("Count", value: .constant(5))), "stepper arrows")
+        expectArrowsPinned(focusedRender(Stepper("Count", value: .constant(5))), "stepper arrows")
     }
 
     @Test("An unfocused or disabled stepper animates nothing")
@@ -609,7 +555,7 @@ struct FocusIndicatorAnimationTests {
         context.environment.focusManager!.register(FocusSentinel())
         #expect(renderToBuffer(Stepper("Count", value: .constant(5)), context: context)
             .animatedCells.isEmpty)
-        #expect(focused(Stepper("Count", value: .constant(5)).disabled(true)).animatedCells.isEmpty)
+        #expect(focusedRender(Stepper("Count", value: .constant(5)).disabled(true)).animatedCells.isEmpty)
     }
 
     // MARK: - Focus section indicator
@@ -728,6 +674,97 @@ struct FocusIndicatorAnimationTests {
         #expect(unselected.animatedCells.isEmpty, "an unselected cursor row is breathing")
     }
 
+    // MARK: - Table cursor row
+
+    /// Rows for the table cases. `Identifiable`, because a `Table`'s selection
+    /// is by id.
+    private struct Row: Identifiable, Sendable {
+        let id: String
+        let name: String
+        let note: String
+    }
+
+    private var tableRows: [Row] {
+        (0..<3).map { Row(id: "\($0)", name: "Row \($0)", note: "note \($0)") }
+    }
+
+    /// The same rows with a note long enough to wrap onto a second line, so the
+    /// multi-line path really does produce a row taller than one line.
+    private var wrappingTableRows: [Row] {
+        (0..<3).map {
+            Row(id: "\($0)", name: "Row \($0)", note: "a note long enough to wrap over two lines")
+        }
+    }
+
+    /// A focused table whose cursor row is also selected, at whatever height —
+    /// short enough and it fits, tall enough and it scrolls, which are
+    /// different assembly paths inside the table.
+    private func selectedRowTable(
+        height: Int = 10, rows: [Row]? = nil, multiLine: Bool = false
+    ) -> FrameBuffer {
+        let data = rows ?? tableRows
+        let table = Table(data, selection: .constant("0" as String?)) {
+            TableColumn("Name", value: \Row.name)
+            TableColumn("Note", value: \Row.note).lineLimit(multiLine ? 2 : 1)
+        }
+        return renderToBuffer(table, context: makeRenderContext(width: 40, height: height))
+    }
+
+    @Test("A focused table's selected row hands its whole line to the run loop")
+    func tableCursorRow() {
+        let buffer = selectedRowTable()
+        expectAnimates(buffer, runs: 1, "table cursor row")
+        let run = buffer.animatedCells[0]
+        // Past the border and the column header vertically; past the border
+        // and the container's one cell of horizontal padding across.
+        #expect(run.offsetY == 2)
+        #expect(run.offsetX == 2)
+        #expect(Set(run.frames.map(\.stripped)).count == 1, "the pulse changed the row's text")
+    }
+
+    @Test("The table's run survives the scrollbar path")
+    func tableCursorRowWithScrollbar() {
+        // An overflowing table draws a bar, and its rows go through a SECOND
+        // assembly function with its own clipping and its own bar-cell merge.
+        let many = (0..<40).map { Row(id: "\($0)", name: "Row \($0)", note: "note \($0)") }
+        let buffer = selectedRowTable(height: 8, rows: many)
+        expectAnimates(buffer, runs: 1, "table cursor row, scrolling")
+        let run = buffer.animatedCells[0]
+        #expect(run.offsetX + run.width < buffer.width - 1, "the run reaches the bar's column")
+    }
+
+    @Test("The table's run survives the multi-line path")
+    func tableCursorRowMultiLine() {
+        // A column with a line limit above 1 takes a THIRD assembly path, where
+        // a row is several lines tall and each of them carries the background.
+        let buffer = selectedRowTable(rows: wrappingTableRows, multiLine: true)
+        // The row is two lines tall, and BOTH carry the background — so both
+        // want a run, on consecutive rows. One run would leave half the
+        // highlight frozen while the other half breathed.
+        #expect(buffer.animatedCells.count == 2, "the multi-line path left the wrong runs")
+        #expect(buffer.animatedCells.allSatisfy { $0.isAnimating })
+        expectReplayIsIdentity(buffer, "the multi-line run does not match the drawn cells")
+        let rows = buffer.animatedCells.map(\.offsetY).sorted()
+        #expect(rows == [rows[0], rows[0] + 1])
+    }
+
+    @Test("An unfocused table, or one whose cursor row is unselected, animates nothing")
+    func tableCursorRowStill() {
+        let context = makeRenderContext(width: 40, height: 10)
+        context.environment.focusManager!.register(FocusSentinel())
+        let unfocused = renderToBuffer(
+            Table(tableRows, selection: .constant("0" as String?)) {
+                TableColumn("Name", value: \Row.name)
+            }, context: context)
+        #expect(unfocused.animatedCells.isEmpty, "an unfocused table is breathing")
+
+        let unselected = renderToBuffer(
+            Table(tableRows, selection: .constant(String?.none)) {
+                TableColumn("Name", value: \Row.name)
+            }, context: makeRenderContext(width: 40, height: 10))
+        #expect(unselected.animatedCells.isEmpty, "an unselected cursor row is breathing")
+    }
+
     // MARK: - Composers that assemble rows by hand
 
     // A container that concatenates child STRINGS gets none of what the child
@@ -739,7 +776,7 @@ struct FocusIndicatorAnimationTests {
 
     @Test("A ButtonRow carries its focused button's caps")
     func buttonRowLiftsRuns() {
-        let buffer = focused(
+        let buffer = focusedRender(
             ButtonRow {
                 Button("Cancel") {}
                 Button("OK") {}
@@ -749,14 +786,14 @@ struct FocusIndicatorAnimationTests {
 
     @Test("A dialog's horizontal button row carries them too")
     func alertButtonRowLiftsRuns() {
-        let buffer = focused(
+        let buffer = focusedRender(
             AlertButtonRow(buttons: [Button("Delete") {}, Button("Cancel") {}]))
         expectAnimates(buffer, runs: 2, "focused button in an alert row")
     }
 
     @Test("A dialog's stacked button column carries them too")
     func alertButtonColumnLiftsRuns() {
-        let buffer = focused(
+        let buffer = focusedRender(
             AlertButtonColumn(buttons: [Button("Delete") {}, Button("Cancel") {}]))
         expectAnimates(buffer, runs: 2, "focused button in an alert column")
     }
@@ -818,7 +855,3 @@ struct FocusIndicatorAnimationTests {
 
 /// Claims auto-focus before the control under test renders, so that control
 /// renders in its un-focused state.
-private final class FocusSentinel: Focusable {
-    let focusID = "focus-indicator-animation-sentinel"
-    func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
-}

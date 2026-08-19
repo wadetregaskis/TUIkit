@@ -68,14 +68,6 @@ struct PointerHoverAuditTests {
 
     // MARK: - DatePicker
 
-    /// Parks the focus, so the field under test is rendered UNfocused — a
-    /// focused one says so with its pulsing active block and the pointer must
-    /// not fight that.
-    private final class FocusSentinel: Focusable {
-        let focusID = "hover-audit-sentinel"
-        func handleKeyEvent(_ event: KeyEvent) -> Bool { false }
-    }
-
     @Test("A date field lifts under the pointer")
     func dateFieldLifts() {
         let view = DatePicker("", selection: .constant(Date(timeIntervalSince1970: 0)))
