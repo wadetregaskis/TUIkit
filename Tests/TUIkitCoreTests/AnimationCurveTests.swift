@@ -30,13 +30,21 @@ struct AnimationCurveTests {
         }
     }
 
-    @Test("A linear curve is its own fraction")
+    @Test("A linear curve is its own fraction, EXACTLY")
     func linearIsIdentity() {
+        // Exactly, not nearly. A curve solved numerically lands a rounding
+        // error either side of its answer, and that is enough to put a value
+        // sitting on a cell boundary on the wrong side of it: a bar animating
+        // linearly to full width came out one cell short at three-quarters,
+        // because 0.7499999 rounds to 7 cells and 0.75 rounds to 8.
         let animation = Animation.linear(duration: 1)
-        for step in 0...10 {
-            let t = Double(step) / 10
-            #expect(abs(animation.fraction(at: t) - t) < 1e-6, "at \(t)")
+        for step in 0...100 {
+            let t = Double(step) / 100
+            #expect(animation.fraction(at: t) == t, "at \(t)")
         }
+        // Any curve whose control points sit on the diagonal is the identity,
+        // however it was spelled.
+        #expect(Animation.timingCurve(0.25, 0.25, 0.9, 0.9, duration: 1).fraction(at: 0.4) == 0.4)
     }
 
     @Test("Ease-in starts slower than linear; ease-out starts faster")

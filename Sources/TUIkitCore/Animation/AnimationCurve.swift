@@ -73,6 +73,12 @@ extension AnimationCurve {
     ) -> Double {
         guard x > 0 else { return 0 }
         guard x < 1 else { return 1 }
+        // Control points ON the diagonal make x(t) and y(t) the same
+        // polynomial, so y as a function of x is exactly the identity. Worth
+        // saying outright: `.linear` is the commonest curve, and solving it
+        // numerically leaves it a rounding error either side of exact — enough
+        // to put a value that lands on a cell boundary on the wrong side of it.
+        if p1x == p1y && p2x == p2y { return x }
 
         var t = x  // x is a good first guess: the curve is near-diagonal.
         for _ in 0..<8 {
