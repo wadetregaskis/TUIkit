@@ -189,6 +189,19 @@ private struct TabSizeCache: Equatable {
         sizes[width] = entry
         while order.count > Self.capacity { sizes.removeValue(forKey: order.removeFirst()) }
     }
+
+    /// Whether these hold the same measurements — ignoring which width was
+    /// touched most recently.
+    ///
+    /// The LRU order is bookkeeping, not content, and it moves on every `set`.
+    /// A `TabView` measures at more than one width per frame (the panel sizes
+    /// to its widest tab, then renders at the panel's width), so the order
+    /// flipped every frame and the memo compared unequal to itself: the guarded
+    /// write fired, the write invalidated the render cache and asked for
+    /// another frame, and that frame did it again. A page with a `TabView` on
+    /// it re-rendered forever, drawing an identical picture — measured at 14%
+    /// of a core on the Example's Tab Views page, with nothing animating.
+    func hasSameSizes(as other: Self) -> Bool { sizes == other.sizes }
 }
 
 /// Renders the tab strip plus the selected tab's content.
@@ -271,14 +284,15 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let present = Set(tabs.map { AnyHashable($0.value) })
         entry = entry.filter { present.contains($0.key) }  // drop removed tabs
         cache.set(entry, for: available)
-        // Only when it actually changed. This runs during the MEASURE pass, and
-        // writing a `StateBox` invalidates the render cache and asks for another
-        // render — which measures again, which wrote again. An idle page with a
-        // tab view rendered itself forever at whatever rate the loop would run,
-        // producing byte-identical frames: 12% of a core on the Example's Tab
-        // Views page, with nothing on screen changing. The cache is a memo, not
-        // state; re-storing the same memo must not dirty anything.
-        if cache != box.value { box.value = cache }
+        // Only when the MEASUREMENTS actually changed. This runs during the
+        // measure pass, and writing a `StateBox` invalidates the render cache
+        // and asks for another render — which measures again, which wrote
+        // again. An idle page with a tab view rendered itself forever at
+        // whatever rate the loop would run, producing byte-identical frames,
+        // with nothing on screen changing. The cache is a memo, not state;
+        // re-storing the same memo must not dirty anything — and "the same"
+        // means the same sizes, not the same LRU order (see `hasSameSizes`).
+        if !cache.hasSameSizes(as: box.value) { box.value = cache }
         return entry
     }
 
