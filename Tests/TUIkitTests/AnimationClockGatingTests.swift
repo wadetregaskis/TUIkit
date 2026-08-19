@@ -9,10 +9,10 @@ import Testing
 @testable import TUIkit
 
 /// Validates the primitives behind demand-driven animation: a render frame
-/// reports whether it consumed the pulse clock (so the run loop keeps the pulse
-/// timer ticking) or the cursor clock (cursor blink), and reports neither for a
-/// static frame (so the loop idles at zero CPU). See `RenderLoop.RenderActivity`
-/// and `App.run`'s `applyAnimationActivity`.
+/// reports whether it consumed the animation clock — through the `pulsePhase`
+/// seam or by resolving a focused `SelectionEmphasis` — so the run loop keeps
+/// the clock ticking, and reports neither for a static frame (so the loop idles
+/// at zero CPU). See `RenderLoop.RenderActivity` and `App.renderFrame`.
 
 /// A non-interactive view that reads the per-frame-volatile pulse phase.
 private struct PulseConsumer: View, Renderable {
@@ -64,5 +64,55 @@ struct AnimationClockGatingTests {
 
         _ = timer.blinkVisible(for: .regular)
         #expect(timer.didReadThisFrame)  // blink path also counts
+    }
+}
+
+// MARK: - One clock
+
+@MainActor
+@Suite("One focus clock")
+struct FocusClockUnityTests {
+
+    /// Every speed the style offers.
+    private var speeds: [TextCursorStyle.Speed] { [.slow, .regular, .fast] }
+
+    @Test("A breath starts at its BRIGHT end")
+    func breathStartsBright() {
+        // The clock is reset whenever the focus moves, so tick 0 is what a
+        // newly focused control shows. A breath that began dim left it looking
+        // unfocused for a third of a second — at the moment it most needs to
+        // be seen.
+        for speed in speeds {
+            #expect(CursorTimer.pulsePhase(atTick: 0, speed: speed) == 1)
+        }
+    }
+
+    @Test("A breath is a round trip: bright → dim → bright")
+    func breathIsARoundTrip() {
+        for speed in speeds {
+            let ticks = CursorTimer.cycleTicks(for: speed, animation: .pulse)
+            let phases = (0...ticks).map { CursorTimer.pulsePhase(atTick: $0, speed: speed) }
+            #expect(phases.min()! < 0.02, "\(speed): never reached the dim end")
+            #expect(phases.last! > 0.98, "\(speed): did not come back bright")
+        }
+    }
+
+    @Test("The phase seam and the emphasis clock are the same breath")
+    func oneFormulaBehindBoth() {
+        // The bug this pins: there were two clocks, at 2 s and 0.8 s, and which
+        // one a focus indicator breathed on depended purely on which route its
+        // view happened to take — a section's border against the controls
+        // inside it. Both now come from `CursorTimer`.
+        let timer = CursorTimer(renderNotifier: AppState())
+        var env = EnvironmentValues()
+        env.cursorTimer = timer
+        let seam = timer.breathPhase
+        let emphasis = SelectionIndicator.resolve(isFocused: true, environment: env)
+        #expect(emphasis.phase == seam)
+    }
+
+    @Test("There is one animation clock")
+    func exactlyOneClock() {
+        #expect(AnimationClock.allCases == [.cursor])
     }
 }

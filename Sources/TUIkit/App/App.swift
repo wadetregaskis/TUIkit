@@ -177,7 +177,6 @@ extension AppRunner {
             appearanceManager: appearanceManager,
             tuiContext: tuiContext
         )
-        let pulseTimer = PulseTimer(renderNotifier: appState)
         let cursorTimer = CursorTimer(renderNotifier: appState)
         // Coalesces the periodic re-render requests of every animating view
         // (Spinner, indeterminate ProgressView, …) into the fewest distinct render
@@ -233,9 +232,11 @@ extension AppRunner {
             Task { @MainActor in stdinArrival?.wake() }
         }
 
-        // Reset pulse animation and trigger re-render when focus changes
-        focusManager.onFocusChange = { [weak pulseTimer, weak appState] in
-            pulseTimer?.reset()
+        // Restart the breath and re-render when the focus moves, so the newly
+        // focused control is at its brightest the moment it takes the focus
+        // (the phase starts at its bright end — see `CursorTimer.pulsePhase`).
+        focusManager.onFocusChange = { [weak cursorTimer, weak appState] in
+            cursorTimer?.reset()
             appState?.setNeedsRender()
         }
 
@@ -259,7 +260,6 @@ extension AppRunner {
         let renderOneFrame = {
             (lastRenderAtNanos, animationDeadlineNanos) = self.renderFrame(
                 renderer: renderer,
-                pulseTimer: pulseTimer,
                 cursorTimer: cursorTimer,
                 scheduler: animationScheduler)
         }
@@ -302,7 +302,7 @@ extension AppRunner {
                 // process is still alive — an app that saves on the way down
                 // has no other moment. See ``ScenePhase``.
                 tuiContext.scenePhase = .background
-                renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
+                renderer.render(pulsePhase: cursorTimer.breathPhase, cursorTimer: cursorTimer)
                 suspendUntilContinued(renderer: renderer)
                 tuiContext.scenePhase = .active
                 pendingRender = true
@@ -322,7 +322,6 @@ extension AppRunner {
             drainTerminalEvents(
                 inputHandler: inputHandler,
                 renderer: renderer,
-                pulseTimer: pulseTimer,
                 cursorTimer: cursorTimer)
 
             // Fold a state change, and any animation tick the cheap path could
@@ -330,7 +329,7 @@ extension AppRunner {
             pendingRender =
                 foldPendingWork(
                     alreadyPending: pendingRender, renderer: renderer,
-                    pulseTimer: pulseTimer, cursorTimer: cursorTimer)
+                    cursorTimer: cursorTimer)
 
             // One monotonic reading drives every decision this iteration — the
             // animation-fired test, the render-now test, and the wait length all
@@ -378,8 +377,8 @@ extension AppRunner {
             await stdinArrival.waitForArrival(timeoutNanoseconds: waitNanos)
         }
 
-        // Stop pulse timer before cleanup
-        pulseTimer.stop()
+        // Stop the animation clock before cleanup
+        cursorTimer.stop()
 
         // Cleanup
         cleanup()
@@ -408,8 +407,7 @@ extension AppRunner {
     /// better, and replaying first would paint the old frame's cells over
     /// content about to change.
     fileprivate func foldPendingWork(
-        alreadyPending: Bool, renderer: RenderLoop<A>,
-        pulseTimer: PulseTimer, cursorTimer: CursorTimer
+        alreadyPending: Bool, renderer: RenderLoop<A>, cursorTimer: CursorTimer
     ) -> Bool {
         var pending = alreadyPending
         if appState.needsRender {
@@ -422,8 +420,7 @@ extension AppRunner {
             _ = appState.consumePendingAnimationClocks()
             return true
         }
-        return !serveAnimationTicks(
-            renderer: renderer, pulseTimer: pulseTimer, cursorTimer: cursorTimer)
+        return !serveAnimationTicks(renderer: renderer, cursorTimer: cursorTimer)
     }
 
     /// Advances any clocks that ticked, without rendering, when every one of
@@ -434,13 +431,13 @@ extension AppRunner {
     ///   frame to patch yet. That is the behaviour this replaces, so falling
     ///   back is always safe.
     fileprivate func serveAnimationTicks(
-        renderer: RenderLoop<A>, pulseTimer: PulseTimer, cursorTimer: CursorTimer
+        renderer: RenderLoop<A>, cursorTimer: CursorTimer
     ) -> Bool {
         let ticked = appState.consumePendingAnimationClocks()
         guard !ticked.isEmpty else { return true }  // nothing ticked; nothing owed
         var steps: [AnimationClock: Int] = [:]
         for clock in ticked where renderer.lastActivity.canReplay(clock) {
-            steps[clock] = clock == .pulse ? pulseTimer.currentStep : cursorTimer.elapsedTicks
+            steps[clock] = cursorTimer.elapsedTicks
         }
         guard steps.count == ticked.count else { return false }
         return renderer.replayAnimations(steps: steps)
@@ -448,27 +445,26 @@ extension AppRunner {
 
     fileprivate func renderFrame(
         renderer: RenderLoop<A>,
-        pulseTimer: PulseTimer,
         cursorTimer: CursorTimer,
         scheduler: AnimationScheduler
     ) -> (lastRenderAtNanos: UInt64, animationDeadlineNanos: UInt64?) {
         scheduler.beginFrame()
         let frameNow = Int64(bitPattern: DispatchTime.now().uptimeNanoseconds)
         let activity = renderer.render(
-            pulsePhase: pulseTimer.phase,
+            pulsePhase: cursorTimer.breathPhase,
             cursorTimer: cursorTimer,
             animationScheduler: scheduler,
             frameNowNanos: frameNow)
         scheduler.endFrame()
-        // Demand-driven animation clocks: keep each ticking only while a frame
+        // Demand-driven animation clock: kept ticking only while a frame
         // actually consumed it, so a static screen drives no further frames.
-        // A clock keeps running while EITHER a view reads it as it renders or
-        // the frame left runs on it — the second is the cheap path, and stopping
+        // It keeps running while EITHER a view reads it as it renders or the
+        // frame left runs on it — the second is the cheap path, and stopping
         // the clock because nobody read the phase would freeze it.
-        let pulseLive = activity.usesPulse || activity.animatedClocks.contains(.pulse)
-        let cursorLive = activity.usesCursor || activity.animatedClocks.contains(.cursor)
-        if pulseLive { pulseTimer.start() } else { pulseTimer.stop() }
-        if cursorLive { cursorTimer.start() } else { cursorTimer.stop() }
+        let clockLive =
+            activity.usesPulse || activity.usesCursor
+            || activity.animatedClocks.contains(.cursor)
+        if clockLive { cursorTimer.start() } else { cursorTimer.stop() }
         let deadline = scheduler.nextFiring(after: frameNow).map { UInt64(bitPattern: $0) }
         // Re-evaluate the mouse-tracking mode (modifiers may elevate it this
         // frame); only re-emitted when it actually changes.
@@ -560,7 +556,6 @@ extension AppRunner {
     fileprivate func drainTerminalEvents(
         inputHandler: InputHandler,
         renderer: RenderLoop<A>,
-        pulseTimer: PulseTimer,
         cursorTimer: CursorTimer
     ) {
         var eventsProcessed = 0
@@ -577,7 +572,7 @@ extension AppRunner {
                 // repaint first so the snapshot captures every line.
                 if keyEvent.key == .character("`"), frameDumpEnabled {
                     renderer.invalidateDiffCache()
-                    renderer.render(pulsePhase: pulseTimer.phase, cursorTimer: cursorTimer)
+                    renderer.render(pulsePhase: cursorTimer.breathPhase, cursorTimer: cursorTimer)
                     terminal.dumpLastFrame()
                 }
                 if inputHandler.handle(keyEvent) {

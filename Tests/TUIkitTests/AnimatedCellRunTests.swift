@@ -19,7 +19,7 @@ struct AnimatedCellRunTests {
     private func run(x: Int, y: Int, width: Int = 1, frames: [String] = ["a", "b"])
         -> AnimatedCellRun
     {
-        AnimatedCellRun(offsetX: x, offsetY: y, width: width, frames: frames, clock: .pulse)
+        AnimatedCellRun(offsetX: x, offsetY: y, width: width, frames: frames, clock: .cursor)
     }
 
     private func buffer(_ lines: [String], runs: [AnimatedCellRun] = []) -> FrameBuffer {

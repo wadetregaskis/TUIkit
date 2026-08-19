@@ -50,10 +50,10 @@ struct _ColorSwatchCells: View {
 
     @Environment(\.palette) private var palette
 
-    /// Volatile: reading it also keeps the cell out of any render memo, so the
-    /// focus pulse animates. Read ONLY while focused — an ungated read would
-    /// keep every swatch on the page redrawing forever.
-    @Environment(\.pulsePhase) private var pulsePhase
+    /// The shared focus clock — resolved ONLY while focused (resolving a
+    /// focused emphasis is the volatile read that keeps the clock ticking, and
+    /// an ungated one would keep every swatch on the page redrawing forever).
+    @Environment(\.selectionEmphasis) private var emphasis
 
     var body: some View {
         // Semantic colours have no components of their own, and both the fill
@@ -78,7 +78,7 @@ struct _ColorSwatchCells: View {
             // Focused: the bullet pulses whether or not this swatch is
             // selected — activating (Enter / Space / click) selects it.
             let dim = readable.opacity(ViewConstants.focusPulseMin, over: fill)
-            return Color.lerp(dim, readable, phase: pulsePhase)
+            return emphasis(true).color(dim: dim, bright: readable)
         }
         if isSelected { return readable }
         if isHovered {

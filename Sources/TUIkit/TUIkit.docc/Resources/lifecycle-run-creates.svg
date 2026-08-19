@@ -1,5 +1,5 @@
-<svg width="413pt" height="116pt"
- viewBox="0.00 0.00 413.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="310pt" height="116pt"
+ viewBox="0.00 0.00 310.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <style>
 .edge path { fill: none; stroke: #8a8a8a; }
 .edge polygon { stroke: #8a8a8a; fill: #8a8a8a; }
@@ -17,8 +17,8 @@
 <!-- run -->
 <g id="node1" class="node">
 <title>run</title>
-<path fill="#13795b" stroke="black" stroke-width="0" d="M243.66,-108C243.66,-108 163.62,-108 163.62,-108 157.62,-108 151.62,-102 151.62,-96 151.62,-96 151.62,-84 151.62,-84 151.62,-78 157.62,-72 163.62,-72 163.62,-72 243.66,-72 243.66,-72 249.66,-72 255.66,-78 255.66,-84 255.66,-84 255.66,-96 255.66,-96 255.66,-102 249.66,-108 243.66,-108"/>
-<text xml:space="preserve" text-anchor="middle" x="203.64" y="-85.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppRunner.run()</text>
+<path fill="#13795b" stroke="black" stroke-width="0" d="M191.66,-108C191.66,-108 111.62,-108 111.62,-108 105.62,-108 99.62,-102 99.62,-96 99.62,-96 99.62,-84 99.62,-84 99.62,-78 105.62,-72 111.62,-72 111.62,-72 191.66,-72 191.66,-72 197.66,-72 203.66,-78 203.66,-84 203.66,-84 203.66,-96 203.66,-96 203.66,-102 197.66,-108 191.66,-108"/>
+<text xml:space="preserve" text-anchor="middle" x="151.64" y="-85.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">AppRunner.run()</text>
 </g>
 <!-- input -->
 <g id="node2" class="node">
@@ -29,8 +29,8 @@
 <!-- run&#45;&gt;input -->
 <g id="edge1" class="edge">
 <title>run&#45;&gt;input</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M164.67,-72.05C142.01,-62.2 113.31,-49.72 89.43,-39.34"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="90.6,-37.18 83.2,-36.63 88.65,-41.67 90.6,-37.18"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M125.26,-72.05C110.4,-62.51 91.7,-50.5 75.85,-40.32"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="77.53,-38.49 70.32,-36.77 74.88,-42.61 77.53,-38.49"/>
 </g>
 <!-- render -->
 <g id="node3" class="node">
@@ -41,34 +41,21 @@
 <!-- run&#45;&gt;render -->
 <g id="edge2" class="edge">
 <title>run&#45;&gt;render</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M191.06,-72.05C184.54,-63.28 176.48,-52.43 169.35,-42.83"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="171.34,-41.41 165.2,-37.25 167.41,-44.33 171.34,-41.41"/>
-</g>
-<!-- pulse -->
-<g id="node4" class="node">
-<title>pulse</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M283.54,-36C283.54,-36 229.75,-36 229.75,-36 223.75,-36 217.75,-30 217.75,-24 217.75,-24 217.75,-12 217.75,-12 217.75,-6 223.75,0 229.75,0 229.75,0 283.54,0 283.54,0 289.54,0 295.54,-6 295.54,-12 295.54,-12 295.54,-24 295.54,-24 295.54,-30 289.54,-36 283.54,-36"/>
-<text xml:space="preserve" text-anchor="middle" x="256.64" y="-19.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">PulseTimer</text>
-<text xml:space="preserve" text-anchor="middle" x="256.64" y="-7.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">100 ms</text>
-</g>
-<!-- run&#45;&gt;pulse -->
-<g id="edge3" class="edge">
-<title>run&#45;&gt;pulse</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M216.47,-72.05C223.18,-63.2 231.49,-52.22 238.81,-42.55"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="240.56,-44.3 242.84,-37.24 236.66,-41.34 240.56,-44.3"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M151.64,-72.05C151.64,-63.8 151.64,-53.7 151.64,-44.54"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="154.1,-44.61 151.65,-37.61 149.2,-44.61 154.1,-44.61"/>
 </g>
 <!-- cursor -->
-<g id="node5" class="node">
+<g id="node4" class="node">
 <title>cursor</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M392.54,-36C392.54,-36 332.75,-36 332.75,-36 326.75,-36 320.75,-30 320.75,-24 320.75,-24 320.75,-12 320.75,-12 320.75,-6 326.75,0 332.75,0 332.75,0 392.54,0 392.54,0 398.54,0 404.54,-6 404.54,-12 404.54,-12 404.54,-24 404.54,-24 404.54,-30 398.54,-36 392.54,-36"/>
-<text xml:space="preserve" text-anchor="middle" x="362.64" y="-19.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">CursorTimer</text>
-<text xml:space="preserve" text-anchor="middle" x="362.64" y="-7.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">50 ms</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M289.54,-36C289.54,-36 229.75,-36 229.75,-36 223.75,-36 217.75,-30 217.75,-24 217.75,-24 217.75,-12 217.75,-12 217.75,-6 223.75,0 229.75,0 229.75,0 289.54,0 289.54,0 295.54,0 301.54,-6 301.54,-12 301.54,-12 301.54,-24 301.54,-24 301.54,-30 295.54,-36 289.54,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="259.64" y="-19.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">CursorTimer</text>
+<text xml:space="preserve" text-anchor="middle" x="259.64" y="-7.55" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">50 ms</text>
 </g>
 <!-- run&#45;&gt;cursor -->
-<g id="edge4" class="edge">
+<g id="edge3" class="edge">
 <title>run&#45;&gt;cursor</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M242.13,-72.05C264.51,-62.2 292.86,-49.72 316.44,-39.34"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="317.15,-41.7 322.57,-36.64 315.18,-37.22 317.15,-41.7"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M177.79,-72.05C192.51,-62.51 211.04,-50.5 226.75,-40.32"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="227.68,-42.64 232.22,-36.78 225.01,-38.53 227.68,-42.64"/>
 </g>
 </g>
 </svg>

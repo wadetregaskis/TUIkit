@@ -60,7 +60,13 @@ extension FocusSectionModifier: Renderable {
             let accentColor = context.environment.palette.accent
             let dimColor = accentColor.opacity(
                 ViewConstants.focusBorderDim, over: context.environment.palette.background)
-            sectionContext.environment.focusIndicatorColor = Color.lerp(dimColor, accentColor, phase: context.environment.pulsePhase)
+            // Through the shared focus clock, so a section's ● breathes at the
+            // same rate as every control inside it and honours
+            // `.selectionIndicatorStyle(_:)` — and, on a 256-colour terminal,
+            // walks the shades the cube can actually show.
+            sectionContext.environment.focusIndicatorColor =
+                context.environment.selectionEmphasis(true)
+                .color(dim: dimColor, bright: accentColor)
         } else {
             sectionContext.environment.focusIndicatorColor = nil
         }

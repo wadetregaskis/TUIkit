@@ -279,7 +279,9 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
                 let accentColor = context.environment.palette.accent
                 let dimColor = accentColor.opacity(
                     ViewConstants.focusBorderDim, over: context.environment.palette.background)
-                sectionContext.environment.focusIndicatorColor = Color.lerp(dimColor, accentColor, phase: context.environment.pulsePhase)
+                sectionContext.environment.focusIndicatorColor =
+                    context.environment.selectionEmphasis(true)
+                    .color(dim: dimColor, bright: accentColor)
             } else {
                 sectionContext.environment.focusIndicatorColor = nil
             }
@@ -337,11 +339,11 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             }
         }
 
-        // Read the pulse clock ONLY when a divider is focused/dragged or
+        // Read the focus clock ONLY when a divider is focused/dragged or
         // hovered, so the demand-driven loop keeps the pulse animating just for
         // those cases (a static split with no active/hovered divider stays idle).
         let anyDividerPulsing = dividerInfos.contains { $0.isActive || $0.isHovered }
-        let pulsePhase = anyDividerPulsing ? context.environment.pulsePhase : 0
+        let emphasis = context.environment.selectionEmphasis(anyDividerPulsing)
 
         // Combine buffers horizontally, inserting the (possibly resizable)
         // dividers between them.
@@ -351,7 +353,7 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             dividerInfos: dividerInfos,
             resizable: resizable,
             palette: context.environment.palette,
-            pulsePhase: pulsePhase,
+            emphasis: emphasis,
             availableHeight: context.availableHeight
         )
     }
@@ -672,7 +674,7 @@ extension _NavigationSplitViewCore {
         dividerInfos: [DividerRenderInfo],
         resizable: Bool,
         palette: any Palette,
-        pulsePhase: Double,
+        emphasis: SelectionEmphasis,
         availableHeight: Int
     ) -> FrameBuffer {
         guard !buffers.isEmpty else { return FrameBuffer() }
@@ -696,7 +698,7 @@ extension _NavigationSplitViewCore {
                     : DividerRenderInfo(isActive: false, isHovered: false, mouseHandlerID: nil)
                 let dividerBuffer = buildDividerColumn(
                     info: info, height: maxHeight, resizable: resizable,
-                    palette: palette, pulsePhase: pulsePhase)
+                    palette: palette, emphasis: emphasis)
                 result.appendHorizontally(dividerBuffer, spacing: 0)
                 result.appendHorizontally(paddedBuffer, spacing: 0)
             }
@@ -845,8 +847,9 @@ extension _NavigationSplitViewCore {
     /// - **Hovered** (`isHovered`): just the grip dots pulse — a quiet hint
     ///   that's not distracting when the cursor merely passes over.
     ///
-    /// `pulsePhase` is non-zero only when some divider is active or hovered (see
-    /// `renderToBuffer`), so an untouched split animates nothing. A
+    /// `emphasis` describes a focused element only when some divider is active
+    /// or hovered (see `renderToBuffer`), so an untouched split animates
+    /// nothing. A
     /// non-resizable divider is a plain space column (the historical separator);
     /// its drag hit-test region spans the full height, so a drag works anywhere
     /// along it, not just on the dots.
@@ -855,7 +858,7 @@ extension _NavigationSplitViewCore {
         height: Int,
         resizable: Bool,
         palette: any Palette,
-        pulsePhase: Double
+        emphasis: SelectionEmphasis
     ) -> FrameBuffer {
         let h = max(0, height)
         guard resizable, h > 0 else {
@@ -868,18 +871,17 @@ extension _NavigationSplitViewCore {
 
         // Grip foreground: a quiet dot, pulsing toward the accent while hovered.
         let dotColor = info.isHovered
-            ? Color.lerp(
-                palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
-                palette.accent, phase: pulsePhase)
+            ? emphasis.color(
+                dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
+                bright: palette.accent)
             : palette.foregroundTertiary
 
         // Background: pulses across the whole divider while focused / dragging
         // (same min/max the List focus-pulse uses).
         let background: Color? = info.isActive
-            ? Color.lerp(
-                palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
-                palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background),
-                phase: pulsePhase)
+            ? emphasis.color(
+                dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
+                bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background))
             : nil
 
         let lines: [String] = (0..<h).map { row in

@@ -128,12 +128,10 @@ let lifecycleRunCreates = Diagram(
         Node(id: "run", title: "AppRunner.run()", kind: .accent),
         Node(id: "input", title: "InputHandler"),
         Node(id: "render", title: "RenderLoop"),
-        Node(id: "pulse", title: "PulseTimer", detail: ["100 ms"]),
         Node(id: "cursor", title: "CursorTimer", detail: ["50 ms"]),
     ],
     edges: [
-        Edge("run", "input"), Edge("run", "render"),
-        Edge("run", "pulse"), Edge("run", "cursor"),
+        Edge("run", "input"), Edge("run", "render"), Edge("run", "cursor"),
     ]
 )
 
@@ -248,7 +246,6 @@ let depGraphOwnership = Diagram(
         Node(id: "tuiContext", title: "TUIContext"),
         Node(id: "input", title: "InputHandler"),
         Node(id: "render", title: "RenderLoop"),
-        Node(id: "pulse", title: "PulseTimer"),
         Node(id: "cursor", title: "CursorTimer"),
         Node(id: "lifecycle", title: "LifecycleManager"),
         Node(id: "keyDispatch", title: "KeyEventDispatcher"),
@@ -260,7 +257,7 @@ let depGraphOwnership = Diagram(
         Edge("runner", "signal"), Edge("runner", "terminal"), Edge("runner", "appState"),
         Edge("runner", "statusBar"), Edge("runner", "appHeader"), Edge("runner", "focus"),
         Edge("runner", "themes"), Edge("runner", "tuiContext"), Edge("runner", "input"),
-        Edge("runner", "render"), Edge("runner", "pulse"), Edge("runner", "cursor"),
+        Edge("runner", "render"), Edge("runner", "cursor"),
         Edge("tuiContext", "lifecycle"), Edge("tuiContext", "keyDispatch"),
         Edge("tuiContext", "prefs"), Edge("tuiContext", "stateStore"), Edge("tuiContext", "cache"),
         Edge("signal", "runner", label: "SIGINT · SIGWINCH", loop: true, dashed: true),

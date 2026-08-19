@@ -133,28 +133,26 @@ internal struct RenderBackgroundCodes: Equatable {
 /// nested in the generic `RenderLoop`, so callers can name it without its type
 /// parameter.)
 struct RenderActivity {
-    /// A view read `pulsePhase` this frame (a focus indicator is animating).
+    /// A view read the `pulsePhase` seam this frame (see
+    /// ``EnvironmentValues/pulsePhase``).
     let usesPulse: Bool
-    /// A view read the cursor clock this frame (a text field is focused).
+    /// A view resolved the clock this frame — a focused control breathing, a
+    /// focused field blinking.
     let usesCursor: Bool
 
     /// Clocks the frame left ``AnimatedCellRun``s for.
     ///
     /// A clock listed here can be advanced by replaying those runs against the
-    /// frame already on screen. A clock in `usesPulse` / `usesCursor` cannot:
-    /// some view built its appearance from the phase *while rendering*, so the
-    /// only way to advance it is to render again. The two are not exclusive —
-    /// a page mid-migration has both — and when they disagree the reader wins,
-    /// because a frozen indicator is worse than a wasted frame.
+    /// frame already on screen. A clock some view READ cannot: that view built
+    /// its appearance from the phase *while rendering*, so the only way to
+    /// advance it is to render again. The two are not exclusive — a page
+    /// mid-migration has both — and when they disagree the reader wins, because
+    /// a frozen indicator is worse than a wasted frame.
     let animatedClocks: Set<AnimationClock>
 
     /// Whether `clock` can be advanced without walking the view tree.
     func canReplay(_ clock: AnimationClock) -> Bool {
-        guard animatedClocks.contains(clock) else { return false }
-        switch clock {
-        case .pulse: return !usesPulse
-        case .cursor: return !usesCursor
-        }
+        animatedClocks.contains(clock) && !usesPulse && !usesCursor
     }
 }
 
@@ -354,8 +352,8 @@ extension RenderLoop {
     /// See the class-level documentation for the complete pipeline steps.
     ///
     /// - Parameters:
-    ///   - pulsePhase: The current breathing indicator phase (0–1).
-    ///     Passed from `PulseTimer` via `AppRunner`.
+    ///   - pulsePhase: The current breathing phase (0–1), from the one
+    ///     animation clock (`CursorTimer.breathPhase`) via `AppRunner`.
     ///   - cursorTimer: The cursor timer for TextField/SecureField animations.
     ///   - animationScheduler: The run loop's animation scheduler, made available
     ///     to animating views via `context.requestAnimation(...)`. `nil` for

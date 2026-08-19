@@ -8,9 +8,9 @@ import Foundation
 import TUIkit
 
 /// Returns a value in `0...1` that ramps from 0 to 1 over `period`
-/// seconds and then wraps back to 0. The page's render is driven by
-/// ``PulseTimer`` (~10 Hz), so reading this on each render produces a
-/// smooth slow animation in the determinate bars without anything in
+/// seconds and then wraps back to 0. The page's render is driven by the
+/// app's animation clock (20 Hz), so reading this on each render produces
+/// a smooth slow animation in the determinate bars without anything in
 /// the page having to remember state. The default `period` of 50 s
 /// is the user's requested "1% every half-second" pace.
 private func animatedFraction(period: Double = 50) -> Double {
@@ -267,7 +267,7 @@ struct ProgressViewPage: View {
     }
 
     /// The "Determinate" section — two labelled bars animating via the shared
-    /// wall-clock fraction (they stay in sync; the PulseTimer's ~10 Hz
+    /// wall-clock fraction (they stay in sync; the animation clock's 20 Hz
     /// re-render makes the animation look continuous despite being
     /// state-less). The `s` shortcut cycles the style applied to just these.
     @ViewBuilder

@@ -6,18 +6,24 @@
 
 import Foundation
 
-/// Drives the cursor animation for TextField and SecureField.
+/// The app's one animation clock: the cursor's blink, and every focus
+/// indicator's breath.
 ///
 /// `CursorTimer` maintains two phase values for different animation styles:
 /// - `blinkVisible`: Boolean for sharp on/off blinking
-/// - `pulsePhase`: Smooth 0-1 sine wave for pulsing
+/// - `pulsePhase`: Smooth 0-1 cosine wave for pulsing, starting bright
+///
+/// There used to be a second clock — a `PulseTimer` for focus indicators — and
+/// having two was a bug rather than a feature: they ran at different rates from
+/// different formulas, so the same focus pulse breathed at 2 s on a section's
+/// border and 0.8 s on the controls inside it, depending only on which route
+/// the view took. One clock and one formula now serve both, with the cadence
+/// chosen per element by ``SelectionIndicatorStyle``.
 ///
 /// The timer is a single `@MainActor` `Task` that sleeps between ticks (the
-/// same pattern as ``PulseTimer`` and ``AutoRepeatTimer``). It runs
-/// independently from the `PulseTimer` (which handles focus indicators) so
-/// the two can use different cadences. Staying on the main actor means the
-/// tick counter is never mutated off-thread, so the phases read during
-/// render are race-free.
+/// same pattern as ``AutoRepeatTimer``). Staying on the main actor means the
+/// tick counter is never mutated off-thread, so the phases read during render
+/// are race-free.
 ///
 /// ## Animation Speeds
 ///
@@ -46,7 +52,7 @@ final class CursorTimer {
 
     /// Elapsed ticks since timer started.
     /// Readable so a cell-run replay indexes a cycle by the same tick the blink
-    /// state is computed from — see ``PulseTimer/currentStep``.
+    /// state is computed from.
     private(set) var elapsedTicks = 0
 
     /// Whether the cursor clock was read during the current render frame.
@@ -118,9 +124,15 @@ extension CursorTimer {
 
     /// Returns the pulse phase (0-1) for smooth cursor animation.
     ///
-    /// The phase follows a sine curve for smooth breathing:
+    /// The phase follows a cosine curve for smooth breathing, and it starts at
+    /// its BRIGHTEST:
     /// - 0.0: Dimmest
     /// - 1.0: Brightest
+    ///
+    /// Starting bright is what makes ``reset()`` mean "show me now". The clock
+    /// is reset whenever the focus moves, and a breath that began at its dim
+    /// end left the newly focused control looking unfocused for a third of a
+    /// second — the moment it most needs to be visible.
     ///
     /// - Parameter speed: The cursor speed setting.
     /// - Returns: Phase value between 0 and 1.
@@ -129,13 +141,24 @@ extension CursorTimer {
         return Self.pulsePhase(atTick: elapsedTicks, speed: speed)
     }
 
+    /// The breath phase right now, WITHOUT marking the clock as consumed.
+    ///
+    /// The phase seam `EnvironmentValues.pulsePhase` carries, so a view that
+    /// reads the phase directly sees the same breath as one that resolves a
+    /// ``SelectionEmphasis`` — there is one clock and one formula behind both.
+    /// (Demand is tracked at the seam's own getter, which is why this one must
+    /// not set `didReadThisFrame`.)
+    var breathPhase: Double {
+        Self.pulsePhase(atTick: elapsedTicks, speed: .regular)
+    }
+
     /// The pulse phase at an arbitrary tick. See ``blinkVisible(atTick:speed:)``
     /// for why this is static and why reading it is not a volatile read.
     static func pulsePhase(atTick tick: Int, speed: TextCursorStyle.Speed) -> Double {
         let cycleMs = speed.pulseCycleMs
         let normalized = Double((tick * tickIntervalMs) % cycleMs) / Double(cycleMs)
-        // Sine wave: 0 → 1 → 0 over the cycle.
-        return sin(normalized * .pi)
+        // Cosine wave: 1 → 0 → 1 over the cycle, so tick 0 is the bright end.
+        return (cos(normalized * 2 * .pi) + 1) / 2
     }
 }
 

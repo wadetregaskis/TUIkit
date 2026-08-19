@@ -336,13 +336,12 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         // inverts the terminal's default colours and collapses to dark-on-dark
         // on a mid-tone theme), so it's readable on every palette and visibly
         // breathes while focused, the same affordance List/Picker rows use.
-        // Gated on `!isMeasuring` so the measure pass never reads `pulsePhase`;
+        // Gated on `!isMeasuring` so the measure pass never reads the clock;
         // it's colour-only, so width is identical whether or not it's applied.
         let activeHighlight: Color? = (isFocused && !context.isMeasuring)
-            ? Color.lerp(
-                palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
-                palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background),
-                phase: context.environment.pulsePhase)
+            ? context.environment.selectionEmphasis(true).color(
+                dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
+                bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background))
             : nil
 
         var line = ""

@@ -14,7 +14,7 @@ Several sources cause `RenderLoop` to produce a new frame. They converge on two 
 |---------|--------|-----------|
 | Terminal resize | `SIGWINCH` signal | `SignalManager`'s dispatch signal source sets the resize flag |
 | State mutation | `@State` property change | `AppState.setNeedsRender()` sets `needsRender`; the observer wakes the loop |
-| Animation timers | PulseTimer (100 ms) / CursorTimer (50 ms) | Calls `appState.setNeedsRender()` |
+| Animation clock | CursorTimer (50 ms) | Calls `appState.setNeedsRender()` |
 | Focus change | `FocusManager.onFocusChange` | Resets pulse timer and calls `appState.setNeedsRender()` |
 
 All triggers converge on boolean flags that the main loop checks each iteration. The actual rendering always happens on the main thread: signal handlers never render directly.

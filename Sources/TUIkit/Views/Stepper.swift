@@ -476,15 +476,16 @@ private struct _StepperCore: View, Renderable, Layoutable {
             isFocused: isFocused,
             isHovered: isHovered,
             palette: palette,
-            // Read the clock ONLY when the pulse is actually drawn — the same
-            // condition `buildContent` uses to consume it. `pulsePhase` is a
-            // VOLATILE read: asking for it tells the run loop this frame
-            // consumed the clock, which keeps the clock ticking and re-renders
-            // the whole page ~10 times a second. An unfocused stepper does not
-            // use the phase, so reading it kept every page with a stepper
-            // anywhere on it rendering forever, drawing an identical frame.
-            pulsePhase: isFocused && !isDisabled && !context.isMeasuring
-                ? context.environment.pulsePhase : 0,
+            // Resolve the clock ONLY when the pulse is actually drawn — the
+            // same condition `buildContent` uses to consume it. Resolving a
+            // FOCUSED emphasis is a VOLATILE read: it tells the run loop this
+            // frame consumed the clock, which keeps the clock ticking and
+            // re-renders the whole page many times a second. An unfocused
+            // stepper does not use the phase, so reading it kept every page
+            // with a stepper anywhere on it rendering forever, drawing an
+            // identical frame.
+            emphasis: context.environment.selectionEmphasis(
+                isFocused && !isDisabled && !context.isMeasuring),
             valueStyle: context.environment.styleCascade.resolve(
                 for: [.all, .text, .control(.stepper)]),
             isDisabled: isDisabled
@@ -691,7 +692,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         isFocused: Bool,
         isHovered: Bool,
         palette: any Palette,
-        pulsePhase: Double,
+        emphasis: SelectionEmphasis,
         valueStyle: StyleAttributes,
         isDisabled: Bool
     ) -> String {
@@ -709,7 +710,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         } else if isFocused {
             // Pulse between 35% and 100% accent
             let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
-            arrowColor = Color.lerp(dimAccent, palette.accent, phase: pulsePhase)
+            arrowColor = emphasis.color(dim: dimAccent, bright: palette.accent)
             valueColor = palette.foreground
         } else if isHovered {
             arrowColor = palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)

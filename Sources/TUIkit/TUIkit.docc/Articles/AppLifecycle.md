@@ -33,11 +33,11 @@ The `@main` attribute tells Swift to call the static `main()` method provided by
 
 ## Subsystem Initialization
 
-`AppRunner.init()` creates and wires the core subsystems: Terminal, AppState, StatusBarState, AppHeaderState, FocusManager, TUIContext (containing LifecycleManager, KeyEventDispatcher, PreferenceStorage, StateStorage, and RenderCache), and two ThemeManagers (palette and appearance). `run()` then creates the remaining runtime components: InputHandler, RenderLoop, PulseTimer (100 ms), and CursorTimer (50 ms).
+`AppRunner.init()` creates and wires the core subsystems: Terminal, AppState, StatusBarState, AppHeaderState, FocusManager, TUIContext (containing LifecycleManager, KeyEventDispatcher, PreferenceStorage, StateStorage, and RenderCache), and two ThemeManagers (palette and appearance). `run()` then creates the remaining runtime components: InputHandler, RenderLoop, and CursorTimer (50 ms) — the one animation clock, behind both the cursor's blink and every focus indicator's breath.
 
 @Image(source: "lifecycle-subsystem-init.svg", alt: "Diagram showing subsystem initialization: @main calls App.main(), which creates the app instance via Self(), then AppRunner.init() creates Terminal, AppState, StatusBarState, AppHeaderState, FocusManager, TUIContext with 5 children (LifecycleManager, KeyEventDispatcher, PreferenceStorage, StateStorage, RenderCache), and two ThemeManagers.")
 
-@Image(source: "lifecycle-run-creates.svg", alt: "Diagram showing run() creating InputHandler, RenderLoop, PulseTimer (100ms), and CursorTimer (50ms).")
+@Image(source: "lifecycle-run-creates.svg", alt: "Diagram showing run() creating InputHandler, RenderLoop, and CursorTimer (50ms).")
 
 The `AppRunner` is the sole owner of all subsystems. Dependencies flow through constructor injection and ``RenderContext``.
 
@@ -52,8 +52,8 @@ Before the main loop starts, `run()` prepares the terminal:
 | 3 | Hide cursor | Avoid cursor flicker during rendering |
 | 4 | Enable raw mode | Disable line buffering, echo, and signal processing |
 | 5 | Register state observer | `AppState` changes set `appState.needsRender` and `wake()` the loop |
-| 6 | Register focus observer | Focus changes reset the pulse timer and trigger re-renders |
-| 7 | Prepare animation timers | PulseTimer (100 ms) and CursorTimer (50 ms), each started on demand only while a rendered frame consumes it |
+| 6 | Register focus observer | Focus changes restart the breath (so the newly focused control is at its brightest) and trigger re-renders |
+| 7 | Prepare the animation clock | CursorTimer (50 ms), started on demand only while a rendered frame consumes it |
 | 8 | Render first frame | Show the initial UI immediately |
 
 ### Raw Mode
@@ -81,7 +81,7 @@ Several sources cause a new frame to be rendered. Each sets a flag the loop chec
 |---------|------|-----------------|
 | SIGWINCH | Dispatch signal source sets the resize flag + wakes the loop | `consumeResizeFlag()` |
 | @State mutation | `AppState.setNeedsRender()` sets the flag; observer wakes the loop | `appState.needsRender` |
-| PulseTimer / CursorTimer (while active) | Calls `appState.setNeedsRender()` | `appState.needsRender` |
+| CursorTimer (while active) | Calls `appState.setNeedsRender()` | `appState.needsRender` |
 | Focus change | Calls `appState.setNeedsRender()` | `appState.needsRender` |
 
 All triggers set boolean flags and wake the loop; the actual rendering always happens on the main thread — signal handlers never render directly.
@@ -198,7 +198,7 @@ The `Terminal` class also has a `deinit` safety net that disables raw mode if it
 
 AppRunner creates and owns every subsystem. TUIContext acts as a secondary container for lifecycle, key dispatch, and preference storage.
 
-@Image(source: "dep-graph-ownership.svg", alt: "Ownership diagram showing AppRunner owning all subsystems: SignalManager, Terminal, AppState, StatusBarState, AppHeaderState, FocusManager, both ThemeManagers, TUIContext, InputHandler, RenderLoop, PulseTimer, and CursorTimer. TUIContext contains LifecycleManager, KeyEventDispatcher, PreferenceStorage, StateStorage, and RenderCache. SignalManager sends SIGINT and SIGWINCH flags back to AppRunner.")
+@Image(source: "dep-graph-ownership.svg", alt: "Ownership diagram showing AppRunner owning all subsystems: SignalManager, Terminal, AppState, StatusBarState, AppHeaderState, FocusManager, both ThemeManagers, TUIContext, InputHandler, RenderLoop, and CursorTimer. TUIContext contains LifecycleManager, KeyEventDispatcher, PreferenceStorage, StateStorage, and RenderCache. SignalManager sends SIGINT and SIGWINCH flags back to AppRunner.")
 
 ### Runtime References
 
