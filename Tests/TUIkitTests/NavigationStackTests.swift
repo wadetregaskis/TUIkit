@@ -87,6 +87,45 @@ struct NavigationStackTests {
             "the pop landed somewhere else — focus memory per depth is the point")
     }
 
+    @Test("A pushed screen does not re-take the focus from a dialog over it")
+    func pushedScreenDoesNotFightAnOverlay() {
+        // Activating a focus section is a TRANSITION — it remembers the section
+        // it leaves, drops the focus and restores this one's memory. The stack
+        // was doing it on every render pass, so an alert or sheet presented
+        // from a pushed screen lost the focus again on every frame: its control
+        // was focused for under a frame, a field in it was torn down and
+        // restarted continuously, and the loop spun at the frame cap.
+        var path: [Item] = []
+        let binding = Binding(get: { path }, set: { path = $0 })
+        // A sibling section stands in for the overlay: what matters is that it
+        // is registered every pass (as a presented modal's is) and active.
+        let view = VStack(alignment: .leading, spacing: 0) {
+            NavigationStack(path: binding) {
+                Button("root") {}.focusID("root")
+                    .navigationDestination(for: Item.self) { _ in
+                        Button("screen") {}.focusID("screen")
+                    }
+            }
+            Button("in overlay") {}.focusID("overlay-button")
+                .focusSection("overlay")
+        }
+        let tui = TUIContext()
+        let fm = FocusManager()
+
+        path = [Item(name: "one")]
+        _ = frame(view, tui: tui, fm: fm)
+        #expect(fm.isFocused(id: "screen"), "the pushed screen took the focus")
+
+        // The overlay takes the focus, the way a presented modal does.
+        fm.activateSection(id: "overlay")
+        #expect(fm.isActiveSection("overlay"), "the overlay is active to begin with")
+
+        _ = frame(view, tui: tui, fm: fm)
+        #expect(
+            fm.isActiveSection("overlay"),
+            "the stack took the active section back on a steady frame")
+    }
+
     // MARK: - Path
 
     @Test("An empty path shows the root")

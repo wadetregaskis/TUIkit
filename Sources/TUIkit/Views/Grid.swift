@@ -255,7 +255,14 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
         // Pass B: spanning cells grow their last column if they still overflow.
         for row in rows where !row.spansFullWidth {
             var index = 0
-            for (cell, span) in zip(row.cells, row.spans) where span > 1 {
+            // Every cell, not just the spanning ones: a `where` on the loop
+            // skips the whole body, `index += span` included, so a spanning
+            // cell preceded by any ordinary one measured its width against the
+            // wrong columns and grew the wrong column. The render loop advances
+            // for every cell; this has to agree with it.
+            for (cell, span) in zip(row.cells, row.spans) {
+                defer { index += span }
+                guard span > 1 else { continue }
                 let size = cell.measure(proposal: .unspecified, context: context)
                 let covered =
                     columns[index..<(index + span)].reduce(0, +)
@@ -263,7 +270,6 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
                 if size.width > covered {
                     columns[index + span - 1] += size.width - covered
                 }
-                index += span
             }
         }
         return (columns, heights, columnAlignment)

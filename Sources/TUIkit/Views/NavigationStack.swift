@@ -287,11 +287,22 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
                 focusManager?.deactivateSection(id: Self.sectionID(base: base, depth: deeper))
             }
         }
+        let pushed = coordinator.renderedDepth < depth
         coordinator.renderedDepth = depth
         guard depth > 0 else { return nil }
         let sectionID = Self.sectionID(base: base, depth: depth)
+        // Registration is per-frame presence: sections are rebuilt every pass,
+        // so the section has to be declared again each time or its controls
+        // have nowhere to register.
         focusManager?.registerSection(id: sectionID)
-        focusManager?.activateSection(id: sectionID)
+        // Activation is NOT. It is a transition — it remembers the section it
+        // leaves, drops the focus, and restores this one's memory — so calling
+        // it every frame while something else is active (an alert or sheet
+        // presented FROM a pushed screen) took the focus back from it on every
+        // pass: the dialog's control was focused for under a frame, a field in
+        // it was torn down and restarted continuously, and the render loop
+        // spun at the frame cap for as long as the dialog was up.
+        if pushed { focusManager?.activateSection(id: sectionID) }
         return sectionID
     }
 

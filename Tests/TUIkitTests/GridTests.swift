@@ -119,6 +119,30 @@ struct GridTests {
         #expect(rendered[2].hasPrefix("ccc ddd"))
     }
 
+    @Test("A span PRECEDED by an ordinary cell grows the right column")
+    func spanAfterAnOrdinaryCell() {
+        // The bug: Pass B filtered the loop with `where span > 1`, which skips
+        // the whole body — the index bookkeeping included — so a spanning cell
+        // that follows a single-column one measured itself against the wrong
+        // columns and grew the wrong one. Here the span is in columns 1…2, and
+        // the widening must land on column 2, leaving column 0 alone.
+        let rendered = lines(
+            Grid(alignment: .leading) {
+                GridRow {
+                    Text("a")
+                    Text("b")
+                    Text("c")
+                }
+                GridRow {
+                    Text("x")
+                    Text("wiiiide").gridCellColumns(2)
+                }
+            })
+        // Row 0's first column stays one cell wide, so "a b" is still "a b".
+        #expect(rendered[0].trimmingCharacters(in: .whitespaces) == "a b c", "\(rendered)")
+        #expect(rendered[1].hasPrefix("x wiiiide"), "the span moved: \(rendered)")
+    }
+
     @Test("gridCellColumns spans, and grows its last column only if it must")
     func cellSpanning() {
         // "wide" (4) fits inside a+space+b (1+1+1 = 3)? No — so the LAST of the
