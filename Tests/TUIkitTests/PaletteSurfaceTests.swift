@@ -58,14 +58,32 @@ struct PaletteSurfaceTests {
         for palette in palettes {
             let page = palette.background.resolve(with: palette)
             let header = palette.appHeaderBackground.resolve(with: palette)
-            guard SystemPalette.isVisiblySeparate(header, from: page) else { continue }
+            guard
+                SystemPalette.isVisiblySeparate(
+                    header, from: page, separation: SystemPalette.planeSeparation)
+            else { continue }
             #expect(
                 palette.liftedBackground.resolve(with: palette) == header,
                 "\(palette.id): a visible appHeaderBackground was overridden by the fallback")
         }
     }
 
-    @Test("Every palette's surface is a visible step off its page")
+    @Test("Every palette's plane is a visible step off its page")
+    func planesAreVisible() {
+        // The tab body, the header island: a large area, so a smaller step than
+        // a field's reads clearly — and a *bigger* one reads as a panel, which
+        // is what a whole-page step turned every tab body into.
+        for palette in palettes {
+            let page = palette.background.resolve(with: palette)
+            let plane = palette.liftedBackground.resolve(with: palette)
+            let raw = plane.lightnessDifference(from: page)
+            #expect(
+                raw >= SystemPalette.planeSeparation,
+                "\(palette.id): the plane is ΔL* \(String(format: "%.1f", raw)) off the page")
+        }
+    }
+
+    @Test("Every palette's field is a visible step off its page")
     func surfacesAreVisible() {
         // The bug this pins, reported against Novel and true of five others: a
         // field whose background is *technically* not the page colour but sits
@@ -78,16 +96,28 @@ struct PaletteSurfaceTests {
             let field = palette.fieldBackground.resolve(with: palette)
             let raw = field.lightnessDifference(from: page)
             #expect(
-                raw >= SystemPalette.surfaceSeparation,
+                raw >= SystemPalette.wellSeparation,
                 "\(palette.id): the field is ΔL* \(String(format: "%.1f", raw)) off the page")
-            // And on a 256-colour terminal, where the cube can round a step
-            // back onto the page — the failure the first version of this rule
-            // was written for.
-            let rendered = field.downsampledToPalette256().lightnessDifference(
-                from: page.downsampledToPalette256())
-            #expect(
-                rendered >= SystemPalette.surfaceSeparation / 2,
-                "\(palette.id): the field quantises to ΔL* \(String(format: "%.1f", rendered))")
+        }
+    }
+
+    @Test("On a 256-colour terminal the field survives the cube")
+    func fieldsSurviveQuantisation() {
+        // Where the cube can round a step back onto the page — the failure the
+        // first version of this rule was written for. The derivation is
+        // depth-aware now (a truecolor terminal gets the step it asked for; the
+        // cube's coarser one is only imposed where the cube is what paints),
+        // so this has to ASK for the cube rather than assume it.
+        withColorDepth(.palette256) {
+            for palette in palettes {
+                let page = palette.background.resolve(with: palette).downsampledToPalette256()
+                let field = palette.fieldBackground.resolve(with: palette)
+                    .downsampledToPalette256()
+                let rendered = field.lightnessDifference(from: page)
+                #expect(
+                    rendered >= SystemPalette.wellSeparation / 2,
+                    "\(palette.id): the field quantises to ΔL* \(String(format: "%.1f", rendered))")
+            }
         }
     }
 
@@ -101,8 +131,31 @@ struct PaletteSurfaceTests {
             let field = palette.fieldBackground(on: tab).resolve(with: palette)
             let gap = String(format: "%.1f", field.lightnessDifference(from: tab))
             #expect(
-                SystemPalette.isVisiblySeparate(field, from: tab),
+                SystemPalette.isVisiblySeparate(
+                    field, from: tab, separation: SystemPalette.wellSeparation),
                 "\(palette.id): a field on the tab surface is ΔL* \(gap) off it")
+        }
+    }
+
+    @Test("The ladder only ever climbs AWAY from the page")
+    func nestedSurfacesNeverReturnToThePage() {
+        // The bug this pins, and it was the same one seen from the other side:
+        // asking "which way is away from the text?" afresh at each rung folds
+        // the ladder back on itself. A dark palette's tab body steps lighter
+        // (its page has no room to go darker), and a field inside that body,
+        // asking again from there, steps darker — onto the page colour exactly,
+        // on ten of the sixteen. It read as a hole punched through the tab.
+        for palette in palettes {
+            let page = palette.background.resolve(with: palette)
+            let tab = palette.liftedBackground.resolve(with: palette)
+            let field = palette.fieldBackground(on: tab).resolve(with: palette)
+            let tabGap = tab.lightnessDifference(from: page)
+            let fieldGap = field.lightnessDifference(from: page)
+            let gaps = "field ΔL* \(String(format: "%.1f", fieldGap)), "
+                + "tab ΔL* \(String(format: "%.1f", tabGap))"
+            #expect(fieldGap > tabGap, "\(palette.id): the ladder folded back — \(gaps)")
+            #expect(
+                field != page, "\(palette.id): the field came out the page colour exactly")
         }
     }
 
@@ -152,10 +205,13 @@ struct PaletteSurfaceTests {
         // least able to spare the affordance. (``surfacesAreVisible`` measures
         // how far; this one keeps the older, blunter question in the suite,
         // because "the same cube entry" is the failure that started it.)
-        for palette in palettes {
-            let page = palette.background.resolve(with: palette).downsampledToPalette256()
-            let lift = palette.liftedBackground.resolve(with: palette).downsampledToPalette256()
-            #expect(lift != page, "\(palette.id): the lift quantises onto the page")
+        withColorDepth(.palette256) {
+            for palette in palettes {
+                let page = palette.background.resolve(with: palette).downsampledToPalette256()
+                let lift = palette.liftedBackground.resolve(with: palette)
+                    .downsampledToPalette256()
+                #expect(lift != page, "\(palette.id): the lift quantises onto the page")
+            }
         }
     }
 }

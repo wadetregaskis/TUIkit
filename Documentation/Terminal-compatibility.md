@@ -93,14 +93,48 @@ the emoji-class clusters below unless noted.
   different measure: not "can this be read on that" but "are these two shades
   visibly different", which a contrast ratio cannot answer — it flattens at both
   ends of the range, scoring two plainly different near-blacks at 1.08 and two
-  plainly different creams at 1.05. `Palette.liftedBackground` uses perceived
-  lightness (CIE L\*, `Color.perceivedLightness`) and steps the page's own colour
-  until the surface is ΔL\* 10 off it, measured **both** raw and through the cube
-  (half the floor there, since the cube's own snapping does some of the work and
-  its sparse regions would otherwise drag the step to an extreme). The step
-  scales the page's channels rather than mixing toward black or white, because
-  mixing desaturates: a phosphor palette's near-black page mixed 10% toward
-  white is grey, and a green terminal grew grey text fields.
+  plainly different creams at 1.05. Surfaces use perceived lightness (CIE L\*,
+  `Color.perceivedLightness`) and step the page's own colour until they are far
+  enough off it. The step scales the page's channels rather than mixing toward
+  black or white, because mixing desaturates: a phosphor palette's near-black
+  page mixed 10% toward white is grey, and a green terminal grew grey text
+  fields.
+
+  **How far** depends on how big the surface is. A *plane* — a tab body, a
+  header strip — is ΔL\* 5 (`Palette.planeSeparation`, behind
+  `liftedBackground`), because a large area needs less of a difference to read
+  as one. A *well* — the field behind editable text — is ΔL\* 10
+  (`wellSeparation`, behind `fieldBackground`), because a small one has to
+  announce an edge. One number for both made the choice between them: at a
+  plane's step Novel's fields disappeared, and at a well's every tab body read
+  as a panel.
+
+  **How far is measured in the colours the terminal will actually paint.** On a
+  truecolor terminal the raw step is the step. On a 256-colour one the walk has
+  to continue until the 6×6×6 cube separates the two (at half the floor, since
+  the cube's own snapping does some of the work), and in dark saturated hues,
+  where the cube's rungs are 95 apart, that costs a much bigger jump. Demanding
+  the cube's jump on *every* terminal made a field inside a dark tab body come
+  out three times its intended step — a bright green block on a theme whose
+  point is that it is nearly black. (`Palette.hoveredControlFace` deliberately
+  goes the other way and compares through the cube everywhere: a hover's tint is
+  small, and looking the same on every terminal is worth more than the fidelity.
+  Surfaces cannot look the same on both anyway — the cube moves the page too.)
+
+  **Which way is decided once, for the whole palette** (`surfacesRunLighter`):
+  by the palette's stated `appHeaderBackground` where it has a visible opinion,
+  else away from the text where the page has room for it, else toward the text.
+  Every rung follows that one direction. Asking "away from the text?" afresh at
+  each rung folds the ladder back on itself — a dark palette's tab body steps
+  lighter (its page has no room to go darker), and a field inside that body,
+  asking again from there, steps darker and lands back on the page colour, which
+  is what it looked like: a hole punched through the tab, on ten of the sixteen
+  built-in palettes. Where the chosen direction runs out (a 256-colour terminal
+  brightening Red's field until the cube can tell it apart makes the light text
+  on it unreadable first), the other direction is taken instead — but only if it
+  lands somewhere still visibly not the page. Red on a 256-colour terminal is
+  the one palette where nothing satisfies all three, and its field inside a tab
+  body quantises onto the tab's own cube entry.
 
   The step is taken from whatever is actually **behind** the control, not always
   from the page: a `TextField` inside a `TabView`'s body asked for "a surface on

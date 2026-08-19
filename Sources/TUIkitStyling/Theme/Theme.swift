@@ -126,20 +126,37 @@ extension Palette {
 
     public var cursorColor: Color { accent }
 
-    public var fieldBackground: Color { liftedBackground }
+    /// The default well: the palette's stated chrome tone when it is a *well's*
+    /// worth of separation from the page, and otherwise the page stepped by
+    /// ``wellSeparation``.
+    ///
+    /// Deliberately not ``liftedBackground``, which is a plane. The two are the
+    /// same material and different depths: a tab body or a header strip is a
+    /// large area, where a small step reads clearly, and a field is a small one
+    /// that has to announce an edge. Sharing one number made the choice between
+    /// them: at a plane's step Novel's fields disappeared, and at a well's every
+    /// tab body shouted.
+    public var fieldBackground: Color {
+        let base = background.resolve(with: self)
+        let stated = appHeaderBackground.resolve(with: self)
+        if Self.isVisiblySeparate(stated, from: base, separation: Self.wellSeparation) {
+            return stated
+        }
+        return surface(steppedFrom: base, separation: Self.wellSeparation)
+    }
 
     /// The field surface for a field drawn on `surface` instead of on the page.
     ///
     /// On the page this is ``fieldBackground`` itself — including any tone the
-    /// palette stated for its chrome. Anywhere else it is a step off whatever
-    /// is actually behind the field (``lifted(from:)``), because the palette's
-    /// one answer is the page's answer, and a container that already took that
-    /// step would hand the field its own colour back.
+    /// palette stated for its chrome. Anywhere else it is a well stepped off
+    /// whatever is actually behind the field, because the palette's one answer
+    /// is the page's answer, and a container that already took a step would
+    /// hand the field its own colour back.
     public func fieldBackground(on surface: Color) -> Color {
         let page = background.resolve(with: self)
         let resolved = surface.resolve(with: self)
         guard resolved != page else { return fieldBackground }
-        return lifted(from: resolved)
+        return self.surface(steppedFrom: resolved, separation: Self.wellSeparation)
     }
 
     /// A surface that sits ON the page and must be visible as one: the tab
@@ -180,8 +197,10 @@ extension Palette {
         let base = background.resolve(with: self)
         let stated = appHeaderBackground.resolve(with: self)
         // The palette's own opinion wins when it can be seen; otherwise derive.
-        if Self.isVisiblySeparate(stated, from: base) { return stated }
-        return lifted(from: base)
+        if Self.isVisiblySeparate(stated, from: base, separation: Self.planeSeparation) {
+            return stated
+        }
+        return surface(steppedFrom: base, separation: Self.planeSeparation)
     }
 
     /// The same step, taken from an arbitrary surface rather than from the page
@@ -194,30 +213,112 @@ extension Palette {
     /// from what is actually behind the control keeps the field a field
     /// wherever it is put.
     public func lifted(from base: Color) -> Color {
-        let text = foreground.resolve(with: self)
-
-        // Away from the text first, then toward it. The second walk is the one
-        // that can cost readability, so only it carries the guard.
-        let textIsLighter = (text.perceivedLightness ?? 0) > (base.perceivedLightness ?? 0)
-        if let away = Self.surface(steppingFrom: base, lighter: !textIsLighter) { return away }
-        if let toward = Self.surface(steppingFrom: base, lighter: textIsLighter, readableFor: text) {
-            return toward
-        }
-        // Nothing cleared the floor in either direction (a mid-grey page whose
-        // text sits right beside it, say). The best available step still beats
-        // the page colour, which is what "no surface at all" would draw.
-        return Self.surface(steppingFrom: base, lighter: !textIsLighter, orBestEffort: true)
-            ?? base
+        surface(steppedFrom: base.resolve(with: self), separation: Self.planeSeparation)
     }
 
-    /// Whether `candidate` reads as a different shade from `page` — both as the
-    /// palette states it and as a 256-colour terminal will paint it, since a
-    /// step that survives one and not the other is invisible on half the
-    /// terminals in use.
-    static func isVisiblySeparate(_ candidate: Color, from page: Color) -> Bool {
-        guard candidate.lightnessDifference(from: page) >= surfaceSeparation else { return false }
+    /// Which way this palette's surfaces climb: `true` when a surface is
+    /// *lighter* than what it sits on.
+    ///
+    /// Decided ONCE, for the whole palette, and that is the point. Deciding it
+    /// per surface — "away from the text, from wherever I am" — makes the
+    /// ladder fold back on itself: on a dark theme the tab body steps lighter
+    /// (its page has no room to go darker), and then a field inside that body,
+    /// asking the same question from its new position, steps *darker* and lands
+    /// back on the page colour. Which is exactly what it looked like: a hole
+    /// punched through the tab, on ten of the sixteen built-in palettes.
+    ///
+    /// Three rules, in order:
+    ///
+    /// 1. The palette's own **stated chrome tone**, when it has a visible
+    ///    opinion. `appHeaderBackground` is where a palette says which way its
+    ///    chrome sits; a derivation that ran the other way would cross back
+    ///    over the page between rungs.
+    /// 2. Otherwise **away from the text**, where the page has room for it — a
+    ///    well, not a highlight, and moving away from the text can only improve
+    ///    its contrast.
+    /// 3. Otherwise **toward the text** (a page already at its extreme: Basic's
+    ///    white, Homebrew's black, Man Page's near-white cream), where the walk
+    ///    itself stops before the text stops being readable.
+    var surfacesRunLighter: Bool {
+        let page = background.resolve(with: self).perceivedLightness ?? 0
+        let stated = appHeaderBackground.resolve(with: self).perceivedLightness ?? page
+        if abs(stated - page) >= Self.planeSeparation { return stated > page }
+        let text = foreground.resolve(with: self).perceivedLightness ?? 0
+        let awayIsLighter = text <= page
+        // "Room" in the same units as the step: how much L\* is left between
+        // the page and the end of the range in that direction.
+        let room = awayIsLighter ? 100 - page : page
+        return room >= Self.planeSeparation ? awayIsLighter : !awayIsLighter
+    }
+
+    /// One rung of the ladder: `base` stepped by `separation` in the palette's
+    /// surface direction, in `base`'s own hue.
+    ///
+    /// The direction is a preference; *not looking like the page* is the
+    /// invariant. Where the preferred direction runs out — a 256-colour
+    /// terminal derives Red's field by brightening a dark red until the cube
+    /// can tell it apart, and the light text on it stops being readable first —
+    /// the other direction is taken instead, but only if it lands somewhere
+    /// that is still visibly not the page.
+    func surface(steppedFrom base: Color, separation: Double) -> Color {
+        let lighter = surfacesRunLighter
+        let text = foreground.resolve(with: self)
+        let page = background.resolve(with: self)
+
+        /// Only a walk that moves TOWARD the text can cost readability, and
+        /// only that one carries the guard.
+        func guardText(_ lighter: Bool) -> Color? {
+            let towardText =
+                lighter == ((text.perceivedLightness ?? 0) > (base.perceivedLightness ?? 0))
+            return towardText ? text : nil
+        }
+
+        if let preferred = Self.surfaceWalk(
+            from: base, lighter: lighter, separation: separation,
+            readableFor: guardText(lighter))
+        {
+            return preferred
+        }
+        if base != page,
+            let other = Self.surfaceWalk(
+                from: base, lighter: !lighter, separation: separation,
+                readableFor: guardText(!lighter)),
+            Self.isVisiblySeparate(other, from: page, separation: separation)
+        {
+            return other
+        }
+        // Best-effort rather than `base`: a step that fell short of the floor
+        // still beats handing back the colour that is already there, which is
+        // what "no surface at all" would draw.
+        return Self.surfaceWalk(
+            from: base, lighter: lighter, separation: separation,
+            readableFor: guardText(lighter), orBestEffort: true) ?? base
+    }
+
+    /// Whether `candidate` reads as a different shade from `page` — measured in
+    /// the colours this terminal will actually paint.
+    ///
+    /// On a terminal that paints what it is given, the step IS the step. On one
+    /// that snaps everything to the 6×6×6 cube, a step finer than the cube is
+    /// no step at all, so the walk has to keep going until the cube separates
+    /// the two — and in dark saturated hues, where the cube's rungs are 95
+    /// apart, that costs a much bigger jump. Asking for the cube's jump on
+    /// **every** terminal is what made a field inside a dark tab body come out
+    /// three times the intended step: a bright green block, on a theme whose
+    /// whole point is that it is nearly black.
+    ///
+    /// So this one is depth-aware, where ``hoveredControlFace`` deliberately is
+    /// not. A hover's tint is small and its consistency across terminals is
+    /// worth more than the fidelity; a surface's overshoot is a large area of
+    /// the wrong colour, and surfaces cannot look the same on both terminals
+    /// anyway — the cube moves the page too.
+    static func isVisiblySeparate(
+        _ candidate: Color, from page: Color, separation: Double
+    ) -> Bool {
+        guard candidate.lightnessDifference(from: page) >= separation else { return false }
+        guard ColorDepth.current < .truecolor else { return true }
         return candidate.downsampledToPalette256().lightnessDifference(
-            from: page.downsampledToPalette256()) >= surfaceSeparation / 2
+            from: page.downsampledToPalette256()) >= separation / 2
     }
 
     /// Walks the page's own colour up or down in brightness until the surface
@@ -232,8 +333,8 @@ extension Palette {
     ///     cleared the floor, rather than `nil`.
     /// - Returns: the surface, or `nil` when this direction ran out of range
     ///   (or out of readability) first.
-    static func surface(
-        steppingFrom base: Color, lighter: Bool, readableFor text: Color? = nil,
+    static func surfaceWalk(
+        from base: Color, lighter: Bool, separation: Double, readableFor text: Color? = nil,
         orBestEffort: Bool = false
     ) -> Color? {
         var factor = 1.0
@@ -248,7 +349,9 @@ extension Palette {
                 break  // one step further would be unreadable; stop at what we have
             }
             best = candidate
-            if isVisiblySeparate(candidate, from: base) { return candidate }
+            if isVisiblySeparate(candidate, from: base, separation: separation) {
+                return candidate
+            }
             // Saturation — every channel pinned at an end — is the only real
             // stall. A step that rounds back onto the page is NOT one: scaling
             // a channel of 5 by 1.04 lands on 5 again, and a near-black page
@@ -305,17 +408,33 @@ extension Palette {
         (color.relativeLuminance ?? 0) > 0.5 ? Color.rgb(0, 0, 0) : Color.rgb(255, 255, 255)
     }
 
-    /// How far apart a surface and its page have to be, in
-    /// ``Color/perceivedLightness``.
+    /// How far a **plane** sits from what is behind it, in
+    /// ``Color/perceivedLightness`` — a tab body, a header strip, an island.
     ///
-    /// 10 is the measured value. The palettes that read as having no surface at
-    /// all sat at ΔL\* 0.5–5.9 (Man Page 0.5, Ocean 2.9, Novel 3.4, Blue 3.8),
-    /// and the ones nobody complained about at 8.7–18.7 (Basic 8.7, Red Sands
-    /// 9.5, Solid Colors 14.3, Homebrew 15.2, Green 18.7). 10 clears the whole
-    /// first group and leaves the second where it is — and, applied as a target
+    /// Half a well's step, because a plane is a large area and a large area
+    /// needs less of a difference to read as one: more of it lands on the
+    /// retina, and its edges run beside the thing they are being compared with.
+    /// At a well's step the tab bodies stopped reading as the same page and
+    /// started reading as panels.
+    ///
+    /// 5 also keeps the stated tones of the palettes that have an opinion about
+    /// their chrome — Novel 5.9, Red Sands 5.7, Silver Aerogel 5.8, Grass and
+    /// Ocean 6.9, Solid Colors 7.0, Basic 8.7, Homebrew and Pro 16.6 — while
+    /// still deriving one for the phosphor presets (2.5–4.5) and Man Page
+    /// (1.8), which is where the missing-surface reports came from.
+    static var planeSeparation: Double { 5 }
+
+    /// How far a **well** sits from what is behind it, in
+    /// ``Color/perceivedLightness`` — the field behind editable text.
+    ///
+    /// 10 is the measured value. The fields that read as no field at all sat at
+    /// ΔL\* 0.5–5.9 (Man Page 0.5, Ocean 2.9, Novel 3.4/5.9, Blue 3.8), and the
+    /// ones nobody complained about at 8.7–18.7 (Basic 8.7, Red Sands 9.5,
+    /// Solid Colors 14.3, Homebrew 15.2, Green 18.7). 10 clears the whole first
+    /// group and leaves the second where it is — and, applied as a target
     /// rather than a per-palette constant, it makes a field look like the same
     /// affordance on every theme instead of ranging from invisible to a panel.
-    static var surfaceSeparation: Double { 10 }
+    static var wellSeparation: Double { 10 }
 
     /// How much brighter (or darker) each step of the surface walk makes the
     /// page. Fine enough that the result overshoots the floor by little, coarse

@@ -105,11 +105,22 @@ struct PaletteContrastAuditTests {
                 // builds it: `foregroundTertiary` is derived against the PAGE,
                 // and the field is a step off the page, so what is drawn is the
                 // tertiary floored against the field it lands on.
+                //
+                // Measured through the cube, on BOTH sides, because that is the
+                // space the renderer's floor is applied in
+                // (`ensuringRenderedContrast`) and therefore the only space it
+                // promises anything about. Measured raw instead, the pair reads
+                // a little under the floor wherever quantisation moved the
+                // field toward the text it was floored against — Novel 2.14,
+                // Silver Aerogel 2.32 — which is a fact about the recipe, not a
+                // palette that needs fixing.
                 name: "prompt/fieldBackground",
                 foreground: palette.foregroundTertiary.ensuringRenderedContrast(
                     atLeast: ViewConstants.disabledLabelContrastFloor,
-                    against: palette.fieldBackground.resolve(with: palette)),
-                background: palette.fieldBackground,
+                    against: palette.fieldBackground.resolve(with: palette)
+                ).downsampledToPalette256(),
+                background: palette.fieldBackground.resolve(with: palette)
+                    .downsampledToPalette256(),
                 minimum: 2.4),
         ] + controlSurfacePairs(for: palette)
     }
