@@ -658,6 +658,65 @@ struct FocusIndicatorAnimationTests {
         expectReplayIsIdentity(buffer, "a narrow box repainted its own border")
     }
 
+    // MARK: - List cursor row
+
+    /// A focused list whose cursor row is also selected — the one state in
+    /// which a row's background breathes.
+    private func selectedRowList(height: Int = 8) -> FrameBuffer {
+        let list = List(selection: .constant("Alpha" as String?)) {
+            ForEach(["Alpha", "Bravo", "Charlie"], id: \.self) { Text($0) }
+        }
+        return renderToBuffer(list, context: makeRenderContext(width: 30, height: height))
+    }
+
+    @Test("A focused list's selected row hands its whole line to the run loop")
+    func listCursorRow() {
+        let buffer = selectedRowList()
+        expectAnimates(buffer, runs: 1, "list cursor row")
+        let run = buffer.animatedCells[0]
+        // The row sits one line down and one column in, past the border.
+        #expect(run.offsetY == 1)
+        #expect(run.offsetX == 1)
+        // A background pulse recolours the row without moving a glyph.
+        #expect(Set(run.frames.map(\.stripped)).count == 1, "the pulse changed the row's text")
+        #expect(run.frames.allSatisfy { $0.strippedLength == run.width })
+    }
+
+    @Test("The run survives the scrollbar path too")
+    func listCursorRowWithScrollbar() {
+        // A list that overflows draws a scrollbar, and its rows are assembled by
+        // a SECOND compose function with its own clipping and its own bar-cell
+        // merge. Same rules in two places is how the two drift apart, so the
+        // scrolling path is pinned separately.
+        let list = List(selection: .constant("Alpha" as String?)) {
+            ForEach((0..<40).map { $0 == 0 ? "Alpha" : "Row \($0)" }, id: \.self) { Text($0) }
+        }
+        let buffer = renderToBuffer(list, context: makeRenderContext(width: 30, height: 8))
+        expectAnimates(buffer, runs: 1, "list cursor row, scrolling")
+        // The run stops short of the bar's column — it must not repaint it.
+        let run = buffer.animatedCells[0]
+        #expect(run.offsetX + run.width < buffer.width - 1)
+    }
+
+    @Test("An unfocused list, or one whose cursor row is unselected, animates nothing")
+    func listCursorRowStill() {
+        let context = makeRenderContext(width: 30, height: 8)
+        context.environment.focusManager!.register(FocusSentinel())
+        let unfocused = renderToBuffer(
+            List(selection: .constant("Alpha" as String?)) {
+                ForEach(["Alpha", "Bravo"], id: \.self) { Text($0) }
+            }, context: context)
+        #expect(unfocused.animatedCells.isEmpty, "an unfocused list is breathing")
+
+        // Focused, but the cursor row is not the selected one: the cursor row
+        // gets the flat focus background, which does not animate.
+        let unselected = renderToBuffer(
+            List(selection: .constant(String?.none)) {
+                ForEach(["Alpha", "Bravo"], id: \.self) { Text($0) }
+            }, context: makeRenderContext(width: 30, height: 8))
+        #expect(unselected.animatedCells.isEmpty, "an unselected cursor row is breathing")
+    }
+
     // MARK: - Composers that assemble rows by hand
 
     // A container that concatenates child STRINGS gets none of what the child

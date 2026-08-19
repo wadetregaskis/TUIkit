@@ -303,6 +303,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         )
 
         let contentLines: [String]
+        var contentRuns: [AnimatedCellRun] = []
         let renderState: PopulatedRenderState?
         if source.isEmpty {
             contentLines = buildEmptyStateLines(context: context)
@@ -325,6 +326,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 targetContentHeight: targetContentHeight
             )
             contentLines = result.lines
+            contentRuns = result.runs
             renderState = result.state
         }
 
@@ -346,7 +348,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 showFooterSeparator: showFooterSeparator,
                 hasBorder: style.showsBorder
             ),
-            content: _ListContentView(lines: paddedContentLines),
+            content: _ListContentView(lines: paddedContentLines, runs: contentRuns),
             footer: footer,
             context: context
         )
@@ -399,7 +401,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         palette: any Palette,
         style: any ListStyle,
         targetContentHeight: Int
-    ) -> (lines: [String], state: PopulatedRenderState) {
+    ) -> (lines: [String], runs: [AnimatedCellRun], state: PopulatedRenderState) {
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
             explicitFocusID: focusID,
@@ -479,6 +481,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
         let lines: [String]
         let visibleRowYRanges: [VisibleRowRange]
+        let animatedRuns: [AnimatedCellRun]
         var scrollbarColumn: Int?
         var scrollbarHeight = 0
         if wantsScrollbar {
@@ -491,7 +494,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 palette: palette
             )
             let contentRowWidth = max(1, rowWidth - 1)
-            (lines, visibleRowYRanges) = composeScrollbarRowLines(
+            (lines, visibleRowYRanges, animatedRuns) = composeScrollbarRowLines(
                 visibleRows: visibleRows,
                 handler: handler,
                 origin: origin,
@@ -507,7 +510,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             scrollbarColumn = 1 + style.rowPadding.leading + contentRowWidth
             scrollbarHeight = bar.count
         } else {
-            (lines, visibleRowYRanges) = composeRowLines(
+            (lines, visibleRowYRanges, animatedRuns) = composeRowLines(
                 handler: handler,
                 origin: origin,
                 visibleRows: visibleRows,
@@ -521,6 +524,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
         return (
             lines: lines,
+            runs: animatedRuns,
             state: PopulatedRenderState(
                 handler: handler,
                 focusID: persistedFocusID,
@@ -900,13 +904,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         contentHeight: Int,
         style: any ListStyle,
         context: RenderContext
-    ) -> (lines: [String], ranges: [VisibleRowRange]) {
+    ) -> (lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun]) {
         let palette = context.environment.palette
         // The indicator lines are chrome — they describe where the content sits —
         // so the rows are collected separately and an overscroll slide moves only
         // them (§1.5). `lines` is assembled from the three parts at the end.
         var rowLines: [String] = []
         var ranges: [VisibleRowRange] = []
+        /// The breathing rows' lines, at their position among `rowLines`, and
+        /// every frame of each. Turned into runs at the end, once the reorder
+        /// clip and the overscroll slide have had their say about where those
+        /// lines actually ended up.
+        var pulseRuns: [(y: Int, frames: [String])] = []
         var topIndicator: String?
         var bottomIndicator: String?
 
@@ -960,7 +969,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             if case .header = row.type { sectionContentIndex = 0 }
             let isFocused = handler.isCursorRow(rowIndex) && listHasFocus
             let isSelected = handler.isSelected(at: rowIndex)
-            var styledLines = renderRow(
+            let rendered = renderRow(
                 row: row,
                 isFocused: isFocused,
                 isSelected: isSelected,
@@ -970,12 +979,20 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 context: context,
                 palette: palette
             )
+            var styledLines = rendered.lines
+            // A breathing row's frames are clipped alongside its lines, so
+            // `pulseFrames[i]` stays the frames of `styledLines[i]` — a run is
+            // spliced over cells by position, and an off-by-one here repaints
+            // the row above or below, every tick, forever.
+            var pulseFrames = rendered.pulseFrames
             // Line granularity: the top visible row enters partially, its
             // first `clip` lines scrolled off above the viewport. Clipped by
             // the RESOLVED origin, which is also what the window walk, the
             // indicators, the bands and the click mapping measure from.
             if rowIndex == origin.offset, origin.topClip > 0 {
-                styledLines.removeFirst(min(origin.topClip, styledLines.count - 1))
+                let clipped = min(origin.topClip, styledLines.count - 1)
+                styledLines.removeFirst(clipped)
+                pulseFrames?.removeFirst(clipped)
             }
             // …and the bottom row leaves partially, clipped at the budget.
             // During a reorder hold the budget clip is deferred to
@@ -987,11 +1004,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 let remaining = rowLineBudget - rowLinesEmitted
                 if remaining <= 0 { break }
                 if styledLines.count > remaining {
-                    styledLines.removeLast(styledLines.count - remaining)
+                    let dropped = styledLines.count - remaining
+                    styledLines.removeLast(dropped)
+                    pulseFrames?.removeLast(dropped)
                 }
             }
             let yStart = rowLines.count
             rowLines.append(contentsOf: styledLines)
+            if let pulseFrames {
+                pulseRuns += pulseFrames.enumerated().map { (y: yStart + $0.offset, frames: $0.element) }
+            }
             rowLinesEmitted += styledLines.count
             ranges.append((
                 rowIndex: rowIndex,
@@ -1009,7 +1031,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // content area by the slot's height).
         if handler.reorder != nil {
             clipReorderOverrun(
-                lines: &rowLines, ranges: &ranges,
+                lines: &rowLines, ranges: &ranges, pulseRuns: &pulseRuns,
                 budget: rowLineBudget ?? max(1, contentHeight - indicatorLines))
         }
 
@@ -1025,9 +1047,25 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             )
         }
 
-        // Slide the rows, then wrap the (unmoved) indicators back around them.
-        // The ranges are relative to the assembled lines, so they take the
-        // slide AND the top indicator's offset.
+        return slideAndWrap(
+            rowLines: rowLines, ranges: ranges, pulseRuns: pulseRuns,
+            topIndicator: topIndicator, bottomIndicator: bottomIndicator,
+            handler: handler, rowWidth: rowWidth)
+    }
+
+    /// Applies the overscroll slide to the rows, then wraps the (unmoved) "N
+    /// more" indicators back around them.
+    ///
+    /// The rows' bands and their animated runs are relative to the assembled
+    /// lines, so both take the slide AND the top indicator's offset. A row —
+    /// or a run — slid off screen is dropped rather than left claiming cells
+    /// that are no longer its own.
+    private func slideAndWrap(
+        rowLines: [String], ranges: [VisibleRowRange],
+        pulseRuns: [(y: Int, frames: [String])],
+        topIndicator: String?, bottomIndicator: String?,
+        handler: ItemListHandler<SelectionValue>, rowWidth: Int
+    ) -> (lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun]) {
         let blank = String(repeating: " ", count: max(0, rowWidth))
         let slidRows = handler.overscrollState.slid(rowLines, blank: blank)
         let topOffset = topIndicator == nil ? 0 : 1
@@ -1038,7 +1076,31 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 (rowIndex: $0.rowIndex, yStart: $0.yStart + topOffset, height: $0.height,
                  type: $0.type)
             }
-        return (assembled, moved)
+        return (
+            assembled, moved,
+            slidRuns(
+                pulseRuns, handler: handler, lineCount: slidRows.count, topOffset: topOffset))
+    }
+
+    /// One run per breathing line, moved by the overscroll slide the way
+    /// ``slidRanges`` moves the row bands, and offset past the top indicator.
+    private func slidRuns(
+        _ pulseRuns: [(y: Int, frames: [String])], handler: ItemListHandler<SelectionValue>,
+        lineCount: Int, topOffset: Int
+    ) -> [AnimatedCellRun] {
+        pulseRuns.compactMap { run in
+            var y = run.y
+            if handler.overscrollState.excursion != 0 {
+                guard let moved = handler.overscrollState.slidRange(
+                    yStart: y, height: 1, lineCount: lineCount)
+                else { return nil }
+                y = moved.yStart
+            }
+            guard let first = run.frames.first else { return nil }
+            return AnimatedCellRun(
+                offsetX: 0, offsetY: y + topOffset, width: first.strippedLength,
+                frames: run.frames, clock: .cursor)
+        }
     }
 
     /// The vertical scrollbar cells for a list, one styled single-cell string per
@@ -1112,7 +1174,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         bar: [String],
         style: any ListStyle,
         context: RenderContext
-    ) -> (lines: [String], ranges: [VisibleRowRange]) {
+    ) -> (lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun]) {
         let palette = context.environment.palette
         let contentHeight = bar.count
         let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
@@ -1123,12 +1185,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // the bar where it is.
         var lines: [String] = []
         var ranges: [VisibleRowRange] = []
+        /// The breathing rows' lines and every frame of each, at their position
+        /// among `lines` — turned into runs at the end, after the reorder clip
+        /// and the overscroll slide (see composeRowLines).
+        var pulseRuns: [(y: Int, frames: [String])] = []
         var sectionContentIndex = 0
         for (rowIndex, row) in visibleRows {
             if case .header = row.type { sectionContentIndex = 0 }
             let isFocused = handler.isCursorRow(rowIndex) && listHasFocus
             let isSelected = handler.isSelected(at: rowIndex)
-            var styledLines = renderRow(
+            let rendered = renderRow(
                 row: row,
                 isFocused: isFocused,
                 isSelected: isSelected,
@@ -1138,10 +1204,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 context: context,
                 palette: palette
             )
+            var styledLines = rendered.lines
+            // Clipped alongside the lines, so `pulseFrames[i]` stays the frames
+            // of `styledLines[i]` — see composeRowLines.
+            var pulseFrames = rendered.pulseFrames
             // Line granularity: the top visible row enters partially (see
             // composeRowLines)…
             if rowIndex == origin.offset, origin.topClip > 0 {
-                styledLines.removeFirst(min(origin.topClip, styledLines.count - 1))
+                let clipped = min(origin.topClip, styledLines.count - 1)
+                styledLines.removeFirst(clipped)
+                pulseFrames?.removeFirst(clipped)
             }
             // …and the bottom row leaves partially: the bar area's height is
             // the hard budget, so the list never grows to fit a whole row.
@@ -1159,21 +1231,30 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 let remaining = contentHeight - lines.count
                 if remaining <= 0 { break }
                 if styledLines.count > remaining {
-                    styledLines.removeLast(styledLines.count - remaining)
+                    let dropped = styledLines.count - remaining
+                    styledLines.removeLast(dropped)
+                    pulseFrames?.removeLast(dropped)
                 }
             }
             let yStart = lines.count
-            for rowLine in styledLines {
-                // An intrinsically over-wide row must not push the bar cell past
-                // the interior (where the container clamp would cut the bar off);
-                // hard-clip it to the content column, matching the container's
-                // own clipping of over-wide rows on the bar-less path.
-                let fitted =
+            // An intrinsically over-wide row must not push the bar cell past
+            // the interior (where the container clamp would cut the bar off);
+            // hard-clip it to the content column, matching the container's
+            // own clipping of over-wide rows on the bar-less path. A run's
+            // frames go through the same fit, or the run would claim more
+            // cells than its line occupies and paint over the bar.
+            func fitted(_ rowLine: String) -> String {
+                let cut =
                     rowLine.strippedLength > contentRowWidth
                     ? rowLine.ansiAwarePrefix(visibleCount: contentRowWidth)
                     : rowLine
-                let pad = max(0, contentRowWidth - fitted.strippedLength)
-                lines.append(fitted + String(repeating: " ", count: pad))
+                return cut + String(repeating: " ", count: max(0, contentRowWidth - cut.strippedLength))
+            }
+            for (offset, rowLine) in styledLines.enumerated() {
+                lines.append(fitted(rowLine))
+                if let frames = pulseFrames?[offset] {
+                    pulseRuns.append((y: yStart + offset, frames: frames.map(fitted)))
+                }
             }
             ranges.append((
                 rowIndex: rowIndex,
@@ -1185,7 +1266,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
         // Slot-aware overrun clip for a reorder hold (see composeRowLines).
         if handler.reorder != nil {
-            clipReorderOverrun(lines: &lines, ranges: &ranges, budget: contentHeight)
+            clipReorderOverrun(
+                lines: &lines, ranges: &ranges, pulseRuns: &pulseRuns, budget: contentHeight)
         }
 
         // Fill the area below the last row so the bar spans the full height.
@@ -1197,7 +1279,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let slid = handler.overscrollState.slid(lines, blank: blank)
         return (
             slid.enumerated().map { $0.element + barCell(at: $0.offset) },
-            slidRanges(ranges, handler: handler, lineCount: slid.count))
+            slidRanges(ranges, handler: handler, lineCount: slid.count),
+            slidRuns(pulseRuns, handler: handler, lineCount: slid.count, topOffset: 0))
     }
 
     /// Clips a reorder frame's overrun — away from the SLOT, never through
@@ -1210,12 +1293,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// comes off the FRONT instead (visually: the list scrolled down to keep
     /// the destination in view), and the ranges shift with it.
     private func clipReorderOverrun(
-        lines: inout [String], ranges: inout [VisibleRowRange], budget: Int
+        lines: inout [String], ranges: inout [VisibleRowRange],
+        pulseRuns: inout [(y: Int, frames: [String])], budget: Int
     ) {
         let overrun = lines.count - max(1, budget)
         guard overrun > 0 else { return }
         if ranges.last?.rowIndex == Self.reorderSlotRowIndex {
             lines.removeFirst(overrun)
+            // The runs move with the lines they describe, and one clipped away
+            // above the viewport goes with it.
+            pulseRuns = pulseRuns.compactMap {
+                $0.y >= overrun ? (y: $0.y - overrun, frames: $0.frames) : nil
+            }
             ranges = ranges.compactMap { range in
                 let end = range.yStart + range.height - overrun
                 guard end > 0 else { return nil }
@@ -1227,6 +1316,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         } else {
             lines.removeLast(overrun)
             let cap = lines.count
+            pulseRuns = pulseRuns.filter { $0.y < cap }
             ranges = ranges.compactMap { range in
                 guard range.yStart < cap else { return nil }
                 return (
@@ -2185,8 +2275,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         style: any ListStyle,
         context: RenderContext,
         palette: any Palette
-    ) -> [String] {
-        let backgroundColor = row.backgroundOverride ?? rowBackgroundColor(
+    ) -> RenderedRow {
+        let background = row.backgroundOverride.map(RowBackground.fixed) ?? rowBackground(
             rowType: row.type,
             isFocused: isFocused,
             isSelected: isSelected,
@@ -2200,28 +2290,80 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let badge = row.badge
         let shouldRenderBadge = badge != nil && !badge!.isHidden && row.isSelectable
 
-        // Render each line with padding and optional badge
-        return row.buffer.lines.enumerated().map { lineIndex, line in
-            if shouldRenderBadge && lineIndex == 0 {
-                return renderLineWithBadge(
-                    line: line,
-                    badge: badge!,
-                    rowWidth: rowWidth,
-                    backgroundColor: backgroundColor,
-                    palette: palette
-                )
-            } else {
-                return renderPlainLine(
-                    line: line,
-                    rowWidth: rowWidth,
-                    backgroundColor: backgroundColor
-                )
+        /// The row's lines over a given background — the ONE description of what
+        /// this row looks like, called once for the frame on screen and once per
+        /// point of a pulse for the runs that replay it.
+        func lines(over backgroundColor: Color?) -> [String] {
+            row.buffer.lines.enumerated().map { lineIndex, line in
+                if shouldRenderBadge && lineIndex == 0 {
+                    return renderLineWithBadge(
+                        line: line,
+                        badge: badge!,
+                        rowWidth: rowWidth,
+                        backgroundColor: backgroundColor,
+                        palette: palette
+                    )
+                } else {
+                    return renderPlainLine(
+                        line: line,
+                        rowWidth: rowWidth,
+                        backgroundColor: backgroundColor
+                    )
+                }
+            }
+        }
+
+        guard case .pulsing(let cycle, let dim, let bright) = background, cycle.isAnimating else {
+            return RenderedRow(lines: lines(over: background.colorNow), pulseFrames: nil)
+        }
+        // Transposed to line-major, because that is how the runs are asked for:
+        // one run per LINE, carrying that line at every point of the cycle.
+        let perStep = cycle.colors(dim: dim, bright: bright).map { lines(over: $0) }
+        let step = cycle.step % max(1, perStep.count)
+        return RenderedRow(
+            lines: perStep[step],
+            pulseFrames: (0..<row.buffer.lines.count).map { line in perStep.map { $0[line] } })
+    }
+
+    /// A row's rendered lines, plus — when its background breathes — every frame
+    /// of each line, ready to become an ``AnimatedCellRun`` once the caller
+    /// knows where on screen the line ended up.
+    private struct RenderedRow {
+        let lines: [String]
+        /// `pulseFrames[line][step]`, or `nil` for a row that does not animate.
+        let pulseFrames: [[String]]?
+    }
+
+    /// What a row draws behind itself.
+    private enum RowBackground {
+        /// No background at all.
+        case none
+        /// One colour, every frame.
+        case fixed(Color)
+        /// A breathing colour: the whole cycle and the two ends it runs between,
+        /// so the row can be handed to the run loop rather than re-rendered on
+        /// every tick of it.
+        case pulsing(SelectionEmphasisCycle, dim: Color, bright: Color)
+
+        init(_ color: Color?) {
+            self = color.map(Self.fixed) ?? .none
+        }
+
+        /// The colour to draw with in the frame being rendered now.
+        @MainActor
+        var colorNow: Color? {
+            switch self {
+            case .none: return nil
+            case .fixed(let color): return color
+            case .pulsing(let cycle, let dim, let bright):
+                return cycle.colorNow(dim: dim, bright: bright)
             }
         }
     }
 
-    /// Determines the background color for a row based on its type and visual state.
-    private func rowBackgroundColor(
+    /// The background a row shows for its type and visual state — a fixed
+    /// colour, or (for the cursor row of a focused list) a whole pulse.
+    private func rowBackground(
         rowType: ListRowType<SelectionValue>,
         isFocused: Bool,
         isSelected: Bool,
@@ -2229,21 +2371,26 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         style: any ListStyle,
         context: RenderContext,
         palette: any Palette
-    ) -> Color? {
+    ) -> RowBackground {
         switch rowType {
         case .header, .footer:
-            return nil
+            return .none
 
         case .content:
             if isFocused && isSelected {
-                let dimAccent = palette.accent.opacity(
-                    ViewConstants.focusPulseMin, over: palette.background)
-                return SelectionIndicator.resolve(isFocused: true, context: context)
-                    .color(
-                        dim: dimAccent,
-                        bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background))
+                // The cursor row on a focused list breathes. As a CYCLE, not a
+                // live phase: the phase read marks the frame as having consulted
+                // the clock, so the whole page was re-rendered on every tick to
+                // recolour one row. The caller turns the cycle into
+                // ``AnimatedCellRun``s over the row's own lines.
+                return .pulsing(
+                    context.environment.selectionEmphasis.cycle(true),
+                    dim: palette.accent.opacity(
+                        ViewConstants.focusPulseMin, over: palette.background),
+                    bright: palette.accent.opacity(
+                        ViewConstants.focusPulseMax, over: palette.background))
             } else if isFocused {
-                return palette.focusBackground
+                return .fixed(palette.focusBackground)
             } else if isSelected {
                 // Selected row while the list itself doesn't have
                 // focus. Controlled by the
@@ -2255,19 +2402,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 // (pop-up pickers, quick-pick palettes) where the
                 // ambient highlight is more noise than signal.
                 if context.environment.unfocusedSelectionVisibility == .hidden {
-                    return alternatingBackgroundIfAny(
+                    return .init(alternatingBackgroundIfAny(
                         sectionContentIndex: sectionContentIndex,
                         style: style,
-                        palette: palette
-                    )
+                        palette: palette))
                 }
-                return palette.accent.opacity(ViewConstants.selectedBackground, over: palette.background)
+                return .fixed(
+                    palette.accent.opacity(ViewConstants.selectedBackground, over: palette.background))
             } else {
-                return alternatingBackgroundIfAny(
+                return .init(alternatingBackgroundIfAny(
                     sectionContentIndex: sectionContentIndex,
                     style: style,
-                    palette: palette
-                )
+                    palette: palette))
             }
         }
     }
@@ -2354,11 +2500,20 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 struct _ListContentView: View, Renderable {
     let lines: [String]
 
+    /// The breathing rows' cells, already positioned among `lines` — the
+    /// container shifts them past its border along with the lines themselves.
+    var runs: [AnimatedCellRun] = []
+
     var body: Never {
         fatalError("_ListContentView renders via Renderable")
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        FrameBuffer(lines: lines)
+        var buffer = FrameBuffer(lines: lines)
+        // A measure pass draws nothing, so a run left on it would describe
+        // cells that were never on screen — and keep the clock alive from a
+        // pass that produced no frame.
+        if !context.isMeasuring { buffer.animatedCells = runs }
+        return buffer
     }
 }
