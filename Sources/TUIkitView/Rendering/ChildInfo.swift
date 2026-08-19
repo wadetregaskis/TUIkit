@@ -416,6 +416,14 @@ private func viewValueHash<V: View>(_ view: V) -> Int {
 private func measureChildUncached<V: View>(
     _ view: V, proposal: ProposedSize, context: RenderContext
 ) -> ViewSize {
+    // Measure what will be DRAWN: an `Animatable` view mid-animation is a
+    // different size from the one the tree describes, and a measure that used
+    // the target would lay out for a frame that is not on screen yet. Here
+    // rather than in `measureChild` so it falls INSIDE that memo's
+    // cache-unsafe window — an animating subtree must be measured every frame,
+    // not remembered. Reads the store without writing it.
+    let view = resolvingAnimation(view, context: context, isMeasuring: true)
+
     // Use Layoutable if available (mark as measuring to suppress side-effects).
     //
     // Spacer is handled here too: it conforms to `Layoutable` and its

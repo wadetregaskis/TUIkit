@@ -48,6 +48,14 @@
 /// - Note: The animated value is what the view is *rendered* with; it is not
 ///   written back to your state. `progress` is 1 the instant the closure
 ///   returns, and every event handler sees 1. Only the picture lags.
+///
+/// `@MainActor` because everything that conforms is a view, and `View` is —
+/// so `struct Bar: View, Animatable` needs no isolation ceremony at the
+/// declaration. SwiftUI reaches the same place from the other side, with a
+/// `@preconcurrency` `View`; TUIkit's is plain `@MainActor`, so the isolation
+/// has to be stated here instead. The animatable *data* stays nonisolated: it
+/// is arithmetic, and belongs to nobody.
+@MainActor
 public protocol Animatable {
     /// The type defining the data to animate.
     associatedtype AnimatableData: VectorArithmetic

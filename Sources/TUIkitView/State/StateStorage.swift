@@ -104,6 +104,15 @@ public final class StateStorage: @unchecked Sendable {
     /// the rest of the per-identity state, so removed conditionals don't leak.
     private var lastConditionalCase: [ViewIdentity: Bool] = [:]
 
+    /// What each animating value in the tree is doing.
+    ///
+    /// Held here rather than standing alone because its lifetime is exactly
+    /// this one's: an animation belongs to a view identity, and dies with it.
+    /// ``endRenderPass()``, ``invalidateDescendants(of:)`` and ``reset()``
+    /// forward to it, so an animating view that leaves the tree — or a
+    /// conditional branch that flips — takes its animations along.
+    public let animations = AnimationStore()
+
     /// Creates an empty state storage.
     public init() {}
 
@@ -290,6 +299,7 @@ extension StateStorage {
         for identity in staleConditionals {
             lastConditionalCase.removeValue(forKey: identity)
         }
+        animations.prune { !activeIdentities.contains($0) && !isRetained($0) }
     }
 
     /// Removes all state for descendants of the given identity.
@@ -307,6 +317,7 @@ extension StateStorage {
         for key in staleTrackedKeys {
             trackedValues.removeValue(forKey: key)
         }
+        animations.removeDescendants(of: ancestor)
     }
 
     /// Removes all stored state. Used during app cleanup.
@@ -316,6 +327,7 @@ extension StateStorage {
         onChangeCounters.removeAll()
         activeIdentities.removeAll()
         lastConditionalCase.removeAll()
+        animations.removeAll()
     }
 }
 

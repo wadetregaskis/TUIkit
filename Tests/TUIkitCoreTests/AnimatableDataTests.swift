@@ -94,6 +94,9 @@ struct AnimatableDataTests {
         typealias AnimatableData = EmptyAnimatableData
     }
 
+    // `Animatable` is `@MainActor` — everything that conforms is a view, and
+    // views are — so the two tests that touch a conformance say so.
+    @MainActor
     @Test("Animatable is a two-way window onto the view's own property")
     func animatableDataWritesBack() {
         var bar = Bar(fraction: 0)
@@ -102,6 +105,7 @@ struct AnimatableDataTests {
         #expect(bar.animatableData == 0.5)
     }
 
+    @MainActor
     @Test("A type with nothing to animate still conforms, in one line")
     func emptyConformanceNeedsNoBody() {
         var flash = Flash()

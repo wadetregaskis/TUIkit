@@ -160,6 +160,12 @@ extension Layoutable {
 /// - Returns: A ``FrameBuffer`` containing the rendered terminal output.
 @MainActor
 public func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameBuffer {
+    // An `Animatable` view renders at where its picture has GOT to, not at what
+    // the tree says — so substitute before anything reads it, INCLUDING the
+    // `Renderable` branch below (a modifier that animates is a `Renderable`).
+    // Free for every other view: one set lookup against a per-type cache.
+    let view = resolvingAnimation(view, context: context, isMeasuring: context.isMeasuring)
+
     // Priority 1: Direct rendering via Renderable protocol.
     //
     // The result is clamped to the available space — the universal layout

@@ -419,19 +419,9 @@ extension RenderLoop {
 
         // Create render context with environment
         var environment = buildEnvironment()
-        environment.pulsePhase = pulsePhase
-        environment.cursorTimer = cursorTimer
-        // Animating views declare their re-render rate through the scheduler
-        // (see `RenderContext.requestAnimation`); they anchor new grids to this
-        // frame's `now` so the loop's next-firing query agrees with them exactly.
-        environment.animationScheduler = animationScheduler
-        environment.frameNowNanos = frameNowNanos
-        // The transaction the pending change was made under — how
-        // `withAnimation` reaches the render that follows it. Consumed (not
-        // merely read) so it applies to exactly one pass: the one that first
-        // shows the change. A frame that renders for some other reason must
-        // not restart animations that already began.
-        environment.transaction = AppState.shared.consumePendingTransaction() ?? Transaction()
+        publishAnimationValues(
+            into: &environment, pulsePhase: pulsePhase, cursorTimer: cursorTimer,
+            animationScheduler: animationScheduler, frameNowNanos: frameNowNanos)
         // Install a fresh volatile-read tracker at the render root so that, after
         // the frame, we can tell whether anything actually consumed the pulse
         // clock (the row memo reuses this same tracker further down). Likewise
@@ -564,6 +554,8 @@ extension RenderLoop {
         )
 
         endRenderPass()
+
+        keepAnimating(scheduler: animationScheduler, frameNowNanos: frameNowNanos)
 
         return recordActivity(
             usesPulse: (environment.volatileReadTracker?.reads ?? 0) > 0,
@@ -974,6 +966,69 @@ extension RenderLoop {
         guard present != lastFrameHadStatusBar else { return }
         lastFrameHadStatusBar = present
         diffWriter.invalidate()
+    }
+
+    /// Publishes everything this frame's animations are a function of: the two
+    /// clocks, the scheduler they declare their rates to, this frame's `now`,
+    /// and the transaction the pending change was made under.
+    ///
+    /// `frameNowNanos` is the anchor for any grid registering this frame, so
+    /// the loop's next-firing query and the grids agree exactly rather than by
+    /// a clock read apart.
+    private func publishAnimationValues(
+        into environment: inout EnvironmentValues,
+        pulsePhase: Double,
+        cursorTimer: CursorTimer?,
+        animationScheduler: AnimationScheduler?,
+        frameNowNanos: Int64
+    ) {
+        environment.pulsePhase = pulsePhase
+        environment.cursorTimer = cursorTimer
+        environment.animationScheduler = animationScheduler
+        environment.frameNowNanos = frameNowNanos
+        // Consumed, not merely read, so it applies to exactly one pass: the one
+        // that first shows the change. A frame that renders for some other
+        // reason must not restart animations that already began.
+        environment.transaction = AppState.shared.consumePendingTransaction() ?? Transaction()
+        // Whether a change may animate at all: only where more frames can
+        // follow it. A one-off render (`ViewRenderer`, the frame dump) would
+        // show an animation's FIRST value and never advance past it, so there a
+        // change snaps instead.
+        environment.canAnimate = animationScheduler != nil
+    }
+
+    /// Keeps the frames coming while anything is still moving.
+    ///
+    /// Asked once for the whole tree rather than declared per animating view: an
+    /// interpolation's next frame is due at a *rate*, not at a phase, so one
+    /// grid serves every animation on screen — and it disappears the moment the
+    /// last one arrives, which is what stops a settled screen rendering.
+    ///
+    /// Called AFTER the pass's prune, so an animation whose view has just left
+    /// the tree does not hold the loop open for something nobody can see.
+    private func keepAnimating(scheduler: AnimationScheduler?, frameNowNanos: Int64) {
+        guard tuiContext.stateStorage.animations.hasLiveAnimations(at: frameNowNanos) else {
+            return
+        }
+        scheduler?.request(Self.viewAnimationToken, Self.viewAnimationRequest, now: frameNowNanos)
+    }
+
+    /// The scheduler token every in-flight interpolation shares.
+    ///
+    /// One token, not one per animation: they all want the same thing — another
+    /// frame, soon — so they ride one grid and one render serves them all.
+    private static var viewAnimationToken: String { "view-animations" }
+
+    /// How often an interpolation is re-rendered.
+    ///
+    /// 30 Hz. A terminal cell has no sub-pixel to reveal, so the visible
+    /// resolution of a moving thing is far below a display's: at 30 Hz a
+    /// quarter-second ease gets eight distinct pictures, which is past the
+    /// point where more of them look smoother. The tolerance lets it lock onto
+    /// a grid already running near that rate (a drag return, another app
+    /// animation) so one render serves both.
+    private static var viewAnimationRequest: AnimationRequest {
+        AnimationRequest(frequency: 30, frequencyTolerance: 6)
     }
 
     /// Stores and returns what this frame reported, so the run loop can decide

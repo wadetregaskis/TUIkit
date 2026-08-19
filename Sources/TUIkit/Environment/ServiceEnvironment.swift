@@ -45,14 +45,6 @@ private struct AnimationSchedulerKey: EnvironmentKey {
     static let defaultValue: AnimationScheduler? = nil
 }
 
-/// EnvironmentKey for the current frame's monotonic-clock timestamp, in
-/// nanoseconds — the `now` an animation grid is anchored to when it first
-/// registers this frame. Shared by every view in the frame so grids that
-/// register together share an anchor (and so coincide exactly).
-private struct FrameNowNanosKey: EnvironmentKey {
-    static let defaultValue: Int64 = 0
-}
-
 // MARK: - Synthesised Key Event Dispatch
 
 /// EnvironmentKey for the synthesised-key path: a closure
@@ -162,13 +154,6 @@ extension EnvironmentValues {
     var animationScheduler: AnimationScheduler? {
         get { self[AnimationSchedulerKey.self] }
         set { self[AnimationSchedulerKey.self] = newValue }
-    }
-
-    /// The current frame's monotonic-clock timestamp (ns) — the anchor for any
-    /// animation grid that registers this frame.
-    var frameNowNanos: Int64 {
-        get { self[FrameNowNanosKey.self] }
-        set { self[FrameNowNanosKey.self] = newValue }
     }
 
     /// Preference value collection during rendering.
