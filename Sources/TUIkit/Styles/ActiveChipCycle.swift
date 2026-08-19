@@ -4,9 +4,10 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
-/// The active tab chip's background, as a whole cycle. When the strip is
-/// focused it breathes toward the accent so the active tab is easy to find
-/// on a busy screen; otherwise it's the quiet shared surface.
+/// The active tab chip's LABEL colour, as a whole cycle. When the strip is
+/// focused the label breathes toward the accent so the active tab is easy to
+/// find on a busy screen; otherwise it rests at a quiet, readable tone. The
+/// chip's fill does not move.
 ///
 /// A cycle rather than "this tick's colour" because that is what lets the
 /// strip hand those cells to the run loop as an ``AnimatedCellRun``. Asking
@@ -16,35 +17,49 @@
 struct ActiveChipCycle {
     let cycle: SelectionEmphasisCycle
 
-    /// The quiet shared surface — where an unfocused chip sits, and the
-    /// recessive end of the breath.
+    /// The chip's own surface — steady, focused or not. A tab is a place, not a
+    /// state, and its fill says which place; the focus says so in the label.
     let surface: Color
 
-    /// The loud end: the accent, at the weight a *fill* behind text can
-    /// carry without hurting the label's contrast.
-    let accentTint: Color
+    /// Where the active label rests: readable on the chip, and quiet.
+    let labelDim: Color
 
+    /// The loud end of the breath: the accent, floored so it stays readable on
+    /// the chip it is drawn on (a mid-tone accent on a mid-tone surface is the
+    /// case that fails).
+    let labelBright: Color
+
+    /// - Parameter restingLabel: where the active label sits when the strip
+    ///   does not hold the focus — the dim end of the breath.
     @MainActor
-    init(surface: Color, palette: any Palette, isFocused: Bool, context: RenderContext) {
+    init(
+        surface: Color, restingLabel: Color, palette: any Palette, isFocused: Bool,
+        context: RenderContext
+    ) {
         cycle = context.environment.selectionEmphasis.cycle(isFocused)
         self.surface = surface
-        accentTint = palette.accent.opacity(
-            ViewConstants.focusedChipBackground, over: surface)
+        labelDim = restingLabel
+        labelBright = palette.accent.resolve(with: palette)
+            .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: surface)
     }
 
-    /// The background to fill the active chip with right now. A fill
-    /// recedes to its own surface when unfocused (a still cycle would
-    /// otherwise sit at the accent).
+    /// The active label's colour right now — breathing while the strip holds
+    /// the focus, resting otherwise.
+    ///
+    /// The breath is in the TEXT rather than in the fill: a pulsing background
+    /// behind a whole tab is a large area of moving colour, which reads as the
+    /// tab flashing rather than as "the keyboard is here", and it drags the
+    /// label's contrast up and down with it.
     @MainActor
-    var now: Color {
-        cycle.isFocused ? cycle.colorNow(dim: surface, bright: accentTint) : surface
+    var labelNow: Color {
+        cycle.isFocused ? cycle.colorNow(dim: labelDim, bright: labelBright) : labelDim
     }
 
-    /// The chip's run, drawn by `draw` at each colour of the cycle — nil
+    /// The chip's run, drawn by `draw` at each label colour of the cycle — nil
     /// when the chip is not breathing.
     @MainActor
     func run(offsetX: Int, offsetY: Int, draw: (Color) -> String) -> AnimatedCellRun? {
         cycle.run(
-            dim: surface, bright: accentTint, offsetX: offsetX, offsetY: offsetY, draw: draw)
+            dim: labelDim, bright: labelBright, offsetX: offsetX, offsetY: offsetY, draw: draw)
     }
 }

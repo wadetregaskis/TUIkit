@@ -524,9 +524,10 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let insets = resolvedContentInsets(style: .bordered, context: context)
         let alignment = context.environment.tabViewHeaderAlignment
         let chip = ActiveChipCycle(
-            surface: surface, palette: palette, isFocused: isFocused, context: context)
-        let (activeFg, inactiveFg, inactiveBg) = stripLabelColors(
-            surface: surface, isFocused: isFocused, palette: palette)
+            surface: surface,
+            restingLabel: Self.contrastingForeground(for: surface, palette: palette),
+            palette: palette, isFocused: isFocused, context: context)
+        let (inactiveFg, inactiveBg) = stripLabelColors(palette: palette)
 
         // Size to the widest tab; the strip wraps per the header-wrap mode.
         let avail = max(1, context.availableWidth - 2)
@@ -559,7 +560,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         var (lines, regions, animatedCells) = folderStripRows(
             rows: rows, selectedIndex: selectedIndex, chip: chip,
             style: FolderStripStyle(
-                activeFg: activeFg, inactiveFg: inactiveFg, inactiveBg: inactiveBg,
+                inactiveFg: inactiveFg, inactiveBg: inactiveBg,
                 border: border, surface: surface, interior: interior, boxWidth: boxWidth,
                 alignment: alignment))
 
@@ -771,7 +772,9 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let insets = resolvedContentInsets(style: .compact, context: context)
         let alignment = context.environment.tabViewHeaderAlignment
         let chip = ActiveChipCycle(
-            surface: surface, palette: palette, isFocused: isFocused, context: context)
+            surface: surface,
+            restingLabel: Self.contrastingForeground(for: surface, palette: palette),
+            palette: palette, isFocused: isFocused, context: context)
 
         // Size to the widest tab; the strip wraps per the header-wrap mode (folded
         // to the content width, or only on overflow).

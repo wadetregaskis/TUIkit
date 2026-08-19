@@ -21,8 +21,7 @@ extension _TabViewCore {
         lines: [String], regions: [(x: Int, y: Int, width: Int, index: Int)],
         animatedCells: [AnimatedCellRun]
     ) {
-        let (activeFg, inactiveFg, inactiveBg) = stripLabelColors(
-            surface: surface, isFocused: isFocused, palette: palette)
+        let (inactiveFg, inactiveBg) = stripLabelColors(palette: palette)
         var lines: [String] = []
         var regions: [(x: Int, y: Int, width: Int, index: Int)] = []
         var animatedCells: [AnimatedCellRun] = []
@@ -31,10 +30,10 @@ extension _TabViewCore {
         // half a cell each side with a clean edge. One function draws it, so
         // the animation's frames are the same cells the render draws — a second
         // spelling of this is how a replayed run drifts from what is on screen.
-        func drawChip(_ index: Int, background: Color, active: Bool) -> String {
+        func drawChip(_ index: Int, background: Color, foreground: Color, active: Bool) -> String {
             ANSIRenderer.colorize("▐", foreground: background)
                 + ANSIRenderer.colorize(
-                    " \(tabs[index].title) ", foreground: active ? activeFg : inactiveFg,
+                    " \(tabs[index].title) ", foreground: foreground,
                     background: background, bold: active)
                 + ANSIRenderer.colorize("▌", foreground: background)
         }
@@ -47,12 +46,14 @@ extension _TabViewCore {
                 // The active chip takes the surface (breathing when focused);
                 // inactive chips recede onto the base background.
                 let active = i == selectedIndex
-                line += drawChip(i, background: active ? chip.now : inactiveBg, active: active)
+                line += drawChip(
+                    i, background: active ? chip.surface : inactiveBg,
+                    foreground: active ? chip.labelNow : inactiveFg, active: active)
                 let chipWidth = tabWidth(i, style: .compact)  // body + the two caps
                 regions.append((x: x, y: y, width: chipWidth, index: i))
                 if active,
                     let run = chip.run(offsetX: x, offsetY: y, draw: {
-                        drawChip(i, background: $0, active: true)
+                        drawChip(i, background: chip.surface, foreground: $0, active: true)
                     })
                 {
                     animatedCells.append(run)
@@ -68,7 +69,6 @@ extension _TabViewCore {
     /// The chrome a folder-tab strip is drawn from: the label colours, the
     /// border and surface tones, and the box geometry its rows align within.
     struct FolderStripStyle {
-        let activeFg: Color
         let inactiveFg: Color
         let inactiveBg: Color
         let border: Color
@@ -100,9 +100,9 @@ extension _TabViewCore {
         // One function draws a tab's label so the animation's frames are the
         // same cells the render draws. The walls either side are border chrome
         // and do not breathe, so a folder tab's run is its body only.
-        func drawLabel(_ index: Int, background: Color, active: Bool) -> String {
+        func drawLabel(_ index: Int, background: Color, foreground: Color, active: Bool) -> String {
             ANSIRenderer.colorize(
-                " \(tabs[index].title) ", foreground: active ? style.activeFg : style.inactiveFg,
+                " \(tabs[index].title) ", foreground: foreground,
                 background: background, bold: active)
         }
 
@@ -150,12 +150,14 @@ extension _TabViewCore {
             for (k, i) in row.enumerated() {
                 let active = i == selectedIndex
                 labels += bc("│")
-                labels += drawLabel(i, background: active ? chip.now : style.inactiveBg, active: active)
+                labels += drawLabel(
+                    i, background: active ? chip.surface : style.inactiveBg,
+                    foreground: active ? chip.labelNow : style.inactiveFg, active: active)
                 regions.append((x: bodySpans[k].start, y: labelsY, width: bodySpans[k].len, index: i))
                 if active,
                     let run = chip.run(
                         offsetX: bodySpans[k].start, offsetY: labelsY,
-                        draw: { drawLabel(i, background: $0, active: true) })
+                        draw: { drawLabel(i, background: chip.surface, foreground: $0, active: true) })
                 {
                     animatedCells.append(run)
                 }
@@ -174,19 +176,11 @@ extension _TabViewCore {
         return (lines, regions, animatedCells)
     }
 
-    /// The strip's label colours — active foreground (the accent when the strip
-    /// is focused, a surface-contrasting tone otherwise) plus the inactive
-    /// chips' foreground and background. Shared by both strip styles.
-    func stripLabelColors(
-        surface: Color, isFocused: Bool, palette: any Palette
-    ) -> (activeFg: Color, inactiveFg: Color, inactiveBg: Color) {
-        (
-            isFocused
-                ? palette.accent.resolve(with: palette)
-                : Self.contrastingForeground(for: surface, palette: palette),
-            palette.foregroundSecondary,
-            palette.background.resolve(with: palette)
-        )
+    /// The inactive chips' foreground and background. Shared by both strip
+    /// styles; the ACTIVE chip's label comes from ``ActiveChipCycle``, which
+    /// owns both ends of its breath.
+    func stripLabelColors(palette: any Palette) -> (inactiveFg: Color, inactiveBg: Color) {
+        (palette.foregroundSecondary, palette.background.resolve(with: palette))
     }
 
     /// The glyph for a tab-strip top wall: rounded corners at the strip ends and

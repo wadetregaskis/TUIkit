@@ -77,14 +77,6 @@ public enum ViewConstants {
     /// Accent opacity for selection indicator bullets.
     public static let selectionIndicator: Double = 0.60
 
-    /// Accent opacity for the bright end of a focused fill that sits BEHIND
-    /// text the framework does not colour itself (a TabView's active chip).
-    ///
-    /// Bounded by readability, unlike a glyph that merely *is* the accent — a
-    /// focused button's end caps breathe to the full accent because nothing is
-    /// written on them.
-    public static let focusedChipBackground: Double = 0.45
-
     /// Accent opacity for the background tint of a control while
     /// the cursor is hovering over it (not focused, not pressed).
     /// Sits between the static unfocused tint
