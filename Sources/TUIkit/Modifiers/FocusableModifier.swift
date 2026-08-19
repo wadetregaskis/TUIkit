@@ -74,7 +74,20 @@ extension FocusableModifier: Renderable {
         // label). Returns the id only when a stop was actually registered.
         let focusID = registerFocusStop(context: context)
 
-        var buffer = TUIkit.renderToBuffer(content, context: context)
+        // Tell the content whether it holds the focus, the way SwiftUI's
+        // `.focusable()` does. Without this the modifier makes a view reachable
+        // by Tab and gives it no way to SAY so: `\.isFocused` stayed false
+        // however the ring moved, and an app's own control could be focused
+        // while drawing exactly as it does when it is not. `.contextMenu` had
+        // been publishing it for its own content all along; this is the same
+        // thing, from the modifier that actually owns the focus stop.
+        var contentContext = context
+        if let focusID {
+            contentContext.environment.isFocused = FocusRegistration.isFocused(
+                context: context, focusID: focusID)
+        }
+
+        var buffer = TUIkit.renderToBuffer(content, context: contentContext)
 
         // `.activate` → click anywhere in the content to focus it.
         if let focusID, interactions.contains(.activate),

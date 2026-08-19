@@ -60,6 +60,51 @@ struct FocusableModifierTests {
         #expect(manager.registeredFocusIDsInActiveSection().isEmpty)
     }
 
+    // MARK: - \.isFocused
+
+    /// Records what `\.isFocused` read inside a focusable's content.
+    private struct FocusReporter: View {
+        let seen: Box<Bool?>
+        @Environment(\.isFocused) private var isFocused
+        var body: some View {
+            seen.value = isFocused
+            return Text("x")
+        }
+    }
+
+    @Test("A focusable publishes \\.isFocused to its content")
+    func publishesIsFocused() {
+        // Without this, `.focusable()` makes a view reachable by Tab and gives
+        // it no way to say so — an app's own control could hold the focus and
+        // draw exactly as it does when it does not. SwiftUI's `.focusable()`
+        // sets `\.isFocused` for the same reason.
+        let seen = Box<Bool?>(nil)
+        render(FocusReporter(seen: seen).focusable(), TUIContext(), FocusManager())
+        #expect(seen.value == true, "the lone focusable auto-focuses")
+    }
+
+    @Test("An UNfocused focusable publishes false")
+    func publishesIsFocusedFalse() {
+        // Two stops, and the first takes the focus — so the second must report
+        // false rather than simply never being told.
+        let seen = Box<Bool?>(nil)
+        render(
+            VStack {
+                Text("first").focusable()
+                FocusReporter(seen: seen).focusable()
+            }, TUIContext(), FocusManager())
+        #expect(seen.value == false)
+    }
+
+    @Test("A view that is not focusable is told nothing")
+    func nonFocusableIsUnchanged() {
+        // The value defaults to false and nothing sets it — so a plain view
+        // inside a focused control does not inherit the control's answer.
+        let seen = Box<Bool?>(nil)
+        render(FocusReporter(seen: seen), TUIContext(), FocusManager())
+        #expect(seen.value == false)
+    }
+
     // MARK: - .focused($x) round-trip
 
     private struct FocusableBoolHarness: View {

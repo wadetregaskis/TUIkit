@@ -26,7 +26,15 @@ extension View {
     ///   frame on screen without consulting the view again, so a run in the
     ///   wrong place, or one frame too wide, repaints whatever is really there —
     ///   every tick, until something else forces a full render.
-    func animatedCells(_ runs: [AnimatedCellRun]) -> some View {
+    ///
+    /// - Note: This is the low-level route, and it requires the view to know
+    ///   where its own cells are. When what animates is a colour something else
+    ///   paints — a border, a background — hand that modifier an
+    ///   ``AnimatedColor`` instead and let it place the runs.
+    ///
+    /// - Parameter runs: The animated spans, positioned within this view.
+    /// - Returns: A view whose buffer carries those runs.
+    public func animatedCells(_ runs: [AnimatedCellRun]) -> some View {
         AnimatedCellsModifier(content: self, runs: runs)
     }
 }
