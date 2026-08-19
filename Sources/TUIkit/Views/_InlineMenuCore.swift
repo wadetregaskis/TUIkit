@@ -34,7 +34,8 @@ struct _InlineMenuCore: View, Renderable, Layoutable {
         // terminal has rows scrolls inside its border rather than running off
         // the bottom, and the focus reveal keeps the focused item in view as
         // the arrows walk past the edge.
-        renderMenuColumn(column, context: context, capHeight: context.availableHeight)
+        registerPagingKeys(context: context)
+        return renderMenuColumn(column, context: context, capHeight: context.availableHeight)
     }
 
     @ViewBuilder
@@ -44,5 +45,44 @@ struct _InlineMenuCore: View, Renderable, Layoutable {
             .foregroundStyle(.palette.accent)
         Divider()
         content
+    }
+
+    /// Registers the menu's own paging keys: `Page Up`/`Page Down` move the
+    /// cursor a screenful of rows, `Home`/`End` to the first and last.
+    ///
+    /// A menu is a list, and a list's paging keys move its cursor. Left to the
+    /// focus ring these keys scroll the enclosing container and deliberately
+    /// leave the focus behind — right for a page of prose with a button on it,
+    /// wrong for a column that is nothing but rows: the highlight scrolled out
+    /// of sight, and the next arrow key snapped the view back to where it had
+    /// been left. Registered ahead of the ring (view handlers are layer 2, the
+    /// focus system layer 3), and scoped to THIS menu's own rows by identity
+    /// path so a menu beside other controls does not page through them.
+    private func registerPagingKeys(context: RenderContext) {
+        // Registered straight with the dispatcher rather than through
+        // `.onKeyPress`: a modifier around the column would hide the rows from
+        // `renderMenuColumn`, which walks the content to find them.
+        guard !context.isMeasuring,
+            let dispatcher = context.environment.keyEventDispatcher,
+            let focusManager = context.environment.focusManager
+        else { return }
+        // The dispatcher clears its handlers every frame, so re-registering is
+        // per-frame presence — declare it, or a memoised replay would drop it.
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
+        let path = context.identity.path
+        // One screenful of rows: the height the menu was offered, less its own
+        // chrome (two border rows, the label, and the rule under it).
+        let page = max(1, context.availableHeight - 4)
+        dispatcher.addHandler(sectionID: context.environment.activeFocusSectionID) { event in
+            let jump: FocusManager.SubtreeFocusJump
+            switch event.key {
+            case .pageUp: jump = .backward(page)
+            case .pageDown: jump = .forward(page)
+            case .home: jump = .first
+            case .end: jump = .last
+            default: return false
+            }
+            return focusManager.moveFocus(inSubtreeAt: path, jump: jump)
+        }
     }
 }

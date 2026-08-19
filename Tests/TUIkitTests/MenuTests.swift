@@ -60,6 +60,9 @@ struct MenuTests {
             maxWidth: context.availableWidth, maxHeight: context.availableHeight,
             palette: context.environment.palette)
         tui.mouseEventDispatcher.setRegions(composited.hitTestRegions)
+        // The focus pass closes too, as the run loop closes it: that is where
+        // an unfinished Home/End resumes against the rows this pass laid out.
+        context.environment.focusManager?.endRenderPass()
         tui.stateStorage.endRenderPass()
         return buffer
     }
@@ -85,6 +88,66 @@ struct MenuTests {
         #expect(out[3].contains("Text Styles"))
         #expect(out[4].contains("Colors"))
         #expect(out[5].contains("Quit"))
+    }
+
+    @Test("An inline menu's paging keys move its cursor, not just the view")
+    func inlinePagingMovesTheCursor() {
+        // The report: on a menu taller than the terminal, Page Up/Down and
+        // Home/End felt dead. They were scrolling — the focus ring's answer for
+        // keys a focused control declines — and leaving the highlight behind,
+        // so the cursor was off screen and the next arrow key snapped the view
+        // back to it. A menu is a list; its paging keys move its cursor.
+        withColorDepth(.truecolor) {
+            let (tui, context) = harness(height: 9)
+            let view = Menu("Menu") {
+                ForEach(0..<12, id: \.self) { index in Button("Item \(index)") {} }
+            }
+            .menuStyle(.inline)
+
+            /// The item text on the row the cursor is on — the one row whose
+            /// fill differs from its neighbours' (every row carries the menu's
+            /// own surface, so "has a background" does not distinguish them).
+            func cursorRow(_ buffer: FrameBuffer) -> String? {
+                let rows = buffer.lines.filter { $0.contains("Item ") }
+                func fill(_ line: String) -> String {
+                    line.ranges(of: "48;2;").first.map {
+                        String(line[$0.lowerBound...].prefix(16))
+                    } ?? ""
+                }
+                let counts = rows.reduce(into: [String: Int]()) { $0[fill($1), default: 0] += 1 }
+                return rows.first { counts[fill($0)] == 1 }?.stripped
+                    .trimmingCharacters(in: .whitespaces)
+            }
+
+            let start = cursorRow(renderArmed(view, tui: tui, context: context))
+            #expect(start?.contains("Item 0") == true, "the first row starts focused: \(start ?? "-")")
+
+            #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .pageDown)))
+            let paged = cursorRow(renderArmed(view, tui: tui, context: context))
+            #expect(paged != start, "Page Down left the cursor where it was")
+
+            #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .end)))
+            // Two frames: a menu taller than the terminal lays out only the
+            // rows it can show, so the first frame reaches the last row laid
+            // out and scrolls; the second lays out the rows that revealed and
+            // the jump finishes against them (see `pendingSubtreeJump`).
+            _ = renderArmed(view, tui: tui, context: context)
+            let last = cursorRow(renderArmed(view, tui: tui, context: context))
+            #expect(last?.contains("Item 11") == true, "End is the last row: \(last ?? "-")")
+
+            #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .home)))
+            _ = renderArmed(view, tui: tui, context: context)
+            let home = cursorRow(renderArmed(view, tui: tui, context: context))
+            #expect(home?.contains("Item 0") == true, "Home is the first row: \(home ?? "-")")
+
+            // Pressing Home again is a no-op for the cursor — it is already
+            // there — and the menu still takes the key, because "go to the top"
+            // is also an instruction to the view.
+            _ = tui.keyEventDispatcher.dispatch(KeyEvent(key: .home))
+            #expect(
+                cursorRow(renderArmed(view, tui: tui, context: context))?.contains("Item 0") == true,
+                "the cursor stayed where it was")
+        }
     }
 
     @Test("Every row of a menu is the same width, and the menu hugs its widest")

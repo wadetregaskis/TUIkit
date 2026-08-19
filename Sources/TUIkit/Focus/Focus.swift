@@ -172,6 +172,16 @@ public final class FocusManager: @unchecked Sendable {
     /// though `currentFocusedID` itself hasn't changed.
     public private(set) var focusedInteractionGeneration: UInt64 = 0
 
+    /// A `Home`/`End` still travelling: the rows it is headed for may not exist
+    /// yet.
+    ///
+    /// A menu taller than the terminal lays out only the rows it can show, so
+    /// only those are registered — "the last row" is the last one CURRENTLY
+    /// laid out. Jumping there scrolls, the next pass lays out the rows that
+    /// scroll revealed, and the jump resumes against them. It settles in a
+    /// frame or two, and stops the moment a pass cannot move it further.
+    private var pendingSubtreeJump: (path: String, jump: SubtreeFocusJump)?
+
     /// Callback triggered when focus changes (element or section).
     public var onFocusChange: (() -> Void)?
 
@@ -1106,6 +1116,18 @@ extension FocusManager {
             }
         }
 
+        // Resume a Home/End that ran out of laid-out rows to travel through.
+        // Here, because this is the moment this pass's rows have registered —
+        // the same reason `.defaultFocus` resolves here.
+        if let pending = pendingSubtreeJump {
+            pendingSubtreeJump = nil
+            if moveFocus(inSubtreeAt: pending.path, jump: pending.jump) {
+                // It moved, so it may have more to travel: keep the intent for
+                // the pass the scroll it just requested will produce.
+                pendingSubtreeJump = pending
+            }
+        }
+
         // Drop `@FocusState` entries whose control left the tree this pass.
         pruneFocusRegistry()
 
@@ -1215,6 +1237,77 @@ extension FocusManager {
             let fallbackIndex = direction == .forward ? 0 : available.count - 1
             focus(available[fallbackIndex])
             return true
+        }
+    }
+
+    /// Moves the focus among the stops of ONE subtree — a menu's own rows —
+    /// rather than the whole section.
+    ///
+    /// A menu is a list, and a list's paging keys move its cursor. The focus
+    /// ring's own answer to Page Up/Down and Home/End is to scroll the
+    /// enclosing container and deliberately leave the focus where it was
+    /// (`dispatchKeyEvent`), which is right for a page of prose with a button
+    /// on it and wrong for a column that is nothing but stops: the highlight
+    /// scrolled out of sight and the next arrow key snapped the view back to
+    /// wherever it had been left.
+    ///
+    /// Subtree membership is by identity path, so this moves within the menu
+    /// that asked and not into whatever else shares its section. Rows given an
+    /// explicit `.focusID("…")` embed no path and so cannot be routed to — the
+    /// identity tax `focusID(_:addressesSubtreeAt:)` documents.
+    ///
+    /// - Returns: whether the focus moved.
+    @discardableResult
+    func moveFocus(inSubtreeAt path: String, jump: SubtreeFocusJump) -> Bool {
+        guard let section = activeSection else { return false }
+        let stops = section.focusables.filter {
+            // The container that HOLDS the rows is a focus stop too when its
+            // content overflows, and it is registered last — so "the end" was
+            // landing on the scroll view rather than on the last row: no
+            // highlight, nothing to activate, and the viewport left where it
+            // was. A menu pages among its rows.
+            $0.canBeFocused && !($0 is ScrollViewHandler)
+                && Self.focusID($0.focusID, addressesSubtreeAt: path)
+        }
+        guard !stops.isEmpty else { return false }
+        let current = focusedID.flatMap { id in stops.firstIndex { $0.focusID == id } }
+        let target: Int
+        switch jump {
+        case .first: target = 0
+        case .last: target = stops.count - 1
+        case .forward(let by): target = min(stops.count - 1, (current ?? -1) + max(1, by))
+        case .backward(let by): target = max(0, (current ?? stops.count) - max(1, by))
+        }
+        let moved = target != current
+        if moved {
+            focus(stops[target])
+            // The cursor moved on purpose, so the viewport must follow it — the
+            // same bump `dispatchKeyEvent` makes when a focused control consumes
+            // a key. Without it `End` moved the focus to the last row and left
+            // the view showing the first.
+            focusedInteractionGeneration &+= 1
+        }
+
+        // An end-to-end jump keeps travelling while the rows it is headed for
+        // are still being laid out. Reaching the last row LAID OUT is not
+        // reaching the last row, and the reveal will not scroll past a cursor
+        // that is already visible — so the container is sent to that end too,
+        // and the jump resumes in `endRenderPass` against the rows that
+        // scrolling reveals. A page jump needs none of this: a screenful is a
+        // screenful, and the reveal covers it.
+        switch jump {
+        case .first, .last:
+            let atBoundary = target == (jump == .first ? 0 : stops.count - 1)
+            guard atBoundary else {
+                pendingSubtreeJump = nil
+                return moved
+            }
+            pendingSubtreeJump = (path, jump)
+            let scrolled = scrollActiveSection(for: jump == .first ? .home : .end)
+            return moved || scrolled
+        case .forward, .backward:
+            pendingSubtreeJump = nil
+            return moved
         }
     }
 
