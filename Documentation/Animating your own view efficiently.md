@@ -275,20 +275,26 @@ alternatives to it.
    half and should be built against a real case.
 4. **5.4 as the stated destination**, gating on wanting `withAnimation` at all.
 
-## 7. What is still on the live clock
+## 7. What was still on the live clock — **all converted, 2026-08-19**
 
-Independent of the above, these built-ins still resolve a live
-`SelectionEmphasis` while rendering and so still force a full render per tick.
-Each is a straight conversion of the kind already done a dozen times:
+The list this section used to hold is empty. Every producer named in it now
+builds a cycle and hands the loop pre-rendered frames:
 
-| producer | where |
+| producer | what it needed |
 |---|---|
-| `scrollIndicatorEmphasis` — the "N more above/below" lines | `_ListCore`, `Table` (`scrollIndicatorCycle` already exists, unused) |
-| `heldSlotBackground` — the keyboard reorder hold | `_ListCore` |
-| `DropdownMenuRenderer` — the pop-up menu's highlight | `DropdownMenuRenderer.swift` |
-| `Color256Grid`, `SwatchGrid` — the cursor marker | the colour-picker panel |
-| ~~`ContextMenuTarget`~~ | **done** — `Example`, via `.border(AnimatedColor)` |
+| The "N more above/below" indicators (`_ListCore`, `Table`) | the cycle overload `ScrollView` was already using; `scrollIndicatorEmphasis` deleted with its last caller |
+| `DropdownMenuRenderer` | the whole popup redrawn once per cycle point, one run per line — every line carries border cells, so every line moves |
+| `Color256Grid`, `SwatchGrid` | one run over the cursor swatch, at the placement each already records |
+| `_ListCore`'s held reorder slot | `SelectableListRow.backgroundOverride` became a `RowBackground`, so it goes through the cursor row's machinery |
+| `Example`'s `ContextMenuTarget` | `.border(AnimatedColor)` — §5.2 |
 
-`grep -n 'SelectionIndicator.resolve\|selectionEmphasis(' Sources/` is the
-running list: the direct call is the expensive route, `.cycle(` is the cheap
-one.
+`grep -n 'SelectionIndicator.resolve\|selectionEmphasis(' Sources/` now finds
+exactly one hit: `SelectionEmphasisClock.callAsFunction`, the public
+this-tick's-colour route. That one stays. It is the simplest thing an app can
+write, it is correct, and the article says plainly what it costs and what to
+reach for instead. Deleting it would leave no easy answer to "just give me the
+colour" — and the whole point of the cheap path is that it is a choice, not a
+tax on understanding the machinery.
+
+A sweep of every page in `Example`, at three different focus positions each,
+reports zero clock reads while idle.
