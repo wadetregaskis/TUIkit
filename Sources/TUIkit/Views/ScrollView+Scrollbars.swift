@@ -25,6 +25,8 @@ extension _ScrollViewCore {
               let mouseDispatcher = context.environment.mouseEventDispatcher,
               !isDisabled
         else { return }
+        // The bar's arrows and thumb answer the pointer, which needs motion.
+        mouseDispatcher.requestFeature(.motion)
         let barHandler = ScrollbarRenderer.verticalMouseHandler(
             for: handler, length: buffer.height,
             arrows: context.environment.scrollbarArrows,
@@ -59,6 +61,7 @@ extension _ScrollViewCore {
               let mouseDispatcher = context.environment.mouseEventDispatcher,
               !isDisabled
         else { return }
+        mouseDispatcher.requestFeature(.motion)
         let barHandler = ScrollbarRenderer.horizontalMouseHandler(
             for: handler.horizontal, length: contentWidth,
             arrows: context.environment.scrollbarArrows,
@@ -100,7 +103,8 @@ extension _ScrollViewCore {
             proportional: context.environment.scrollbarProportionalThumb,
             // The bar is the ScrollView's focus indicator: it pulses the
             // accent while focused (see ScrollbarColors.focusIndicating).
-            colors: .focusIndicating(isFocused: isFocused, context: context))
+            colors: .focusIndicating(
+                isFocused: isFocused, hoveredCell: handler.hoveredBarCell, context: context))
         let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
         var lines = buffer.lines
         for index in 0..<height {
@@ -145,7 +149,9 @@ extension _ScrollViewCore {
             offset: handler.horizontal.scrollOffset,
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
-            colors: .focusIndicating(isFocused: isFocused, context: context))
+            colors: .focusIndicating(
+                isFocused: isFocused, hoveredCell: handler.horizontal.hoveredBarCell,
+                context: context))
         let corner =
             hasVerticalBar
             ? ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)

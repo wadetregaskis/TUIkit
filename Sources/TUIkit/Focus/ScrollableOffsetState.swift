@@ -142,6 +142,15 @@ public protocol ScrollableOffsetState: AnyObject {
     /// ``scrollOffset`` directly and is deliberately unaffected.
     var isScrollEnabled: Bool { get set }
 
+    /// The scrollbar cell the pointer is over, bar-relative, or `nil` when it
+    /// is elsewhere.
+    ///
+    /// Written by the bar's mouse handler and read by its renderer, so the
+    /// arrow or thumb under the pointer can answer it. Lives on the scrollable
+    /// rather than beside the bar because the bar is drawn fresh every frame
+    /// and the pointer does not move with it.
+    var hoveredBarCell: Int? { get set }
+
     /// The bound ``TUIkit/View/anchorPosition(_:)`` override, captured from the
     /// environment during render so a *user* scroll can release it at event
     /// time (when the environment is out of reach). `nil` when the app bound
@@ -248,6 +257,9 @@ public final class ScrollAxis: ScrollableOffsetState {
     public var isAutoScrolling = false
     /// Whether the user may scroll this axis (``ScrollableOffsetState``).
     public var isScrollEnabled = true
+
+    /// The scrollbar cell under the pointer (``ScrollableOffsetState``).
+    public var hoveredBarCell: Int?
     /// A horizontal axis is never anchored (anchoring is a vertical, row-wise
     /// notion), so this stays `nil`.
     public var anchorPositionBinding: Binding<ScrollAnchor<AnyHashable>?>?

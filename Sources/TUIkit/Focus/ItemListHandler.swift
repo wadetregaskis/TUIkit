@@ -536,6 +536,9 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// gated by it — moving a cursor is not adjusting a scroll position, and the
     /// reveal that keeps the cursor on screen is a framework guarantee.
     var isScrollEnabled = true
+
+    /// The scrollbar cell under the pointer (``ScrollableOffsetState``).
+    var hoveredBarCell: Int?
     /// Bound `.anchorPosition` override, captured each render so a USER scroll
     /// can release it to `.window` at event time. See
     /// `ScrollableOffsetState.releaseAnchorOnUserScroll()`.

@@ -151,6 +151,8 @@ private enum TabViewStateIndex {
     /// Per-tab measured content sizes (``TabSizeCache``), so the panel can size
     /// to the widest *and* tallest tab without re-measuring every tab each pass.
     static let sizeCache = 2
+    /// The index of the tab under the pointer, or `nil`.
+    static let hoveredTab = 3
 }
 
 /// Each tab's natural content size, per width measured at.
@@ -488,10 +490,24 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         guard !context.isMeasuring, let dispatcher = context.environment.mouseEventDispatcher else { return }
         let captureFocusID = persistedFocusIDForClicks(context)
         let focusManager = context.environment.focusManager
+        // A tab is a click target, so it answers the pointer like one.
+        dispatcher.requestFeature(.motion)
+        let hoverBox = hoveredTabBox(context: context)
         for region in regions {
             let value = tabs[region.index].value
             let capture = selection
+            let index = region.index
             let handlerID = dispatcher.register { event in
+                switch event.phase {
+                case .entered, .moved:
+                    hoverBox.value = index
+                    return true
+                case .exited:
+                    if hoverBox.value == index { hoverBox.value = nil }
+                    return true
+                default:
+                    break
+                }
                 guard event.phase == .released, event.button == .left else {
                     return event.phase == .pressed && event.button == .left
                 }
@@ -560,7 +576,8 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         var (lines, regions, animatedCells) = folderStripRows(
             rows: rows, selectedIndex: selectedIndex, chip: chip,
             style: FolderStripStyle(
-                inactiveFg: inactiveFg, inactiveBg: inactiveBg,
+                inactiveFg: inactiveFg, hoveredIndex: hoveredTabBox(context: context).value,
+                palette: palette, inactiveBg: inactiveBg,
                 border: border, surface: surface, interior: interior, boxWidth: boxWidth,
                 alignment: alignment))
 
@@ -800,8 +817,9 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let content = full.clamped(toWidth: min(natural, panelWidth), height: full.height)
 
         let strip = compactStripLines(
-            rows: rows, selectedIndex: selectedIndex, isFocused: isFocused,
-            surface: surface, chip: chip, palette: palette,
+            rows: rows, selectedIndex: selectedIndex,
+            hoveredIndex: hoveredTabBox(context: context).value,
+            chip: chip, palette: palette,
             width: panelWidth, alignment: alignment)
         let (stripLines, regions) = (strip.lines, strip.regions)
 
@@ -837,6 +855,14 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             context.isMeasuring ? [] : strip.animatedCells + buffer.animatedCells
         attachTabClicks(to: &buffer, regions: regions, context: context)
         return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
+    }
+
+    /// The persistent "which tab is the pointer over" box.
+    private func hoveredTabBox(context: RenderContext) -> StateBox<Int?> {
+        context.stateStorage!.storage(
+            for: StateStorage.StateKey(
+                identity: context.identity, propertyIndex: StateIndex.hoveredTab),
+            default: nil)
     }
 
     /// Black or white, whichever reads better on `color`.

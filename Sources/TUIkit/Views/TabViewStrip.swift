@@ -14,8 +14,8 @@ extension _TabViewCore {
     /// padded to `width`), the per-tab click regions in strip coordinates, and
     /// the active chip's animation run if it is breathing.
     func compactStripLines(
-        rows: [[Int]], selectedIndex: Int, isFocused: Bool,
-        surface: Color, chip: ActiveChipCycle, palette: any Palette,
+        rows: [[Int]], selectedIndex: Int, hoveredIndex: Int?,
+        chip: ActiveChipCycle, palette: any Palette,
         width: Int, alignment: HorizontalAlignment
     ) -> (
         lines: [String], regions: [(x: Int, y: Int, width: Int, index: Int)],
@@ -46,9 +46,14 @@ extension _TabViewCore {
                 // The active chip takes the surface (breathing when focused);
                 // inactive chips recede onto the base background.
                 let active = i == selectedIndex
+                // The pointer lifts the label it is over — including the active
+                // tab's, unless that one is already breathing for the focus.
+                let hovered = i == hoveredIndex && !(active && chip.isBreathing)
+                let resting = active ? chip.labelNow : inactiveFg
                 line += drawChip(
                     i, background: active ? chip.surface : inactiveBg,
-                    foreground: active ? chip.labelNow : inactiveFg, active: active)
+                    foreground: hovered ? palette.hoveredForeground(resting) : resting,
+                    active: active)
                 let chipWidth = tabWidth(i, style: .compact)  // body + the two caps
                 regions.append((x: x, y: y, width: chipWidth, index: i))
                 if active,
@@ -70,6 +75,10 @@ extension _TabViewCore {
     /// border and surface tones, and the box geometry its rows align within.
     struct FolderStripStyle {
         let inactiveFg: Color
+        /// The tab under the pointer, if any.
+        let hoveredIndex: Int?
+        /// For the hover lift (``Palette/hoveredForeground(_:)``).
+        let palette: any Palette
         let inactiveBg: Color
         let border: Color
         let surface: Color
@@ -149,10 +158,13 @@ extension _TabViewCore {
             var labels = base(off)
             for (k, i) in row.enumerated() {
                 let active = i == selectedIndex
+                let hovered = i == style.hoveredIndex && !(active && chip.isBreathing)
+                let resting = active ? chip.labelNow : style.inactiveFg
                 labels += bc("│")
                 labels += drawLabel(
                     i, background: active ? chip.surface : style.inactiveBg,
-                    foreground: active ? chip.labelNow : style.inactiveFg, active: active)
+                    foreground: hovered ? style.palette.hoveredForeground(resting) : resting,
+                    active: active)
                 regions.append((x: bodySpans[k].start, y: labelsY, width: bodySpans[k].len, index: i))
                 if active,
                     let run = chip.run(

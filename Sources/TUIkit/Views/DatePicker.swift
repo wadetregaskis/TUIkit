@@ -328,6 +328,12 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
+        let isHovered =
+            !isDisabled && !isFocused
+            && (context.stateStorage!.storage(
+                for: StateStorage.StateKey(
+                    identity: context.identity, propertyIndex: StateIndex.isHovered),
+                default: false) as StateBox<Bool>).value
         let cells = model.cells(date: selection.wrappedValue, activeIndex: isFocused ? handler.activeIndex : -1)
         let activeKind: DateFieldModel.Kind? = isFocused ? handler.activeKind : nil
 
@@ -359,7 +365,12 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
             } else {
                 // Every editable component is underlined so the field reads as
                 // fillable even before it takes focus.
-                style.foregroundColor = isDisabled ? palette.foregroundTertiary : palette.foreground
+                let resting =
+                    isDisabled ? palette.foregroundTertiary : palette.foreground
+                // …and lifts under the pointer, unless the field already has
+                // the focus and is saying so with its pulsing block.
+                style.foregroundColor =
+                    isHovered ? palette.hoveredForeground(resting) : resting
                 style.isUnderlined = !isDisabled
             }
             line += ANSIRenderer.render(cell.text, with: style.resolved(with: palette))
@@ -383,7 +394,23 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         else { return }
         let focusManager = context.environment.focusManager
         let focusID = handler.focusID
+        let hoverBox: StateBox<Bool> = context.stateStorage!.storage(
+            for: StateStorage.StateKey(
+                identity: context.identity, propertyIndex: StateIndex.isHovered),
+            default: false)
+        // An editable field answers the pointer like every other control.
+        mouseDispatcher.requestFeature(.motion)
         let handlerID = mouseDispatcher.register { event in
+            switch event.phase {
+            case .entered, .moved:
+                hoverBox.value = true
+                return true
+            case .exited:
+                hoverBox.value = false
+                return true
+            default:
+                break
+            }
             switch event.button {
             case .scrollUp, .scrollDown:
                 // The field under the pointer takes the step and becomes the

@@ -234,8 +234,21 @@ extension ScrollbarRenderer {
         arrows: ScrollbarArrows, proportional: Bool, behavior: ScrollbarClickBehavior
     ) -> (MouseEvent) -> Bool {
         { event in
-            guard event.button == .left, state.isScrollEnabled else { return false }
             let position = vertical ? event.y : event.x
+            // Hover first, and regardless of the button: the pointer moving
+            // over the bar carries no button at all, and a bar that cannot
+            // scroll is not a control and does not answer the pointer.
+            switch event.phase {
+            case .entered, .moved:
+                state.hoveredBarCell = state.isScrollEnabled ? position : nil
+                return state.isScrollEnabled
+            case .exited:
+                state.hoveredBarCell = nil
+                return true
+            default:
+                break
+            }
+            guard event.button == .left, state.isScrollEnabled else { return false }
             let perEnd = (length > arrowReserve(arrows) ? arrowReserve(arrows) : 0) / 2
             let trackLen = max(1, length - 2 * perEnd)
             let extent = state.extent

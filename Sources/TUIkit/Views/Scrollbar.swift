@@ -338,19 +338,40 @@ struct ScrollbarColors {
     let track: Color
     let arrow: Color
 
+    /// The bar-relative cell the pointer is over, and the tone to draw it in —
+    /// `nil` when the pointer is elsewhere.
+    ///
+    /// A cell rather than a *part*, so `.double` arrows work: both ends carry
+    /// an up-arrow and a down-arrow, and lighting "the up arrow" would light
+    /// the one at the far end too. Only one cell is ever under the pointer.
+    var hover: (cell: Int, color: Color)?
+
+    /// `base`, or the hover tone when the pointer is over cell `index`.
+    func color(_ base: Color, atCell index: Int) -> Color {
+        hover.map { $0.cell == index ? $0.color : base } ?? base
+    }
+
     /// The standard palette for a bar that doubles as its container's focus
     /// indicator: quiet secondary/tertiary tones unfocused, and a PULSING
     /// accent thumb + arrows when focused — the same SelectionIndicator
     /// convention (and `.selectionIndicatorStyle` knob) every other focused
     /// control breathes with. The steady accent alone was too subtle a
     /// focus cue.
+    /// - Parameter hoveredCell: the bar-relative cell under the pointer, if
+    ///   any. A scrollbar's arrows and thumb are controls — the only ones that
+    ///   had no answer to the pointer at all — so the cell under it lifts, the
+    ///   way every other control's foreground does (``Palette/hoveredForeground(_:)``).
     @MainActor
-    static func focusIndicating(isFocused: Bool, context: RenderContext) -> Self {
+    static func focusIndicating(
+        isFocused: Bool, hoveredCell: Int? = nil, context: RenderContext
+    ) -> Self {
         let palette = context.environment.palette
         // §1.2 of the scroll-anchoring spec: when the user may not adjust the
         // scroll position, the chrome still renders — in a disabled state. One
         // step quieter than the resting bar, so the view reads as pinned rather
         // than as having no more content.
+        // A bar that cannot be scrolled is not a control, so it does not
+        // answer the pointer either.
         guard context.environment.isScrollEnabled else {
             return Self(
                 thumb: palette.foregroundTertiary,
@@ -361,17 +382,24 @@ struct ScrollbarColors {
             return Self(
                 thumb: palette.foregroundSecondary,
                 track: palette.foregroundQuaternary,
-                arrow: palette.foregroundTertiary)
+                arrow: palette.foregroundTertiary,
+                hover: hoveredCell.map {
+                    ($0, palette.hoveredForeground(palette.foregroundSecondary))
+                })
         }
         // The cycle, not the live phase: building it reads no clock, so a
         // focused bar no longer forces a full re-render on every tick. The
         // cells are handed to the run loop instead — see `focusCycle` and
         // ``AnimatedCellRun``.
         let cycle = context.environment.selectionEmphasis.cycle(true)
+        // A focused bar is already breathing the accent; the pointer says so by
+        // stepping the cell it is over further, not by starting a second story.
+        let now = cycle.colorNow(dim: Self.pulseDim(palette), bright: palette.accent)
         return Self(
-            thumb: cycle.colorNow(dim: Self.pulseDim(palette), bright: palette.accent),
+            thumb: now,
             track: palette.foregroundQuaternary,
-            arrow: cycle.colorNow(dim: Self.pulseDim(palette), bright: palette.accent))
+            arrow: now,
+            hover: hoveredCell.map { ($0, palette.hoveredForeground(now)) })
     }
 
     /// The bar with a given accent for its thumb and arrows — one frame of the
@@ -546,17 +574,31 @@ enum ScrollbarRenderer {
         guard height > 0 else { return [] }
         let reserve = height > arrowReserve(arrows) ? arrowReserve(arrows) : 0
         let trackLen = height - reserve
+        let perEnd = reserve / 2
         let lines = trackCells(
             count: trackLen, extent: extent, viewport: viewport, offset: offset,
             proportional: proportional, vertical: true
-        ).map { styledCell($0, thumb: colors.thumb, track: colors.track) }
+        ).enumerated().map {
+            styledCell(
+                $0.element, thumb: colors.color(colors.thumb, atCell: $0.offset + perEnd),
+                track: colors.track)
+        }
 
         guard reserve > 0 else { return lines }
-        let up = ANSIRenderer.colorize("▲", foreground: colors.arrow, background: colors.track)
-        let down = ANSIRenderer.colorize("▼", foreground: colors.arrow, background: colors.track)
+        func arrow(_ glyph: String, atCell cell: Int) -> String {
+            ANSIRenderer.colorize(
+                glyph, foreground: colors.color(colors.arrow, atCell: cell),
+                background: colors.track)
+        }
         // `single` → ▲ … ▼; `double` → ▲▼ … ▲▼ (both arrows at each end).
-        let head = reserve == 4 ? [up, down] : [up]
-        let tail = reserve == 4 ? [up, down] : [down]
+        let last = height - 1
+        let head =
+            reserve == 4
+            ? [arrow("▲", atCell: 0), arrow("▼", atCell: 1)] : [arrow("▲", atCell: 0)]
+        let tail =
+            reserve == 4
+            ? [arrow("▲", atCell: last - 1), arrow("▼", atCell: last)]
+            : [arrow("▼", atCell: last)]
         return head + lines + tail
     }
 
@@ -631,16 +673,30 @@ enum ScrollbarRenderer {
         guard width > 0 else { return "" }
         let reserve = width > arrowReserve(arrows) ? arrowReserve(arrows) : 0
         let trackLen = width - reserve
+        let perEnd = reserve / 2
         let trackStr = trackCells(
             count: trackLen, extent: extent, viewport: viewport, offset: offset,
             proportional: proportional, vertical: false
-        ).map { styledCell($0, thumb: colors.thumb, track: colors.track) }.joined()
+        ).enumerated().map {
+            styledCell(
+                $0.element, thumb: colors.color(colors.thumb, atCell: $0.offset + perEnd),
+                track: colors.track)
+        }.joined()
 
         guard reserve > 0 else { return trackStr }
-        let left = ANSIRenderer.colorize("◀", foreground: colors.arrow, background: colors.track)
-        let right = ANSIRenderer.colorize("▶", foreground: colors.arrow, background: colors.track)
-        let head = reserve == 4 ? left + right : left
-        let tail = reserve == 4 ? left + right : right
+        func arrow(_ glyph: String, atCell cell: Int) -> String {
+            ANSIRenderer.colorize(
+                glyph, foreground: colors.color(colors.arrow, atCell: cell),
+                background: colors.track)
+        }
+        let last = width - 1
+        let head =
+            reserve == 4
+            ? arrow("◀", atCell: 0) + arrow("▶", atCell: 1) : arrow("◀", atCell: 0)
+        let tail =
+            reserve == 4
+            ? arrow("◀", atCell: last - 1) + arrow("▶", atCell: last)
+            : arrow("▶", atCell: last)
         return head + trackStr + tail
     }
 }

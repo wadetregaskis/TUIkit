@@ -43,6 +43,10 @@ struct ActiveChipCycle {
             .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: surface)
     }
 
+    /// Whether the active chip is breathing — the strip holds the focus, and
+    /// the style animates. A hover must not fight that.
+    var isBreathing: Bool { cycle.isFocused && cycle.isAnimating }
+
     /// The active label's colour right now — breathing while the strip holds
     /// the focus, resting otherwise.
     ///

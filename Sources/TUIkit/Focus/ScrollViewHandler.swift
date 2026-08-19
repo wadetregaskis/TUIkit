@@ -72,6 +72,9 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// Whether the user may scroll (``ScrollableOffsetState``), synced from
     /// `environment.isScrollEnabled` each render.
     public var isScrollEnabled = true
+
+    /// The scrollbar cell under the pointer (``ScrollableOffsetState``).
+    public var hoveredBarCell: Int?
     /// Bound `.anchorPosition` override, captured each render so a USER scroll
     /// can release it to `.window` at event time. See
     /// `ScrollableOffsetState.releaseAnchorOnUserScroll()`.
