@@ -117,6 +117,67 @@ struct PublicAnimationAPITests {
         #expect(buffer.animatedCells.isEmpty)
     }
 
+    // MARK: - Letting a modifier place the runs
+
+    /// The whole recipe an app follows for "my view shows that it has the
+    /// focus", with no offsets anywhere in it.
+    private struct PublicProbeBordered: View {
+        @Environment(\.isFocused) private var isFocused
+        @Environment(\.selectionEmphasis) private var emphasis
+        @Environment(\.palette) private var palette
+
+        var body: some View {
+            Text("Pick me")
+                .padding(.horizontal, 1)
+                .border(emphasis.animatedColor(
+                    isFocused, dim: palette.border, bright: palette.accent))
+        }
+    }
+
+    @Test("An animated border colour animates the border, offsets and all")
+    func animatedBorder() {
+        let buffer = renderToBuffer(
+            PublicProbeBordered().focusable(), context: makeRenderContext(width: 20, height: 4))
+        // A three-row box: the two rules, and two side cells on the one row
+        // between them.
+        #expect(buffer.animatedCells.count == 4, "wrong number of border runs")
+        #expect(buffer.animatedCells.allSatisfy { $0.isAnimating })
+
+        let byRow = Dictionary(grouping: buffer.animatedCells, by: \.offsetY)
+        #expect(byRow[0]?.count == 1, "the top rule is one run")
+        #expect(byRow[2]?.count == 1, "the bottom rule is one run")
+        #expect(byRow[1]?.map(\.width) == [1, 1], "the side walls are single cells")
+
+        // And every run must sit exactly on the cells that were drawn.
+        for run in buffer.animatedCells {
+            let replayed = buffer.composited(
+                with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
+            #expect(replayed.lines.map(\.stripped) == buffer.lines.map(\.stripped),
+                "run \(run.offsetX),\(run.offsetY) moved the cells")
+        }
+    }
+
+    @Test("An unfocused border animates nothing")
+    func unfocusedBorderIsStill() {
+        // No `.focusable()` — nothing takes the focus, so the colour is one
+        // frame and the border is drawn exactly as a plain `.border(_:)` would.
+        let buffer = renderToBuffer(
+            PublicProbeBordered(), context: makeRenderContext(width: 20, height: 4))
+        #expect(buffer.animatedCells.isEmpty)
+    }
+
+    @Test("A still AnimatedColor draws what the plain overload draws")
+    func stillColourMatchesPlainBorder() {
+        // The whole point of a still colour being an `AnimatedColor` too is
+        // that a call site need not branch — so the two must produce the same
+        // picture, byte for byte.
+        let context = makeRenderContext(width: 20, height: 4)
+        let animated = renderToBuffer(Text("x").border(AnimatedColor(.red)), context: context)
+        let plain = renderToBuffer(Text("x").border(Color.red), context: context)
+        #expect(animated.lines == plain.lines)
+        #expect(animated.animatedCells.isEmpty)
+    }
+
     @Test("A styled string is self-contained")
     func styledStringResets() {
         // A frame handed to the run loop is spliced in without whatever escape

@@ -229,7 +229,12 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         let appearance = context.environment.appearance
         let effectiveBorderStyle = style.borderStyle ?? appearance.borderStyle
         let palette = context.environment.palette
-        let borderColor = style.borderColor?.resolve(with: palette) ?? palette.border
+        // Every frame of the border's colour, not just the one on screen: a
+        // border handed an animating colour leaves runs for its own cells
+        // (`borderRuns`), which is the whole point of the type.
+        let borderAnimation =
+            style.borderColor?.resolved(with: palette) ?? AnimatedColor(palette.border)
+        let borderColor = borderAnimation.current
         let hasBorder = style.hasBorder
 
         // Inner context for content between the side borders (width − 2 when
@@ -343,7 +348,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                 footerBuffer: footerBuffer,
                 innerWidth: innerWidth,
                 borderStyle: effectiveBorderStyle,
-                borderColor: borderColor,
+                borderColor: borderAnimation,
                 context: context,
                 focusIndicator: indicator
             )
@@ -523,11 +528,12 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         footerBuffer: FrameBuffer?,
         innerWidth: Int,
         borderStyle: BorderStyle,
-        borderColor: Color,
+        borderColor: AnimatedColor,
         context: RenderContext,
         focusIndicator: FocusIndicatorEmphasis? = nil
     ) -> FrameBuffer {
         let palette = context.environment.palette
+        let borderNow = borderColor.current
         var lines: [String] = []
 
         // Top border (with title if present)
@@ -536,7 +542,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                 BorderRenderer.standardTopBorder(
                     style: borderStyle,
                     innerWidth: innerWidth,
-                    color: borderColor,
+                    color: borderNow,
                     title: titleText,
                     titleColor: titleColor?.resolve(with: palette) ?? palette.accent,
                     focusIndicatorColor: focusIndicator?.colorNow
@@ -547,7 +553,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                 BorderRenderer.standardTopBorder(
                     style: borderStyle,
                     innerWidth: innerWidth,
-                    color: borderColor,
+                    color: borderNow,
                     focusIndicatorColor: focusIndicator?.colorNow
                 )
             )
@@ -564,7 +570,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                 contents: bodyBuffer.lines,
                 innerWidth: innerWidth,
                 style: borderStyle,
-                color: borderColor,
+                color: borderNow,
                 contentWidth: bodyBuffer.linesAreUniformWidth ? bodyBuffer.width : nil
             )
         )
@@ -576,7 +582,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                     BorderRenderer.standardDivider(
                         style: borderStyle,
                         innerWidth: innerWidth,
-                        color: borderColor
+                        color: borderNow
                     )
                 )
             }
@@ -587,7 +593,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                     contents: footerBuf.lines,
                     innerWidth: innerWidth,
                     style: borderStyle,
-                    color: borderColor
+                    color: borderNow
                 )
             )
         }
@@ -597,7 +603,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
             BorderRenderer.standardBottomBorder(
                 style: borderStyle,
                 innerWidth: innerWidth,
-                color: borderColor
+                color: borderNow
             )
         )
 
@@ -662,26 +668,138 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         }
         result.overlays = carriedOverlays
         result.hitTestRegions = carriedRegions
-        // Animated runs move with their cells, like the regions above. Dropping
-        // them here does not merely stop an animation, it FREEZES one: the run
-        // loop keeps the clock alive from the runs on the final buffer.
-        var carriedRuns = bodyBuffer.shiftedAnimatedCells(byX: 1, y: 1)
+        result.animatedCells = animatedCells(
+            bodyBuffer: bodyBuffer, footerBuffer: footerBuffer, innerWidth: innerWidth,
+            borderStyle: borderStyle, borderColor: borderColor,
+            focusIndicator: focusIndicator, lineCount: lines.count, palette: palette)
+        return result
+    }
+
+    /// Every animated cell of a bordered container: the ones its content
+    /// declared, moved past the border, plus the border's own.
+    ///
+    /// Dropping a carried run does not merely stop an animation, it FREEZES
+    /// one: the run loop keeps the clock alive from the runs on the final
+    /// buffer, so a run that never arrives takes the clock down with it.
+    @MainActor
+    private func animatedCells(
+        bodyBuffer: FrameBuffer,
+        footerBuffer: FrameBuffer?,
+        innerWidth: Int,
+        borderStyle: BorderStyle,
+        borderColor: AnimatedColor,
+        focusIndicator: FocusIndicatorEmphasis?,
+        lineCount: Int,
+        palette: any Palette
+    ) -> [AnimatedCellRun] {
+        var runs = bodyBuffer.shiftedAnimatedCells(byX: 1, y: 1)
         if let footerBuf = footerBuffer, !footerBuf.isEmpty {
             let footerRow = 1 + bodyBuffer.lines.count + (style.showFooterSeparator ? 1 : 0)
-            carriedRuns += footerBuf.shiftedAnimatedCells(byX: 1, y: footerRow)
+            runs += footerBuf.shiftedAnimatedCells(byX: 1, y: footerRow)
         }
-        // The section's ● breathes on its own, at the one cell the top border
-        // just drew it in — `BorderRenderer.showsFocusIndicator` is the SAME
-        // condition the border drew under, so a box too narrow for the ● leaves
-        // no run repainting a corner.
-        if let indicatorRun = focusIndicator.flatMap({ indicator in
-            BorderRenderer.showsFocusIndicator(innerWidth: innerWidth, hasTitle: title != nil)
-                ? indicator.run(offsetX: 1, offsetY: 0) : nil
+        let showsIndicator =
+            focusIndicator != nil
+            && BorderRenderer.showsFocusIndicator(innerWidth: innerWidth, hasTitle: title != nil)
+        if borderColor.isAnimating {
+            // The border itself moves, so the whole frame it draws is replayed —
+            // and the ● lives IN the top border's line. A separate run for it
+            // would be a second claim on the same cell, spliced in whatever
+            // order the loop happened to hold them: the two are folded into one
+            // set of frames instead, in phase because they share the clock.
+            runs += borderRuns(
+                borderColor, indicator: showsIndicator ? focusIndicator : nil,
+                borderStyle: borderStyle, innerWidth: innerWidth, lineCount: lineCount,
+                dividerRow: dividerRow(bodyBuffer: bodyBuffer, footerBuffer: footerBuffer),
+                palette: palette)
+        } else if let indicatorRun = showsIndicator
+            ? focusIndicator?.run(offsetX: 1, offsetY: 0) : nil
+        {
+            // The section's ● breathes on its own, at the one cell the top
+            // border just drew it in — `BorderRenderer.showsFocusIndicator` is
+            // the SAME condition the border drew under, so a box too narrow for
+            // the ● leaves no run repainting a corner.
+            runs.append(indicatorRun)
+        }
+        return runs
+    }
+
+    /// The row the footer separator sits on, or `nil` when there is none. Its
+    /// end caps are `leftT`/`rightT` rather than the plain wall, so it is drawn
+    /// (and replayed) as a whole line rather than as two side cells.
+    private func dividerRow(bodyBuffer: FrameBuffer, footerBuffer: FrameBuffer?) -> Int? {
+        guard style.showFooterSeparator, !(footerBuffer?.isEmpty ?? true) else { return nil }
+        return 1 + bodyBuffer.lines.count
+    }
+
+    /// Every cell of a border whose colour moves, as runs.
+    ///
+    /// The horizontal rules — top, bottom and the footer separator — are whole
+    /// lines, rebuilt per frame through the same `BorderRenderer` calls that
+    /// drew them, so a title and a focus ● come along at the right colours.
+    /// Everything between is two single cells per row, and every one of those
+    /// rows draws the identical wall, so the frames are built once and shared
+    /// (an array is copy-on-write, so sharing them costs nothing).
+    ///
+    /// - Parameter indicator: The focus ●, when the top border is drawing one.
+    ///   It is folded into the top line's frames rather than left as its own
+    ///   run, because two runs over one cell have no defined order.
+    @MainActor
+    private func borderRuns(
+        _ borderColor: AnimatedColor,
+        indicator: FocusIndicatorEmphasis?,
+        borderStyle: BorderStyle,
+        innerWidth: Int,
+        lineCount: Int,
+        dividerRow: Int?,
+        palette: any Palette
+    ) -> [AnimatedCellRun] {
+        guard lineCount >= 2 else { return [] }
+        let titleText = title
+        let titleColour = titleColor?.resolve(with: palette) ?? palette.accent
+        var runs: [AnimatedCellRun] = []
+
+        if let top = borderColor.run(offsetX: 0, offsetY: 0, drawAtStep: { step, colour in
+            let dot = indicator.map { $0.cycle.colors(dim: $0.dim, bright: $0.bright) }
+                .map { $0[step % max(1, $0.count)] }
+            guard let titleText else {
+                return BorderRenderer.standardTopBorder(
+                    style: borderStyle, innerWidth: innerWidth, color: colour,
+                    focusIndicatorColor: dot)
+            }
+            return BorderRenderer.standardTopBorder(
+                style: borderStyle, innerWidth: innerWidth, color: colour, title: titleText,
+                titleColor: titleColour, focusIndicatorColor: dot)
         }) {
-            carriedRuns.append(indicatorRun)
+            runs.append(top)
         }
-        result.animatedCells = carriedRuns
-        return result
+
+        if let bottom = borderColor.run(offsetX: 0, offsetY: lineCount - 1, draw: {
+            BorderRenderer.standardBottomBorder(
+                style: borderStyle, innerWidth: innerWidth, color: $0)
+        }) {
+            runs.append(bottom)
+        }
+
+        if let dividerRow, dividerRow > 0, dividerRow < lineCount - 1,
+            let divider = borderColor.run(offsetX: 0, offsetY: dividerRow, draw: {
+                BorderRenderer.standardDivider(
+                    style: borderStyle, innerWidth: innerWidth, color: $0)
+            })
+        {
+            runs.append(divider)
+        }
+
+        // The side walls. `innerWidth + 1` rather than the buffer's width: a
+        // titled top border may be WIDER than the box below it, and the wall is
+        // where `standardContentLines` put it.
+        guard let wall = borderColor.run(offsetX: 0, offsetY: 0, draw: {
+            String(borderStyle.vertical).styled(foreground: $0)
+        }) else { return runs }
+        for row in 1..<(lineCount - 1) where row != dividerRow {
+            runs.append(wall.shifted(byX: 0, y: row))
+            runs.append(wall.shifted(byX: innerWidth + 1, y: row))
+        }
+        return runs
     }
 
     // MARK: - Borderless Rendering

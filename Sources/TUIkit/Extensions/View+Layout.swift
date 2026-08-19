@@ -50,6 +50,36 @@ extension View {
         style: BorderStyle? = nil,
         width: Int = 1
     ) -> some View {
+        bordered(style: style, colour: AnimatedColor(colour), width: width)
+    }
+
+    /// A border whose colour breathes, blinks, or otherwise moves.
+    ///
+    /// The cheap way to show that your own view holds the focus. The border is
+    /// drawn here, so it is this modifier — not the caller — that knows which
+    /// cells to animate, and it leaves ``AnimatedCellRun``s for them. Nothing
+    /// re-renders per tick.
+    ///
+    /// ```swift
+    /// Text("Right-click me")
+    ///     .border(emphasis.animatedColor(
+    ///         isFocused, dim: palette.border, bright: palette.accent))
+    /// ```
+    ///
+    /// A still ``AnimatedColor`` (an unfocused element, or a
+    /// `.selectionIndicatorStyle(.none)`) simply draws its one colour and
+    /// leaves nothing behind, so the call site need not branch.
+    ///
+    /// - Parameters:
+    ///   - colour: The border colour, as every frame of its cycle.
+    ///   - style: The box-drawing characters (default: the appearance's).
+    ///   - width: Concentric rings, in cells. Every ring animates.
+    /// - Returns: A view with a border that moves.
+    public func border(
+        _ colour: AnimatedColor,
+        style: BorderStyle? = nil,
+        width: Int = 1
+    ) -> some View {
         bordered(style: style, colour: colour, width: width)
     }
 
@@ -80,7 +110,7 @@ extension View {
     /// `ContainerView` around the last, which is exactly what a two-cell
     /// border looks like on a grid that has no half-cells.
     @ViewBuilder
-    func bordered(style: BorderStyle?, colour: Color?, width: Int) -> some View {
+    func bordered(style: BorderStyle?, colour: AnimatedColor?, width: Int) -> some View {
         if width <= 0 {
             self
         } else {
@@ -93,7 +123,7 @@ extension View {
     }
 
     /// One border, drawn as the titleless container it has always been.
-    private func ring(style: BorderStyle?, colour: Color?) -> some View {
+    private func ring(style: BorderStyle?, colour: AnimatedColor?) -> some View {
         ContainerView(
             style: ContainerStyle(
                 showHeaderSeparator: false,

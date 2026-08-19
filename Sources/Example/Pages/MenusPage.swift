@@ -201,6 +201,12 @@ struct MenusPage: View {
 /// affordance every built-in control uses, on the same clock, honouring
 /// whatever `.selectionIndicatorStyle` is in force — pulse, blink, or a static
 /// accent. Neither decision is made here.
+///
+/// `animatedColor` rather than `emphasis(isFocused).color(…)`: the latter is
+/// this tick's colour and reads the clock to get it, so advancing the pulse
+/// means re-rendering the whole page. This hands `.border` every frame of the
+/// cycle, and the border — which is the only thing that knows where its cells
+/// are — leaves them for the run loop. See the `AnimatingYourOwnView` article.
 private struct ContextMenuTarget: View {
     let title: LocalizedStringKey
 
@@ -221,10 +227,11 @@ private struct ContextMenuTarget: View {
     /// The same two endpoints the framework's own focused frames breathe
     /// between — deliberately not `palette.border` at the dim end, or the
     /// bottom of every pulse would be indistinguishable from not being focused
-    /// at all.
-    private var borderColor: Color {
-        guard isFocused else { return palette.border }
-        return emphasis(true).color(
+    /// at all. Unfocused it is one frame, so the border simply sits still.
+    private var borderColor: AnimatedColor {
+        guard isFocused else { return AnimatedColor(palette.border) }
+        return emphasis.animatedColor(
+            true,
             dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
             bright: palette.accent)
     }

@@ -22,7 +22,7 @@ The shape of it:
 | You want | You do |
 |----------|--------|
 | A cell whose **colour** varies over the focus pulse | Ask for the *cycle*, not the phase; leave an ``AnimatedCellRun`` |
-| Something a **modifier** paints (a border, a background) | Hand that modifier an animated colour and let it place the runs |
+| Something a **modifier** paints (a border) | Hand it an ``AnimatedColor`` and let it place the runs |
 | Anything else | Render each frame yourself and describe the spans that differ |
 
 ## Say when you are focused
@@ -95,6 +95,36 @@ For an element whose appearance is more than a foreground colour, the
 `draw:` overloads hand you each frame's colour (or the whole
 ``SelectionEmphasis``, if two things pulse at once) and take back the finished
 cells.
+
+## Let the modifier place them
+
+Both of those need the view to know where its own cells are. Often it does not:
+what animates is a colour something *else* paints, and that something knows the
+geometry only after layout. The `.border` of the focus example above is exactly
+that case — there is no offset for you to pass.
+
+So hand the modifier the colour instead. ``AnimatedColor`` is every frame of
+one, and ``View/border(_:style:width:)-(AnimatedColor,_,_)`` takes it and leaves the runs for the
+cells it drew:
+
+```swift
+struct Target: View {
+    @Environment(\.isFocused) private var isFocused
+    @Environment(\.selectionEmphasis) private var emphasis
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Text("Right-click me")
+            .padding(.horizontal, 1)
+            .border(emphasis.animatedColor(
+                isFocused, dim: palette.border, bright: palette.accent))
+    }
+}
+```
+
+No offsets, no ``Renderable``, nothing to get wrong — and an unfocused view
+produces a still colour, which draws exactly what `.border(_ colour: Color)`
+would and leaves nothing behind. That is the shape to reach for first.
 
 ## Composed views declare their runs
 

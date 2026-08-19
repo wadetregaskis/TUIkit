@@ -116,7 +116,7 @@ struct Box<Content: View>: View {
     }
 
     var body: some View {
-        content.bordered(style: borderStyle, colour: borderColor, width: 1)
+        content.bordered(style: borderStyle, colour: borderColor.map(AnimatedColor.init), width: 1)
     }
 }
 

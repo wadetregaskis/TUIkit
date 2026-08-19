@@ -111,8 +111,13 @@ struct ContainerStyle: Sendable, Equatable {
     /// The border style (nil uses appearance default).
     var borderStyle: BorderStyle?
 
-    /// The border color (nil uses theme default).
-    var borderColor: Color?
+    /// The border colour (nil uses the theme's), as every frame of it.
+    ///
+    /// An ``AnimatedColor`` rather than a `Color` because the border is drawn
+    /// here and only here: a caller that wants it to breathe cannot know which
+    /// cells to animate, and this is the type that lets it not have to. A
+    /// still colour is one frame, so the common case costs nothing.
+    var borderColor: AnimatedColor?
 
     /// How the footer content is aligned within the container width (default
     /// leading). See ``ContainerConfig/footerAlignment``.
@@ -139,7 +144,7 @@ struct ContainerStyle: Sendable, Equatable {
         showHeaderSeparator: Bool = true,
         showFooterSeparator: Bool = true,
         borderStyle: BorderStyle? = nil,
-        borderColor: Color? = nil,
+        borderColor: AnimatedColor? = nil,
         footerAlignment: HorizontalAlignment = .leading,
         hasBorder: Bool = true,
         scrollsOverflowingBody: Bool = false
@@ -160,7 +165,7 @@ struct ContainerStyle: Sendable, Equatable {
         self.showHeaderSeparator = true
         self.showFooterSeparator = config.showFooterSeparator
         self.borderStyle = config.borderStyle
-        self.borderColor = config.borderColor
+        self.borderColor = config.borderColor.map(AnimatedColor.init)
         self.footerAlignment = config.footerAlignment
         self.hasBorder = config.hasBorder
         self.scrollsOverflowingBody = config.scrollsOverflowingBody
@@ -197,7 +202,7 @@ internal func renderContainer<Content: View, Footer: View>(
         showHeaderSeparator: true,
         showFooterSeparator: hasFooter && config.showFooterSeparator,
         borderStyle: config.borderStyle,
-        borderColor: config.borderColor,
+        borderColor: config.borderColor.map(AnimatedColor.init),
         footerAlignment: config.footerAlignment,
         hasBorder: config.hasBorder,
         scrollsOverflowingBody: config.scrollsOverflowingBody
@@ -251,7 +256,7 @@ internal func measureContainer<Content: View, Footer: View>(
         showHeaderSeparator: true,
         showFooterSeparator: hasFooter && config.showFooterSeparator,
         borderStyle: config.borderStyle,
-        borderColor: config.borderColor,
+        borderColor: config.borderColor.map(AnimatedColor.init),
         footerAlignment: config.footerAlignment,
         hasBorder: config.hasBorder,
         scrollsOverflowingBody: config.scrollsOverflowingBody
