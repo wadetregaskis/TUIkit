@@ -772,6 +772,11 @@ extension FocusManager {
         // all of which the scroller's OWN key handler gets right.
         // The one definition of a page, in the scroller's own stepping unit.
         let page = scroller.pageDistance
+        // The offset before, so the caller can be told whether anything
+        // actually moved. "A scroller exists" is not movement, and a jump that
+        // resumes itself while the container is still travelling needs to know
+        // the difference — see `moveFocus(inSubtreeAt:jump:)`.
+        let before = scroller.scrollOffset
         switch key {
         // A page moves the PICTURE by a page — `pageDelta(_:)` re-bases it on
         // the offset the rows were drawn from, which near the top edge is not
@@ -784,7 +789,7 @@ extension FocusManager {
         case .end: scroller.userScrollToBottom()
         default: return false
         }
-        return true
+        return scroller.scrollOffset != before
     }
 }
 
@@ -1303,14 +1308,15 @@ extension FocusManager {
         // screenful, and the reveal covers it.
         switch jump {
         case .first, .last:
-            let atBoundary = target == (jump == .first ? 0 : stops.count - 1)
-            guard atBoundary else {
-                pendingSubtreeJump = nil
-                return moved
-            }
-            pendingSubtreeJump = (path, jump)
+            // Re-armed only while this pass made progress — the cursor moved,
+            // or the container did. Re-arming unconditionally left the latch
+            // set forever: every later pass re-ran the jump, so the next Up
+            // after an End was undone at the end of its own render and the
+            // arrow key read as dead.
             let scrolled = scrollActiveSection(for: jump == .first ? .home : .end)
-            return moved || scrolled
+            let progressed = moved || scrolled
+            pendingSubtreeJump = progressed ? (path, jump) : nil
+            return progressed
         case .forward, .backward:
             pendingSubtreeJump = nil
             return moved

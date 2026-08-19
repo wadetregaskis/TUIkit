@@ -150,6 +150,47 @@ struct MenuTests {
         }
     }
 
+    @Test("An arrow key after End is not undone")
+    func arrowAfterEndSticks() {
+        // The latch that lets Home/End keep travelling while more rows are laid
+        // out was re-armed unconditionally, so it never cleared: every later
+        // pass re-ran the jump, and an Up pressed after End was snapped back to
+        // the last row at the end of its own render. The arrow key read as
+        // dead.
+        withColorDepth(.truecolor) {
+            let (tui, context) = harness(height: 9)
+            let view = Menu("Menu") {
+                ForEach(0..<12, id: \.self) { index in Button("Item \(index)") {} }
+            }
+            .menuStyle(.inline)
+            func cursorRow(_ buffer: FrameBuffer) -> String? {
+                let rows = buffer.lines.filter { $0.contains("Item ") }
+                func fill(_ line: String) -> String {
+                    line.ranges(of: "48;2;").first.map {
+                        String(line[$0.lowerBound...].prefix(16))
+                    } ?? ""
+                }
+                let counts = rows.reduce(into: [String: Int]()) { $0[fill($1), default: 0] += 1 }
+                return rows.first { counts[fill($0)] == 1 }?.stripped
+                    .trimmingCharacters(in: .whitespaces)
+            }
+
+            _ = renderArmed(view, tui: tui, context: context)
+            #expect(tui.keyEventDispatcher.dispatch(KeyEvent(key: .end)))
+            // Let the jump settle (it travels as rows are laid out).
+            for _ in 0..<4 { _ = renderArmed(view, tui: tui, context: context) }
+            #expect(
+                cursorRow(renderArmed(view, tui: tui, context: context))?.contains("Item 11") == true)
+
+            // Up, and it stays up.
+            context.environment.focusManager!.focusPreviousInSection()
+            let afterUp = cursorRow(renderArmed(view, tui: tui, context: context))
+            #expect(
+                afterUp?.contains("Item 10") == true,
+                "the arrow was undone by a stale jump: \(afterUp ?? "-")")
+        }
+    }
+
     @Test("A menu leaves the paging keys alone when the cursor is elsewhere")
     func inlinePagingIsScopedToTheCursor() {
         // The handler is registered per SECTION, not per control, so a menu
