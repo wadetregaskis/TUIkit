@@ -653,38 +653,48 @@ struct ContextMenuTests {
     /// an otherwise dead frame reads as debris rather than as focus.
     @Test("The open menu's border pulses, and shows no ● where a title would go")
     func openMenuBorderPulses() throws {
-        /// The presented menu, rendered at a given point in the pulse cycle.
-        func popup(pulsePhase: Double) -> FrameBuffer? {
-            let tui = TUIContext()
-            let focusManager = FocusManager()
-            var context = context(tui, focusManager: focusManager)
-            context.environment.pulsePhase = pulsePhase
-            let view = targetView()
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let context = context(tui, focusManager: focusManager)
+        let view = targetView()
 
-            _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
-            _ = tui.mouseEventDispatcher.dispatch(
-                MouseEvent(button: .right, phase: .pressed, x: 3, y: 0))
-            _ = tui.mouseEventDispatcher.dispatch(
-                MouseEvent(button: .right, phase: .released, x: 3, y: 0))
-            return renderArmed(view, tui: tui, focusManager: focusManager, context: context)
-                .overlays.first?.content
-        }
+        _ = renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .right, phase: .pressed, x: 3, y: 0))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .right, phase: .released, x: 3, y: 0))
+        let popup = try #require(
+            renderArmed(view, tui: tui, focusManager: focusManager, context: context)
+                .overlays.first?.content)
 
-        let dim = try #require(popup(pulsePhase: 0))
-        let bright = try #require(popup(pulsePhase: 1))
         #expect(
-            !dim.lines.contains { $0.stripped.contains("●") },
+            !popup.lines.contains { $0.stripped.contains("●") },
             """
             an untitled menu shows nothing in its top border: \
-            \(dim.lines.map(\.stripped).joined(separator: "\n"))
+            \(popup.lines.map(\.stripped).joined(separator: "\n"))
             """)
-        // The colour, not the glyphs: the frame is the same box either way.
-        #expect(
-            dim.lines.map(\.stripped) == bright.lines.map(\.stripped),
-            "the pulse must not move any glyph")
-        #expect(
-            dim.lines[0] != bright.lines[0],
-            "…only recolour the border, which must breathe: \(dim.lines[0].debugDescription)")
+
+        // Not "the output changes with the phase": the popup no longer reads
+        // the phase as it renders — that read is what re-rendered the whole
+        // page behind an open menu on every tick. It leaves runs instead, and
+        // the breathing lives there.
+        #expect(!popup.animatedCells.isEmpty, "the frame does not breathe")
+        // The colour, not the glyphs: the frame is the same box at every point
+        // of the cycle.
+        for run in popup.animatedCells {
+            #expect(
+                Set(run.frames.map(\.stripped)).count == 1,
+                "the pulse moved a glyph on row \(run.offsetY)")
+            // And each run must sit on the cells it was drawn from: replaying
+            // the step the frame was rendered at changes nothing.
+            let replayed = popup.composited(
+                with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
+            #expect(
+                replayed.lines.map(\.stripped) == popup.lines.map(\.stripped),
+                "the run on row \(run.offsetY) moved the cells")
+        }
+        // The top border is part of it — the frame breathes as a whole.
+        #expect(popup.animatedCells.contains { $0.offsetY == 0 })
     }
 
     /// The measure pass has to see the shortcuts too, or the menu is sized for

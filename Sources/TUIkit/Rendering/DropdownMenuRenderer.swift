@@ -199,14 +199,15 @@ enum DropdownMenu {
                     arrow: palette.foregroundTertiary))
             : nil
 
-        var buffer = FrameBuffer(
-            lines: lines(
-                rows: rows,
-                highlightedRow: config.highlightedRow,
-                visibleRange: window.visible,
-                innerWidth: config.innerWidth,
-                barCells: barCells,
-                context: context))
+        let drawn = animatedLines(
+            rows: rows,
+            highlightedRow: config.highlightedRow,
+            visibleRange: window.visible,
+            innerWidth: config.innerWidth,
+            barCells: barCells,
+            context: context)
+        var buffer = FrameBuffer(lines: drawn.lines)
+        buffer.animatedCells = drawn.runs
         attachMouseHandlers(
             to: &buffer,
             config: config,
@@ -364,13 +365,22 @@ enum DropdownMenu {
 
     // MARK: - Line drawing
 
-    /// Draws the bordered popup lines for the visible window.
+    /// Draws the bordered popup lines for the visible window, at one point of
+    /// the focus pulse.
+    ///
+    /// Everything a popup draws moves: the highlighted row's background, and
+    /// the border echoing it at lower intensity. So rather than pick apart
+    /// which cells those are, ``animatedLines`` calls this once per point of
+    /// the cycle and hands the loop one run per line — the frames are then
+    /// literally what this renderer produces, which is the strongest form the
+    /// "a run must match the cells that were drawn" rule can take.
     private static func lines(
         rows: [Row],
         highlightedRow: Int?,
         visibleRange: Range<Int>,
         innerWidth: Int,
         barCells: [String]?,
+        emphasis: SelectionEmphasis,
         context: RenderContext
     ) -> [String] {
         let palette = context.environment.palette
@@ -382,11 +392,10 @@ enum DropdownMenu {
         // driving the menu rather than whatever sits behind it.
         let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
         let brightAccent = palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
-        let indicator = SelectionIndicator.resolve(isFocused: true, context: context)
-        let highlightBg = indicator.color(dim: dimAccent, bright: brightAccent)
+        let highlightBg = emphasis.color(dim: dimAccent, bright: brightAccent)
         // The border echoes the highlight pulse at lower intensity so the
         // popup's frame reads as part of the same active control.
-        let borderColor = indicator.color(
+        let borderColor = emphasis.color(
             dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
             bright: palette.accent)
 
@@ -451,6 +460,47 @@ enum DropdownMenu {
             BorderRenderer.standardBottomBorder(
                 style: borderStyle, innerWidth: innerWidth, color: borderColor))
         return lines
+    }
+
+    /// The popup's lines, plus the runs that let the loop breathe them.
+    ///
+    /// The whole popup is redrawn per point of the cycle — cheap, because the
+    /// row contents are already-rendered strings and this only re-assembles
+    /// them — and every line gets a run, because every line carries border
+    /// cells and so every line moves.
+    @MainActor
+    private static func animatedLines(
+        rows: [Row],
+        highlightedRow: Int?,
+        visibleRange: Range<Int>,
+        innerWidth: Int,
+        barCells: [String]?,
+        context: RenderContext
+    ) -> (lines: [String], runs: [AnimatedCellRun]) {
+        func draw(_ emphasis: SelectionEmphasis) -> [String] {
+            lines(
+                rows: rows, highlightedRow: highlightedRow, visibleRange: visibleRange,
+                innerWidth: innerWidth, barCells: barCells, emphasis: emphasis, context: context)
+        }
+        // The cycle, not the live phase: reading the phase marks the frame as
+        // having consulted the clock, and an open menu would then re-render the
+        // entire page behind it ~20 times a second.
+        let cycle = context.environment.selectionEmphasis.cycle(true)
+        let now = cycle.frames[cycle.step % max(1, cycle.frames.count)]
+        let drawn = draw(now)
+        guard cycle.isAnimating, !context.isMeasuring else { return (drawn, []) }
+        let perStep = cycle.frames.map(draw)
+        let runs = drawn.indices.compactMap { row -> AnimatedCellRun? in
+            let frames = perStep.map { $0[row] }
+            let run = AnimatedCellRun(
+                offsetX: 0, offsetY: row, width: drawn[row].strippedLength,
+                frames: frames, clock: .cursor)
+            // A divider or an unhighlighted row whose border happens to
+            // quantise to one colour is a still picture; the loop drops those
+            // anyway, and not emitting them keeps the buffer honest.
+            return run.isAnimating ? run : nil
+        }
+        return (drawn, runs)
     }
 
     // MARK: - Mouse wiring
