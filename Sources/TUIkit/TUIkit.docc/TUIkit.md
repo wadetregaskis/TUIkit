@@ -58,6 +58,7 @@ struct MyApp: App {
 - <doc:AppearanceAndColors>
 - <doc:Preferences>
 - <doc:CustomViews>
+- <doc:Animation>
 - <doc:AnimatingYourOwnView>
 - <doc:KeyboardShortcuts>
 - <doc:MouseAndGestures>
@@ -210,6 +211,17 @@ struct MyApp: App {
 
 - ``State``
 - ``Binding``
+
+### Animation
+
+- ``withAnimation(_:_:)``
+- ``Animation``
+- ``Animatable``
+- ``Transaction``
+- ``withTransaction(_:_:)``
+- ``VectorArithmetic``
+- ``AnimatablePair``
+- ``EmptyAnimatableData``
 
 ### Environment
 
