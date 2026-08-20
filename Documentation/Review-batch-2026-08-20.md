@@ -227,6 +227,71 @@ overscroll slide and reorder clip the pulse runs already go through — in a
 not worth starting at the end of a batch. **This is the biggest single
 performance item I have found in this pass.**
 
+### Scrolling
+- **"The scroller never disappears into its own track"** — the focused
+  scrollbar's breath faded its thumb to *exactly* the track's colour on several
+  palettes (a contrast ratio of 1.0), so once per breath there was nothing on
+  the bar to read.
+
+### Spinners
+- **"Two places you can choose a spinner, and one list to choose from"** — an
+  editor on the Spinners page, and a picker for the `.refreshable` indicator
+  (the setting with a real reason to exist: `.line` is pure ASCII and animates
+  on a font with no Braille coverage).
+
+## Not started
+
+Five items from your list are untouched. Each is a session rather than a batch
+item, and I would rather say so than leave half of one behind.
+
+1. **Scroll granularity: partial rows at both ends, and a selection toggle.**
+   Your reasoning is right and I want to say so explicitly: row-vs-line is a
+   *scroll* concept, selection always moves whole rows, and the asymmetry — a
+   partial row at the top but never at the bottom — has no defensible reason.
+   The scrollbar-pulse half of this item is done; the granularity half touches
+   `ItemListHandler`'s resting-position ladder and its `Table` twin, which is
+   the pair that drifts (see `list-table-twin-divergence`), so it wants doing to
+   both at once with the storm suites run against both.
+2. **Mono image rendering: adaptive threshold and a colour LUT.** The
+   all-black-under-most-themes report is the clear part; auto-contrast wants
+   real research (Otsu vs local/Sauvola thresholding, and whether dithering
+   belongs here) and the palette mapping is the part you asked me to design
+   before building beyond mono.
+3. **Text input: the shortcut legend, and reconciling Ctrl-A.** The legend is
+   small. The reconciliation is a decision, and I have opinions rather than an
+   answer — see below.
+4. **View resizing.** Wants the SwiftUI study first, then a TUI-native design
+   (which handles, drawn how, on which containers). A design note before any
+   code.
+5. **The Example-wide horizontal-space review.** Thirty-five pages, each needing
+   a judgement about what to put beside what and a narrow fallback. The
+   `ViewThatFits` pattern the Animation page and the track editor now use is the
+   shape it should follow; the left-gutter half is mechanical once the
+   collapsible-padding question is settled.
+
+### On Ctrl-A, since you asked for at least one option
+
+The clash: `TextEditor` reads Ctrl-A as "start of line" (Emacs) and `TextField`
+reads it as "select all" (because a terminal cannot deliver Cmd-A). Three ways
+out, in the order I would rank them:
+
+1. **Make Ctrl-A mean start-of-line everywhere, and move select-all to Ctrl-/ or
+   Ctrl-6.** The Emacs motion set is the one a terminal user already has in
+   their fingers from readline, and it is the set that is *complete* — Ctrl-A/E,
+   Ctrl-B/F, Ctrl-K, Ctrl-U. Select-all is the odd one out and the one with no
+   tradition to break; it also has an unambiguous replacement in a chord nothing
+   else wants.
+2. **Make Ctrl-A select-all everywhere, and use Home for start-of-line.** Fewer
+   keys to learn, and matches what a non-Emacs user expects from a text box —
+   but it breaks the readline muscle memory in the one control where it is
+   strongest, and Home is not always deliverable (some terminals send nothing
+   useful; see `Terminal-compatibility.md`).
+3. **Leave them different and document it.** I do not recommend this; the two
+   controls sit on the same page and are the same kind of thing.
+
+I favour (1). It is the only one where both key sets stay internally consistent,
+and the cost falls on the gesture with the least history behind it.
+
 ## Deferred, deliberately
 
 **The page-instruction concision sweep.** You asked for the instruction lines at
