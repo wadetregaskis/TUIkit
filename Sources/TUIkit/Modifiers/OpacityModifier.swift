@@ -144,10 +144,43 @@ extension _OpacityView: Renderable {
 /// The colour arithmetic behind ``View/opacity(_:)``, kept out of
 /// the generic view so there is one copy of it and tests can reach it.
 enum OpacityFade {
-    /// Rewrites every colour in `line`'s SGR sequences, leaving everything else
-    /// — bold, dim, underline, inverse, cursor moves — exactly as it was.
+    /// Fades every colour in `line` toward `surface`.
+    ///
+    /// A thin face on ``SGRColorRewrite``, which is the general form: every
+    /// colour effect in the framework is the same walk over the same escape
+    /// sequences with a different function of the colour.
     static func fading(
         _ line: String, by factor: Double, over surface: Color, defaultForeground: Color
+    ) -> String {
+        SGRColorRewrite.rewriting(
+            line, defaultForeground: defaultForeground, defaultBackground: surface
+        ) { $0.opacity(factor, over: surface) }
+    }
+}
+
+/// Rewrites every colour a rendered line names, leaving everything else — bold,
+/// dim, underline, inverse, cursor moves — exactly as it was.
+///
+/// The one place that knows how an SGR sequence carries a colour: the basic
+/// 30–37 / 90–97 forms and their background twins, the extended `38;5;n` and
+/// `38;2;r;g;b`, and the "default" 39 / 49 (which are the palette's own colours
+/// here, so they transform rather than snapping back to full strength).
+///
+/// Everything that changes how a subtree *looks* without changing what it draws
+/// goes through here — opacity, brightness, contrast, saturation, grayscale,
+/// inversion, hue rotation, transitions' fades. Each is a function from colour
+/// to colour; none of them has to learn ANSI.
+enum SGRColorRewrite {
+    /// `line` with `transform` applied to every colour it names.
+    ///
+    /// - Parameters:
+    ///   - line: A rendered line, escapes and all.
+    ///   - defaultForeground: What `39` (default foreground) means here.
+    ///   - defaultBackground: What `49` (default background) means here.
+    ///   - transform: The colour effect. Called with resolved colours only.
+    static func rewriting(
+        _ line: String, defaultForeground: Color, defaultBackground: Color,
+        transform: (Color) -> Color
     ) -> String {
         var result = ""
         for segment in line.ansiSegments() {
@@ -155,17 +188,18 @@ enum OpacityFade {
             case .visible(let character):
                 result.append(character)
             case .ansi(let sequence, _):
-                result += Self.fadingSGR(
-                    sequence, by: factor, over: surface,
-                    defaultForeground: defaultForeground)
+                result += Self.rewritingSGR(
+                    sequence, defaultForeground: defaultForeground,
+                    defaultBackground: defaultBackground, transform: transform)
             }
         }
         return result
     }
 
-    /// One escape sequence, faded if it is an SGR that names a colour.
-    private static func fadingSGR(
-        _ sequence: String, by factor: Double, over surface: Color, defaultForeground: Color
+    /// One escape sequence, transformed if it is an SGR that names a colour.
+    private static func rewritingSGR(
+        _ sequence: String, defaultForeground: Color, defaultBackground: Color,
+        transform: (Color) -> Color
     ) -> String {
         // Only SGR (`ESC [ … m`) carries colour; anything else passes through
         // untouched rather than being guessed at.
@@ -183,7 +217,7 @@ enum OpacityFade {
                 // Extended colour: `38;5;n` or `38;2;r;g;b` (48 for background).
                 let (color, consumed) = Self.extendedColor(parameters, from: index)
                 if let color {
-                    let faded = color.opacity(factor, over: surface)
+                    let faded = transform(color)
                     rewritten += parameter == 38
                         ? ANSIRenderer.foregroundCodes(for: faded)
                         : ANSIRenderer.backgroundCodes(for: faded)
@@ -193,16 +227,14 @@ enum OpacityFade {
                 index += consumed
                 continue
             case 30...37, 90...97, 40...47, 100...107:
-                rewritten += Self.fadedBasic(parameter, by: factor, over: surface)
+                rewritten += Self.rewrittenBasic(parameter, transform: transform)
             case 39:
                 // "Default foreground" — which IS the palette foreground
-                // here, so it fades rather than snapping back to full
+                // here, so it transforms rather than snapping back to full
                 // strength.
-                rewritten += ANSIRenderer.foregroundCodes(
-                    for: defaultForeground.opacity(factor, over: surface))
+                rewritten += ANSIRenderer.foregroundCodes(for: transform(defaultForeground))
             case 49:
-                rewritten += ANSIRenderer.backgroundCodes(
-                    for: surface.opacity(factor, over: surface))
+                rewritten += ANSIRenderer.backgroundCodes(for: transform(defaultBackground))
             default:
                 // 0 (reset), 1 (bold), 2 (dim), 4 (underline), 7 (inverse), …
                 rewritten.append(parameters[index])
@@ -248,15 +280,15 @@ enum OpacityFade {
     /// faded. The named colours have no fixed RGB — a terminal's palette
     /// decides — so they are faded via their standard xterm values, which is
     /// what the 256-cube downsampling already assumes.
-    private static func fadedBasic(
-        _ parameter: Int, by factor: Double, over surface: Color
+    private static func rewrittenBasic(
+        _ parameter: Int, transform: (Color) -> Color
     ) -> [String] {
         let isBackground = (40...47).contains(parameter) || (100...107).contains(parameter)
         let isBright = parameter >= 90
         let base = parameter - (isBright ? (isBackground ? 100 : 90) : (isBackground ? 40 : 30))
         guard base >= 0, base < Self.basicColors.count else { return ["\(parameter)"] }
         let (standard, bright) = Self.basicColors[base]
-        let faded = (isBright ? bright : standard).opacity(factor, over: surface)
+        let faded = transform(isBright ? bright : standard)
         return isBackground
             ? ANSIRenderer.backgroundCodes(for: faded)
             : ANSIRenderer.foregroundCodes(for: faded)

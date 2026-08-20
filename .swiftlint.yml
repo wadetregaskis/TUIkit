@@ -120,6 +120,7 @@ identifier_name:
     - _providesZIndex
     - _providesAlignmentGuide
     - _isAnimatable
+    - _animated
     # Idiomatic single-letter math / graphics / loop names: keeping
     # them short matches the surrounding domain (coordinates,
     # colour channels, dimensions, indices) better than renaming.
@@ -201,6 +202,9 @@ type_name:
     # Applies a transition to its content; internal so `View.transition(_:)`
     # can return it opaquely.
     - _TransitionView
+    # Rewrites its content's colours; internal so `.brightness(_:)` and its
+    # siblings can return it opaquely.
+    - _ColorEffectView
     # One node's row in an `OutlineGroup`. Public-but-underscored because the
     # outline hands its rows to its container as `ChildView`s, which key each
     # one by this type.
