@@ -58,7 +58,7 @@ struct MyApp: App {
 - <doc:AppearanceAndColors>
 - <doc:Preferences>
 - <doc:CustomViews>
-- <doc:Animation>
+- <doc:AnimatingChanges>
 - <doc:AnimatingYourOwnView>
 - <doc:KeyboardShortcuts>
 - <doc:MouseAndGestures>

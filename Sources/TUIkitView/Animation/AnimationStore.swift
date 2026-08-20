@@ -283,8 +283,9 @@ extension AnimationStore {
     /// Drops the animations the tree stopped asking about.
     ///
     /// Called from ``StateStorage/endRenderPass()``. Keyed on what was asked
-    /// this pass rather than on `@State`'s active-identity set — see
-    /// ``seenThisPass`` for why that set cannot answer this question.
+    /// this pass rather than on `@State`'s active-identity set: a modifier that
+    /// animates is a `Renderable`, which renders at its parent's identity and
+    /// marks nothing active, so that set can never answer this question.
     public func endRenderPass() {
         guard !records.isEmpty || !triggers.isEmpty else { return }
         records = records.filter { seenThisPass.contains($0.key) }

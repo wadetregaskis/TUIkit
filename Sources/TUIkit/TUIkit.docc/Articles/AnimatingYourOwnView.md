@@ -7,7 +7,7 @@ to do it.
 
 > Note: This is the low-level route. For animating a *change* — a value moving
   from one number to another because something happened — reach for
-  <doc:Animation> first: ``withAnimation(_:_:)`` and ``View/animation(_:value:)``
+  <doc:AnimatingChanges> first: ``withAnimation(_:_:)`` and ``View/animation(_:value:)``
   need no offsets, no clocks and no runs. What follows is for a **decoration**:
   something that moves for as long as it is on screen, which is the one shape
   `withAnimation` cannot serve cheaply unless it is a pure re-colouring.

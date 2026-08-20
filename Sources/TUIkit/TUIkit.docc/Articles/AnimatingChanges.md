@@ -1,4 +1,4 @@
-# Animation
+# Animating Changes
 
 Change a value and let the picture catch up.
 
