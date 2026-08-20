@@ -88,5 +88,7 @@
   "appearance.rounded": "Rounded",
   "appearance.line": "Line",
   "appearance.doubleLine": "Double line",
-  "appearance.heavy": "Heavy"
+  "appearance.heavy": "Heavy",
+  "appearance.block": "Block",
+  "appearance.blank": "Blank"
 }

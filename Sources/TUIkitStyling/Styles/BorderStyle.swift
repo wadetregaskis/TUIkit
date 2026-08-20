@@ -137,6 +137,22 @@ public struct BorderStyle: Sendable, Hashable {
         rightT: "┫"
     )
 
+    /// A solid bar of full blocks (█), drawn in the border colour.
+    ///
+    /// The heaviest border a terminal can draw: not a line around the content
+    /// but a band of colour enclosing it. Its corners and junctions are the
+    /// same glyph as its edges, because a full block has no direction to turn.
+    public static let block = Self(
+        topLeft: "█",
+        topRight: "█",
+        bottomLeft: "█",
+        bottomRight: "█",
+        horizontal: "█",
+        vertical: "█",
+        leftT: "█",
+        rightT: "█"
+    )
+
     /// No visible border (space characters).
     public static let none = Self(
         topLeft: " ",

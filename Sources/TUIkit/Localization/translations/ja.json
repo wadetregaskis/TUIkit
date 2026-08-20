@@ -88,5 +88,7 @@
   "appearance.rounded": "角丸",
   "appearance.line": "細線",
   "appearance.doubleLine": "二重線",
-  "appearance.heavy": "太線"
+  "appearance.heavy": "太線",
+  "appearance.block": "ブロック",
+  "appearance.blank": "余白"
 }

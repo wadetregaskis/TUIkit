@@ -75,6 +75,8 @@ public enum LocalizationKey {
         case line = "appearance.line"
         case doubleLine = "appearance.doubleLine"
         case heavy = "appearance.heavy"
+        case block = "appearance.block"
+        case blank = "appearance.blank"
     }
 
     /// Error messages

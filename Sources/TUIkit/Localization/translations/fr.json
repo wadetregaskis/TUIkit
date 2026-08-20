@@ -88,5 +88,7 @@
   "appearance.rounded": "Arrondi",
   "appearance.line": "Trait",
   "appearance.doubleLine": "Double trait",
-  "appearance.heavy": "Épais"
+  "appearance.heavy": "Épais",
+  "appearance.block": "Bloc",
+  "appearance.blank": "Vide"
 }

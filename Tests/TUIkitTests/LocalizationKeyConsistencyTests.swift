@@ -357,6 +357,8 @@ final class LocalizationKeyConsistencyTests {
         enumKeys.insert(LocalizationKey.Appearance.line.rawValue)
         enumKeys.insert(LocalizationKey.Appearance.doubleLine.rawValue)
         enumKeys.insert(LocalizationKey.Appearance.heavy.rawValue)
+        enumKeys.insert(LocalizationKey.Appearance.block.rawValue)
+        enumKeys.insert(LocalizationKey.Appearance.blank.rawValue)
 
         // Status bar keys
         enumKeys.insert(LocalizationKey.StatusBar.quit.rawValue)
@@ -374,7 +376,7 @@ final class LocalizationKeyConsistencyTests {
     func allEnumKeysCovered() {
         // button + label + error + placeholder + menu + dialog + validation
         //   + statusbar + appearance
-        let expectedKeyCount = 21 + 18 + 11 + 6 + 8 + 7 + 4 + 3 + 4
+        let expectedKeyCount = 21 + 18 + 11 + 6 + 8 + 7 + 4 + 3 + 6
         #expect(
             englishTranslations.count == expectedKeyCount,
             "Expected \(expectedKeyCount) keys in translations, but got \(englishTranslations.count)"

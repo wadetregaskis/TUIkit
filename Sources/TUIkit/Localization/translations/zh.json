@@ -88,5 +88,7 @@
   "appearance.rounded": "圆角",
   "appearance.line": "细线",
   "appearance.doubleLine": "双线",
-  "appearance.heavy": "粗线"
+  "appearance.heavy": "粗线",
+  "appearance.block": "实块",
+  "appearance.blank": "留白"
 }

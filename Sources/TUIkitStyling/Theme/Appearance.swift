@@ -125,6 +125,12 @@ extension Appearance {
 
         /// Heavy/bold borders (┏━┓).
         public static let heavy = Self(rawValue: "heavy")
+
+        /// A solid band of full blocks (███), in the border colour.
+        public static let block = Self(rawValue: "block")
+
+        /// A blank one-cell inset, in whatever is behind it.
+        public static let blank = Self(rawValue: "blank")
     }
 }
 
@@ -151,6 +157,20 @@ extension Appearance {
     /// Uses `BorderStyle.heavy` for bold, prominent borders.
     public static let heavy = Appearance(id: .heavy, borderStyle: .heavy)
 
+    /// A solid band of full blocks, drawn in the border colour.
+    ///
+    /// The heaviest a border gets: a band of colour around the content rather
+    /// than a line drawn near it.
+    public static let block = Appearance(id: .block, borderStyle: .block)
+
+    /// A blank one-cell inset, showing whatever is behind it.
+    ///
+    /// The other half of the pair, and the quietest border there is: the same
+    /// geometry as every other appearance — the content still sits one cell in
+    /// from where it would otherwise — with nothing drawn to mark it. Useful
+    /// where the chrome should give the content room without framing it.
+    public static let blank = Appearance(id: .blank, borderStyle: .none)
+
     /// The default appearance (rounded).
     public static let `default`: Appearance = .rounded
 }
@@ -161,12 +181,17 @@ extension Appearance {
 public struct AppearanceRegistry {
     /// All available appearances in cycling order.
     ///
-    /// Order: rounded (default) → line → doubleLine → heavy
+    /// Order: rounded (default) → line → doubleLine → heavy → block → blank
+    ///
+    /// Roughly by weight, so cycling with the appearance key walks from the
+    /// usual to the extremes rather than jumping between them.
     public static let all: [Appearance] = [
         .rounded,
         .line,
         .doubleLine,
         .heavy,
+        .block,
+        .blank,
     ]
 
     /// Finds an appearance by ID.

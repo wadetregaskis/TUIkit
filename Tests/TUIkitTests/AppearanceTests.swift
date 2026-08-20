@@ -43,21 +43,27 @@ struct AppearanceTests {
     @Test("AppearanceRegistry contains all predefined appearances")
     func registryContainsAll() {
         let all = AppearanceRegistry.all
-        #expect(all.count == 4)
+        #expect(all.count == 6)
         #expect(all.contains { $0.rawId == .line })
         #expect(all.contains { $0.rawId == .rounded })
         #expect(all.contains { $0.rawId == .doubleLine })
         #expect(all.contains { $0.rawId == .heavy })
+        #expect(all.contains { $0.rawId == .block })
+        #expect(all.contains { $0.rawId == .blank })
     }
 
     @Test("AppearanceRegistry cycling order is correct")
     func registryCyclingOrder() {
         let all = AppearanceRegistry.all
-        // Order: rounded (default) → line → doubleLine → heavy
+        // Order: rounded (default) → line → doubleLine → heavy → block → blank,
+        // roughly by weight, so cycling walks to the extremes rather than
+        // jumping between them.
         #expect(all[0].rawId == .rounded)
         #expect(all[1].rawId == .line)
         #expect(all[2].rawId == .doubleLine)
         #expect(all[3].rawId == .heavy)
+        #expect(all[4].rawId == .block)
+        #expect(all[5].rawId == .blank)
     }
 
     @Test("AppearanceRegistry can find appearance by ID")
