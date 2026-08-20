@@ -80,6 +80,64 @@ rearrangement so the curve settings read as page-wide.
   that holds for some controls and not others is worse than either rule.
 - **The acrostic is not localized.** Its point is that a column spells a word.
 
+## Investigated, diagnosed, NOT fixed — needs your call
+
+### 256-colour gradient banding
+
+You reported "out-of-place colours" in default gradients on a 256-colour
+terminal (the screenshots did not come through, so this is from first
+principles — say if what I found is not what you were looking at).
+
+**It reproduces, and the cause is exact.** The Example's default track gradient
+(`FF5050 → FFC850 → 50DC78`) over 40 cells quantises to:
+
+    203×5  202×1  209×5  208×2  215×4  214×3  221×3  185×4  149×4  113×4  77×4  41×1
+
+202, 208 and 214 are the cube's **blue = 0** corner; their neighbours 203, 209,
+215 are the same colours at **blue = 95**. The interpolated colour at those
+cells has blue = 80. So a 15-point error is being passed over for an 80-point
+one — a visibly more saturated cell wedged into a smooth ramp, which is exactly
+"out of place".
+
+**Why.** `nearestPalette256Index` compares in OKLab with the components split:
+`ΔL² + w·ΔC² + 4·ΔH²`. ΔH² = Δa² + Δb² − ΔC² is the *tangential* part, so it is
+blind to movement along the chroma axis — a candidate far more saturated in the
+same hue has Δa² + Δb² ≈ ΔC², which cancels. The ×4 hue weight, whose job is
+keeping a colour in its family, therefore does the least work exactly where the
+family is most at risk, and nothing else prices the chroma. Chroma LOSS is
+already charged ×4 for the mirror-image reason (recorded in that function's
+comment, from an earlier washed-out-speckle report). Chroma GAIN is charged ×1.
+
+**Three fixes tried, all measured, none shipped.**
+
+1. **Charge chroma gain ×8 as well** (symmetric, hue left at ×4). The gradients
+   come out perfect — `203×6 209×6 215×7 221×4 185×4 149×5 113×5 77×3`, eight
+   monotonic runs, no speckles, and the "cool" ramp cleans up too. **But** it
+   breaks four palette-derivation tests: the surface walk that separates a
+   field or a plane from its page reads the *quantised* result to decide when
+   it has moved far enough, so changing the metric changes where that walk
+   stops. Novel's field ends up 8.99 apart from its page against a floor of 10.
+2. **Weight hue ×8 too.** Same gradient result, and additionally reintroduces
+   the washed-out speckle the ×4 chroma-loss weight was added to remove.
+3. **A chroma CEILING instead of a weight** — no candidate may sit further from
+   the target's chroma than the closest one does, plus a leeway. Principled (it
+   forbids only the leap, leaving every close-call exactly as it was) but the
+   leeway has no good value: 0.03 OKLab is too wide to remove the speckles and
+   already too narrow for the surface walk.
+
+**What I think the answer is, and why I did not just do it.** The banding is a
+property of a *sequence*, not of a colour, and the quantiser only ever sees one
+colour at a time. A gradient knows its whole ramp and could quantise it as a
+ramp — enforcing monotonicity, which a per-cell nearest-neighbour search cannot
+promise. That means the renderer pre-quantising when the terminal is
+256-colour, which means the renderer knowing the terminal's colour depth, which
+it currently does not. It is a real piece of work rather than a tuning change,
+and it is worth doing properly rather than at the end of a batch.
+
+*Meanwhile:* the metric is untouched, so nothing regressed. The measurement
+above is repeatable — the probe is four `TrackRenderer.gradientColor` sweeps
+printing run-length-encoded palette indices.
+
 ## Open questions
 
 Nothing blocking. Listed for when you get to them.
