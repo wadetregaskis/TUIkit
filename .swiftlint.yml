@@ -119,6 +119,7 @@ identifier_name:
     - _isSpacer
     - _providesZIndex
     - _providesAlignmentGuide
+    - _isAnimatable
     # Idiomatic single-letter math / graphics / loop names: keeping
     # them short matches the surrounding domain (coordinates,
     # colour channels, dimensions, indices) better than renaming.

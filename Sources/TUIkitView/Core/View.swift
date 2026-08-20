@@ -106,6 +106,22 @@ public protocol View {
     /// wrapper. Without it every child of every stack would pay an
     /// almost-always-failing conformance cast on the hottest path there is.
     static var _providesAlignmentGuide: Bool { get }
+
+    /// Static witness: whether this view type nominates something continuous
+    /// about itself — that is, whether it conforms to ``Animatable``. `false`
+    /// for every view but those, which get `true` from the constrained default
+    /// below.
+    ///
+    /// Same shape and same reason as ``_isSpacer``, and the reason is measured:
+    /// this is asked once per view per walk, on both the render and the measure
+    /// side, and conformance-checking each one — even against a
+    /// direct-mapped-by-metadata-pointer cache — cost a paired **+0.6% to +0.9%
+    /// on `table`, `deep` and `kitchensink`** (41 reps, tight intervals). A tax
+    /// on every app, including every app that animates nothing. As a static
+    /// witness it is a constant the specialiser can fold away.
+    ///
+    /// Not to be implemented by hand: conform to ``Animatable`` instead.
+    static var _isAnimatable: Bool { get }
 }
 
 public extension View {
@@ -118,4 +134,8 @@ public extension View {
     /// Default: a view sets no alignment guide. `_AlignmentGuideView` overrides
     /// this.
     static var _providesAlignmentGuide: Bool { false }
+
+    /// A view says nothing continuous about itself unless it is ``Animatable``.
+    @inlinable
+    static var _isAnimatable: Bool { false }
 }

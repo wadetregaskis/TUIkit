@@ -422,8 +422,23 @@ private func measureChildUncached<V: View>(
     // rather than in `measureChild` so it falls INSIDE that memo's
     // cache-unsafe window — an animating subtree must be measured every frame,
     // not remembered. Reads the store without writing it.
-    let view = resolvingAnimation(view, context: context, isMeasuring: true)
+    //
+    // Branched, not folded, for the reason `renderToBuffer` gives: rebinding
+    // `view` unconditionally copies the struct on every measured child, and
+    // deep nesting measures the tail once per enclosing level.
+    if V._isAnimatable, let animated = resolvingAnimation(view, context: context, isMeasuring: true)
+    {
+        return measureResolved(animated, proposal: proposal, context: context)
+    }
+    return measureResolved(view, proposal: proposal, context: context)
+}
 
+/// ``measureChildUncached(_:proposal:context:)`` once the animation
+/// substitution is settled.
+@MainActor
+private func measureResolved<V: View>(
+    _ view: V, proposal: ProposedSize, context: RenderContext
+) -> ViewSize {
     // Use Layoutable if available (mark as measuring to suppress side-effects).
     //
     // Spacer is handled here too: it conforms to `Layoutable` and its

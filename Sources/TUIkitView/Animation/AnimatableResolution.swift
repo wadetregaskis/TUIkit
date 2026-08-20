@@ -23,39 +23,35 @@ import TUIkitCore
 ///     that flag means something narrower — a *render* performed only in order
 ///     to measure — and is false on the ordinary structural measure walk, where
 ///     writing would be just as wrong.
-/// - Returns: `view` unchanged unless it is `Animatable` and something is
-///   moving, in which case a copy at this frame's value.
+/// - Returns: A copy at this frame's value, or **`nil` when there is nothing to
+///   substitute** — which is the answer for every view but the animating ones,
+///   and is why it is an `Optional` rather than the view itself. Returning
+///   `view` would make every caller rebind it, and rebinding copies the struct
+///   on every render of every view in the tree. That copy, not the check, was
+///   the +1% a paired A/B kept finding.
 @MainActor
 func resolvingAnimation<V: View>(
     _ view: V, context: RenderContext, isMeasuring: Bool
-) -> V {
-    // The overwhelmingly common answer is "this type is not animatable", and it
-    // is the same answer every time for a given type — so it is remembered,
-    // exactly as `bindStateProperties` remembers which types have no `@State`.
-    // Only an unseen type pays the conformance check.
-    let typeID = ObjectIdentifier(V.self)
-    if AnimatableTypeCache.isKnownInert(typeID) { return view }
+) -> V? {
+    guard let animatable = view as? any Animatable else { return nil }
+    guard let storage = context.stateStorage else { return nil }
 
-    guard let animatable = view as? any Animatable else {
-        AnimatableTypeCache.noteInert(typeID)
-        return view
-    }
-    guard let storage = context.stateStorage else { return view }
-
-    let key = AnimationStore.Key(identity: context.identity, owner: typeID)
+    let key = AnimationStore.Key(identity: context.identity, owner: ObjectIdentifier(V.self))
     // Passing an `any Animatable` to a generic parameter opens the existential,
     // so the animatable data keeps its real type through the store.
-    let resolved = substituting(
+    guard let resolved = substituting(
         animatable, key: key, storage: storage, context: context, isMeasuring: isMeasuring)
-    return (resolved as? V) ?? view
+    else { return nil }
+    return resolved as? V
 }
 
-/// Replaces `value`'s animatable data with what the store says to draw.
+/// Replaces `value`'s animatable data with what the store says to draw, or
+/// `nil` when the store says to draw exactly what the tree already says.
 @MainActor
 private func substituting<A: Animatable>(
     _ value: A, key: AnimationStore.Key, storage: StateStorage, context: RenderContext,
     isMeasuring: Bool
-) -> A {
+) -> A? {
     let transaction = context.environment.transaction
     let animation = context.environment.canAnimate ? transaction.effectiveAnimation : nil
     let drawn = storage.animations.value(
@@ -64,7 +60,7 @@ private func substituting<A: Animatable>(
         animation: animation,
         nowNanos: context.environment.frameNowNanos,
         isMeasuring: isMeasuring)
-    guard drawn != value.animatableData else { return value }
+    guard drawn != value.animatableData else { return nil }
 
     // The subtree's appearance is now a function of time, which a value memo
     // cannot reproduce from a cached buffer — it would freeze the animation on
@@ -77,51 +73,10 @@ private func substituting<A: Animatable>(
     return copy
 }
 
-/// Which view types are known not to be ``Animatable``.
-///
-/// A negative cache, like `StateBindingCache.typesWithoutState`: the answer is a
-/// property of the type, so it is asked once. Named for what it holds rather
-/// than for what it is, because a hit means "nothing to do here".
-///
-/// Direct-mapped on the metadata pointer rather than a `Set`, because this is
-/// consulted once per view per walk — the single most-executed lookup the
-/// animation machinery adds — and a `Set` would hash the pointer through
-/// SipHash to answer a question a load and a compare can answer. A paired A/B
-/// measured the hashed version at **+0.6% [+0.1%, +1.0%] on `table`**, which is
-/// small, real, and paid by every app whether or not it animates anything.
-///
-/// A collision costs a repeated conformance check, never a wrong answer: a slot
-/// answers only for the exact pointer stored in it, and `0` is not a valid
-/// metadata address so an empty slot always misses.
-@MainActor
-private enum AnimatableTypeCache {
-    /// Power of two, so the index is a mask rather than a division. 512 slots
-    /// is 4 KB and comfortably more than the distinct view types a frame
-    /// touches, so in practice the table settles with no collisions at all.
-    private static let slotCount = 512
-
-    private static var slots = [UInt](repeating: 0, count: slotCount)
-
-    /// Type metadata is at least 8-byte aligned, so the low three bits are
-    /// always zero and carry nothing to index on.
-    private static func slot(_ bits: UInt) -> Int { Int((bits >> 3) % UInt(slotCount)) }
-
-    static func isKnownInert(_ typeID: ObjectIdentifier) -> Bool {
-        slots[slot(typeID.rawBits)] == typeID.rawBits
-    }
-
-    static func noteInert(_ typeID: ObjectIdentifier) {
-        slots[slot(typeID.rawBits)] = typeID.rawBits
-    }
-}
-
-extension ObjectIdentifier {
-    /// The raw address this identifier wraps.
-    ///
-    /// `ObjectIdentifier` exposes no bit pattern, and its `hashValue` is a
-    /// SipHash of the address — the very cost being avoided. `unsafeBitCast` to
-    /// `UInt` is exact: the type is a single pointer-sized field, and the
-    /// standard library's own `init(bitPattern:)` on `UInt` (the reverse
-    /// direction) documents that layout.
-    fileprivate var rawBits: UInt { unsafeBitCast(self, to: UInt.self) }
+extension View where Self: Animatable {
+    /// An ``Animatable`` view nominates something continuous about itself, so
+    /// the render and measure walks must ask the animation store what to draw
+    /// it at. See ``View/_isAnimatable``.
+    @inlinable
+    public static var _isAnimatable: Bool { true }
 }

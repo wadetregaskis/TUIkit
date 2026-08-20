@@ -985,16 +985,20 @@ extension RenderLoop {
         environment.pulsePhase = pulsePhase
         environment.cursorTimer = cursorTimer
         environment.animationScheduler = animationScheduler
-        environment.frameNowNanos = frameNowNanos
+        // One value, one dictionary entry: see `AnimationFrame`. The tick is
+        // read WITHOUT marking the clock as consumed — a producer that lays its
+        // cycle out against it is precisely one the loop can replay instead of
+        // re-render, so reading it must not be what stops that. `canAnimate` is
+        // false without a scheduler: a one-off render would show an animation's
+        // first value and never advance past it.
+        environment.animationFrame = AnimationFrame(
+            nowNanos: frameNowNanos,
+            tick: cursorTimer?.elapsedTicks ?? 0,
+            canAnimate: animationScheduler != nil)
         // Consumed, not merely read, so it applies to exactly one pass: the one
         // that first shows the change. A frame that renders for some other
         // reason must not restart animations that already began.
         environment.transaction = AppState.shared.consumePendingTransaction() ?? Transaction()
-        // Whether a change may animate at all: only where more frames can
-        // follow it. A one-off render (`ViewRenderer`, the frame dump) would
-        // show an animation's FIRST value and never advance past it, so there a
-        // change snaps instead.
-        environment.canAnimate = animationScheduler != nil
     }
 
     /// Keeps the frames coming while anything is still moving.

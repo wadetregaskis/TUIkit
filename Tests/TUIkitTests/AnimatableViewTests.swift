@@ -231,3 +231,54 @@ struct AnimatableViewTests {
         #expect(screen.isAnimating(atMillis: 100_000))
     }
 }
+
+// MARK: - The static witness
+
+/// Conforms to `Animatable` in a SEPARATE extension rather than on the type
+/// declaration, which is the spelling that could pick the wrong witness for
+/// `View._isAnimatable` — a wrong answer here means the view silently never
+/// animates, which is exactly the failure that looks like a success.
+private struct SplitConformanceBar: View {
+    var fraction: Double
+
+    var body: some View {
+        Text(String(repeating: "#", count: max(0, Int((fraction * 10).rounded()))))
+    }
+}
+
+extension SplitConformanceBar: Animatable {
+    var animatableData: Double {
+        get { fraction }
+        set { fraction = newValue }
+    }
+}
+
+@MainActor
+@Suite("The animatable witness")
+struct AnimatableWitnessTests {
+
+    @Test("A conformance declared in an extension still animates")
+    func retroactiveConformanceIsSeen() {
+        var context = makeRenderContext(width: 20, height: 3)
+        context.environment.canAnimate = true
+        context.environment.transaction = Transaction(animation: .linear(duration: 1))
+
+        func render(_ fraction: Double, atMillis: Int) -> Int {
+            context.environment.frameNowNanos = Int64(atMillis) * 1_000_000
+            let buffer = renderToBuffer(SplitConformanceBar(fraction: fraction), context: context)
+            return buffer.lines.first?.stripped.trimmingCharacters(in: .whitespaces).count ?? 0
+        }
+
+        #expect(SplitConformanceBar._isAnimatable, "the constrained witness was not chosen")
+        #expect(render(0, atMillis: 0) == 0)
+        #expect(render(1, atMillis: 0) == 0)
+        #expect(render(1, atMillis: 500) == 5)
+    }
+
+    @Test("An ordinary view says it has nothing to animate")
+    func plainViewIsNotAnimatable() {
+        #expect(!Text._isAnimatable)
+        #expect(!EmptyView._isAnimatable)
+        #expect(!VStack<Text>._isAnimatable)
+    }
+}

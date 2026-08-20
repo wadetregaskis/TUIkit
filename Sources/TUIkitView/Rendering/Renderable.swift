@@ -163,9 +163,23 @@ public func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameB
     // An `Animatable` view renders at where its picture has GOT to, not at what
     // the tree says — so substitute before anything reads it, INCLUDING the
     // `Renderable` branch below (a modifier that animates is a `Renderable`).
-    // Free for every other view: one set lookup against a per-type cache.
-    let view = resolvingAnimation(view, context: context, isMeasuring: context.isMeasuring)
+    //
+    // Split rather than folded into one rebinding of `view`, because rebinding
+    // copies the struct: doing it unconditionally cost a measured ~1% of a
+    // frame on `table`, `deep` and `kitchensink`, paid by every app whether or
+    // not it animates anything. The static witness makes the branch a constant
+    // the specialiser can fold, and the common path never binds a new value.
+    if V._isAnimatable,
+        let animated = resolvingAnimation(view, context: context, isMeasuring: context.isMeasuring)
+    {
+        return renderResolved(animated, context: context)
+    }
+    return renderResolved(view, context: context)
+}
 
+/// ``renderToBuffer(_:context:)`` once the animation substitution is settled.
+@MainActor
+private func renderResolved<V: View>(_ view: V, context: RenderContext) -> FrameBuffer {
     // Priority 1: Direct rendering via Renderable protocol.
     //
     // The result is clamped to the available space — the universal layout
@@ -214,7 +228,7 @@ public func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameB
 
         context.stateStorage!.markActive(context.identity)
 
-        return renderToBuffer(body, context: childContext)
+        return TUIkitView.renderToBuffer(body, context: childContext)
     }
 
     // Priority 3: No rendering path — return empty buffer silently.
