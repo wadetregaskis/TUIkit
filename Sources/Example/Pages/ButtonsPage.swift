@@ -20,6 +20,10 @@ struct ButtonsPage: View {
     @State var clickCount: Int = 0
     @State var tintToggle: Bool = true
 
+    /// Read so the demo's tint can be chosen against the palette in force, and
+    /// re-chosen when the theme changes.
+    @Environment(\.palette) private var palette
+
     var body: some View {
         ScrollView {
             content
@@ -27,6 +31,30 @@ struct ButtonsPage: View {
         .appHeader {
             DemoAppHeader("menu.item.buttons")
         }
+    }
+
+    /// A tint that is visibly *not* this theme's own accent.
+    ///
+    /// The section's whole point is that `.tint` changes something, which it
+    /// cannot show if the tint IS the accent — and the demo used to hardcode
+    /// `.palette.success`, which under the default Green theme is exactly that.
+    /// So it picks whichever of the palette's semantic colours sits furthest
+    /// from the accent, and picks again whenever the theme changes.
+    ///
+    /// Distance in plain RGB rather than contrast ratio: contrast is luminance
+    /// only, so a red and a green of the same brightness score as identical —
+    /// which is the pair this most needs to tell apart.
+    private var demoTint: Color {
+        let accent = palette.accent.resolve(with: palette).rgbComponents ?? (0, 0, 0)
+        let candidates: [Color] = [.palette.info, .palette.warning, .palette.error, .palette.success]
+        func distance(_ color: Color) -> Int {
+            guard let rgb = color.resolve(with: palette).rgbComponents else { return 0 }
+            let dr = Int(rgb.red) - Int(accent.red)
+            let dg = Int(rgb.green) - Int(accent.green)
+            let db = Int(rgb.blue) - Int(accent.blue)
+            return dr * dr + dg * dg + db * db
+        }
+        return candidates.max { distance($0) < distance($1) } ?? .palette.info
     }
 
     @ViewBuilder private var content: some View {
@@ -90,13 +118,13 @@ struct ButtonsPage: View {
 
             DemoSection("page.buttons.section.tinted") {
                 // .tint cascades the accent to every control inside. The toggle
-                // drives it: flip it off and the green tint (on the button AND on
-                // the toggle's own checkbox) disappears — a live cascade demo.
+                // drives it: flip it off and the tint (on the button AND on the
+                // toggle's own checkbox) disappears — a live cascade demo.
                 VStack(alignment: .leading, spacing: 1) {
                     Button("page.buttons.primary") { clickCount += 1 }.buttonStyle(.primary)
                     Toggle("page.buttons.toggle", isOn: $tintToggle)
                 }
-                .tint(tintToggle ? .palette.success : nil)
+                .tint(tintToggle ? demoTint : nil)
             }
 
             DemoSection("page.buttons.section.plain") {
