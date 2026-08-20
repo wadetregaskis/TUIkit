@@ -81,9 +81,15 @@ public final class AnimationStore: @unchecked Sendable {
         /// content changed shape, its cycle grew past the cap) stops being
         /// counted as served and the loop starts rendering for it again.
         var servedByRuns = false
+
+        /// The pass this record was last asked about. See ``pass``.
+        var lastPass: UInt64 = 0
     }
 
     private var records: [Key: Record] = [:]
+
+    /// The pass each `View.animation(_:value:)` trigger was last seen on.
+    private var triggerPasses: [Key: UInt64] = [:]
 
     /// The last value each `View.animation(_:value:)` saw, so it can tell a
     /// change from a re-render. Kept here rather than in `StateStorage`'s
@@ -92,7 +98,8 @@ public final class AnimationStore: @unchecked Sendable {
     /// render one — where the claim order does not hold.
     private var triggers: [Key: Any] = [:]
 
-    /// Which animating values the tree asked about this pass.
+    /// Which pass is being rendered, so a record can carry the last one it was
+    /// asked about and the prune becomes a comparison.
     ///
     /// The store cannot lean on `StateStorage`'s active-identity set the way
     /// `@State` does, and finding that out cost a live debugging session: a
@@ -103,9 +110,16 @@ public final class AnimationStore: @unchecked Sendable {
     /// target and the loop went quiet, which looks exactly like success.
     ///
     /// Re-declaration instead: anything the tree asks about is alive, and
-    /// anything it stops asking about has left. Same contract as the animation
-    /// scheduler's per-frame token declarations.
-    private var seenThisPass: Set<Key> = []
+    /// anything it stops asking about has left. A stamp rather than a
+    /// `Set<Key>` of everything seen, because with `.padding` and `.frame`
+    /// animatable this is touched once per layout node per walk, and hashing a
+    /// key into a second table is the kind of cost that only shows up on a tree
+    /// deep enough to measure it twice.
+    private var pass: UInt64 = 0
+
+    /// Whether anything declared itself served by runs last pass, so the clear
+    /// sweep can be skipped entirely when nothing did.
+    private var servedAnyByRuns = false
 
     /// Creates an empty store.
     public init() {}
@@ -132,8 +146,7 @@ extension AnimationStore {
     public func value<D: VectorArithmetic>(
         for key: Key, target: D, animation: Animation?, nowNanos: Int64, isMeasuring: Bool
     ) -> D {
-        seenThisPass.insert(key)
-        guard let record = records[key],
+        guard var record = records[key],
             let from = record.from as? D,
             let recorded = record.target as? D
         else {
@@ -144,6 +157,11 @@ extension AnimationStore {
             store(Record(from: target, target: target, animation: nil, startNanos: nowNanos),
                 for: key, isMeasuring: isMeasuring)
             return target
+        }
+        // The re-declaration, on an entry already in hand.
+        if record.lastPass != pass, !isMeasuring {
+            record.lastPass = pass
+            records[key] = record
         }
 
         let presented = presented(record, from: from, target: recorded, nowNanos: nowNanos)
@@ -189,10 +207,10 @@ extension AnimationStore {
     public func arrivalPhase(
         for key: Key, animation: Animation?, nowNanos: Int64, isMeasuring: Bool
     ) -> Double {
-        seenThisPass.insert(key)
         if let record = records[key], let from = record.from as? Double,
             let target = record.target as? Double
         {
+            if record.lastPass != pass, !isMeasuring { records[key]?.lastPass = pass }
             return presented(record, from: from, target: target, nowNanos: nowNanos)
         }
         guard let animation else {
@@ -217,9 +235,11 @@ extension AnimationStore {
     public func triggerChanged<V: Equatable>(
         _ value: V, for key: Key, isMeasuring: Bool
     ) -> Bool {
-        seenThisPass.insert(key)
         let previous = triggers[key] as? V
-        if !isMeasuring { triggers[key] = value }
+        if !isMeasuring {
+            triggers[key] = value
+            triggerPasses[key] = pass
+        }
         guard let previous else { return false }
         return previous != value
     }
@@ -249,7 +269,6 @@ extension AnimationStore {
     public func cycle<D: VectorArithmetic & Sendable>(
         for key: Key, nowNanos: Int64, tick: Int
     ) -> AnimationCycle<D>? {
-        seenThisPass.insert(key)
         guard let record = records[key],
             let animation = record.animation, animation.repeatsForever,
             let from = record.from as? D, let target = record.target as? D
@@ -267,6 +286,7 @@ extension AnimationStore {
     /// stops emitting runs starts being rendered for again on the next frame.
     public func noteServedByRuns(_ key: Key) {
         records[key]?.servedByRuns = true
+        servedAnyByRuns = true
     }
 
     /// Starts a pass: nothing has been asked about yet, and nothing has been
@@ -274,8 +294,14 @@ extension AnimationStore {
     ///
     /// Called from ``StateStorage/beginRenderPass()``.
     public func beginRenderPass() {
-        seenThisPass.removeAll(keepingCapacity: true)
-        for key in records.keys {
+        pass &+= 1
+        // Gated on a flag rather than swept: with `.padding` and `.frame`
+        // animatable, `records` holds an entry per layout node, and a page with
+        // a thousand of them would walk all thousand every frame to clear a
+        // flag almost none of them ever set.
+        guard servedAnyByRuns else { return }
+        servedAnyByRuns = false
+        for key in records.keys where records[key]?.servedByRuns == true {
             records[key]?.servedByRuns = false
         }
     }
@@ -302,7 +328,9 @@ extension AnimationStore {
     /// to store, so measure and render agree on the frame a change lands.
     private func store(_ record: Record, for key: Key, isMeasuring: Bool) {
         guard !isMeasuring else { return }
-        records[key] = record
+        var stamped = record
+        stamped.lastPass = pass
+        records[key] = stamped
     }
 }
 
@@ -317,8 +345,21 @@ extension AnimationStore {
     /// marks nothing active, so that set can never answer this question.
     public func endRenderPass() {
         guard !records.isEmpty || !triggers.isEmpty else { return }
-        records = records.filter { seenThisPass.contains($0.key) }
-        triggers = triggers.filter { seenThisPass.contains($0.key) }
+        // Collect-then-remove rather than `filter`, which builds a WHOLE NEW
+        // dictionary every pass. On a deeply nested tree that is thousands of
+        // entries reallocated per frame to drop, almost always, none of them —
+        // it measured as most of a +7.6% on `deep`.
+        var stale: [Key] = []
+        for (key, record) in records where record.lastPass != pass { stale.append(key) }
+        for key in stale { records.removeValue(forKey: key) }
+
+        guard !triggers.isEmpty else { return }
+        var staleTriggers: [Key] = []
+        for (key, seen) in triggerPasses where seen != pass { staleTriggers.append(key) }
+        for key in staleTriggers {
+            triggers.removeValue(forKey: key)
+            triggerPasses.removeValue(forKey: key)
+        }
     }
 
     /// Drops the animations of everything below `ancestor` — the
@@ -330,6 +371,7 @@ extension AnimationStore {
         }
         for key in triggers.keys where ancestor.isAncestor(of: key.identity) {
             triggers.removeValue(forKey: key)
+            triggerPasses.removeValue(forKey: key)
         }
     }
 
@@ -337,5 +379,6 @@ extension AnimationStore {
     public func removeAll() {
         records.removeAll()
         triggers.removeAll()
+        triggerPasses.removeAll()
     }
 }

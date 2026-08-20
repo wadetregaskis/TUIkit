@@ -122,6 +122,21 @@ public protocol View {
     ///
     /// Not to be implemented by hand: conform to ``Animatable`` instead.
     static var _isAnimatable: Bool { get }
+
+    /// Static witness: this view at the value the animation store says to draw
+    /// it at, or `nil` when nothing is moving.
+    ///
+    /// A witness rather than `view as? any Animatable` because the cast BOXES —
+    /// a view struct is several words, so opening the existential heap-allocates
+    /// once per animatable node per walk, and casting the result back is a
+    /// second dynamic cast. With `.padding` and `.frame` animatable that is
+    /// every layout node in the tree: it cost **+14% on `deep`**, whose whole
+    /// shape is nested layout modifiers measured O(depth²) times.
+    ///
+    /// Here `Self` is concrete, so the store call is generic and nothing is
+    /// boxed. Not to be implemented by hand.
+    @MainActor
+    static func _animated(_ view: Self, context: RenderContext, isMeasuring: Bool) -> Self?
 }
 
 public extension View {
@@ -138,4 +153,10 @@ public extension View {
     /// A view says nothing continuous about itself unless it is ``Animatable``.
     @inlinable
     static var _isAnimatable: Bool { false }
+
+    /// A view with nothing continuous about it never needs substituting.
+    @inlinable
+    static func _animated(_ view: Self, context: RenderContext, isMeasuring: Bool) -> Self? {
+        nil
+    }
 }

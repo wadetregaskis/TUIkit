@@ -33,44 +33,7 @@ import TUIkitCore
 func resolvingAnimation<V: View>(
     _ view: V, context: RenderContext, isMeasuring: Bool
 ) -> V? {
-    guard let animatable = view as? any Animatable else { return nil }
-    guard let storage = context.stateStorage else { return nil }
-
-    let key = AnimationStore.Key(identity: context.identity, owner: ObjectIdentifier(V.self))
-    // Passing an `any Animatable` to a generic parameter opens the existential,
-    // so the animatable data keeps its real type through the store.
-    guard let resolved = substituting(
-        animatable, key: key, storage: storage, context: context, isMeasuring: isMeasuring)
-    else { return nil }
-    return resolved as? V
-}
-
-/// Replaces `value`'s animatable data with what the store says to draw, or
-/// `nil` when the store says to draw exactly what the tree already says.
-@MainActor
-private func substituting<A: Animatable>(
-    _ value: A, key: AnimationStore.Key, storage: StateStorage, context: RenderContext,
-    isMeasuring: Bool
-) -> A? {
-    let transaction = context.environment.transaction
-    let animation = context.environment.canAnimate ? transaction.effectiveAnimation : nil
-    let drawn = storage.animations.value(
-        for: key,
-        target: value.animatableData,
-        animation: animation,
-        nowNanos: context.environment.frameNowNanos,
-        isMeasuring: isMeasuring)
-    guard drawn != value.animatableData else { return nil }
-
-    // The subtree's appearance is now a function of time, which a value memo
-    // cannot reproduce from a cached buffer — it would freeze the animation on
-    // its first frame. Same declaration `requestAnimation` makes, for the same
-    // reason.
-    context.environment.volatileReadTracker?.recordRenderSideEffect()
-
-    var copy = value
-    copy.animatableData = drawn
-    return copy
+    V._animated(view, context: context, isMeasuring: isMeasuring)
 }
 
 extension View where Self: Animatable {
@@ -79,4 +42,33 @@ extension View where Self: Animatable {
     /// it at. See ``View/_isAnimatable``.
     @inlinable
     public static var _isAnimatable: Bool { true }
+
+    /// This view at the value the store says to draw, or `nil` when that is
+    /// exactly what the tree already says.
+    ///
+    /// Generic in `Self`, so nothing is boxed and nothing is cast back — see
+    /// ``View/_animated(_:context:isMeasuring:)``.
+    @MainActor
+    public static func _animated(
+        _ view: Self, context: RenderContext, isMeasuring: Bool
+    ) -> Self? {
+        guard let storage = context.stateStorage else { return nil }
+        let animation = context.environment.canAnimate
+            ? context.environment.transaction.effectiveAnimation : nil
+        let key = AnimationStore.Key(
+            identity: context.identity, owner: ObjectIdentifier(Self.self))
+        let target = view.animatableData
+        let drawn = storage.animations.value(
+            for: key, target: target, animation: animation,
+            nowNanos: context.environment.frameNowNanos, isMeasuring: isMeasuring)
+        guard drawn != target else { return nil }
+
+        // The subtree's appearance is now a function of time, which a value memo
+        // cannot reproduce from a cached buffer — it would freeze the animation
+        // on its first frame. Same declaration `requestAnimation` makes.
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
+        var copy = view
+        copy.animatableData = drawn
+        return copy
+    }
 }

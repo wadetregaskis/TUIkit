@@ -45,6 +45,20 @@ public protocol ViewModifier {
     /// Not to be implemented by hand: conform to ``Animatable`` instead.
     static var _isAnimatable: Bool { get }
 
+    /// Static witness: this modifier at the value the animation store says to
+    /// draw it at, or `nil` when nothing is moving. See
+    /// ``View/_animated(_:context:isMeasuring:)`` for why it is a witness
+    /// rather than an existential cast.
+    ///
+    /// `owner` is passed in rather than taken as `Self` so the store key stays
+    /// the `ModifiedView`'s own generic type — which distinguishes two of the
+    /// same modifier nested around one view, where the modifier type alone
+    /// would not.
+    @MainActor
+    static func _animated(
+        _ modifier: Self, owner: Any.Type, context: RenderContext, isMeasuring: Bool
+    ) -> Self?
+
     /// Adjusts the rendering context before the wrapped content is rendered.
     ///
     /// Override this method in modifiers that consume space (like padding)
@@ -67,6 +81,14 @@ extension ViewModifier {
     /// ``Animatable``.
     @inlinable
     public static var _isAnimatable: Bool { false }
+
+    /// A modifier with nothing continuous about it never needs substituting.
+    @inlinable
+    public static func _animated(
+        _ modifier: Self, owner: Any.Type, context: RenderContext, isMeasuring: Bool
+    ) -> Self? {
+        nil
+    }
 }
 
 extension ViewModifier where Self: Animatable {
@@ -74,6 +96,27 @@ extension ViewModifier where Self: Animatable {
     /// renders, exactly as an animatable view's is.
     @inlinable
     public static var _isAnimatable: Bool { true }
+
+    /// This modifier at the value the store says to draw it at.
+    @MainActor
+    public static func _animated(
+        _ modifier: Self, owner: Any.Type, context: RenderContext, isMeasuring: Bool
+    ) -> Self? {
+        guard let storage = context.stateStorage else { return nil }
+        let animation = context.environment.canAnimate
+            ? context.environment.transaction.effectiveAnimation : nil
+        let key = AnimationStore.Key(
+            identity: context.identity, owner: ObjectIdentifier(owner))
+        let target = modifier.animatableData
+        let drawn = storage.animations.value(
+            for: key, target: target, animation: animation,
+            nowNanos: context.environment.frameNowNanos, isMeasuring: isMeasuring)
+        guard drawn != target else { return nil }
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
+        var copy = modifier
+        copy.animatableData = drawn
+        return copy
+    }
 }
 
 // MARK: - ModifiedView
@@ -213,4 +256,18 @@ extension ModifiedView {
     /// exactly what happened, and what the padding test caught.
     @inlinable
     public static var _isAnimatable: Bool { Modifier._isAnimatable }
+
+    /// Forwarded to the modifier, for the same reason and with the same
+    /// unconditional placement as ``_isAnimatable``.
+    @MainActor
+    public static func _animated(
+        _ view: Self, context: RenderContext, isMeasuring: Bool
+    ) -> Self? {
+        guard let animated = Modifier._animated(
+            view.modifier, owner: Self.self, context: context, isMeasuring: isMeasuring)
+        else { return nil }
+        var copy = view
+        copy.modifier = animated
+        return copy
+    }
 }
