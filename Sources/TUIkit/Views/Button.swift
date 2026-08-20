@@ -287,7 +287,11 @@ private struct _ButtonCore: View, Renderable, Layoutable {
     ) -> Bool {
         guard let menuOrdinal else {
             let handler = ActionHandler(
-                focusID: focusID, action: action, canBeFocused: !isDisabled)
+                focusID: focusID, action: action, canBeFocused: !isDisabled,
+                // Read here rather than in the closure: the environment is out
+                // of reach by the time a key arrives, exactly as the menu's
+                // dismiss action is.
+                extras: context.environment.buttonKeyExtras)
             FocusRegistration.register(context: context, handler: handler)
             return FocusRegistration.isFocused(context: context, focusID: focusID)
         }

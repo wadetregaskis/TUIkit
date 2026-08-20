@@ -57,6 +57,10 @@ final class ActionHandler: Focusable {
     /// The keys that trigger the action.
     let triggerKeys: Set<Key>
 
+    /// Extra keys an enclosing control wants answered while this button has
+    /// focus — a disclosure's Left and Right. See ``ButtonKeyExtras``.
+    let extras: ButtonKeyExtras?
+
     /// Creates an action handler.
     ///
     /// - Parameters:
@@ -64,16 +68,19 @@ final class ActionHandler: Focusable {
     ///   - action: The action to execute when triggered.
     ///   - canBeFocused: Whether this element can receive focus. Defaults to `true`.
     ///   - triggerKeys: The keys that trigger the action. Defaults to Enter and Space.
+    ///   - extras: Extra keys supplied by an enclosing control, if any.
     init(
         focusID: String,
         action: @escaping () -> Void,
         canBeFocused: Bool = true,
-        triggerKeys: Set<Key> = [.enter, .space]
+        triggerKeys: Set<Key> = [.enter, .space],
+        extras: ButtonKeyExtras? = nil
     ) {
         self.focusID = focusID
         self.action = action
         self.canBeFocused = canBeFocused
         self.triggerKeys = triggerKeys
+        self.extras = extras
     }
 }
 
@@ -81,6 +88,13 @@ final class ActionHandler: Focusable {
 
 extension ActionHandler {
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        // Extras first, and only for keys they claimed: a control that composes
+        // a button is more specific than the button, and this is the one place
+        // that can tell the difference. They never see Return or Space unless
+        // they asked for them.
+        if let extras, extras.keys.contains(event.key), extras.handle(event) {
+            return true
+        }
         guard triggerKeys.contains(event.key) else { return false }
         action()
         return true

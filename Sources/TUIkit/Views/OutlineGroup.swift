@@ -45,6 +45,10 @@ import TUIkitView
 ///
 /// On its own — in a `VStack`, a `ScrollView` — each branch's triangle is a Tab
 /// stop, and **Return** or **Space** opens or closes it, as any button would.
+/// **Right** opens it and **Left** closes it, exactly as in the `List` form
+/// below, so the same tree answers the same keys whatever it was put inside.
+/// (Without the list's ladder: there is no row cursor here to walk out of a
+/// subtree, so a Left with nothing left to close is plain focus movement.)
 ///
 /// Inside a ``List`` the row is the focusable and the triangle is not, because
 /// a row has a *selection* as well as an action and the two must not compete:
@@ -530,16 +534,33 @@ public struct _OutlineRow<Element, ID: Hashable, Leaf: View>: View {
         } else {
             Button(action: toggle, label: { glyph })
                 .buttonStyle(.plain)
+                // Only when the triangle is the focus stop. Inside a list the
+                // row is focusable and the LIST answers these keys, with the
+                // whole ladder — recursive open on Option, and a Left that
+                // walks out of the subtree before it gives up. Registering them
+                // here as well would put two handlers on one keystroke.
+                .buttonKeyExtras(keys: [.left, .right]) { event in
+                    setExpanded(event.key == .right)
+                }
         }
     }
 
     /// Opens a closed node, or closes an open one.
     private func toggle() {
-        if expansion.value.contains(id) {
-            expansion.value.remove(id)
-        } else {
+        setExpanded(!expansion.value.contains(id))
+    }
+
+    /// Puts this node into a named state, and reports whether that changed
+    /// anything — which is what decides if the key was used up.
+    @discardableResult
+    private func setExpanded(_ open: Bool) -> Bool {
+        guard expansion.value.contains(id) != open else { return open }
+        if open {
             expansion.value.insert(id)
+        } else {
+            expansion.value.remove(id)
         }
+        return true
     }
 }
 

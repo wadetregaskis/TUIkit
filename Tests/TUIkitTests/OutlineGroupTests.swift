@@ -626,4 +626,27 @@ struct OutlineGroupTests {
         let rendered = lines(frame(view, tui: tui, context: context))
         #expect(rendered.count == 2, "back to the two roots: \(rendered)")
     }
+    /// A bare outline is a column of triangles, each its own Tab stop, and the
+    /// keys have to be the same ones the `List` form answers — otherwise the
+    /// same tree behaves differently depending on what it was put inside.
+    @Test("Right opens the focused node and Left closes it, in a bare outline")
+    func arrowKeysDiscloseTheFocusedNode() throws {
+        let (tui, context) = harness()
+        let view = outline()
+
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .right))
+        let opened = lines(frame(view, tui: tui, context: context))
+        #expect(
+            opened.contains { $0.contains("TUIkit") },
+            "Right on the first root disclosed it: \(opened)")
+
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .left))
+        let closed = lines(frame(view, tui: tui, context: context))
+        #expect(
+            closed.contains { $0.contains("TUIkit") } == false,
+            "and Left folded it away again: \(closed)")
+    }
 }

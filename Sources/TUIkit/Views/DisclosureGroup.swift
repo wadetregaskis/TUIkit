@@ -25,8 +25,12 @@ import TUIkitCore
 ///
 /// The header is a Tab stop: **Return**, **Enter** or **Space** toggles it, and
 /// so does a click anywhere on the row — the triangle and the label are one
-/// control, as they are on macOS. The content is indented to start under the
-/// label, so nesting groups inside one another draws a tree.
+/// control, as they are on macOS. **Right** opens it and **Left** closes it, as
+/// they do in ``OutlineGroup`` and in a `List(_:children:)`; those two *set* the
+/// state rather than toggling it, so holding Right on an open group does
+/// nothing. Right stays the group's even then, while a Left with nothing left
+/// to close goes back to being ordinary focus movement. The content is indented
+/// to start under the label, so nesting groups inside one another draws a tree.
 ///
 /// ## Who owns the expansion
 ///
@@ -127,6 +131,25 @@ public struct DisclosureGroup<Label: View, Content: View>: View {
                 }
             )
             .buttonStyle(.plain)
+            // Left closes and Right opens, which is what an outline view does
+            // everywhere else in this framework — a `List(_:children:)` has
+            // answered these keys since it gained a tree, and a disclosure that
+            // did not was the odd one out. They SET rather than toggle, so
+            // holding Right on an open group does nothing rather than shutting
+            // it.
+            .buttonKeyExtras(keys: [.left, .right]) { event in
+                let wanted = event.key == .right
+                guard expansion.wrappedValue != wanted else {
+                    // Nothing to do here. Right is still the disclosure's — a
+                    // group that is already open should not hand the key on and
+                    // move the focus sideways. Left is not: once there is
+                    // nothing left to close, it belongs to whatever encloses
+                    // this group.
+                    return wanted
+                }
+                expansion.wrappedValue = wanted
+                return true
+            }
 
             if expansion.wrappedValue {
                 content().padding(.leading, DisclosureMetrics.contentIndent)

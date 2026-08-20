@@ -187,6 +187,65 @@ struct DisclosureGroupTests {
             "a second Return closes it again: \(collapsed)")
     }
 
+    /// The keys an outline view has everywhere else. `List(_:children:)` has
+    /// answered Left and Right since it gained a tree; a `DisclosureGroup` that
+    /// did not was the odd one out.
+    @Test("Right opens the focused group and Left closes it")
+    func arrowKeysDiscloseTheFocusedGroup() throws {
+        let (tui, context) = harness()
+        let open = Flag(false)
+        let view = DisclosureGroup("Advanced", isExpanded: open.binding) { Text("Secret") }
+
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        #expect(focus.dispatchKeyEvent(KeyEvent(key: .right)), "Right is the header's")
+        #expect(open.value, "and it opened the group")
+        frame(view, tui: tui, context: context)
+
+        #expect(focus.dispatchKeyEvent(KeyEvent(key: .left)), "Left is too")
+        #expect(open.value == false, "and it closed it again")
+    }
+
+    /// They SET rather than toggle, which is the difference between an arrow
+    /// key and Return: holding Right on an open group must not shut it. And
+    /// once there is nothing left to open or close, the two keys part company —
+    /// Right stays the disclosure's, Left goes back to being focus movement.
+    @Test("Right on an open group holds the focus; Left on a closed one releases it")
+    func arrowKeysSetRatherThanToggle() throws {
+        let (tui, context) = harness(height: 16)
+        let first = Flag(true)
+        let view = VStack(alignment: .leading, spacing: 0) {
+            DisclosureGroup("First", isExpanded: first.binding) { Text("AlphaBody") }
+            DisclosureGroup("Second") { Text("BetaBody") }
+        }
+
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+        let onFirst = focus.currentFocusedID
+
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .right))
+        #expect(first.value, "an open group stays open under Right")
+        #expect(
+            focus.currentFocusedID == onFirst,
+            "and keeps the focus, rather than landing in the control next to it")
+
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .left))
+        #expect(first.value == false, "Left closed it")
+        frame(view, tui: tui, context: context)
+
+        // On to the second group, which is closed, so its Left has nothing to
+        // do — and must therefore go back to being what Left is everywhere
+        // else in the framework: a move to the previous control.
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .tab))
+        let onSecond = focus.currentFocusedID
+        #expect(onSecond != onFirst, "Tab reached the second group")
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .left))
+        #expect(
+            focus.currentFocusedID == onFirst,
+            "Left on a closed group is the framework's again, and moves the focus")
+    }
+
     @Test("Return writes through the caller's binding when one was supplied")
     func returnWritesTheSuppliedBinding() throws {
         let (tui, context) = harness()
