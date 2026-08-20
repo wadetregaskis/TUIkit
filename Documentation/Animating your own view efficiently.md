@@ -1,8 +1,9 @@
 # Animating your own view efficiently
 
-*Scoping note, 2026-08-19. **Status: §6.1 and §6.2 are done** — see the
-per-option notes below. §6.3 is deliberately deferred until a real case wants
-it, and §6.4 is the destination rather than a plan.*
+*Scoping note, 2026-08-19. **Status: §6.1, §6.2 and §6.4 are done.** §6.3 was
+attempted as part of §6.4 and turned out to be unsound in its general form —
+see §5.3 and §8. The standing constraint below is answered in §8: the
+TUIkit-specific spellings stay, and now for a reason rather than by default.*
 
 *Standing constraint on §6.4: when the SwiftUI-style API can do all of this
 correctly and at the same cost, the TUIkit-specific spellings it replaces —
@@ -219,7 +220,7 @@ The cost of a *still* `AnimatedColor` is the thing to watch: every bordered
 container in a frame builds one, and the first cut stored it as a one-element
 array — +1.1% per frame on `table`. It stores a constant as a colour now.
 
-### 5.3 Automatic runs by diffing pre-rendered phases — **deferred**
+### 5.3 Automatic runs by diffing pre-rendered phases — **attempted; unsound in general**
 
 ```swift
 PhaseAnimator(emphasis.cycle(isFocused)) { phase in
@@ -247,6 +248,26 @@ author writes an ordinary view and never sees a run, an offset or a clock.
   no effect — the ~12% byte overhead already known from the replay path, but
   multiplied. The diff must compare rendered cells, not strings.
 
+**The cost this scoping missed, and it is the decisive one.** "N renders of the
+subtree" is not N times the CPU — it is N times every *side effect* a render
+performs. A render registers focus, publishes hit-test regions, fires
+`onAppear`, writes preferences, declares animation rates. Sixteen phases would
+register a control's focus sixteen times and appear it sixteen times. There is
+no `isRehearsing` flag that fixes this either: suppressing side effects would
+also change what several views *draw* (a measure-mode render reports natural
+sizes and skips focus rings), so the phases would no longer be the picture the
+real render produces — and a run that disagrees with the drawn cells is the one
+failure mode this whole mechanism has.
+
+So the general form is out. What shipped instead is the **narrow** form, which
+is sound and covers the case that matters: a modifier whose output is a pure
+re-styling of a buffer its content already produced renders that content ONCE
+and re-colours the finished lines per phase. `AnimatedBufferCycle` is that, and
+`.opacity(_:)` is its first user — a `withAnimation(.repeatForever)` fade costs
+no render passes at all. Anything whose phases differ in what is *drawn* rather
+than in how it is coloured is pointed at §5.1 instead, where the author knows
+each phase and nothing is rendered sixteen times.
+
 ### 5.4 Make it implicit, the way SwiftUI does
 
 The endpoint 5.2 and 5.3 both point at: an app declares a value animatable, and
@@ -259,6 +280,12 @@ That is a much larger piece of work and it needs the interpolation model first
 (`Animatable`, a real animation curve type, a transaction). Worth naming as the
 destination so 5.2 and 5.3 are built as steps toward it rather than as
 alternatives to it.
+
+**DONE.** `withAnimation`, `Animation`, `Animatable`, `VectorArithmetic`,
+`Transaction`, `.animation(_:value:)` and `.transaction(_:)` all exist and match
+SwiftUI's signatures; see the `Animation` article. What it does *not* do is make
+the run machinery an implementation detail nobody outside the framework names —
+see §8.
 
 ## 6. Recommendation
 
@@ -298,3 +325,58 @@ tax on understanding the machinery.
 
 A sweep of every page in `Example`, at three different focus positions each,
 reports zero clock reads while idle.
+
+
+## 8. What §6.4 turned out to be, and what stays
+
+`withAnimation` works, and the answer to the standing constraint is: **the
+TUIkit-specific spellings stay.** Not for want of trying to retire them — three
+things came out of building it that the scoping above could not have known.
+
+**A terminal has no render server.** SwiftUI's efficiency comes from handing an
+interpolation to Core Animation, which runs it without re-evaluating a body.
+There is nothing here to hand it to, so an animating subtree really is walked
+once per frame. That is fine, and bounded, for a *change*: 30 Hz for the
+animation's duration, eight passes for a quarter-second ease, then nothing. It
+is not fine forever, and `repeatForever` is exactly forever.
+
+**The cheap path exists but is narrow, and narrow for a good reason** (§5.3
+above): only a pure re-styling of one render can be pre-rendered soundly.
+`.opacity` qualifies. A glyph that changes shape, a spinner, a chip whose
+content changes — none do, and no amount of API design makes them.
+
+**The focus pulse is not an app animation.** It is a shared affordance on one
+clock, phase-locked across every element showing focus, its cadence chosen by
+`SelectionIndicatorStyle` rather than by the call site. Rebuilt on
+`withAnimation(.repeatForever)` it would be per-element and phased from
+whenever each element started, so a section's border and the control inside it
+would drift apart — which is the exact bug that merged the two clocks into one
+in the first place.
+
+So the division is now a real one rather than a transitional one, and both
+articles say it in the same words: **`withAnimation` is for changes; the run
+machinery is for decorations.** `AnimatedColor`, `animatedCells(_:)` and
+`SelectionEmphasisCycle` are the decoration half, they are documented as such,
+and they are not redundant.
+
+### What it cost
+
+A paired A/B (41 reps, `ab_bench.py`) against the commit before the animator:
+
+| scenario | change | verdict |
+|---|---|---|
+| `table` | +0.8% | slower |
+| `deep` | +0.6% | slower |
+| `kitchensink` | +0.7% | slower |
+| `megalist` | +0.3% | indistinguishable |
+
+Down from ~1.0–1.4% after three rounds of work — see the commit "Animating cost
+every app 1% of a frame, animating or not". Three things were paying it and only
+one was the obvious one: the per-view conformance check (now a static `View`
+witness), an unconditional rebinding of the view value that copied the struct on
+every render (now a `nil`-returning resolution and a branch), and three new
+`EnvironmentValues` entries in a dictionary that is copied down the whole tree
+(now one `AnimationFrame`).
+
+The residual is spread thin — a witness call, one function call, one dictionary
+entry — and the remaining candidates all trade a correctness hole for it.
