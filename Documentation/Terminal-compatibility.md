@@ -172,6 +172,13 @@ the emoji-class clusters below unless noted.
   TextField caps and the switch knob). Shades ░▒▓ render as fine stipple.
   The image pipeline's half-block mode uses ▀ (upper) rather than ▄
   specifically to avoid a banding artifact observed here.
+  **`Appearance.block`** (added 2026-08-20) draws its edges as a run of
+  `█`, so its horizontal borders inherit those seams on this host. The
+  mitigation is the one `TrackConfiguration.block` already uses — paint
+  the glyph's own colour as the cell BACKGROUND as well, so the pixels
+  the glyph misses are the same colour — but that needs the border
+  renderer to be able to state a background, which it currently cannot.
+  Cosmetic, and only on this terminal; recorded rather than fixed.
 - **Right-edge phantom cells:** rows whose compensation leaves
   advance≠paint at the right edge can leave unpainted phantom cells;
   `FrameDiffWriter.repaintRightEdge` runs a scoped second pass.
