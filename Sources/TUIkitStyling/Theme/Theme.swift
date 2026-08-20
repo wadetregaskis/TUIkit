@@ -460,7 +460,7 @@ extension Palette {
         accent.opacity(ViewConstants.focusBorderDim, over: background)
     }
 
-    /// The face while the pointer is over the control (and it is not focused).
+    /// The face while the pointer is over the control.
     ///
     /// A step further into the accent than ``restingControlFace``, and — this
     /// is the part a fixed opacity cannot do — far enough that the *terminal*
@@ -471,26 +471,37 @@ extension Palette {
     /// quantised both tints onto one cube entry, so hovering those themes did
     /// nothing visible.
     ///
-    /// So the tint walks toward the accent until the cube separates it, and
-    /// stops at the first step that does — the smallest visible difference,
-    /// rather than a louder constant that would out-shout focus on the palettes
-    /// that never needed it. Compared after downsampling on every terminal, not
-    /// only where the depth demands it, so a hover looks the same everywhere
-    /// (the rule ``liftedBackground`` already follows, for the same reason).
+    /// So the tint walks toward the accent until the cube separates it —
+    /// compared after downsampling on every terminal, not only where the depth
+    /// demands it, so a hover looks the same everywhere (the rule
+    /// ``liftedBackground`` already follows, for the same reason).
+    ///
+    /// It walks ``hoverSeparationSteps`` distinguishable entries rather than
+    /// stopping at the first. The first is what the *terminal* can show; it was
+    /// not what a *person* notices, which is what "the highlight effect for
+    /// mouse hover is a bit too subtle" was about. Counting cube entries rather
+    /// than raising the opacity keeps the adaptive property that mattered: a
+    /// palette with a coarse accent ramp still gets exactly two visible steps,
+    /// and one with a fine ramp does not get a shout.
     public var hoveredControlFace: Color {
         let resting = restingControlFace.resolve(with: self).downsampledToPalette256()
+        var distinct: [Color] = []
+        var furthest = accent
         var tint = ViewConstants.hoverBackground
         while tint < 1.0 {
             let candidate = accent.opacity(tint, over: background)
-            if candidate.resolve(with: self).downsampledToPalette256() != resting {
-                return candidate
+            let quantised = candidate.resolve(with: self).downsampledToPalette256()
+            if quantised != resting, !distinct.contains(quantised) {
+                distinct.append(quantised)
+                furthest = candidate
+                if distinct.count >= Self.hoverSeparationSteps { return candidate }
             }
             tint += Self.hoverTintStep
         }
-        // The accent itself, which is as far as this direction goes. A palette
-        // whose accent cannot be told from its own 20% tint has nothing left to
-        // hover with.
-        return accent
+        // Ran out of room: the furthest visibly-different tint found, or the
+        // accent itself when there was none. A palette whose accent cannot be
+        // told from its own 20% tint has nothing left to hover with.
+        return distinct.isEmpty ? accent : furthest
     }
 
     /// A foreground lifted to answer the pointer.
@@ -519,16 +530,46 @@ extension Palette {
         let page = background.resolve(with: self)
         let resting = resolved.downsampledToPalette256()
 
-        /// The first step toward `target` the cube can tell from `resolved`,
-        /// or nil when that whole direction quantises back onto it.
+        /// The step toward `target` that is ``hoverSeparationSteps``
+        /// distinguishable cube entries away from `resolved`, or the furthest
+        /// one this direction reaches, or nil when the whole direction
+        /// quantises back onto it.
+        ///
+        /// The extra steps are a preference, not a requirement: a candidate is
+        /// only taken past the first if it is no HARDER to read against the
+        /// page than the first was. Walking away from the page (the usual
+        /// case) can only improve that, so it always gets its full travel;
+        /// walking toward the accent or the page is where a second step could
+        /// make a hovered label dimmer than the minimum-visible version
+        /// already was, and it is refused there. Silver Aerogel found this:
+        /// its foreground is already at the extreme, so its lift is a hue
+        /// step, and two of them took a label to 1.99:1.
         func stepped(toward target: Color) -> Color? {
+            var distinct: [Color] = []
+            var best: Color?
+            var floor = 0.0
             var phase = Self.hoverForegroundLift
             while phase < 1.0 {
                 let candidate = Color.lerp(resolved, target, phase: phase)
-                if candidate.downsampledToPalette256() != resting { return candidate }
+                let quantised = candidate.downsampledToPalette256()
+                if quantised != resting, !distinct.contains(quantised) {
+                    let contrast = quantised.contrastRatio(against: page)
+                    if best == nil {
+                        // The first visible step sets the bar the rest must clear.
+                        floor = contrast
+                        best = candidate
+                    } else if contrast >= floor {
+                        best = candidate
+                    } else {
+                        return best
+                    }
+                    distinct.append(quantised)
+                    if distinct.count >= Self.hoverSeparationSteps { return best }
+                }
                 phase += Self.hoverForegroundLift
             }
-            return target.downsampledToPalette256() != resting ? target : nil
+            if best == nil, target.downsampledToPalette256() != resting { return target }
+            return best
         }
 
         // 1. Away from the page: brighter on a dark palette, darker on a light
@@ -553,6 +594,16 @@ extension Palette {
     /// move further to be noticed at all. Every built-in palette resolves in
     /// one or two steps.
     static var hoverForegroundLift: Double { 0.22 }
+
+    /// How many *distinguishable* steps a hover moves away from rest.
+    ///
+    /// One is the least the terminal can show and the least that can be
+    /// guaranteed on a coarse palette; it is not what a person notices when the
+    /// thing under the pointer is a few cells of a busy page. Two is, and it
+    /// still adapts — a palette needing a large opacity change to cross one cube
+    /// entry gets a large one, and a palette needing a nudge gets two nudges
+    /// rather than a shout.
+    static var hoverSeparationSteps: Int { 2 }
 
     /// How coarsely ``hoveredControlFace`` searches for a visible step.
     ///

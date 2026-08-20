@@ -235,18 +235,44 @@ struct PaletteContrastAuditTests {
         }
     }
 
-    /// …and no further than it has to be. A palette the cube already separated
-    /// keeps the tint it had, so this is a fix for the terminals that needed it
-    /// rather than a louder hover for everyone.
-    @Test("A palette the cube already separated is left alone")
-    func hoverDoesNotOvershoot() {
-        // Blue's 0.20 and 0.32 tints land on different cube entries as they
-        // are, so its hover must still be exactly the 0.32 one.
-        let blue = SystemPalette(.blue)
-        #expect(
-            blue.hoveredControlFace.resolve(with: blue)
-                == blue.accent.opacity(ViewConstants.hoverBackground, over: blue.background)
-                .resolve(with: blue))
+    /// …and it goes two visible steps, not one.
+    ///
+    /// One step is the least the *terminal* can show. It was not what a *person*
+    /// notices on a busy page — "the highlight effect for mouse hover is a bit
+    /// too subtle" — so the tint walks past the first cube entry that separates
+    /// it from rest and stops at the second.
+    ///
+    /// Stated as a property of the result rather than by re-deriving the walk:
+    /// somewhere strictly between the resting tint and the hovered one there
+    /// must be a THIRD cube entry, which is what "two steps" means and what a
+    /// first-step-only implementation cannot satisfy. The ladder here is finer
+    /// than the implementation's, so it cannot miss an entry the implementation
+    /// passed through.
+    @Test("The hover face walks two visible steps, not the first one it finds")
+    func hoverWalksTwoSteps() {
+        for palette in Self.allPalettes {
+            let resting = palette.restingControlFace.resolve(with: palette)
+                .downsampledToPalette256()
+            let hovered = palette.hoveredControlFace.resolve(with: palette)
+                .downsampledToPalette256()
+            // The palettes with nothing left to give: the walk ran out of range
+            // and returned the accent itself. Nothing to count there.
+            let accent = palette.accent.resolve(with: palette).downsampledToPalette256()
+            if hovered == accent { continue }
+
+            var intermediate = false
+            var tint = ViewConstants.hoverBackground
+            while tint < 1.0 {
+                let entry = palette.accent.opacity(tint, over: palette.background)
+                    .resolve(with: palette).downsampledToPalette256()
+                if entry == hovered { break }
+                if entry != resting { intermediate = true }
+                tint += 0.02
+            }
+            #expect(
+                intermediate,
+                "\(palette.name): hover \(Self.hex(hovered)) is the first entry that separates from rest \(Self.hex(resting)), not the second")
+        }
     }
 
     // MARK: - One chrome, both ends
