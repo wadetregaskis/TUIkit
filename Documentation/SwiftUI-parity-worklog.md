@@ -81,3 +81,53 @@ change or is open permanently once an app animates anything once.
 *Meanwhile:* accepted and recorded. My read is that a 7.5% on the deep-nesting
 stress case is a fair price for `.padding`/`.frame` animating at all, given the
 realistic shapes measure clean — but it is a judgement call and it is yours.
+
+
+## 2026-08-19 — parity, continued
+
+Working down the gap list, picking the ones a character grid can honour
+*exactly* rather than approximately.
+
+### Done
+
+- **Seven colour effects**: `.brightness`, `.contrast`, `.saturation`,
+  `.grayscale`, `.hueRotation`, `.colorInvert`, `.colorMultiply`. These sound
+  graphical and are not — each is a function from colour to colour, and a
+  terminal names its colours explicitly in escapes it has already emitted.
+  `.opacity`'s SGR walk turned out to be the general case and became one
+  (`SGRColorRewrite`). All animatable, all size-neutral.
+- **`Angle`**, which comes with `.hueRotation` and is the one place a geometric
+  type earns its keep here: a hue *is* an angle, so this rotates colours exactly
+  while nothing about the cells moves.
+- **`.position(x:y:)` / `.position(_:)`** — the absolute counterpart to
+  `.offset`, including SwiftUI's rule that a positioned view fills the space it
+  is offered.
+- **`Binding.animation(_:)`**.
+
+A/B after the colour effects: `table`, `megalist`, `kitchensink`
+indistinguishable. (`deep` unchanged at its known +7.7% — see Q3.)
+
+### Pulled before shipping
+
+**Q4.** `.background(alignment:content:)` — I wrote it and then took it out,
+because "draw this *behind* that" has no honest meaning when every cell is
+opaque. SwiftUI's background shows through wherever the content is transparent;
+here the content's spaces are cells like any other, so a background under
+`Text("Total")` is simply covered by the word. The options are (a) treat a
+space in the content as transparent, which is a real and defensible rule but a
+new one, (b) ship it as "visible only where the content is shorter", which
+would be surprising, or (c) leave it out. I left it out.
+*Meanwhile:* `.overlay(alignment:content:)` already exists and is unambiguous,
+and `.background(_ color:)` covers the common case.
+
+### Not attempted, and why
+
+- **`deleteDisabled(_:)` / `moveDisabled(_:)`** — these belong on the ROWS of a
+  `ForEach`, read by the enclosing `List`'s delete/reorder machinery. TUIkit has
+  `onDelete` / `onMove` on `ForEach` itself, so wiring a per-row veto means
+  threading an environment value through the reorder host. Worth doing; wants
+  more room than the end of a batch.
+- **`labelsHidden()` / `labelsVisibility(_:)`** — cheap to add, but only
+  meaningful once `Toggle`, `Slider`, `Stepper`, `Picker` and `DatePicker` all
+  honour it. Adding the modifier without that is the "silently does nothing"
+  shape I have been avoiding all session.
