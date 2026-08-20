@@ -113,6 +113,10 @@ public final class StateStorage: @unchecked Sendable {
     /// conditional branch that flips — takes its animations along.
     public let animations = AnimationStore()
 
+    /// What each removed view left behind, so a removal transition has
+    /// something to play out. See ``DepartureStore``.
+    public let departures = DepartureStore()
+
     /// Creates an empty state storage.
     public init() {}
 
@@ -245,6 +249,7 @@ extension StateStorage {
     /// Begins a new render pass by clearing the active identity set.
     public func beginRenderPass() {
         animations.beginRenderPass()
+        departures.beginRenderPass()
         activeIdentities.removeAll(keepingCapacity: true)
         retainedSubtreeRoots.removeAll(keepingCapacity: true)
         beginSceneRender()
@@ -329,6 +334,7 @@ extension StateStorage {
         activeIdentities.removeAll()
         lastConditionalCase.removeAll()
         animations.removeAll()
+        departures.removeAll()
     }
 }
 

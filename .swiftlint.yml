@@ -198,6 +198,9 @@ type_name:
     # Publishes a foreground style that can fade; internal so
     # `View.foregroundStyle(_:)` can return it opaquely.
     - _AnimatableForegroundStyleView
+    # Applies a transition to its content; internal so `View.transition(_:)`
+    # can return it opaquely.
+    - _TransitionView
     # One node's row in an `OutlineGroup`. Public-but-underscored because the
     # outline hands its rows to its container as `ChildView`s, which key each
     # one by this type.

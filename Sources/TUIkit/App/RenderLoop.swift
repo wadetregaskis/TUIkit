@@ -1009,11 +1009,14 @@ extension RenderLoop {
     /// last one arrives, which is what stops a settled screen rendering.
     ///
     /// Called AFTER the pass's prune, so an animation whose view has just left
-    /// the tree does not hold the loop open for something nobody can see.
+    /// the tree does not hold the loop open for something nobody can see. A
+    /// view that is *leaving* is the deliberate exception — it is exactly the
+    /// thing nobody can see coming, and it needs frames until it has gone.
     private func keepAnimating(scheduler: AnimationScheduler?, frameNowNanos: Int64) {
-        guard tuiContext.stateStorage.animations.hasLiveAnimations(at: frameNowNanos) else {
-            return
-        }
+        let store = tuiContext.stateStorage
+        guard store.animations.hasLiveAnimations(at: frameNowNanos)
+            || store.departures.hasDepartures(at: frameNowNanos)
+        else { return }
         scheduler?.request(Self.viewAnimationToken, Self.viewAnimationRequest, now: frameNowNanos)
     }
 

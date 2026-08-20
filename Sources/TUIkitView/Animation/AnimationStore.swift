@@ -178,6 +178,35 @@ extension AnimationStore {
         return presented
     }
 
+    /// How present a view arriving at `key` is — `0` on the frame it appears
+    /// under an animation, rising to `1`.
+    ///
+    /// The deliberate opposite of ``value(for:target:animation:nowNanos:isMeasuring:)``,
+    /// which never animates a first sight: an appearance is exactly what a
+    /// transition animates, and everything else is exactly what it must not.
+    /// Without an animation, or once the arrival is over, this is `1` and the
+    /// view is simply drawn.
+    public func arrivalPhase(
+        for key: Key, animation: Animation?, nowNanos: Int64, isMeasuring: Bool
+    ) -> Double {
+        seenThisPass.insert(key)
+        if let record = records[key], let from = record.from as? Double,
+            let target = record.target as? Double
+        {
+            return presented(record, from: from, target: target, nowNanos: nowNanos)
+        }
+        guard let animation else {
+            store(
+                Record(from: 1.0, target: 1.0, animation: nil, startNanos: nowNanos),
+                for: key, isMeasuring: isMeasuring)
+            return 1
+        }
+        store(
+            Record(from: 0.0, target: 1.0, animation: animation, startNanos: nowNanos),
+            for: key, isMeasuring: isMeasuring)
+        return 0
+    }
+
     /// Whether `value` differs from the last one seen at `key`.
     ///
     /// First sight is **not** a change: a view appearing is not a value moving,

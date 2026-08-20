@@ -41,7 +41,13 @@ extension Optional: Renderable where Wrapped: View {
         case .some(let view):
             return TUIkitView.renderToBuffer(view, context: context)
         case .none:
-            return FrameBuffer()
+            // An `if` without an `else` is the commonest way a view is removed,
+            // and this slot is the only thing left of it: the view is gone from
+            // the tree, so nothing else can play out its removal transition.
+            // See ``DepartureStore``.
+            return context.stateStorage?.departures.departing(
+                at: context.identity, nowNanos: context.environment.frameNowNanos)
+                ?? FrameBuffer()
         }
     }
 }
@@ -54,7 +60,13 @@ extension Optional: Layoutable where Wrapped: View {
         case .some(let view):
             return measureChild(view, proposal: proposal, context: context)
         case .none:
-            return ViewSize.fixed(0, 0)
+            // A view on its way out still holds its slot open, or the page
+            // would close up around it on the first frame of the removal and
+            // the transition would play in a space that had already gone.
+            guard let leaving = context.stateStorage?.departures.departingSize(
+                at: context.identity)
+            else { return ViewSize.fixed(0, 0) }
+            return ViewSize.fixed(leaving.width, leaving.height)
         }
     }
 }
