@@ -233,7 +233,8 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         // border handed an animating colour leaves runs for its own cells
         // (`borderRuns`), which is the whole point of the type.
         let borderAnimation =
-            style.borderColor?.resolved(with: palette) ?? AnimatedColor(palette.border)
+            Self.animating(style.borderColor, context: context)?.resolved(with: palette)
+            ?? AnimatedColor(palette.border)
         let borderColor = borderAnimation.current
         let hasBorder = style.hasBorder
 
@@ -878,5 +879,23 @@ extension _ContainerViewCore: @preconcurrency Equatable where Content: Equatable
     static func == (lhs: _ContainerViewCore<Content, Footer>, rhs: _ContainerViewCore<Content, Footer>) -> Bool {
         lhs.title == rhs.title && lhs.titleColor == rhs.titleColor && lhs.content == rhs.content && lhs.footer == rhs.footer
             && lhs.style == rhs.style && lhs.padding == rhs.padding
+    }
+}
+
+// MARK: - A border colour that changed
+
+extension _ContainerViewCore {
+    /// The border's colour, faded when it changed inside
+    /// ``withAnimation(_:_:)``.
+    ///
+    /// Only a *still* colour is put through the animator. One that already
+    /// carries a cycle is a decoration — a focus pulse — and is on the run
+    /// loop's replay path, which is both cheaper and not a change to animate
+    /// between. Interpolating one cycle into another would be neither.
+    @MainActor
+    static func animating(_ colour: AnimatedColor?, context: RenderContext) -> AnimatedColor? {
+        guard let colour, !colour.isAnimating else { return colour }
+        return AnimatedColor(
+            ColorAnimation.resolving(colour.current, owner: Self.self, context: context))
     }
 }

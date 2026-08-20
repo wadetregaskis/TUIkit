@@ -195,6 +195,9 @@ type_name:
     # Publishes an animation to its subtree; internal so `View.animation(_:value:)`
     # can return it opaquely.
     - _AnimationValueModifier
+    # Publishes a foreground style that can fade; internal so
+    # `View.foregroundStyle(_:)` can return it opaquely.
+    - _AnimatableForegroundStyleView
     # One node's row in an `OutlineGroup`. Public-but-underscored because the
     # outline hands its rows to its container as `ChildView`s, which key each
     # one by this type.

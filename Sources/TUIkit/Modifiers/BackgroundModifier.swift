@@ -15,7 +15,11 @@ public struct BackgroundModifier: ViewModifier {
     public func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
         guard !buffer.isEmpty else { return buffer }
 
-        let resolvedColor = color.resolve(with: context.environment.palette)
+        // Through the animator, so a change to the colour inside
+        // `withAnimation` fades rather than jumps. Returns the colour
+        // untouched when nothing is moving.
+        let animated = ColorAnimation.resolving(color, owner: Self.self, context: context)
+        let resolvedColor = animated.resolve(with: context.environment.palette)
         let width = buffer.width
         var lines: [String] = []
 
