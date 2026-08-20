@@ -19,6 +19,10 @@ struct AnimationPage: View {
     @State private var curve: Int = 0
     @State private var isDimmed = false
     @State private var breathes = false
+    @State private var isWide = false
+    @State private var isWarm = false
+    @State private var showsPanel = false
+    @State private var transition = 0
 
     /// The curves the two bars can be driven with. `.smooth`, `.snappy` and
     /// `.bouncy` are springs, so the last of them visibly overshoots the target
@@ -32,6 +36,15 @@ struct AnimationPage: View {
     ]
 
     private var animation: Animation { Self.curves[curve].animation }
+
+    /// The transitions the panel can come and go with.
+    private static let transitions: [(key: String, transition: AnyTransition)] = [
+        ("page.animation.transition.opacity", .opacity),
+        ("page.animation.transition.slide", .slide),
+        ("page.animation.transition.moveTop", .move(edge: .top)),
+        ("page.animation.transition.scale", .scale),
+        ("page.animation.transition.both", .move(edge: .leading).combined(with: .opacity)),
+    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -108,6 +121,51 @@ struct AnimationPage: View {
                     Text("page.animation.breathingText")
                         .foregroundStyle(.palette.accent)
                         .opacity(breathingOpacity)
+                }
+            }
+
+            DemoSection("page.animation.section.modifiers") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("page.animation.modifiers.hint")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    HStack(spacing: 2) {
+                        Button("page.animation.button.resize") {
+                            withAnimation(animation) { isWide.toggle() }
+                        }
+                        Button("page.animation.button.recolour") {
+                            withAnimation(animation) { isWarm.toggle() }
+                        }
+                    }
+                    // A frame, a padding and a border colour, all moving from
+                    // one `withAnimation`. None of these views is `Animatable`
+                    // — the MODIFIERS are.
+                    Text("page.animation.box")
+                        .padding(.leading, isWide ? 6 : 1)
+                        .frame(width: isWide ? 40 : 20)
+                        .border(isWarm ? .palette.warning : .palette.border)
+                }
+            }
+
+            DemoSection("page.animation.section.transition") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("page.animation.transition.hint")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Picker("page.animation.transition.label", selection: $transition) {
+                        ForEach(Array(Self.transitions.enumerated()), id: \.offset) { entry in
+                            Text(L(entry.element.key)).tag(entry.offset)
+                        }
+                    }
+                    Button("page.animation.button.toggle") {
+                        withAnimation(.easeInOut(duration: 0.5)) { showsPanel.toggle() }
+                    }
+                    // The optional IS what is rendered here, so the removal has
+                    // a slot to play out in — see `View.transition(_:)`.
+                    (showsPanel ? Text("page.animation.panel") : nil)
+                        .map {
+                            $0.padding(1)
+                                .border(.palette.accent)
+                                .transition(Self.transitions[transition].transition)
+                        }
                 }
             }
 
