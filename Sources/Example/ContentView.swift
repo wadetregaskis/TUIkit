@@ -43,6 +43,7 @@ enum DemoPage: Int, CaseIterable {
     case focus
     case menus
     case navigation
+    case animation
 }
 
 // MARK: - App-wide styling
@@ -247,6 +248,8 @@ struct ContentView: View {
             PreferencesPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .focus:
             FocusPage().statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .animation:
+            AnimationPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         }
     }
 
