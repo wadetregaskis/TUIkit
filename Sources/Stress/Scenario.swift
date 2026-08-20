@@ -62,6 +62,7 @@ enum Scenarios {
         DashboardScenario.descriptor,
         FramedColumnsScenario.descriptor,
         ChurnUpdateScenario.descriptor,
+        AnimatingScenario.descriptor,
         KitchenSinkScenario.descriptor,
     ]
 
