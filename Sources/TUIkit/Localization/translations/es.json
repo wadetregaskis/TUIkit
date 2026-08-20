@@ -83,5 +83,10 @@
   "validation.email_invalid": "Dirección de correo electrónico no válida",
   "validation.password_too_short": "La contraseña debe tener al menos 8 caracteres",
   "validation.username_taken": "Este nombre de usuario ya existe",
-  "validation.field_required": "Este campo no puede estar vacío"
+  "validation.field_required": "Este campo no puede estar vacío",
+
+  "appearance.rounded": "Redondeado",
+  "appearance.line": "Línea",
+  "appearance.doubleLine": "Línea doble",
+  "appearance.heavy": "Grueso"
 }

@@ -83,5 +83,10 @@
   "validation.email_invalid": "电子邮件地址无效",
   "validation.password_too_short": "密码必须至少为 8 个字符",
   "validation.username_taken": "用户名已存在",
-  "validation.field_required": "此字段不能为空"
+  "validation.field_required": "此字段不能为空",
+
+  "appearance.rounded": "圆角",
+  "appearance.line": "细线",
+  "appearance.doubleLine": "双线",
+  "appearance.heavy": "粗线"
 }

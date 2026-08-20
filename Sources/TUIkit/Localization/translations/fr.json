@@ -83,5 +83,10 @@
   "validation.email_invalid": "Adresse e-mail invalide",
   "validation.password_too_short": "Le mot de passe doit contenir au moins 8 caractères",
   "validation.username_taken": "Ce nom d'utilisateur existe déjà",
-  "validation.field_required": "Ce champ ne peut pas être vide"
+  "validation.field_required": "Ce champ ne peut pas être vide",
+
+  "appearance.rounded": "Arrondi",
+  "appearance.line": "Trait",
+  "appearance.doubleLine": "Double trait",
+  "appearance.heavy": "Épais"
 }

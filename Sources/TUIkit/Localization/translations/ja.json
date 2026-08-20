@@ -83,5 +83,10 @@
   "validation.email_invalid": "メールアドレスが無効です",
   "validation.password_too_short": "パスワードは8文字以上である必要があります",
   "validation.username_taken": "ユーザー名は既に使用されています",
-  "validation.field_required": "この項目は空にできません"
+  "validation.field_required": "この項目は空にできません",
+
+  "appearance.rounded": "角丸",
+  "appearance.line": "細線",
+  "appearance.doubleLine": "二重線",
+  "appearance.heavy": "太線"
 }

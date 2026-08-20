@@ -83,5 +83,10 @@
   "validation.email_invalid": "Indirizzo e-mail non valido",
   "validation.password_too_short": "La password deve contenere almeno 8 caratteri",
   "validation.username_taken": "Questo nome utente è già in uso",
-  "validation.field_required": "Questo campo non può essere vuoto"
+  "validation.field_required": "Questo campo non può essere vuoto",
+
+  "appearance.rounded": "Arrotondato",
+  "appearance.line": "Linea",
+  "appearance.doubleLine": "Linea doppia",
+  "appearance.heavy": "Spesso"
 }

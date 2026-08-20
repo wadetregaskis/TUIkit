@@ -65,6 +65,18 @@ public enum LocalizationKey {
         case to = "label.to"
     }
 
+    /// Border appearance names, as shown in a settings screen.
+    ///
+    /// ``Appearance/name`` is the identifier capitalised, which is right for a
+    /// `Cyclable`'s identity and wrong for a label — see
+    /// ``Appearance/localizedName``.
+    public enum Appearance: String {
+        case rounded = "appearance.rounded"
+        case line = "appearance.line"
+        case doubleLine = "appearance.doubleLine"
+        case heavy = "appearance.heavy"
+    }
+
     /// Error messages
     public enum Error: String {
         case invalidInput = "error.invalid_input"

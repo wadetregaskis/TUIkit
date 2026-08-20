@@ -83,5 +83,10 @@
   "validation.email_invalid": "Invalid email address",
   "validation.password_too_short": "Password must be at least 8 characters",
   "validation.username_taken": "Username already exists",
-  "validation.field_required": "This field cannot be empty"
+  "validation.field_required": "This field cannot be empty",
+
+  "appearance.rounded": "Rounded",
+  "appearance.line": "Line",
+  "appearance.doubleLine": "Double line",
+  "appearance.heavy": "Heavy"
 }

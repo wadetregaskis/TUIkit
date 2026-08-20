@@ -49,3 +49,23 @@ extension AppState {
         LocalizationService.shared.setLanguage(language)
     }
 }
+
+// MARK: - Appearance
+
+extension Appearance {
+    /// The appearance's name in the app's language.
+    ///
+    /// ``name`` is the identifier capitalised — "Rounded", "Doubleline" — which
+    /// is the right thing for a `Cyclable`'s identity and the wrong thing for a
+    /// settings screen, where it appeared verbatim in every language.
+    ///
+    /// Here rather than on ``Appearance`` itself because the type lives in
+    /// `TUIkitStyling`, below the localization service; this module can see
+    /// both. Falls back to ``name`` for an appearance an app added, which has
+    /// no key to look up.
+    public var localizedName: String {
+        let key = "appearance.\(rawId.rawValue)"
+        let localized = LocalizationService.shared.string(for: key)
+        return localized == key ? name : localized
+    }
+}

@@ -223,7 +223,12 @@ struct ThemePage: View {
                 DemoSection("page.theme.borderAppearance") {
                     Picker("page.theme.appearanceLabel", selection: appearanceSelection) {
                         ForEach(0..<appearances.count, id: \.self) { index in
-                            Text(appearances[index].name).tag(appearances[index].id)
+                            // `localizedName`, not `name`: the latter is the
+                            // identifier capitalised, which is right for a
+                            // `Cyclable`'s identity and wrong on a settings
+                            // screen — it read "Rounded" in every language.
+                            Text(appearances[index].localizedName)
+                                .tag(appearances[index].id)
                         }
                     }
                     .pickerStyle(.radioGroup)
