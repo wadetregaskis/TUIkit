@@ -76,3 +76,108 @@ struct OpacityAnimationTests {
         #expect(animated.line(0.4, atMillis: 1000) == snapped.line(0.4, atMillis: 0))
     }
 }
+
+@MainActor
+@Suite("A fade that never ends")
+struct RepeatingOpacityTests {
+
+    /// A view whose opacity is on a repeating animation, rendered at a chosen
+    /// tick of the replay clock.
+    @MainActor
+    private final class Screen {
+        var context = makeRenderContext(width: 12, height: 3)
+
+        init(_ animation: Animation) {
+            context.environment.canAnimate = true
+            context.environment.transaction = Transaction(animation: animation)
+        }
+
+        func render(_ opacity: Double, atTick tick: Int) -> FrameBuffer {
+            context.environment.animationTick = tick
+            context.environment.frameNowNanos =
+                Int64(Double(tick) * AnimationClock.cursor.tickInterval * 1_000_000_000)
+            return renderToBuffer(Text("ABC").opacity(opacity), context: context)
+        }
+
+        /// Whether the run loop would still be rendering for this.
+        func needsRenders(atTick tick: Int) -> Bool {
+            context.environment.stateStorage!.animations.hasLiveAnimations(
+                at: Int64(Double(tick) * AnimationClock.cursor.tickInterval * 1_000_000_000))
+        }
+    }
+
+    @Test("The whole cycle is handed to the run loop, pre-rendered")
+    func repeatingFadeBecomesRuns() {
+        // 0.4 s out and back is 0.8 s, which is sixteen ticks of the 50 ms
+        // replay clock — the same sixteen a focus breath uses.
+        let screen = Screen(.linear(duration: 0.4).repeatForever(autoreverses: true))
+        _ = screen.render(1, atTick: 0)
+        let buffer = screen.render(0.2, atTick: 0)
+
+        #expect(buffer.animatedCells.count == 1, "one row of text, so one run")
+        let run = buffer.animatedCells[0]
+        #expect(run.isAnimating)
+        #expect(run.frames.count == 16, "got \(run.frames.count) frames")
+        #expect(run.clock == .cursor)
+    }
+
+    @Test("And the loop then renders nothing for it")
+    func repeatingFadeStopsTheRenders() {
+        // The whole point. A fade that never ends, served by re-rendering,
+        // costs a render pass for as long as the view is on screen.
+        let screen = Screen(.linear(duration: 0.4).repeatForever(autoreverses: true))
+        _ = screen.render(1, atTick: 0)
+        _ = screen.render(0.2, atTick: 0)
+        #expect(!screen.needsRenders(atTick: 0))
+        #expect(!screen.needsRenders(atTick: 400), "a repeating fade woke the loop up again")
+    }
+
+    @Test("Replaying the tick just rendered changes nothing")
+    func replayIsIdentityAtTheCurrentStep() {
+        // The property every run must have: the loop splices `frame(at: step)`
+        // over what is on screen without consulting the view, so at the step
+        // the view just drew, that must be a no-op. A run whose frames are a
+        // hair out of phase with the picture repaints the row every tick.
+        let screen = Screen(.linear(duration: 0.4).repeatForever(autoreverses: true))
+        _ = screen.render(1, atTick: 0)
+        for tick in [0, 1, 5, 8, 15, 16, 33] {
+            let buffer = screen.render(0.2, atTick: tick)
+            for run in buffer.animatedCells {
+                // Byte for byte: the frame the loop would splice in at this
+                // tick IS the line the render drew. Comparing only the visible
+                // characters would pass with the colours a full cycle out of
+                // phase, which is the mistake worth catching here.
+                #expect(run.frame(at: tick) == buffer.lines[run.offsetY], "tick \(tick)")
+
+                // And splicing it really does leave the cells where they were.
+                let replayed = buffer.composited(
+                    with: FrameBuffer(lines: [run.frame(at: tick)]),
+                    at: (x: run.offsetX, y: run.offsetY))
+                #expect(
+                    replayed.lines.map(\.stripped) == buffer.lines.map(\.stripped),
+                    "tick \(tick) moved the cells")
+            }
+        }
+    }
+
+    @Test("A cycle too long to hold is rendered the ordinary way")
+    func longCyclesFallBack() {
+        // Past the cap the frames outweigh what they save, so the run loop goes
+        // back to rendering — correctly, just not cheaply.
+        let screen = Screen(.linear(duration: 60).repeatForever(autoreverses: true))
+        _ = screen.render(1, atTick: 0)
+        let buffer = screen.render(0.2, atTick: 0)
+        #expect(buffer.animatedCells.isEmpty)
+        #expect(screen.needsRenders(atTick: 0), "it stopped rendering AND left no runs")
+    }
+
+    @Test("A finite fade leaves no runs — it just ends")
+    func finiteFadesAreNotPreRendered() {
+        let screen = Screen(.linear(duration: 0.4))
+        _ = screen.render(1, atTick: 0)
+        let buffer = screen.render(0.2, atTick: 0)
+        #expect(buffer.animatedCells.isEmpty)
+        #expect(screen.needsRenders(atTick: 0))
+        #expect(!screen.needsRenders(atTick: 100), "a finite fade never finished")
+    }
+}

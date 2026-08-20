@@ -46,8 +46,13 @@ import Foundation
 @MainActor
 final class CursorTimer {
     /// Base tick interval in milliseconds.
-    /// We use a fast tick (50ms) and derive phases from elapsed time.
-    private static let tickIntervalMs = 50
+    ///
+    /// A fast tick, with phases derived from elapsed time. Taken from
+    /// ``AnimationClock/tickInterval`` rather than written here, because a
+    /// pre-rendered cycle is sampled onto that same grid — a run's frames are
+    /// indexed by tick — and two constants for one interval would eventually
+    /// disagree.
+    private static let tickIntervalMs = Int(AnimationClock.cursor.tickInterval * 1000)
     private var tickIntervalMs: Int { Self.tickIntervalMs }
 
     /// Elapsed ticks since timer started.

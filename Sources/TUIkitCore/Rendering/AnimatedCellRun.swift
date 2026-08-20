@@ -18,6 +18,19 @@
 public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable {
     /// The animation clock: blinks and breaths alike (`CursorTimer`).
     case cursor
+
+    /// How long one tick of this clock lasts.
+    ///
+    /// The finest step anything replayed can move at, and therefore the grid a
+    /// repeating animation is sampled onto when its cycle is pre-rendered: a
+    /// run's frames are indexed by tick, so a cycle of `period / tickInterval`
+    /// frames is what the loop can actually replay. `CursorTimer` derives its
+    /// own sleep from this, so the two cannot drift apart.
+    public var tickInterval: Double {
+        switch self {
+        case .cursor: 0.05
+        }
+    }
 }
 
 // MARK: - AnimatedCellRun

@@ -5,6 +5,13 @@ to do it.
 
 ## Overview
 
+> Note: This is the low-level route. For animating a *change* — a value moving
+  from one number to another because something happened — reach for
+  <doc:Animation> first: ``withAnimation(_:_:)`` and ``View/animation(_:value:)``
+  need no offsets, no clocks and no runs. What follows is for a **decoration**:
+  something that moves for as long as it is on screen, which is the one shape
+  `withAnimation` cannot serve cheaply unless it is a pure re-colouring.
+
 The terminal has no compositor. Anything that changes on screen changes because
 something wrote to it, and the naive way to animate — ask what time it is while
 you render, and render again on a timer — costs a full pass over the view tree
@@ -173,6 +180,29 @@ let replayed = buffer.composited(
     with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
 #expect(replayed.lines.map(\.stripped) == buffer.lines.map(\.stripped))
 ```
+
+## Where `withAnimation` meets this
+
+The two are the same machinery seen from opposite ends, and they meet at
+``Animation/repeatForever(autoreverses:)``.
+
+A repeating animation has a finite cycle — at the 50 ms replay clock, a 0.8 s
+breath is sixteen distinct values — so it *can* be pre-rendered, and where the
+animated value only re-styles a buffer the content already produced, the
+framework does exactly that and hands the loop the frames. ``View/opacity(_:)``
+is the case that qualifies today: a never-ending fade costs no render passes at
+all.
+
+The reason it is not automatic for everything is worth knowing, because it is
+the same reason this article exists. Pre-rendering a cycle of an arbitrary
+subtree means rendering that subtree once per phase — and a render is not a pure
+function. It registers focus, publishes hit-test regions, fires `onAppear`,
+writes preferences. Sixteen phases would do all of that sixteen times.
+
+So the framework only takes the shortcut where the phases are re-stylings of one
+render, and everything else is offered this article instead: *you* know what your
+view draws at each point of its cycle, and you can build the frames without
+rendering anything sixteen times.
 
 ## One reader spoils the frame
 

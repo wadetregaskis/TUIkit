@@ -76,10 +76,7 @@ extension _OpacityView: Animatable {
 extension _OpacityView: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let buffer = TUIkit.renderToBuffer(content, context: context)
-        let factor = min(max(opacity, 0), 1)
-        // Fully opaque is the identity, and taking it means an untouched
-        // subtree cannot be changed by this code path at all.
-        guard factor < 1, !buffer.isEmpty else { return buffer }
+        guard !buffer.isEmpty else { return buffer }
 
         // Resolve first: a semantic colour makes `opacity(_:over:)` a silent
         // no-op and makes `ANSIRenderer` trap outright.
@@ -91,11 +88,56 @@ extension _OpacityView: Renderable {
         // emits already names its own colour and ends in a reset, so rewriting
         // the colours it named is enough to fade all of it. `OpacityTests`
         // pins that precondition across the view surface.
-        let faded = buffer.lines.map { line in
-            OpacityFade.fading(
-                line, by: factor, over: surface, defaultForeground: defaultForeground)
+        func faded(by factor: Double) -> [String] {
+            let clamped = min(max(factor, 0), 1)
+            // Fully opaque is the identity, and taking it means an untouched
+            // subtree cannot be changed by this code path at all.
+            guard clamped < 1 else { return buffer.lines }
+            return buffer.lines.map { line in
+                OpacityFade.fading(
+                    line, by: clamped, over: surface, defaultForeground: defaultForeground)
+            }
         }
-        return buffer.replacingLines(faded)
+
+        if let cycling = cycling(buffer, faded: faded, context: context) { return cycling }
+        let factor = min(max(opacity, 0), 1)
+        guard factor < 1 else { return buffer }
+        return buffer.replacingLines(faded(by: factor))
+    }
+
+    /// The whole fade, pre-rendered, when the opacity is on a repeating
+    /// animation — or `nil` when it is not (the ordinary, transient case).
+    ///
+    /// A fade that never ends would otherwise cost a render pass for as long as
+    /// the view is on screen. It need not: `.opacity` renders its content ONCE
+    /// and then re-colours the finished lines, so every point of the cycle is a
+    /// re-colouring of the same buffer, and the run loop can replay them.
+    /// See ``AnimatedBufferCycle``.
+    private func cycling(
+        _ buffer: FrameBuffer, faded: (Double) -> [String], context: RenderContext
+    ) -> FrameBuffer? {
+        guard !context.isMeasuring, let storage = context.stateStorage else { return nil }
+        let key = AnimationStore.Key(
+            identity: context.identity, owner: ObjectIdentifier(Self.self))
+        guard
+            let cycle: AnimationCycle<Double> = storage.animations.cycle(
+                for: key,
+                nowNanos: context.environment.frameNowNanos,
+                tick: context.environment.animationTick),
+            let runs = AnimatedBufferCycle.runs(phases: cycle.values.map(faded)),
+            !runs.isEmpty
+        else { return nil }
+
+        // Only now: a cycle that could not be turned into runs must keep being
+        // rendered for, or the fade freezes on whatever frame it stopped at.
+        storage.animations.noteServedByRuns(key)
+
+        // Drawn at the CYCLE's current value, not at this frame's continuous
+        // one, so replaying the run at the tick just rendered is a no-op — the
+        // property every run has to have.
+        var faded = buffer.replacingLines(faded(cycle.current))
+        faded.animatedCells += runs
+        return faded
     }
 }
 

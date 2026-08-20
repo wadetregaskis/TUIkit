@@ -71,6 +71,16 @@ public final class AnimationStore: @unchecked Sendable {
 
         /// When it began, on the frame clock.
         var startNanos: Int64
+
+        /// Whether this frame's render handed the run loop the whole cycle
+        /// pre-rendered, so the loop needs no further renders for it.
+        ///
+        /// Cleared every pass by ``beginRenderPass()`` and re-declared by
+        /// whoever emitted the runs, exactly as the animation scheduler makes
+        /// a view re-declare its rate: a producer that stops emitting (its
+        /// content changed shape, its cycle grew past the cap) stops being
+        /// counted as served and the loop starts rendering for it again.
+        var servedByRuns = false
     }
 
     private var records: [Key: Record] = [:]
@@ -172,8 +182,52 @@ extension AnimationStore {
     /// question, asked once per frame rather than per animating view.
     public func hasLiveAnimations(at nowNanos: Int64) -> Bool {
         records.values.contains { record in
-            guard let animation = record.animation else { return false }
+            guard let animation = record.animation, !record.servedByRuns else { return false }
             return !animation.isFinished(at: elapsed(record, nowNanos))
+        }
+    }
+
+    /// The repeating animation at `key` sampled onto the replay clock, or `nil`
+    /// when there is nothing repeating there (or its cycle is too long to hold).
+    ///
+    /// Asking changes nothing: a caller that asks and then cannot emit runs —
+    /// because its phases disagreed about the shape of the picture — must leave
+    /// the animation being rendered for. Declaring it served is a separate,
+    /// deliberate step, so the "a dropped run looks like a win" trap cannot be
+    /// sprung by an early return.
+    ///
+    /// - Parameters:
+    ///   - key: The animating value's place in the tree.
+    ///   - nowNanos: This frame's timestamp.
+    ///   - tick: The replay clock's tick count for this frame.
+    public func cycle<D: VectorArithmetic & Sendable>(
+        for key: Key, nowNanos: Int64, tick: Int
+    ) -> AnimationCycle<D>? {
+        guard let record = records[key],
+            let animation = record.animation, animation.repeatsForever,
+            let from = record.from as? D, let target = record.target as? D
+        else { return nil }
+        return AnimationCycle<D>(
+            animation: animation, from: from, to: target,
+            startNanos: record.startNanos, nowNanos: nowNanos, tick: tick)
+    }
+
+    /// Declares that this frame handed the run loop the whole cycle at `key`,
+    /// so the loop needs no further renders for it.
+    ///
+    /// Re-declared every frame — ``beginRenderPass()`` clears it — exactly as
+    /// an animating view re-declares its rate to the scheduler. A producer that
+    /// stops emitting runs starts being rendered for again on the next frame.
+    public func noteServedByRuns(_ key: Key) {
+        records[key]?.servedByRuns = true
+    }
+
+    /// Forgets which animations were served by runs last pass.
+    ///
+    /// Called from ``StateStorage/beginRenderPass()``.
+    public func beginRenderPass() {
+        for key in records.keys {
+            records[key]?.servedByRuns = false
         }
     }
 

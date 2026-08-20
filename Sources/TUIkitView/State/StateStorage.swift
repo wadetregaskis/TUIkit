@@ -244,6 +244,7 @@ extension StateStorage {
 
     /// Begins a new render pass by clearing the active identity set.
     public func beginRenderPass() {
+        animations.beginRenderPass()
         activeIdentities.removeAll(keepingCapacity: true)
         retainedSubtreeRoots.removeAll(keepingCapacity: true)
         beginSceneRender()
