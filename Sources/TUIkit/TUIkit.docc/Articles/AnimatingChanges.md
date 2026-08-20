@@ -49,14 +49,32 @@ conformed by `Int` for that reason: the *animation* is continuous and the
 *drawing* rounds. Rounding per sample instead would quantise the curve as well
 as the position, and an eased move would come out linear.
 
-``View/opacity(_:)`` is `Animatable` already, so a fade needs no type of your
-own:
+Much of what you would want to animate is animatable already, so most changes
+need no type of your own:
+
+| You change | What moves |
+|------------|------------|
+| ``View/opacity(_:)`` | The fade |
+| ``View/offset(x:y:)`` | The displacement — layout is untouched, so this is the cheapest |
+| ``View/padding(_:_:)`` | The insets, and the layout around them |
+| ``View/frame(width:height:alignment:)`` | A **fixed** width and height |
+| ``View/foregroundStyle(_:)``, ``View/background(_:)``, ``View/border(_:style:width:)-(Color,_,_)`` | The colour |
 
 ```swift
 Text("Saved")
     .opacity(hasSaved ? 1 : 0)
     .animation(.easeInOut(duration: 0.4), value: hasSaved)
 ```
+
+A `ViewModifier` of your own joins that list by conforming to ``Animatable``
+and naming one property — `ModifiedView` is animatable whenever its modifier
+is, so there is nothing else to learn.
+
+Two boundaries are worth knowing because they look like bugs otherwise. A
+**flexible** frame (`maxWidth: .infinity`) has no number to move between, so it
+snaps. And `Text`'s own `foregroundStyle(_:) -> Text` overload carries the
+colour in the view *value* rather than painting it, so a colour set that way
+changes at once; wrap the text to fade it.
 
 ## Saying it at the change, or at the view
 
@@ -109,6 +127,35 @@ So for a decoration that is not a re-colouring, reach for the lower-level route
 in <doc:AnimatingYourOwnView>, which lets a view hand the loop its own finished
 frames. `withAnimation` is for *changes*; that is for *decorations*.
 
+## Coming and going
+
+``View/transition(_:)`` says how a view arrives when it is inserted and how it
+leaves when it is removed:
+
+```swift
+if showDetail {
+    Detail().transition(.move(edge: .top).combined(with: .opacity))
+}
+```
+
+``AnyTransition/opacity``, ``AnyTransition/move(edge:)``,
+``AnyTransition/slide``, ``AnyTransition/offset(x:y:)``,
+``AnyTransition/scale(anchor:)`` and ``AnyTransition/identity`` compose with
+``AnyTransition/combined(with:)`` and ``AnyTransition/asymmetric(insertion:removal:)``.
+A transition runs *only* when the change that caused it was animated, so
+leaving one on a view that also appears for other reasons — a page opening, a
+list rebuilding — stays instant.
+
+The effects apply to the rendered cells rather than to layout: a view sliding
+in gets its space at once and moves into it. `.scale` has no sub-cell rendering
+to shrink, so it uncovers the view from its anchor a cell at a time.
+
+A **removal** needs somewhere to play out, because the view is gone from the
+tree by the time anything notices. Whatever still stands in its slot is what
+plays it — which works when the optional is the thing being rendered, and not
+for an `if` inside a stack, where a `nil` optional flattens to no children at
+all. Such a view animates in and jumps out. See ``View/transition(_:)``.
+
 ## Springs
 
 ``Animation/spring(duration:bounce:)`` is a real damped oscillator, evaluated in
@@ -128,7 +175,13 @@ animation retires there.
 
 - ``withAnimation(_:_:)``
 - ``View/animation(_:value:)``
+- ``Binding/animation(_:)``
 - ``Animation``
+
+### Coming and going
+
+- ``View/transition(_:)``
+- ``AnyTransition``
 
 ### Declaring what moves
 

@@ -387,8 +387,8 @@ public struct Binding<Value> {
     /// - Parameter animation: How to animate changes made through the returned
     ///   binding. `nil` makes them explicitly un-animated.
     /// - Returns: A binding that writes inside ``withAnimation(_:_:)``.
-    public func animation(_ animation: Animation? = .default) -> Binding<Value> {
-        Binding(
+    public func animation(_ animation: Animation? = .default) -> Self {
+        Self(
             get: getValue,
             set: { newValue in withAnimation(animation) { self.setValue(newValue) } })
     }
