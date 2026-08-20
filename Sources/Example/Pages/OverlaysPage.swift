@@ -299,8 +299,15 @@ struct OverlaysPage: View {
         }
         .sheet(isPresented: $showDetented) {
             Dialog(title: "page.overlays.variants.sheetTitle") {
-                Text("page.overlays.variants.sheetBody")
-                Button("button.close") { showDetented = false }
+                // A blank row between the prose and the action, and the action
+                // at the trailing edge — where a dialog's confirming button
+                // sits on every desktop platform. Packed against the text it
+                // read as another line of the message.
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("page.overlays.variants.sheetBody")
+                    Button("button.close") { showDetented = false }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
             }
             .presentationDetents([.medium, .large, .height(8)], selection: $detent)
         }

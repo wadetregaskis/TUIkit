@@ -337,13 +337,71 @@ struct LayoutPage: View {
             }
 
             DemoSection("page.layout.section.zstack") {
-                // Children stack back-to-front; alignment positions them within
-                // the union of their sizes. Here a label is centred over a band.
-                ZStack(alignment: .center) {
-                    Text(String(repeating: "▒", count: 28)).foregroundStyle(.palette.accent)
-                    Text(" \(L("page.layout.onTop")) ").bold().inverted()
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("page.layout.zstack.explain")
+                        .foregroundStyle(.palette.foregroundSecondary)
+
+                    // 1 — What it does. Children stack back-to-front and
+                    // alignment positions them within the union of their sizes.
+                    Text("page.layout.zstack.case1")
+                        .foregroundStyle(.palette.foregroundTertiary)
+                    ZStack(alignment: .center) {
+                        Text(String(repeating: "▒", count: 28)).foregroundStyle(.palette.accent)
+                        Text(" \(L("page.layout.onTop")) ").bold().inverted()
+                    }
+                    .border(.brightBlack)
+
+                    // 2 — There is no transparency, and this is the demo that
+                    // says so. The label's own SPACES are cells like any other,
+                    // so they punch a hole in the band rather than letting it
+                    // through. Beside it, the same label with no padding: the
+                    // hole shrinks to exactly the glyphs.
+                    Text("page.layout.zstack.case2")
+                        .foregroundStyle(.palette.foregroundTertiary)
+                    HStack(spacing: 3) {
+                        ZStack(alignment: .center) {
+                            Text(String(repeating: "▒", count: 20))
+                                .foregroundStyle(.palette.accent)
+                            Text(verbatim: "   \(L("page.layout.zstack.word"))   ")
+                        }
+                        .border(.brightBlack)
+                        ZStack(alignment: .center) {
+                            Text(String(repeating: "▒", count: 20))
+                                .foregroundStyle(.palette.accent)
+                            Text(verbatim: L("page.layout.zstack.word"))
+                        }
+                        .border(.brightBlack)
+                    }
+
+                    // 3 — Nor is there any blending. Two words over each other
+                    // give the top one's cells, not a mixture of both; the
+                    // lower one survives only where the upper does not reach.
+                    Text("page.layout.zstack.case3")
+                        .foregroundStyle(.palette.foregroundTertiary)
+                    ZStack(alignment: .leading) {
+                        Text(verbatim: "UNDERNEATH·UNDERNEATH")
+                            .foregroundStyle(.palette.foregroundSecondary)
+                        Text(verbatim: "OVER")
+                            .bold()
+                            .foregroundStyle(.palette.warning)
+                    }
+                    .border(.brightBlack)
+
+                    // 4 — What to reach for instead. `.opacity` is not
+                    // compositing: it moves a COLOUR toward the background and
+                    // the cell stays as opaque as it was, which is why it can
+                    // fade text that has nothing behind it and cannot show what
+                    // does.
+                    Text("page.layout.zstack.case4")
+                        .foregroundStyle(.palette.foregroundTertiary)
+                    ZStack(alignment: .center) {
+                        Text(String(repeating: "▒", count: 28)).foregroundStyle(.palette.accent)
+                        Text(" \(L("page.layout.zstack.faded")) ")
+                            .foregroundStyle(.palette.foreground)
+                            .opacity(0.45)
+                    }
+                    .border(.brightBlack)
                 }
-                .border(.brightBlack)
             }
 
             DemoSection("page.layout.section.alignmentGuide") {
