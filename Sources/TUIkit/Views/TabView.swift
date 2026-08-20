@@ -498,7 +498,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     /// Registers a click handler per tab region (selecting that tab).
     private func attachTabClicks(
         to buffer: inout FrameBuffer,
-        regions: [(x: Int, y: Int, width: Int, index: Int)],
+        regions: [(x: Int, y: Int, width: Int, height: Int, index: Int)],
         context: RenderContext
     ) {
         guard !context.isMeasuring, let dispatcher = context.environment.mouseEventDispatcher else { return }
@@ -531,7 +531,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             }
             buffer.hitTestRegions.append(
                 HitTestRegion(
-                    offsetX: region.x, offsetY: region.y, width: region.width, height: 1,
+                    offsetX: region.x, offsetY: region.y, width: region.width, height: region.height,
                     handlerID: handlerID, focusID: nil))
         }
     }

@@ -18,12 +18,12 @@ extension _TabViewCore {
         chip: ActiveChipCycle, palette: any Palette,
         width: Int, alignment: HorizontalAlignment
     ) -> (
-        lines: [String], regions: [(x: Int, y: Int, width: Int, index: Int)],
+        lines: [String], regions: [(x: Int, y: Int, width: Int, height: Int, index: Int)],
         animatedCells: [AnimatedCellRun]
     ) {
         let (inactiveFg, inactiveBg) = stripLabelColors(palette: palette)
         var lines: [String] = []
-        var regions: [(x: Int, y: Int, width: Int, index: Int)] = []
+        var regions: [(x: Int, y: Int, width: Int, height: Int, index: Int)] = []
         var animatedCells: [AnimatedCellRun] = []
 
         // A coloured chip: the half-block caps (▐ … ▌) extend the chip's fill
@@ -55,7 +55,7 @@ extension _TabViewCore {
                     foreground: hovered ? palette.hoveredForeground(resting) : resting,
                     active: active)
                 let chipWidth = tabWidth(i, style: .compact)  // body + the two caps
-                regions.append((x: x, y: y, width: chipWidth, index: i))
+                regions.append((x: x, y: y, width: chipWidth, height: 1, index: i))
                 if active,
                     let run = chip.run(offsetX: x, offsetY: y, draw: {
                         drawChip(i, background: chip.surface, foreground: $0, active: true)
@@ -97,7 +97,7 @@ extension _TabViewCore {
     func folderStripRows(
         rows: [[Int]], selectedIndex: Int, chip: ActiveChipCycle, style: FolderStripStyle
     ) -> (
-        lines: [String], regions: [(x: Int, y: Int, width: Int, index: Int)],
+        lines: [String], regions: [(x: Int, y: Int, width: Int, height: Int, index: Int)],
         animatedCells: [AnimatedCellRun]
     ) {
         func bc(_ s: String) -> String { ANSIRenderer.colorize(s, foreground: style.border) }
@@ -116,7 +116,7 @@ extension _TabViewCore {
         }
 
         var lines: [String] = []
-        var regions: [(x: Int, y: Int, width: Int, index: Int)] = []
+        var regions: [(x: Int, y: Int, width: Int, height: Int, index: Int)] = []
         var animatedCells: [AnimatedCellRun] = []
 
         for (rowIndex, row) in rows.enumerated() {
@@ -165,7 +165,16 @@ extension _TabViewCore {
                     i, background: active ? chip.surface : style.inactiveBg,
                     foreground: hovered ? style.palette.hoveredForeground(resting) : resting,
                     active: active)
-                regions.append((x: bodySpans[k].start, y: labelsY, width: bodySpans[k].len, index: i))
+                // The chrome above and below a tab is the tab's, not the
+                // page's: a folder tab is drawn as three rows and read as one
+                // control, so a click on the line over the title should not
+                // miss. The top border always belongs to it; the row below
+                // does too on the bottom row, where it is the content box's
+                // own border — higher up it is the NEXT row's top border, and
+                // two tabs claiming one row would make the answer arbitrary.
+                regions.append((
+                    x: bodySpans[k].start, y: labelsY - 1, width: bodySpans[k].len,
+                    height: isBottom ? 3 : 2, index: i))
                 if active,
                     let run = chip.run(
                         offsetX: bodySpans[k].start, offsetY: labelsY,
