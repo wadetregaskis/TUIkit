@@ -409,9 +409,23 @@ struct ScrollbarColors {
     }
 
     /// The recessive end of the focused bar's breath.
+    ///
+    /// Floored against the TRACK, not against the page. The dim end is the
+    /// accent faded toward the background, and on several palettes that lands
+    /// on — or past — the track's own quiet tone, so the thumb disappeared into
+    /// its track once per breath and took the scroll position with it. Reported
+    /// as the scroller going momentarily invisible, and it is: for those frames
+    /// there is nothing on the bar to read.
+    ///
+    /// Through the cube (``Color/ensuringRenderedContrast(atLeast:against:)``),
+    /// because that is where two quiet tones collapse onto one entry.
     @MainActor
     static func pulseDim(_ palette: any Palette) -> Color {
-        palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
+        palette.accent
+            .opacity(ViewConstants.focusPulseMin, over: palette.background)
+            .ensuringRenderedContrast(
+                atLeast: ViewConstants.chromeSeparationFloor,
+                against: palette.foregroundQuaternary.resolve(with: palette))
     }
 
     /// The bar's breathing cycle, or nil when nothing about it moves — not

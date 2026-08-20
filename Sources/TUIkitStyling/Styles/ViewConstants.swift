@@ -74,6 +74,20 @@ public enum ViewConstants {
     /// onto the enabled label's `#00d700` (4.07:1).
     public static let disabledLabelContrastFloor: Double = 2.4
 
+    /// The floor between one piece of chrome and another it sits on — a
+    /// scrollbar's thumb against its own track.
+    ///
+    /// Lower than either label floor, and deliberately: both of these are quiet
+    /// by design and neither is text. What it has to guarantee is only that the
+    /// two remain TELLABLE APART, at every phase of a breath — a thumb that
+    /// fades to its track's colour on the way past takes the scroll position
+    /// with it, which is what "the scroller goes momentarily invisible" was.
+    ///
+    /// 1.6, which clears the 256-colour cube's spacing between adjacent
+    /// greyscale rungs without lifting the dim end of the pulse enough to stop
+    /// it reading as a breath.
+    public static let chromeSeparationFloor: Double = 1.6
+
     /// Accent opacity for selection indicator bullets.
     public static let selectionIndicator: Double = 0.60
 
