@@ -301,6 +301,7 @@ enum DropdownMenu {
     @MainActor
     private static func rowHandler(
         index: Int,
+        onWheel: @escaping (MouseEvent) -> Bool,
         tracks: @escaping (MouseButton) -> Bool,
         mouseDispatcher: MouseEventDispatcher,
         onHover: @escaping (Int) -> Void,
@@ -308,6 +309,7 @@ enum DropdownMenu {
         onDismiss: @escaping () -> Void
     ) -> HitTestRegion.HandlerID {
         mouseDispatcher.register { event in
+            if onWheel(event) { return true }
             switch event.phase {
             case .entered:
                 // Hover follows the cursor across the popup: whichever
@@ -536,9 +538,13 @@ enum DropdownMenu {
         let innerWidth = config.innerWidth
         let contentInner = window.wantsBar ? max(1, innerWidth - 1) : innerWidth
 
-        // Wheel anywhere over the popup scrolls the window freely (it does
-        // not follow the highlight — like a desktop drop-down). Left clicks
-        // on chrome/empty area are consumed so they don't fall through.
+        // Wheel over the popup's CHROME — its border, its scrollbar column, the
+        // empty space past the last row — scrolls the window and nothing else:
+        // there is no row under the pointer there to move the highlight to. A
+        // wheel over a row is the row's, and moves it; see `rowHandler`.
+        //
+        // Left clicks on chrome/empty area are consumed so they don't fall
+        // through.
         let wheelID = mouseDispatcher.register { event in
             if scroll.handleWheelEvent(event) { return true }
             // The popup's own chrome — its frame, its padding, a divider — is
@@ -572,13 +578,35 @@ enum DropdownMenu {
         }
 
         for (local, index) in window.visible.enumerated() {
-            switch rows[index] {
-            case .option: break
-            case .rendered(_, let isSelectable) where isSelectable: break
-            default: continue
+            guard isSelectable(rows[index]) else { continue }
+            // The wheel over a row scrolls the window like the wheel anywhere
+            // else — the highlight does not drag the viewport after it, as a
+            // desktop drop-down's does not. But the ROWS move under a pointer
+            // that has not, so the row the pointer is on afterwards is a
+            // different row, and leaving the highlight behind left the menu
+            // showing one answer while holding another: releasing chose what
+            // was under the cursor rather than what was lit, which is a wrong
+            // answer and not merely an untidy one.
+            //
+            // Bound per row rather than answered on the popup-wide wheel
+            // catcher, because a row's region IS the coordinate mapping: it
+            // knows its own position in the visible window without arithmetic
+            // on an event's coordinates, whose origin depends on how the popup
+            // was composited (a tall one is clamped to the screen, and then the
+            // two differ).
+            let onWheel: (MouseEvent) -> Bool = { event in
+                guard scroll.handleWheelEvent(event) else { return false }
+                // Read AFTER the scroll: the offset is the one the next frame
+                // will draw with, which is the one the pointer will be over.
+                let landed = scroll.scrollOffset + local
+                if rows.indices.contains(landed), isSelectable(rows[landed]) {
+                    onHover(landed)
+                }
+                return true
             }
             let mouseHandlerID = rowHandler(
-                index: index, tracks: tracks, mouseDispatcher: mouseDispatcher,
+                index: index, onWheel: onWheel,
+                tracks: tracks, mouseDispatcher: mouseDispatcher,
                 onHover: onHover, onActivate: onActivate, onDismiss: onDismiss)
             buffer.hitTestRegions.append(
                 HitTestRegion(
@@ -587,6 +615,20 @@ enum DropdownMenu {
                     width: contentInner,
                     height: 1,
                     handlerID: mouseHandlerID))
+        }
+    }
+
+    /// Whether a row is something the pointer can be *on*: an option, or a
+    /// pre-drawn row that said it is a choice. A divider is neither.
+    ///
+    /// Shared by the two places that ask — which rows get a hit-test region,
+    /// and which row a wheel scroll may move the highlight to — because the two
+    /// disagreeing would mean a highlight landing where no click can follow it.
+    private static func isSelectable(_ row: Row) -> Bool {
+        switch row {
+        case .option: return true
+        case .rendered(_, let isSelectable): return isSelectable
+        case .divider: return false
         }
     }
 

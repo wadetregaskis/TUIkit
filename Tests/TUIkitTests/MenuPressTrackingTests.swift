@@ -132,6 +132,88 @@ struct MenuPressTrackingTests {
         return nil
     }
 
+    private func wheel(_ tui: TUIContext, x: Int, y: Int, up: Bool = false) {
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: up ? .scrollUp : .scrollDown, phase: .pressed, x: x, y: y))
+    }
+
+    // MARK: - The wheel moves the rows, so it moves the highlight
+
+    /// Scrolling a menu under a pointer that has not moved changes which row
+    /// the pointer is ON, so it has to change which row is lit. It used not to:
+    /// the highlight stayed on the option it was on, which had scrolled
+    /// somewhere else (or off), and the menu then showed one answer while
+    /// holding another. Releasing chose what was under the cursor rather than
+    /// what was lit, which is a wrong answer and not merely an untidy one.
+    ///
+    /// Two runs of the same gesture in two fresh contexts rather than one run
+    /// that reopens the menu: what is being compared is a CLICK's answer (the
+    /// row's own hit region, correct by construction) against the KEYBOARD's
+    /// (Return takes whatever is lit), and reopening a drop-down highlights
+    /// whatever is selected — which would let the second answer agree with the
+    /// first without the scroll having done anything.
+    @Test("A wheel scroll moves the highlight to the row now under the pointer")
+    func wheelMovesTheHighlightUnderThePointer() throws {
+        /// One run: open the drop-down, put the pointer on a row a few down,
+        /// optionally scroll, and commit — by clicking, or from the keyboard.
+        /// Returns the option chosen.
+        func run(
+            scrolling: Bool,
+            commit: (TUIContext, RenderContext, (x: Int, y: Int), () -> Void) -> Void
+        ) throws -> Int {
+            let (tui, context) = harness()
+            let chosen = Counter()
+            // Longer than the popup can show, so the wheel has somewhere to go.
+            let menu = Picker(
+                "Pick", selection: Binding(get: { chosen.value }, set: { chosen.value = $0 })
+            ) {
+                ForEach(0..<60, id: \.self) { index in Text("Option \(index)").tag(index) }
+            }
+            .selectionIndicatorStyle(.none)
+
+            let closed = renderArmed(menu, tui: tui, context: context)
+            let controlX = try #require(
+                closed.lines[0].stripped.firstIndex(of: "▐").map {
+                    closed.lines[0].stripped.distance(
+                        from: closed.lines[0].stripped.startIndex, to: $0)
+                })
+            press(tui, context, x: controlX + 1, y: 0)
+            release(tui, context, x: controlX + 1, y: 0)
+            let opened = renderArmed(menu, tui: tui, context: context)
+            let target = try row(opened, "Option 5")
+
+            if scrolling {
+                wheel(tui, x: target.x, y: target.y)
+                renderArmed(menu, tui: tui, context: context)
+            }
+            commit(tui, context, target, { renderArmed(menu, tui: tui, context: context) })
+            return chosen.value
+        }
+
+        // What a click at that point chooses, with the rows where they started.
+        let byClick = try run(scrolling: false) { tui, context, target, redraw in
+            press(tui, context, x: target.x, y: target.y)
+            redraw()
+            release(tui, context, x: target.x, y: target.y)
+        }
+        #expect(byClick > 0, "the click chose an option further down the list")
+
+        // The same point, one wheel tick later, committed from the keyboard.
+        let byKeyboard = try run(scrolling: true) { _, context, _, _ in
+            _ = context.environment.focusManager?.dispatchKeyEvent(KeyEvent(key: .enter))
+        }
+        #expect(
+            byKeyboard == byClick + ViewConstants.mouseWheelScrollLines,
+            "the lit row followed the rows to the pointer rather than staying put")
+    }
+
+    /// A mutable `Int` an escaping binding can write — a plain `var` captured by
+    /// one would be a copy per closure.
+    @MainActor
+    private final class Counter {
+        var value = 0
+    }
+
     // MARK: - Pull-down `Menu`
 
     /// `.selectionIndicatorStyle(.none)` because the highlight otherwise
