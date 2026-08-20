@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import TUIkit
 
 /// Collects the indices of the ``LazyVStack`` rows that actually rendered this
@@ -109,6 +110,18 @@ private let flowChips = [
 /// - Lazy stacks windowing to a ScrollView's viewport (live rendered-row set)
 /// - Alignment guides, GeometryReader, and a custom `Layout`
 struct LayoutPage: View {
+    /// The locale the app is running in, so the money column formats — and
+    /// aligns — the way its reader writes numbers. Populated from the app's
+    /// localization service each frame, so switching language on the Theme page
+    /// re-formats and re-aligns this column with it.
+    @Environment(\.locale) private var locale
+
+    /// The width the reflow demo wraps its prose into. Published once per
+    /// frame and stable across measure and render, which a `GeometryReader`
+    /// here would not be — a reader is greedy in HEIGHT too, and inside this
+    /// page's `ScrollView` that would give the section the whole viewport.
+    @Environment(\.terminalWidth) private var terminalWidth
+
     /// Whether the bullet hangs off the stack's alignment line.
     @State private var hangBullet = true
 
@@ -133,18 +146,129 @@ struct LayoutPage: View {
 
     /// Amounts whose whole parts differ in width, so aligning on the decimal
     /// point is visibly not the same as aligning on either edge.
-    private struct Amount: Hashable {
-        let whole: String
-        let fraction: String
+    ///
+    /// Numbers rather than pre-split strings, because the point of the demo is
+    /// that the alignment follows the CONTENT — and the content is whatever the
+    /// reader's locale makes of these. In English `1240.05` is "1,240.05" and
+    /// the line to align on is a full stop; in German it is "1.240,05" and the
+    /// line is a comma, with a full stop three digits earlier that must not be
+    /// mistaken for it.
+    private static let amounts: [Double] = [7.5, 1240.05, 96.125, 3.7, 58021.4]
+
+    /// One line of the acrostic, split around the letter that sits on the spine.
+    ///
+    /// Deliberately not localized — the same call `OutlineDemoTree` makes about
+    /// path names, for a stronger reason: the poem's point is that its seventh
+    /// column spells a word, and no translation can be asked to keep that.
+    struct AcrosticLine: Hashable {
+        let before: String
+        let letter: Character
+        let after: String
     }
 
-    private static let amounts = [
-        Amount(whole: "7", fraction: "50"),
-        Amount(whole: "1240", fraction: "05"),
-        Amount(whole: "96", fraction: "125"),
-        Amount(whole: "3", fraction: "7"),
-        Amount(whole: "58021", fraction: "40"),
+    /// Seven lines whose spine reads "aligned".
+    private static let acrostic = [
+        AcrosticLine(before: "we st", letter: "a", after: "rt with a line,"),
+        AcrosticLine(before: "and every ", letter: "l", after: "etter finds it —"),
+        AcrosticLine(before: "the column ", letter: "i", after: "s not a margin"),
+        AcrosticLine(before: "but a lon", letter: "g", after: " thread"),
+        AcrosticLine(before: "drawn dow", letter: "n", after: " the page,"),
+        AcrosticLine(before: "holding ", letter: "e", after: "ach row"),
+        AcrosticLine(before: "in one accor", letter: "d", after: "."),
     ]
+
+    /// A block of prose with one word in it that has to line up with the other
+    /// blocks' words, whatever the wrap does.
+    struct Keyworded {
+        let before: String
+        let keyword: String
+        let after: String
+    }
+
+    private static let keywordBlocks = [
+        Keyworded(
+            before: "a stack asks each child where its own line is, and the child",
+            keyword: "answers",
+            after: "with a number of its own choosing."),
+        Keyworded(
+            before: "the wrap moves the words about as the terminal changes width,"
+                + " and the row this word lands on",
+            keyword: "answers",
+            after: "differently every time."),
+        Keyworded(
+            before: "so the guide is recomputed from the wrap rather than written"
+                + " down once, and the column",
+            keyword: "answers",
+            after: "to the content instead of to the page."),
+    ]
+
+    /// How wide each of the three prose columns is, given the terminal and the
+    /// two cells of gap between them. Floored so a narrow terminal still gets
+    /// something wrappable rather than a division by nothing.
+    private var keywordColumnWidth: Int {
+        max(12, (terminalWidth - 8) / Self.keywordBlocks.count)
+    }
+
+    /// A locale whose decimal separator is not this one's, so the pair of
+    /// columns always shows the contrast rather than the same thing twice.
+    private var contrastingLocale: Locale {
+        (locale.decimalSeparator ?? ".") == "," ? Locale(identifier: "en_US") : Locale(identifier: "de_DE")
+    }
+
+    /// One column of amounts, formatted and aligned for `columnLocale`.
+    private func amountColumn(in columnLocale: Locale) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(verbatim: columnLocale.identifier)
+                .foregroundStyle(.palette.foregroundTertiary)
+            VStack(alignment: .decimalPoint, spacing: 0) {
+                ForEach(Self.amounts, id: \.self) { amount in
+                    let parts = localizedParts(of: amount, in: columnLocale)
+                    HStack(spacing: 0) {
+                        Text(parts.whole)
+                        Text(parts.separator)
+                            .foregroundStyle(.palette.accent)
+                        Text(parts.fraction)
+                            .foregroundStyle(.palette.foregroundSecondary)
+                    }
+                    // The guide sits on the ROW, not on the separator inside
+                    // it: a stack reads the guides of the children it places,
+                    // and a guide set deeper down does not travel up through
+                    // the row to reach it. (SwiftUI resolves a custom alignment
+                    // recursively, so there the guide can sit on the point
+                    // itself — the gap is recorded in
+                    // `SwiftUI-compatibility.md`.) The line is still the
+                    // content's own: the separator sits exactly past the whole
+                    // part, in CELLS, and the whole part is whatever this
+                    // locale's grouping made of it.
+                    .alignmentGuide(.decimalPoint) { _ in
+                        Double(localizedParts(of: amount, in: columnLocale).whole.strippedLength)
+                    }
+                }
+            }
+            .border(.brightBlack)
+        }
+    }
+
+    /// An amount formatted for ``locale``, split at the decimal separator that
+    /// locale actually uses.
+    ///
+    /// Searched from the END, which is what makes it right in both directions:
+    /// English writes "1,240.05", where the separator appears once, and German
+    /// writes "1.240,05", where a full stop appears first and means something
+    /// else entirely.
+    private func localizedParts(of amount: Double, in numberLocale: Locale)
+        -> (whole: String, separator: String, fraction: String)
+    {
+        let text = amount.formatted(
+            .number.grouping(.automatic).precision(.fractionLength(0...3)).locale(numberLocale))
+        let separator = numberLocale.decimalSeparator ?? "."
+        guard let split = text.range(of: separator, options: .backwards) else {
+            return (text, "", "")
+        }
+        return (
+            String(text[..<split.lowerBound]), separator, String(text[split.upperBound...])
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -284,27 +408,67 @@ struct LayoutPage: View {
                     Text("page.layout.guideCase3")
                         .foregroundStyle(.palette.foregroundTertiary)
 
-                    VStack(alignment: .decimalPoint, spacing: 0) {
-                        ForEach(Self.amounts, id: \.self) { amount in
+                    // The same amounts twice, in two locales, each column
+                    // aligning on the separator ITS locale writes. Side by side
+                    // because that is the part worth seeing: the second column
+                    // has a full stop in it that is NOT the point, and a column
+                    // aligned on "the full stop" would be three digits out.
+                    HStack(alignment: .top, spacing: 4) {
+                        amountColumn(in: locale)
+                        amountColumn(in: contrastingLocale)
+                    }
+
+                    // 4 — The same idea, with nothing numeric about it.
+                    //
+                    // A guide is a number the CONTENT chooses, so it can be
+                    // anything the content can find — including "the letter I
+                    // want in the column". Read the accented letters downward.
+                    Text("page.layout.guideCase4")
+                        .foregroundStyle(.palette.foregroundTertiary)
+
+                    VStack(alignment: .spine, spacing: 0) {
+                        ForEach(Self.acrostic, id: \.self) { line in
                             HStack(spacing: 0) {
-                                Text(amount.whole)
-                                Text(".")
+                                Text(verbatim: line.before)
+                                Text(verbatim: String(line.letter))
+                                    .bold()
                                     .foregroundStyle(.palette.accent)
-                                Text(amount.fraction)
-                                    .foregroundStyle(.palette.foregroundSecondary)
+                                Text(verbatim: line.after)
                             }
-                            // The guide sits on the ROW, not on the `.` inside
-                            // it: a stack reads the guides of the children it
-                            // places, and a guide set deeper down does not
-                            // travel up through the row to reach it. (SwiftUI
-                            // resolves a custom alignment recursively, so there
-                            // the guide can sit on the point itself — the gap
-                            // is recorded in `SwiftUI-compatibility.md`.) The
-                            // line is still the content's own: the point sits
-                            // exactly past the whole part.
-                            .alignmentGuide(.decimalPoint) { _ in
-                                Double(amount.whole.strippedLength)
+                            .alignmentGuide(.spine) { _ in
+                                Double(line.before.strippedLength)
                             }
+                        }
+                    }
+                    .border(.brightBlack)
+
+                    // 5 — A guide across a VERTICAL alignment, which is where
+                    // this stops being a curiosity.
+                    //
+                    // Three blocks of prose, each with one word that matters,
+                    // side by side. Resize the terminal: the text reflows, the
+                    // word lands on a different line of its own block every
+                    // time, and the three stay on ONE row of the screen.
+                    //
+                    // The catch, and the lesson: you cannot align on something
+                    // whose position you have not decided. A `Text` that wraps
+                    // itself knows which row its keyword ended on and cannot
+                    // tell anyone, so each block wraps its own words here and
+                    // reports the row it found. That is the whole trick.
+                    Text("page.layout.guideCase5")
+                        .foregroundStyle(.palette.foregroundTertiary)
+
+                    HStack(alignment: .keywordRow, spacing: 2) {
+                        ForEach(Self.keywordBlocks, id: \.before) { block in
+                            KeywordBlock(block: block, width: keywordColumnWidth)
+                                // On the child the STACK places, not inside the
+                                // block's own body — a guide set deeper down
+                                // does not travel up to the stack that reads it.
+                                .alignmentGuide(.keywordRow) { _ in
+                                    Double(
+                                        KeywordBlock.keywordRow(
+                                            of: block, width: keywordColumnWidth))
+                                }
                         }
                     }
                     .border(.brightBlack)
@@ -497,4 +661,99 @@ private enum DecimalPointID: AlignmentID {
 extension HorizontalAlignment {
     /// Aligns children on their decimal point. See ``DecimalPointID``.
     fileprivate static let decimalPoint = Self(DecimalPointID.self)
+}
+
+/// The column an acrostic's letters stand in.
+private enum SpineID: AlignmentID {
+    static func defaultValue(in context: ViewDimensions) -> Double { 0 }
+}
+
+extension HorizontalAlignment {
+    /// Aligns children on the letter each has chosen. See ``SpineID``.
+    fileprivate static let spine = Self(SpineID.self)
+}
+
+/// The ROW a block's keyword wrapped onto — a vertical line, not a horizontal
+/// one, which is the half of alignment that only pays off when something moves.
+private enum KeywordRowID: AlignmentID {
+    /// The first row, so a block with nothing to say still starts at the top
+    /// rather than floating.
+    static func defaultValue(in context: ViewDimensions) -> Double { 0 }
+}
+
+extension VerticalAlignment {
+    /// Aligns blocks on the row their keyword wrapped onto. See ``KeywordRowID``.
+    fileprivate static let keywordRow = Self(KeywordRowID.self)
+}
+
+/// A paragraph that wraps itself, so it can say which row its keyword ended on.
+///
+/// A `Text` wraps too, and better — but it does it while rendering and keeps
+/// the answer to itself, and a guide has to be a number the stack can read
+/// while it is placing children. So the words are broken here, where the answer
+/// is in hand.
+private struct KeywordBlock: View {
+    let block: LayoutPage.Keyworded
+    let width: Int
+
+    /// One word of the paragraph, and whether it is THE word.
+    private struct Word {
+        let text: String
+        let isKeyword: Bool
+    }
+
+    private static func words(of block: LayoutPage.Keyworded) -> [Word] {
+        block.before.split(separator: " ").map { Word(text: String($0), isKeyword: false) }
+            + [Word(text: block.keyword, isKeyword: true)]
+            + block.after.split(separator: " ").map { Word(text: String($0), isKeyword: false) }
+    }
+
+    /// Greedy wrap, in CELLS — the same unit the terminal measures in, so a
+    /// wide character costs what it draws.
+    private static func rows(of block: LayoutPage.Keyworded, width: Int) -> [[Word]] {
+        var rows: [[Word]] = [[]]
+        var used = 0
+        for word in words(of: block) {
+            let cells = word.text.strippedLength
+            if used > 0, used + 1 + cells > width {
+                rows.append([word])
+                used = cells
+            } else {
+                used += used > 0 ? cells + 1 : cells
+                rows[rows.count - 1].append(word)
+            }
+        }
+        return rows
+    }
+
+    /// Which wrapped row the keyword landed on — the guide's value.
+    ///
+    /// Static, and called from the CALL SITE rather than from `body`: a stack
+    /// reads the guides of the children it places, and a guide set inside a
+    /// child's own body does not travel up to reach it. (The same rule the
+    /// decimal-point column above is written around.)
+    static func keywordRow(of block: LayoutPage.Keyworded, width: Int) -> Int {
+        rows(of: block, width: width).firstIndex { $0.contains(where: \.isKeyword) } ?? 0
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            let wrapped = Array(Self.rows(of: block, width: width).enumerated())
+            ForEach(wrapped, id: \.offset) { _, row in
+                HStack(spacing: 1) {
+                    ForEach(Array(row.enumerated()), id: \.offset) { _, word in
+                        if word.isKeyword {
+                            Text(verbatim: word.text)
+                                .bold()
+                                .foregroundStyle(.palette.accent)
+                        } else {
+                            Text(verbatim: word.text)
+                                .foregroundStyle(.palette.foregroundSecondary)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(width: width, alignment: .leading)
+    }
 }
