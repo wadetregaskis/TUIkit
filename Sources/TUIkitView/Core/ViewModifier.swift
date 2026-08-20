@@ -32,6 +32,19 @@ public protocol ViewModifier {
     /// - Returns: The modified buffer.
     func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer
 
+    /// Static witness: whether this modifier type nominates something
+    /// continuous about itself — that is, whether it conforms to ``Animatable``.
+    ///
+    /// The same shape and the same measured reason as ``View/_isAnimatable``,
+    /// and it exists separately because a *conditional* conformance cannot
+    /// supply that witness: `ModifiedView` is `Animatable` only when its
+    /// modifier is, so Swift picks the unconstrained default for it and the
+    /// answer would always be `false`. `ModifiedView` forwards to this instead,
+    /// which stays a constant the specialiser can fold.
+    ///
+    /// Not to be implemented by hand: conform to ``Animatable`` instead.
+    static var _isAnimatable: Bool { get }
+
     /// Adjusts the rendering context before the wrapped content is rendered.
     ///
     /// Override this method in modifiers that consume space (like padding)
@@ -49,6 +62,18 @@ extension ViewModifier {
     public func adjustContext(_ context: RenderContext) -> RenderContext {
         context
     }
+
+    /// A modifier says nothing continuous about itself unless it is
+    /// ``Animatable``.
+    @inlinable
+    public static var _isAnimatable: Bool { false }
+}
+
+extension ViewModifier where Self: Animatable {
+    /// An ``Animatable`` modifier's data is substituted before its view
+    /// renders, exactly as an animatable view's is.
+    @inlinable
+    public static var _isAnimatable: Bool { true }
 }
 
 // MARK: - ModifiedView
@@ -71,7 +96,10 @@ public struct ModifiedView<Content: View, Modifier: ViewModifier>: View {
     public let content: Content
 
     /// The modifier to apply.
-    public let modifier: Modifier
+    ///
+    /// A `var` only so an animatable modifier's data can be substituted before
+    /// the view renders; nothing else mutates it.
+    public var modifier: Modifier
 
     /// Creates a modified view.
     ///
@@ -157,4 +185,32 @@ extension ModifiedView: Layoutable {
             isHeightFlexible: childSize.isHeightFlexible
         )
     }
+}
+
+// MARK: - Animating a modifier
+
+extension ModifiedView: Animatable where Modifier: Animatable {
+    /// A modified view's animatable data is its modifier's.
+    ///
+    /// The general route by which a *modifier* animates — `.padding`,
+    /// `.offset`, and any `ViewModifier` an app writes. It is where SwiftUI
+    /// puts it too (`ModifiedContent: Animatable where Modifier: Animatable`),
+    /// and it means a modifier author declares one property rather than
+    /// learning anything about the render pipeline.
+    public var animatableData: Modifier.AnimatableData {
+        get { modifier.animatableData }
+        set { modifier.animatableData = newValue }
+    }
+}
+
+extension ModifiedView {
+    /// Forwarded from the modifier.
+    ///
+    /// **Unconditional**, deliberately: the `Animatable` conformance above is
+    /// conditional, so a witness declared inside it cannot satisfy the
+    /// *unconditional* `View` conformance — Swift falls back to the `false`
+    /// default and every animated modifier silently stops animating. Which is
+    /// exactly what happened, and what the padding test caught.
+    @inlinable
+    public static var _isAnimatable: Bool { Modifier._isAnimatable }
 }

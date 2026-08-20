@@ -124,7 +124,10 @@ public enum Edge: Int8, Sendable, CaseIterable {
 ///   ``View`` instead of instantiating this type directly.
 public struct PaddingModifier: ViewModifier {
     /// The padding insets.
-    let insets: EdgeInsets
+    ///
+    /// A `var` so an animation can substitute it — see the `Animatable`
+    /// conformance below.
+    var insets: EdgeInsets
 
     public func adjustContext(_ context: RenderContext) -> RenderContext {
         var adjusted = context
@@ -182,5 +185,21 @@ public struct PaddingModifier: ViewModifier {
         return buffer.replacingLines(
             result, width: lineWidth, uniformWidth: buffer.linesAreUniformWidth,
             overlayShiftX: insets.leading, overlayShiftY: insets.top)
+    }
+}
+
+// MARK: - Animating padding
+
+extension PaddingModifier: Animatable {
+    /// The insets are what moves, so a change to them inside
+    /// ``withAnimation(_:_:)`` opens or closes the gap rather than jumping it.
+    ///
+    /// Padding is a *layout* change, so this is the expensive shape: the
+    /// subtree is re-measured and re-laid-out on every frame of the animation.
+    /// Bounded by the animation's duration, and not something to put on
+    /// ``Animation/repeatForever(autoreverses:)``.
+    public var animatableData: EdgeInsets.AnimatableData {
+        get { insets.animatableData }
+        set { insets.animatableData = newValue }
     }
 }

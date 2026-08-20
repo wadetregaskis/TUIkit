@@ -67,10 +67,13 @@ public struct GeometryProxy: Equatable, Sendable {
 /// ``AlignmentID``: this framework's geometry is integral.
 public struct CellSize: Equatable, Sendable {
     /// The width in cells.
-    public let width: Int
+    ///
+    /// A `var` so an animation can substitute it — see the `Animatable`
+    /// conformance in `AnimatableGeometry.swift`.
+    public var width: Int
 
     /// The height in rows.
-    public let height: Int
+    public var height: Int
 
     /// Creates a size in whole cells.
     ///
@@ -90,16 +93,18 @@ public struct CellSize: Equatable, Sendable {
 /// A rectangle in whole terminal cells — the counterpart of `CGRect`.
 public struct CellRect: Equatable, Sendable {
     /// The leading edge, in cells from the coordinate space's origin.
-    public let x: Int
+    ///
+    /// A `var`, like ``CellSize/width``, so an animation can substitute it.
+    public var x: Int
 
     /// The top edge, in rows from the coordinate space's origin.
-    public let y: Int
+    public var y: Int
 
     /// The width in cells.
-    public let width: Int
+    public var width: Int
 
     /// The height in rows.
-    public let height: Int
+    public var height: Int
 
     /// The trailing edge (exclusive).
     public var maxX: Int { x + width }

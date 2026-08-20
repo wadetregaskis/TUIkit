@@ -19,8 +19,8 @@ import TUIkitCore
 /// displaced content composites above its siblings.
 public struct OffsetView<Content: View>: View {
     let content: Content
-    let x: Int
-    let y: Int
+    var x: Int
+    var y: Int
 
     public var body: Never {
         fatalError("OffsetView renders via Renderable")
@@ -93,5 +93,23 @@ extension View {
     /// - Returns: A view drawn at the offset position.
     public func offset(_ offset: CellSize) -> some View {
         self.offset(x: offset.width, y: offset.height)
+    }
+}
+
+// MARK: - Animating the offset
+
+extension OffsetView: Animatable {
+    /// The displacement is what moves, so a change to it inside
+    /// ``withAnimation(_:_:)`` slides rather than jumps.
+    ///
+    /// The cheapest kind of animated geometry here: an offset does not change
+    /// layout — the view keeps its natural place for sizing — so a frame of
+    /// this animation re-renders the subtree but re-measures nothing.
+    public var animatableData: AnimatablePair<Double, Double> {
+        get { AnimatablePair(Double(x), Double(y)) }
+        set {
+            x = Int(newValue.first.rounded())
+            y = Int(newValue.second.rounded())
+        }
     }
 }

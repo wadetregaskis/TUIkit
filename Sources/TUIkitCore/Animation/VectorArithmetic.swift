@@ -17,12 +17,12 @@
 /// needs to know when it has effectively arrived, and comparing squared
 /// magnitudes avoids a square root per sample.
 ///
-/// `Double` and `Float` conform. Terminal geometry is integer (see
-/// `CellSize`, `CellRect`), and deliberately does *not* conform: an animation
-/// interpolates continuously and the *drawing* rounds to cells, so a moving
-/// view's animatable data is a pair of `Double`s even though it lands on whole
-/// columns. Rounding per sample instead would quantise the curve as well as the
-/// position, and an eased move would come out linear.
+/// `Double` and `Float` conform. `Int` does not, and neither do the integer
+/// geometry types (`CellSize`, `CellRect`, `EdgeInsets`) — those are
+/// ``Animatable`` with *`Double`* animatable data instead, so the interpolation
+/// is computed at full precision from the original endpoints and only the final
+/// position is rounded onto the cell grid. An eased move keeps its easing that
+/// way; it simply dwells longer on the cells it passes through slowly.
 public protocol VectorArithmetic: AdditiveArithmetic {
     /// Multiplies each component of this value by `rhs`.
     mutating func scale(by rhs: Double)

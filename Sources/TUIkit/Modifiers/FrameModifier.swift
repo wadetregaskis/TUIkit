@@ -29,22 +29,25 @@ public struct FlexibleFrameView<Content: View>: View {
     let content: Content
 
     /// The minimum width in characters, or nil for no minimum.
-    let minWidth: Int?
+    ///
+    /// The six dimensions are `var` so an animation can substitute them — see
+    /// the `Animatable` conformance below.
+    var minWidth: Int?
 
     /// The ideal width in characters, or nil to use intrinsic size.
-    let idealWidth: Int?
+    var idealWidth: Int?
 
     /// The maximum width constraint, or nil for no maximum.
-    let maxWidth: FrameDimension?
+    var maxWidth: FrameDimension?
 
     /// The minimum height in lines, or nil for no minimum.
-    let minHeight: Int?
+    var minHeight: Int?
 
     /// The ideal height in lines, or nil to use intrinsic size.
-    let idealHeight: Int?
+    var idealHeight: Int?
 
     /// The maximum height constraint, or nil for no maximum.
-    let maxHeight: FrameDimension?
+    var maxHeight: FrameDimension?
 
     /// The alignment of the content within the frame.
     let alignment: Alignment
@@ -459,5 +462,50 @@ extension FlexibleFrameView: Layoutable {
             isHeightFlexible: axisFlexible(
                 isInfinity: heightInfinity, reported: height, wanted: wantedHeight,
                 contentFlexible: contentSize.isHeightFlexible, cap: heightCap))
+    }
+}
+
+// MARK: - Animating a fixed frame
+
+extension FlexibleFrameView: Animatable {
+    /// A **fixed** frame's width and height — what `.frame(width:height:)`
+    /// pins — so growing or shrinking a box inside ``withAnimation(_:_:)``
+    /// is a resize rather than a jump.
+    ///
+    /// Only the fixed case. SwiftUI draws the same line by having two types
+    /// (`_FrameLayout` is `Animatable`, `_FlexFrameLayout` is not); TUIkit has
+    /// one, so the distinction is made here instead: a dimension is animated
+    /// only where the view was built by pinning min, ideal and max to the same
+    /// number. A genuinely flexible frame — `maxWidth: .infinity` — has no
+    /// number to move between, and `-1` is the sentinel that says so. A
+    /// dimension going from unconstrained to fixed therefore snaps, which is
+    /// the honest answer: there is no width it was previously at.
+    public var animatableData: AnimatablePair<Double, Double> {
+        get {
+            AnimatablePair(
+                Self.pinned(minWidth, idealWidth, maxWidth),
+                Self.pinned(minHeight, idealHeight, maxHeight))
+        }
+        set {
+            Self.repin(&minWidth, &idealWidth, &maxWidth, to: newValue.first)
+            Self.repin(&minHeight, &idealHeight, &maxHeight, to: newValue.second)
+        }
+    }
+
+    /// The number a dimension is pinned to, or `-1` when it is not pinned.
+    private static func pinned(_ min: Int?, _ ideal: Int?, _ max: FrameDimension?) -> Double {
+        guard let ideal, min == ideal, max == .fixed(ideal) else { return -1 }
+        return Double(ideal)
+    }
+
+    /// Moves a pinned dimension, leaving an unpinned one alone.
+    private static func repin(
+        _ min: inout Int?, _ ideal: inout Int?, _ max: inout FrameDimension?, to value: Double
+    ) {
+        guard value >= 0, pinned(min, ideal, max) >= 0 else { return }
+        let cells = Int(value.rounded())
+        min = cells
+        ideal = cells
+        max = .fixed(cells)
     }
 }
