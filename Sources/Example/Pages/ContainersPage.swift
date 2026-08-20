@@ -170,6 +170,15 @@ struct ContainersPage: View {
                 Text("page.containers.borderStyleHelp").foregroundStyle(.palette.foregroundSecondary)
             }
 
+            // The page had no keyboard help at all, and it is the page whose
+            // controls answer the least obvious keys: Left and Right disclose
+            // here as they do in a tree, which nothing on screen said.
+            KeyboardHelpSection(shortcuts: [
+                "page.containers.help.tab",
+                "page.containers.help.toggle",
+                "page.containers.help.arrows",
+            ])
+
             Spacer()
         }
         .scrollableDemoPage()

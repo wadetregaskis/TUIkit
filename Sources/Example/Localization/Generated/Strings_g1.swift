@@ -134,6 +134,9 @@ extension ExampleStrings {
             "page.containers.disclosure.nested": "Nested group",
             "page.containers.section.appearance": "Appearance & BorderStyle",
             "page.containers.borderStyleHelp": "BorderStyle is determined by Appearance. Press 'a' to cycle.",
+            "page.containers.help.tab": "[Tab] Move between disclosure headers",
+            "page.containers.help.toggle": "[Space] [Enter] Open or close the focused one",
+            "page.containers.help.arrows": "[<-] [->] Close and open it — the keys a tree answers",
 
             // page.overlays
             "page.overlays.selectDemo": "Select a Demo",
@@ -390,6 +393,9 @@ extension ExampleStrings {
             "page.containers.disclosure.nested": "Verschachtelte Gruppe",
             "page.containers.section.appearance": "Erscheinungsbild & Rahmenstil",
             "page.containers.borderStyleHelp": "Der Rahmenstil wird durch das Erscheinungsbild bestimmt. Mit 'a' durchschalten.",
+            "page.containers.help.tab": "[Tab] Zwischen Aufklapp-Überschriften wechseln",
+            "page.containers.help.toggle": "[Leer] [Enter] Die fokussierte öffnen oder schließen",
+            "page.containers.help.arrows": "[<-] [->] Schließen und öffnen — die Tasten eines Baums",
 
             // page.overlays
             "page.overlays.selectDemo": "Demo auswählen",
@@ -646,6 +652,9 @@ extension ExampleStrings {
             "page.containers.disclosure.nested": "Groupe imbriqué",
             "page.containers.section.appearance": "Apparence et style de bordure",
             "page.containers.borderStyleHelp": "Le style de bordure est déterminé par l'apparence. Appuyez sur « a » pour faire défiler.",
+            "page.containers.help.tab": "[Tab] Passer d'un en-tête dépliant à l'autre",
+            "page.containers.help.toggle": "[Espace] [Entrée] Ouvrir ou fermer celui qui a le focus",
+            "page.containers.help.arrows": "[<-] [->] Fermer et ouvrir — les touches d'un arbre",
 
             // page.overlays
             "page.overlays.selectDemo": "Choisir une démo",
@@ -902,6 +911,9 @@ extension ExampleStrings {
             "page.containers.disclosure.nested": "Gruppo annidato",
             "page.containers.section.appearance": "Aspetto e stile del bordo",
             "page.containers.borderStyleHelp": "Lo stile del bordo è determinato dall'aspetto. Premi 'a' per scorrere.",
+            "page.containers.help.tab": "[Tab] Spostarsi fra le intestazioni a scomparsa",
+            "page.containers.help.toggle": "[Spazio] [Invio] Aprire o chiudere quella col fuoco",
+            "page.containers.help.arrows": "[<-] [->] Chiudere e aprire — i tasti di un albero",
 
             // page.overlays
             "page.overlays.selectDemo": "Scegli una demo",
@@ -1158,6 +1170,9 @@ extension ExampleStrings {
             "page.containers.disclosure.nested": "Grupo anidado",
             "page.containers.section.appearance": "Apariencia y estilo de borde",
             "page.containers.borderStyleHelp": "El estilo de borde lo determina la apariencia. Pulsa 'a' para alternar.",
+            "page.containers.help.tab": "[Tab] Moverse entre encabezados desplegables",
+            "page.containers.help.toggle": "[Espacio] [Entrar] Abrir o cerrar el enfocado",
+            "page.containers.help.arrows": "[<-] [->] Cerrar y abrir — las teclas de un árbol",
 
             // page.overlays
             "page.overlays.selectDemo": "Elige una demo",
@@ -1414,6 +1429,9 @@ extension ExampleStrings {
             "page.containers.disclosure.nested": "嵌套分组",
             "page.containers.section.appearance": "外观与边框样式",
             "page.containers.borderStyleHelp": "边框样式由外观决定。按 'a' 循环切换。",
+            "page.containers.help.tab": "[Tab] 在折叠标题之间移动",
+            "page.containers.help.toggle": "[空格] [回车] 展开或收起当前项",
+            "page.containers.help.arrows": "[<-] [->] 收起与展开——和树视图一样",
 
             // page.overlays
             "page.overlays.selectDemo": "选择一个演示",
@@ -1670,6 +1688,9 @@ extension ExampleStrings {
             "page.containers.disclosure.nested": "ネストされたグループ",
             "page.containers.section.appearance": "外観と枠線スタイル",
             "page.containers.borderStyleHelp": "枠線スタイルは外観によって決まります。'a' キーで切り替えます。",
+            "page.containers.help.tab": "[Tab] 開閉見出しの間を移動",
+            "page.containers.help.toggle": "[Space] [Enter] フォーカス中のものを開閉",
+            "page.containers.help.arrows": "[<-] [->] 閉じる／開く——ツリーと同じキー",
 
             // page.overlays
             "page.overlays.selectDemo": "デモを選択",
