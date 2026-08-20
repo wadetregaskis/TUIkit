@@ -138,6 +138,57 @@ and it is worth doing properly rather than at the end of a batch.
 above is repeatable — the probe is four `TrackRenderer.gradientColor` sweeps
 printing run-length-encoded palette indices.
 
+### Split View: measured, and it is the fastest page I tested
+
+You reported the Split View page as noticeably sluggish. I could not reproduce
+it on any axis, and it is consistently the *cheapest* of the interactive pages.
+Release build unless noted; `ps` CPU time, 120x40, 30 events at 20/s.
+
+| Page       | idle CPU | Tab burst | Down burst | Terminal resize |
+|------------|---------:|----------:|-----------:|----------------:|
+| Split View |     0.4% |   6.3 ms  |    4.0 ms  |        12.7 ms  |
+| Lists      |    15.2% |  21.3 ms  |   18.0 ms  |        34.7 ms  |
+| Tables     |     4.8% |  13.7 ms  |   14.0 ms  |        24.7 ms  |
+| Layout     |        — |  13.7 ms  |        —   |        30.0 ms  |
+
+Also measured and found no difference: the debug build (same ordering, ~2x
+across the board), all three split styles including `sizeToFit` (which
+re-measures content to size its columns), a mouse-drag burst on the divider,
+and a 220x70 terminal.
+
+So: what were you doing when it felt slow? A gesture I have not thought of, a
+much larger window, or possibly the terminal emulator's own redraw cost rather
+than ours — the page emits a lot of box-drawing, and some terminals are slow
+with it. Happy to chase it with a hint.
+
+### What the measurement DID turn up: one spinner costs 22% of a core
+
+The Lists page idles at **22.6% CPU** (debug; 15.2% release) while nothing is
+happening, emitting 2.3 KB/s — the shape of a page re-rendering ~20x a second
+and producing almost no diff.
+
+Deleting one line finds it. The multi-line list demo has a `Spinner(style:
+.dots)` in every row; replacing it with a static `Text` takes the page from
+**22.6% to 0.2%**.
+
+The cause is the animated-run propagation trap, from the other side. `_ListCore`
+flattens its rows to `[String]` lines and collects runs only for its OWN pulse
+(the cursor row breathing); a row's `buffer.animatedCells` is dropped on the
+floor. So the spinner cannot be replayed by the run loop and has to be
+*re-rendered* to move — which means re-rendering the page, twenty times a
+second, to advance three characters.
+
+`SpinnerRowAnimationTests` passes, and is right to: the spinner does keep
+spinning. It tests the visible outcome, not the mechanism, which is exactly the
+hole that lets a 100x idle-CPU regression through.
+
+The fix is real work rather than a gate: `RenderedRow` would have to carry the
+row's own runs alongside its lines, and they would have to survive the same
+overscroll slide and reorder clip the pulse runs already go through — in a
+2500-line file with several row-assembly paths. Worth a session of its own, and
+not worth starting at the end of a batch. **This is the biggest single
+performance item I have found in this pass.**
+
 ## Deferred, deliberately
 
 **The page-instruction concision sweep.** You asked for the instruction lines at
