@@ -196,9 +196,13 @@ extension Palette {
     public var liftedBackground: Color {
         let base = background.resolve(with: self)
         let stated = appHeaderBackground.resolve(with: self)
-        // The palette's own opinion wins when it can be seen; otherwise derive.
+        // The palette's own opinion wins when it can be seen — but it is an
+        // opinion about a COLOUR, not about what a coarse terminal will make of
+        // it, and on a 256-colour one several palettes' chrome tone quantises
+        // to a saturated corner. Held to the same quiet standard as a derived
+        // step (see `quietest`).
         if Self.isVisiblySeparate(stated, from: base, separation: Self.planeSeparation) {
-            return stated
+            return Self.quietest(stated, steppedFrom: base, separation: Self.planeSeparation)
         }
         return surface(steppedFrom: base, separation: Self.planeSeparation)
     }
@@ -277,7 +281,7 @@ extension Palette {
             from: base, lighter: lighter, separation: separation,
             readableFor: guardText(lighter))
         {
-            return preferred
+            return Self.quietest(preferred, steppedFrom: base, separation: separation)
         }
         if base != page,
             let other = Self.surfaceWalk(
@@ -285,14 +289,83 @@ extension Palette {
                 readableFor: guardText(!lighter)),
             Self.isVisiblySeparate(other, from: page, separation: separation)
         {
-            return other
+            return Self.quietest(other, steppedFrom: base, separation: separation)
         }
         // Best-effort rather than `base`: a step that fell short of the floor
         // still beats handing back the colour that is already there, which is
         // what "no surface at all" would draw.
-        return Self.surfaceWalk(
-            from: base, lighter: lighter, separation: separation,
-            readableFor: guardText(lighter), orBestEffort: true) ?? base
+        guard
+            let best = Self.surfaceWalk(
+                from: base, lighter: lighter, separation: separation,
+                readableFor: guardText(lighter), orBestEffort: true)
+        else { return base }
+        return Self.quietest(best, steppedFrom: base, separation: separation)
+    }
+
+    /// The quieter of a hue-preserving step and a neutral one, when the
+    /// terminal's palette makes the hue-preserving step shout.
+    ///
+    /// ``surfaceWalk`` scales the base colour, which keeps its hue — the right
+    /// thing on a terminal that paints what it is given. On a 256-colour one it
+    /// is the reason a dark theme's tab body came out as a solid block of its
+    /// own hue: the cube's darkest coloured rung is 0x5F, so a walk that stays
+    /// in a near-black green has nowhere to land but `(0, 95, 0)`, three times
+    /// the step that was asked for. Amber was worse — its walk landed on
+    /// `(95, 0, 0)`, a red surface on an amber theme — because the cube's
+    /// nearest coloured entry to a dark brown is not brown.
+    ///
+    /// The greyscale ramp has 24 rungs where the colour cube has 6, so a
+    /// neutral of the right lightness is available where a hued one is not.
+    /// It is taken only when it is genuinely quieter: the hue-preserving step
+    /// must overshoot (more than twice the separation asked for, once the
+    /// terminal has quantised it) and the neutral must still clear the floor.
+    /// On a truecolor terminal nothing overshoots and this never fires, so the
+    /// hue is kept wherever it can be shown.
+    static func quietest(
+        _ preferred: Color, steppedFrom base: Color, separation: Double
+    ) -> Color {
+        guard ColorDepth.current < .truecolor else { return preferred }
+        let quantisedBase = base.downsampledToPalette256()
+        let quantisedPreferred = preferred.downsampledToPalette256()
+        let overshoot = quantisedPreferred.lightnessDifference(from: quantisedBase)
+
+        /// How saturated a colour is, in the crudest useful sense: the spread
+        /// between its strongest and weakest channel.
+        func spread(_ colour: Color) -> Int {
+            guard let rgb = colour.rgbComponents else { return 0 }
+            let channels = [Int(rgb.red), Int(rgb.green), Int(rgb.blue)]
+            return (channels.max() ?? 0) - (channels.min() ?? 0)
+        }
+
+        // Two ways the cube can shout. It can overshoot in LIGHTNESS — a
+        // near-black green landing on `(0, 95, 0)`. Or it can invent SATURATION
+        // the page never had, which is how an amber theme's tab body came out
+        // red: `(10, 8, 5)` is barely tinted, and the cube's nearest coloured
+        // entry to it is a corner. Half a cube rung of new spread is enough to
+        // call that.
+        let inventedChroma = spread(quantisedPreferred) - spread(quantisedBase) > 48
+        guard overshoot > separation * 2 || inventedChroma else { return preferred }
+
+        // A grey of the base's own lightness, walked the same way the hued step
+        // was — so it clears the same floor rather than landing wherever the
+        // hued step happened to. Amber found this: a neutral at the hued step's
+        // lightness was still too dark to separate from its page.
+        let baseLightness = base.perceivedLightness ?? 0
+        let level = UInt8(max(0, min(255, (baseLightness / 100) * 255)))
+        let greyBase = Color.rgb(level, level, level)
+        let lighter = (preferred.perceivedLightness ?? baseLightness) > baseLightness
+        guard
+            let neutral = surfaceWalk(
+                from: greyBase, lighter: lighter, separation: separation),
+            isVisiblySeparate(neutral, from: base, separation: separation)
+        else { return preferred }
+        let quantisedNeutral = neutral.downsampledToPalette256()
+        let neutralOvershoot = quantisedNeutral.lightnessDifference(from: quantisedBase)
+        let quieter =
+            inventedChroma
+            ? spread(quantisedNeutral) < spread(quantisedPreferred)
+            : neutralOvershoot < overshoot
+        return quieter ? neutral : preferred
     }
 
     /// Whether `candidate` reads as a different shade from `page` — measured in
