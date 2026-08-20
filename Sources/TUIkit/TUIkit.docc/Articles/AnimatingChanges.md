@@ -152,9 +152,11 @@ to shrink, so it uncovers the view from its anchor a cell at a time.
 
 A **removal** needs somewhere to play out, because the view is gone from the
 tree by the time anything notices. Whatever still stands in its slot is what
-plays it — which works when the optional is the thing being rendered, and not
-for an `if` inside a stack, where a `nil` optional flattens to no children at
-all. Such a view animates in and jumps out. See ``View/transition(_:)``.
+plays it: the picture the view drew on its last frame is left behind, and the
+`nil` it became draws that picture part-way gone. This holds the view's row (and
+its width) open for as long as the removal runs, so the rest of the stack does
+not close up around it until it has finished leaving. See
+``View/transition(_:)``.
 
 ## Springs
 

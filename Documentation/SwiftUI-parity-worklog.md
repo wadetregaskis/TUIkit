@@ -32,14 +32,18 @@ fade means a store lookup per `Text`, which is the most-rendered view there is.
 *Meanwhile:* documented on the modifier and pinned by a test. I think the cost
 is not worth it, but you may disagree.
 
-**2. Removal transitions need a surviving slot.** An `if` inside a stack has
-none: a stack asks children to flatten and a `nil` optional flattens to *no
-children*. Such a view animates in and jumps out.
+**2. Removal transitions need a surviving slot.** An `if` inside a stack had
+none: a stack asks children to flatten and a `nil` optional flattened to *no
+children*. Such a view animated in and jumped out.
 
-**Q2.** Fixing it means an optional keeping a slot of its own rather than
-flattening — which moves identities and stack spacing under every `if` in every
-existing app. Worth doing as its own piece of work?
-*Meanwhile:* documented and pinned by a test that asserts the jump.
+**Q2 — answered, and done (2026-08-20).** You called the jump wrong, and it was.
+The fix is narrower than I had feared: a `nil` keeps a slot only while the store
+confirms something is still leaving from that exact address (parent identity +
+the wrapped view's type), so a `nil` in an app that animates nothing costs one
+`isEmpty` check and contributes no child — identities and stack spacing under
+every existing `if` are untouched. The slot borrows `Wrapped`'s identity, which
+is the address the present view rendered at, so it finds the picture that view
+left behind.
 
 **3. `PhaseAnimator` / `KeyframeAnimator` are recorded as not-implemented**,
 with the reason: pre-rendering a subtree once per phase runs its render *side

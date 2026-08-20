@@ -63,8 +63,9 @@ extension Optional: Layoutable where Wrapped: View {
             // A view on its way out still holds its slot open, or the page
             // would close up around it on the first frame of the removal and
             // the transition would play in a space that had already gone.
-            guard let leaving = context.stateStorage?.departures.departingSize(
-                at: context.identity)
+            guard
+                let leaving = context.stateStorage?.departures.departingSize(
+                    at: context.identity, nowNanos: context.environment.frameNowNanos)
             else { return ViewSize.fixed(0, 0) }
             return ViewSize.fixed(leaving.width, leaving.height)
         }

@@ -112,10 +112,65 @@ extension DepartureStore {
     }
 
     /// The size a departing view is still holding open, or `nil` if none is.
-    public func departingSize(at identity: ViewIdentity) -> (width: Int, height: Int)? {
-        guard let entry = entries[identity], !entry.presentThisPass, entry.leftAtNanos != nil
-        else { return nil }
+    ///
+    /// Asked only from a slot that has already established the view is gone —
+    /// an `Optional` that is `nil` — so presence is not re-tested here. It must
+    /// not be: the question arrives on the MEASURE walk, which runs before any
+    /// of this frame's renders and therefore before the frame's presence marks
+    /// exist at all. Testing them would report every still-present view as
+    /// departing on every measure.
+    ///
+    /// Nor can it require the removal to have already started. The first frame
+    /// of a removal is measured before it is rendered, so on that frame
+    /// `leftAtNanos` is still `nil` — insisting on it collapsed the slot to
+    /// nothing exactly when the transition needed it most, and the first frame
+    /// of every departure was drawn into no rows.
+    public func departingSize(at identity: ViewIdentity, nowNanos: Int64)
+        -> (width: Int, height: Int)?
+    {
+        guard let entry = entries[identity], !isFinished(entry, at: nowNanos) else { return nil }
         return (entry.departure.width, entry.departure.height)
+    }
+
+    /// Whether a view of `type` registered *directly* under `parent` is still
+    /// leaving.
+    ///
+    /// A container that flattens its children asks this when a child slot has
+    /// become `nil`: the answer decides whether the slot still exists. Both
+    /// halves of the question are load-bearing.
+    ///
+    /// *Directly* under, not anywhere below: an enclosing stack must not hold a
+    /// slot open on behalf of something departing several levels down, which is
+    /// already held open by its own parent.
+    ///
+    /// Of that *type*, because the caller knows the child's type but not the
+    /// index it will be flattened to, and because a slot it cannot actually
+    /// draw is worse than no slot. A `nil` whose content would have flattened
+    /// into *several* children has no single type to match, finds nothing here,
+    /// and contributes nothing — the same instant removal as before, rather
+    /// than an empty child that would push its siblings apart by a stack's
+    /// spacing.
+    ///
+    /// The empty check is the whole point of the fast path: almost every tree
+    /// has no departures at all, and this is asked once per `nil` optional per
+    /// pass.
+    public func hasDeparture(
+        directlyUnder parent: ViewIdentity, ofType type: Any.Type, nowNanos: Int64
+    ) -> Bool {
+        guard !entries.isEmpty else { return false }
+        let wanted = ObjectIdentifier(type)
+        for (identity, entry) in entries where !isFinished(entry, at: nowNanos) {
+            guard let leaf = identity.leafType, ObjectIdentifier(leaf) == wanted else { continue }
+            if identity.parent == parent { return true }
+        }
+        return false
+    }
+
+    /// Whether `entry`'s removal has played out. An entry that has not started
+    /// leaving is never finished.
+    private func isFinished(_ entry: Entry, at nowNanos: Int64) -> Bool {
+        guard let left = entry.leftAtNanos else { return false }
+        return entry.departure.animation.isFinished(at: Double(nowNanos - left) / 1_000_000_000)
     }
 
     /// Whether anything is still leaving — the run loop's question, asked once.

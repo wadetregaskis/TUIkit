@@ -119,22 +119,35 @@ struct TransitionTests {
 
     // MARK: - Leaving
 
-    @Test("A removal inside a stack is instant, because no slot is left")
-    func removalInsideAStackIsInstant() {
-        // The limitation, pinned so it is a stated contract rather than a
-        // surprise. A stack asks its children to flatten themselves; a `nil`
-        // optional flattens to NO children, so the moment the condition goes
-        // false there is nothing in the tree standing where the view stood, and
-        // nothing that could play its removal out. The insertion half works
-        // here — the view is present for that — and the removal is a jump.
-        //
-        // Fixing it means an optional keeping a slot of its own rather than
-        // flattening, which changes identities and stack spacing for every
-        // existing `if` in every app. Not worth it for this.
+    @Test("A removal inside a stack plays out, holding its row open")
+    func removalInsideAStackPlaysOut() {
+        // `if` inside a stack is how a view comes and goes in almost every app,
+        // and it used to be the one shape a removal could not play in: a stack
+        // asks its children to flatten themselves and a `nil` optional flattened
+        // to NO children, so the instant the condition went false there was
+        // nothing standing where the view stood. Now the `nil` keeps a slot for
+        // exactly as long as something is still leaving from it.
         let screen = Screen(.linear(duration: 1))
+        // Let it arrive first — appearing under an animation is itself animated,
+        // so the view is only whole once the insertion has run its second.
         _ = screen.draw(true, .move(edge: .trailing), atMillis: 0)
-        #expect(screen.draw(false, .move(edge: .trailing), atMillis: 0)[0] == "----")
-        #expect(screen.draw(false, .move(edge: .trailing), atMillis: 200).count == 1)
+        #expect(screen.draw(true, .move(edge: .trailing), atMillis: 1000) == ["XXXX", "----"])
+        // The frame it goes: still whole, still in its own row, and the row
+        // below has not moved up.
+        #expect(screen.draw(false, .move(edge: .trailing), atMillis: 1000) == ["XXXX", "----"])
+        #expect(screen.draw(false, .move(edge: .trailing), atMillis: 1500) == ["  XX", "----"])
+        // Played out: the slot goes, and the stack finally closes up.
+        #expect(screen.draw(false, .move(edge: .trailing), atMillis: 2200) == ["----"])
+    }
+
+    @Test("A stack a view is not leaving keeps exactly the children it had")
+    func absentOptionalCostsNoSlot() {
+        // The other half of the contract: the slot exists only while a removal
+        // is actually running. A `nil` that nothing left from contributes
+        // nothing, so it cannot push its siblings apart by a stack's spacing —
+        // which would be a layout change for every `if` in every app.
+        let screen = Screen(nil)
+        #expect(screen.draw(false, .opacity, atMillis: 0) == ["----"])
     }
 
     @Test("Coming back cancels the departure and runs the insertion again")

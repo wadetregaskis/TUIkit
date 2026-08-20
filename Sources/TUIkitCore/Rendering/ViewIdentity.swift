@@ -270,6 +270,33 @@ extension ViewIdentity {
     ///
     /// - Parameter descendant: The identity to check.
     /// - Returns: `true` if `descendant` is strictly below this identity.
+    /// The view type this identity's last structural step names, or `nil` when
+    /// the step names no type (a conditional branch label, a raw path).
+    ///
+    /// With ``parent`` this is enough to ask "is this the slot a child of that
+    /// type would occupy?" without knowing which index it landed on — the
+    /// question a flattening container has when a child has become `nil` and
+    /// only the child's *type* is still statically known.
+    public var leafType: Any.Type? {
+        switch node.step {
+        case .typed(let type, _): return type
+        case .keyed(let type, _): return type
+        case .branch, .raw: return nil
+        }
+    }
+
+    /// The identity one structural step up, or `nil` at the root.
+    ///
+    /// Answers "was this registered directly under that container?" without
+    /// rendering either path — the question a container asks when it has to
+    /// decide whether something it no longer contains is still on its way out.
+    /// A raw-rooted identity (``init(path:)``) has no structure to climb and
+    /// returns `nil`.
+    public var parent: ViewIdentity? {
+        guard let parentNode = node.parent else { return nil }
+        return ViewIdentity(node: parentNode)
+    }
+
     public func isAncestor(of descendant: ViewIdentity) -> Bool {
         // Raw-rooted identities carry their path as opaque string data; only the
         // string-prefix comparison can see their component boundaries.

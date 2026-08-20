@@ -23,24 +23,30 @@ extension View {
     /// is what makes it safe to leave a transition on a view that appears for
     /// other reasons (a page being opened, a list being rebuilt).
     ///
-    /// ## Insertions everywhere, removals where a slot survives
+    /// ## How a view that no longer exists still leaves
     ///
     /// An **insertion** works wherever the view appears, because the view is
     /// there to be drawn.
     ///
-    /// A **removal** needs somewhere to play out, and the view being removed is
-    /// by definition no longer in the tree — so what plays it is whatever still
-    /// stands where it stood. That works when the optional is itself the thing
-    /// being rendered (a page's body, a modifier's content). It does **not**
-    /// work for an `if` inside a stack: a stack asks its children to flatten
-    /// themselves and a `nil` optional flattens to *no children at all*, so the
-    /// instant the condition goes false there is nothing left holding the
-    /// place. Such a view still animates in, and jumps out.
+    /// A **removal** has no view: the body no longer produces one, and a
+    /// terminal rebuilds its whole frame from the tree. What plays it is
+    /// whatever still stands where it stood — the `nil` the optional became —
+    /// drawing the picture the view left behind on its last frame. While that
+    /// runs, the slot keeps the size the view had, so the stack around it does
+    /// not close up until the removal has finished.
     ///
-    /// Changing that means an optional keeping a slot of its own instead of
-    /// flattening, which would move identities and stack spacing under every
-    /// `if` in every existing app — a much larger change than this, and one to
-    /// make on its own terms rather than as a side effect of transitions.
+    /// This holds both where the optional is itself the thing being rendered (a
+    /// page's body, a modifier's content) and for the far commoner `if` inside a
+    /// stack. A stack asks its children to flatten themselves, and a `nil`
+    /// flattens to no children at all; it makes the one exception for a `nil`
+    /// something is still leaving from, and only for as long as that is true.
+    ///
+    /// The exception is claimed by address — the enclosing identity plus the
+    /// wrapped view's type — so a `nil` in a tree that is animating nothing
+    /// contributes no child and changes no spacing, exactly as before. The one
+    /// shape still left out is a `nil` whose content would have flattened into
+    /// *several* children, which has no single address to claim: those still
+    /// jump.
     ///
     /// - Parameter transition: How to come and go.
     /// - Returns: A view that transitions.

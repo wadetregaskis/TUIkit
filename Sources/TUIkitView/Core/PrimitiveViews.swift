@@ -152,10 +152,44 @@ extension ConditionalView: ChildViewProvider {
 }
 
 /// An optional view (an `if` without `else`) flattens the same way: present
-/// content contributes its children, `nil` contributes nothing.
+/// content contributes its children, `nil` contributes nothing — *unless* what
+/// was there is still leaving.
+///
+/// ## Why `nil` is sometimes not nothing
+///
+/// A removal transition has no view to play it: the body no longer produces
+/// one. What plays it is whatever still stands in its place, and for an
+/// optional rendered directly (a page's body, a modifier's content) that is the
+/// `nil` itself — see ``DepartureStore``.
+///
+/// Flattening took even that away. `if` inside a stack is the commonest way a
+/// view comes and goes, and flattening `nil` to *no children at all* meant the
+/// instant the condition went false there was no slot left to draw into: such
+/// views animated in and jumped out. So a `nil` that something is still leaving
+/// from keeps one slot, drawn by ``Optional`` itself, until the removal has
+/// played out — and then goes back to contributing nothing.
+///
+/// The slot borrows `Wrapped`'s identity rather than `Optional`'s, so it lands
+/// on exactly the address the present view rendered at and finds what that view
+/// left behind. It is claimed only when the store confirms a live departure at
+/// that address, which is what keeps every `nil` in every app that animates
+/// nothing costing exactly what it did before: one dictionary-empty check.
 extension Optional: ChildViewProvider where Wrapped: View {
     public func childViews(context: RenderContext) -> [ChildView] {
-        self.map { resolveChildViews(from: $0, context: context) } ?? []
+        switch self {
+        case .some(let wrapped):
+            return resolveChildViews(from: wrapped, context: context)
+        case .none:
+            guard let storage = context.stateStorage,
+                storage.departures.hasDeparture(
+                    directlyUnder: context.identity, ofType: Wrapped.self,
+                    nowNanos: context.environment.frameNowNanos)
+            else { return [] }
+            // `childIndex` is provisional: the enclosing container rebases it to
+            // the flattened position, which is the same position the present
+            // view held as long as nothing before it also came or went.
+            return [ChildView(self, identityType: Wrapped.self, childIndex: 0)]
+        }
     }
 }
 
