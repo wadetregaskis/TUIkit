@@ -329,7 +329,7 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
         let isHovered =
-            !isDisabled && !isFocused
+            !isDisabled
             && (context.stateStorage!.storage(
                 for: StateStorage.StateKey(
                     identity: context.identity, propertyIndex: StateIndex.isHovered),

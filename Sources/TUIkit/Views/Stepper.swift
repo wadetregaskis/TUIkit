@@ -469,7 +469,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
             identity: context.identity, propertyIndex: StateIndex.isHovered)
         let hoverBox: StateBox<Bool> = stateStorage.storage(
             for: hoverKey, default: false)
-        let isHovered = !isDisabled && !isFocused && hoverBox.value
+        let isHovered = !isDisabled && hoverBox.value
 
         // The whole cycle, not the live phase. Asking for the phase is a
         // VOLATILE read: it tells the run loop this frame consumed the clock,
@@ -751,8 +751,9 @@ private struct _StepperCore: View, Renderable, Layoutable {
     ) -> String {
         // Arrow and value colors:
         //   - Focused: pulsing accent
-        //   - Hovered (not focused): static accent at the
-        //     hoverBackground tint
+        //   - Hovered: static accent at the hoverBackground tint. Focus wins
+        //     on these cells, as it does on a Slider's arrows and for the same
+        //     reason — a hover must not freeze the pulse.
         //   - Otherwise: dimmed
         let arrowColor: Color
         let valueColor: Color

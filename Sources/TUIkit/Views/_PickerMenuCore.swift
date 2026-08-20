@@ -79,7 +79,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
 
         let hoverBox = resolveHoverBox(
             stateStorage: stateStorage, context: context)
-        let isHovered = !isDisabled && !isFocused && hoverBox.value
+        let isHovered = !isDisabled && hoverBox.value
 
         // Render every option's label once (dividers have none); reuse for
         // sizing and drawing. Row indices match `entries` throughout — the
@@ -358,9 +358,9 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let fittedText = DropdownMenu.fit(selectedText, to: textWidth)
         let content = " " + fittedText + caret + " "
 
-        // Same hover treatment as Button: bump the background
-        // tint while the cursor is hovering and the control
-        // isn't focused. Caps and label colour are unchanged.
+        // Same hover treatment as Button: bump the background tint while the
+        // cursor is over the control, focused or not. Caps and label colour are
+        // focus's, so the two are answered in different ink.
         let buttonBg = isHovered ? palette.hoveredControlFace : palette.restingControlFace
 
         // The label colours are floored (hue-preserving) against the face

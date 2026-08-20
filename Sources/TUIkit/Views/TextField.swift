@@ -387,7 +387,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             identity: context.identity, propertyIndex: StateIndex.isHovered)
         let hoverBox: StateBox<Bool> = stateStorage.storage(
             for: hoverKey, default: false)
-        let isHovered = !isDisabled && !isFocused && hoverBox.value
+        let isHovered = !isDisabled && hoverBox.value
 
         // Diagnostic (TUIKIT_DEBUG_FOCUS=1): on every render, log
         // what *this* field's binding is reading, what focus it

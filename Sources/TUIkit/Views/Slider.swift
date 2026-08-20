@@ -474,7 +474,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             identity: context.identity, propertyIndex: StateIndex.isHovered)
         let hoverBox: StateBox<Bool> = stateStorage.storage(
             for: hoverKey, default: false)
-        let isHovered = !isDisabled && !isFocused && hoverBox.value
+        let isHovered = !isDisabled && hoverBox.value
 
         // Calculate fraction, clamped to [0, 1] to handle out-of-bounds values
         let range = bounds.upperBound - bounds.lowerBound
@@ -815,9 +815,11 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     ) -> String {
         // Arrow colors:
         //   - Focused: pulsing accent
-        //   - Hovered (not focused): static accent at the
-        //     hoverBackground tint so the affordance is visible
-        //     without competing with the focus pulse
+        //   - Hovered: static accent at the hoverBackground tint, so the
+        //     affordance is visible. Focus wins on these particular cells —
+        //     they are the only thing either state has to say here, and a
+        //     pointer resting on the arrow it already focused must not freeze
+        //     the pulse. The hover still shows elsewhere on the control.
         //   - Otherwise: dimmed foregroundTertiary
         let arrowColor: Color
         if isDisabled {

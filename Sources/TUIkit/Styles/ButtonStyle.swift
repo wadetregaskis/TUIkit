@@ -351,12 +351,14 @@ private struct _ButtonStyleBody: View, Renderable {
         let palette = context.environment.palette
         let isDisabled = !configuration.isEnabled
         let isFocused = configuration.isFocused
-        // Hover is suppressed when the button is focused — focus
-        // is already a more emphatic affordance — so the visual
-        // doesn't compete with itself. Disabled buttons never
-        // show hover (Button._ButtonCore clamps it to false
-        // before constructing the configuration).
-        let isHovered = configuration.isHovered && !isFocused
+        // Focus and hover are two different questions — where the KEYBOARD
+        // goes, and where the MOUSE would — so a button that is both shows
+        // both. They do not compete here because they are answered in
+        // different ink: focus moves the caps (pulsing them to accent) and the
+        // weight, hover moves the FACE. Disabled buttons never show hover
+        // (Button._ButtonCore clamps it to false before constructing the
+        // configuration).
+        let isHovered = configuration.isHovered
 
         // A destructive role always wins on colour, matching SwiftUI, where
         // the role overrides whatever tint the style would otherwise use.
@@ -523,7 +525,8 @@ private struct _ButtonStyleBody: View, Renderable {
         let palette = context.environment.palette
         let isDisabled = !configuration.isEnabled
         let isFocused = configuration.isFocused
-        let isHovered = configuration.isHovered && !isFocused
+        // Both, for the reason given in the string path above.
+        let isHovered = configuration.isHovered
 
         let cascaded = context.environment.styleCascade.resolve(
             for: [.all, .text, .control(.button), .controlVariant(.button, appearance.variant)])

@@ -344,7 +344,7 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
             identity: context.identity, propertyIndex: StateIndex.isHovered)
         let hoverBox: StateBox<Bool> = stateStorage.storage(
             for: hoverKey, default: false)
-        let isHovered = !isDisabled && !isFocused && hoverBox.value
+        let isHovered = !isDisabled && hoverBox.value
 
         // Build the secure field content using shared renderer
         let cascaded = context.environment.styleCascade.resolve(
@@ -371,9 +371,9 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         // The caps are half-block glyphs painted in the field surface — they
         // read as the field's rounded ends on any palette, and hover tints them
         // toward the accent so the affordance reads as "I'm clickable", the same
-        // visual language as TextField. A focused field shows no hover bump
-        // (focus is the more emphatic signal), and a `.plain` field has no caps
-        // at all.
+        // visual language as TextField. A focused field shows the bump too —
+        // focus is drawn by the caret, not by the caps, so the two never ask
+        // for the same cell. A `.plain` field has no caps at all.
         let hoveredChrome = FieldChrome(
             style: context.environment.textFieldStyle, palette: palette,
             isHovered: isHovered, on: context.environment.surfaceBackground)

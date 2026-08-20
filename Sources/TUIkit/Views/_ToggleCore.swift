@@ -425,15 +425,17 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         let isOnValue = isOn.wrappedValue
 
-        // Hover state — flipped by the dispatcher on .entered /
-        // .exited events synthesised from motion. Suppressed
-        // when focused (focus is the more emphatic affordance)
-        // and when disabled.
+        // Hover state — flipped by the dispatcher on .entered / .exited events
+        // synthesised from motion. Not suppressed by focus: the two say
+        // different things (where the keyboard is, where the mouse is) and the
+        // toggle answers them in different ink — the brackets pulse for focus,
+        // the label and the mark lift for the pointer. Suppressed when
+        // disabled, which has nothing to answer with.
         let hoverKey = StateStorage.StateKey(
             identity: context.identity, propertyIndex: StateIndex.isHovered)
         let hoverBox: StateBox<Bool> = stateStorage.storage(
             for: hoverKey, default: false)
-        let isHovered = !isDisabled && !isFocused && hoverBox.value
+        let isHovered = !isDisabled && hoverBox.value
 
         // The built-in styles render procedurally (focus glow + `ToggleCharacterSet`
         // glyphs); a custom `ToggleStyle` renders through its `makeBody`. Either

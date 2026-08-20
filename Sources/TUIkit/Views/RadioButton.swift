@@ -453,7 +453,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
                 isFocused: isFocused,
                 groupHasFocus: groupHasFocus,
                 isSelected: selection.wrappedValue == item.value,
-                isHovered: hoveredIndex == index && !isFocused,
+                isHovered: hoveredIndex == index,
                 context: context,
                 palette: palette
             )
@@ -483,7 +483,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
                 isFocused: isFocused,
                 groupHasFocus: groupHasFocus,
                 isSelected: selection.wrappedValue == item.value,
-                isHovered: hoveredIndex == index && !isFocused,
+                isHovered: hoveredIndex == index,
                 context: context,
                 palette: palette
             )
