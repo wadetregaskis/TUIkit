@@ -264,6 +264,73 @@ struct DisclosureGroupTests {
             "closing the binding closes the group")
     }
 
+    // MARK: - What a closed section remembers
+
+    /// Closing a section and opening it again used to reset everything inside
+    /// it, because a collapsed group does not build its content and unbuilt
+    /// state is collected at the end of the pass. A nested group you had opened
+    /// was shut again; a field you had typed in was blank.
+    @Test("a nested group keeps its expansion while its parent is closed")
+    func nestedExpansionSurvivesTheParentClosing() throws {
+        let (tui, context) = harness(height: 20)
+        let outer = Flag(true)
+        let view = DisclosureGroup("Outer", isExpanded: outer.binding) {
+            DisclosureGroup("Inner") { Text("InnerBody") }
+        }
+
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+        // Focus starts on the outer header; Tab reaches the inner one.
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .tab))
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .right))
+        let opened = lines(frame(view, tui: tui, context: context))
+        #expect(opened.contains { $0.contains("InnerBody") }, "the inner opened: \(opened)")
+
+        // Close the OUTER group, which takes the inner one off screen along
+        // with everything it was remembering, then open it again.
+        outer.value = false
+        frame(view, tui: tui, context: context)
+        outer.value = true
+        let reopened = lines(frame(view, tui: tui, context: context))
+        #expect(
+            reopened.contains { $0.contains("InnerBody") },
+            "the inner group is as it was left, not as it started: \(reopened)")
+    }
+
+    /// The other half: the claim is renewed per pass by the group's own render,
+    /// so a group that leaves the tree entirely takes its contents' state with
+    /// it. Nothing is kept alive by a section that is no longer there.
+    @Test("a group that leaves the tree does not keep its contents' state")
+    func stateGoesWhenTheGroupItselfGoes() throws {
+        let (tui, context) = harness(height: 20)
+        let present = Flag(true)
+        @MainActor func view() -> some View {
+            VStack(alignment: .leading, spacing: 0) {
+                if present.value {
+                    DisclosureGroup("Outer", isExpanded: .constant(true)) {
+                        DisclosureGroup("Inner") { Text("InnerBody") }
+                    }
+                }
+            }
+        }
+
+        frame(view(), tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .tab))
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .right))
+        #expect(lines(frame(view(), tui: tui, context: context)).contains {
+            $0.contains("InnerBody")
+        })
+
+        present.value = false
+        frame(view(), tui: tui, context: context)
+        present.value = true
+        let rebuilt = lines(frame(view(), tui: tui, context: context))
+        #expect(
+            rebuilt.contains { $0.contains("InnerBody") } == false,
+            "a group rebuilt from nothing starts closed: \(rebuilt)")
+    }
+
     @Test("clicking the header row toggles it")
     func clickTogglesIt() {
         let (tui, context) = harness()

@@ -5,6 +5,7 @@
 //  License: MIT
 
 import TUIkitCore
+import TUIkitView
 
 // MARK: - DisclosureGroup
 
@@ -47,12 +48,19 @@ import TUIkitCore
 /// Button("Show me") { showingDetails = true }
 /// ```
 ///
-/// ## The content is not built while collapsed
+/// ## The content is not built while collapsed — but it is remembered
 ///
 /// `content` is a closure, exactly as in SwiftUI, and a collapsed group never
 /// calls it. So the rows of a closed group cost nothing per frame — not their
 /// views, not their measurement — which is what makes a page of collapsed
 /// sections cheap enough to be the default shape of a settings screen.
+///
+/// What a closed group *does* keep is the state its content had: a nested group
+/// you opened is still open when you reopen its parent, and a field you typed
+/// in still has your text. This is a deliberate divergence from SwiftUI, where
+/// collapsing takes the content out of the hierarchy and its `@State` with it —
+/// see ``_DisclosedStateRetainer``. It lasts only while the group itself is on
+/// screen: a group that leaves the tree takes everything below it along.
 ///
 /// - Note: SwiftUI's `DisclosureGroupStyle` is not implemented; a terminal
 ///   disclosure is a triangle and an indent, and there is no second geometry to
@@ -117,6 +125,14 @@ public struct DisclosureGroup<Label: View, Content: View>: View {
         // closures. A `Binding` is a pair of closures, so this is a copy of
         // two references, not a snapshot of the value.
         let expansion = self.expansion
+        _DisclosedStateRetainer(isCollapsed: !expansion.wrappedValue) {
+            groupBody(expansion: expansion)
+        }
+    }
+
+    /// The header and, while open, the content.
+    @ViewBuilder
+    private func groupBody(expansion: Binding<Bool>) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(
                 action: { expansion.wrappedValue.toggle() },
@@ -155,6 +171,56 @@ public struct DisclosureGroup<Label: View, Content: View>: View {
                 content().padding(.leading, DisclosureMetrics.contentIndent)
             }
         }
+    }
+}
+
+// MARK: - Keeping a closed section's contents
+
+/// Keeps the state of a collapsed group's content alive for as long as the
+/// group itself is on screen.
+///
+/// A collapsed group does not build its content — that is the promise that
+/// makes a page of closed sections cheap — and state whose view did not render
+/// is normally collected at the end of the pass. Together those meant that
+/// closing a section reset everything inside it: a nested group you had opened
+/// was shut again when you reopened its parent, a field you had typed in was
+/// blank. Reported as "the inner disclosure should preserve its state, no?",
+/// and it should.
+///
+/// ``StateStorage/retainSubtree(_:)`` already says exactly this — it is what a
+/// windowed list uses for the rows it scrolled past — so a collapsed group says
+/// it too. The declaration is per-pass and made only while collapsed: an open
+/// group's content renders and marks itself active in the ordinary way, and
+/// when the group ITSELF leaves the tree nothing renews the claim, so the whole
+/// subtree is collected on the next pass. Nothing is kept alive by a section
+/// that is no longer there.
+///
+/// - Note: This is a deliberate divergence from SwiftUI, where a collapsed
+///   group's content leaves the hierarchy and takes its `@State` with it. The
+///   retention is not total: it covers `@State`, `onChange` baselines and
+///   conditional-branch records, and not `.task`s or `onDisappear`, which
+///   `LifecycleManager` sweeps on its own terms.
+private struct _DisclosedStateRetainer<Content: View>: View, Renderable, Layoutable {
+    let isCollapsed: Bool
+    @ViewBuilder let content: Content
+
+    var body: Never {
+        fatalError("_DisclosedStateRetainer renders via Renderable")
+    }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // Render path only. A measure must not write persistent state, and the
+        // claim is a per-pass declaration — the render that follows makes it.
+        if isCollapsed, !context.isMeasuring {
+            context.stateStorage?.retainSubtree(context.identity)
+        }
+        return TUIkitView.renderToBuffer(content, context: context)
+    }
+
+    /// Transparent: the wrapper adds no chrome and no identity step, so it
+    /// measures exactly as what it wraps.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        measureChild(content, proposal: proposal, context: context)
     }
 }
 
