@@ -373,6 +373,26 @@ public struct Binding<Value> {
         self = projectedValue
     }
 
+    /// A binding whose writes are made under `animation`, so a control that
+    /// knows nothing about animation still animates what it changes.
+    ///
+    /// ```swift
+    /// Toggle("Expanded", isOn: $isExpanded.animation(.easeInOut))
+    /// ```
+    ///
+    /// The third place an animation can be stated, and the one for when
+    /// neither the change nor the view is yours to annotate: the *binding* is.
+    /// Reads are untouched — only the write is wrapped.
+    ///
+    /// - Parameter animation: How to animate changes made through the returned
+    ///   binding. `nil` makes them explicitly un-animated.
+    /// - Returns: A binding that writes inside ``withAnimation(_:_:)``.
+    public func animation(_ animation: Animation? = .default) -> Binding<Value> {
+        Binding(
+            get: getValue,
+            set: { newValue in withAnimation(animation) { self.setValue(newValue) } })
+    }
+
     /// Derives a binding to a sub-property of the wrapped value via key path.
     ///
     /// This is what makes `$model.field` work: writing to the derived binding

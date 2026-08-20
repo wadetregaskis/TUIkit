@@ -149,6 +149,47 @@
         "*.appendInterpolation(_:formatter:)"
       ],
       "why": "The `formatter:` spelling is the pre-`FormatStyle` class API. It parses through an untyped out-parameter — `Formatter.getObjectValue(_:for:errorDescription:)` yields `AnyObject` — so binding it to a `Binding<Int>` is a downcast the compiler cannot check, and SwiftUI's `Text`/interpolation overloads narrow it further to `NSObject` and `ReferenceConvertible`, which are Objective-C bridging protocols rather than Swift ones. The same capability IS implemented in its typed form, where `Strategy.ParseOutput == FormatInput` makes the round-trip a static guarantee: `TextField(_:value:format:)` and its two siblings (Sources/TUIkit/Views/TextFieldValue.swift), `Text(_:format:)` (Sources/TUIkit/Views/Text.swift:111) and `\\(value, format:)` in a LocalizedStringKey interpolation. Adding the class spelling beside them would be the same feature with the type safety taken out."
+    },
+    {
+      "match": [
+        "CustomAnimation",
+        "CustomAnimation.*",
+        "AnimationContext",
+        "AnimationContext.*",
+        "AnimationState",
+        "AnimationState.*",
+        "AnimationStateKey",
+        "AnimationStateKey.*",
+        "Animation.animate(value:time:context:)",
+        "Animation.base",
+        "Animation.init(_:)"
+      ],
+      "why": "SwiftUI's hook for writing an animation CURVE of your own, by integrating a value forward from a mutable per-animation state. TUIkit's animations are closed-form functions of elapsed time on purpose, not integrated: that is what lets a repeating one be sampled once and handed to the run loop as finished frames (AnimatedCellRun), which is the whole difference between a decoration costing nothing and costing a render pass twenty times a second. A protocol whose contract is 'you may keep state between frames' cannot offer that, so adopting it would mean two animation models, one of which is never cheap."
+    },
+    {
+      "match": [
+        "PhaseAnimator",
+        "PhaseAnimator.*",
+        "KeyframeAnimator",
+        "KeyframeAnimator.*",
+        "Keyframes",
+        "Keyframes.*",
+        "KeyframeTrack",
+        "KeyframeTrack.*",
+        "KeyframesBuilder",
+        "KeyframesBuilder.*",
+        "KeyframeTrackContentBuilder",
+        "KeyframeTrackContentBuilder.*",
+        "CubicKeyframe",
+        "LinearKeyframe",
+        "MoveKeyframe",
+        "SpringKeyframe",
+        "*Keyframe.*",
+        "View.phaseAnimator(_:content:animation:)",
+        "View.keyframeAnimator(initialValue:repeating:content:keyframes:)",
+        "View.keyframeAnimator(initialValue:trigger:content:keyframes:)"
+      ],
+      "why": "Declarative animation SEQUENCES — content described at each phase, with the framework moving between them. The shape is right for a terminal and the machinery to serve it cheaply is not: pre-rendering a subtree once per phase means running that subtree's render side effects once per phase too (focus registration, hit-test regions, onAppear, preference writes), and suppressing those changes what several views draw. Documented in `Documentation/Animating your own view efficiently.md` §5.3. `View.transition(_:)` and `AnimatedCellRun` cover the cases this would, from the two ends."
     }
   ],
   "renamed": {
@@ -179,10 +220,6 @@
     "ProposedViewSize": {
       "tuikit": "ProposedSize",
       "why": "Sources/TUIkitCore/Rendering/LayoutTypes.swift:16 — `public struct ProposedSize` with `width: Int?` / `height: Int?` and `.unspecified` / `.fixed(_:_:)`. Same role and same nil-means-ideal semantics as `ProposedViewSize`, in cells rather than CGFloat per §2.2. It is what `Layout."
-    },
-    "ScrollIndicatorVisibility": {
-      "tuikit": "ScrollbarVisibility",
-      "why": "Sources/TUIkit/Views/Scrollbar.swift — the CASE names are SwiftUI's (.automatic/.visible/.hidden/.never), which is what a call site writes: `.scrollIndicators(.visible)` never names the type. The type keeps `Scrollbar` so it reads with its siblings `ScrollbarArrows` and `ScrollbarEdges`, which have no SwiftUI counterpart at all — renaming one of the three would break the family to close a symbol nobody spells. `.never` behaves as `.hidden` here: SwiftUI separates them because a platform convention can override a hidden bar, and nothing in a terminal can."
     },
     "ScrollTargetBehavior": {
       "tuikit": "ScrollGranularity",
@@ -509,9 +546,6 @@
     "ToolbarTitleDisplayMode": {
       "why": "Exists only to feed `toolbarTitleDisplayMode(_:)`; a cell grid has a single glyph size (TUIkit has no Font type), so `.large`/`.inline`/`.inlineLarge` collapse to one representation."
     },
-    "Transaction": {
-      "why": "Its purpose is to carry the Animation attached to a state change (plus overrides like disablesAnimations) through the update pass. TUIkit re-renders whole frames from current state with no old→new update to ride, and a cell grid has no intermediate frames to interpolate through, "
-    },
     "TransactionKey": {
       "why": "Custom keys on a Transaction that does not exist; the only consumers of transaction values are animation-aware update paths, which TUIkit has none of (see Transaction)."
     },
@@ -538,6 +572,45 @@
     },
     "WindowToolbarFullScreenVisibility": {
       "why": "Exists only to feed `windowToolbarFullScreenVisibility(_:)`; TUIkit has no window and no window toolbar — the host terminal owns both, and TUIkit only ever knows a rows×columns grid (Sources/TUIkit/App/RenderLoop.swift)."
+    },
+    "AnimationCompletionCriteria": {
+      "why": "Names WHEN a `withAnimation` completion handler fires — on the animation logically finishing, or on it actually removing. TUIkit has no completion handler to qualify (`withAnimation(_:completionCriteria:_:completion:)` is likewise absent): an animation here is retired by the store on the first frame past its duration, and nothing yet asks to be told. Worth adding together, not separately."
+    },
+    "UnitCurve": {
+      "why": "A standalone, sample-able easing curve, separable from any animation. TUIkit's curves are cases inside `Animation` (AnimationCurve), reachable through `Animation.fraction(at:)` — which is public precisely so an app pre-rendering its own frames samples the same formula the framework does. A second, parallel curve type would be a second formula to keep in step with the first."
+    },
+    "Spring": {
+      "why": "SwiftUI's standalone spring solver, usable outside an animation (to compute settling, velocity, and so on). TUIkit's spring is a case of `Animation` with a closed-form step response; its settling time is derived from the damping envelope and exposed as the animation's duration. The solver is not separately useful here because nothing in a terminal integrates motion — there is no velocity to carry between gestures."
+    },
+    "View.animation(_:)": {
+      "why": "The unscoped form, which animates EVERY change in the subtree rather than changes to a named value — deprecated in SwiftUI for exactly that reason. `View.animation(_:value:)` is implemented and is the shape to use; adding the unscoped one back would be adding a known trap."
+    },
+    "View.animation(_:body:)": {
+      "why": "Scopes an animation to the views built inside a closure rather than to a value. The same job as `View.animation(_:value:)` from the other side, and the one TUIkit implements; a second spelling would be a second set of composition rules to define against the first (which of the two wins where they overlap is not obvious in SwiftUI either)."
+    },
+    "Animation.interpolatingSpring": {
+      "why": "A velocity-PRESERVING spring: retargeting mid-flight carries the current velocity into the new animation. TUIkit's animations are closed-form functions of elapsed time and carry position only — retargeting restarts from where the picture is, at rest. Honouring the name without the velocity would be the wrong animation under the right spelling."
+    },
+    "Animation.interpolatingSpring(mass:stiffness:damping:initialVelocity:)": {
+      "why": "See `Animation.interpolatingSpring`: velocity-preserving, and TUIkit's springs carry position only."
+    },
+    "Animation.interpolatingSpring(duration:bounce:initialVelocity:)": {
+      "why": "See `Animation.interpolatingSpring`."
+    },
+    "Animation.interactiveSpring": {
+      "why": "A spring tuned for gesture tracking, where the animation is continuously retargeted by a finger. A terminal has no continuous pointer stream to track — mouse reports arrive per cell — so the tuning has nothing to be tuned against; `.snappy` is the nearest thing that means something here."
+    },
+    "Animation.interactiveSpring(duration:extraBounce:blendDuration:)": {
+      "why": "See `Animation.interactiveSpring`."
+    },
+    "Animation.interactiveSpring(response:dampingFraction:blendDuration:)": {
+      "why": "See `Animation.interactiveSpring`."
+    },
+    "AnyTransition.modifier(active:identity:)": {
+      "why": "Builds a transition from two arbitrary `ViewModifier`s, with the framework interpolating between them. TUIkit's transitions are values applied to the rendered BUFFER rather than modifiers applied to the view (see `AnyTransition`), because a per-frame re-layout is the cost this design exists to avoid; there is no modifier pair for it to interpolate."
+    },
+    "AnyTransition.push(from:)": {
+      "why": "Moves the incoming view in while pushing the outgoing one out, which requires both to be laid out at once. A removed view here is a buffer left behind in the slot it vacated, not a view still participating in layout — see `DepartureStore`. `.move(edge:)` is the half of this that a departing buffer can express."
     }
   },
   "differentShape": {
