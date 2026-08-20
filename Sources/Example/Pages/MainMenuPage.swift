@@ -152,7 +152,13 @@ struct MainMenuPage: View {
                         FeatureBox("feature.pureSwift.title", "feature.pureSwift.subtitle").equatable()
                         FeatureBox("feature.declarative.title", "feature.declarative.subtitle").equatable()
                         FeatureBox("feature.composable.title", "feature.composable.subtitle").equatable()
-                        FeatureBox("feature.unicode.title", "所有语言 🥳🤙🏽").equatable()
+                        // `L(_:)` on the title, not the bare key: the subtitle
+                        // here is display text rather than a key, and one
+                        // argument that is not a literal takes the whole call
+                        // to the disfavoured `(String, String)` overload — so
+                        // the key would have been shown verbatim. Spelling the
+                        // lookup out keeps the two halves independent.
+                        FeatureBox(L("feature.unicode.title"), "所有语言 🥳🤙🏽").equatable()
                     }
                     HStack(spacing: 3) {
                         // The SF Symbols subtitle wraps to two lines (glyphs +
@@ -160,7 +166,7 @@ struct MainMenuPage: View {
                         // them relative to each other to show off
                         // `.multilineTextAlignment(_:)` — the modifier flows
                         // through the custom `FeatureBox` into its inner `Text`.
-                        FeatureBox("feature.sfSymbols.title", sfSymbolsSubtitle)
+                        FeatureBox(L("feature.sfSymbols.title"), sfSymbolsSubtitle)
                             .equatable()
                             .multilineTextAlignment(.center)
                     }
