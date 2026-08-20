@@ -300,7 +300,7 @@ extension StateStorage {
         for identity in staleConditionals {
             lastConditionalCase.removeValue(forKey: identity)
         }
-        animations.prune { !activeIdentities.contains($0) && !isRetained($0) }
+        animations.endRenderPass()
     }
 
     /// Removes all state for descendants of the given identity.

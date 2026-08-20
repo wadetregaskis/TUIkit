@@ -96,7 +96,27 @@ struct RepeatingOpacityTests {
             context.environment.animationTick = tick
             context.environment.frameNowNanos =
                 Int64(Double(tick) * AnimationClock.cursor.tickInterval * 1_000_000_000)
+            // Bracketed exactly as the run loop brackets a frame. Without this
+            // the whole suite passed while the app froze: the store's records
+            // were pruned at the end of every pass, so every pass saw a first
+            // sight — and a first sight never animates.
+            let storage = context.environment.stateStorage!
+            storage.beginRenderPass()
+            defer { storage.endRenderPass() }
             return renderToBuffer(Text("ABC").opacity(opacity), context: context)
+        }
+
+        /// How many animating values the store is tracking.
+        var storedAnimationCount: Int {
+            context.environment.stateStorage!.animations.count
+        }
+
+        /// One pass that renders a different tree entirely.
+        func renderSomethingElse() {
+            let storage = context.environment.stateStorage!
+            storage.beginRenderPass()
+            defer { storage.endRenderPass() }
+            _ = renderToBuffer(Text("gone"), context: context)
         }
 
         /// Whether the run loop would still be rendering for this.
@@ -169,6 +189,39 @@ struct RepeatingOpacityTests {
         let buffer = screen.render(0.2, atTick: 0)
         #expect(buffer.animatedCells.isEmpty)
         #expect(screen.needsRenders(atTick: 0), "it stopped rendering AND left no runs")
+    }
+
+    @Test("The record survives the pass that created it")
+    func recordsAreNotPrunedEachPass() {
+        // A `Renderable` modifier renders at its PARENT's identity and marks
+        // nothing active, so the store cannot use `@State`'s active-identity
+        // set to decide what is still alive. It keys on what the tree asked
+        // about instead. Get this wrong and every pass is a first sight: the
+        // fade jumps to its target, the loop goes quiet, and the CPU graph
+        // reads as a total success.
+        let screen = Screen(.linear(duration: 0.4).repeatForever(autoreverses: true))
+        _ = screen.render(1, atTick: 0)
+        _ = screen.render(0.2, atTick: 0)
+        // Several passes later it must STILL be animating, at a value it was
+        // never given.
+        let buffer = screen.render(0.2, atTick: 4)
+        #expect(buffer.animatedCells.count == 1, "the animation was pruned mid-flight")
+        // Not tick 12: an autoreversing cycle of sixteen is symmetric about its
+        // midpoint, so 4 and 12 are the same picture by construction.
+        #expect(buffer.lines != screen.render(0.2, atTick: 6).lines, "the fade stood still")
+    }
+
+    @Test("A view that leaves the tree takes its animation with it")
+    func leavingPrunesTheRecord() {
+        let screen = Screen(.linear(duration: 0.4).repeatForever(autoreverses: true))
+        _ = screen.render(1, atTick: 0)
+        _ = screen.render(0.2, atTick: 0)
+        #expect(screen.storedAnimationCount == 1)
+
+        // A pass that renders something else entirely: nothing asks about the
+        // fade, so it is gone.
+        screen.renderSomethingElse()
+        #expect(screen.storedAnimationCount == 0)
     }
 
     @Test("A finite fade leaves no runs — it just ends")

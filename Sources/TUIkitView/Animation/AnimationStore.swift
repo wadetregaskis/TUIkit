@@ -92,6 +92,21 @@ public final class AnimationStore: @unchecked Sendable {
     /// render one — where the claim order does not hold.
     private var triggers: [Key: Any] = [:]
 
+    /// Which animating values the tree asked about this pass.
+    ///
+    /// The store cannot lean on `StateStorage`'s active-identity set the way
+    /// `@State` does, and finding that out cost a live debugging session: a
+    /// modifier that animates — `.opacity(_:)` — is a `Renderable`, and a
+    /// `Renderable` renders at its PARENT's identity and marks nothing active.
+    /// So every record here was pruned on the pass that created it, and every
+    /// pass then saw a first sight, which never animates. The fade froze on its
+    /// target and the loop went quiet, which looks exactly like success.
+    ///
+    /// Re-declaration instead: anything the tree asks about is alive, and
+    /// anything it stops asking about has left. Same contract as the animation
+    /// scheduler's per-frame token declarations.
+    private var seenThisPass: Set<Key> = []
+
     /// Creates an empty store.
     public init() {}
 
@@ -117,6 +132,7 @@ extension AnimationStore {
     public func value<D: VectorArithmetic>(
         for key: Key, target: D, animation: Animation?, nowNanos: Int64, isMeasuring: Bool
     ) -> D {
+        seenThisPass.insert(key)
         guard let record = records[key],
             let from = record.from as? D,
             let recorded = record.target as? D
@@ -172,6 +188,7 @@ extension AnimationStore {
     public func triggerChanged<V: Equatable>(
         _ value: V, for key: Key, isMeasuring: Bool
     ) -> Bool {
+        seenThisPass.insert(key)
         let previous = triggers[key] as? V
         if !isMeasuring { triggers[key] = value }
         guard let previous else { return false }
@@ -203,6 +220,7 @@ extension AnimationStore {
     public func cycle<D: VectorArithmetic & Sendable>(
         for key: Key, nowNanos: Int64, tick: Int
     ) -> AnimationCycle<D>? {
+        seenThisPass.insert(key)
         guard let record = records[key],
             let animation = record.animation, animation.repeatsForever,
             let from = record.from as? D, let target = record.target as? D
@@ -222,10 +240,12 @@ extension AnimationStore {
         records[key]?.servedByRuns = true
     }
 
-    /// Forgets which animations were served by runs last pass.
+    /// Starts a pass: nothing has been asked about yet, and nothing has been
+    /// served by runs yet.
     ///
     /// Called from ``StateStorage/beginRenderPass()``.
     public func beginRenderPass() {
+        seenThisPass.removeAll(keepingCapacity: true)
         for key in records.keys {
             records[key]?.servedByRuns = false
         }
@@ -260,18 +280,15 @@ extension AnimationStore {
 // MARK: - Lifetime
 
 extension AnimationStore {
-    /// Drops the animations of views no longer in the tree.
+    /// Drops the animations the tree stopped asking about.
     ///
-    /// Called from ``StateStorage/endRenderPass()`` with the same staleness test
-    /// `@State` gets, so an animating view that leaves takes its animation with
-    /// it and one that is merely scrolled out of a windowing container keeps it.
-    public func prune(where isStale: (ViewIdentity) -> Bool) {
-        for key in records.keys where isStale(key.identity) {
-            records.removeValue(forKey: key)
-        }
-        for key in triggers.keys where isStale(key.identity) {
-            triggers.removeValue(forKey: key)
-        }
+    /// Called from ``StateStorage/endRenderPass()``. Keyed on what was asked
+    /// this pass rather than on `@State`'s active-identity set — see
+    /// ``seenThisPass`` for why that set cannot answer this question.
+    public func endRenderPass() {
+        guard !records.isEmpty || !triggers.isEmpty else { return }
+        records = records.filter { seenThisPass.contains($0.key) }
+        triggers = triggers.filter { seenThisPass.contains($0.key) }
     }
 
     /// Drops the animations of everything below `ancestor` — the
