@@ -80,6 +80,44 @@ rearrangement so the curve settings read as page-wide.
   that holds for some controls and not others is worse than either rule.
 - **The acrostic is not localized.** Its point is that a column spells a word.
 
+### Borders and tabs
+- **"The chrome around a tab is the tab's"** — a folder tab is three rows and
+  reads as one control, so the border above and below the label is now part of
+  its click target. The strip decides how tall each region is, because only it
+  knows which chrome rows belong to a tab and which to its neighbour.
+- **"A surface is a background, not a colour swatch"** — the tab body on a
+  256-colour terminal. Worse than reported once measured: Amber's body came out
+  RED, because the cube's nearest coloured entry to a barely-tinted dark brown
+  is a corner. Where a hued step shouts, a neutral of the right lightness is
+  taken instead; the greyscale ramp has 24 rungs where the colour cube has 6.
+  Nothing changes on a truecolor terminal, and palettes whose page is already
+  saturated (Grass, Ocean, Red Sands) keep their hue on 256 colours too.
+- **"Border appearance names in the reader's language"** — they came from
+  `Appearance.name`, which is the identifier capitalised, so every language read
+  "Rounded", "Line", "Doubleline".
+- **"Two more border appearances, and the enum question dissolves"** — see below.
+
+## Answering your question about the block borders
+
+You asked whether the two block appearances should be distinct enum cases or one
+case with an associated value. **Neither**, and I was about to give you the wrong
+answer.
+
+The answer I had ready: the difference is not *which glyph* but *which channel
+the colour goes in*, so it belongs on `BorderStyle` as an orthogonal axis
+(`ink: .foreground | .background`) rather than as a case or an associated value,
+because expressing it as a case duplicates the glyph table and expressing it as
+an associated value hides an orthogonal axis inside one member.
+
+That reasoning is sound and the premise is false. A border of **spaces** already
+draws "an empty cell showing whatever is behind it" — no new axis needed, and
+`BorderStyle.none` has been exactly that since the beginning; it simply was not
+offered as an `Appearance`. And a border of `█` draws in the border colour
+because every border character does.
+
+So they are two ordinary `BorderStyle` values, like `.line` and `.heavy`, and
+half of it already existed. Shipped as `Appearance.block` and `Appearance.blank`.
+
 ## Investigated, diagnosed, NOT fixed — needs your call
 
 ### 256-colour gradient banding
