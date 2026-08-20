@@ -79,6 +79,25 @@ public struct TrackConfiguration: Sendable, Equatable {
     /// cells are lit). `nil` uses the flat filled colour.
     public var fillGradient: [Color]?
 
+    /// An optional colour for the UNFILLED region, overriding the one the
+    /// control would otherwise use.
+    ///
+    /// The unfilled part of a bar is half of what a bar looks like, and it was
+    /// the half a style could say nothing about: the control passed its own
+    /// recessive colour and that was that. A style that has chosen a fill also
+    /// wants a say in what the fill is drawn *against*. `nil` keeps the
+    /// control's choice, which is what every built-in preset does.
+    public var emptyColor: Color?
+
+    /// An optional per-cell colour gradient the unfilled cells fade across.
+    ///
+    /// Measured the same way the fill's is (see ``TrackGradientScaling``): with
+    /// `.track` the empty cells take the part of the ramp their POSITION on the
+    /// bar names, so fill and empty gradients drawn from the same stops are one
+    /// continuous ramp interrupted by the boundary. With `.fill` the ramp is
+    /// compressed into the unfilled run, which is the decorative reading.
+    public var emptyGradient: [Color]?
+
     /// Creates a track configuration.
     ///
     /// - Parameters:
@@ -88,16 +107,22 @@ public struct TrackConfiguration: Sendable, Equatable {
     ///     cell, or `nil` to quantize to whole cells.
     ///   - emptyStyle: How the unfilled region is drawn.
     ///   - fillGradient: An optional colour gradient across the lit cells.
+    ///   - emptyColor: An optional colour for the unfilled region.
+    ///   - emptyGradient: An optional colour gradient across the unfilled cells.
     public init(
         fill: String,
         partialRamp: [Character]? = nil,
         emptyStyle: EmptyStyle,
-        fillGradient: [Color]? = nil
+        fillGradient: [Color]? = nil,
+        emptyColor: Color? = nil,
+        emptyGradient: [Color]? = nil
     ) {
         self.fill = fill
         self.partialRamp = partialRamp
         self.emptyStyle = emptyStyle
         self.fillGradient = fillGradient
+        self.emptyColor = emptyColor
+        self.emptyGradient = emptyGradient
     }
 
     /// Creates a track configuration with a single-character fill — sugar
@@ -106,11 +131,14 @@ public struct TrackConfiguration: Sendable, Equatable {
         fullGlyph: Character,
         partialRamp: [Character]? = nil,
         emptyStyle: EmptyStyle,
-        fillGradient: [Color]? = nil
+        fillGradient: [Color]? = nil,
+        emptyColor: Color? = nil,
+        emptyGradient: [Color]? = nil
     ) {
         self.init(
             fill: String(fullGlyph), partialRamp: partialRamp,
-            emptyStyle: emptyStyle, fillGradient: fillGradient)
+            emptyStyle: emptyStyle, fillGradient: fillGradient,
+            emptyColor: emptyColor, emptyGradient: emptyGradient)
     }
 }
 

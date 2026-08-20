@@ -37,6 +37,18 @@ struct TrackStyleEditor: View {
     /// The fill gradient's stops, persisted as comma-separated hex like the
     /// ProgressView page's sweep gradient. Default: red → amber → green.
     @AppStorage("trackEditor.gradientStops") private var gradientStopsRaw = "FF5050,FFC850,50DC78"
+    /// What a gradient is measured across. The same control Progress & Gauges
+    /// has, because it is the same question and the answer changes what a
+    /// gradient MEANS — a scale, or a decoration.
+    @AppStorage("trackEditor.gradientSpan") private var gradientSpansTrack = true
+    /// Whether the unfilled half gets a colour of its own.
+    @AppStorage("trackEditor.emptyTinted") private var emptyTinted = false
+    /// Whether the unfilled half gets a gradient rather than a flat colour.
+    @AppStorage("trackEditor.emptyGradient") private var emptyGradientEnabled = false
+    /// The unfilled gradient's stops. Default: a cool ramp, so it reads as the
+    /// other half of the bar rather than as more fill.
+    @AppStorage("trackEditor.emptyStops") private var emptyStopsRaw = "203050,2A4A78,3C6EA5"
+    @State private var editingEmptyGradient = false
     @State private var sliderValue = 0.6
     /// Whether the gradient-editor dialog is up.
     @State private var editingGradient = false
@@ -87,6 +99,21 @@ struct TrackStyleEditor: View {
         GradientStopsCodec.decode(gradientStopsRaw, fallback: Self.defaultGradient)
     }
 
+    /// The fallback unfilled gradient when the persisted stops are unusable.
+    private static let defaultEmptyGradient: [Color] = [
+        .rgb(32, 48, 80), .rgb(42, 74, 120), .rgb(60, 110, 165),
+    ]
+
+    private var emptyStops: [Color] {
+        GradientStopsCodec.decode(emptyStopsRaw, fallback: Self.defaultEmptyGradient)
+    }
+
+    private var emptyStopsBinding: Binding<[Color]> {
+        Binding(
+            get: { emptyStops },
+            set: { emptyStopsRaw = GradientStopsCodec.encode($0) })
+    }
+
     /// The gradient editor's binding: decodes on read, re-encodes on write.
     private var gradientStopsBinding: Binding<[Color]> {
         Binding(
@@ -118,7 +145,12 @@ struct TrackStyleEditor: View {
             fill: fill,
             partialRamp: rampText.isEmpty ? nil : Array(rampText),
             emptyStyle: empty,
-            fillGradient: gradientEnabled ? gradientStops : nil)
+            fillGradient: gradientEnabled ? gradientStops : nil,
+            // The unfilled half is stylable too: a flat colour of the style's
+            // own, or a ramp across it. Its first stop doubles as the flat
+            // colour so the two controls agree about what "tinted" means.
+            emptyColor: emptyTinted ? emptyStops.first : nil,
+            emptyGradient: emptyGradientEnabled ? emptyStops : nil)
     }
 
     /// A slowly-advancing fraction (0→1 over 50 s), shared phase with the
@@ -162,6 +194,14 @@ struct TrackStyleEditor: View {
                 // disables with the toggle off.
                 Button("component.trackEditor.editGradient") { editingGradient = true }
                     .disabled(!gradientEnabled)
+                Toggle("component.trackEditor.gradientSpansTrack", isOn: $gradientSpansTrack)
+                    .disabled(!gradientEnabled && !emptyGradientEnabled)
+            }
+            HStack(spacing: 2) {
+                Toggle("component.trackEditor.emptyTinted", isOn: $emptyTinted)
+                Toggle("component.trackEditor.emptyGradient", isOn: $emptyGradientEnabled)
+                Button("component.trackEditor.editEmptyGradient") { editingEmptyGradient = true }
+                    .disabled(!emptyTinted && !emptyGradientEnabled)
             }
             Text("component.trackEditor.comboHint")
                 .foregroundStyle(.palette.foregroundSecondary)
@@ -171,11 +211,19 @@ struct TrackStyleEditor: View {
                 ProgressView(value: animatedFraction)
                     .progressViewStyle(.custom(configuration))
                     .frame(width: 36)
+                    .trackGradientScaling(gradientSpansTrack ? .track : .fill)
             case .slider:
                 Slider(value: $sliderValue)
                     .trackStyle(.custom(configuration))
                     .frame(width: 36)
+                    .trackGradientScaling(gradientSpansTrack ? .track : .fill)
             }
+        }
+        .modal(isPresented: $editingEmptyGradient) {
+            GradientEditorPanel(
+                "component.trackEditor.emptyGradientTitle",
+                stops: emptyStopsBinding,
+                isPresented: $editingEmptyGradient)
         }
         .modal(isPresented: $editingGradient) {
             GradientEditorPanel(

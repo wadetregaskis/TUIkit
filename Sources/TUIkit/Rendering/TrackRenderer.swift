@@ -135,7 +135,8 @@ enum TrackRenderer {
                 emptyFill: emptyFill,
                 coloring: coloring,
                 filledColor: filledColor,
-                emptyColor: emptyColor
+                emptyColor: emptyColor,
+                gradientScaling: gradientScaling
             )
         }
     }
@@ -227,6 +228,11 @@ extension TrackRenderer {
         // Terminal.app). With glyph colour == background colour those
         // unpainted pixels vanish, while the real glyph is kept so a
         // plain-text copy (no styling) still shows where the progress was.
+        // A style that has chosen a fill also gets a say in what the fill is
+        // drawn AGAINST — the unfilled half of a bar is half of what it looks
+        // like. `nil` keeps the control's own recessive colour, which is what
+        // every built-in preset does.
+        let emptyColor = config.emptyColor ?? emptyColor
         let trackBackground: Color? = paintsBackground ? emptyColor : nil
 
         // Optional per-cell colour fade. What it is measured across is the
@@ -263,20 +269,40 @@ extension TrackRenderer {
         }
         let emptyCount = width - litCellCount
         if emptyCount > 0 {
-            if paintsBackground {
-                // Spaces on the empty colour → a solid unfilled remainder.
+            // The empty gradient is measured the way the fill's is: pinned to
+            // the bar, an empty cell takes the colour its POSITION names, so
+            // fill and empty ramps drawn from the same stops read as one
+            // continuous ramp with the boundary cutting across it. Compressed,
+            // the ramp is squeezed into the unfilled run instead.
+            let emptySpan = gradientScaling == .track ? width : emptyCount
+            // Anchored to the TRACK (cell j always shows the same character),
+            // so the texture stays put while the fill sweeps across it.
+            func emptyGlyphs() -> String {
+                var glyphs = ""
+                for cell in litCellCount..<width {
+                    glyphs.append(emptyChars[cell % emptyChars.count])
+                }
+                return glyphs
+            }
+            if let gradient = config.emptyGradient, emptySpan > 1 {
+                for cell in litCellCount..<width {
+                    let index = gradientScaling == .track ? cell : cell - litCellCount
+                    let colour = gradientColor(
+                        stops: gradient, parameter: Double(index) / Double(emptySpan - 1),
+                        fallback: emptyColor)
+                    result += ANSIRenderer.colorize(
+                        paintsBackground ? " " : String(emptyChars[cell % emptyChars.count]),
+                        foreground: colour,
+                        background: paintsBackground ? colour : nil)
+                }
+            } else if paintsBackground {
+                // One run, one escape: a flat unfilled remainder is what almost
+                // every bar draws, and it must not cost a colour change a cell.
                 result += ANSIRenderer.colorize(
                     String(repeating: " ", count: emptyCount), foreground: emptyColor,
                     background: emptyColor)
             } else {
-                // The unfilled pattern is anchored to the TRACK (cell j always
-                // shows the same character), so the texture stays put while
-                // the fill sweeps across it.
-                var empty = ""
-                for cell in litCellCount..<width {
-                    empty.append(emptyChars[cell % emptyChars.count])
-                }
-                result += ANSIRenderer.colorize(empty, foreground: emptyColor)
+                result += ANSIRenderer.colorize(emptyGlyphs(), foreground: emptyColor)
             }
         }
         return result
@@ -308,6 +334,8 @@ extension TrackRenderer {
         paintsBackground: Bool,
         gradientScaling: TrackGradientScaling
     ) -> String {
+        // The style's own unfilled colour, if it named one — see the fine path.
+        let emptyColor = config.emptyColor ?? emptyColor
         let effectiveWidth = (width / quantum) * quantum
         guard effectiveWidth > 0 else { return "" }
         let steps = effectiveWidth / quantum
@@ -429,12 +457,20 @@ extension TrackRenderer {
         emptyFill: String,
         coloring: SegmentColoring,
         filledColor: Color,
-        emptyColor: Color
+        emptyColor: Color,
+        gradientScaling: TrackGradientScaling
     ) -> String {
         let leadingWidth = leading.strippedLength
         let trailingWidth = trailing.strippedLength
         let middleWidth = max(1, middle.strippedLength)
         let filledCount = Int((fraction * Double(width)).rounded())
+        // What a gradient is measured across, exactly as every other style
+        // reads it: the whole bar, so a colour always marks the same value, or
+        // the lit part, so the ramp follows the fill. This style used to ignore
+        // the setting entirely and always compress into the lit part, which
+        // made a gradient meant as a SCALE lie — at 10% its one lit cell is the
+        // last colour.
+        let gradientSpan = gradientScaling == .track ? width : filledCount
 
         var result = ""
 
@@ -447,7 +483,7 @@ extension TrackRenderer {
             let truncated = (leading + trailing).ansiAwarePrefix(visibleCount: filledCount)
             result += renderLitRegion(
                 leading: truncated, middleRun: "", trailing: "",
-                coloring: coloring, filledColor: filledColor)
+                coloring: coloring, filledColor: filledColor, gradientSpan: gradientSpan)
         } else {
             // Endpoints fit. Repeat `middle` to fill the gap, plus a
             // partial trailing slice if needed.
@@ -463,7 +499,7 @@ extension TrackRenderer {
             }
             result += renderLitRegion(
                 leading: leading, middleRun: middleRun, trailing: trailing,
-                coloring: coloring, filledColor: filledColor)
+                coloring: coloring, filledColor: filledColor, gradientSpan: gradientSpan)
         }
 
         let emptyCellCount = max(0, width - filledCount)
@@ -490,7 +526,7 @@ extension TrackRenderer {
     /// embedded); `.gradient` re-colours cell by cell and expects plain text.
     private static func renderLitRegion(
         leading: String, middleRun: String, trailing: String,
-        coloring: SegmentColoring, filledColor: Color
+        coloring: SegmentColoring, filledColor: Color, gradientSpan: Int
     ) -> String {
         switch coloring {
         case .automatic:
@@ -508,22 +544,30 @@ extension TrackRenderer {
             return result
         case .gradient(let stops):
             return gradientCells(
-                (leading + middleRun + trailing).stripped, stops: stops, fallback: filledColor)
+                (leading + middleRun + trailing).stripped, stops: stops, fallback: filledColor,
+                span: gradientSpan)
         }
     }
 
-    /// Colours `text` cell by cell across gradient `stops` (the whole string
-    /// spans parameter 0…1). Used by `.threeSegment`'s gradient colouring.
-    private static func gradientCells(_ text: String, stops: [Color], fallback: Color) -> String {
+    /// Colours `text` cell by cell across gradient `stops`.
+    ///
+    /// `span` is how many cells the gradient is measured across — the whole
+    /// track, or just the lit part (see ``TrackGradientScaling``). The text may
+    /// be shorter than the span, in which case it uses the first part of the
+    /// ramp and the rest is simply not reached; that is what makes a gradient
+    /// read as a scale rather than as a fade.
+    private static func gradientCells(
+        _ text: String, stops: [Color], fallback: Color, span: Int
+    ) -> String {
         let cells = Array(text)
-        guard cells.count > 1 else {
+        guard cells.count > 1, span > 1 else {
             return ANSIRenderer.colorize(text, foreground: stops.first ?? fallback)
         }
         var result = ""
         for (index, cell) in cells.enumerated() {
             let color = gradientColor(
                 stops: stops,
-                parameter: Double(index) / Double(cells.count - 1),
+                parameter: Double(index) / Double(span - 1),
                 fallback: fallback)
             result += ANSIRenderer.colorize(String(cell), foreground: color)
         }

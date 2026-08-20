@@ -107,6 +107,70 @@ struct TrackGradientTests {
 
 // MARK: - Scaling
 
+/// The unfilled half of a bar, which a style could say nothing about until now:
+/// the control passed its own recessive colour and that was the end of it.
+@MainActor
+@Suite("Track empty styling")
+struct TrackEmptyStylingTests {
+
+    private func render(_ config: TrackConfiguration, _ scaling: TrackGradientScaling = .track)
+        -> String
+    {
+        TrackRenderer.render(
+            fraction: 0.5, width: 10, style: .custom(config),
+            filledColor: .rgb(1, 2, 3),
+            emptyColor: .rgb(9, 9, 9),
+            accentColor: .rgb(7, 7, 7),
+            gradientScaling: scaling)
+    }
+
+    private func hasForeground(_ output: String, _ code: String) -> Bool {
+        output.contains("38;2;\(code)")
+    }
+
+    @Test("Without one, the control's own empty colour is used")
+    func defaultsToTheControlsColour() {
+        #expect(hasForeground(render(.bar), "9;9;9"))
+    }
+
+    @Test("A style's own empty colour replaces it")
+    func styleColourWins() {
+        var config = TrackConfiguration.bar
+        config.emptyColor = .rgb(40, 50, 60)
+        let output = render(config)
+        #expect(hasForeground(output, "40;50;60"))
+        #expect(!hasForeground(output, "9;9;9"), "the control's colour is gone: \(output.debugDescription)")
+    }
+
+    @Test("An empty gradient pinned to the bar takes the ramp its position names")
+    func emptyGradientIsPositional() {
+        var config = TrackConfiguration.bar
+        config.emptyGradient = [.rgb(0, 0, 0), .rgb(255, 0, 0)]
+        let output = render(config, .track)
+        // Half full, so the unfilled run covers the SECOND half of the ramp:
+        // it reaches the last stop and never shows the first.
+        #expect(hasForeground(output, "255;0;0"))
+        #expect(!hasForeground(output, "0;0;0"), "the ramp's start belongs to the filled half")
+    }
+
+    @Test("Compressed, the same gradient is squeezed into the unfilled run")
+    func emptyGradientCompresses() {
+        var config = TrackConfiguration.bar
+        config.emptyGradient = [.rgb(0, 0, 0), .rgb(255, 0, 0)]
+        let output = render(config, .fill)
+        #expect(hasForeground(output, "0;0;0"), "…so it starts at the first stop instead")
+        #expect(hasForeground(output, "255;0;0"))
+    }
+
+    @Test("A solid-background track gradients its background too")
+    func backgroundStyleGradients() {
+        var config = TrackConfiguration.block
+        config.emptyGradient = [.rgb(0, 0, 0), .rgb(255, 0, 0)]
+        let output = render(config, .track)
+        #expect(output.contains("48;2;255;0;0"), "the unfilled remainder is a FILL, not a glyph")
+    }
+}
+
 /// What the gradient is measured across — the bar, or the lit part of it.
 ///
 /// The distinction is the difference between a gradient that means something
@@ -155,6 +219,33 @@ struct TrackGradientScalingTests {
         // Nothing to compress at 100%, so the two spellings must not diverge —
         // the property that makes `.track` a safe default.
         #expect(render(1.0, .track) == render(1.0, .fill))
+    }
+
+    /// The same question for `.threeSegment`, which answered it wrongly by
+    /// answering it not at all: it took no scaling parameter, so every gradient
+    /// it drew was compressed into the fill however the caller had asked.
+    @Test("A three-segment gradient honours the scaling too")
+    func threeSegmentHonoursScaling() {
+        func segments(_ fraction: Double, _ scaling: TrackGradientScaling) -> String {
+            TrackRenderer.render(
+                fraction: fraction, width: 10,
+                style: .threeSegment(
+                    leading: "[", middle: "=", trailing: "]", emptyFill: "·",
+                    coloring: .gradient([.rgb(0, 0, 0), .rgb(255, 0, 0)])),
+                filledColor: .rgb(1, 2, 3),
+                emptyColor: .rgb(9, 9, 9),
+                accentColor: .rgb(7, 7, 7),
+                gradientScaling: scaling)
+        }
+        let pinned = segments(0.5, .track)
+        #expect(
+            !hasForeground(pinned, "255;0;0"),
+            "a half-full bar has not reached the last stop: \(pinned.debugDescription)")
+        let compressed = segments(0.5, .fill)
+        #expect(
+            hasForeground(compressed, "255;0;0"),
+            "…but compressed into the fill it has: \(compressed.debugDescription)")
+        #expect(segments(1.0, .track) == segments(1.0, .fill), "and a full bar agrees")
     }
 
     @Test("The default is the bar")
