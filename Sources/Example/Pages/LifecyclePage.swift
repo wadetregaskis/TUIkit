@@ -34,6 +34,15 @@ struct LifecycleCounters: Equatable {
 struct LifecyclePage: View {
     @Binding var counters: LifecycleCounters
 
+    /// Which spinner the refresh indicator uses. Persisted, because the point
+    /// of the setting is that a font without Braille coverage needs `.line` —
+    /// and someone who has had to choose it once should not choose it again.
+    @AppStorage("lifecycle.refreshIndicator") private var refreshIndicatorStyle = "line"
+
+    private var indicatorChoice: SpinnerStyleChoice {
+        SpinnerStyleChoice(rawValue: refreshIndicatorStyle) ?? .line
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
@@ -98,8 +107,13 @@ struct LifecyclePage: View {
                     // counterpart: which spinner the indicator uses is a
                     // subtree setting. `.line` is pure ASCII, so it animates
                     // even on a font with no Braille coverage — which is the
-                    // reason to want the choice. Omit it for `.dots`.
-                    .refreshIndicator(style: .line)
+                    // reason to want the choice, and the reason the picker
+                    // below is worth having rather than a hardcoded style.
+                    .refreshIndicator(style: indicatorChoice.style)
+
+                    SpinnerStylePicker(
+                        titleKey: "page.lifecycle.refreshIndicatorStyle",
+                        selection: $refreshIndicatorStyle)
                 }
             }
 
