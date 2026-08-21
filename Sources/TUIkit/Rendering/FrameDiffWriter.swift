@@ -595,10 +595,21 @@ extension FrameDiffWriter {
         cache.fit(to: newLines.count)
         defer { setCellCache(cache, for: region) }
 
+        // The styling this pass has left the terminal in, carried from row to
+        // row. Rows are written in ascending order with nothing between them but
+        // cursor moves, and a cursor move is not styling — so a span opening the
+        // next row can say only what changed, exactly as one opening the next
+        // run within a row does. Measured over a divider drag, `ESC[0m` alone
+        // appeared 1,898 times in one capture: a row's worth of styling stated
+        // afresh, per row, to say what a handful of parameters would.
+        //
+        // `nil` means "not known", which is the honest state at the start: what
+        // the caller left in force before this pass is not ours to assume.
+        var emitted: SGRState?
         for row in changedRows {
             switch spanDiff(
                 newLines: newLines, previousLines: previousLines, row: row,
-                terminalWidth: terminalWidth, cache: &cache)
+                terminalWidth: terminalWidth, cache: &cache, emitted: &emitted)
             {
             case .identical:
                 // The two spellings land the terminal in the same place, so
@@ -613,9 +624,20 @@ extension FrameDiffWriter {
                 }
             case .wholeLine:
                 terminal.moveCursor(toRow: startRow + row, column: 1)
+                // A built row opens by STATING ITS BACKGROUND, not by resetting,
+                // so anything else this pass carried in — a bold, an underline,
+                // a reverse — would still be in force, and the `ESC[2K` the row
+                // opens with would erase under it. Close the chain first.
+                if emitted?.isDefault == false { terminal.write("\u{1B}[0m") }
                 terminal.write(newLines[row])
+                emitted = SGRState()  // every built row ends with a reset
             }
         }
+        // Hand the terminal back the way every row used to: unstyled. The erase
+        // below depends on it — `ESC[2K` clears with the background in force,
+        // and this pass's last row must not choose the colour of a row it is
+        // not painting.
+        if emitted?.isDefault == false { terminal.write("\u{1B}[0m") }
 
         // Clear excess old lines when the previous frame had more rows.
         // Each output line already contains ESC[2K (from buildOutputLines),
@@ -648,7 +670,7 @@ extension FrameDiffWriter {
     /// row to diff against or the row is one the cell walk declines.
     private func spanDiff(
         newLines: [String], previousLines: [String], row: Int, terminalWidth: Int,
-        cache: inout CellCache
+        cache: inout CellCache, emitted: inout SGRState?
     ) -> ANSICellDiff {
         guard row < previousLines.count else { return .wholeLine }
         let previous =
@@ -658,7 +680,8 @@ extension FrameDiffWriter {
             let new = ANSIRowCells(decomposing: newLines[row], width: terminalWidth)
         else { return .wholeLine }
         cache.remember(new, line: newLines[row], at: row)
-        return new.diff(replacing: previous, mergingGapsUpTo: Self.spanMergeGap)
+        return new.diff(
+            replacing: previous, mergingGapsUpTo: Self.spanMergeGap, continuing: &emitted)
     }
 
     /// Workaround for a Terminal.app rendering quirk: when a skin-tone-

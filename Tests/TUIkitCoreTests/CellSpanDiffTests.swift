@@ -307,6 +307,129 @@ struct CellSpanDiffTests {
         }
     }
 
+    // MARK: - Carrying styling from row to row
+
+    /// Paints `previous` on a multi-row screen, plans every row with the state
+    /// carried between them exactly as `FrameDiffWriter` does, applies the
+    /// plans, and requires the screen to equal painting `new` outright.
+    @discardableResult
+    private func checkRows(_ previous: [String], _ new: [String], width: Int, _ label: String)
+        -> Int
+    {
+        var incremental = Screen(rows: previous.count, columns: width)
+        for (row, line) in previous.enumerated() {
+            incremental.move(row: row, column: 0)
+            incremental.feed(line)
+        }
+
+        var emitted: SGRState?
+        var written = 0
+        for row in previous.indices {
+            guard let old = ANSIRowCells(decomposing: previous[row], width: width),
+                let fresh = ANSIRowCells(decomposing: new[row], width: width)
+            else {
+                // What the writer does for a row it cannot account for: close
+                // the chain, then rewrite the row whole.
+                if emitted?.isDefault == false {
+                    incremental.move(row: row, column: 0)
+                    incremental.feed("\u{1B}[0m")
+                }
+                incremental.move(row: row, column: 0)
+                incremental.feed(new[row])
+                emitted = SGRState()
+                continue
+            }
+            switch fresh.diff(replacing: old, mergingGapsUpTo: 8, continuing: &emitted) {
+            case .identical, .wholeLine:
+                continue
+            case .spans(let spans):
+                for span in spans {
+                    incremental.move(row: row, column: span.column)
+                    incremental.feed(span.content)
+                    written += span.content.utf8.count
+                }
+            }
+        }
+
+        var reference = Screen(rows: previous.count, columns: width)
+        for (row, line) in new.enumerated() {
+            reference.move(row: row, column: 0)
+            reference.feed(line)
+        }
+        #expect(incremental == reference, "\(label): the plans did not reproduce the rows")
+        return written
+    }
+
+    @Test("Styling carries from one row to the next, and costs less for it")
+    func stateCarriesAcrossRows() {
+        // Rows are written in ascending order with nothing between them but
+        // cursor moves, and a cursor move is not styling — so the second row's
+        // span need not restate what the first already established.
+        let width = 30
+        let previous = (0..<6).map { _ in built("\u{1B}[38;5;22mabcdef\u{1B}[0m", width: width) }
+        let new = (0..<6).map { _ in built("\u{1B}[38;5;22mabcXef\u{1B}[0m", width: width) }
+        let carried = checkRows(previous, new, width: width, "six rows, same styling")
+
+        // The same rows planned one at a time, each stating itself from a reset
+        // and closing with one — which is what this used to cost.
+        var alone = 0
+        for row in previous.indices {
+            if case .spans(let spans) = new[row].ansiCellDiff(
+                replacing: previous[row], width: width, mergingGapsUpTo: 8)
+            {
+                alone += spans.reduce(0) { $0 + $1.content.utf8.count }
+            }
+        }
+        #expect(carried < alone, "carrying state cost \(carried) against \(alone) alone")
+    }
+
+    @Test("A row the walk declines closes the chain before it is written whole")
+    func wholeLineRowClosesTheChain() {
+        // A built row opens by stating its BACKGROUND, not by resetting, so a
+        // bold or a reverse carried into it would still be in force — and the
+        // `ESC[2K` it opens with would erase under it.
+        let width = 24
+        let previous = [
+            built("\u{1B}[1;7mab\u{1B}[0m", width: width),
+            built("plain", width: width),
+        ]
+        let new = [
+            built("\u{1B}[1;7mXb\u{1B}[0m", width: width),
+            // A wide character: the walk declines this row, so it is written
+            // whole, immediately after a row whose span left bold+reverse on.
+            built("wide \u{1F5A5}\u{FE0F} here", width: width),
+        ]
+        checkRows(previous, new, width: width, "span row then whole-line row")
+    }
+
+    @Test("Randomised multi-row frames stay faithful")
+    func randomisedRowCarry() {
+        let width = 40
+        var seed: UInt64 = 0xBEEF_0042
+        func next(_ bound: Int) -> Int {
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Int((seed >> 33) % UInt64(bound))
+        }
+        let palette = [
+            "", "\u{1B}[31m", "\u{1B}[38;5;208m", "\u{1B}[1m", "\u{1B}[7m", "\u{1B}[4m",
+            "\u{1B}[48;5;22m", "\u{1B}[0m",
+        ]
+        let alphabet = Array("abc   ─│ ")
+        func frame() -> [String] {
+            (0..<8).map { _ in
+                var content = ""
+                for _ in 0..<(6 + next(28)) {
+                    if next(4) == 0 { content += palette[next(palette.count)] }
+                    content.append(alphabet[next(alphabet.count)])
+                }
+                return built(content + "\u{1B}[0m", width: width)
+            }
+        }
+        for sample in 0..<120 {
+            checkRows(frame(), frame(), width: width, "random frame #\(sample)")
+        }
+    }
+
     @Test("Randomised small edits stay faithful")
     func randomisedEdits() {
         // The shape that matters most in practice: a row that mostly stays put

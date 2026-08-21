@@ -19,9 +19,14 @@ public struct ANSICellSpan: Equatable, Sendable {
     ///
     /// Spans are written **in the order they appear** and carry SGR state
     /// between them, so a span's opening escape is a delta from where the
-    /// previous one left the terminal. The last span in the array ends with a
-    /// reset; the others do not. Writing them out of order, or writing anything
-    /// else in between, breaks that chain.
+    /// previous one left the terminal. Writing them out of order, or writing
+    /// anything else in between, breaks that chain.
+    ///
+    /// Who ends the chain with a reset depends on which entry point built these.
+    /// ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)`` plans one
+    /// row in isolation and closes it; ``ANSIRowCells/diff(replacing:mergingGapsUpTo:continuing:)``
+    /// hands the running state back so a caller writing many rows can keep it,
+    /// and that caller owes the terminal the closing reset.
     public let content: String
 }
 
@@ -39,6 +44,23 @@ public enum ANSICellDiff: Equatable, Sendable {
     /// whole-line rewrite is safe. See the bail-outs in
     /// ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``.
     case wholeLine
+
+    /// This plan with a reset added to its last span, when `emitted` says the
+    /// spans leave the terminal styled.
+    ///
+    /// The reset is load-bearing exactly as it is on the whole-line path: it is
+    /// what stops this row's styling leaking into whatever is drawn next. What
+    /// changes with ``ANSIRowCells/diff(replacing:mergingGapsUpTo:continuing:)``
+    /// is only WHEN it is owed — once at the end of a run of rows rather than
+    /// once per row.
+    public func closingStyling(from emitted: SGRState?) -> Self {
+        guard case .spans(var spans) = self, let last = spans.last,
+            emitted?.isDefault == false
+        else { return self }
+        spans[spans.count - 1] = ANSICellSpan(
+            column: last.column, content: last.content + "\u{1B}[0m")
+        return .spans(spans)
+    }
 }
 
 extension String {
@@ -122,7 +144,12 @@ extension String {
             let new = ANSIRowCells(decomposing: self, width: width),
             let old = ANSIRowCells(decomposing: previous, width: width)
         else { return .wholeLine }
-        return new.diff(replacing: old, mergingGapsUpTo: gap)
+        // One row, planned on its own: nothing precedes it that we may assume,
+        // and nothing follows it that will clean up — so it states itself from a
+        // reset and closes with one.
+        var emitted: SGRState?
+        return new.diff(replacing: old, mergingGapsUpTo: gap, continuing: &emitted)
+            .closingStyling(from: emitted)
     }
 }
 
@@ -228,10 +255,22 @@ public struct ANSIRowCells: Sendable {
         guard cells.count == width else { return nil }
     }
 
-    /// What has to be written to turn `previous` into this row. See
+    /// What has to be written to turn `previous` into this row, **given the
+    /// styling the terminal is already in**. See
     /// ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``, whose
     /// documentation this shares.
-    public func diff(replacing previous: Self, mergingGapsUpTo gap: Int) -> ANSICellDiff {
+    ///
+    /// `emitted` is the state this pass has left the terminal in — `nil` when
+    /// that is not known, which is the only case where a span has to state
+    /// itself from a reset. It is updated to whatever these spans leave behind,
+    /// so a caller writing row after row can hand it straight back: rows are
+    /// written in ascending order with only cursor moves between them, and a
+    /// cursor move is not styling. Nothing is written to close the chain — see
+    /// ``ANSICellDiff/closingStyling(from:)``, and note that a caller which
+    /// writes anything else between rows must close it itself.
+    public func diff(
+        replacing previous: Self, mergingGapsUpTo gap: Int, continuing emitted: inout SGRState?
+    ) -> ANSICellDiff {
         let width = cells.count
         guard previous.cells.count == width else { return .wholeLine }
 
@@ -269,12 +308,15 @@ public struct ANSIRowCells: Sendable {
             }
         }
         guard any else { return .identical }
-        return .spans(spans(covering: differs, width: width, mergingGapsUpTo: gap))
+        return .spans(
+            spans(covering: differs, width: width, mergingGapsUpTo: gap, emitted: &emitted))
     }
 
     /// The runs to write, from the columns that differ: consecutive differing
     /// columns, with runs less than `gap` apart joined into one.
-    private func spans(covering differs: [Bool], width: Int, mergingGapsUpTo gap: Int) -> [ANSICellSpan] {
+    private func spans(
+        covering differs: [Bool], width: Int, mergingGapsUpTo gap: Int, emitted: inout SGRState?
+    ) -> [ANSICellSpan] {
         var bounds: [(lower: Int, upper: Int)] = []
         var column = 0
         while column < width {
@@ -301,9 +343,8 @@ public struct ANSIRowCells: Sendable {
         // Spans are written back to back with only cursor moves between them,
         // and a cursor move is not styling — so the terminal's state carries
         // from one to the next and each opens by saying only what changed. The
-        // first cannot: what the caller left in force before the row is not
-        // ours to know, so it states itself from a reset.
-        var emitted: SGRState?
+        // caller's `emitted` extends that across rows for the same reason; only
+        // a state nobody has established has to be stated from a reset.
         for (lower, upper) in bounds {
             var content = ""
             var run = -1
@@ -322,13 +363,6 @@ public struct ANSIRowCells: Sendable {
                 content.unicodeScalars.append(cells[column])
             }
             spans.append(ANSICellSpan(column: lower, content: content))
-        }
-        // The trailing reset is load-bearing exactly as it is on the whole-line
-        // path: it is what stops this row's styling leaking into whatever is
-        // drawn next.
-        if let last = spans.last, emitted?.isDefault == false {
-            spans[spans.count - 1] = ANSICellSpan(
-                column: last.column, content: last.content + "\u{1B}[0m")
         }
         return spans
     }

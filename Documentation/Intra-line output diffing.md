@@ -103,8 +103,10 @@ finding that out took a probe rather than a proof.
    by stating its styling; spans within a row are written back to back with only
    cursor moves between them, and a cursor move is not styling, so the second
    and later spans open with a *delta* from where the previous one left the
-   terminal (``SGRState/rendered(changingFrom:)``). The last span in a row ends
-   with the reset that stops its styling leaking into whatever is drawn next.
+   terminal (``SGRState/rendered(changingFrom:)``). The same argument extends
+   from one row to the next — see "Carrying state across rows" below — so the
+   reset that stops a row's styling leaking is owed once per PASS rather than
+   once per row.
 4. **It conflicts with the emoji compensation — and more besides.** The sketch
    said to gate on `!isAppleTerminal`, because Terminal.app's compensation
    injects `CUF` sequences and a cursor move destroys column accounting. That is
@@ -284,9 +286,48 @@ runs, which is exactly what a real bug looks like. Strip `U+FE0F` from both
 streams before replaying: it is pyte's bug, and neutralising it identically
 keeps the comparison about the app.
 
+## Carrying state across rows
+
+Listed above as "not obviously worth the coupling", on the strength of a guess
+that it was worth a few hundred bytes a frame. Measured, it is worth 14.6% of
+the `scroll` scenario, and the coupling turned out to be two lines.
+
+The argument is the one already used *within* a row, extended: `writeDiff`
+writes rows in ascending order with nothing between them but cursor moves, and a
+cursor move is not styling. So the first span of row N+1 can open with a delta
+from wherever row N's last span left the terminal, exactly as the second span of
+a row does.
+
+`ANSIRowCells.diff(replacing:mergingGapsUpTo:continuing:)` takes the running
+state and hands it back; `ANSICellDiff.closingStyling(from:)` is what a caller
+planning ONE row in isolation uses to close its own chain, and
+`String.ansiCellDiff(replacing:width:mergingGapsUpTo:)` keeps doing exactly that
+so its contract is unchanged.
+
+Two places owe the terminal a reset, and both are the coupling:
+
+- **Before a row written whole.** A built row opens by stating its *background*,
+  not by resetting, so a bold or a reverse carried into it would still be in
+  force — and the `ESC[2K` the row opens with would erase under it.
+- **At the end of the pass**, before the loop that erases rows the previous
+  frame had and this one does not. `ESC[2K` clears with the background in force,
+  and the last row painted must not choose the colour of a row it is not
+  painting.
+
+| scenario | without carry | with carry | |
+|---|---|---|---|
+| `scroll` | 52,994 | **45,264** | −14.6% |
+| `list` | 24,398 | **23,947** | −1.8% |
+| `table` | 73,275 | 73,485 | +0.3% |
+| `splitdrag` | — | — | no change |
+
+`splitdrag` and `table` are unchanged because their rows are written whole,
+which is the honest shape of this win: it is worth having exactly where the span
+path is doing the work.
+
 ## What is left
 
 - **The remaining bytes.** The frame still spends most of itself on styling
-  (58% after this, down from 69%), and the next lever is genuinely the renderer:
-  a cell grid rather than `lines: [String]`, which is the API break described
-  above.
+  (58% after this pass, down from 69%), and the next lever is genuinely the
+  renderer: a cell grid rather than `lines: [String]`, which is the API break
+  described above.
