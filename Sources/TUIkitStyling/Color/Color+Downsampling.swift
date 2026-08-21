@@ -51,6 +51,197 @@ extension Color {
     }
 }
 
+// MARK: - Quantising a whole ramp
+
+extension Color {
+    /// A gradient's per-cell colours, quantised as a RAMP rather than one cell
+    /// at a time.
+    ///
+    /// ## Why a ramp needs its own answer
+    ///
+    /// ``downsampledToPalette256()`` is exact about one colour and knows nothing
+    /// about its neighbours, which is the right contract for a background or a
+    /// label and the wrong one for a gradient. Banding is a property of the
+    /// SEQUENCE: a ramp is smooth when its entries move in one direction, and a
+    /// per-cell nearest-neighbour search has no reason to keep them doing so.
+    ///
+    /// The default track gradient — `FF5050 → FFC850 → 50DC78` over 40 cells —
+    /// quantised to `203×5 202 209×5 208×2 215×4 214×2 221×4 …`. 202, 208 and
+    /// 214 are the cube's **blue = 0** corner; their neighbours 203, 209, 215
+    /// are the same colours at blue = 95, and the interpolated colour there has
+    /// blue = 80. A 15-point error passed over for an 80-point one, once, in the
+    /// middle of a smooth run — which is exactly what "out-of-place colours"
+    /// looks like.
+    ///
+    /// ## What this does instead
+    ///
+    /// Quantise each cell with the ordinary metric — **unchanged**, because it
+    /// is load-bearing far outside gradients (``SystemPalette`` reads quantised
+    /// colours to decide when a surface has stepped far enough off its page, so
+    /// retuning it moves palette derivation) — and then repair the sequence.
+    ///
+    /// The repair: group the entries into runs, find the first step where a
+    /// run's entry moves a channel *against* the direction the ramp moves it
+    /// there, drop the entry belonging to the SHORTER of the two runs, and
+    /// re-quantise the affected cells among the entries that remain. Repeat.
+    /// One entry dies per pass, so it terminates; three passes sufficed for
+    /// every ramp measured.
+    ///
+    /// A run's LENGTH is the tie-break, and it needs no tuning because it is not
+    /// a threshold: the number of cells an entry wins is the extent of the ramp
+    /// for which it genuinely is nearest, so a lateral excursion is short by
+    /// construction and a real step is long. A distance slack was tried instead
+    /// and reproduces the tuning problem exactly — 0.02 collapses the default
+    /// ramp to four runs, 0.005 to two, while still leaving other ramps' strays
+    /// in place.
+    ///
+    /// Measured over ten real ramps at 40 cells: every monotonicity violation
+    /// removed (6→0, 7→0, 3→0, 2→0), bit-identical on the five that had none,
+    /// and mean OKLab error slightly LOWER on four of the five it changed.
+    ///
+    /// - Parameters:
+    ///   - stops: The gradient's stops, two or more.
+    ///   - count: How many cells the ramp spans.
+    ///   - depth: The terminal's colour depth. Anything but ``ColorDepth/palette256``
+    ///     returns the plain interpolation, so a caller never has to branch.
+    /// - Returns: `count` colours. Palette entries at 256-colour depth — which
+    ///   the ANSI layer passes through untouched — and interpolated RGB
+    ///   otherwise.
+    public static func quantisedRamp(stops: [Color], count: Int, depth: ColorDepth) -> [Color] {
+        let sampled = (0..<max(0, count)).map { index -> Color in
+            let phase = count > 1 ? Double(index) / Double(count - 1) : 0
+            return interpolate(stops: stops, phase: phase)
+        }
+        // Only the 6x6x6 cube bands. A truecolor terminal draws what it is
+        // given, and a 16-colour one has so few entries that monotonicity is
+        // not the interesting problem.
+        guard depth == .palette256, sampled.count > 2 else { return sampled }
+        guard sampled.allSatisfy({ $0.rgbComponents != nil }) else { return sampled }
+
+        let key = RampKey(stops: stops, count: count, depth: depth)
+        rampCacheLock.lock()
+        let cached = rampCache[key]
+        rampCacheLock.unlock()
+        if let cached { return cached }
+
+        var entries = sampled.map { $0.downsampledToPalette256() }
+        var banned: Set<UInt8> = []
+        // One entry retired per pass, and never below two, so this cannot spin.
+        for _ in 0..<max(1, sampled.count) {
+            guard let offender = firstMonotonicityBreak(in: entries, along: sampled) else { break }
+            guard let index = paletteIndex(of: entries[offender]) else { break }
+            banned.insert(index)
+            let survivors = Set((16...255).map(UInt8.init)).subtracting(banned)
+            guard survivors.count > 2 else { break }
+            entries = sampled.map { colour in
+                guard let rgb = colour.rgbComponents else { return colour }
+                return .palette(
+                    nearestPalette256Index(
+                        red: rgb.red, green: rgb.green, blue: rgb.blue, among: survivors))
+            }
+        }
+
+        rampCacheLock.lock()
+        if rampCache.count > 512 { rampCache.removeAll(keepingCapacity: true) }
+        rampCache[key] = entries
+        rampCacheLock.unlock()
+        return entries
+    }
+
+    /// Piecewise-linear interpolation into `stops` — the one definition of what
+    /// a gradient's colour at `phase` is.
+    public static func interpolate(stops: [Color], phase: Double) -> Color {
+        guard let first = stops.first else { return .rgb(0, 0, 0) }
+        guard stops.count >= 2 else { return first }
+        let segments = Double(stops.count - 1)
+        let scaled = max(0, min(segments, phase * segments))
+        let lower = min(Int(scaled), stops.count - 2)
+        return lerp(stops[lower], stops[lower + 1], phase: scaled - Double(lower))
+    }
+
+    /// The index of the first run whose entry moves a channel against the way
+    /// the ramp moves it there — or `nil` when the sequence is already monotone.
+    ///
+    /// Returns the cell belonging to the SHORTER of the two runs at the break,
+    /// because that is the one more likely to be a lateral excursion than a
+    /// step (see ``quantisedRamp(stops:count:depth:)``).
+    private static func firstMonotonicityBreak(in entries: [Color], along ramp: [Color]) -> Int? {
+        var runs: [(start: Int, end: Int)] = []
+        for index in entries.indices {
+            if let last = runs.last, entries[index] == entries[last.start] {
+                runs[runs.count - 1].end = index
+            } else {
+                runs.append((start: index, end: index))
+            }
+        }
+        guard runs.count > 1 else { return nil }
+
+        for step in 1..<runs.count {
+            let before = runs[step - 1]
+            let after = runs[step]
+            guard let a = entries[before.start].rgbComponents,
+                let b = entries[after.start].rgbComponents,
+                let sourceA = ramp[before.start].rgbComponents,
+                let sourceB = ramp[after.start].rgbComponents
+            else { continue }
+            let entryDelta = [
+                Int(b.red) - Int(a.red), Int(b.green) - Int(a.green), Int(b.blue) - Int(a.blue),
+            ]
+            let rampDelta = [
+                Int(sourceB.red) - Int(sourceA.red),
+                Int(sourceB.green) - Int(sourceA.green),
+                Int(sourceB.blue) - Int(sourceA.blue),
+            ]
+            // A channel the entries move one way while the ramp moves it the
+            // other — or moves at all while the ramp holds it still.
+            let against = zip(entryDelta, rampDelta).contains { entry, source in
+                entry != 0 && (source == 0 || (entry > 0) != (source > 0))
+            }
+            guard against else { continue }
+            let beforeLength = before.end - before.start + 1
+            let afterLength = after.end - after.start + 1
+            return beforeLength <= afterLength ? before.start : after.start
+        }
+        return nil
+    }
+
+    /// The palette index behind a quantised colour, when it has one.
+    private static func paletteIndex(of colour: Color) -> UInt8? {
+        if case .palette256(let index) = colour.value { return index }
+        return nil
+    }
+
+    /// The nearest entry among a restricted candidate set — the repair's
+    /// re-assignment, using the very same metric as the unrestricted search so
+    /// that dropping an entry is the ONLY difference between them.
+    private static func nearestPalette256Index(
+        red: UInt8, green: UInt8, blue: UInt8, among candidates: Set<UInt8>
+    ) -> UInt8 {
+        let target = oklab(red: red, green: green, blue: blue)
+        let mustKeepHue = (target.a * target.a + target.b * target.b).squareRoot() >= Self.hueFloor
+        var bestIndex: UInt8 = 16
+        var bestDistance = Double.infinity
+        for index in candidates.sorted() {
+            if mustKeepHue && !Self.keepsItsHue[Int(index) - 16] { continue }
+            let distance = hueWeightedDistanceSquared(target, palette256Lab[Int(index) - 16])
+            if distance < bestDistance {
+                bestDistance = distance
+                bestIndex = index
+            }
+        }
+        return bestIndex
+    }
+
+    private struct RampKey: Hashable {
+        let stops: [Color]
+        let count: Int
+        let depth: ColorDepth
+    }
+
+    private static let rampCacheLock = NSLock()
+    nonisolated(unsafe) private static var rampCache: [RampKey: [Color]] = [:]
+}
+
 // MARK: - Private Helpers
 
 extension Color {

@@ -46,6 +46,10 @@ enum TrackRenderer {
         accentColor: Color,
         gradientScaling: TrackGradientScaling = .track
     ) -> String {
+        // Read once per render, not once per cell. A gradient can only be
+        // quantised as a ramp if it knows what the terminal will do to it; at
+        // truecolor every helper below falls through to the plain interpolation.
+        let depth = ColorDepth.current
         guard width > 0 else { return "" }
 
         // Clamp fraction to [0, 1] to prevent track overflow
@@ -60,37 +64,37 @@ enum TrackRenderer {
             return renderConfigured(
                 fraction: fraction, width: width, config: .block,
                 filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling)
+                gradientScaling: gradientScaling, depth: depth)
         case .blockFine:
             return renderConfigured(
                 fraction: fraction, width: width, config: .blockFine,
                 filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling)
+                gradientScaling: gradientScaling, depth: depth)
         case .shade:
             return renderConfigured(
                 fraction: fraction, width: width, config: .shade,
                 filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling)
+                gradientScaling: gradientScaling, depth: depth)
         case .bar:
             return renderConfigured(
                 fraction: fraction, width: width, config: .bar,
                 filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling)
+                gradientScaling: gradientScaling, depth: depth)
         case .braille:
             return renderConfigured(
                 fraction: fraction, width: width, config: .braille,
                 filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling)
+                gradientScaling: gradientScaling, depth: depth)
         case .shadeRamp(let gradient):
             return renderConfigured(
                 fraction: fraction, width: width, config: .shadeRamp(gradient: gradient),
                 filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling)
+                gradientScaling: gradientScaling, depth: depth)
         case .custom(let config):
             return renderConfigured(
                 fraction: fraction, width: width, config: config,
                 filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling)
+                gradientScaling: gradientScaling, depth: depth)
 
         // The head / marker / segment families are structurally distinct
         // (single indicator, no fractional fill ramp) and keep their own paths.
@@ -136,7 +140,8 @@ enum TrackRenderer {
                 coloring: coloring,
                 filledColor: filledColor,
                 emptyColor: emptyColor,
-                gradientScaling: gradientScaling
+                gradientScaling: gradientScaling,
+                depth: depth
             )
         }
     }
@@ -148,11 +153,27 @@ enum TrackRenderer {
     /// the same interpolation. Fewer than two stops yield `fallback`.
     static func gradientColor(stops: [Color], parameter: Double, fallback: Color) -> Color {
         guard stops.count >= 2 else { return fallback }
-        let segments = Double(stops.count - 1)
-        let scaled = max(0.0, min(segments, parameter * segments))
-        let lowerIndex = min(Int(scaled), stops.count - 2)
-        let mix = scaled - Double(lowerIndex)
-        return Color.lerp(stops[lowerIndex], stops[lowerIndex + 1], phase: mix)
+        return Color.interpolate(stops: stops, phase: parameter)
+    }
+
+    /// The colour a gradient shows at cell `index` of a `span`-cell ramp.
+    ///
+    /// Not `gradientColor(parameter:)` per cell, because a per-cell nearest
+    /// match has no memory of its neighbours and a gradient's smoothness is a
+    /// property of the SEQUENCE — see ``Color/quantisedRamp(stops:count:depth:)``,
+    /// which is where the whole ramp is quantised at once and repaired into a
+    /// monotone one. At truecolor depth it returns the same interpolation this
+    /// always produced, so no caller has to branch on the terminal.
+    ///
+    /// The ramp is memoised on `(stops, span, depth)`, so asking cell by cell
+    /// costs one dictionary hit each after the first.
+    static func gradientColor(
+        stops: [Color], index: Int, span: Int, fallback: Color, depth: ColorDepth
+    ) -> Color {
+        guard stops.count >= 2, span > 0 else { return fallback }
+        let ramp = Color.quantisedRamp(stops: stops, count: span, depth: depth)
+        guard !ramp.isEmpty else { return fallback }
+        return ramp[max(0, min(ramp.count - 1, index))]
     }
 }
 
@@ -179,7 +200,8 @@ extension TrackRenderer {
         config: TrackConfiguration,
         filledColor: Color,
         emptyColor: Color,
-        gradientScaling: TrackGradientScaling
+        gradientScaling: TrackGradientScaling,
+        depth: ColorDepth
     ) -> String {
         let fillChars = Array(config.fill.isEmpty ? "█" : config.fill)
         let emptyChars: [Character]
@@ -204,7 +226,8 @@ extension TrackRenderer {
                 fraction: fraction, width: width, quantum: quantum,
                 fillChars: fillChars, emptyChars: emptyChars,
                 config: config, filledColor: filledColor, emptyColor: emptyColor,
-                paintsBackground: paintsBackground, gradientScaling: gradientScaling)
+                paintsBackground: paintsBackground, gradientScaling: gradientScaling,
+                depth: depth)
         }
 
         // A ramp of n glyphs gives n+1 sub-cell steps; no ramp means whole-cell
@@ -247,9 +270,8 @@ extension TrackRenderer {
                 return filledColor
             }
             return gradientColor(
-                stops: gradient,
-                parameter: Double(index) / Double(gradientSpan - 1),
-                fallback: filledColor)
+                stops: gradient, index: index, span: gradientSpan,
+                fallback: filledColor, depth: depth)
         }
 
         var result = ""
@@ -288,8 +310,8 @@ extension TrackRenderer {
                 for cell in litCellCount..<width {
                     let index = gradientScaling == .track ? cell : cell - litCellCount
                     let colour = gradientColor(
-                        stops: gradient, parameter: Double(index) / Double(emptySpan - 1),
-                        fallback: emptyColor)
+                        stops: gradient, index: index, span: emptySpan,
+                        fallback: emptyColor, depth: depth)
                     result += ANSIRenderer.colorize(
                         paintsBackground ? " " : String(emptyChars[cell % emptyChars.count]),
                         foreground: colour,
@@ -332,7 +354,8 @@ extension TrackRenderer {
         filledColor: Color,
         emptyColor: Color,
         paintsBackground: Bool,
-        gradientScaling: TrackGradientScaling
+        gradientScaling: TrackGradientScaling,
+        depth: ColorDepth
     ) -> String {
         // The style's own unfilled colour, if it named one — see the fine path.
         let emptyColor = config.emptyColor ?? emptyColor
@@ -359,9 +382,8 @@ extension TrackRenderer {
                 return filledColor
             }
             return gradientColor(
-                stops: gradient,
-                parameter: Double(cell) / Double(gradientSpan - 1),
-                fallback: filledColor)
+                stops: gradient, index: cell, span: gradientSpan,
+                fallback: filledColor, depth: depth)
         }
 
         // The fill: walk the cyclic pattern up to the step boundary.
@@ -458,7 +480,8 @@ extension TrackRenderer {
         coloring: SegmentColoring,
         filledColor: Color,
         emptyColor: Color,
-        gradientScaling: TrackGradientScaling
+        gradientScaling: TrackGradientScaling,
+        depth: ColorDepth
     ) -> String {
         let leadingWidth = leading.strippedLength
         let trailingWidth = trailing.strippedLength
@@ -483,7 +506,8 @@ extension TrackRenderer {
             let truncated = (leading + trailing).ansiAwarePrefix(visibleCount: filledCount)
             result += renderLitRegion(
                 leading: truncated, middleRun: "", trailing: "",
-                coloring: coloring, filledColor: filledColor, gradientSpan: gradientSpan)
+                coloring: coloring, filledColor: filledColor, gradientSpan: gradientSpan,
+                depth: depth)
         } else {
             // Endpoints fit. Repeat `middle` to fill the gap, plus a
             // partial trailing slice if needed.
@@ -499,7 +523,8 @@ extension TrackRenderer {
             }
             result += renderLitRegion(
                 leading: leading, middleRun: middleRun, trailing: trailing,
-                coloring: coloring, filledColor: filledColor, gradientSpan: gradientSpan)
+                coloring: coloring, filledColor: filledColor, gradientSpan: gradientSpan,
+                depth: depth)
         }
 
         let emptyCellCount = max(0, width - filledCount)
@@ -526,7 +551,7 @@ extension TrackRenderer {
     /// embedded); `.gradient` re-colours cell by cell and expects plain text.
     private static func renderLitRegion(
         leading: String, middleRun: String, trailing: String,
-        coloring: SegmentColoring, filledColor: Color, gradientSpan: Int
+        coloring: SegmentColoring, filledColor: Color, gradientSpan: Int, depth: ColorDepth
     ) -> String {
         switch coloring {
         case .automatic:
@@ -545,7 +570,7 @@ extension TrackRenderer {
         case .gradient(let stops):
             return gradientCells(
                 (leading + middleRun + trailing).stripped, stops: stops, fallback: filledColor,
-                span: gradientSpan)
+                span: gradientSpan, depth: depth)
         }
     }
 
@@ -557,7 +582,7 @@ extension TrackRenderer {
     /// ramp and the rest is simply not reached; that is what makes a gradient
     /// read as a scale rather than as a fade.
     private static func gradientCells(
-        _ text: String, stops: [Color], fallback: Color, span: Int
+        _ text: String, stops: [Color], fallback: Color, span: Int, depth: ColorDepth
     ) -> String {
         let cells = Array(text)
         guard cells.count > 1, span > 1 else {
@@ -566,9 +591,7 @@ extension TrackRenderer {
         var result = ""
         for (index, cell) in cells.enumerated() {
             let color = gradientColor(
-                stops: stops,
-                parameter: Double(index) / Double(span - 1),
-                fallback: fallback)
+                stops: stops, index: index, span: span, fallback: fallback, depth: depth)
             result += ANSIRenderer.colorize(String(cell), foreground: color)
         }
         return result
