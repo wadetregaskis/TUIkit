@@ -468,6 +468,53 @@ before I build past mono, and I have not designed it yet.
   keep their best property: the handler records raw intent and the layout clamps
   it, so the arrow keys always step from the real size.
 
+### The horizontal-space review: measured, and the two worst pages fixed
+
+You asked for every page rearranged to use the available width with a taller
+narrow fallback. Thirty-five pages is more judgement than one pass, so this pass
+**measured** them all — which turns the rest from a survey into a work list —
+and rearranged the two worst.
+
+Rendering every page at 200x50 through `tui_screens.py --dump-dir` and taking
+the widest body row:
+
+| | page | cols used of 200 |
+|---|---|---|
+| 1 | Radio Buttons | **65 (32%)** |
+| 2 | Steppers | **74 (37%)** |
+| 3 | Buttons & Links | 82 (41%) |
+| 4 | Spinners | 91 (45%) |
+| 5 | Preferences | 96 (48%) |
+| 6 | State Persistence | 117 (58%) |
+| 7 | Empty State | 124 (62%) |
+| 8 | Picker | 134 (67%) |
+| 9 | Image (File) | 138 (69%) |
+| 10 | Split View | 172 (86%) |
+
+Every other page already reaches 99–100%. So this is nine pages, not
+thirty-five, and the list is ordered by how much there is to gain.
+
+**Radio Buttons 65 → 175 cols** and **Steppers 74 → 120**, both following the
+`ViewThatFits(in: .horizontal)` shape the Animation page and the track editor
+use: preferred arrangement first, then progressively narrower ones, then the
+original single column. Radio Buttons gets four arrangements (five across, then
+2+2+1, then 3+2, then one column); Steppers three, with the shift-accelerated
+section keeping a column of its own for as long as there is room, because it
+carries a sentence of prose rather than a control.
+
+Each section is a named `@ViewBuilder` property rather than written out per
+arrangement — `ViewThatFits` builds every candidate, so a section duplicated
+four times would be four copies of the same bindings to keep in step.
+
+Worth noting for the remaining seven: the arrangements fall back on their own
+under translation, which is what makes this safe to do at all. The widest
+arrangement stops fitting in German before it does in English, and the page
+quietly takes the next one down.
+
+Still not done: the **collapsible left gutter**. It is a separate question from
+this — it is about the page frame rather than the page content — and I have not
+settled what "collapsible" should mean for something one column wide.
+
 ## Not started
 
 Five items from your list are untouched. Each is a session rather than a batch
@@ -535,11 +582,8 @@ Table row is one line and the question does not arise there.
 4. **View resizing.** *Design note written* — `Documentation/Resizable views.md`.
    No code yet, deliberately: the affordance is the expensive part to change
    later. Summary below.
-5. **The Example-wide horizontal-space review.** Thirty-five pages, each needing
-   a judgement about what to put beside what and a narrow fallback. The
-   `ViewThatFits` pattern the Animation page and the track editor now use is the
-   shape it should follow; the left-gutter half is mechanical once the
-   collapsible-padding question is settled.
+5. **The Example-wide horizontal-space review.** *Measured, two worst pages
+   done, seven to go* — see above. The left gutter is still open.
 
 ### On Ctrl-A, since you asked for at least one option
 
