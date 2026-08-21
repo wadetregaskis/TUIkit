@@ -737,14 +737,27 @@ stay that way.
 
 ## Open questions
 
-Nothing blocking. Listed for when you get to them.
+Both answered.
 
-- **Q1 — `handleMenuShortcut` in `ContentView` is dead code.** It maps
-  characters to pages, omits `f` and `a` (Forms and Animation), and never fires:
-  the menu rows carry their own `.keyboardShortcut`, which is what actually
-  works. Delete it?
+- **Q1 — `handleMenuShortcut` in `ContentView` is dead code.** It mapped
+  characters to pages, omitted `f` and `a` (Forms and Animation), and never
+  fired: the menu rows carry their own `.keyboardShortcut`, which is what
+  actually works. **Deleted** (9399713a).
 - **Q2 — `row(_:_:)` in `MenuPressTrackingTests` is off by one for a popup tall
-  enough to be clamped to the screen.** It returns `overlay.offsetY + line`,
-  which is the drawn row, but the popup's hit regions for a clamped popup sit
-  one row lower. Existing tests do not notice because their menus are short. Not
-  chased; noted because the next person to write a menu mouse test will hit it.
+  enough to be clamped to the screen.** Chased, and it went one step further
+  than filed before coming back.
+
+  Written up first as a **user-facing bug** — an exact-option test showed
+  clicking a clamped drop-down row choosing the row below it, a consistent +1 —
+  and pinned with `withKnownIssue` (836ceac5). That diagnosis was wrong. The
+  helper located a row at `overlay.offsetY + line`, the offset the layer ASKED
+  for; where it goes is `OverlayLayer.placed(maxWidth:maxHeight:)`, and the two
+  differ as soon as a popup is flipped or nudged to fit. Probed on the
+  60-option case: declared `offsetY=1`, placed `y=0`, composited regions on rows
+  1–22 against "Option 2" drawn at row 3 — in agreement. The test was aiming one
+  row low.
+
+  Fixed by reading the label out of the **composited** frame, which is what a
+  user's eye reads (50e85688), and confirmed end to end in a PTY against the
+  Example's 200-option `Picker`: clicking the row that visibly says "Number N"
+  selects Number N. `DropdownMenuRenderer` is unchanged.
