@@ -79,6 +79,11 @@ struct DemoAppHeader: View {
                 }
                 .foregroundStyle(.palette.foregroundTertiary)
             }
+            // Matches the column the page gutter leaves on the right. The
+            // gutter is applied outside the header, so it narrows the header's
+            // available width — which insets the trailing text and leaves the
+            // leading text against the border. This is the other half of it.
+            .padding(.leading, 1)
         }
     }
 }
