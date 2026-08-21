@@ -174,12 +174,119 @@ resize) simply misses and decomposes again.
 paired A/B, which is the expected result: those scenarios measure the render
 path, and this is a change to the write path.
 
+## Fewer style transitions per row
+
+The section below used to be "what is left", and the honest lever it named —
+fewer style transitions per row — turned out to be the largest single win of the
+whole exercise, and to sit one level LEFT of everything above. Not in the diff
+at all: in the row builder, where the bytes are first written down.
+
+### Where the bytes actually went
+
+`drive.py --dump` and `analyze_stream.py` (commit 8316c653) split the stream
+three ways. Over a divider drag at 140×42:
+
+```
+total             256,343
+cells              48,201  ( 18.8%)
+SGR               177,423  ( 69.2%)  17,367 escapes
+cursor/erase       30,719  ( 12.0%)  3,874 escapes
+```
+
+Sixty-nine per cent styling, and one change of styling per 2.8 cells drawn. The
+histogram says why:
+
+| count | share | escape |
+|---|---|---|
+| 4,187 | 24.1% | `ESC[39m` |
+| 2,646 | 15.2% | `ESC[38;5;22m` |
+| 1,922 | 11.1% | `ESC[38;5;22;48;5;16m` |
+
+The most frequent escape in the whole stream turns the foreground back to the
+terminal's default; the second turns the same green straight back on. That is a
+label, some padding, another label — and the padding is not green either way.
+
+Worth noting what the analyser did **not** find: an escape that changes nothing
+at all appeared once in the entire capture. The waste was not repetition. Every
+one of those escapes was individually necessary *given where the renderer had
+left the terminal*, which makes it a question about the renderer, not a peephole
+pass over its output.
+
+### The rule
+
+Most of what SGR expresses is a property of a **glyph**, and a cell holding a
+space has none. Bold, dim, italic, conceal and the foreground colour are all
+unobservable on one. What a blank cell can show is its background, and the
+attributes that put ink on an empty cell: underline, strikethrough, blink, and
+reverse — which makes the foreground the colour the cell is painted, and so
+brings the foreground back into the comparison whenever one of them is in force.
+
+`SGRState.paintsBlankCellsIdentically(to:)` is that rule, and
+`collapsingAdjacentSGR()` applies it: a state change whose only difference is
+invisible on a space is **held** while the row prints spaces, and paid at the
+first cell that can show it — by which time the row has usually changed its mind
+and nothing needs emitting at all.
+
+It is exact for the same reason the rest of that function is: nothing observed
+the intermediate state.
+
+### How far left this can go
+
+The question this answers is whether such escapes can be *prevented* rather
+than cleaned up afterwards. Three positions:
+
+| where | what it would take |
+|---|---|
+| the diff (`ANSIRowCells`) | already there, and it only ever sees rows written incrementally — a full repaint bypasses it entirely |
+| **the row builder (`collapsingAdjacentSGR`)** | **one function, one rule; catches every row, whole-line and span alike** |
+| the renderer (`ANSIRenderer.render`) | a render-layer rewrite plus a public API break |
+
+The last one is the true "never emit it in the first place", and the reason it
+is not taken is worth writing down. `ANSIRenderer.render` returns
+`sequence + text + reset` because the `String` it returns is **context-free**:
+it knows neither what precedes it nor what follows, and 151 call sites
+concatenate the results freely. Everything downstream is repair —
+`applyPersistentBackground`, `applyPersistentDim`,
+`FrameBuffer.restating(_:afterResetsIn:)`, and the `replacing(reset, …)` in
+`FrameDiffWriter.buildLine` — four implementations of the same workaround, which
+compose multiplicatively when nested. Fixing it at source means carrying a cell
+grid rather than `lines: [String]`, which is read in 52 files across 145
+references with 65 `FrameBuffer(lines:)` constructions.
+
+The row builder is the last point at which the whole row is known and the first
+at which it is known *completely*, which is why it is the right place — and it
+gets essentially all of the available win without touching the API.
+
+### Results
+
+Median of five runs each, 140×42, release, against the whole pass before it:
+
+| scenario | before | after | |
+|---|---|---|---|
+| `splitdrag` | 257,987 | **189,366** | −26.6% |
+| `table` | 92,172 | **72,988** | −20.8% |
+| `scroll` | 55,319 | **45,760** | −17.3% |
+| `list` | 25,029 | **23,978** | −4.2% |
+
+SGR escapes over the drag fell from 17,367 to 8,562 and SGR bytes from 177,423
+to 107,841 — a 39% cut in styling, and 27% of everything written.
+
+The rendered screens were compared cell by cell across ten scenarios, comparing
+what a viewer can SEE rather than what the styling says, against a measured
+run-to-run noise floor for each. Identical everywhere.
+
+**A second pyte artefact, and it is not the one already documented above.**
+`pyte` loses everything after a VS-16 emoji when the emoji and the text arrive
+in the same `draw()` chunk. Moving an escape from one side of `🖥️` to the other
+therefore changes what pyte believes is on screen, and the app is not involved.
+It showed up as 26 and 37 stably-different cells on two pages — stable across
+runs, which is exactly what a real bug looks like. Strip `U+FE0F` from both
+streams before replaying: it is pyte's bug, and neutralising it identically
+keeps the comparison about the app.
+
 ## What is left
 
-- **Carrying SGR state across rows**, not only within one. Worth a few hundred
-  bytes a frame, and it couples the diff writer to every other thing that might
-  write between two rows. Not obviously worth the coupling.
-- **The remaining 3,931.** At a gap of 8 the plan writes about 454 cells; the
-  frame spends the rest on span framing and styling. The next honest lever is
-  fewer *style transitions* per row, which is a rendering question rather than a
-  writing one.
+- **The remaining bytes.** The frame still spends most of itself on styling
+  (58% after this, down from 69%), and the next lever is genuinely the renderer:
+  a cell grid rather than `lines: [String]`, which is the API break described
+  above.

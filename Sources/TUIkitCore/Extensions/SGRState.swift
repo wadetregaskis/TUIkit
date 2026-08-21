@@ -208,6 +208,46 @@ public struct SGRState: Sendable, Equatable {
         return delta.utf8.count <= absolute.utf8.count ? delta : absolute
     }
 
+    /// Whether this state and `other` paint a **blank cell** — a cell holding
+    /// nothing but a space — the same.
+    ///
+    /// Weaker than equality on purpose. Most of what SGR expresses is a
+    /// property of a GLYPH, and a blank cell has none: bold, dim, italic and
+    /// conceal are all unobservable on a space, and so is the foreground colour
+    /// unless something is drawing in it. A screen full of background is
+    /// exactly what a terminal UI mostly is — the gutters, the padding to the
+    /// right edge, the space between a label and its value — so a diff that
+    /// calls those cells dirty because an invisible foreground changed rewrites
+    /// most of a row to change nothing anyone can see.
+    ///
+    /// What IS observable on a space, and so is still compared:
+    ///
+    /// - the **background**, which is the whole of what a blank cell shows;
+    /// - **underline, strikethrough and blink** (4, 5, 6, 9), which draw ink on
+    ///   an empty cell, and **reverse** (7), which makes the foreground the
+    ///   colour the cell is painted;
+    /// - the **foreground**, but only when one of those is in force — that is
+    ///   precisely when it has something to colour;
+    /// - any **passthrough** code, because unknown means "not safe to reason
+    ///   about", and that includes reasoning about whether it is visible.
+    ///
+    /// The caller must have established that both cells hold a space. This says
+    /// nothing about a cell with a glyph in it.
+    public func paintsBlankCellsIdentically(to other: Self) -> Bool {
+        guard background == other.background,
+            passthrough.isEmpty, other.passthrough.isEmpty
+        else { return false }
+        let mine = attributes.intersection(Self.visibleOnBlankCell)
+        guard mine == other.attributes.intersection(Self.visibleOnBlankCell) else { return false }
+        // Those attributes draw in the foreground colour (or, for reverse, AS
+        // the background), so with any of them in force the foreground is as
+        // visible as the background is.
+        return mine.isEmpty || foreground == other.foreground
+    }
+
+    /// The attributes that put ink on a cell holding nothing but a space.
+    private static let visibleOnBlankCell: Set<Int> = [4, 5, 6, 7, 9]
+
     /// Just the BACKGROUND half of ``rendered`` — the escape that re-establishes
     /// this state's background colour and says nothing about anything else, or
     /// `""` when the background is the terminal's own.

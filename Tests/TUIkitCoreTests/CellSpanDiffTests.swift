@@ -21,15 +21,22 @@ struct CellSpanDiffTests {
 
     /// A deliberately literal terminal: a grid of cells, a cursor, and the two
     /// escapes this path emits. Independent of the code under test, so the two
-    /// can disagree.
+    /// can disagree — which is why it parses SGR itself rather than borrowing
+    /// ``SGRState``, whose netting is one of the things being graded.
     private struct Screen: Equatable {
         var cells: [[Cell]]
         var cursor = (row: 0, column: 0)
-        var style = SGRState()
+        var style = ReferenceStyle()
 
+        /// One cell, compared by what a viewer can SEE in it — which is less
+        /// than what its styling says. See ``ReferenceStyle/appearance(of:)``.
         struct Cell: Equatable {
             var character: Character = " "
-            var style = SGRState()
+            var style = ReferenceStyle()
+
+            static func == (lhs: Self, rhs: Self) -> Bool {
+                lhs.style.appearance(of: lhs.character) == rhs.style.appearance(of: rhs.character)
+            }
         }
 
         init(rows: Int, columns: Int) {

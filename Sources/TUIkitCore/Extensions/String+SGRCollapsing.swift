@@ -49,6 +49,30 @@ extension String {
     /// styling across one would change what it applies to. An unparseable code
     /// is carried through verbatim by ``SGRState``, which is the same call that
     /// type already makes: unknown means "not safe to reason about".
+    ///
+    /// ## Seeing across blank cells
+    ///
+    /// A run of SGR with nothing printed between is not the only thing a row
+    /// wastes bytes on. The commoner shape is styling that changes for cells
+    /// that cannot show the change: a label in colour, three spaces, another
+    /// label in the same colour spends `ESC[39m` to stop being green over
+    /// cells that are not green either way, then twelve bytes becoming green
+    /// again. Measured over a divider drag at 140×42, `ESC[39m` was the single
+    /// most common escape in the whole stream — **4,187 of 17,367, 20,935
+    /// bytes** — and `ESC[38;5;22m`, the colour going straight back on, was the
+    /// second at 2,646.
+    ///
+    /// So a state change whose only visible difference is on a glyph is HELD
+    /// while the row prints spaces, and emitted at the first cell that can show
+    /// it — by which time the row has often changed its mind and nothing needs
+    /// emitting at all. What "can show it" means is
+    /// ``SGRState/paintsBlankCellsIdentically(to:)``: the background, and the
+    /// attributes that put ink on an empty cell.
+    ///
+    /// This is exact for the same reason the rest is: nothing observed the
+    /// intermediate state. It is deliberately done HERE, at the row builder,
+    /// rather than in the diff downstream — a row written whole never reaches
+    /// the diff, and a full repaint is all such rows.
     public func collapsingAdjacentSGR() -> String {
         guard containsAnySGR else { return self }
 
@@ -94,6 +118,17 @@ extension String {
             emitted = desired
         }
 
+        /// Whether the styling still owed may be held over a blank cell.
+        ///
+        /// Only once the state is knowable at all (`sawReset`) and something has
+        /// been emitted to compare against — before that the line's baseline is
+        /// inherited and unknown, and an unknown state cannot be shown to be
+        /// invisible.
+        var canDeferAcross: Bool {
+            guard sawReset, unresetRun.isEmpty, let emitted else { return false }
+            return desired.paintsBlankCellsIdentically(to: emitted)
+        }
+
         var index = startIndex
         while index < endIndex {
             if self[index] == "\u{1B}", let end = escapeEnd(from: index) {
@@ -122,7 +157,12 @@ extension String {
                 index = end
                 continue
             }
-            reconcile()
+            // A space shows its background and whatever draws ink on an empty
+            // cell, and nothing else — so a change confined to the rest of the
+            // state waits for a cell that can show it.
+            if self[index] != " " || !canDeferAcross {
+                reconcile()
+            }
             result.append(self[index])
             index = self.index(after: index)
         }
