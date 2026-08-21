@@ -282,6 +282,57 @@ performance item I have found in this pass.**
   (the setting with a real reason to exist: `.line` is pure ASCII and animates
   on a font with no Braille coverage).
 
+## Second pass — the four you called out
+
+### The block borders, proceeded with
+**"A block border paints its cells, so the seams have nothing to show."**
+`BorderStyle.paintsBackground`, a Bool rather than a `Color` because a border's
+colour arrives per frame (palette, override, or one step of a pulse) and a
+colour on the style would be a second source of truth an animated wall could not
+honour. False on `.blank`, whose contract is that things show through — and no
+"the glyph looks opaque" heuristic, which would also break drag previews, where
+a blank carrying a background is deliberately kept as fill rather than trimmed
+as padding. Three hand-built wall/rule emitters now go through
+`BorderRenderer.wall` / `.rule`. `DimmedOrnaments` gained the block glyphs: a
+block-bordered page behind a modal had been the only chrome that did not recede.
+
+### Select-all is Option-Ctrl-A
+**"Ctrl-A means the same thing in both text controls."** No new machinery: the
+`alt` flag existed, `ESC 0x01` already decoded to it, and ⌥⌃A was *already*
+selecting all because the Ctrl table ignored the bit. Ctrl-A is start-of-line in
+both controls now. Ctrl-E came with it — beyond the letter of the decision, but
+with Ctrl-A moving and Ctrl-E still typing an "e" the field would have had half
+of readline's pair, which is the same asymmetry being fixed. The ⌥ dependency is
+in `Terminal-compatibility.md` with the bytes, flagged as the one binding that
+deliberately breaks that file's own "an ⌥-chord must be an accelerator, never
+the only route" rule, with the reasoning for it.
+
+Also **"The editor's keys, written down under the editors"** — a readline legend
+under the two `TextEditor`s, read off `TextEditorHandler` rather than from
+memory.
+
+### The gradient banding, fixed
+**"Quantise a gradient as a ramp, not one cell at a time."** The premise
+recorded above — that the renderer cannot know the terminal's colour depth — was
+false; `ColorDepth.current` is public and already read twice per `colorize`. So
+the fix needed none of the three metric changes that broke palette derivation:
+quantise per cell with the **unchanged** metric, then repair the sequence by
+dropping the shorter run's entry at each monotonicity break and re-quantising
+among what survives. A run's length is the tie-break and needs no tuning,
+because it is not a threshold — the cells an entry wins are the extent of the
+ramp for which it genuinely is nearest.
+
+### The drag, and the byte budget
+**"A frame stops restating styling it has already stated."** 62% of a drag frame
+was SGR escapes, 984 of them a bare reset followed by the background it had just
+cleared. A line now states each style once and skips any restatement of what is
+already in force — with the baseline subtlety that before a line's first reset
+the incoming state is unknown, so nothing there may be netted or skipped. Escape
+count down 44%, at no measurable CPU cost.
+
+Both A/B runs across this pass: `table`, `kitchensink`, `deep` and `textwall`
+all indistinguishable.
+
 ## Not started
 
 Five items from your list are untouched. Each is a session rather than a batch
