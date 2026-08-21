@@ -235,7 +235,22 @@ struct SGRStateTests {
         // delta that omitted 39/49 would leave the old colours in force.
         assertDeltaEquivalent(
             from: ["\u{1B}[0;38;5;22;48;5;28m"], to: ["\u{1B}[0;1m"], "colours to default")
-        #expect(neither.rendered(changingFrom: coloured) == "\u{1B}[1;39;49m")
+        // Here the delta would be `ESC[1;39;49m` and the reset-prefixed
+        // absolute is `ESC[0;1m` — same meaning, two bytes fewer. Both spellings
+        // are correct, so the shorter one wins; what must never happen is the
+        // colours being left standing.
+        #expect(neither.rendered(changingFrom: coloured) == "\u{1B}[0;1m")
+    }
+
+    @Test("Whichever spelling is shorter wins, and both are equivalent")
+    func deltaTakesTheShorterSpelling() {
+        var coloured = SGRState()
+        coloured.apply("\u{1B}[0;38;5;22;48;5;16m")
+        // Everything off: `ESC[39;49m` says it in nine bytes, `ESC[0m` in four.
+        #expect(SGRState().rendered(changingFrom: coloured) == "\u{1B}[0m")
+        assertDeltaEquivalent(from: ["\u{1B}[0;38;5;22;48;5;16m"], to: ["\u{1B}[0m"], "all off")
+        // And the other way, where the delta really is shorter, it stays.
+        #expect(coloured.rendered(changingFrom: SGRState()) == "\u{1B}[38;5;22;48;5;16m")
     }
 
     @Test("Turning an attribute off falls back to a reset-prefixed absolute")

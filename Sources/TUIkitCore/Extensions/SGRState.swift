@@ -201,7 +201,11 @@ public struct SGRState: Sendable, Equatable {
         // leave the previous styling in force, so spend the bytes rather than
         // trust the reasoning.
         guard !codes.isEmpty else { return absolute }
-        return "\u{1B}[" + codes.joined(separator: ";") + "m"
+        let delta = "\u{1B}[" + codes.joined(separator: ";") + "m"
+        // A delta is usually shorter, but not always: going back to the default
+        // spells out `ESC[39;49m` where `ESC[0m` says the same in four bytes.
+        // Both are correct, so take whichever is smaller.
+        return delta.utf8.count <= absolute.utf8.count ? delta : absolute
     }
 
     /// Just the BACKGROUND half of ``rendered`` — the escape that re-establishes
