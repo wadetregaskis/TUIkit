@@ -151,6 +151,48 @@ final class FrameDiffWriter {
     private var statusBarReuse = LineReuseCache()
     private var appHeaderReuse = LineReuseCache()
 
+    /// One region's previous frame taken apart into cells, so a row is
+    /// decomposed ONCE: the row this frame diffs as "new" is the row the next
+    /// frame diffs as "previous", and doing both sides every frame doubles the
+    /// work for no new information.
+    ///
+    /// Every entry carries the exact string it was built from, so a stale one is
+    /// not merely unlikely but impossible. `previousXxxLines = newLines` hands
+    /// the same `String` instances back, which makes the check a pointer
+    /// comparison in the case that matters; anything that changes what is on
+    /// screen behind this cache's back — an animation replay patching a row, a
+    /// rebuild, a resize — simply misses and decomposes again.
+    private struct CellCache {
+        var lines: [String] = []
+        var cells: [ANSIRowCells?] = []
+
+        /// Sizes the cache to a frame, dropping entries for rows that no longer
+        /// exist and leaving the rest to be validated by string, not by index.
+        mutating func fit(to count: Int) {
+            if lines.count != count {
+                lines = Array(repeating: "", count: count)
+                cells = Array(repeating: nil, count: count)
+            }
+        }
+
+        mutating func remember(_ row: ANSIRowCells, line: String, at index: Int) {
+            guard index < cells.count else { return }
+            cells[index] = row
+            lines[index] = line
+        }
+
+        /// The decomposition for `line`, or `nil` when this cache does not hold
+        /// one built from exactly that string.
+        func cells(matching line: String, at index: Int) -> ANSIRowCells? {
+            guard index < cells.count, lines[index] == line else { return nil }
+            return cells[index]
+        }
+    }
+
+    private var contentCells = CellCache()
+    private var statusBarCells = CellCache()
+    private var appHeaderCells = CellCache()
+
     /// Number of rows actually (re)built by the most recent
     /// `buildOutputLines(…reusingFor:)` call; the remainder were reused from the
     /// previous frame. Exposed for tests and profiling.
@@ -410,6 +452,22 @@ extension FrameDiffWriter {
         }
     }
 
+    private func cellCache(for region: OutputRegion) -> CellCache {
+        switch region {
+        case .content: return contentCells
+        case .statusBar: return statusBarCells
+        case .appHeader: return appHeaderCells
+        }
+    }
+
+    private func setCellCache(_ cache: CellCache, for region: OutputRegion) {
+        switch region {
+        case .content: contentCells = cache
+        case .statusBar: statusBarCells = cache
+        case .appHeader: appHeaderCells = cache
+        }
+    }
+
     private func setReuseCache(_ cache: LineReuseCache, for region: OutputRegion) {
         switch region {
         case .content: contentReuse = cache
@@ -427,7 +485,9 @@ extension FrameDiffWriter {
         bgCode: String,
         reset: String
     ) {
-        let changedRows = writeDiff(newLines: newLines, previousLines: previousContentLines, terminal: terminal, startRow: startRow)
+        let changedRows = writeDiff(
+            newLines: newLines, previousLines: previousContentLines, terminal: terminal,
+            startRow: startRow, terminalWidth: terminalWidth, region: .content)
         repaintRightEdge(
             changedRows: changedRows,
             in: newLines,
@@ -449,7 +509,9 @@ extension FrameDiffWriter {
         bgCode: String,
         reset: String
     ) {
-        let changedRows = writeDiff(newLines: newLines, previousLines: previousStatusBarLines, terminal: terminal, startRow: startRow)
+        let changedRows = writeDiff(
+            newLines: newLines, previousLines: previousStatusBarLines, terminal: terminal,
+            startRow: startRow, terminalWidth: terminalWidth, region: .statusBar)
         repaintRightEdge(
             changedRows: changedRows,
             in: newLines,
@@ -471,7 +533,9 @@ extension FrameDiffWriter {
         bgCode: String,
         reset: String
     ) {
-        let changedRows = writeDiff(newLines: newLines, previousLines: previousAppHeaderLines, terminal: terminal, startRow: startRow)
+        let changedRows = writeDiff(
+            newLines: newLines, previousLines: previousAppHeaderLines, terminal: terminal,
+            startRow: startRow, terminalWidth: terminalWidth, region: .appHeader)
         repaintRightEdge(
             changedRows: changedRows,
             in: newLines,
@@ -492,6 +556,9 @@ extension FrameDiffWriter {
         contentReuse = LineReuseCache()
         statusBarReuse = LineReuseCache()
         appHeaderReuse = LineReuseCache()
+        contentCells = CellCache()
+        statusBarCells = CellCache()
+        appHeaderCells = CellCache()
     }
 
     /// Computes which row indices have changed between two frames.
@@ -511,17 +578,43 @@ extension FrameDiffWriter {
 // MARK: - Private Helpers
 
 extension FrameDiffWriter {
-    /// Writes only the lines that differ between two frames.
+    /// Writes only the lines that differ between two frames — and within each of
+    /// those, only the cell runs that differ. See
+    /// ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)`` for what
+    /// makes a run, and when it declines to answer.
     ///
     /// - Returns: The row indices that were actually written (needed by
     ///   ``repaintRightEdge`` to scope its workaround to only changed rows).
     @discardableResult
-    fileprivate func writeDiff(newLines: [String], previousLines: [String], terminal: any TerminalProtocol, startRow: Int) -> [Int] {
+    fileprivate func writeDiff(
+        newLines: [String], previousLines: [String], terminal: any TerminalProtocol,
+        startRow: Int, terminalWidth: Int, region: OutputRegion
+    ) -> [Int] {
         let changedRows = Self.computeChangedRows(newLines: newLines, previousLines: previousLines)
+        var cache = cellCache(for: region)
+        cache.fit(to: newLines.count)
+        defer { setCellCache(cache, for: region) }
 
         for row in changedRows {
-            terminal.moveCursor(toRow: startRow + row, column: 1)
-            terminal.write(newLines[row])
+            switch spanDiff(
+                newLines: newLines, previousLines: previousLines, row: row,
+                terminalWidth: terminalWidth, cache: &cache)
+            {
+            case .identical:
+                // The two spellings land the terminal in the same place, so
+                // there is nothing to draw — but the row still counts as
+                // written, because `repaintRightEdge` scopes itself to rows
+                // whose CONTENT it has to reason about, not to rows that moved.
+                continue
+            case .spans(let spans):
+                for span in spans {
+                    terminal.moveCursor(toRow: startRow + row, column: span.column + 1)
+                    terminal.write(span.content)
+                }
+            case .wholeLine:
+                terminal.moveCursor(toRow: startRow + row, column: 1)
+                terminal.write(newLines[row])
+            }
         }
 
         // Clear excess old lines when the previous frame had more rows.
@@ -537,6 +630,35 @@ extension FrameDiffWriter {
         }
 
         return changedRows
+    }
+
+    /// How many unchanged columns may sit inside one written run.
+    ///
+    /// Closing a run and opening another costs a cursor move plus a restatement
+    /// of styling — call it twenty bytes — so bridging a short gap of unchanged
+    /// cells is cheaper than skipping it. Measured over a divider drag at
+    /// 140×42, the total is flat from about 4 to about 16 and rises sharply
+    /// outside that: 2,628 bytes a frame at a gap of 4, 2,577 at 8, 2,606 at 16,
+    /// 2,971 at 0 (a cursor move for every isolated cell) and 4,232 at
+    /// unbounded (one run per row, which is the prefix/suffix trim and little
+    /// more). Eight sits in the middle of the flat stretch.
+    private static let spanMergeGap = 8
+
+    /// The per-row plan, or ``ANSICellDiff/wholeLine`` when there is no previous
+    /// row to diff against or the row is one the cell walk declines.
+    private func spanDiff(
+        newLines: [String], previousLines: [String], row: Int, terminalWidth: Int,
+        cache: inout CellCache
+    ) -> ANSICellDiff {
+        guard row < previousLines.count else { return .wholeLine }
+        let previous =
+            cache.cells(matching: previousLines[row], at: row)
+            ?? ANSIRowCells(decomposing: previousLines[row], width: terminalWidth)
+        guard let previous,
+            let new = ANSIRowCells(decomposing: newLines[row], width: terminalWidth)
+        else { return .wholeLine }
+        cache.remember(new, line: newLines[row], at: row)
+        return new.diff(replacing: previous, mergingGapsUpTo: Self.spanMergeGap)
     }
 
     /// Workaround for a Terminal.app rendering quirk: when a skin-tone-
