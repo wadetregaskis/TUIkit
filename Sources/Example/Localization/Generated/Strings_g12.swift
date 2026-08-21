@@ -15,6 +15,7 @@
 extension ExampleStrings {
     static let g12: [String: [String: String]] = [
         "en": [
+            "page.list.selectable": "Selection enabled",
             "page.textInput.editorKeysSection": "Editor shortcuts (readline)",
             "page.textInput.editorKeys.motion": "[^B] [^F] Back / forward a character · [^P] [^N] Previous / next line · [^V] Page down",
             "page.textInput.editorKeys.lineEnds": "[^A] [^E] Start / end of line · [^T] Transpose · [^O] Open a line below",
@@ -23,6 +24,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Select all",
         ],
         "de": [
+            "page.list.selectable": "Auswahl aktiviert",
             "page.textInput.editorKeysSection": "Editor-Kürzel (readline)",
             "page.textInput.editorKeys.motion": "[^B] [^F] Ein Zeichen zurück / vor · [^P] [^N] Vorige / nächste Zeile · [^V] Eine Seite runter",
             "page.textInput.editorKeys.lineEnds": "[^A] [^E] Zeilenanfang / -ende · [^T] Zeichen tauschen · [^O] Zeile darunter öffnen",
@@ -31,6 +33,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Alles auswählen",
         ],
         "fr": [
+            "page.list.selectable": "Sélection activée",
             "page.textInput.editorKeysSection": "Raccourcis de l'éditeur (readline)",
             "page.textInput.editorKeys.motion": "[^B] [^F] Caractère précédent / suivant · [^P] [^N] Ligne précédente / suivante · [^V] Page suivante",
             "page.textInput.editorKeys.lineEnds": "[^A] [^E] Début / fin de ligne · [^T] Transposer · [^O] Ouvrir une ligne dessous",
@@ -39,6 +42,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Tout sélectionner",
         ],
         "it": [
+            "page.list.selectable": "Selezione attiva",
             "page.textInput.editorKeysSection": "Scorciatoie dell'editor (readline)",
             "page.textInput.editorKeys.motion": "[^B] [^F] Un carattere indietro / avanti · [^P] [^N] Riga precedente / successiva · [^V] Pagina giù",
             "page.textInput.editorKeys.lineEnds": "[^A] [^E] Inizio / fine riga · [^T] Scambia caratteri · [^O] Apri una riga sotto",
@@ -47,6 +51,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Seleziona tutto",
         ],
         "es": [
+            "page.list.selectable": "Selección activada",
             "page.textInput.editorKeysSection": "Atajos del editor (readline)",
             "page.textInput.editorKeys.motion": "[^B] [^F] Un carácter atrás / adelante · [^P] [^N] Línea anterior / siguiente · [^V] Página abajo",
             "page.textInput.editorKeys.lineEnds": "[^A] [^E] Inicio / fin de línea · [^T] Transponer · [^O] Abrir una línea debajo",
@@ -55,6 +60,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Seleccionar todo",
         ],
         "zh": [
+            "page.list.selectable": "启用选择",
             "page.textInput.editorKeysSection": "编辑器快捷键（readline）",
             "page.textInput.editorKeys.motion": "[^B] [^F] 前后移动一个字符 · [^P] [^N] 上一行 / 下一行 · [^V] 向下翻页",
             "page.textInput.editorKeys.lineEnds": "[^A] [^E] 行首 / 行尾 · [^T] 交换字符 · [^O] 在下方新开一行",
@@ -63,6 +69,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] 全选",
         ],
         "ja": [
+            "page.list.selectable": "選択を有効にする",
             "page.textInput.editorKeysSection": "エディタのショートカット（readline）",
             "page.textInput.editorKeys.motion": "[^B] [^F] 一文字戻る／進む · [^P] [^N] 前の行／次の行 · [^V] 一画面下へ",
             "page.textInput.editorKeys.lineEnds": "[^A] [^E] 行頭／行末 · [^T] 文字を入れ替え · [^O] 下に行を開く",

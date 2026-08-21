@@ -68,6 +68,9 @@ struct ListPage: View {
     @State var multiLineSelection: String?
     @State var treeSelection: String?
     @State var multiLineByLine = true
+    /// Whether the multi-line demo's list has a selection at all — see the
+    /// toggle's comment.
+    @State var multiLineSelectable = true
     @State var multiLineFollowMargin = FollowMarginChoice.none.rawValue
     @State var browserURL: URL = FileBrowser.seedDirectory()
     @State private var searchQuery = ""
@@ -312,10 +315,19 @@ struct ListPage: View {
                     // a wheel tick moves three LINES (the top row can rest
                     // partially clipped) or three whole ROWS.
                     Toggle("demo.scrollGranularity.line", isOn: $multiLineByLine)
+                    // Granularity is a property of a SCROLL, not of a
+                    // selection: there is no such thing as half a selected row,
+                    // so the cursor always moves whole rows whatever this says.
+                    // Turning selection off is the only way to see that —
+                    // otherwise every wheel tick is followed by the list
+                    // scrolling to keep the cursor in view, and the two
+                    // behaviours are impossible to tell apart.
+                    Toggle("page.list.selectable", isOn: $multiLineSelectable)
                     // How early the list scrolls to follow the moving
                     // selection: at the edge (default), 2 lines early, or
                     // keeping the selection centred.
                     FollowMarginPicker(selection: $multiLineFollowMargin)
+                        .disabled(!multiLineSelectable)
                     multiLineList
                 }
             }
@@ -358,29 +370,42 @@ struct ListPage: View {
     /// The multi-line cells list — extracted so the granularity toggle can
     /// re-apply `.scrollGranularity` to it without deepening the section body.
     @ViewBuilder private var multiLineList: some View {
-        List(selection: $multiLineSelection) {
-            ForEach(FileItem.manyFiles) { file in
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 1) {
-                        Text("\(file.icon) \(file.name)").bold()
-                        Spacer()
-                        // An animated cell inside a scrolling List row —
-                        // it must keep spinning even though the row is
-                        // memoized (see SpinnerRowAnimationTests).
-                        Spinner(style: .dots)
-                    }
-                    Text(file.size).foregroundStyle(.palette.foregroundSecondary)
+        multiLineListBody
+            // Five rows of content: 5 × 2 lines, plus the border's two. Four
+            // would do to show scrolling, but not to show the follow margin —
+            // in a three-row viewport "one row of margin" and "centred" pick
+            // the same row, so the picker above looked inert between those two
+            // settings.
+            .frame(height: 12)
+            .scrollIndicators(.visible)
+            .scrollGranularity(multiLineByLine ? .line : .row)
+            .scrollFollowMargin(
+                FollowMarginChoice(rawValue: multiLineFollowMargin)?.margin ?? .none)
+    }
+
+    /// The list itself, with or without a selection binding — two different
+    /// `List` initializers, so this is a branch rather than an optional.
+    @ViewBuilder private var multiLineListBody: some View {
+        if multiLineSelectable {
+            List(selection: $multiLineSelection) { multiLineRows }
+        } else {
+            List { multiLineRows }
+        }
+    }
+
+    @ViewBuilder private var multiLineRows: some View {
+        ForEach(FileItem.manyFiles) { file in
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 1) {
+                    Text("\(file.icon) \(file.name)").bold()
+                    Spacer()
+                    // An animated cell inside a scrolling List row — it must
+                    // keep spinning even though the row is memoized (see
+                    // SpinnerRowAnimationTests).
+                    Spinner(style: .dots)
                 }
+                Text(file.size).foregroundStyle(.palette.foregroundSecondary)
             }
         }
-        // Five rows of content: 5 × 2 lines, plus the border's two. Four would
-        // do to show scrolling, but not to show the follow margin — in a
-        // three-row viewport "one row of margin" and "centred" pick the same
-        // row, so the picker above looked inert between those two settings.
-        .frame(height: 12)
-        .scrollIndicators(.visible)
-        .scrollGranularity(multiLineByLine ? .line : .row)
-        .scrollFollowMargin(
-            FollowMarginChoice(rawValue: multiLineFollowMargin)?.margin ?? .none)
     }
 }
