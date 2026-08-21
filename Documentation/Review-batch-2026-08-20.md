@@ -417,6 +417,33 @@ twice.
 Five items from your list are untouched. Each is a session rather than a batch
 item, and I would rather say so than leave half of one behind.
 
+### Correction: the bottom partial row already worked
+
+I told you (commit `1daeecee`) that the bottom of a line-granularity list could
+not show a partial row, and blamed `rowsFitting(in:)`. That was wrong on both
+counts. `rowsFitting` feeds `pageDistance` — how far Page Down goes — and has
+nothing to do with the window walk. The walk's straddle branch already admits
+the row that overhangs the budget under line granularity, and `_ListCore` clips
+it at the budget as it draws.
+
+Driving a real List rather than reading the arithmetic settles it:
+
+    r4L0 r4L1 r4L2 r4L3  r5L0 r5L1 r5L2 r5L3  r6L0
+
+Row 6 enters and is cut after one of its four lines. Both ends do cut, and a
+viewport sitting mid-row is filled exactly.
+
+`ListPartialRowTests` now pins that: the top clips, the bottom clips, both clip
+at once, and no line between them is left blank. It sweeps scroll positions
+rather than computing one, because the first version of it computed one and got
+a false negative — a wheel notch moves three lines, so with three-line rows
+every notch lands back on a row boundary and the top never clips. That was a
+property of my test, not of the List, and it is the same shape of mistake as the
+divider column: a measurement that runs, reports, and is measuring nothing.
+
+List only, deliberately: a `TableColumn` extracts a `String` per cell, so a
+Table row is one line and the question does not arise there.
+
 1. **Scroll granularity: partial rows at both ends, and a selection toggle.**
    The scrollbar-pulse half is done. On the other half I can now answer your
    question — "is there any technical or conceptual reason why it shouldn't
@@ -434,11 +461,9 @@ item, and I would rather say so than leave half of one behind.
    - And `clampTopClip()` zeroes the clip outright once `scrollOffset >=
      maxOffset` (`:1263`), so the very bottom is pinned to a row boundary.
 
-   Making the bottom match means the row walk drawing a row's first *k* lines
-   when only *k* fit — the mirror of what the top clip already does — in
-   `_ListCore` **and** in its `Table` twin, which is the pair that drifts (see
-   `list-table-twin-divergence`). Worth doing to both at once with the seeded
-   storm suites run against both, which is why it is not a batch item.
+   **Resolved, and my diagnosis above was wrong** — see the correction just
+   before this list. The bottom already cuts; nothing needed building, and what
+   was missing was a test saying so.
 
    On the framing: your reading is right and worth writing down — row-vs-line is
    a property of a SCROLL, selection always moves whole rows because there is no
