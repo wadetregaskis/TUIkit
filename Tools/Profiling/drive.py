@@ -19,7 +19,7 @@ Two modes:
 Usage:
     drive.py BIN [--scenario tour|list|table|emoji|scroll|mouse|splitdrag|idle|menu]
                  [--loops N] [--rows R] [--cols C] [--settle S]
-                 [--trace OUT.trace] [--time-limit MS] [--quiet]
+                 [--trace OUT.trace] [--time-limit MS] [--dump OUT.ansi] [--quiet]
 
 Quits the app cleanly with 'q' (TUIkit's default quit shortcut), falling
 back to SIGTERM/SIGKILL.
@@ -202,6 +202,9 @@ def main():
                     help="if set, attach Instruments Time Profiler and write this .trace")
     ap.add_argument("--time-limit", type=int, default=15000,
                     help="xctrace recording limit in ms (only with --trace)")
+    ap.add_argument("--dump", default=None,
+                    help="write the app's raw output stream to this file, for "
+                         "byte attribution (see analyze_stream.py)")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
@@ -219,6 +222,7 @@ def main():
 
     os.close(slave)
     total = 0
+    dump = open(args.dump, "wb") if args.dump else None
 
     def drain(timeout):
         nonlocal total
@@ -233,6 +237,8 @@ def main():
             if not data:
                 return -1
             total += len(data)
+            if dump:
+                dump.write(data)
             timeout = 0.0
 
     drain(args.settle)  # startup + first frames
@@ -291,6 +297,9 @@ def main():
         os.waitpid(pid, 0)
     except ChildProcessError:
         pass
+
+    if dump:
+        dump.close()
 
     if not args.quiet:
         print(f"[drive] scenario={args.scenario} loops={args.loops} "
