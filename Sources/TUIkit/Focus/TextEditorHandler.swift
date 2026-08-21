@@ -144,7 +144,7 @@ final class TextEditorHandler: Focusable {
         // `.character(letter, ctrl: true)`; Ctrl-H / Ctrl-I / Ctrl-M are
         // pre-parsed to Backspace / Tab / Enter and handled below.
         if event.ctrl, case .character(let character) = event.key {
-            return handleControlCharacter(character)
+            return handleControlCharacter(character, alt: event.alt)
         }
         // Option/Alt-modified keys map to word-wise motion and deletion.
         if event.alt, handleAltKey(event) {
@@ -234,9 +234,15 @@ final class TextEditorHandler: Focusable {
 
     /// Handles a Ctrl+letter chord (the Emacs-style Cocoa bindings). Returns
     /// `false` for an unbound chord so it can propagate.
-    private func handleControlCharacter(_ character: Character) -> Bool {
+    private func handleControlCharacter(_ character: Character, alt: Bool) -> Bool {
         switch character {
-        case "a": moveToStartOfLine()  // beginning of line
+        // Option-Ctrl-A selects the whole document; plain Ctrl-A is
+        // start-of-line, as it has always been here and as it now is in
+        // `TextFieldHandler` too. Cmd-A cannot reach a terminal app, so
+        // select-all needs *some* chord — this is the nearest one to it that
+        // does not take a motion key away.
+        case "a":
+            if alt { selectAll() } else { moveToStartOfLine() }
         case "e": moveToEndOfLine()  // end of line
         case "b": moveLeft()  // back one character
         case "f": moveRight()  // forward one character
@@ -601,6 +607,21 @@ extension TextEditorHandler {
     }
 
     /// Drops the selection without moving the cursor.
+    /// Selects the whole document — Option-Ctrl-A.
+    ///
+    /// The empty guard mirrors `TextFieldHandler.selectAll()`, and it is
+    /// load-bearing rather than tidy: `normalizeStaleState()` drops any anchor
+    /// that sits on the cursor, so selecting "all" of an empty document would
+    /// leave a phantom anchor behind for the next keystroke to trip over.
+    func selectAll() {
+        let lines = readLines()
+        guard !(lines.count == 1 && lines[0].isEmpty) else { return }
+        selectionAnchor = TextEditorPosition(line: 0, column: 0)
+        cursorLine = lines.count - 1
+        cursorColumn = lines[cursorLine].count
+        syncDesiredColumn(lines)
+    }
+
     func clearSelection() {
         selectionAnchor = nil
     }

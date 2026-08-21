@@ -33,8 +33,9 @@
 /// | Delete | Delete character at cursor |
 /// | Left | Move cursor left |
 /// | Right | Move cursor right |
-/// | Home | Move cursor to start |
-/// | End | Move cursor to end |
+/// | Home / Ctrl+A | Move cursor to start |
+/// | End / Ctrl+E | Move cursor to end |
+/// | Option+Ctrl+A | Select all |
 /// | Enter | Trigger onSubmit action |
 ///
 /// # Basic Example

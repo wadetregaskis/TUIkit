@@ -23,6 +23,7 @@
 /// | Home / End | Start / end of the whole field (the document) |
 /// | Page Up / Down | Move a screenful up / down |
 /// | Ctrl-A / Ctrl-E | Start / end of the current line |
+/// | Option-Ctrl-A | Select the whole document |
 /// | Ctrl-B / Ctrl-F | Back / forward one character |
 /// | Ctrl-P / Ctrl-N | Previous / next line |
 /// | Ctrl-D | Delete forward |

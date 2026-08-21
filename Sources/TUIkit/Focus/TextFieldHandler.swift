@@ -45,7 +45,9 @@
 /// | Shift+Down | Select to end of text |
 /// | Shift+Home | Select to start of text |
 /// | Shift+End | Select to end of text |
-/// | Ctrl+A | Select all text |
+/// | Ctrl+A | Start of line |
+/// | Ctrl+E | End of line |
+/// | Option+Ctrl+A | Select all text |
 /// | Ctrl+C | Copy selection to clipboard |
 /// | Ctrl+X | Cut selection to clipboard |
 /// | Ctrl+V | Paste from clipboard |
@@ -271,6 +273,23 @@ extension TextFieldHandler {
     }
 
     /// Extends selection to the end of the text.
+    /// Puts the caret at the very start, dropping any selection.
+    ///
+    /// One definition, called by Home, by Up, and by Ctrl-A — the same
+    /// twin-divergence lesson the list and table pair taught, in miniature: two
+    /// copies of "go to the start" is two places for it to stop meaning the
+    /// same thing.
+    func moveToStart() {
+        clearSelection()
+        cursorPosition = 0
+    }
+
+    /// Puts the caret at the very end, dropping any selection.
+    func moveToEnd() {
+        clearSelection()
+        cursorPosition = text.wrappedValue.count
+    }
+
     func extendSelectionToEnd() {
         startOrExtendSelection()
         cursorPosition = text.wrappedValue.count
@@ -334,8 +353,7 @@ extension TextFieldHandler {
             if event.shift {
                 extendSelectionToStart()
             } else {
-                clearSelection()
-                cursorPosition = 0
+                moveToStart()
             }
             return true
 
@@ -344,8 +362,7 @@ extension TextFieldHandler {
             if event.shift {
                 extendSelectionToEnd()
             } else {
-                clearSelection()
-                cursorPosition = text.wrappedValue.count
+                moveToEnd()
             }
             return true
 
@@ -389,7 +406,7 @@ extension TextFieldHandler {
             return handled
         }
         if event.ctrl {
-            return handleCtrlCharacter(char)
+            return handleCtrlCharacter(char, alt: event.alt)
         }
         // Ignore control characters except printable ones.
         if char.isLetter || char.isNumber || char.isPunctuation
@@ -429,10 +446,28 @@ extension TextFieldHandler {
 
     /// Handles Ctrl + character shortcuts. Always returns a `Bool` — `false`
     /// when the character has no Ctrl binding, so the event is dropped.
-    fileprivate func handleCtrlCharacter(_ char: Character) -> Bool {
+    ///
+    /// `alt` is what distinguishes the two meanings of A. Ctrl-A is
+    /// start-of-line, as it is in readline and as it always was in
+    /// ``TextEditorHandler``; **Option**-Ctrl-A selects all. The two controls
+    /// disagreeing about one of the most-used chords in a terminal was the
+    /// defect — Ctrl-A jumped in one and selected in the other — and the
+    /// motion set is the one with a tradition to keep.
+    fileprivate func handleCtrlCharacter(_ char: Character, alt: Bool) -> Bool {
         switch char {
         case "a", "A":
-            selectAll()
+            if alt {
+                selectAll()
+            } else {
+                moveToStart()
+            }
+            return true
+        case "e", "E":
+            // The other half of the pair. Without it Ctrl-A would move and
+            // Ctrl-E would insert an "e", which is the asymmetry this change
+            // exists to remove — and `TextEditorHandler` has had both for as
+            // long as it has had either.
+            moveToEnd()
             return true
         case "c", "C":
             copySelection()

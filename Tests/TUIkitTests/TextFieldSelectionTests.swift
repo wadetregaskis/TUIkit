@@ -313,15 +313,16 @@ struct TextFieldSelectionTests {
         #expect(handler.cursorPosition == 1)
     }
 
-    // MARK: - Select All (Ctrl+A)
+    // MARK: - Select All (Option+Ctrl+A) and start-of-line (Ctrl+A)
 
-    @Test("Ctrl+A selects all text")
-    func ctrlASelectsAllText() {
+    @Test("Option+Ctrl+A selects all text")
+    func optionCtrlASelectsAllText() {
         var text = "Hello World"
         let binding = Binding(get: { text }, set: { text = $0 })
         let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 3)
 
-        let handled = handler.handleKeyEvent(KeyEvent(key: .character("a"), ctrl: true))
+        let handled = handler.handleKeyEvent(
+            KeyEvent(key: .character("a"), ctrl: true, alt: true))
 
         #expect(handled == true)
         #expect(handler.selectionAnchor == 0)
@@ -329,13 +330,40 @@ struct TextFieldSelectionTests {
         #expect(handler.selectionRange == 0..<11)
     }
 
-    @Test("Ctrl+A on empty text does nothing")
+    /// The point of the change: the same chord means the same thing in both
+    /// text controls, and in a terminal that thing is readline's.
+    @Test("Ctrl+A alone goes to the start of the line, as it does in TextEditor")
+    func ctrlAMovesToStart() {
+        var text = "Hello World"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 7)
+
+        let handled = handler.handleKeyEvent(KeyEvent(key: .character("a"), ctrl: true))
+
+        #expect(handled == true)
+        #expect(handler.cursorPosition == 0)
+        #expect(handler.selectionRange == nil, "moving is not selecting")
+    }
+
+    @Test("Ctrl+E goes to the end, the other half of the pair")
+    func ctrlEMovesToEnd() {
+        var text = "Hello World"
+        let binding = Binding(get: { text }, set: { text = $0 })
+        let handler = TextFieldHandler(focusID: "test", text: binding, cursorPosition: 2)
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .character("e"), ctrl: true)))
+        #expect(handler.cursorPosition == 11)
+        #expect(text == "Hello World", "and does not type an 'e'")
+    }
+
+    @Test("Option+Ctrl+A on empty text does nothing")
     func ctrlAOnEmptyTextDoesNothing() {
         var text = ""
         let binding = Binding(get: { text }, set: { text = $0 })
         let handler = TextFieldHandler(focusID: "test", text: binding)
 
-        let handled = handler.handleKeyEvent(KeyEvent(key: .character("a"), ctrl: true))
+        let handled = handler.handleKeyEvent(
+            KeyEvent(key: .character("a"), ctrl: true, alt: true))
 
         #expect(handled == true)
         #expect(handler.hasSelection == false)

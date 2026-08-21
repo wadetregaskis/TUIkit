@@ -1022,6 +1022,36 @@ an accelerator, never the only route.** `OutlineGroup`'s recursive disclosure
 follows it — plain Right and Left reach every branch one level at a time on
 every terminal, and Option only makes that faster where the chord survives.
 
+#### Option + Control + a letter (recorded 2026-08-20)
+
+Select-all in the text controls is **⌥⌃A**, and it is the one binding in the
+framework that deliberately breaks the accelerator rule above: there is no
+other route to it. That was a decision made with the trade-off stated — "I know
+that won't work in some terminal clients by default, but that's okay; I don't
+want to move it even further away from the platform canonical shortcut
+(⌘A)" — and ⌘A cannot reach a terminal app at all.
+
+The bytes, for a terminal in "Esc+" mode:
+
+| Chord | Bytes | Decodes to |
+|---|---|---|
+| ⌃A | `0x01` | `.character("a")`, ctrl |
+| ⌥⌃A | `ESC 0x01` | `.character("a")`, ctrl + alt |
+
+The second is the ESC-prefix spelling applied to a C0 byte rather than to a CSI
+sequence, and `KeyEvent.parse` already handled it: a two-byte `ESC <byte>`
+recurses into the single-byte path, which maps 0x01–0x1A back to a letter with
+`ctrl: true`, and the ESC contributes `alt: true`. No new modifier flag was
+needed — verified through a PTY.
+
+*Not yet captured:* **which spelling each terminal emits for ⌥ + a C0 chord.**
+This is the same survey the section above still wants, now with a second reason
+to run it. A terminal in "Normal" Option mode will send the letter's ⌥-composed
+character instead (⌥a is `å`), which decodes as a plain character and inserts
+it; a terminal in "Meta" mode sets the high bit. Neither reaches the binding.
+Run `cat -v`, press ⌃A and then ⌥⌃A, in Terminal.app, iTerm2, Ghostty and Warp,
+and record the four pairs here.
+
 
 ### Control collides with the C0 range
 

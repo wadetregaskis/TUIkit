@@ -36,7 +36,9 @@
 /// | Home / End | Move cursor to start / end of text |
 /// | Shift+Left / Shift+Right | Extend selection one character |
 /// | Shift+Option+Left / Right | Extend selection to the previous / next word boundary |
-/// | Ctrl+A | Select all |
+/// | Ctrl+A | Start of line |
+/// | Ctrl+E | End of line |
+/// | Option+Ctrl+A | Select all |
 /// | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste |
 /// | Ctrl+Z | Undo |
 /// | Ctrl+U | Erase the entire field |
