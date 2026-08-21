@@ -105,14 +105,17 @@ def scenario_split_drag(rows, cols, sweeps=6):
     one column left of it — press the border and the gesture does nothing while
     still looking plausible, which cost a round of measurements that were
     measuring nothing. The Balanced style puts the divider at 30% of the width
-    (column 42 of 140, measured). Sanity-check with the byte total this prints:
-    a press ON the divider emitted 627,361 bytes, and every neighbouring column
-    — 39, 40, 41, 43, 44 — emitted about 31,000, which is the page sitting
-    still. A twenty-fold difference, so a total in the tens of thousands means
-    the press missed and the numbers are measuring nothing.
-    Coordinates are 1-based, as SGR reports them.
+    plus the one-column page gutter (column 43 of 140, 49 of 160, measured).
+
+    The `+ 1` is that gutter, and it is why this constant is checked rather
+    than trusted: when the gutter landed, this scenario went from pressing the
+    divider to pressing the sidebar beside it, and carried on printing a byte
+    total as if nothing were wrong. Re-measured after: col 42 gives 17,662
+    bytes, col 43 gives 97,054, col 44 gives 17,733. So `run_splitdrag` below
+    asserts the magnitude — a miss is now an error rather than a plausible
+    number. Coordinates are 1-based, as SGR reports them.
     """
-    col = max(2, int(cols * 0.30))
+    col = max(2, int(cols * 0.30) + 1)
     row = max(2, rows // 2)
     steps = [(0.40, PAGE_KEYS["split"].encode()), (0.20, b"")]
     steps.append((0.05, mouse_sgr(0, col, row, True)))          # press
@@ -292,6 +295,16 @@ def main():
     if not args.quiet:
         print(f"[drive] scenario={args.scenario} loops={args.loops} "
               f"size={args.cols}x{args.rows} output={total:,} bytes")
+        if args.scenario == "splitdrag" and total < 50_000:
+            # A press one column wide of the divider starts nothing, and the
+            # run still completes and still prints a total. Anything near an
+            # idle page's output means the grab point has drifted — see
+            # `scenario_split_drag`.
+            print(
+                f"[drive] ERROR: splitdrag emitted only {total:,} bytes — "
+                "the press missed the divider and this measured nothing",
+                file=sys.stderr)
+            raise SystemExit(2)
         if args.trace:
             print(f"[drive] trace written: {args.trace}")
 
