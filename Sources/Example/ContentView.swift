@@ -168,11 +168,7 @@ struct ContentView: View {
                     appearanceManager?.cycleNext()
                     return true
                 default:
-                    // Quick-jump shortcuts only work from the menu page.
-                    // On sub-pages they would conflict with text input
-                    // (e.g. TextField, SecureField).
-                    guard currentPage == .menu else { return false }
-                    return handleMenuShortcut(event.key)
+                    return false
                 }
             }
     }
@@ -188,10 +184,9 @@ struct ContentView: View {
         // so the page switch keeps each page's state independent.
         switch page {
         case .menu:
-            // The 1–9 / 0 quick-jump shortcuts are still wired up via
-            // `handleMenuShortcut`, but the menu page already lists each
-            // page's shortcut next to its title — repeating them in the
-            // status bar would be noise.
+            // The quick-jump shortcuts are the menu rows' own
+            // `.keyboardShortcut`, and the menu lists each next to its title —
+            // repeating them in the status bar would be noise.
             MainMenuPage(currentPage: $currentPage, menuSelection: $menuSelection)
                 .statusBarItems {
                     StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "status.nav")
@@ -275,37 +270,5 @@ struct ContentView: View {
             },
             StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "status.scroll"),
         ]
-    }
-
-    /// Handles quick-jump shortcuts from the menu page.
-    ///
-    /// - Returns: `true` if the key was consumed, `false` otherwise.
-    private func handleMenuShortcut(_ key: Key) -> Bool {
-        let mapping: [Character: DemoPage] = [
-            "1": .textStyles, "2": .colors, "3": .containers,
-            "4": .overlays, "5": .layout, "6": .buttons,
-            "7": .toggles, "8": .textInput,
-            "9": .radioButtons, "0": .spinners, "-": .lists,
-            "=": .tables, "s": .scrollView,
-            "[": .sliders, "]": .steppers,
-            ";": .splitView, "'": .imageFile, ",": .imageURL,
-            ".": .emoji, "/": .pickers, "`": .progress,
-            "m": .mouse, "t": .theme, "e": .emptyState,
-            "v": .tabViews,
-            "p": .statePersistence, "l": .lifecycle,
-            "r": .preferences, "k": .focus, "n": .menus,
-            "g": .navigation,
-        ]
-
-        if case .character(let ch) = key, let page = mapping[ch] {
-            // The menu's own rows set both, and `MainMenuPage.defaultFocus`
-            // puts the cursor back on `menuSelection` — so a quick-jump that
-            // moved only `currentPage` sent you back to whichever page you had
-            // last opened by clicking, rather than to the one you just left.
-            menuSelection = page
-            currentPage = page
-            return true
-        }
-        return false
     }
 }
