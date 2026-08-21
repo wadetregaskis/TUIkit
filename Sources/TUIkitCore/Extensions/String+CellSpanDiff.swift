@@ -68,6 +68,13 @@ extension String {
     /// and a byte diff would report a difference without being able to say
     /// where.
     ///
+    /// Styling is compared by what it PAINTS, not by what it says: a cell
+    /// holding a space shows its background and whatever draws ink on an empty
+    /// cell, and nothing else — see
+    /// ``TUIkitCore/SGRState/paintsBlankCellsIdentically(to:)``. Most of a
+    /// terminal UI is blank cells, and comparing them strictly reports a row
+    /// dirty for a foreground colour nobody can see.
+    ///
     /// ## When it declines
     ///
     /// ``ANSICellDiff/wholeLine`` is returned rather than a wrong answer
@@ -232,9 +239,12 @@ public struct ANSIRowCells: Sendable {
         var any = false
         // Style comparisons repeat for every column of a run, so the last
         // answer is kept: a row passes through a handful of distinct styles, not
-        // one per cell.
+        // one per cell. Two answers per pair, because what counts as the same
+        // styling depends on whether the cell has a glyph in it —
+        // ``SGRState/paintsBlankCellsIdentically(to:)``.
         var lastPair = (-1, -1)
         var lastPairEqual = true
+        var lastPairBlankEqual = true
         for column in 0..<width {
             if cells[column] != previous.cells[column] {
                 differs[column] = true
@@ -245,8 +255,15 @@ public struct ANSIRowCells: Sendable {
             if pair != lastPair {
                 lastPair = pair
                 lastPairEqual = styles[pair.0] == previous.styles[pair.1]
+                lastPairBlankEqual =
+                    lastPairEqual
+                    || styles[pair.0].paintsBlankCellsIdentically(to: previous.styles[pair.1])
             }
-            if !lastPairEqual {
+            // A space shows only what its styling PAINTS, which is much less
+            // than what its styling says. Most of a terminal UI is blank cells
+            // carrying a foreground colour nobody can see.
+            let same = cells[column] == " " ? lastPairBlankEqual : lastPairEqual
+            if !same {
                 differs[column] = true
                 any = true
             }
