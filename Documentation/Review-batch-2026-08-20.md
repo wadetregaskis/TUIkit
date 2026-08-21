@@ -176,7 +176,50 @@ and it is worth doing properly rather than at the end of a batch.
 above is repeatable — the probe is four `TrackRenderer.gradientColor` sweeps
 printing run-length-encoded palette indices.
 
-### Split View: measured, and it is the fastest page I tested
+### Split View, second pass: found it, and my first measurement was measuring nothing
+
+**I had the wrong column.** The divider's hit region is ONE cell wide, and I
+dragged the box border beside it. Every "Split View is the cheapest page"
+number in the table below was taken while the drag did nothing at all — the
+screen was identical before and after. That table is left standing as a record
+of the mistake, not as evidence.
+
+With the right column (36, not 35, at 120 columns) the drag costs **13 KB per
+event** against an arrow key's 210 bytes on the same page — 62 times as much —
+and one drag step at 120x40 emitted **32,394 bytes**.
+
+**The mechanism, pinned twice.** Writes to the terminal are a blocking
+`write(2)` on the run loop's own thread (`Terminal.writeAll`), so the app cannot
+get ahead of the terminal and its frame rate is exactly *terminal drain
+throughput ÷ bytes per frame*. Driving a real drag through a PTY drained at a
+fixed rate reproduces the whole curve — 30.6 fps unlimited, 20.2 at 250 KB/s,
+10.3 at 120, 4.3 at 60, **1.7 at 30** — with app CPU falling 20% → 1% in
+lockstep, and `sample` putting 94.8% of main-thread samples inside `write`. CPU
+falling *with* frame rate is the signature: not slow, blocked.
+
+Ruled out with evidence: the frame cap (60 fps, and the loop blocks on a wake
+rather than polling), event coalescing (one frame per drag event, up to 128
+drained per iteration, nothing dropped), discarded passes (zero samples in the
+correction walk), and measure cost (2.6x the cells for 1.66x the CPU but 2.1x
+the bytes — size hurts through bytes, not measurement).
+
+**What is fixed:** the SGR churn — see "A frame stops restating styling it has
+already stated". 62% of that frame was colour escapes; the count is down 44%.
+
+**What is left, with the numbers to justify it:** intra-line (cell-span)
+diffing. `FrameDiffWriter` diffs at ROW granularity and every changed row is
+written as `ESC[2K` plus the whole styled row. A divider move leaves the
+columns LEFT of the divider untouched, so a span-aware writer would skip about
+a third of each row. `Documentation/Intra-line output diffing.md` already
+sketches exactly this and parked it on a 144 → 35 byte case; this is the case
+that reopens it.
+
+**Not a bug, checked:** the focused divider's pulse. It was suspected of
+re-rendering the page 2.2 times a second; measured at 0.3% CPU and 768 bytes a
+frame, which is the animated-cell replay path working exactly as intended —
+the run loop advances the divider's own 40 cells without re-rendering anything.
+
+### Split View, first pass: the measurements that were measuring nothing
 
 You reported the Split View page as noticeably sluggish. I could not reproduce
 it on any axis, and it is consistently the *cheapest* of the interactive pages.
