@@ -172,10 +172,20 @@ resizes, exactly as a divider does today.
   concepts.
 - **Pinning a size to a name.** Sizes live in `StateStorage` keyed by render
   identity, so a relayout that changes the identity starts the view over at the
-  layout's size. I wrote in the previous version of this note that
-  `.focusID(_:)` would extend it; that was wrong — `.focusID(_:)` is a property
-  on the views that declare one (Picker, TextField), not a general modifier, and
-  this one takes no id at all. The focus id it registers is derived from the
-  same identity path, so it cannot outlive it either. Giving the modifier an id
-  of its own is the fix, and `SplitViewWidths`' reset token is the shape to
-  copy.
+  layout's size. I wrote in an earlier version of this note that `.focusID(_:)`
+  would extend it; that was wrong — `.focusID(_:)` is a property on the views
+  that declare one (Picker, TextField), not a general modifier, and this one
+  takes no id at all.
+
+  I then wrote that `SplitViewWidths` was the shape to copy. That is wrong too,
+  and for a more useful reason: `NavigationSplitView.resolvePersistedWidths`
+  keys that store by `StateStorage.StateKey(identity:propertyIndex:)` as well.
+  It survives a re-render, not a change of identity. **Column widths have
+  exactly the same limitation**, and have had it all along — so there is no
+  existing pattern to copy here, and building one means inventing an
+  app-level registry keyed by a name rather than by a path.
+
+  That is a real piece of design (who owns the registry, when an entry is
+  collected, what two views sharing a name means) and not a modifier signature,
+  which is why it is written down here rather than attempted at the end of a
+  session. Both the resizable view and the split view would use it.
