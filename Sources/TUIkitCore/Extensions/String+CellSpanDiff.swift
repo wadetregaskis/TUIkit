@@ -133,9 +133,14 @@ extension String {
 /// every frame doubles the work for no new information. Nothing about the
 /// contents is exposed — the type exists to be handed back in.
 public struct ANSIRowCells: Sendable {
-    /// The character drawn at each column — exactly one per column, because a
-    /// row carrying anything that claims more than one is declined outright.
-    private var characters: [Character] = []
+    /// The scalar drawn at each column — exactly one per column, and exactly
+    /// one scalar per character, because a row carrying anything that combines
+    /// or claims more than one cell is declined outright.
+    ///
+    /// Scalars rather than `Character`s so the per-column comparison is a
+    /// `UInt32` compare with no reference counting, and so the walk that builds
+    /// this never has to segment the row into grapheme clusters.
+    private var cells: [Unicode.Scalar] = []
 
     /// Which entry of ``styles`` is in force at each column.
     private var styleRun: [Int] = []
@@ -150,7 +155,7 @@ public struct ANSIRowCells: Sendable {
     /// ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``.
     public init?(decomposing line: String, width: Int) {
         guard width > 0 else { return nil }
-        characters.reserveCapacity(width)
+        cells.reserveCapacity(width)
         styleRun.reserveCapacity(width)
         var state = SGRState()
         styles.append(state)
@@ -159,39 +164,33 @@ public struct ANSIRowCells: Sendable {
 
         let scalars = line.unicodeScalars
         var index = scalars.startIndex
-        var pending = String.UnicodeScalarView()
 
-        // Visible scalars are buffered and grouped into Characters on the way
-        // out: width is a per-CHARACTER property and a grapheme may span
-        // scalars, but an escape's final byte must never fuse with an Extend
-        // scalar that follows it. Same reasoning as `ansiSegments()`.
-        func flushVisible() -> Bool {
-            defer { pending = String.UnicodeScalarView() }
-            guard !pending.isEmpty else { return true }
-            for character in String(pending) {
-                // Exactly one cell, or this row is not one we can place a
-                // cursor inside — see the bail-outs on `ansiCellDiff`. Zero
-                // belongs to no column; more than one is a claim some terminal
-                // may not honour, and a span has no way to recover from that.
-                guard character.terminalWidth == 1 else { return false }
+        while index < scalars.endIndex {
+            let scalar = scalars[index]
+            guard scalar.value == 0x1B else {
+                // One scalar per column, taken without segmenting the row: a
+                // scalar that ``Character/isStandaloneClusterScalar(_:)``
+                // accepts is guaranteed to be its own grapheme cluster, so its
+                // lone width IS its width. A scalar that might combine is an
+                // emoji, a mark, a jamo or a flag — exactly the contentious
+                // class this diff declines anyway — so the fast path is the
+                // whole path, and the row bails rather than falling back to
+                // segmentation. Anything not exactly one cell bails too: zero
+                // belongs to no column, and more than one is a claim some
+                // terminal may not honour with no way for a span to recover.
+                guard Character.isStandaloneClusterScalar(scalar.value),
+                    scalar.loneTerminalWidth == 1
+                else { return nil }
                 if stateChanged {
                     styles.append(state)
                     currentRun = styles.count - 1
                     stateChanged = false
                 }
-                characters.append(character)
+                cells.append(scalar)
                 styleRun.append(currentRun)
-            }
-            return true
-        }
-
-        while index < scalars.endIndex {
-            guard scalars[index].value == 0x1B else {
-                pending.append(scalars[index])
                 index = scalars.index(after: index)
                 continue
             }
-            guard flushVisible() else { return nil }
             var sequence = String.UnicodeScalarView()
             sequence.append(scalars[index])
             index = scalars.index(after: index)
@@ -213,21 +212,21 @@ public struct ANSIRowCells: Sendable {
             case 0x6D:  // 'm' — styling, which is what we are here to track
                 state.apply(String(sequence))
                 stateChanged = true
-            case 0x4B where characters.isEmpty:  // 'K' — the erase every row opens with
+            case 0x4B where cells.isEmpty:  // 'K' — the erase every row opens with
                 break
             default:
                 return nil  // a cursor move, or an erase we cannot account for
             }
         }
-        guard flushVisible(), characters.count == width else { return nil }
+        guard cells.count == width else { return nil }
     }
 
     /// What has to be written to turn `previous` into this row. See
     /// ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``, whose
     /// documentation this shares.
     public func diff(replacing previous: Self, mergingGapsUpTo gap: Int) -> ANSICellDiff {
-        let width = characters.count
-        guard previous.characters.count == width else { return .wholeLine }
+        let width = cells.count
+        guard previous.cells.count == width else { return .wholeLine }
 
         var differs = [Bool](repeating: false, count: width)
         var any = false
@@ -237,7 +236,7 @@ public struct ANSIRowCells: Sendable {
         var lastPair = (-1, -1)
         var lastPairEqual = true
         for column in 0..<width {
-            if characters[column] != previous.characters[column] {
+            if cells[column] != previous.cells[column] {
                 differs[column] = true
                 any = true
                 continue
@@ -303,7 +302,7 @@ public struct ANSIRowCells: Sendable {
                     }
                     emitted = style
                 }
-                content.append(characters[column])
+                content.unicodeScalars.append(cells[column])
             }
             spans.append(ANSICellSpan(column: lower, content: content))
         }
