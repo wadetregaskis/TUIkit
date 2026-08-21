@@ -437,8 +437,35 @@ It declines rather than guess: an image spanning fewer than 16 of 256 levels
 keeps the fixed split, because Otsu on a flat image splits sensor noise and
 renders it as speckle.
 
-Still yours to call: **the custom palette LUT.** You asked to see the design
-before I build past mono, and I have not designed it yet.
+### The custom palette: designed, not built
+
+`Documentation/Image palette mapping.md`, since you asked to see the design
+before I build past mono. The short version:
+
+- A fifth `ASCIIColorMode` case, `.palette([Color])`. **`Color`, not `RGBA`** —
+  a palette of `.palette.accent` follows the theme, and that is the case worth
+  having; an `[RGBA]` would freeze the answer at construction. It sits
+  *orthogonal* to the existing four, which are a fidelity ladder chosen by what
+  the terminal can do; this one is chosen by intent.
+- **Map by luminance order, not nearest RGB.** Nearest-neighbour on three
+  colours flattens whole regions to one — the same failure the gradient work hit
+  — and the fix is the same: quantise the sequence, not the sample. Luminance
+  ordering also makes `.grayscale` a special case of this rather than a separate
+  thing.
+- **Do not reach for `hueWeightedDistanceSquared`.** It is load-bearing for
+  `SystemPalette` derivation, which reads *quantised* colours, so retuning it
+  moves the surface walk. Three attempts during the gradient work each broke
+  derivation and each was reverted. A palette mapper gets its own private
+  distance.
+- **Dithering is where the depth comes from.** The error diffused between two
+  palette entries is what makes a boundary read as a gradient rather than a
+  step, so the palette has to resolve to concrete RGBA before the dither runs —
+  exactly as the mono threshold now does.
+
+Two questions in the note are genuinely yours: whether a two-entry palette means
+"ink and paper" or "two inks on the app's background" (I lean to the second),
+and whether `.grayscale` should fold into `.palette` afterwards (I would, but
+not in the same change).
 
 ### View resizing: a design note, not code
 
