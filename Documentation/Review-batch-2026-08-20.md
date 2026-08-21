@@ -333,6 +333,85 @@ count down 44%, at no measurable CPU cost.
 Both A/B runs across this pass: `table`, `kitchensink`, `deep` and `textwall`
 all indistinguishable.
 
+## Third pass — the Split View drag, again
+
+You said it was maybe a little better and still quite poor. It was. Here is
+what the second pass had actually achieved, and what this one did.
+
+### What the second pass fixed, and what it left
+
+Collapsing adjacent SGR cut a drag frame from ~15,600 to 10,747 bytes. Real,
+and not nearly enough, because it left the shape of the problem untouched: the
+diff worked in whole ROWS. Measured at 140x42 in release, one drag frame:
+
+| | |
+|---|---|
+| bytes emitted | **10,747** |
+| rows rewritten | 27.9 of 42 |
+| cells written | 3,906 |
+| **cells that actually changed** | **393** of 5,880 |
+| bytes per genuinely changed cell | **27.3** |
+
+Ten times the cells written as changed. That number is the frame rate, because
+writes block: the app renders exactly as fast as the terminal absorbs bytes.
+
+### Two changes
+
+**Say only what changed** (`bd741b84`). The collapser skipped restating styling
+already in force but restated anything that *did* change absolutely — a reset
+plus every parameter. Inside one built line the terminal's state is known,
+because we put it there, so each change is now a delta from it. The two
+commonest escapes in a drag frame were both saying things the terminal already
+knew: `ESC[0;48;5;16m` (12 bytes, only the foreground going back to default —
+`ESC[39m`, 5) and `ESC[0;38;5;22;48;5;16m` (19 bytes over a background that was
+not changing — `ESC[38;5;22m`, 11). SGR bytes down 31%, frame down 17%.
+
+**Write the cells that changed, not the rows they are in** (`ad929451`). The
+intra-line diffing that `Documentation/Intra-line output diffing.md` had parked.
+It was parked on the strength of the wrong measurement — a blinking cursor,
+where the win is 4x on a number already too small to matter. On the drag it is
+2.3x on the number that IS the gesture.
+
+### Where it ended up
+
+| per drag frame, 140x42 release | bytes | CPU |
+|---|---|---|
+| before this whole review | 10,620 | 6.4 ms |
+| after the SGR collapse (second pass) | ~8,900 | 7.0 ms |
+| **now** | **3,929** | 7.6 ms |
+
+**2.7x fewer bytes**, for about 1 ms more CPU per frame — and the trade is the
+right way round, because CPU was 23% of one core during the drag and the bytes
+were the constraint.
+
+### Two things you should know
+
+**The debug build is a different animal.** The same drag frame costs **7.6 ms in
+release and 77.8 ms in debug** — a factor of ten, and 77.8 ms caps the drag at
+about 13 fps before the terminal has seen a single byte. If you have been
+watching `swift run Example`, that is very likely the largest single term in
+what you are seeing, and none of the byte work above can touch it. Worth
+checking before I chase the remaining bytes.
+
+**Spans cost cursor moves.** The frame now emits about 53 cursor moves where it
+emitted 28, in exchange for writing 454 cells instead of 3,906. On every
+terminal I can measure that is an enormous win, because the cost is in the
+bytes. On a terminal whose cost is per-escape rather than per-byte it would be
+less of one. The gap that decides this is one constant
+(`FrameDiffWriter.spanMergeGap`, 8): raising it to unbounded gives one span per
+row — same 28 moves as today's whole-line path — at about 6,000 bytes a frame
+instead of 3,929. I picked bytes. Say the word if your terminal disagrees.
+
+### And a correction to my own method
+
+Two of the twelve-gesture verification sweep's early failures were the harness,
+not the code: feeding a terminal model in arrival-sized chunks splits multi-byte
+sequences at different offsets for each build, and `pyte` gets some of those
+wrong. It shows up as a difference between builds that the bytes do not have.
+Capture the whole stream, replay it in one go, and only then is a difference a
+difference. Written down in the design note so it does not cost anyone an hour
+twice.
+
 ## Not started
 
 Five items from your list are untouched. Each is a session rather than a batch
