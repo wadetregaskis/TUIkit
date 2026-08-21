@@ -22,17 +22,20 @@ extension ASCIIConverter {
     /// horizontal resolutions match, which is why this is the default
     /// (and recommended) mode for any colour terminal.
     ///
-    /// In monochrome mode the two pixels are thresholded against
-    /// mid-luminance and drawn as space / `▀` / `▄` / `█` so the silhouette
-    /// remains recognisable even without colour.
+    /// In monochrome mode the two pixels are thresholded — at
+    /// `monoThreshold`, measured from the image by ``monoInkThreshold(for:)``
+    /// — and drawn as space / `▀` / `▄` / `█` so the silhouette remains
+    /// recognisable even without colour.
     func convertHalfBlocks(
         _ image: RGBAImage,
         width: Int,
         height: Int,
-        mode: ASCIIColorMode
+        mode: ASCIIColorMode,
+        monoThreshold: Double
     ) -> [String] {
         if mode == .mono {
-            return convertHalfBlocksMono(image, width: width, height: height)
+            return convertHalfBlocksMono(
+                image, width: width, height: height, monoThreshold: monoThreshold)
         }
         return convertHalfBlocksColor(image, width: width, height: height, mode: mode)
     }
@@ -90,12 +93,13 @@ extension ASCIIConverter {
         return lines
     }
 
-    /// Monochrome variant: threshold both pixels at mid-luminance and pick
-    /// the block glyph that best represents which halves are lit.
+    /// Monochrome variant: threshold both pixels and pick the block glyph that
+    /// best represents which halves are lit.
     private func convertHalfBlocksMono(
         _ image: RGBAImage,
         width: Int,
-        height: Int
+        height: Int,
+        monoThreshold: Double
     ) -> [String] {
         var lines = [String]()
         lines.reserveCapacity(height)
@@ -104,8 +108,10 @@ extension ASCIIConverter {
             var line = ""
             line.reserveCapacity(width)
             for cellX in 0..<width {
-                let topLit = ASCIIConverter.isMonoInk(image.pixel(at: cellX, 2 * cellY))
-                let bottomLit = ASCIIConverter.isMonoInk(image.pixel(at: cellX, 2 * cellY + 1))
+                let topLit = ASCIIConverter.isMonoInk(
+                    image.pixel(at: cellX, 2 * cellY), threshold: monoThreshold)
+                let bottomLit = ASCIIConverter.isMonoInk(
+                    image.pixel(at: cellX, 2 * cellY + 1), threshold: monoThreshold)
                 switch (topLit, bottomLit) {
                 case (false, false):
                     line.append(" ")
@@ -142,10 +148,11 @@ extension ASCIIConverter {
     /// mono rendered it as a near-solid slab of `█` with the subject barely
     /// legible inside it, and `.solid` mono as a featureless filled rectangle.
     /// Both read as "mono draws nothing".
-    static func isMonoInk(_ pixel: RGBA) -> Bool {
-        pixel.luminance >= monoInkThreshold
+    /// - Parameter threshold: The luminance at or above which a pixel is ink,
+    ///   measured from the image by ``monoInkThreshold(for:)``. A fixed
+    ///   mid-luminance split misses a dark photograph's tones entirely — which
+    ///   is the other half of why mono "drew nothing".
+    static func isMonoInk(_ pixel: RGBA, threshold: Double) -> Bool {
+        pixel.luminance >= threshold
     }
-
-    /// Mid-luminance: the split between background and ink for ``isMonoInk(_:)``.
-    static let monoInkThreshold: Double = 128
 }

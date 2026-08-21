@@ -69,7 +69,9 @@ struct ASCIIRendererPerformanceTests {
         let converter = ASCIIConverter()
 
         let perCall = measure(10) {
-            _ = converter.convertBraille(image, width: 80, height: 40, mode: .grayscale)
+            _ = converter.convertBraille(
+                image, width: 80, height: 40, mode: .grayscale,
+                monoThreshold: ASCIIConverter.midLuminance)
         }
         let label = String(format: "%.3fms", perCall * 1000)
         print("=== Braille ASCII Performance ===")

@@ -90,13 +90,15 @@ extension ASCIIConverter {
     ///
     /// Quantizes against the *effective* color mode so dithering matches
     /// what will actually be emitted. See ``ASCIIColorMode/effective(for:)``.
-    func applyFloydSteinbergDithering(_ image: RGBAImage, mode: ASCIIColorMode) -> RGBAImage {
+    func applyFloydSteinbergDithering(
+        _ image: RGBAImage, mode: ASCIIColorMode, monoThreshold: Double
+    ) -> RGBAImage {
         var result = image
 
         for y in 0..<image.height {
             for x in 0..<image.width {
                 let oldPixel = result.pixel(at: x, y)
-                let newPixel = quantizePixel(oldPixel, mode: mode)
+                let newPixel = quantizePixel(oldPixel, mode: mode, monoThreshold: monoThreshold)
                 result.setPixel(at: x, y, value: newPixel)
 
                 let rErr = Int16(oldPixel.r) - Int16(newPixel.r)
@@ -147,7 +149,9 @@ extension ASCIIConverter {
     }
 
     /// Quantizes a pixel to its nearest representative value for the given color mode.
-    private func quantizePixel(_ pixel: RGBA, mode: ASCIIColorMode) -> RGBA {
+    private func quantizePixel(
+        _ pixel: RGBA, mode: ASCIIColorMode, monoThreshold: Double
+    ) -> RGBA {
         switch mode {
         case .trueColor:
             return pixel
@@ -161,7 +165,9 @@ extension ASCIIConverter {
             return RGBA(r: gray, g: gray, b: gray)
 
         case .mono:
-            let val: UInt8 = pixel.luminance > 128.0 ? 255 : 0
+            // The same split the mono renderers threshold on, so the error the
+            // dither diffuses is the error they will actually make.
+            let val: UInt8 = ASCIIConverter.isMonoInk(pixel, threshold: monoThreshold) ? 255 : 0
             return RGBA(r: val, g: val, b: val)
         }
     }

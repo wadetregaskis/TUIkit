@@ -28,9 +28,17 @@ extension ASCIIConverter {
     /// - Luminance is computed inline with the same 0.299/0.587/0.114
     ///   coefficients ``RGBA/luminance`` uses, but as integer arithmetic
     ///   against a scaled threshold — comparing `r*299 + g*587 + b*114`
-    ///   to `128_000` matches the Double form bit-for-bit at this
-    ///   precision and avoids the per-pixel `Double` conversions.
-    func convertBraille(_ image: RGBAImage, width: Int, height: Int, mode: ASCIIColorMode) -> [String] {
+    ///   to the threshold scaled by 1000 matches the Double form to within
+    ///   rounding and avoids the per-pixel `Double` conversions.
+    ///
+    /// - Parameter monoThreshold: The luminance at or above which a dot is lit.
+    ///   Braille takes it in EVERY colour mode, not only monochrome: its dots
+    ///   are always a binary decision — colour is averaged per cell separately
+    ///   — so a threshold sitting outside a dark image's tones leaves a colour
+    ///   render as blank as a mono one. See ``monoInkThreshold(for:)``.
+    func convertBraille(
+        _ image: RGBAImage, width: Int, height: Int, mode: ASCIIColorMode, monoThreshold: Double
+    ) -> [String] {
         // Braille bit index for each (dy, dx) of the 2x4 cell.
         // Indexed by `dy * 2 + dx`.
         //   (0,0)=0  (0,1)=3
@@ -50,10 +58,10 @@ extension ASCIIConverter {
             return dy * imageWidth + dx
         }
 
-        // 0.299*255 + 0.587*255 + 0.114*255 = 255; threshold is half the
-        // unscaled range, so the integer-scaled threshold is
-        // 128 * (0.299+0.587+0.114) * 1000 ≈ 128_000.
-        let scaledThreshold = 128_000
+        // 0.299*255 + 0.587*255 + 0.114*255 = 255, so a luminance threshold
+        // scales into this integer form by 1000. (Mid-luminance, the old fixed
+        // value, was 128 * 1000 = 128_000.)
+        let scaledThreshold = Int(monoThreshold * 1000)
 
         var lines = [String]()
         lines.reserveCapacity(height)

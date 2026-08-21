@@ -345,9 +345,16 @@ extension ASCIIConverter {
             scaled = scaled.boxReduced(by: factor)
         }
 
+        // The split between ink and background, measured from THIS image
+        // rather than assumed to be mid-grey — see ``monoInkThreshold(for:)``.
+        // Measured before dithering, because dithering quantises against it and
+        // measuring after would be measuring its own output.
+        let monoThreshold = Self.monoInkThreshold(for: scaled)
+
         // Apply dithering if requested (only meaningful for non-trueColor modes)
         if dithering == .floydSteinberg, effectiveMode != .trueColor {
-            scaled = applyFloydSteinbergDithering(scaled, mode: effectiveMode)
+            scaled = applyFloydSteinbergDithering(
+                scaled, mode: effectiveMode, monoThreshold: monoThreshold)
         }
 
         // Convert to lines.
@@ -359,11 +366,17 @@ extension ASCIIConverter {
         }
         switch characterSet {
         case .blocks(.braille):
-            return convertBraille(scaled, width: width, height: height, mode: effectiveMode)
+            return convertBraille(
+                scaled, width: width, height: height, mode: effectiveMode,
+                monoThreshold: monoThreshold)
         case .blocks(.fine):
-            return convertHalfBlocks(scaled, width: width, height: height, mode: effectiveMode)
+            return convertHalfBlocks(
+                scaled, width: width, height: height, mode: effectiveMode,
+                monoThreshold: monoThreshold)
         case .blocks(.solid):
-            return convertBlocks(scaled, width: width, height: height, mode: effectiveMode)
+            return convertBlocks(
+                scaled, width: width, height: height, mode: effectiveMode,
+                monoThreshold: monoThreshold)
         case .ascii, .unicode, .blocks(.coarse), .customRamp:
             return convertCharacterBased(scaled, width: width, height: height, mode: effectiveMode)
         }
@@ -491,7 +504,8 @@ extension ASCIIConverter {
         _ image: RGBAImage,
         width: Int,
         height: Int,
-        mode: ASCIIColorMode
+        mode: ASCIIColorMode,
+        monoThreshold: Double
     ) -> [String] {
         var lines = [String]()
         lines.reserveCapacity(height)
@@ -508,7 +522,7 @@ extension ASCIIConverter {
                 // block where the image is lit and a space where it is not.
                 // See ``isMonoInk(_:)`` for why bright is the ink.
                 if mode == .mono {
-                    line.append(Self.isMonoInk(pixel) ? "█" : " ")
+                    line.append(Self.isMonoInk(pixel, threshold: monoThreshold) ? "█" : " ")
                     continue
                 }
 
