@@ -17,7 +17,7 @@ Two modes:
                    Profiler (via xctrace) to the running app for the run
 
 Usage:
-    drive.py BIN [--scenario tour|list|table|emoji|scroll|mouse|idle|menu]
+    drive.py BIN [--scenario tour|list|table|emoji|scroll|mouse|splitdrag|idle|menu]
                  [--loops N] [--rows R] [--cols C] [--settle S]
                  [--trace OUT.trace] [--time-limit MS] [--quiet]
 
@@ -45,7 +45,7 @@ PGUP, PGDN = ESC + b"[5~", ESC + b"[6~"
 PAGE_KEYS = {
     "lists": "-", "tables": "=", "scroll": "s", "emoji": ".", "mouse": "m",
     "text": "1", "colors": "2", "containers": "3", "buttons": "6",
-    "radios": "9", "sliders": "[", "steppers": "]",
+    "radios": "9", "sliders": "[", "steppers": "]", "split": ";",
 }
 
 
@@ -93,6 +93,38 @@ def scenario_mouse(rows, cols):
     return steps
 
 
+def scenario_split_drag(rows, cols, sweeps=6):
+    """Drag a NavigationSplitView divider back and forth.
+
+    The gesture that motivated intra-line diffing: it disturbs most of the
+    screen a little, every frame, for as long as the button is held — which is
+    the opposite shape from the scrolls above (a few rows changing a lot) and
+    exercises the write path rather than the measure pass.
+
+    The grab point has to be the divider itself, not the sidebar's right border
+    one column left of it — press the border and the gesture does nothing while
+    still looking plausible, which cost a round of measurements that were
+    measuring nothing. The Balanced style puts the divider at 30% of the width
+    (column 42 of 140, measured). Sanity-check with the byte total this prints:
+    a press ON the divider emitted 627,361 bytes, and every neighbouring column
+    — 39, 40, 41, 43, 44 — emitted about 31,000, which is the page sitting
+    still. A twenty-fold difference, so a total in the tens of thousands means
+    the press missed and the numbers are measuring nothing.
+    Coordinates are 1-based, as SGR reports them.
+    """
+    col = max(2, int(cols * 0.30))
+    row = max(2, rows // 2)
+    steps = [(0.40, PAGE_KEYS["split"].encode()), (0.20, b"")]
+    steps.append((0.05, mouse_sgr(0, col, row, True)))          # press
+    for sweep in range(sweeps):
+        span = range(1, 13) if sweep % 2 == 0 else range(12, 0, -1)
+        for offset in span:
+            # 32 = motion with the left button held.
+            steps.append((0.02, mouse_sgr(32, col + offset, row, True)))
+    steps.append((0.05, mouse_sgr(0, col, row, False)))          # release
+    return steps
+
+
 def build_scenario(name, rows, cols):
     if name == "tour":
         return scenario_pages(list(PAGE_KEYS.values()))
@@ -106,6 +138,8 @@ def build_scenario(name, rows, cols):
         return scenario_scroll(PAGE_KEYS["scroll"])
     if name == "mouse":
         return scenario_mouse(rows, cols)
+    if name == "splitdrag":
+        return scenario_split_drag(rows, cols)
     if name == "menu":
         # Sit on the MAIN MENU with no input at all. It is the screen an app
         # opens on, so its steady-state cost is the first thing a user feels —
@@ -155,7 +189,8 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("binary")
     ap.add_argument("--scenario", default="tour",
-                    choices=["tour", "list", "table", "emoji", "scroll", "mouse", "idle", "menu", "progress"])
+                    choices=["tour", "list", "table", "emoji", "scroll", "mouse", "splitdrag",
+                             "idle", "menu", "progress"])
     ap.add_argument("--loops", type=int, default=1)
     ap.add_argument("--rows", type=int, default=50)
     ap.add_argument("--cols", type=int, default=160)
