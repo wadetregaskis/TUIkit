@@ -110,29 +110,27 @@ right edges.** Reasoning:
 Bottom and right only also has a plain description a user can hold: **a
 resizable view grows down and right, and never moves.**
 
-## The affordance
+## The affordance, as shipped
 
-Drawn, always, on the two live edges — not on hover.
+The design here was two tinted edge runs plus a corner glyph. Building it
+settled that down to **a mark of one cell and a target of two whole edges** —
+see "What building it changed" below. Drawn, always, not on hover:
 
-- The **corner** swaps its glyph: `┘` becomes `╝` (and the rounded `╯` becomes
-  `╝` too — the double line is the signal, and it survives every repertoire in
-  `Terminal-compatibility.md` since it is Box Drawing, not a pictograph).
-- The **bottom and right runs** take the palette's dimmest border tint, one step
-  brighter than the rest of the border, so the live edges read as slightly
-  raised without becoming the loudest thing on the page. `Palette` already has
-  the vocabulary for this — the same one-step separation `hoverSeparationSteps`
-  uses — and it must go through `ensuringRenderedContrast(atLeast:against:)` for
-  the same reason everything else does.
-- **Hover strengthens it rather than creating it**: the run under the pointer
-  takes the hovered-control face, so the affordance is discoverable without the
-  pointer and confirms under it.
-- **Focus** (the handler is `Focusable`, so Tab reaches it) draws the same emphasis
-  the split divider's focused state draws today. No new visual language.
+- The **corner cell** carries the mark, and the glyph names the axes that
+  actually work: `╝` for both, `╡` for width only, `╧` for height only. Box
+  Drawing rather than a pictograph, so every repertoire in
+  `Terminal-compatibility.md` advances it by the one cell claimed.
+- **Resting** it takes the palette's border tint, **hovered** the hovered
+  foreground, **focused** the accent — the three-step vocabulary every other
+  affordance uses, floored through `ensuringRenderedContrast(atLeast:against:)`
+  for the same reason everything else is.
+- The **whole bottom edge and right edge** are the drag target, which is what
+  makes a one-cell mark acceptable.
 
-One thing to check before building: a `.block` border paints its cells, so a
-"one step brighter" edge on a block border is a background change rather than a
-glyph change. `BorderStyle.paintsBackground` already tells the renderer which it
-is, so the affordance has to be expressed in both terms.
+Still open, and worth doing when a block-bordered view is made resizable: a
+`.block` border paints its cells, so the mark sitting on one is a background
+change rather than a glyph change. `BorderStyle.paintsBackground` says which,
+and the grip does not consult it yet.
 
 ## Keyboard
 
@@ -164,10 +162,14 @@ resizes, exactly as a divider does today.
   pretending to be a window manager is the failure mode this whole note is
   trying to avoid.
 
-## Open question for the next pass
+## Open questions
 
-Whether `.userResizable` takes an axis set — `.userResizable([.horizontal])` —
-or always offers both. Both is simpler and matches the corner grip; an axis set
-matters for a view whose height is meaningful (a `Table` whose row count is the
-point) and would let the affordance drop to a single edge. Cheap to add later,
-so start with both.
+- **The axis set was the open question, and it is answered.** The note asked
+  whether `.userResizable` should take axes or always offer both. It takes them,
+  and ranges name an axis as well as bounding it — one rule instead of two
+  concepts.
+- **Persistence beyond a view's identity.** Sizes live in `StateStorage` keyed by
+  render identity, so `.focusID(_:)` is what makes one outlive a relayout. That
+  is honest but undocumented anywhere a user would look; the `SplitViewWidths`
+  reset-token idea would give it a proper "put it back" gesture too.
+- **The block-border mark**, above.
