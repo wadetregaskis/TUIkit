@@ -271,13 +271,27 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         context: RenderContext
     ) {
         let palette = context.environment.palette
-        let glyph: String
+        let corner: String
         switch (axes.contains(.horizontal), axes.contains(.vertical)) {
-        case (true, true): glyph = "╝"
-        case (true, false): glyph = "╡"
-        case (false, true): glyph = "╧"
+        case (true, true): corner = "╝"
+        case (true, false): corner = "╡"
+        case (false, true): corner = "╧"
         case (false, false): return
         }
+
+        // A `.block` border paints its cells rather than drawing lines on them
+        // (see `BorderStyle.paintsBackground`), so a line-drawing corner
+        // stamped onto one would punch a hole in a solid edge — the mark would
+        // read as damage rather than as an affordance. Keep whatever glyph is
+        // there in that case and let the TINT do the marking, which is the same
+        // three-step vocabulary either way.
+        //
+        // Read from the cell rather than from the border style, because the
+        // border is inside the content and this modifier is outside it: there
+        // is no style to consult, only the result.
+        let existing = buffer.lines.last?.stripped.last
+        let paintsItsCells = existing.map { ("\u{2580}"..."\u{259F}").contains($0) } ?? false
+        let glyph = paintsItsCells ? String(existing!) : corner
 
         // Focused is loudest, hovered next, resting quiet but present — the
         // same three-step vocabulary every other affordance uses, and floored

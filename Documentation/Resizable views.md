@@ -127,10 +127,12 @@ see "What building it changed" below. Drawn, always, not on hover:
 - The **whole bottom edge and right edge** are the drag target, which is what
   makes a one-cell mark acceptable.
 
-Still open, and worth doing when a block-bordered view is made resizable: a
-`.block` border paints its cells, so the mark sitting on one is a background
-change rather than a glyph change. `BorderStyle.paintsBackground` says which,
-and the grip does not consult it yet.
+A `.block` border paints its cells rather than drawing lines on them, so
+stamping `╝` onto one would punch a hole in a solid edge — the mark would read
+as damage. The grip keeps whatever glyph is already there in that case and lets
+the **tint alone** do the marking. It reads that from the CELL rather than from
+`BorderStyle.paintsBackground`, because the border is inside the content and
+this modifier is outside it: there is no style to consult, only the result.
 
 ## Keyboard
 
@@ -168,8 +170,12 @@ resizes, exactly as a divider does today.
   whether `.userResizable` should take axes or always offer both. It takes them,
   and ranges name an axis as well as bounding it — one rule instead of two
   concepts.
-- **Persistence beyond a view's identity.** Sizes live in `StateStorage` keyed by
-  render identity, so `.focusID(_:)` is what makes one outlive a relayout. That
-  is honest but undocumented anywhere a user would look; the `SplitViewWidths`
-  reset-token idea would give it a proper "put it back" gesture too.
-- **The block-border mark**, above.
+- **Pinning a size to a name.** Sizes live in `StateStorage` keyed by render
+  identity, so a relayout that changes the identity starts the view over at the
+  layout's size. I wrote in the previous version of this note that
+  `.focusID(_:)` would extend it; that was wrong — `.focusID(_:)` is a property
+  on the views that declare one (Picker, TextField), not a general modifier, and
+  this one takes no id at all. The focus id it registers is derived from the
+  same identity path, so it cannot outlive it either. Giving the modifier an id
+  of its own is the fix, and `SplitViewWidths`' reset token is the shape to
+  copy.

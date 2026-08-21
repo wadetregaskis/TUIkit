@@ -105,9 +105,14 @@ extension View {
     /// narrow what the user may ask for; they do not force the layout to
     /// provide it.
     ///
-    /// The size lives as long as the view's identity does. Give the view a
-    /// ``View/focusID(_:)`` to make it outlive a relayout that would otherwise
-    /// change that identity.
+    /// The size lives exactly as long as the view's **render identity** does,
+    /// because that is what keys it in `StateStorage`. A relayout that changes
+    /// the identity — a view moving between branches of a conditional, say —
+    /// starts it over at the layout's size. There is no way to pin it to a name
+    /// yet: this modifier takes no `focusID`, and the id it registers for
+    /// keyboard focus is derived from the same identity path (or claimed from a
+    /// surrounding ``View/focused(_:equals:)``), so it cannot outlive it
+    /// either.
     ///
     /// ## Reaching it
     ///

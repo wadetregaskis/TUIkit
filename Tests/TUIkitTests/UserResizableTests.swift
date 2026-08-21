@@ -187,6 +187,18 @@ struct UserResizableTests {
         #expect(lastCell(box.userResizable(.vertical)) == "╧")
     }
 
+    @Test("A block border keeps its own glyph and is marked by tint alone")
+    func blockBorderKeepsItsFill() {
+        let context = makeRenderContext(width: 30, height: 6)
+        let view = Text("hello").frame(width: 12, height: 3)
+            .border(style: .block)
+            .userResizable()
+        let buffer = renderToBuffer(view, context: context)
+        // Stamping ╝ onto a painted cell would punch a hole in a solid edge —
+        // the mark would read as damage. The block stays; the tint marks it.
+        #expect(buffer.lines.last?.stripped.last == "█")
+    }
+
     @Test("A disabled view is not resizable and is not in the Tab order")
     func disabledIsInert() {
         let context = makeRenderContext(width: 30, height: 6)
