@@ -152,6 +152,70 @@ struct MenuPressTrackingTests {
     /// (Return takes whatever is lit), and reopening a drop-down highlights
     /// whatever is selected — which would let the second answer agree with the
     /// first without the scroll having done anything.
+    @Test("A click lands on the row it looks like it is on, in a clamped menu")
+    func clickLandsOnTheDrawnRow() throws {
+        // `row(_:_:)` returns `overlay.offsetY + line` — where a row is DRAWN.
+        // Every existing test asserts loosely enough not to notice if the hit
+        // regions sit somewhere else, and their menus are short. A 60-option
+        // popup on a 24-line screen is clamped, which is the case where the two
+        // could disagree. Assert the exact option, so they cannot.
+        for label in ["Option 2", "Option 5", "Option 9"] {
+            let (tui, context) = harness()
+            let chosen = Counter()
+            chosen.value = -1
+            let menu = Picker(
+                "Pick", selection: Binding(get: { chosen.value }, set: { chosen.value = $0 })
+            ) {
+                ForEach(0..<60, id: \.self) { index in Text("Option \(index)").tag(index) }
+            }
+            .selectionIndicatorStyle(.none)
+
+            let closed = renderArmed(menu, tui: tui, context: context)
+            let controlX = try #require(
+                closed.lines[0].stripped.firstIndex(of: "▐").map {
+                    closed.lines[0].stripped.distance(
+                        from: closed.lines[0].stripped.startIndex, to: $0)
+                })
+            press(tui, context, x: controlX + 1, y: 0)
+            release(tui, context, x: controlX + 1, y: 0)
+            let opened = renderArmed(menu, tui: tui, context: context)
+            let overlay = try #require(opened.overlays.first, "the menu is open")
+            #expect(
+                overlay.content.height < 60,
+                "the popup must be CLAMPED for this to test anything: \(overlay.content.height)")
+
+            let target = try row(opened, label)
+            press(tui, context, x: target.x, y: target.y)
+            renderArmed(menu, tui: tui, context: context)
+            release(tui, context, x: target.x, y: target.y)
+
+            let expected = Int(label.dropFirst("Option ".count))
+            // KNOWN ISSUE, and a user-facing one rather than a test-harness
+            // one: clicking a row of a CLAMPED drop-down chooses the row BELOW
+            // it. Measured: the row drawing "Option 2" yields Option 3, "Option
+            // 5" yields 6, "Option 9" yields 10 — a consistent +1, so the
+            // popup's composited hit regions sit one row above where its
+            // content is drawn. `DropdownMenuRenderer` places each row's region
+            // at `offsetY: 1 + local` (past the top border), which is right in
+            // the popup's own buffer; the disagreement is in how a clamped
+            // overlay's regions are composited against its content. The
+            // renderer's own comment at that site anticipates exactly this
+            // ("a tall one is clamped to the screen, and then the two differ").
+            //
+            // Recorded rather than silenced: `withKnownIssue` fails loudly the
+            // day the compositing is fixed, which is what stops this being
+            // forgotten.
+            withKnownIssue("clamped drop-down: hit regions sit one row above the drawn content") {
+                #expect(
+                    chosen.value == expected,
+                    """
+                    clicking the row that DRAWS "\(label)" chose Option \(chosen.value). \
+                    The drawn row and the hit region disagree.
+                    """)
+            }
+        }
+    }
+
     @Test("A wheel scroll moves the highlight to the row now under the pointer")
     func wheelMovesTheHighlightUnderThePointer() throws {
         /// One run: open the drop-down, put the pointer on a row a few down,
