@@ -515,8 +515,39 @@ under translation, which is what makes this safe to do at all. The widest
 arrangement stops fitting in German before it does in English, and the page
 quietly takes the next one down.
 
-Six pages left on the list, in the order above. Still not done either: the
-**collapsible left gutter**. It is a separate question from
+**Spinners 91 → 145** and **Picker 134 → 142** next. The spinner catalogue
+deals into a column count passed as a parameter rather than a second copy of
+the list — a spinner is a live animation, and two lists of twelve would be
+twenty-four clocks where twelve will do. Picker's six sections group by how a
+picker presents its choices: as a menu that opens, as options laid out in
+place, and as a value read back.
+
+### And a correction to the survey's metric
+
+"Widest body row" was the wrong measure, and re-reading the same captures with
+the median row width says so:
+
+| page | widest | median | p90 |
+|---|---|---|---|
+| Preferences | 96 | **12** | 34 |
+| Picker | 134 | 18 | 39 |
+| State Persistence | 117 | 29 | 86 |
+| Empty State | 124 | **64** | 105 |
+| Image (File) | 138 | **82** | 82 |
+| Split View | 172 | **119** | 126 |
+
+Two different things were sitting in one column. A page with a median of 12 and
+a widest of 96 is a narrow column with one explanatory sentence across the top —
+lots to gain. A page whose median is 64 or 82 is *uniformly* that wide, which
+for **Empty State** is a centred placeholder that is meant to be narrow and for
+**Image (File)** is the image itself. Rearranging either would make it worse.
+
+So the honest remaining list is shorter than nine: **State Persistence**
+(median 29, two sections that could sit side by side) and **Preferences**
+(median 12, but only twelve body rows — the gain is real and small). Empty
+State, Image (File) and Split View are done as they are, and I would leave them.
+
+Still not done: the **collapsible left gutter**. It is a separate question from
 this — it is about the page frame rather than the page content — and I have not
 settled what "collapsible" should mean for something one column wide.
 

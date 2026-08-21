@@ -21,9 +21,26 @@ struct PickerPage: View {
     @State var number: Int = 1
     @State private var date = Date()
 
-    var body: some View {
+    /// Pickers that open a menu.
+    @ViewBuilder
+    private var menuColumn: some View {
         VStack(alignment: .leading, spacing: 1) {
+            menuStyleSection
+            longMenuSection
+        }
+    }
 
+    /// Pickers that lay their options out in place.
+    @ViewBuilder
+    private var inPlaceColumn: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            radioGroupSection
+            inlineStyleSection
+        }
+    }
+
+    @ViewBuilder
+    private var menuStyleSection: some View {
             DemoSection("page.picker.menuStyle") {
                 Picker("page.picker.favouriteFruit", selection: $fruit) {
                     Text("page.picker.apple").tag("apple")
@@ -32,7 +49,10 @@ struct PickerPage: View {
                     Text("page.picker.dragonfruit").tag("dragonfruit")
                 }
             }
+    }
 
+    @ViewBuilder
+    private var longMenuSection: some View {
             DemoSection("page.picker.longMenu") {
                 // More options than fit the screen: the drop-down windows them and
                 // shows a scrollbar (wheel, arrows, Home/End, and the bar all scroll).
@@ -42,7 +62,10 @@ struct PickerPage: View {
                     }
                 }
             }
+    }
 
+    @ViewBuilder
+    private var radioGroupSection: some View {
             DemoSection("page.picker.radioGroupStyle") {
                 Picker("page.picker.tshirtSize", selection: $size) {
                     Text("page.picker.small").tag("small")
@@ -51,7 +74,10 @@ struct PickerPage: View {
                 }
                 .pickerStyle(.radioGroup)
             }
+    }
 
+    @ViewBuilder
+    private var inlineStyleSection: some View {
             DemoSection("page.picker.inlineStyle") {
                 Picker("page.picker.priority", selection: $priority) {
                     ForEach(1..<4) { level in
@@ -67,6 +93,10 @@ struct PickerPage: View {
             // renders as an inline field: Left/Right pick a component, Up/Down
             // or typing digits edit it, Page Up/Down move it by a coarse step
             // and Home/End to its limits (the active field pulses when focused).
+    }
+
+    @ViewBuilder
+    private var dateSection: some View {
             DemoSection("page.picker.dateSection") {
                 VStack(alignment: .leading, spacing: 1) {
                     DatePicker("page.newControls.dateBoth", selection: $date)
@@ -74,13 +104,59 @@ struct PickerPage: View {
                     DatePicker("page.newControls.timeOnly", selection: $date, displayedComponents: .hourAndMinute)
                 }
             }
+    }
 
+    @ViewBuilder
+    private var currentSelections: some View {
             DemoSection("page.picker.currentSelections") {
                 VStack(alignment: .leading, spacing: 1) {
                     ValueDisplayRow("page.picker.fruitLabel", fruit)
                     ValueDisplayRow("page.picker.sizeLabel", size)
                     ValueDisplayRow("page.picker.priorityLabel", "\(priority)")
                     ValueDisplayRow("page.picker.numberLabel", "\(number)")
+                }
+            }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+
+            // Six sections, none of them wider than about forty columns, that
+            // ran straight down the page. Preferred arrangement first, then
+            // progressively narrower ones — the `ViewThatFits(in: .horizontal)`
+            // shape the Animation page and the track editor use. Grouped by how
+            // a picker PRESENTS its choices: as a menu that opens, as options
+            // laid out in place, and as a value read back.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 4) {
+                    menuColumn
+                    inPlaceColumn
+                    dateSection
+                    currentSelections
+                }
+                HStack(alignment: .top, spacing: 4) {
+                    menuColumn
+                    inPlaceColumn
+                    VStack(alignment: .leading, spacing: 1) {
+                        dateSection
+                        currentSelections
+                    }
+                }
+                HStack(alignment: .top, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        menuColumn
+                        inPlaceColumn
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        dateSection
+                        currentSelections
+                    }
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    menuColumn
+                    inPlaceColumn
+                    dateSection
+                    currentSelections
                 }
             }
 

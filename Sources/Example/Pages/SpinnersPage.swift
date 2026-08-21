@@ -17,26 +17,75 @@ struct SpinnersPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            // The full style catalogue — every SpinnerStyle in declaration
-            // order. The labels are the API case names (an API surface, left
-            // untranslated), like the ProgressView catalogue.
-            DemoSection("page.spinners.styles") {
-                VStack(alignment: .leading, spacing: 0) {
-                    spinnerRow("dots", .dots)
-                    spinnerRow("line", .line)
-                    spinnerRow("bouncing", .bouncing)
-                    spinnerRow("pie", .pie)
-                    spinnerRow("beachball", .beachball)
-                    spinnerRow("box", .box)
-                    spinnerRow("bars", .bars)
-                    spinnerRow("blockWedge", .blockWedge)
-                    spinnerRow("moon", .moon)
-                    spinnerRow("earth", .earth)
-                    spinnerRow("clock", .clock)
-                    spinnerRow("custom(\"123432\")", .custom("123432"))
+            // A twelve-row catalogue twenty-five columns wide, then an editor
+            // eighty-five wide, one under the other: 45% of a wide terminal
+            // used and the catalogue's own shape wasted. Preferred arrangement
+            // first, then progressively narrower ones — the
+            // `ViewThatFits(in: .horizontal)` shape the Animation page and the
+            // track editor use.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 4) {
+                    stylesCatalogue(columns: 2)
+                    editorAndColour
+                }
+                HStack(alignment: .top, spacing: 4) {
+                    stylesCatalogue(columns: 1)
+                    editorAndColour
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    stylesCatalogue(columns: 1)
+                    editorAndColour
                 }
             }
 
+            Spacer()
+        }
+        .scrollableDemoPage()
+        .appHeader {
+            DemoAppHeader("menu.item.spinners")
+        }
+    }
+
+    /// The full style catalogue — every `SpinnerStyle` in declaration order,
+    /// dealt into `columns` columns. The labels are the API case names (an API
+    /// surface, left untranslated), like the ProgressView catalogue.
+    ///
+    /// Column count is a parameter rather than a second copy of the list: a
+    /// spinner is a live animation, and two lists of twelve would be
+    /// twenty-four clocks where twelve will do.
+    @ViewBuilder
+    private func stylesCatalogue(columns: Int) -> some View {
+        let styles: [(String, SpinnerStyle)] = [
+            ("dots", .dots), ("line", .line), ("bouncing", .bouncing), ("pie", .pie),
+            ("beachball", .beachball), ("box", .box), ("bars", .bars),
+            ("blockWedge", .blockWedge), ("moon", .moon), ("earth", .earth),
+            ("clock", .clock), ("custom(\"123432\")", .custom("123432")),
+        ]
+        let perColumn = (styles.count + columns - 1) / columns
+        DemoSection("page.spinners.styles") {
+            HStack(alignment: .top, spacing: 3) {
+                ForEach(Array(0..<columns), id: \.self) { column in
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(
+                            Array(styles[
+                                min(column * perColumn, styles.count)
+                                    ..< min((column + 1) * perColumn, styles.count)]),
+                            id: \.0
+                        ) { entry in
+                            spinnerRow(entry.0, entry.1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The editor and the custom-colour example, which always travel together:
+    /// both are about choosing how one spinner looks, and the second is the
+    /// answer to a question the first raises.
+    @ViewBuilder
+    private var editorAndColour: some View {
+        VStack(alignment: .leading, spacing: 1) {
             DemoSection("page.spinners.editorSection") {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("page.spinners.editorHint")
@@ -57,12 +106,6 @@ struct SpinnersPage: View {
                 // `.palette.accent`, which made this look uncustomised.
                 Spinner("page.spinners.installing", style: .bouncing, color: .magenta)
             }
-
-            Spacer()
-        }
-        .scrollableDemoPage()
-        .appHeader {
-            DemoAppHeader("menu.item.spinners")
         }
     }
 
