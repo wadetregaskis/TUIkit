@@ -602,7 +602,41 @@ remained an hour ago.
 | Split View | 172 | — | already uses it |
 | State Persistence, Preferences | 117, 96 | — | prose-bound; needs 215 columns |
 
-Still not done: the **collapsible left gutter**. It is a separate question from
+### The collapsible left gutter — one question, then it is ten minutes
+
+The last piece, and I have stopped short of shipping it because "collapsible"
+has two readings that produce different apps, and it would land on all
+thirty-five pages at once.
+
+Every page's content currently starts at column 0, hard against the terminal
+edge. `scrollableDemoPage()` is the shared wrapper, so a gutter is one change
+there and nothing else.
+
+**Reading A — collapse by fit.** `ViewThatFits(in: .horizontal)` over
+`self.padding(.leading, 1)` then `self`: the gutter appears whenever the content
+plus one column still fits, and vanishes when it does not.
+
+That is the literal reading, and I think it is the wrong one, because of how it
+interacts with what the pages actually contain. `ViewThatFits` chooses on IDEAL
+width, and a page holding a List or a Table has an ideal width of "all of it".
+On those pages the padded candidate never fits, so the gutter would be absent
+from exactly the wide, busy pages that most want breathing room, and present on
+the small ones that least need it. The rule would be invisible and the result
+would look arbitrary.
+
+**Reading B — a plain one-column inset.** `self.padding(.leading, 1)`,
+unconditional, and let the layout clamp as it clamps everything else. At 200
+columns it costs 0.5% of the width; at 40 it costs 2.5%, which is one space, and
+the alternative is text touching the bezel.
+
+**I recommend B**, and I would not call it collapsible — nothing about it
+collapses, and a gutter that comes and went as you resized would be more
+distracting than either state. If you want A anyway, it is the same one-line
+change with a `ViewThatFits` around it, and the thing to check first is a
+List-bearing page at 200 columns: if the gutter is missing there, that is the
+failure above and not a bug.
+
+Which one, and I will do it. It is a separate question from
 this — it is about the page frame rather than the page content — and I have not
 settled what "collapsible" should mean for something one column wide.
 
