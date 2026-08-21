@@ -494,13 +494,17 @@ the widest body row:
 Every other page already reaches 99–100%. So this is nine pages, not
 thirty-five, and the list is ordered by how much there is to gain.
 
-**Radio Buttons 65 → 175 cols** and **Steppers 74 → 120**, both following the
+**Radio Buttons 65 → 175 cols**, **Steppers 74 → 120** and **Buttons & Links
+82 → 183**, all following the
 `ViewThatFits(in: .horizontal)` shape the Animation page and the track editor
 use: preferred arrangement first, then progressively narrower ones, then the
 original single column. Radio Buttons gets four arrangements (five across, then
 2+2+1, then 3+2, then one column); Steppers three, with the shift-accelerated
 section keeping a column of its own for as long as there is room, because it
-carries a sentence of prose rather than a control.
+carries a sentence of prose rather than a control. Buttons & Links gets three,
+its nine sections grouped by what each demonstrates — how a button is styled,
+how a modifier on a container cascades into it, and how buttons compose with
+other things.
 
 Each section is a named `@ViewBuilder` property rather than written out per
 arrangement — `ViewThatFits` builds every candidate, so a section duplicated
@@ -511,7 +515,8 @@ under translation, which is what makes this safe to do at all. The widest
 arrangement stops fitting in German before it does in English, and the page
 quietly takes the next one down.
 
-Still not done: the **collapsible left gutter**. It is a separate question from
+Six pages left on the list, in the order above. Still not done either: the
+**collapsible left gutter**. It is a separate question from
 this — it is about the page frame rather than the page content — and I have not
 settled what "collapsible" should mean for something one column wide.
 

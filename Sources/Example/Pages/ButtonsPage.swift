@@ -57,9 +57,38 @@ struct ButtonsPage: View {
         return candidates.max { distance($0) < distance($1) } ?? .palette.info
     }
 
-    @ViewBuilder private var content: some View {
+    /// How a button is styled.
+    @ViewBuilder
+    private var stylingColumn: some View {
         VStack(alignment: .leading, spacing: 1) {
+            counter
+            styles
+            disabledButtons
+        }
+    }
 
+    /// How a modifier on a container reaches the controls inside it.
+    @ViewBuilder
+    private var cascadeColumn: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            cascadingDisabled
+            tinted
+            plainStyle
+        }
+    }
+
+    /// How buttons compose — with each other, with a text style, with a URL.
+    @ViewBuilder
+    private var compositionColumn: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            buttonRowSection
+            themeableText
+            linksSection
+        }
+    }
+
+    @ViewBuilder
+    private var counter: some View {
             DemoSection("page.buttons.section.counter") {
                 HStack(spacing: 2) {
                     Button("+1") {
@@ -79,7 +108,10 @@ struct ButtonsPage: View {
                         .foregroundStyle(.palette.accent)
                 }
             }
+    }
 
+    @ViewBuilder
+    private var styles: some View {
             DemoSection("page.buttons.section.styles") {
                 HStack(spacing: 2) {
                     Button("page.buttons.default") {
@@ -99,14 +131,20 @@ struct ButtonsPage: View {
                     .buttonStyle(.destructive)
                 }
             }
+    }
 
+    @ViewBuilder
+    private var disabledButtons: some View {
             DemoSection("page.buttons.section.disabled") {
                 HStack(spacing: 2) {
                     Button("page.buttons.enabled") { clickCount += 1 }
                     Button("page.buttons.disabled") {}.disabled()
                 }
             }
+    }
 
+    @ViewBuilder
+    private var cascadingDisabled: some View {
             DemoSection("page.buttons.section.cascadingDisabled") {
                 // .disabled on a container cascades to every control inside.
                 VStack(alignment: .leading, spacing: 1) {
@@ -115,7 +153,10 @@ struct ButtonsPage: View {
                 }
                 .disabled(true)
             }
+    }
 
+    @ViewBuilder
+    private var tinted: some View {
             DemoSection("page.buttons.section.tinted") {
                 // .tint cascades the accent to every control inside. The toggle
                 // drives it: flip it off and the tint (on the button AND on the
@@ -126,7 +167,10 @@ struct ButtonsPage: View {
                 }
                 .tint(tintToggle ? demoTint : nil)
             }
+    }
 
+    @ViewBuilder
+    private var plainStyle: some View {
             DemoSection("page.buttons.section.plain") {
                 HStack(spacing: 2) {
                     Button("\(L("page.buttons.link")) 1") { clickCount += 1 }
@@ -135,7 +179,10 @@ struct ButtonsPage: View {
                         .buttonStyle(.plain)
                 }
             }
+    }
 
+    @ViewBuilder
+    private var buttonRowSection: some View {
             DemoSection("page.buttons.section.buttonRow") {
                 ButtonRow(spacing: 3) {
                     Button("page.buttons.cancel") { clickCount += 1 }
@@ -143,7 +190,10 @@ struct ButtonsPage: View {
                 }
                 .buttonStyle(.primary)
             }
+    }
 
+    @ViewBuilder
+    private var themeableText: some View {
             DemoSection("page.buttons.section.themeableText") {
                 VStack(alignment: .leading, spacing: 1) {
                     // .buttonTextStyle re-themes the label text of every button in
@@ -163,6 +213,10 @@ struct ButtonsPage: View {
 
             // A Link is a button that opens a URL, so it belongs with the other
             // activatable controls: Tab to it and press Enter, or click it.
+    }
+
+    @ViewBuilder
+    private var linksSection: some View {
             DemoSection("page.buttons.section.links") {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("page.newControls.linkHint").foregroundStyle(.palette.foregroundSecondary)
@@ -170,6 +224,36 @@ struct ButtonsPage: View {
                     Link(destination: URL(string: "https://github.com/apple/swift")!) {
                         Label("apple/swift", systemImage: "swift")
                     }
+                }
+            }
+    }
+
+    @ViewBuilder private var content: some View {
+        VStack(alignment: .leading, spacing: 1) {
+
+            // Nine short sections that ran straight down the page and used 41%
+            // of a wide terminal. Preferred arrangement first, then
+            // progressively narrower ones — the `ViewThatFits(in: .horizontal)`
+            // shape the Animation page and the track editor use. Grouped by
+            // what each demonstrates: how a button is styled, how a modifier
+            // cascades into a group, and how buttons compose with other things.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 4) {
+                    stylingColumn
+                    cascadeColumn
+                    compositionColumn
+                }
+                HStack(alignment: .top, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        stylingColumn
+                        cascadeColumn
+                    }
+                    compositionColumn
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    stylingColumn
+                    cascadeColumn
+                    compositionColumn
                 }
             }
 
