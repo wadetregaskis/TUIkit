@@ -145,6 +145,12 @@ public struct SGRState: Sendable, Equatable {
     /// fastest.
     public var rendered: String {
         guard !isDefault else { return "" }
+        return "\u{1B}[" + parameters + "m"
+    }
+
+    /// ``rendered``'s parameter list on its own, for a caller assembling one
+    /// escape out of several things — a reset and this state, say.
+    public var parameters: String {
         var parameters: [String] = passthrough
         // Sorted so the same state always renders identically — a `Set` has no
         // order, and an unstable rendering would make buffers that ARE equal
@@ -152,7 +158,7 @@ public struct SGRState: Sendable, Equatable {
         parameters += attributes.sorted().map(String.init)
         if let foreground { parameters += foreground }
         if let background { parameters += background }
-        return "\u{1B}[" + parameters.joined(separator: ";") + "m"
+        return parameters.joined(separator: ";")
     }
 
     /// Just the BACKGROUND half of ``rendered`` — the escape that re-establishes

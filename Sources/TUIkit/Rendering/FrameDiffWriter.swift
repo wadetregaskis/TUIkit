@@ -391,7 +391,15 @@ extension FrameDiffWriter {
         // render loop in a Mode-B (live-app) profile.
         let mainWithBg = compensated.replacing(reset, with: reset + bgCode)
         let padding = max(0, terminalWidth - clippedWidth)
-        return bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset
+        let line = bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset
+        // Last, after every compensation has had the bytes it expects to match
+        // on. The line above is assembled from styled fragments, each ending in
+        // a reset, each of which then has the row's background put back — so a
+        // row of uniformly-styled cells restates its styling once per fragment.
+        // Measured on one frame of a divider drag: 2,565 escapes for 4,800
+        // cells, 19,974 of the frame's 32,394 bytes. See
+        // ``String/collapsingAdjacentSGR()``.
+        return line.collapsingAdjacentSGR()
     }
 
     private func reuseCache(for region: OutputRegion) -> LineReuseCache {
