@@ -412,6 +412,62 @@ Capture the whole stream, replay it in one go, and only then is a difference a
 difference. Written down in the design note so it does not cost anyone an hour
 twice.
 
+
+## Fourth pass
+
+### Mono images now split where the image puts the split
+
+**"Split ink from background where the image puts it, not at mid-grey."** Three
+renderers reduce a pixel to one bit — `.blocks(.solid)` and `.blocks(.fine)` in
+mono, and braille in *every* mode, since its dots carry the shape while colour
+is averaged per cell. All three split at mid-luminance, and the demo image is
+87% below it: only 12% of its sub-pixels came out as ink, which draws a broken
+outline rather than a silhouette. Otsu's method now measures the split from the
+image itself — 75.5 here rather than 128 — and the half-block mono render goes
+from 15% ink to 28%:
+
+```
+   fixed 128                          measured 75.5
+      ██████████▄▄▄                      ▄▄▄▄
+      ███████████████▄             ▀▀█████████████▄▄▄
+       ███▀█████████████▄    ▄▄      ██████████████████▄▄
+```
+
+It declines rather than guess: an image spanning fewer than 16 of 256 levels
+keeps the fixed split, because Otsu on a flat image splits sensor noise and
+renders it as speckle.
+
+Still yours to call: **the custom palette LUT.** You asked to see the design
+before I build past mono, and I have not designed it yet.
+
+### View resizing: a design note, not code
+
+`Documentation/Resizable views.md`. The short version:
+
+- **SwiftUI has nothing to copy.** Window resizing belongs to the window server;
+  `Image.resizable()` means "scale the content", which is a different thing
+  wearing the same word. So this is a TUI-specific API, and the name must not be
+  `resizable()` or the two collide. Proposed: **`.userResizable(_:)`**.
+- **The pointer has no shape**, so unlike every GUI the affordance must be
+  *drawn, before the pointer arrives* — not summoned on hover. That single
+  constraint decides most of the rest.
+- **Of your three placements I recommend the second-and-a-half**: the
+  bottom-right corner *plus* the full bottom and right edges. A one-cell corner
+  is an invisible target and collides with the scrollbar's arrows; all four
+  edges means the top and left resize by moving the view's origin, which takes
+  space from a sibling and is a surprising operation; eight handles is a GUI
+  idiom that only works because a cursor changes shape at each one. Bottom and
+  right also has a sentence a user can hold: *a resizable view grows down and
+  right, and never moves.*
+- **The affordance** is your `╝`, plus the two live edges one palette step
+  brighter, with hover strengthening rather than creating it. Block borders paint
+  their cells, so it has to be expressed as a background change there too.
+- **Most of the machinery already exists** — `_SplitDividerHandler`,
+  `SplitViewWidths`, the reset token — and a general version should be an
+  extraction of those rather than a second implementation. In particular it must
+  keep their best property: the handler records raw intent and the layout clamps
+  it, so the arrow keys always step from the real size.
+
 ## Not started
 
 Five items from your list are untouched. Each is a session rather than a batch
@@ -470,17 +526,15 @@ Table row is one line and the question does not arise there.
    such thing as half a selected row, and the Example demos currently conflate
    the two by driving granularity from the selection cursor. The toggle you
    asked for is the right way to show that.
-2. **Mono image rendering: adaptive threshold and a colour LUT.** The
-   all-black-under-most-themes report is the clear part; auto-contrast wants
-   real research (Otsu vs local/Sauvola thresholding, and whether dithering
-   belongs here) and the palette mapping is the part you asked me to design
+2. **Mono image rendering: adaptive threshold and a colour LUT.** *Threshold
+   done* — see below. The palette LUT is still the part you asked me to design
    before building beyond mono.
 3. **Text input: the shortcut legend, and reconciling Ctrl-A.** The legend is
    small. The reconciliation is a decision, and I have opinions rather than an
    answer — see below.
-4. **View resizing.** Wants the SwiftUI study first, then a TUI-native design
-   (which handles, drawn how, on which containers). A design note before any
-   code.
+4. **View resizing.** *Design note written* — `Documentation/Resizable views.md`.
+   No code yet, deliberately: the affordance is the expensive part to change
+   later. Summary below.
 5. **The Example-wide horizontal-space review.** Thirty-five pages, each needing
    a judgement about what to put beside what and a narrow fallback. The
    `ViewThatFits` pattern the Animation page and the track editor now use is the
