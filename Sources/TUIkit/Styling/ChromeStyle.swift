@@ -101,9 +101,11 @@ extension ChromeStyle {
     /// places is how they drift.
     @MainActor
     static func ruleRow(width: Int, context: RenderContext) -> String {
-        let glyph = context.environment.appearance.borderStyle.horizontal
-        return ANSIRenderer.colorize(
-            String(repeating: glyph, count: max(0, width)),
-            foreground: context.environment.palette.border)
+        // Through `BorderRenderer` rather than by hand: a rule drawn in a style
+        // that paints its cells must paint them here too, or a block-bordered
+        // page grows a hairline gap where its rules are.
+        BorderRenderer.rule(
+            style: context.environment.appearance.borderStyle, width: width,
+            color: context.environment.palette.border)
     }
 }

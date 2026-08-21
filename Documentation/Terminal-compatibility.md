@@ -173,12 +173,12 @@ the emoji-class clusters below unless noted.
   The image pipeline's half-block mode uses ▀ (upper) rather than ▄
   specifically to avoid a banding artifact observed here.
   **`Appearance.block`** (added 2026-08-20) draws its edges as a run of
-  `█`, so its horizontal borders inherit those seams on this host. The
-  mitigation is the one `TrackConfiguration.block` already uses — paint
-  the glyph's own colour as the cell BACKGROUND as well, so the pixels
-  the glyph misses are the same colour — but that needs the border
-  renderer to be able to state a background, which it currently cannot.
-  Cosmetic, and only on this terminal; recorded rather than fixed.
+  `█`, and takes the mitigation `TrackConfiguration.block` already used:
+  ``BorderStyle/paintsBackground`` makes the cell's background the glyph's
+  own colour, so the pixels the glyph misses are the right colour and the
+  seams have nothing to show through to. The title and the focus dot are
+  painted on the band too — and floored against it rather than against the
+  page, since that is what they are now read on.
 - **Right-edge phantom cells:** rows whose compensation leaves
   advance≠paint at the right edge can leave unpainted phantom cells;
   `FrameDiffWriter.repaintRightEdge` runs a scoped second pass.

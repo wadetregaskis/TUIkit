@@ -68,6 +68,44 @@ extension BorderRenderer {
     ///
     /// A titled border always has room — the title is truncated to fit around
     /// the ● — while a plain one needs an inner cell to spare.
+    /// The background a border's cells take, or `nil` for a style that draws
+    /// only its glyph. See ``BorderStyle/paintsBackground``.
+    static func fill(_ style: BorderStyle, _ color: Color) -> Color? {
+        style.paintsBackground ? color : nil
+    }
+
+    /// A colour that has to stay readable on whatever the border paints.
+    ///
+    /// A title and a focus dot sit among a border's cells, so on an opaque
+    /// style they are drawn ON the band rather than in a gap through it — which
+    /// means they are no longer being read against the page. Floored against
+    /// what they actually land on, through the 256-colour cube, exactly as a
+    /// control's label is floored against its face.
+    static func legible(_ ink: Color, on style: BorderStyle, _ color: Color) -> Color {
+        guard style.paintsBackground else { return ink }
+        return ink.ensuringRenderedContrast(
+            atLeast: ViewConstants.labelContrastFloor, against: color)
+    }
+
+    /// One side wall, drawn the one way.
+    ///
+    /// Public because three places used to build this by hand —
+    /// `_ContainerViewCore`'s animating wall, the drop-down's frame, and the
+    /// chrome rule — and a wall that an animation draws differently from the
+    /// one `standardContentLine` draws is a seam down the side of the box.
+    static func wall(style: BorderStyle, color: Color) -> String {
+        ANSIRenderer.colorize(
+            String(style.vertical), foreground: color, background: fill(style, color))
+    }
+
+    /// A horizontal rule in a style — the divider inside a menu, the chrome
+    /// rule — drawn the same way the box's own top and bottom are.
+    static func rule(style: BorderStyle, width: Int, color: Color) -> String {
+        ANSIRenderer.colorize(
+            String(repeating: style.horizontal, count: max(0, width)),
+            foreground: color, background: fill(style, color))
+    }
+
     static func showsFocusIndicator(innerWidth: Int, hasTitle: Bool) -> Bool {
         hasTitle || max(0, innerWidth) > 1
     }
@@ -100,13 +138,16 @@ extension BorderRenderer {
             showsFocusIndicator(innerWidth: innerWidth, hasTitle: false)
         {
             // ╭●──────────────╮
-            let leftCorner = ANSIRenderer.colorize(String(style.topLeft), foreground: color)
-            let indicator = ANSIRenderer.colorize(String(focusIndicator), foreground: indicatorColor)
+            let leftCorner = ANSIRenderer.colorize(
+                String(style.topLeft), foreground: color, background: fill(style, color))
+            let indicator = ANSIRenderer.colorize(
+                String(focusIndicator), foreground: legible(indicatorColor, on: style, color),
+                background: fill(style, color))
             let remainingWidth = innerWidth - 1  // -1 for the ● character
             let rest = ANSIRenderer.colorize(
                 String(repeating: style.horizontal, count: remainingWidth)
                     + String(style.topRight),
-                foreground: color
+                foreground: color, background: fill(style, color)
             )
             return leftCorner + indicator + rest
         }
@@ -115,7 +156,7 @@ extension BorderRenderer {
             String(style.topLeft)
             + String(repeating: style.horizontal, count: innerWidth)
             + String(style.topRight)
-        return ANSIRenderer.colorize(line, foreground: color)
+        return ANSIRenderer.colorize(line, foreground: color, background: fill(style, color))
     }
 
     /// Renders a top border line with an inline title.
@@ -154,14 +195,17 @@ extension BorderRenderer {
         let leftPart: String
         if let indicatorColor = focusIndicatorColor {
             // ╭● Title
-            let corner = ANSIRenderer.colorize(String(style.topLeft), foreground: color)
-            let indicator = ANSIRenderer.colorize(String(focusIndicator), foreground: indicatorColor)
+            let corner = ANSIRenderer.colorize(
+                String(style.topLeft), foreground: color, background: fill(style, color))
+            let indicator = ANSIRenderer.colorize(
+                String(focusIndicator), foreground: legible(indicatorColor, on: style, color),
+                background: fill(style, color))
             leftPart = corner + indicator
         } else {
             // ╭─ Title
             leftPart = ANSIRenderer.colorize(
                 String(style.topLeft) + String(style.horizontal),
-                foreground: color
+                foreground: color, background: fill(style, color)
             )
         }
 
@@ -170,14 +214,20 @@ extension BorderRenderer {
         if fittedTitle.stripped.allSatisfy(\.isWhitespace) {
             let fill = String(repeating: style.horizontal, count: max(0, innerWidth - 1))
                 + String(style.topRight)
-            return leftPart + ANSIRenderer.colorize(fill, foreground: color)
+            return leftPart
+                + ANSIRenderer.colorize(
+                    fill, foreground: color, background: self.fill(style, color))
         }
 
-        let titleStyled = ANSIRenderer.colorize(" \(fittedTitle) ", foreground: titleColor, bold: true)
+        // The title sits IN the band rather than in a gap punched through it: an
+        // opaque border with an unpainted title cell reads as a broken band.
+        let titleStyled = ANSIRenderer.colorize(
+            " \(fittedTitle) ", foreground: legible(titleColor, on: style, color),
+            background: fill(style, color), bold: true)
         let rightPartLength = max(0, innerWidth - usedLeftWidth - fittedTitle.strippedLength - 2)
         let rightPart = ANSIRenderer.colorize(
             String(repeating: style.horizontal, count: rightPartLength) + String(style.topRight),
-            foreground: color
+            foreground: color, background: fill(style, color)
         )
         return leftPart + titleStyled + rightPart
     }
@@ -201,7 +251,7 @@ extension BorderRenderer {
             String(style.bottomLeft)
             + String(repeating: style.horizontal, count: innerWidth)
             + String(style.bottomRight)
-        return ANSIRenderer.colorize(line, foreground: color)
+        return ANSIRenderer.colorize(line, foreground: color, background: fill(style, color))
     }
 
     /// Renders a horizontal divider with T-junctions.
@@ -223,7 +273,7 @@ extension BorderRenderer {
             String(style.leftT)
             + String(repeating: style.horizontal, count: innerWidth)
             + String(style.rightT)
-        return ANSIRenderer.colorize(line, foreground: color)
+        return ANSIRenderer.colorize(line, foreground: color, background: fill(style, color))
     }
 
     /// Wraps a single content line with vertical side borders.
@@ -251,7 +301,7 @@ extension BorderRenderer {
         return contentLine(
             content: content,
             innerWidth: innerWidth,
-            vertical: ANSIRenderer.colorize(String(style.vertical), foreground: color),
+            vertical: wall(style: style, color: color),
             backgroundColor: backgroundColor
         )
     }
@@ -286,7 +336,7 @@ extension BorderRenderer {
         contentWidth: Int? = nil
     ) -> [String] {
         let innerWidth = max(0, innerWidth)  // see standardTopBorder: negative traps
-        let vertical = ANSIRenderer.colorize(String(style.vertical), foreground: color)
+        let vertical = wall(style: style, color: color)
         return contents.map {
             contentLine(
                 content: $0,

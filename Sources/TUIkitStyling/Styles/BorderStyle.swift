@@ -33,6 +33,29 @@ public struct BorderStyle: Sendable, Hashable {
     /// Right T-junction character (┤).
     public let rightT: Character
 
+    /// Whether this style's glyphs are opaque — paint the cell in the border's
+    /// colour as well as the glyph.
+    ///
+    /// A `Bool` and not a `Color`, deliberately. A border's colour arrives per
+    /// frame — `palette.border`, a container's override, or one step of an
+    /// `AnimatedColor` pulse — so a colour stored on the style would be a
+    /// second source of truth the pulse could not honour, and an animated wall
+    /// would breathe over a frozen background. This says only "my glyph fills
+    /// its cell; paint it in whatever colour you are drawing me in", which is
+    /// exactly what ``TrackConfiguration/EmptyStyle/background`` means.
+    ///
+    /// True only for ``block``. `U+2588` does not cover its cell on every
+    /// terminal — Terminal.app leaves hairline seams between adjacent full
+    /// blocks, recorded in `Documentation/Terminal-compatibility.md` — and
+    /// painting the cell the same colour as the glyph makes the pixels the
+    /// glyph misses the right colour anyway. `TrackConfiguration.block` has
+    /// always done this; a border made of the same glyph has the same problem.
+    ///
+    /// It must stay false for ``none``, whose whole contract is that whatever
+    /// is behind it shows through: painting would make the quietest border the
+    /// loudest.
+    public let paintsBackground: Bool
+
     /// Creates a custom border style.
     public init(
         topLeft: Character,
@@ -42,8 +65,10 @@ public struct BorderStyle: Sendable, Hashable {
         horizontal: Character,
         vertical: Character,
         leftT: Character? = nil,
-        rightT: Character? = nil
+        rightT: Character? = nil,
+        paintsBackground: Bool = false
     ) {
+        self.paintsBackground = paintsBackground
         self.topLeft = topLeft
         self.topRight = topRight
         self.bottomLeft = bottomLeft
@@ -150,7 +175,8 @@ public struct BorderStyle: Sendable, Hashable {
         horizontal: "█",
         vertical: "█",
         leftT: "█",
-        rightT: "█"
+        rightT: "█",
+        paintsBackground: true
     )
 
     /// No visible border (space characters).

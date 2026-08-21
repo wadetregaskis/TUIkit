@@ -49,6 +49,11 @@ private enum DimmedOrnaments {
         chars.formUnion(["╔", "╗", "╚", "╝", "═", "║", "╠", "╣", "╦", "╩", "╬"])
         // Box-drawing: heavy
         chars.formUnion(["┏", "┓", "┗", "┛", "━", "┃", "┣", "┫", "┳", "┻", "╋"])
+        // Box-drawing: block and blank (`Appearance.block`). Without these a
+        // block-bordered page behind a modal kept its solid bands at full
+        // strength while everything around them receded — the loudest chrome
+        // on the page was the only thing that did not dim.
+        chars.formUnion(["█", "▀", "▄", "▌", "▐"])
         // UI indicators
         chars.formUnion(["▸", "◂", "▶", "◀", "●", "▪"])
 

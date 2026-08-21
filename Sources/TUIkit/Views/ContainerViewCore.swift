@@ -793,7 +793,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         // titled top border may be WIDER than the box below it, and the wall is
         // where `standardContentLines` put it.
         guard let wall = borderColor.run(offsetX: 0, offsetY: 0, draw: {
-            String(borderStyle.vertical).styled(foreground: $0)
+            BorderRenderer.wall(style: borderStyle, color: $0)
         }) else { return runs }
         for row in 1..<(lineCount - 1) where row != dividerRow {
             runs.append(wall.shifted(byX: 0, y: row))

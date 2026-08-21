@@ -409,8 +409,7 @@ enum DropdownMenu {
         // When a scrollbar is shown it takes the rightmost interior column, so
         // content fits the remaining width and each row is composed manually
         // (border + content + bar cell + border).
-        let verticalBorder = ANSIRenderer.colorize(
-            String(borderStyle.vertical), foreground: borderColor)
+        let verticalBorder = BorderRenderer.wall(style: borderStyle, color: borderColor)
         let contentInner = barCells == nil ? innerWidth : max(1, innerWidth - 1)
 
         for (local, index) in visibleRange.enumerated() {
