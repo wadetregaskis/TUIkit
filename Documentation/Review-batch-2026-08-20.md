@@ -542,10 +542,38 @@ lots to gain. A page whose median is 64 or 82 is *uniformly* that wide, which
 for **Empty State** is a centred placeholder that is meant to be narrow and for
 **Image (File)** is the image itself. Rearranging either would make it worse.
 
-So the honest remaining list is shorter than nine: **State Persistence**
-(median 29, two sections that could sit side by side) and **Preferences**
-(median 12, but only twelve body rows — the gain is real and small). Empty
-State, Image (File) and Split View are done as they are, and I would leave them.
+So the honest remaining list is shorter than nine. Empty State, Image (File)
+and Split View are right as they are.
+
+And then the last two turned out to be a third category, which I only found by
+building it: **prose-bound**. I rearranged State Persistence into two columns
+and it stayed one column at 200 — because its sections are explanations, and two
+~90-column sentences side by side need **215 columns** before `ViewThatFits`
+will take them. Moving the filesystem-path row out of a column (a path is both
+the longest line on the page and the one that reads worst wrapped) bought ten
+columns and not the twenty needed. Preferences is the same shape with less of
+it: twelve body rows, one of them a 96-column sentence.
+
+So that change is **reverted rather than shipped**. Arrangements that never fire
+on any terminal anyone has are worse than none: they are dead code that reads
+like a feature, and the next person to widen a sentence would have no idea they
+had just made the page narrower.
+
+**The width review is finished**, then, with five pages rearranged and four left
+alone for stated reasons — not nine pages of work, and not the two I thought
+remained an hour ago.
+
+| page | before | after | |
+|---|---|---|---|
+| Radio Buttons | 65 | **175** | four arrangements |
+| Steppers | 74 | **120** | three |
+| Buttons & Links | 82 | **183** | three |
+| Spinners | 91 | **145** | three, catalogue column count as a parameter |
+| Picker | 134 | **142** | four |
+| Empty State | 124 | — | a centred placeholder; meant to be narrow |
+| Image (File) | 138 | — | the width IS the image |
+| Split View | 172 | — | already uses it |
+| State Persistence, Preferences | 117, 96 | — | prose-bound; needs 215 columns |
 
 Still not done: the **collapsible left gutter**. It is a separate question from
 this — it is about the page frame rather than the page content — and I have not
