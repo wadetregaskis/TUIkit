@@ -169,6 +169,10 @@ type_name:
     - _ListContentView
     - _ImageCore
     - _ToggleCore
+    # The user-resizable pair: the core is generic over its content and the
+    # handler is shared with it, so neither can be file-private.
+    - _UserResizableCore
+    - _UserResizeHandler
     # Shared by VStack/LazyVStack and HStack/LazyHStack (one core, two overflow
     # policies), so these cores are internal rather than file-private.
     - _VStackCore

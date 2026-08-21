@@ -7,7 +7,9 @@
 //
 //  Translation fragment (group 12): the multi-line editor's own key legend —
 //  readline's bindings, which are written on nothing and so have to be written
-//  down. Its own fragment because group 7 had reached the file-length limit.
+//  down — and the user-resizable demo, whose gesture is likewise invisible
+//  until something says it is there. Its own fragment because group 7 had
+//  reached the file-length limit.
 //  English is the source of truth; other languages fall back to English (then
 //  the key) for anything they omit. Merged into the shared lookup alongside the
 //  other fragments.
@@ -15,6 +17,9 @@
 extension ExampleStrings {
     static let g12: [String: [String: String]] = [
         "en": [
+            "page.layout.resizableSection": "Resize it yourself (.userResizable)",
+            "page.layout.resizableHint": "Tab to the box, then ←/→ and ↑/↓ to resize it (Shift for five, Home/End for the limits, Esc to give the size back). Or drag its bottom or right edge — ╝ marks the corner. Bounded here to 12…40 by 3…8.",
+            "page.layout.resizableBody": "Drag my edge, or use the arrows",
             "page.list.selectable": "Selection enabled",
             "page.textInput.editorKeysSection": "Editor shortcuts (readline)",
             "page.textInput.editorKeys.motion": "[^B] [^F] Back / forward a character · [^P] [^N] Previous / next line · [^V] Page down",
@@ -24,6 +29,9 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Select all",
         ],
         "de": [
+            "page.layout.resizableSection": "Selbst anpassen (.userResizable)",
+            "page.layout.resizableHint": "Mit Tab zum Kasten, dann ←/→ und ↑/↓ zum Ändern (Umschalt für fünf, Pos1/Ende für die Grenzen, Esc gibt die Größe zurück). Oder die untere bzw. rechte Kante ziehen — ╝ markiert die Ecke. Hier begrenzt auf 12…40 mal 3…8.",
+            "page.layout.resizableBody": "Zieh an meiner Kante oder nimm die Pfeile",
             "page.list.selectable": "Auswahl aktiviert",
             "page.textInput.editorKeysSection": "Editor-Kürzel (readline)",
             "page.textInput.editorKeys.motion": "[^B] [^F] Ein Zeichen zurück / vor · [^P] [^N] Vorige / nächste Zeile · [^V] Eine Seite runter",
@@ -33,6 +41,9 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Alles auswählen",
         ],
         "fr": [
+            "page.layout.resizableSection": "À redimensionner soi-même (.userResizable)",
+            "page.layout.resizableHint": "Tab jusqu'au cadre, puis ←/→ et ↑/↓ pour le redimensionner (Maj pour cinq, Origine/Fin pour les limites, Échap rend la taille). Ou faites glisser son bord bas ou droit — ╝ marque le coin. Borné ici à 12…40 sur 3…8.",
+            "page.layout.resizableBody": "Tirez mon bord, ou utilisez les flèches",
             "page.list.selectable": "Sélection activée",
             "page.textInput.editorKeysSection": "Raccourcis de l'éditeur (readline)",
             "page.textInput.editorKeys.motion": "[^B] [^F] Caractère précédent / suivant · [^P] [^N] Ligne précédente / suivante · [^V] Page suivante",
@@ -42,6 +53,9 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Tout sélectionner",
         ],
         "it": [
+            "page.layout.resizableSection": "Ridimensionalo tu (.userResizable)",
+            "page.layout.resizableHint": "Tab fino al riquadro, poi ←/→ e ↑/↓ per ridimensionarlo (Maiusc per cinque, Inizio/Fine per i limiti, Esc restituisce la dimensione). Oppure trascina il bordo inferiore o destro — ╝ segna l'angolo. Qui limitato a 12…40 per 3…8.",
+            "page.layout.resizableBody": "Trascina il mio bordo, o usa le frecce",
             "page.list.selectable": "Selezione attiva",
             "page.textInput.editorKeysSection": "Scorciatoie dell'editor (readline)",
             "page.textInput.editorKeys.motion": "[^B] [^F] Un carattere indietro / avanti · [^P] [^N] Riga precedente / successiva · [^V] Pagina giù",
@@ -51,6 +65,9 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Seleziona tutto",
         ],
         "es": [
+            "page.layout.resizableSection": "Cámbialo tú (.userResizable)",
+            "page.layout.resizableHint": "Tab hasta el recuadro y luego ←/→ y ↑/↓ para redimensionarlo (Mayús para cinco, Inicio/Fin para los límites, Esc devuelve el tamaño). O arrastra su borde inferior o derecho — ╝ marca la esquina. Aquí limitado a 12…40 por 3…8.",
+            "page.layout.resizableBody": "Arrastra mi borde, o usa las flechas",
             "page.list.selectable": "Selección activada",
             "page.textInput.editorKeysSection": "Atajos del editor (readline)",
             "page.textInput.editorKeys.motion": "[^B] [^F] Un carácter atrás / adelante · [^P] [^N] Línea anterior / siguiente · [^V] Página abajo",
@@ -60,6 +77,9 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Seleccionar todo",
         ],
         "zh": [
+            "page.layout.resizableSection": "自己调整大小 (.userResizable)",
+            "page.layout.resizableHint": "用 Tab 移到方框，再用 ←/→ 和 ↑/↓ 调整大小（Shift 一次五格，Home/End 到上下限，Esc 交还尺寸）。也可以拖动它的下边或右边 —— ╝ 标出该角。此处限制为 12…40 乘 3…8。",
+            "page.layout.resizableBody": "拖我的边，或用方向键",
             "page.list.selectable": "启用选择",
             "page.textInput.editorKeysSection": "编辑器快捷键（readline）",
             "page.textInput.editorKeys.motion": "[^B] [^F] 前后移动一个字符 · [^P] [^N] 上一行 / 下一行 · [^V] 向下翻页",
@@ -69,6 +89,9 @@ extension ExampleStrings {
             "page.textInput.editorKeys.selectAll": "[Opt-^A] 全选",
         ],
         "ja": [
+            "page.layout.resizableSection": "自分でリサイズ (.userResizable)",
+            "page.layout.resizableHint": "Tab で枠に移り、←/→ と ↑/↓ でサイズを変えます（Shift で 5 セル、Home/End で上下限、Esc でサイズを返す）。下辺か右辺をドラッグしても構いません — ╝ が角の印です。ここでは 12…40 × 3…8 に制限しています。",
+            "page.layout.resizableBody": "辺をドラッグするか、矢印キーで",
             "page.list.selectable": "選択を有効にする",
             "page.textInput.editorKeysSection": "エディタのショートカット（readline）",
             "page.textInput.editorKeys.motion": "[^B] [^F] 一文字戻る／進む · [^P] [^N] 前の行／次の行 · [^V] 一画面下へ",

@@ -1,13 +1,12 @@
 # User-resizable views
 
-A design note. TUIkit can already resize one thing by hand — a
-`NavigationSplitView` column, by dragging its divider — and the question is what
-it would take to let a `ScrollView`, a `List` or a `Table` be resized the same
-way, by the person using the app rather than by the layout.
+**Status: shipped as `.userResizable(_:)`.** This note was the design; what
+follows is it, updated where building it taught me something. Two things did.
 
-No code yet: the shape of the affordance is the part worth agreeing on first,
-because it is the part a user sees and the part that is expensive to change
-later.
+TUIkit could already resize one thing by hand — a `NavigationSplitView` column,
+by dragging its divider — and the question was what it would take to let any
+view be resized the same way, by the person using the app rather than by the
+layout.
 
 ## SwiftUI has no answer to copy
 
@@ -28,8 +27,34 @@ question is always "what is the SwiftUI signature". Here there is none:
   `Image.resizable()` is added for parity.
 
 So this is a TUI-specific API, and by the rule it stays deliberately separate
-from anything SwiftUI-shaped. Proposed name: **`.userResizable(_:)`** — it says
-who does the resizing, which is exactly what distinguishes it.
+from anything SwiftUI-shaped. The name is **`.userResizable(_:)`** — it says who
+does the resizing, which is exactly what distinguishes it.
+
+### Axes and bounds
+
+Four overloads, and one rule covering all of them: **naming an axis is what
+makes it resizable.**
+
+```swift
+content.userResizable()                             // both, unbounded
+content.userResizable(.horizontal)                  // width only
+content.userResizable(width: 20...80)               // width only, bounded
+content.userResizable(width: 20..., height: 5...30) // both; width has no ceiling
+```
+
+Bounds are Swift ranges, which is what makes "no maximum" and "no minimum"
+spellable without inventing a vocabulary: `20...80` is both ends, `20...` a
+floor with no ceiling, `...80` a ceiling with no floor. `ResizeBounds` reads
+them through `RangeExpression.relative(to:)`, the standard library's own way of
+asking a partial range for concrete bounds — so there are no per-range-type
+overloads and no sentinel numbers standing in for "open".
+
+There is deliberately no overload taking an axis set *and* a range, because
+`.userResizable(.vertical, width: 20...80)` has no honest meaning. Nothing
+contradictory is spellable.
+
+A ceiling applies **before** anything is dragged, so `width: 12...40` reads as
+"at most 40 wide", not "unbounded until someone touches it".
 
 ## What a terminal changes
 

@@ -657,6 +657,27 @@ struct LayoutPage: View {
                 }
             }
 
+            // `.userResizable` — the size becomes the user's, not the layout's.
+            // Bounded on both axes here so the demo shows the limits holding;
+            // the ranges ARE the axis selection, so a `.userResizable(width:)`
+            // alone would leave the height to the layout.
+            DemoSection("page.layout.resizableSection") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("page.layout.resizableHint")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    // Flexible inside, bounded outside: the box fills whatever
+                    // the resizable wrapper offers it, and the wrapper offers
+                    // the range's ceiling until someone drags it. A FIXED frame
+                    // in here would pin the border and the resize would only
+                    // pad around it — which is right, since a fixed size is the
+                    // author saying "this size".
+                    Text("page.layout.resizableBody")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .border(.palette.border)
+                        .userResizable(width: 12...40, height: 3...8)
+                }
+            }
+
             Spacer()
         }
         .scrollableDemoPage()
