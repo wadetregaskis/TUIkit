@@ -339,13 +339,33 @@ Five items from your list are untouched. Each is a session rather than a batch
 item, and I would rather say so than leave half of one behind.
 
 1. **Scroll granularity: partial rows at both ends, and a selection toggle.**
-   Your reasoning is right and I want to say so explicitly: row-vs-line is a
-   *scroll* concept, selection always moves whole rows, and the asymmetry — a
-   partial row at the top but never at the bottom — has no defensible reason.
-   The scrollbar-pulse half of this item is done; the granularity half touches
-   `ItemListHandler`'s resting-position ladder and its `Table` twin, which is
-   the pair that drifts (see `list-table-twin-divergence`), so it wants doing to
-   both at once with the storm suites run against both.
+   The scrollbar-pulse half is done. On the other half I can now answer your
+   question — "is there any technical or conceptual reason why it shouldn't
+   behave consistently at both ends?" — and the answer is **no, and the
+   asymmetry is two separate mechanisms rather than one decision**:
+
+   - The TOP renders a partial row through `scrollTopClipLines`, and
+     `clampTopClip()` says in as many words that granularity "is not a
+     constraint on where the viewport may sit" (`ItemListHandler.swift:1250`).
+     So a partial row is already legitimate there, at any granularity.
+   - The BOTTOM cannot, because the window is filled by `rowsFitting(in:)`
+     (`:1201-1210`), which stops at the last row that fits WHOLE and leaves the
+     remaining lines blank. Nothing decided the bottom should differ; the fill
+     was simply written in whole rows.
+   - And `clampTopClip()` zeroes the clip outright once `scrollOffset >=
+     maxOffset` (`:1263`), so the very bottom is pinned to a row boundary.
+
+   Making the bottom match means the row walk drawing a row's first *k* lines
+   when only *k* fit — the mirror of what the top clip already does — in
+   `_ListCore` **and** in its `Table` twin, which is the pair that drifts (see
+   `list-table-twin-divergence`). Worth doing to both at once with the seeded
+   storm suites run against both, which is why it is not a batch item.
+
+   On the framing: your reading is right and worth writing down — row-vs-line is
+   a property of a SCROLL, selection always moves whole rows because there is no
+   such thing as half a selected row, and the Example demos currently conflate
+   the two by driving granularity from the selection cursor. The toggle you
+   asked for is the right way to show that.
 2. **Mono image rendering: adaptive threshold and a colour LUT.** The
    all-black-under-most-themes report is the clear part; auto-contrast wants
    real research (Otsu vs local/Sauvola thresholding, and whether dithering
