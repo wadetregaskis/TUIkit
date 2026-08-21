@@ -107,13 +107,28 @@ struct MenuPressTrackingTests {
     /// screen coordinates — the menu may be indented (a `Picker`'s drop-down
     /// hangs under its control, past the label), so the column matters as much
     /// as the row.
-    private func row(_ frame: FrameBuffer, _ label: String) throws -> (x: Int, y: Int) {
+    ///
+    /// Read out of the COMPOSITED frame, which is the screen: an overlay's
+    /// `offsetY` is where it asked to go, and `OverlayLayer.placed(…)` is where
+    /// it went. The two differ the moment a popup does not fit below its
+    /// control and is flipped or nudged back on screen — and that is exactly
+    /// the case a test of "does a click land where it looks like it lands" has
+    /// to cover. Aiming with the declared offset made every such test aim one
+    /// row past the label it named, and none of them was strict enough to
+    /// notice until one asserted an exact option.
+    private func row(_ frame: FrameBuffer, _ label: String, _ context: RenderContext) throws -> (
+        x: Int, y: Int
+    ) {
         let overlay = try #require(frame.overlays.first, "the menu is open")
+        let screen = frame.compositingOverlays(
+            maxWidth: context.availableWidth, maxHeight: context.availableHeight,
+            palette: context.environment.palette)
         let line = try #require(
-            overlay.content.lines.firstIndex { $0.stripped.contains(label) },
-            "\(label) is in the menu: \(overlay.content.lines.map(\.stripped))")
-        // Past the menu's left border and its one-cell inset.
-        return (overlay.offsetX + 2, overlay.offsetY + line)
+            screen.lines.firstIndex { $0.stripped.contains(label) },
+            "\(label) is on screen: \(screen.lines.map(\.stripped))")
+        // Past the menu's left border and its one-cell inset. The column comes
+        // from the layer, which is not clipped horizontally in any menu case.
+        return (overlay.offsetX + 2, line)
     }
 
     /// The label of the highlighted row, read out of the DRAWN frame by
@@ -184,35 +199,18 @@ struct MenuPressTrackingTests {
                 overlay.content.height < 60,
                 "the popup must be CLAMPED for this to test anything: \(overlay.content.height)")
 
-            let target = try row(opened, label)
+            let target = try row(opened, label, context)
             press(tui, context, x: target.x, y: target.y)
             renderArmed(menu, tui: tui, context: context)
             release(tui, context, x: target.x, y: target.y)
 
             let expected = Int(label.dropFirst("Option ".count))
-            // KNOWN ISSUE, and a user-facing one rather than a test-harness
-            // one: clicking a row of a CLAMPED drop-down chooses the row BELOW
-            // it. Measured: the row drawing "Option 2" yields Option 3, "Option
-            // 5" yields 6, "Option 9" yields 10 — a consistent +1, so the
-            // popup's composited hit regions sit one row above where its
-            // content is drawn. `DropdownMenuRenderer` places each row's region
-            // at `offsetY: 1 + local` (past the top border), which is right in
-            // the popup's own buffer; the disagreement is in how a clamped
-            // overlay's regions are composited against its content. The
-            // renderer's own comment at that site anticipates exactly this
-            // ("a tall one is clamped to the screen, and then the two differ").
-            //
-            // Recorded rather than silenced: `withKnownIssue` fails loudly the
-            // day the compositing is fixed, which is what stops this being
-            // forgotten.
-            withKnownIssue("clamped drop-down: hit regions sit one row above the drawn content") {
-                #expect(
-                    chosen.value == expected,
-                    """
-                    clicking the row that DRAWS "\(label)" chose Option \(chosen.value). \
-                    The drawn row and the hit region disagree.
-                    """)
-            }
+            #expect(
+                chosen.value == expected,
+                """
+                clicking the row that DRAWS "\(label)" chose Option \(chosen.value). \
+                The drawn row and the hit region disagree.
+                """)
         }
     }
 
@@ -244,7 +242,7 @@ struct MenuPressTrackingTests {
             press(tui, context, x: controlX + 1, y: 0)
             release(tui, context, x: controlX + 1, y: 0)
             let opened = renderArmed(menu, tui: tui, context: context)
-            let target = try row(opened, "Option 5")
+            let target = try row(opened, "Option 5", context)
 
             if scrolling {
                 wheel(tui, x: target.x, y: target.y)
@@ -321,12 +319,12 @@ struct MenuPressTrackingTests {
         // differs from this frame is a row the drag lit up.
         let justOpened = renderArmed(view, tui: tui, context: context)
 
-        let target = try row(justOpened, "Delete")
+        let target = try row(justOpened, "Delete", context)
         drag(tui, x: target.x, y: target.y)
         let dragged = renderArmed(view, tui: tui, context: context)
         #expect(try highlightedRow(dragged, versus: justOpened) == "Delete")
 
-        let backTarget = try row(dragged, "Rename")
+        let backTarget = try row(dragged, "Rename", context)
         drag(tui, x: backTarget.x, y: backTarget.y)
         let back = renderArmed(view, tui: tui, context: context)
         #expect(
@@ -343,7 +341,7 @@ struct MenuPressTrackingTests {
         renderArmed(view, tui: tui, context: context)
         press(tui, context, x: 2, y: 0)
         let opened = renderArmed(view, tui: tui, context: context)
-        let target = try row(opened, "Duplicate")
+        let target = try row(opened, "Duplicate", context)
         drag(tui, x: target.x, y: target.y)
         renderArmed(view, tui: tui, context: context)
         release(tui, x: target.x, y: target.y)
@@ -401,7 +399,7 @@ struct MenuPressTrackingTests {
         renderArmed(view, tui: tui, context: context)
         press(tui, context, x: 2, y: 0)
         let opened = renderArmed(view, tui: tui, context: context)
-        let target = try row(opened, "Sizes")
+        let target = try row(opened, "Sizes", context)
         drag(tui, x: target.x, y: target.y)
         renderArmed(view, tui: tui, context: context)
         release(tui, x: target.x, y: target.y)
@@ -429,7 +427,7 @@ struct MenuPressTrackingTests {
         // Then click two rows in place. This is what `.disabled` is for, and it
         // must keep working: nothing here is a held gesture.
         for label in ["Hidden files", "Sizes"] {
-            let target = try row(opened, label)
+            let target = try row(opened, label, context)
             press(tui, context, x: target.x, y: target.y)
             renderArmed(view, tui: tui, context: context)
             release(tui, x: target.x, y: target.y)
@@ -457,7 +455,7 @@ struct MenuPressTrackingTests {
         let opened = renderArmed(view, tui: tui, context: context)
         // Onto a row first, so the gesture is unambiguously a press-and-hold
         // and not the click that leaves the menu up.
-        let target = try row(opened, "Rename")
+        let target = try row(opened, "Rename", context)
         drag(tui, x: target.x, y: target.y)
         renderArmed(view, tui: tui, context: context)
 
@@ -483,7 +481,7 @@ struct MenuPressTrackingTests {
         renderArmed(view, tui: tui, context: context)
         press(tui, context, x: 2, y: 0)
         let opened = renderArmed(view, tui: tui, context: context)
-        let target = try row(opened, "Rename")
+        let target = try row(opened, "Rename", context)
         drag(tui, x: target.x, y: target.y)
         let dragged = renderArmed(view, tui: tui, context: context)
 
@@ -515,8 +513,8 @@ struct MenuPressTrackingTests {
         release(tui, context, x: 2, y: 0)
         let open = renderArmed(view, tui: tui, context: context)
 
-        let first = try row(open, "Rename")
-        let second = try row(open, "Delete")
+        let first = try row(open, "Rename", context)
+        let second = try row(open, "Delete", context)
         press(tui, context, x: first.x, y: first.y)
         renderArmed(view, tui: tui, context: context)
         drag(tui, x: second.x, y: second.y)
@@ -554,7 +552,7 @@ struct MenuPressTrackingTests {
         let opened = renderArmed(view, tui: tui, context: context)
         #expect(!opened.overlays.isEmpty, "the drop-down is up while the button is still down")
 
-        let target = try row(opened, "Midnight")
+        let target = try row(opened, "Midnight", context)
         drag(tui, x: target.x, y: target.y)
         renderArmed(view, tui: tui, context: context)
         release(tui, x: target.x, y: target.y)
@@ -639,7 +637,7 @@ struct MenuPressTrackingTests {
         let opened = renderArmed(view, tui: tui, context: context)
         #expect(!opened.overlays.isEmpty, "the menu is up with the button still down")
 
-        let target = try row(opened, "Paste")
+        let target = try row(opened, "Paste", context)
         drag(tui, x: target.x, y: target.y, button: .right)
         let dragged = renderArmed(view, tui: tui, context: context)
         #expect(
@@ -701,7 +699,7 @@ struct MenuPressTrackingTests {
         let opened = renderArmed(view, tui: tui, context: context)
         #expect(!opened.overlays.isEmpty, "the suggestions are up with the button still down")
 
-        let target = try row(opened, "Blackberry")
+        let target = try row(opened, "Blackberry", context)
         drag(tui, x: target.x, y: target.y)
         renderArmed(view, tui: tui, context: context)
         release(tui, x: target.x, y: target.y)
