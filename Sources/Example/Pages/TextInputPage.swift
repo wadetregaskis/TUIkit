@@ -227,6 +227,21 @@ struct TextInputPage: View {
                     TextEditor(text: $notes)
                         .frame(height: 4)
                         .border()
+
+                    // The editor's own legend, right under the editors rather
+                    // than at the foot of the page: these are readline's
+                    // bindings, they are not written on anything, and a reader
+                    // who has just clicked into a field is not going to scroll
+                    // to find out what Ctrl-U does.
+                    KeyboardHelpSection(
+                        "page.textInput.editorKeysSection",
+                        shortcuts: [
+                            "page.textInput.editorKeys.motion",
+                            "page.textInput.editorKeys.lineEnds",
+                            "page.textInput.editorKeys.words",
+                            "page.textInput.editorKeys.kill",
+                            "page.textInput.editorKeys.selectAll",
+                        ])
                 }
             }
 
