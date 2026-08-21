@@ -1169,3 +1169,29 @@ here.)
   right-edge repaint.
 - `ToggleCharacterSet.automatic` + `SwitchIndicatorGlyphs` — chrome glyph
   selection per host.
+
+### SGR codes the output path emits (recorded 2026-08-20)
+
+`String.collapsingAdjacentSGR()` states a line's styling once and then emits
+each subsequent change as a **delta** from the state it last established, not
+as a reset-prefixed absolute. That narrows the emitted vocabulary to codes
+that must be safe on every host in this document, so the set is worth writing
+down:
+
+| Codes | Used for | Portability |
+|---|---|---|
+| `0` | the line's first statement, and any attribute-off | universal |
+| `1 2 3 4 5 7 8 9` | attributes ON | universal |
+| `30–37 90–97 38;5;n 38;2;r;g;b` | foreground | per the depth rules above |
+| `40–47 100–107 48;5;n 48;2;r;g;b` | background | per the depth rules above |
+| **`39` / `49`** | foreground / background back to the terminal's own | ECMA-48 core; present in every host here, in tmux, and in the Linux console |
+
+The codes deliberately **not** emitted are the attribute-*off* ones —
+`21 22 23 24 25 27 28 29`. `21` is the reason: ECMA-48 assigns it
+double-underline and several terminals read it as bold-off, so the two
+readings disagree about what a line looks like afterwards.
+``SGRState/rendered(changingFrom:)`` therefore declines to turn an attribute
+off by delta at all and restates from `ESC[0m`, which every terminal agrees
+about. (``SGRState/apply(_:)`` still *honours* both readings when parsing,
+because there the conservative direction is the opposite one — treating an
+off-code as a no-op would leave styling on that the source cleared.)

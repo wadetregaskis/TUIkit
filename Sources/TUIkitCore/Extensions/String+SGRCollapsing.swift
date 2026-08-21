@@ -35,7 +35,12 @@ extension String {
     ///   discarded by that reset, and everything after it is netted by
     ///   ``SGRState`` — whose whole contract is "the shortest sequence that puts
     ///   a freshly-reset terminal into this state", which is precisely the
-    ///   situation after a reset. Emitted as `ESC[0m` plus that.
+    ///   situation after a reset. The line's FIRST reset is emitted as `ESC[0m`
+    ///   plus that, because the state it resets from is the unknown baseline.
+    ///   Every state after it is emitted as a DELTA from the state this function
+    ///   last put the terminal in — see ``SGRState/rendered(changingFrom:)``. An
+    ///   absolute would be correct too; it would also spend twelve bytes saying
+    ///   "black background" to a terminal whose background is already black.
     /// - **A run without one.** The prior state is unknown, so nothing may be
     ///   netted; the parameters are concatenated into one escape instead. Fewer
     ///   bytes of framing, identical meaning.
@@ -76,8 +81,16 @@ extension String {
             flushUnresetRun()
             guard pending else { return }
             pending = false
-            if let emitted, emitted == desired { return }
-            result += desired.isDefault ? "\u{1B}[0m" : "\u{1B}[0;" + desired.parameters + "m"
+            // With something already emitted, the terminal's state is not merely
+            // knowable but KNOWN — we put it there — so say only what changed.
+            // Without, it is unknown (nothing has been netted yet, only the
+            // line's inherited baseline), and only a reset-prefixed absolute is
+            // safe. See ``SGRState/rendered(changingFrom:)``.
+            if let emitted {
+                result += desired.rendered(changingFrom: emitted)
+            } else {
+                result += desired.isDefault ? "\u{1B}[0m" : "\u{1B}[0;" + desired.parameters + "m"
+            }
             emitted = desired
         }
 

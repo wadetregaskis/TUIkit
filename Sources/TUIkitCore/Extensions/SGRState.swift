@@ -161,6 +161,49 @@ public struct SGRState: Sendable, Equatable {
         return parameters.joined(separator: ";")
     }
 
+    /// The shortest escape sequence that takes a terminal **already in
+    /// `previous`** into this state, or `""` when it is already there.
+    ///
+    /// ``rendered`` answers the same question from a freshly-reset terminal,
+    /// which is the only safe answer when the incoming state is unknown — but
+    /// inside one built line it is known, because we put it there. Saying only
+    /// what changed is most of a frame: the two commonest escapes in a divider
+    /// drag were `ESC[0;48;5;16m` (12 bytes, and only the foreground was going
+    /// back to default — `ESC[39m`, 5) and `ESC[0;38;5;22;48;5;16m` (19 bytes
+    /// over a background that was already 16 — `ESC[38;5;22m`, 11).
+    ///
+    /// Two changes are NOT expressed as a delta, and both fall back to a
+    /// reset-prefixed absolute:
+    ///
+    /// - **Turning an attribute off.** The off-codes are where terminals
+    ///   genuinely disagree — ECMA-48 assigns 21 to double-underline while many
+    ///   terminals read it as bold-off, which is why ``apply(_:)`` honours both
+    ///   readings. Emitting one would be betting on the terminal's; a reset is
+    ///   unambiguous everywhere, and this is the render path.
+    /// - **A change in the passthrough codes.** Unknown means "not safe to
+    ///   reason about", so it is not safe to reason about the difference either.
+    ///
+    /// Only `39` / `49` (default foreground / background) are added to the
+    /// codes TUIkit emits, and both are universal — see
+    /// `Documentation/Terminal-compatibility.md`.
+    public func rendered(changingFrom previous: Self) -> String {
+        guard self != previous else { return "" }
+        let absolute = isDefault ? "\u{1B}[0m" : "\u{1B}[0;" + parameters + "m"
+        guard previous.attributes.isSubset(of: attributes),
+            previous.passthrough == passthrough
+        else { return absolute }
+
+        var codes = attributes.subtracting(previous.attributes).sorted().map(String.init)
+        if foreground != previous.foreground { codes += foreground ?? ["39"] }
+        if background != previous.background { codes += background ?? ["49"] }
+        // Unreachable — equal attributes, foreground and background with equal
+        // passthrough IS equality — but a delta that says nothing would silently
+        // leave the previous styling in force, so spend the bytes rather than
+        // trust the reasoning.
+        guard !codes.isEmpty else { return absolute }
+        return "\u{1B}[" + codes.joined(separator: ";") + "m"
+    }
+
     /// Just the BACKGROUND half of ``rendered`` — the escape that re-establishes
     /// this state's background colour and says nothing about anything else, or
     /// `""` when the background is the terminal's own.
