@@ -90,7 +90,8 @@ struct TrackGradientTests {
         // regardless of the animation phase.
         let output = IndeterminateRenderer.render(
             width: 16, style: .gradient(colors: [.rgb(11, 22, 33), .rgb(11, 22, 33)]),
-            filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3))
+            filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
+            elapsed: 0)
         let triples = foregroundTriples(in: output)
         #expect(triples.allSatisfy { $0.hasPrefix("11;22;33") }, "custom stops used: \(triples)")
     }
@@ -99,7 +100,8 @@ struct TrackGradientTests {
     func indeterminateFallback() {
         let output = IndeterminateRenderer.render(
             width: 16, style: .gradient(colors: [.rgb(11, 22, 33)]),
-            filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3))
+            filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
+            elapsed: 0)
         let triples = foregroundTriples(in: output)
         #expect(triples.count >= 4, "built-in rainbow spans many colours: \(triples)")
     }

@@ -298,6 +298,12 @@ extension ProgressView {
 
 // MARK: - Internal Core View
 
+/// Named indices, so no bare integer decides which slot holds what. Outside the
+/// generic type because a generic may not carry static stored properties.
+private enum ProgressStateIndex {
+    static let cycle = 0
+}
+
 /// Internal view that handles the actual rendering of ProgressView.
 private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Renderable, Layoutable {
     let fractionCompleted: Double?
@@ -350,24 +356,93 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
             lines.append(labelLine)
         }
 
-        // Progress bar line
-        lines.append(renderBarLine(width: width, palette: palette, context: context))
+        // Where the animation is now. A determinate bar ignores it entirely:
+        // its value comes from the caller's data, and it does not animate.
+        let elapsed = context.environment.cursorTimer?.elapsedSeconds ?? 0
 
-        // The indeterminate animation derives its phase from the wall clock, so
-        // it only advances when the view is re-rendered over time. The run loop
-        // is demand-driven (it won't re-render a static screen), so — like
-        // Spinner — ask the scheduler to re-render this bar while it is on screen.
-        // Keyed by the stable view identity: several indeterminate bars at this
-        // rate coalesce onto a single render, and a bar that leaves the tree stops
-        // re-declaring and is dropped. (Determinate bars don't animate — they make
-        // no such request, so they drive no frames.)
-        if fractionCompleted == nil {
-            context.requestAnimation(
-                token: "progress-indeterminate-\(context.identity.path)",
-                frequency: 30)
+        // An indeterminate bar leaves its whole cycle behind, so the loop can
+        // splice the next frame over these cells without re-rendering anything.
+        // It used to ask to be re-rendered thirty times a second instead —
+        // which is a full measure/layout/render/diff of the WHOLE screen, to
+        // move one bar. See ``AnimatedCellRun``.
+        let barRow = lines.count
+        guard fractionCompleted == nil, !context.isMeasuring, width > 0 else {
+            lines.append(
+                renderBarLine(width: width, palette: palette, context: context, elapsed: elapsed))
+            return FrameBuffer(lines: lines)
         }
 
-        return FrameBuffer(lines: lines)
+        let cycle = indeterminateCycle(width: width, palette: palette, context: context)
+        lines.append(cycle.frames[
+            cycle.run.index(atElapsed: elapsed) % max(1, cycle.frames.count)])
+        var buffer = FrameBuffer(lines: lines)
+        buffer.animatedCells = [cycle.run.movedTo(row: barRow)]
+        return buffer
+    }
+
+    // MARK: - The indeterminate cycle
+
+    /// One built cycle, kept until something it depends on changes.
+    ///
+    /// Worth keeping because it is the one real cost of this approach: a
+    /// 36-cell `.gradient` cycle is 47 frames of ~840 bytes, and rebuilding
+    /// that on every render would move work onto the render path in exchange
+    /// for taking it off the animation path. Every frame is a pure function of
+    /// these five inputs, so anything else may change freely.
+    private struct CachedCycle {
+        let width: Int
+        let style: IndeterminateStyle
+        let filled: Color
+        let empty: Color
+        let accent: Color
+        let frames: [String]
+        let run: AnimatedCellRun
+
+        func matches(
+            width: Int, style: IndeterminateStyle, filled: Color, empty: Color, accent: Color
+        ) -> Bool {
+            self.width == width && self.style == style && self.filled == filled
+                && self.empty == empty && self.accent == accent
+        }
+    }
+
+    private func indeterminateCycle(
+        width: Int, palette: any Palette, context: RenderContext
+    ) -> CachedCycle {
+        let style = context.environment.indeterminateStyle
+        let filled = palette.foregroundSecondary
+        let empty = palette.foregroundTertiary
+        let accent = palette.accent
+
+        func build() -> CachedCycle {
+            let built = IndeterminateRenderer.cycle(
+                width: width, style: style, filledColor: filled,
+                emptyColor: empty, accentColor: accent)
+            return CachedCycle(
+                width: width, style: style, filled: filled, empty: empty, accent: accent,
+                frames: built.frames,
+                run: AnimatedCellRun(
+                    offsetX: 0, offsetY: 0, width: width, frames: built.frames,
+                    frameDuration: built.frameDuration, clock: .cursor))
+        }
+
+        guard let stateStorage = context.stateStorage else { return build() }
+        // Without this the entry is swept at the end of every render pass —
+        // `storage(for:default:)` does not mark an identity active — and the
+        // cache that exists to build the cycle once would build it every time.
+        stateStorage.markActive(context.identity)
+        let box: StateBox<CachedCycle?> = stateStorage.storage(
+            for: StateStorage.StateKey(
+                identity: context.identity, propertyIndex: ProgressStateIndex.cycle),
+            default: nil)
+        if let cached = box.value,
+            cached.matches(width: width, style: style, filled: filled, empty: empty, accent: accent)
+        {
+            return cached
+        }
+        let built = build()
+        box.value = built
+        return built
     }
 
     // MARK: - Label Line Rendering
@@ -411,14 +486,17 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
 
     /// Renders the progress bar line — a determinate track, or an animated
     /// indeterminate sweep when there is no measurable progress.
-    private func renderBarLine(width: Int, palette: any Palette, context: RenderContext) -> String {
+    private func renderBarLine(
+        width: Int, palette: any Palette, context: RenderContext, elapsed: Double
+    ) -> String {
         guard let fraction = fractionCompleted else {
             return IndeterminateRenderer.render(
                 width: width,
                 style: context.environment.indeterminateStyle,
                 filledColor: palette.foregroundSecondary,
                 emptyColor: palette.foregroundTertiary,
-                accentColor: palette.accent
+                accentColor: palette.accent,
+                elapsed: elapsed
             )
         }
         return TrackRenderer.render(
