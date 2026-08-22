@@ -329,7 +329,13 @@ extension Color {
     }
 
     /// Converts sRGB bytes to OKLab.
-    private static func oklab(red: UInt8, green: UInt8, blue: UInt8) -> (l: Double, a: Double, b: Double) {
+    ///
+    /// `package` rather than `private` because `TUIkitImage`'s palette mapper
+    /// needs the same conversion and a second copy of these coefficients is a
+    /// second place for them to drift. Deliberately NOT public and deliberately
+    /// not paired with ``hueWeightedDistanceSquared``, which is load-bearing for
+    /// palette derivation and must not acquire callers outside this file.
+    package static func oklab(red: UInt8, green: UInt8, blue: UInt8) -> (l: Double, a: Double, b: Double) {
         func linear(_ value: UInt8) -> Double {
             let c = Double(value) / 255.0
             return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)

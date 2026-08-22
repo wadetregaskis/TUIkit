@@ -161,6 +161,20 @@ public enum ASCIIColorMode: Sendable, Equatable {
 
     /// Black and white only. Universal compatibility.
     case mono
+
+    /// A specific set of colours, chosen by intent rather than by what the
+    /// terminal can display. See ``ASCIIPalette``.
+    case palette(ASCIIPalette)
+
+    /// This mode with every colour it names made concrete.
+    ///
+    /// Only ``palette(_:)`` names any; the rest are returned unchanged. Callers
+    /// that render do this once, before consulting a cache keyed on the mode —
+    /// see ``ASCIIPalette/resolved(with:)``.
+    public func resolved(with palette: any Palette) -> Self {
+        guard case .palette(let colors) = self else { return self }
+        return .palette(colors.resolved(with: palette))
+    }
 }
 
 // MARK: - Dithering Mode
@@ -275,6 +289,15 @@ extension ASCIIColorMode {
             (.ansi256, .basic16),
             (.grayscale, .basic16):
             return .mono
+        // A chosen palette SURVIVES a downgrade, where a fidelity mode cannot.
+        case (.palette(let colors), _):
+            return .palette(colors.downsampled(to: depth))
+        // "16.7 million colours" has no meaning on a 16-colour terminal and has
+        // to be abandoned; "these three colours" still does — the honest
+        // degradation is to quantise the colours themselves, which
+        // ``foregroundColorCode(for:mode:)`` does when it emits them, exactly as
+        // every other colour in the app is quantised. The intent is preserved
+        // and only the accuracy drops, which is the right way round.
         default:
             return self
         }

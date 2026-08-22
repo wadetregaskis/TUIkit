@@ -421,7 +421,7 @@ extension Color {
     /// - Indices 8–15: bright ANSI colors
     /// - Indices 16–231: 6×6×6 color cube
     /// - Indices 232–255: grayscale ramp
-    static func palette256ToRGB(_ index: UInt8) -> (red: UInt8, green: UInt8, blue: UInt8) {
+    package static func palette256ToRGB(_ index: UInt8) -> (red: UInt8, green: UInt8, blue: UInt8) {
         switch index {
         case 0...7:
             guard let ansi = ANSIColor(rawValue: index) else { return (0, 0, 0) }

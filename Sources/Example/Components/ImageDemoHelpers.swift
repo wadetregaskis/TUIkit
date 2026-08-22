@@ -25,7 +25,19 @@ enum ImageDemoHelpers {
         .fine, .solid, .coarse, .braille,
     ]
 
-    static let colorModes: [ASCIIColorMode] = [.trueColor, .ansi256, .grayscale, .mono]
+    /// The fidelity ladder, then the three ways of naming a palette — so the
+    /// cycler walks from "as much colour as this terminal has" all the way to
+    /// "these three, and they follow the theme".
+    static let colorModes: [ASCIIColorMode] = [
+        .trueColor, .ansi256, .grayscale, .mono,
+        .palette(.shades(4)),
+        .palette(.sampled(8)),
+        // As a TONE RAMP, not by nearest colour: the accent and white sit
+        // within 0.04 of each other in OKLab lightness, so by nearest colour
+        // the accent would never be the closest entry to anything in a
+        // photograph and the demo would draw two colours while claiming three.
+        .palette(ASCIIPalette([.black, .palette.accent, .white]).asToneRamp()),
+    ]
 
     static func charsetLabel(_ index: Int) -> String {
         switch Charset(rawValue: index) ?? .ascii {
@@ -51,6 +63,12 @@ enum ImageDemoHelpers {
         case .ansi256: return "color:256"
         case .grayscale: return "color:gray"
         case .mono: return "color:mono"
+        case .palette(let palette):
+            switch palette.colors.count {
+            case 4: return "color:4 greys"
+            case 8: return "color:8 sampled"
+            default: return "color:themed"
+            }
         }
     }
 

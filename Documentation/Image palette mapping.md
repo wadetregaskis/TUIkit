@@ -1,12 +1,12 @@
 # Mapping an image onto a chosen palette
 
-A design note for the half of the image work that is not yet built: letting an
-image be rendered in *a specific set of colours* rather than in the terminal's
-whole repertoire. You asked to see the design before I build past monochrome.
+**Status: shipped as `ASCIIColorMode.palette(_:)`.** This note was the design;
+what follows is it, updated where building it taught me something. Three things
+did, and one of them reversed a recommendation.
 
-## What exists, and the gap
+## What existed, and the gap
 
-`ASCIIColorMode` has four cases, and they form a ladder of **fidelity**, chosen
+`ASCIIColorMode` had four cases, and they form a ladder of **fidelity**, chosen
 by what the terminal can display:
 
 | | colours | chosen when |
@@ -16,39 +16,72 @@ by what the terminal can display:
 | `.grayscale` | 24 greys | a deliberate stylistic choice |
 | `.mono` | 2 | 16-colour terminals, `NO_COLOR`, `.noColor` |
 
-`.effective(for:)` walks down that ladder automatically. What is missing is
+`.effective(for:)` walks down that ladder automatically. What was missing is
 orthogonal to it: a mode that says *use these colours*, chosen by intent rather
 than by capability — an image drawn in the theme's palette, or in two or three
 named colours, so it belongs to the app rather than sitting in it as a
 photograph.
 
-Between `.grayscale`'s 24 fixed greys and `.ansi256`'s everything, there is
+Between `.grayscale`'s 24 fixed greys and `.ansi256`'s everything, there was
 nothing.
 
 ## The shape of the API
 
-A fifth case carrying its own colours:
+A fifth case carrying its own colours, `case palette(ASCIIPalette)`, and three
+ways to build one:
 
 ```swift
-case palette([Color])
+.imageColorMode(.palette(ASCIIPalette([.black, .palette.accent, .white])))
+.imageColorMode(.palette(.shades(5)))    // five greys
+.imageColorMode(.palette(.sampled(8)))   // eight, spread over the gamut
 ```
 
 - **`[Color]`, not `[RGBA]`.** A `Color` can be `.palette.accent`, so a palette
   built from the theme *follows the theme* — recolour the app and the image
-  recolours with it. That is the case worth having, and an `[RGBA]` would
-  freeze the answer at construction. Resolution happens once per conversion,
-  against the palette in the environment.
-- **The list is ordered, and the order is dark → light.** Not because the
-  mapper needs it (it does not) but because a caller writing
-  `.palette([.black, .palette.accent, .white])` should get what that reads
-  like. A ramp is a familiar object here — `ASCIICharacterSet.customRamp(_:)`
-  already runs darkest → brightest — so borrowing its convention costs nothing
-  and surprises no one.
-- **`.effective(for:)` must handle it.** A palette of theme colours on a
-  16-colour terminal has to degrade, and the honest degradation is to
-  *quantise the palette itself* against `ColorDepth`, not to abandon it: the
-  intent ("these colours") survives a downgrade in a way ("16.7M colours")
-  does not. On `.noColor` it falls to `.mono`, like everything else.
+  recolours with it. An `[RGBA]` would freeze the answer at construction.
+  Resolution happens once per conversion, in `_ImageCore`, and deliberately
+  **before the render cache is consulted**: the unresolved mode is identical
+  either side of a theme change, so a cache keyed on that would serve the old
+  colours forever.
+- **The order does not matter.** The note originally proposed a dark → light
+  convention borrowed from `ASCICharacterSet.customRamp(_:)`. Both mappings
+  sort or ignore the order themselves, so a palette that had to be written in a
+  particular order would be one more thing to get wrong for no gain.
+- **`.effective(for:)` quantises the palette rather than abandoning it.** "16.7
+  million colours" has no meaning on a 16-colour terminal and has to be given
+  up; "these three colours" still means something. So the entries are
+  downsampled and the intent survives — the right way round, since only the
+  accuracy is lost. `ASCIIPalette.sgrParameters(at:background:)` then says each
+  colour in whatever form it ended up in, which is both fewer bytes than an RGB
+  triple and the only spelling a terminal at that depth understands.
+
+`B` and `C1(b)` from the request — "greyscale with a configurable shade count"
+and "a palette of N by subsampling" — are not separate features. **`.shades(_:)`
+is a generated grey ramp and `.sampled(_:)` is a generated subsample**, and both
+are ordinary palettes once generated. That collapse is most of why this cost two
+files rather than the implied surface.
+
+**`.sampled(_:)` is deliberately not a palette derived from the image.** That
+(median cut, k-means) is a different feature — "reduce this image to N colours"
+rather than "draw this image in MY colours" — and it would put an image-analysis
+pass with its own cache lifetime inside a renderer whose job is mapping. With
+dithering on, a gamut-spread sample gets most of the same look.
+
+### Two generators, and why each is spaced the way it is
+
+- **`.shades(_:)` is even in PERCEIVED lightness**, not in bytes. Five
+  bytes-even greys are 0, 64, 128, 191, 255 — three of them in the bright half
+  where the eye can least tell them apart. Even in OKLab's L puts the middle
+  step at 128 → **its actual value is well below**, which is what makes a
+  five-grey render read as five distinct tones. The inverse needed is only for
+  neutrals, where OKLab's L is the cube root of the linear value, so it is a
+  cube and a gamma encode — no matrix, and no general OKLab → sRGB conversion
+  for this module to carry.
+- **`.sampled(_:)` is farthest-point in OKLab** over the 240 colours of the
+  256-palette. Every entry is one any 256-colour terminal renders exactly, so a
+  palette chosen this way never shifts underfoot when the image is downsampled;
+  and farthest-point covers the gamut where "every k-th index" clusters wherever
+  the cube happens to be dense.
 
 ## The mapping, and the trap in it
 
@@ -57,61 +90,68 @@ the one that produces the two failures worth designing around.
 
 **Failure 1 — flattening.** Map a photograph onto three colours by nearest
 neighbour and large regions collapse to one, because within a region every
-pixel's nearest palette entry is the same. Structure the eye can see in the
-original vanishes. `Color.quantisedRamp(stops:count:depth:)` already exists for
-exactly this problem in gradients, and its lesson transfers: **quantise the
-sequence, not the sample.**
+pixel's nearest palette entry is the same. **Dithering answers this, not a
+cleverer metric**: `quantizePixel` gained a `.palette` case, so the error
+diffused between two entries is what makes a boundary read as a gradient
+instead of a step.
 
 **Failure 2 — the metric.** The instinct is to reach for a perceptual distance,
 and there is one to hand — `hueWeightedDistanceSquared`. Do not. It is
 load-bearing for `SystemPalette` derivation: `isVisiblySeparate` reads
 *quantised* colours, so retuning that metric moves the whole surface walk. Three
 attempts at retuning it during the gradient work each broke palette derivation
-and each was reverted. A palette mapper needs its own distance function, private
-to it, and must not touch that one.
+and each was reverted. The mapper uses **plain OKLab distance**, and
+`Color.oklab(red:green:blue:)` became `package` rather than being copied — a
+second set of those coefficients is a second place for them to drift.
 
-The recommendation, in order of what to build:
+### The recommendation that was wrong, and the case that proved it
 
-1. **Luminance-ordered assignment, not nearest-RGB.** Sort the palette by
-   luminance once, then map each pixel by *where its luminance falls* among the
-   entries. This is what already works for the character ramps, it never
-   flattens (a monotonic input gives a monotonic output), and it makes
-   `.grayscale` a special case of `.palette` rather than a separate thing.
-2. **Dithering carries the residue.** The existing Floyd-Steinberg path already
-   quantises against the effective mode, and this is where a three-colour
-   render gets its apparent depth: the error diffused between two palette
-   entries is what makes a boundary read as a gradient instead of a step. So
-   `quantizePixel` gains a `.palette` case and the rest follows — which is
-   also why the palette must resolve to concrete RGBA *before* dithering, as
-   the mono threshold now does.
-3. **Hue only if it earns its place.** Luminance ordering discards hue, which
-   is right for a two- or three-colour ramp and wrong for a palette of five
-   distinct hues (a flag, a logo). If that case turns out to matter, the answer
-   is a *second* mode rather than a cleverer metric in this one — the two have
-   genuinely different goals, and a single function trying to serve both is how
-   a metric ends up load-bearing in two places at once.
+The note recommended **luminance-ordered assignment, not nearest-RGB**, on the
+grounds that it never flattens. Building it, that looked like an unnecessary
+second rule: for a palette that is a ramp, nearest in OKLab *reduces* to nearest
+in lightness, because the entries' `a` and `b` are equal and drop out of the
+comparison. One rule, `.shades(_:)` needing no special case. So it shipped with
+nearest-colour only.
 
-## What it should not do
+Then the Example's own demo showed what that costs. `{black, accent, white}` in
+the shipped green theme renders **black and white, and no accent at all** — the
+accent sits at OKLab L 0.887 against white's 0.922, so every grey in a
+photograph is closer to one of the other two. Three colours asked for, two
+delivered, and nothing about the result says why.
+
+So both rules ship, as `ASCIIPaletteMapping`:
+
+| | what a pixel picks | right for |
+|---|---|---|
+| `.nearestColor` (default) | the entry it is closest to in OKLab | the palette standing IN for the image's colours — `.shades`, `.sampled`, hues chosen to match a subject |
+| `.toneRamp` | the entry at its tonal RANK, dark to light | "draw this in my three colours", where every colour must be used |
+
+The trade runs both ways, which is what makes it a choice rather than a default:
+`.toneRamp` will recolour a flag, because rank ignores which colour a pixel
+actually was. `.toneRamp` indexes by BT.601 luminance — the same measure every
+other renderer in this module reads — so a colour ramp's steps fall where the
+glyph ramps' do.
+
+Note also what this settles from the original open questions: **the palette does
+not include a background.** Its colours are inks on the app's background, like
+`.grayscale`, not ink-and-paper like `.mono`. Consistent with every other
+coloured mode, and "draw nothing here" is what `.mono` is for.
+
+## What it does not do
 
 - **Not a replacement for `.ansi256`.** This is intent, not capability. A user
   who wants the best available rendering should keep getting it.
 - **Not automatic.** No "detect the theme and use it" default. An image in the
   theme's colours is a strong stylistic choice and should be asked for.
-- **No palette derived from the image** (median cut, k-means). That is a
-  different feature — "reduce this image to N colours" rather than "draw this
-  image in MY colours" — and building it here would put an image-analysis
-  dependency inside a renderer whose job is mapping.
+- **Not a recolouring.** `{black → white, white → black}` is not a two-entry
+  palette; see `ASCIIToneCurve`, which is a separate feature for exactly that
+  reason. The two compose: a curve says what the tones BECOME, a palette says
+  which colours are available to say it in.
 
-## Open questions for you
+## Still open
 
-1. **Does the palette include a background?** A two-entry palette could mean
-   "ink and paper" (draw the light one as blank, like mono does) or "two inks
-   on the app's background". The first matches `.mono`; the second matches
-   `.grayscale`. I lean to the second — consistent with every other coloured
-   mode, and "draw nothing here" is what `.mono` is for — but it changes what
-   `.palette([.black, .white])` looks like, so it is worth agreeing first.
-2. **Should `.grayscale` become `.palette` internally?** It is 24 greys mapped
-   by luminance, which is exactly what this does. Folding it in removes a code
-   path; keeping it separate keeps a familiar case cheap and its output
-   byte-identical. I would fold it *after* this ships and the mapper has been
-   looked at, not as part of the same change.
+- **Should `.grayscale` become `.palette(.shades(24))` internally?** It is 24
+  greys mapped by lightness, which is exactly what this does. Folding it in
+  removes a code path; keeping it separate keeps a familiar case cheap and its
+  output byte-identical. Worth doing after this has been looked at, not as part
+  of the same change.

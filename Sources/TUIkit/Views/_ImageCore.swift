@@ -166,7 +166,14 @@ struct _ImageCore: View, Renderable, Layoutable {
         // Read environment values
         let characterSet = context.environment.imageCharacterSet
         let shapeAware = context.environment.imageShapeAware
-        let colorMode = context.environment.imageColorMode
+        // Resolved HERE, against the theme, and not inside the converter: a
+        // `.palette` mode may name `.palette.accent`, which has no colour of its
+        // own until a palette says so. Resolving before the render cache is
+        // consulted is what makes the image follow a theme change — the
+        // unresolved mode is identical either side of it, so a cache keyed on
+        // that would serve the old colours forever.
+        let colorMode = context.environment.imageColorMode.resolved(
+            with: context.environment.palette)
         let dithering = context.environment.imageDithering
         let contentMode = context.environment.imageContentMode
         let aspectRatioOverride = context.environment.imageAspectRatio
@@ -395,6 +402,7 @@ extension _ImageCore {
         shapeAware: Bool,
         colorMode: ASCIIColorMode,
         dithering: DitheringMode,
+
         supersampling: Int?,
         edgeThreshold: Double?,
         contentMode: ContentMode,

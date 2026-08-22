@@ -29,6 +29,10 @@ extension ASCIIConverter {
 
         case .mono:
             return ""
+
+        case .palette(let palette):
+            let index = palette.nearestIndex(to: pixel)
+            return "\(ANSIEscape.csi)\(palette.sgrParameters(at: index, background: false))m"
         }
     }
 
@@ -53,6 +57,10 @@ extension ASCIIConverter {
 
         case .mono:
             return ""
+
+        case .palette(let palette):
+            let index = palette.nearestIndex(to: pixel)
+            return "\(ANSIEscape.csi)\(palette.sgrParameters(at: index, background: true))m"
         }
     }
 
@@ -169,6 +177,12 @@ extension ASCIIConverter {
             // dither diffuses is the error they will actually make.
             let val: UInt8 = ASCIIConverter.isMonoInk(pixel, threshold: monoThreshold) ? 255 : 0
             return RGBA(r: val, g: val, b: val)
+
+        case .palette(let palette):
+            // The entry this pixel will actually be drawn as — so the error
+            // diffused is the error the palette makes, which is what turns a
+            // three-colour render from three flat regions into a gradient.
+            return palette.rgba(at: palette.nearestIndex(to: pixel))
         }
     }
 
