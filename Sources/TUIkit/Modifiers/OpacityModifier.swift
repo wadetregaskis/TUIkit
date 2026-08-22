@@ -104,7 +104,12 @@ extension _OpacityView: Renderable {
             }
         }
 
-        if let cycling = cycling(buffer, faded: faded, context: context) { return cycling }
+        if let cycling = cycling(
+            buffer, faded: faded, over: surface, defaultForeground: defaultForeground,
+            context: context)
+        {
+            return cycling
+        }
         let factor = min(max(opacity, 0), 1)
         guard factor < 1 else { return buffer }
         var result = buffer.replacingLines(faded(by: factor))
@@ -122,21 +127,10 @@ extension _OpacityView: Renderable {
     /// re-colouring of the same buffer, and the run loop can replay them.
     /// See ``AnimatedBufferCycle``.
     private func cycling(
-        _ buffer: FrameBuffer, faded: (Double) -> [String], context: RenderContext
+        _ buffer: FrameBuffer, faded: (Double) -> [String], over surface: Color,
+        defaultForeground: Color, context: RenderContext
     ) -> FrameBuffer? {
         guard !context.isMeasuring, let storage = context.stateStorage else { return nil }
-        // The pre-rendered path builds its runs out of the buffer's LINES, so
-        // it has no way to carry an overlay through the cycle: a repeating fade
-        // over an `.offset` child would replay the lines and freeze the layer
-        // at whichever phase it was first drawn. Declining here keeps such a
-        // subtree on the ordinary per-frame path — it costs a render per frame
-        // while the animation runs, which is what every fade cost before this
-        // path existed. Fading a layer per phase is the better answer and a
-        // larger change; this is the small one that cannot be wrong.
-        //
-        // A PRESENTATION layer is not a reason to decline, because it is not
-        // faded either way — see `fadingOverlays`.
-        guard !buffer.overlays.contains(where: { !$0.isScreenLevel }) else { return nil }
         let key = AnimationStore.Key(
             identity: context.identity, owner: ObjectIdentifier(Self.self))
         guard
@@ -144,9 +138,32 @@ extension _OpacityView: Renderable {
                 for: key,
                 nowNanos: context.environment.frameNowNanos,
                 tick: context.environment.animationTick),
-            let runs = AnimatedBufferCycle.runs(phases: cycle.values.map(faded)),
-            !runs.isEmpty
+            let runs = AnimatedBufferCycle.runs(phases: cycle.values.map(faded))
         else { return nil }
+
+        // An ANCHORED layer — an `.offset`/`.position` child, a popover — is
+        // part of what this subtree draws, so it has to breathe with the rest
+        // of it. Its runs are built in the LAYER's own coordinate space and
+        // attached to the layer's content, because that is the space a run on
+        // it is in; the compositor shifts them by wherever it places the layer
+        // (`FrameBuffer.composited` lifts an overlay's `animatedCells` exactly
+        // as it lifts its regions).
+        //
+        // This used to decline the pre-rendered path outright when an anchored
+        // layer was present, and pay a render per frame for as long as the fade
+        // ran. That was the safe answer while the alternative was a layer
+        // frozen at one phase; it is not needed now that the layer can carry
+        // its own frames.
+        guard
+            let layers = Self.cyclingOverlays(
+                buffer.overlays, phases: cycle.values, current: cycle.current,
+                over: surface, defaultForeground: defaultForeground)
+        else { return nil }
+
+        // Nothing anywhere changes across the cycle — every row identical at
+        // every phase. Serving it costs nothing and stops the clock; declining
+        // would re-render forever for a fade nobody can see.
+        guard !runs.isEmpty || layers.carriesRuns else { return nil }
 
         // Only now: a cycle that could not be turned into runs must keep being
         // rendered for, or the fade freezes on whatever frame it stopped at.
@@ -155,9 +172,60 @@ extension _OpacityView: Renderable {
         // Drawn at the CYCLE's current value, not at this frame's continuous
         // one, so replaying the run at the tick just rendered is a no-op — the
         // property every run has to have.
-        var faded = buffer.replacingLines(faded(cycle.current))
-        faded.animatedCells += runs
-        return faded
+        var result = buffer.replacingLines(faded(cycle.current))
+        result.animatedCells += runs
+        result.overlays = layers.overlays
+        return result
+    }
+
+    /// `overlays` faded to `current` and carrying their own runs for the rest
+    /// of the cycle — or `nil` when any of them cannot be expressed as runs, in
+    /// which case the whole fade must stay on the per-frame path rather than
+    /// animate half of itself.
+    ///
+    /// Screen-level layers are passed through untouched, exactly as
+    /// ``fadingOverlays(_:by:over:defaultForeground:)`` leaves them: a dialog
+    /// the subtree opened is not the subtree's drawing and does not fade with
+    /// it, cycling or not.
+    ///
+    /// Recursive, because a layer's content can carry layers.
+    private static func cyclingOverlays(
+        _ overlays: [OverlayLayer], phases: [Double], current: Double, over surface: Color,
+        defaultForeground: Color
+    ) -> (overlays: [OverlayLayer], carriesRuns: Bool)? {
+        var result: [OverlayLayer] = []
+        var carriesRuns = false
+        result.reserveCapacity(overlays.count)
+        for layer in overlays {
+            guard !layer.isScreenLevel else {
+                result.append(layer)
+                continue
+            }
+            func fade(_ lines: [String], by factor: Double) -> [String] {
+                let clamped = min(max(factor, 0), 1)
+                guard clamped < 1 else { return lines }
+                return lines.map {
+                    OpacityFade.fading(
+                        $0, by: clamped, over: surface, defaultForeground: defaultForeground)
+                }
+            }
+            guard
+                let runs = AnimatedBufferCycle.runs(
+                    phases: phases.map { fade(layer.content.lines, by: $0) }),
+                let nested = cyclingOverlays(
+                    layer.content.overlays, phases: phases, current: current,
+                    over: surface, defaultForeground: defaultForeground)
+            else { return nil }
+
+            var faded = layer
+            faded.content = layer.content.replacingLines(
+                fade(layer.content.lines, by: current))
+            faded.content.animatedCells += runs
+            faded.content.overlays = nested.overlays
+            result.append(faded)
+            carriesRuns = carriesRuns || !runs.isEmpty || nested.carriesRuns
+        }
+        return (result, carriesRuns)
     }
 }
 

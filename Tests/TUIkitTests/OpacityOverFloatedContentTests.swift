@@ -83,19 +83,101 @@ struct OpacityOverFloatedContentTests {
         #expect(faded?.lines == opaque?.lines, "the dialog faded with its presenter")
     }
 
-    @Test("A repeating fade over an offset child keeps moving")
-    func repeatingFadeDoesNotFreezeAnOffsetChild() {
-        // The pre-rendered cycle builds its runs out of the buffer's LINES, so
-        // it cannot carry a layer through the phases — replaying would freeze
-        // the offset child at whichever phase it was first drawn. The modifier
-        // declines that path when an anchored layer is present and pays a
-        // render per frame instead, which is what every fade cost before the
-        // cycle existed.
-        let context = makeRenderContext(width: 30, height: 6)
-        let view = Text("x").offset(x: 2).opacity(0.5)
-        let buffer = renderToBuffer(view, context: context)
+    /// Drives a repeating fade the way the run loop does — the store prunes its
+    /// records at the end of every pass, so a pass that is not bracketed sees a
+    /// first sight every time, and a first sight never animates.
+    @MainActor
+    private final class Cycling {
+        var context = makeRenderContext(width: 20, height: 4)
+
+        init() {
+            context.environment.canAnimate = true
+            context.environment.transaction = Transaction(
+                animation: .linear(duration: 0.4).repeatForever(autoreverses: true))
+        }
+
+        func render(_ opacity: Double, atTick tick: Int) -> FrameBuffer {
+            context.environment.animationTick = tick
+            context.environment.frameNowNanos =
+                Int64(Double(tick) * AnimationClock.cursor.tickInterval * 1_000_000_000)
+            let storage = context.environment.stateStorage!
+            storage.beginRenderPass()
+            defer { storage.endRenderPass() }
+            return renderToBuffer(Text("x").offset(x: 2).opacity(opacity), context: context)
+        }
+    }
+
+    @Test("A repeating fade hands the offset child its own frames")
+    func repeatingFadeAnimatesAnOffsetChild() {
+        // The pre-rendered cycle builds runs from the buffer's LINES, and an
+        // offset child has none — its content is in a layer. The modifier used
+        // to decline the whole path when a layer was present and pay a render
+        // per frame; now the layer carries its own frames, in its own
+        // coordinate space, which the compositor shifts by wherever it places
+        // the layer.
+        let screen = Cycling()
+        _ = screen.render(1, atTick: 0)
+        let buffer = screen.render(0.2, atTick: 0)
+
+        guard let layer = buffer.overlays.first(where: { !$0.isScreenLevel }) else {
+            Issue.record("precondition: the offset child produced a layer")
+            return
+        }
         #expect(
-            buffer.animatedCells.isEmpty,
-            "an anchored layer must not be handed to the replay path")
+            !layer.content.animatedCells.isEmpty,
+            "the layer got no frames, so the fade would freeze it")
+        #expect(
+            layer.content.animatedCells.allSatisfy { $0.isAnimating },
+            "a frame set that never changes is a still picture")
+        #expect(
+            layer.content.animatedCells.allSatisfy { $0.frames.count == 16 },
+            "0.4s out and back is sixteen ticks of the replay clock")
+    }
+
+    @Test("…and the loop then stops rendering for it")
+    func repeatingFadeOverALayerStopsTheRenders() {
+        // The whole point of the pre-rendered path, and what declining it cost:
+        // a fade that never ends, served by re-rendering, costs a render pass
+        // for as long as the view is on screen.
+        let screen = Cycling()
+        _ = screen.render(1, atTick: 0)
+        _ = screen.render(0.2, atTick: 0)
+        let animations = screen.context.environment.stateStorage!.animations
+        #expect(
+            !animations.hasLiveAnimations(at: 400 * 1_000_000),
+            "a repeating fade over an offset child woke the loop up again")
+    }
+
+    @Test("The layer's frames survive compositing, shifted to where it landed")
+    func layerFramesReachTheScreen() {
+        // A run attached to a layer is in the LAYER's space; it only means
+        // anything if the compositor lifts and shifts it. `FrameBuffer
+        // .composited` does — this is what says so end to end, since a run that
+        // never reaches the final buffer is an animation the loop stops
+        // clocking.
+        var layerContent = FrameBuffer(lines: ["ab"])
+        layerContent.animatedCells = [
+            AnimatedCellRun(
+                offsetX: 0, offsetY: 0, width: 2, frames: ["ab", "cd"], clock: .cursor)
+        ]
+        let base = FrameBuffer(lines: ["........", "........"])
+        let composited = base.composited(
+            with: FrameBuffer(lines: [""]).replacingLines([""]).withOverlay(
+                OverlayLayer(offsetX: 0, offsetY: 0, content: layerContent)),
+            at: (x: 3, y: 1))
+        let screen = composited.compositingOverlays(
+            maxWidth: 8, maxHeight: 2, palette: SystemPalette(.green))
+        #expect(
+            screen.animatedCells.contains { $0.offsetX == 3 && $0.offsetY == 1 },
+            "the layer's run did not reach the screen at its placement: \(screen.animatedCells)")
+    }
+}
+
+extension FrameBuffer {
+    /// Test helper: this buffer carrying `layer`.
+    fileprivate func withOverlay(_ layer: OverlayLayer) -> FrameBuffer {
+        var copy = self
+        copy.overlays.append(layer)
+        return copy
     }
 }
