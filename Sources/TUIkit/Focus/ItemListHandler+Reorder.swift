@@ -566,6 +566,19 @@ extension ItemListHandler {
         /// Its first line, counted from the first CONTENT line of the interior.
         /// Must already include the "N more above" indicator's offset and any
         /// overscroll slide: this is the space the mouse handler works in.
+        ///
+        /// "Must" is the contract, not a description of every caller. `List`
+        /// pre-slides its ranges before publishing (`_ListCore.slidRanges`) and
+        /// satisfies it. `Table` satisfies it on the single-line path and, on
+        /// the MULTI-LINE one, publishes from `yStart = 0` with no slide at all
+        /// (`Table.publishMultiLineRowBands`) — so a multi-line table that is
+        /// scrolled or mid-overscroll hit-tests a drag against geometry the
+        /// rows are not drawn at.
+        ///
+        /// Recorded here rather than fixed because Table's click path takes its
+        /// own excursion correction at event time instead, so the two mappings
+        /// have to be reconciled together rather than one nudged into
+        /// agreement — see `Table.publishRowBands`.
         var yStart: Int
         /// How many lines it occupies (a clipped row counts what is shown).
         var height: Int

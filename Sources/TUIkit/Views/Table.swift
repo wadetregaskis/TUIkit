@@ -1954,12 +1954,6 @@ where Value.ID: Hashable {
                 ? rendered.map { $0.frames ?? [] } : nil)
     }
 
-    /// Hands this frame's drawn row geometry to the shared publisher.
-    ///
-    /// `yStart` is measured from the first row line (past any "N more above"
-    /// indicator), which is the space the mouse handler's `lineOffset` is in,
-    /// and it must include the overscroll `slide` — the rows are drawn shifted
-    /// by it, so a drag hit-tests the wrong row without it.
     /// Registers the table's rows as a drop destination that reports WHERE —
     /// the ``Table/dropDestination(for:action:)`` half, and the twin of
     /// `_ListCore.registerRowDropDestination`.
@@ -2003,12 +1997,6 @@ where Value.ID: Hashable {
                 }))
     }
 
-    /// Trims `lines` to `budget`, taking the overrun off whichever end is NOT
-    /// the drop slot, and reports how far the survivors shifted (negative when
-    /// the front was dropped) so the published bands move with them.
-    ///
-    /// `publishRowBands` discards bands whose `yStart` goes negative — "slid off
-    /// the top" — which is exactly right for rows dropped from the front.
     /// Appends a rendered row's lines to `lines`, and its pulse frames to
     /// `runs` at the positions those lines landed in.
     ///
@@ -2061,6 +2049,18 @@ where Value.ID: Hashable {
         }
     }
 
+    /// Trims `lines` to `budget`, taking the overrun off whichever end is NOT
+    /// the drop slot, and reports how far the survivors shifted (negative when
+    /// the front was dropped) so the published bands move with them.
+    ///
+    /// `publishRowBands` discards bands whose `yStart` goes negative — "slid off
+    /// the top" — which is exactly right for rows dropped from the front.
+    ///
+    /// Reunited with its function; see `publishRowBands` on why that is worth a
+    /// commit. `_ListCore.clipReorderOverrun` is the twin, and the two floors
+    /// differ (`lines.count - budget` here, `- max(1, budget)` there) — noted
+    /// rather than reconciled, because which is right needs a reorder driven at
+    /// a budget of zero to settle and neither has a test at that boundary.
     private func clipOverrun(
         _ lines: inout [String], to budget: Int,
         drawn: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)]
@@ -2075,6 +2075,20 @@ where Value.ID: Hashable {
         return -overrun
     }
 
+    /// Hands this frame's drawn row geometry to the shared publisher.
+    ///
+    /// `yStart` is measured from the first row line (past any "N more above"
+    /// indicator), which is the space the mouse handler's `lineOffset` is in,
+    /// and it must include the overscroll `slide` — the rows are drawn shifted
+    /// by it, so a drag hit-tests the wrong row without it.
+    ///
+    /// This comment spent a while attached to `registerRowDropDestination`
+    /// instead, three hundred lines above, having been separated from its
+    /// function by an edit that left two doc blocks touching. That is not a
+    /// tidiness point: the rule it states — bands must include the slide — is
+    /// the one `publishMultiLineRowBands` does not follow, and it was added
+    /// while the rule was sitting on someone else's function where nobody
+    /// writing a second publisher would read it.
     private func publishRowBands(
         handler: ItemListHandler<Value.ID>,
         drawn: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)],
