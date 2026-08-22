@@ -86,13 +86,24 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
     /// taller than it rendered.)
     private func resolvedLayout(
         _ children: [ChildView], availableWidth: Int, context: RenderContext
-    ) -> (widths: [Int], totalWidth: Int, height: Int, fills: Bool, guideRun: AlignmentGuideRun?) {
+    ) -> (
+        widths: [Int], totalWidth: Int, height: Int, fills: Bool,
+        fillsHeight: Bool, guideRun: AlignmentGuideRun?
+    ) {
         let count = children.count
         let totalSpacing = max(0, count - 1) * spacing
 
         var ideal = [Int](repeating: 0, count: count)
         var idealHeight = [Int](repeating: 0, count: count)
         var fills = [Bool](repeating: false, count: count)
+        // Whether any child would take more HEIGHT if it were offered. Measured
+        // here beside the width flexibility rather than assumed: `clipSizeThatFits`
+        // reported a hard-coded `false`, which is the same under-reporting
+        // `VStack` had on its own axis and fixed — a row containing anything
+        // that fills its height (a ScrollView, a Spacer-bearing column, a
+        // bordered box asked to grow) told its parent it was rigid, and the
+        // parent then distributed vertical space as though nothing wanted any.
+        var fillsHeight = false
         for (index, child) in children.enumerated() {
             if child.isSpacer {
                 ideal[index] = child.spacerMinLength ?? 0
@@ -106,6 +117,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 ideal[index] = size.width
                 idealHeight[index] = size.height
                 fills[index] = size.isWidthFlexible
+                if size.isHeightFlexible { fillsHeight = true }
             }
         }
 
@@ -149,7 +161,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         let totalWidth = widths.reduce(0, +) + totalSpacing
         return (
             widths, min(totalWidth, max(0, availableWidth)), guideRun?.extent ?? height,
-            fills.contains(true), guideRun
+            fills.contains(true), fillsHeight, guideRun
         )
     }
 
@@ -172,7 +184,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
             width: layout.totalWidth,
             height: layout.height,
             isWidthFlexible: layout.fills,
-            isHeightFlexible: false
+            isHeightFlexible: layout.fillsHeight
         )
     }
 
