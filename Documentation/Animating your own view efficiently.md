@@ -434,9 +434,32 @@ Two things follow, and both are cheap:
 that replaying a run changes nothing — the right property — but compared
 `.stripped` lines, which discard exactly the SGR bytes the lift lives in. The
 assertion was about glyph placement and read like an assertion about the cells.
-A test for this class has to compare raw bytes, and `ScrollbarHoverPulseTests`
-does, driving a real pointer through the real dispatcher and hovering the cell
-the bar *itself* nominated as animated.
+`ScrollbarHoverPulseTests` covers the specific case, driving a real pointer
+through the real dispatcher and hovering the cell the bar *itself* nominated as
+animated; `expectReplayIsIdentity` now covers the class.
+
+Getting that shared assertion right needed two corrections, and the second is
+the one worth remembering:
+
+- **Raw bytes are too strict.** Splicing a frame into a row legitimately
+  produces a longer spelling of the same styling. The comparison is
+  `ANSICellDiff.identical` — the framework's own answer to "would a terminal
+  show anything different", the same judgement `FrameDiffWriter` makes.
+- **Replay with the splice the loop actually performs.**
+  `FrameBuffer.patchingAnimatedCells(in:with:atColumn:width:)`, not
+  `composited(with:at:)`. The two differ in one load-bearing way: `composited`
+  resets before an overlay, so a foreground-only frame lands on the terminal's
+  default background, while the tick paints the frame over the background the
+  line already had. Replaying the wrong one accuses every focus cap inside a
+  `.background()` of dropping its surface — which reads exactly like a real bug,
+  right down to a plausible mechanism (`BackgroundModifier` re-styles the lines
+  and carries the runs through untouched), and is not one. `patchingAnimatedCells`
+  exists precisely because that hole was real once, and was closed.
+
+The assertion is only as good as the step it checks, which is the step the view
+rendered at. A frame that is wrong only on the OFF half of a blink passes it —
+so a producer whose frames differ in more than colour wants a test that says so
+directly, as `blinkHasBothHalves` does.
 
 Confirmed live as well as in test: with the pointer parked on the bar's top
 arrow, the cell's foreground before the fix stepped through the plain accent

@@ -55,34 +55,6 @@ struct TextEditorCaretRunTests {
         return renderToBuffer(view, context: context)
     }
 
-    /// Whether replaying a run changes what a terminal would show — glyphs AND
-    /// styling, via the framework's own ``ANSICellDiff/identical``. A caret is a
-    /// colour-only animation, so a comparison of stripped glyphs would pass on
-    /// a run that painted the caret the wrong colour entirely.
-    private func replayPaintsIdentically(_ buffer: FrameBuffer, at step: Int = 0) -> Bool {
-        for run in buffer.animatedCells {
-            let replayed = buffer.composited(
-                with: FrameBuffer(lines: [run.frame(atIndex: step)]),
-                at: (x: run.offsetX, y: run.offsetY))
-            guard replayed.lines.count == buffer.lines.count else { return false }
-            for (before, after) in zip(buffer.lines, replayed.lines) {
-                let width = before.strippedLength
-                guard width > 0, width == after.strippedLength,
-                    let old = ANSIRowCells(decomposing: before, width: width),
-                    let new = ANSIRowCells(decomposing: after, width: width)
-                else {
-                    guard before.stripped == after.stripped else { return false }
-                    continue
-                }
-                var emitted: SGRState?
-                guard new.diff(replacing: old, mergingGapsUpTo: 0, continuing: &emitted)
-                    == .identical
-                else { return false }
-            }
-        }
-        return true
-    }
-
     // MARK: - The caret
 
     @Test("A focused editor hands over its caret cells, and only those")
@@ -95,7 +67,7 @@ struct TextEditorCaretRunTests {
         // The editor opens with the caret at the start of the first line.
         #expect(run.offsetY == 0 && run.offsetX == 0, "run: \(run)")
         #expect(run.width == 1)
-        #expect(replayPaintsIdentically(buffer), "the run does not describe the drawn cells")
+        expectReplayIsIdentity(buffer, "the run does not describe the drawn cells")
     }
 
     @Test("The caret follows the cursor onto its own row and column")
@@ -115,7 +87,7 @@ struct TextEditorCaretRunTests {
         let buffer = renderToBuffer(view, context: context)
         #expect(buffer.animatedCells.first?.offsetY == 1)
         #expect(buffer.animatedCells.first?.offsetX == 3)
-        #expect(replayPaintsIdentically(buffer))
+        expectReplayIsIdentity(buffer)
         withExtendedLifetime(sink) {}
     }
 
@@ -146,7 +118,7 @@ struct TextEditorCaretRunTests {
                         run.frames.allSatisfy { $0.strippedLength == run.width },
                         "\(shape)/\(animation): \(run)")
                 }
-                #expect(replayPaintsIdentically(buffer), "\(shape)/\(animation)")
+                expectReplayIsIdentity(buffer, "\(shape)/\(animation)")
             }
         }
     }
@@ -214,7 +186,7 @@ struct TextEditorCaretRunTests {
         #expect(
             bar.count < buffer.lines.count,
             "the still track rows earn no run: \(bar.count) of \(buffer.lines.count)")
-        #expect(replayPaintsIdentically(buffer))
+        expectReplayIsIdentity(buffer)
     }
 
     @Test("An unfocused overflowing editor animates neither")

@@ -20,35 +20,78 @@ func focusedRender(_ view: some View, width: Int = 40, height: Int = 8) -> Frame
     renderToBuffer(view, context: makeRenderContext(width: width, height: height))
 }
 
-/// A buffer's rows as the terminal shows them: no styling, and no trailing
-/// blanks — compositing squares a buffer's rows off to its widest line, so
-/// a short row picks up padding that never reaches the screen. Anything a
-/// misplaced run would actually do (shift a glyph, overwrite one, split a
-/// wide character) still shows up here.
-func visibleRows(_ buffer: FrameBuffer) -> [String] {
-    buffer.lines.map { line in
-        String(line.stripped.reversed().drop(while: { $0 == " " }).reversed())
+/// Whether two built rows put the same thing on screen — the same glyphs in
+/// the same STYLING.
+///
+/// Not string equality: two spellings of one styling are the same picture, and
+/// splicing a frame into a row legitimately produces the longer spelling. Not
+/// stripped glyphs either, which is what this compared until a scrollbar's
+/// hover lift was replayed away by runs that had never been told about the
+/// pointer — a colour-only difference, invisible to a `.stripped` comparison,
+/// and the whole of what the user saw. See §9 of
+/// `Documentation/Animating your own view efficiently.md`.
+///
+/// The styling half is ``ANSICellDiff/identical``, which is the framework's own
+/// answer to "would a terminal show anything different" — the same judgement
+/// `FrameDiffWriter` makes about whether a cell is worth rewriting. Rows the
+/// decomposer declines (a wide glyph, an emoji, a cursor move) fall back to the
+/// glyph comparison, which is all that can be checked there.
+func paintsIdentically(_ before: [String], _ after: [String]) -> Bool {
+    guard before.count == after.count else { return false }
+    for (old, new) in zip(before, after) {
+        guard trimmedGlyphs(old) == trimmedGlyphs(new) else { return false }
+        let width = old.strippedLength
+        guard width > 0, width == new.strippedLength,
+            let oldCells = ANSIRowCells(decomposing: old, width: width),
+            let newCells = ANSIRowCells(decomposing: new, width: width)
+        else { continue }
+        var emitted: SGRState?
+        guard newCells.diff(replacing: oldCells, mergingGapsUpTo: 0, continuing: &emitted)
+            == .identical
+        else { return false }
     }
+    return true
+}
+
+/// A row's glyphs with trailing blanks dropped — compositing squares a buffer
+/// off to its widest line, so a short row picks up padding that never reaches
+/// the screen.
+private func trimmedGlyphs(_ line: String) -> String {
+    String(line.stripped.reversed().drop(while: { $0 == " " }).reversed())
 }
 
 /// Asserts the run describes the cells that were actually drawn.
 ///
-/// Splicing a run's *current* frame back over the buffer is precisely what
-/// the run loop does on a tick. At the step the view rendered at, that must
-/// change nothing — so any disagreement about where the run sits, or how
-/// wide it is, shows up here as shifted or clobbered glyphs.
+/// Splicing a run's *current* frame back over the buffer is precisely what the
+/// run loop does on a tick. At the step the view rendered at, that must change
+/// nothing — so any disagreement about where the run sits, how wide it is, or
+/// what colour it paints shows up here.
+///
+/// Through ``FrameBuffer/patchingAnimatedCells(in:with:atColumn:width:)``,
+/// which is the splice `RenderLoop` actually performs, and NOT
+/// ``FrameBuffer/composited(with:at:)``, which this used to use. The two differ
+/// in one load-bearing way: `composited` resets before an overlay, so a
+/// foreground-only frame lands on the terminal's default background, while the
+/// tick paints the frame over the background the line already had. Replaying
+/// the wrong one made every focus cap inside a `.background()` look broken
+/// here and fine on screen.
 @MainActor
 func expectReplayIsIdentity(
     _ buffer: FrameBuffer, at step: Int = 0,
     _ comment: Comment? = nil, sourceLocation: SourceLocation = #_sourceLocation
 ) {
-    let before = visibleRows(buffer)
     for run in buffer.animatedCells {
-        let replayed = buffer.composited(
-            with: FrameBuffer(lines: [run.frame(atIndex: step)]),
-            at: (x: run.offsetX, y: run.offsetY))
+        guard run.offsetY < buffer.lines.count else {
+            Issue.record("run \(run) sits past the buffer's \(buffer.lines.count) rows")
+            continue
+        }
+        var replayed = buffer.lines
+        replayed[run.offsetY] = FrameBuffer.patchingAnimatedCells(
+            in: replayed[run.offsetY], with: run.frame(atIndex: step),
+            atColumn: run.offsetX, width: run.width)
         #expect(
-            visibleRows(replayed) == before, comment ?? "run \(run) moved the cells",
+            paintsIdentically(buffer.lines, replayed),
+            comment ?? "run \(run) moved the cells",
             sourceLocation: sourceLocation)
     }
 }
