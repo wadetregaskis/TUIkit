@@ -544,8 +544,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// frame cannot leak into a drop index), no rows, no bands, and whatever
     /// drop action the content declared.
     ///
-    /// Rows are the only thing missing. `publishRowBands` is called with an
-    /// empty list, which clears the previous frame's geometry; the drop
+    /// Rows are the only thing missing. The bands the last populated frame
+    /// published are cleared for us: this state carries no `visibleRowYRanges`,
+    /// and the render path both branches share publishes whatever it finds
+    /// there — an empty list, here. (`Table` clears them in its own empty
+    /// branch instead, its populated paths not sharing one publisher. Both
+    /// arrive at the same place; only this one gets it for free.) The drop
     /// destination then resolves index 0 through its own `?? itemCount`
     /// fallback, with no new arithmetic anywhere.
     ///

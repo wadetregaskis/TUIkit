@@ -1743,6 +1743,12 @@ where Value.ID: Hashable {
         FocusRegistration.register(context: context, handler: handler)
         let hasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         handler.publishEscapeClaim(context: context, isFocused: hasFocus)
+        // The Bottom follow carries the cursor only for the table that owns it.
+        // Every POPULATED path here sets this; the empty one did not, so an
+        // emptied table kept whatever its last populated frame left — the
+        // mirror image of the missing `publishRowBands([])` on `_ListCore`'s
+        // empty path. Each twin was missing the line the other had.
+        handler.isFocusEngaged = hasFocus
         // Clears the bands the last populated frame left behind, so nothing
         // hit-tests against rows that are no longer drawn.
         handler.publishRowBands([])
