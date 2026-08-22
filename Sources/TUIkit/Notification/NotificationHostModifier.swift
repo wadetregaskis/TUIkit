@@ -186,14 +186,29 @@ extension NotificationHostModifier {
             .max() ?? 0
 
         lifecycle.startTask(token: token, priority: .medium) { [lifecycle] in
-            let triggerNanos: UInt64 = 23_800_000  // ~24ms (~42 FPS)
-
             while !Task.isCancelled {
                 let now = Date().timeIntervalSinceReferenceDate
                 if now > latestExpiry {
                     break
                 }
-                try? await Task.sleep(nanoseconds: triggerNanos)
+                // Sleep until an opacity actually moves, rather than 42 times a
+                // second regardless. A notification is at a flat 1.0 for its
+                // whole visible stretch — three seconds of the usual three and a
+                // half — and every wake in there re-renders the entire screen to
+                // draw exactly what is already on it.
+                //
+                // This cannot be an `AnimatedCellRun`, which is what everything
+                // else on this path became: a run LOOPS, and a toast appears
+                // once and vanishes. Its cells stop existing, which is a change
+                // of layout rather than of appearance.
+                let due = entries.map {
+                    NotificationTiming.timeUntilOpacityChanges(
+                        elapsed: now - $0.postedAt, visibleDuration: $0.duration)
+                }.min() ?? NotificationTiming.frameInterval
+                let sleep = min(
+                    NotificationTiming.longestSleep,
+                    max(NotificationTiming.frameInterval, due))
+                try? await Task.sleep(nanoseconds: UInt64(sleep * 1_000_000_000))
                 guard !Task.isCancelled else { break }
                 AppState.shared.setNeedsRender()
             }
