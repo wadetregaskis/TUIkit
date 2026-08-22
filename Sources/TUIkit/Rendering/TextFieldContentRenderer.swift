@@ -253,7 +253,7 @@ struct TextFieldContentRenderer {
     /// has no surface to name — so the palette's background stands in. The
     /// selection is an opaque highlight either way; this only decides its
     /// exact tint.
-    private static func selectionColors(
+    static func selectionColors(
         palette: any Palette, background: Color?
     ) -> (background: Color, foreground: Color) {
         let selection = palette.accent.opacity(
@@ -516,17 +516,19 @@ struct TextFieldContentRenderer {
 
     // MARK: - Cursor State
 
-    /// Computes the cursor visibility and color based on the animation style
-    /// and cursor timer. Shared by every text-input caret (``TextField``,
-    /// ``SecureField``, ``TextEditor``) so one `.textCursor(_:)` setting
-    /// animates identically across all of them.
     /// Every frame of the caret's animation, plus where the clock is now.
     ///
-    /// The counterpart to ``computeCursorState(baseColor:animation:speed:cursorTimer:)``,
-    /// which is one frame. Building this deliberately does **not** consult the
-    /// live clock — each state comes from `CursorTimer`'s static formula — which
-    /// is what lets the caret's cells be handed to the run loop and advanced
-    /// without rendering. See ``AnimatedCellRun``.
+    /// Shared by every text-input caret (``TextField``, ``SecureField``,
+    /// ``TextEditor``) so one `.textCursor(_:)` setting animates identically
+    /// across all of them.
+    ///
+    /// Building this deliberately does **not** consult the live clock — each
+    /// state comes from `CursorTimer`'s static formula — which is what lets the
+    /// caret's cells be handed to the run loop and advanced without rendering.
+    /// See ``AnimatedCellRun``. There is no this-tick-only counterpart: one
+    /// existed, `TextEditor` was its last caller, and keeping it meant a caret
+    /// that read the clock and so re-rendered the whole screen 20 times a
+    /// second to blink one cell.
     ///
     /// A focused text field is the most expensive idle control there is: it used
     /// to re-render the whole screen 20 times a second to blink one cell. On the
@@ -580,26 +582,6 @@ struct TextFieldContentRenderer {
                 true,
                 Color.lerp(baseColor.opacity(ViewConstants.focusPulseMin), baseColor, phase: phase)
             )
-        }
-    }
-
-    static func computeCursorState(
-        baseColor: Color,
-        animation: TextCursorStyle.Animation,
-        speed: TextCursorStyle.Speed,
-        cursorTimer: CursorTimer?
-    ) -> (visible: Bool, color: Color) {
-        switch animation {
-        case .none:
-            return (true, baseColor)
-        case .blink:
-            let visible = cursorTimer?.blinkVisible(for: speed) ?? true
-            return (visible, baseColor)
-        case .pulse:
-            let phase = cursorTimer?.pulsePhase(for: speed) ?? 1.0
-            let dimColor = baseColor.opacity(ViewConstants.focusPulseMin)
-            let color = Color.lerp(dimColor, baseColor, phase: phase)
-            return (true, color)
         }
     }
 }

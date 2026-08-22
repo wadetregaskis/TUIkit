@@ -326,6 +326,16 @@ tax on understanding the machinery.
 A sweep of every page in `Example`, at three different focus positions each,
 reports zero clock reads while idle.
 
+**One producer was missing from that list**: `TextEditor`'s caret, left on the
+live clock on the grounds that its multi-line geometry made it different, and
+its scrollbar with it. It was not different — the caret's row and column are
+arithmetic the row walk already did — and leaving it there cost 6.7% of a core
+for a focused editor against 0.2% for a focused `TextField`. Both converted
+2026-08-21, together, because either half alone is wrong over time: the caret
+alone leaves the editor re-rendering for the bar, and the bar alone leaves its
+runs replaying over a screen the caret is still repainting. See
+`Performance-profile-2026-08.md` §15.
+
 
 ## 8. What §6.4 turned out to be, and what stays
 

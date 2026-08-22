@@ -199,24 +199,28 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
 
         // The caret honours `.textCursor(_:)` exactly like TextField: same
         // shape, same blink/pulse animation, same speed — one setting styles
-        // every text input. Computed only while focused: the cursor timer is
-        // demand-driven (it keeps ticking only while a frame READS it), so an
-        // unfocused editor must not consult it and pin the animation clock.
-        let caret: CaretAppearance
-        if isFocused {
-            let cursorStyle = context.environment.textCursorStyle
-            let cursorState = TextFieldContentRenderer.computeCursorState(
-                baseColor: palette.cursorColor,
-                animation: cursorStyle.animation,
-                speed: cursorStyle.speed,
-                cursorTimer: context.environment.cursorTimer)
-            caret = CaretAppearance(
-                shape: cursorStyle.shape, visible: cursorState.visible, color: cursorState.color)
-        } else {
-            caret = CaretAppearance(shape: .block, visible: false, color: palette.cursorColor)
-        }
+        // every text input.
+        //
+        // The whole cycle, not this tick's frame. A caret that sampled the live
+        // clock re-rendered the WHOLE screen 20 times a second to blink one
+        // cell — 6.7% of a core on the Example's Text Input page against 0.2%
+        // for the TextField two screens above it, which had already been
+        // converted. Computed only while focused: even reading the cycle's
+        // `step` is pointless work for an editor with no caret to draw.
+        let cursorStyle = context.environment.textCursorStyle
+        let caret: RowCaret.Cycle? =
+            isFocused
+            ? RowCaret.Cycle(
+                shape: cursorStyle.shape,
+                cursor: TextFieldContentRenderer.computeCursorCycle(
+                    baseColor: palette.cursorColor,
+                    animation: cursorStyle.animation,
+                    speed: cursorStyle.speed,
+                    cursorTimer: context.environment.cursorTimer))
+            : nil
 
         var output: [String] = []
+        var caretRun: AnimatedCellRun?
         output.reserveCapacity(height)
         for row in 0..<height {
             let lineIndex = handler.scrollLine + row
@@ -227,7 +231,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             let lineChars = displayLines[lineIndex]
             let rowCaret: RowCaret? =
                 (isFocused && lineIndex == handler.cursorLine)
-                ? RowCaret(column: cursorDisplayColumn, appearance: caret) : nil
+                ? caret.map { RowCaret(column: cursorDisplayColumn, cycle: $0) } : nil
             // The handler's selection is character-indexed; the row is painted
             // in display cells, so convert the bounds (a char range maps to a
             // contiguous display range — expansion is monotonic — and a
@@ -238,22 +242,34 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                         ..< TabLayout.displayColumn(ofCharIndex: range.upperBound, in: lineChars, tabWidth: tabWidth)
                 }
                 : nil
-            output.append(
-                styledRow(
-                    lineChars, tabWidth: tabWidth,
-                    scrollColumn: handler.scrollColumn, width: contentWidth,
-                    caret: rowCaret, selection: selection,
-                    styling: RowStyling(
-                        palette: palette, isDisabled: isDisabled, background: fieldBackground)))
+            let rendered = styledRow(
+                lineChars, tabWidth: tabWidth,
+                scrollColumn: handler.scrollColumn, width: contentWidth,
+                caret: rowCaret, selection: selection,
+                styling: RowStyling(
+                    palette: palette, isDisabled: isDisabled, background: fieldBackground))
+            output.append(rendered.line)
+            // The row knows WHERE in itself the caret landed; only the loop
+            // knows which row that is.
+            caretRun = caretRun ?? rendered.caret?.shifted(byX: 0, y: row)
         }
 
+        var barRuns: [AnimatedCellRun] = []
         if hasVerticalOverflow {
-            appendScrollbar(
+            barRuns = appendScrollbar(
                 to: &output, height: height, extent: displayLines.count,
-                offset: handler.scrollLine, isFocused: isFocused, context: context)
+                offset: handler.scrollLine, barColumn: contentWidth,
+                isFocused: isFocused, context: context)
         }
 
         var buffer = FrameBuffer(lines: output)
+        // Never from a measure pass: its buffer describes a size being tried
+        // on, not cells on screen, and a run outliving its cells repaints — on
+        // a clock — over whatever took their place.
+        if !context.isMeasuring {
+            buffer.animatedCells += barRuns
+            if let caretRun { buffer.animatedCells.append(caretRun) }
+        }
         registerMouse(
             context: context, buffer: &buffer, handler: handler,
             contentWidth: contentWidth, height: height,
@@ -261,20 +277,38 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         return buffer
     }
 
-    /// Appends a one-column vertical scroll indicator to each row.
+    /// Appends a one-column vertical scroll indicator to each row, and returns
+    /// the animation runs its cells earn.
+    ///
+    /// Converted WITH the caret rather than after it. The bar's pulse and the
+    /// caret's blink shared one cause — a frame that read the live clock — so
+    /// converting only the caret would have left the editor still re-rendering
+    /// for the bar, and converting only the bar would have left the bar's runs
+    /// replaying over a screen the caret was still repainting. Either half
+    /// alone looks correct in a screenshot and is wrong over time.
     private func appendScrollbar(
         to output: inout [String], height: Int, extent: Int, offset: Int,
-        isFocused: Bool, context: RenderContext
-    ) {
+        barColumn: Int, isFocused: Bool, context: RenderContext
+    ) -> [AnimatedCellRun] {
         let bar = ScrollbarRenderer.verticalScrollbar(
             height: height, extent: extent, viewport: height, offset: offset,
             arrows: .none, proportional: true,
             // Pulses the accent while the editor is focused — the shared
             // focus-indicator convention (ScrollbarColors.focusIndicating).
-            colors: .focusIndicating(isFocused: isFocused, context: context))
+            // The editor's bar is not a mouse target (it registers no region of
+            // its own), so there is no hovered cell to answer.
+            colors: .focusIndicating(isFocused: isFocused, hoveredCell: nil, context: context))
         for index in 0..<min(height, output.count) {
             output[index] += index < bar.count ? bar[index] : " "
         }
+        guard
+            let pulse = ScrollbarColors.focusPulse(
+                isFocused: isFocused, hoveredCell: nil, context: context)
+        else { return [] }
+        return ScrollbarRenderer.verticalScrollbarRuns(
+            height: height, extent: extent, viewport: height, offset: offset,
+            arrows: .none, proportional: true, pulse: pulse
+        ).map { $0.shifted(byX: barColumn, y: 0) }
     }
 
     /// A blank row filled to `width`, painted with the field background.
@@ -329,20 +363,27 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     /// character (emoji, CJK) spans its real width, and an element straddling
     /// either window edge renders as spaces for its visible cells (it can't
     /// be shown half), so the row is always exactly `width` cells.
-    /// The caret's resolved per-frame appearance: the configured shape plus
-    /// the animation's current visibility/colour (see
-    /// ``TextFieldContentRenderer/computeCursorState(baseColor:animation:speed:cursorTimer:)``).
-    private struct CaretAppearance {
-        let shape: TextCursorStyle.Shape
-        let visible: Bool
-        let color: Color
-    }
-
-    /// The caret as one row sees it: its display column plus the per-frame
-    /// appearance. `nil` for rows the caret isn't on.
+    /// The caret as one row sees it: its display column plus every frame of
+    /// its animation. `nil` for rows the caret isn't on.
     private struct RowCaret {
         let column: Int
-        let appearance: CaretAppearance
+        let cycle: Cycle
+
+        /// The shape and the whole animation, resolved once per render and
+        /// shared by every row (only one of which ever uses it).
+        struct Cycle {
+            let shape: TextCursorStyle.Shape
+            let cursor: TextFieldContentRenderer.CursorCycle
+        }
+    }
+
+    /// A row's line, plus the caret run it left behind — the same pair
+    /// ``TextFieldContentRenderer/FieldContent`` carries, for the same reason:
+    /// the row knows where in itself the caret's cells are, and only its caller
+    /// knows where the row is.
+    private struct RenderedRow {
+        let line: String
+        let caret: AnimatedCellRun?
     }
 
     /// The frame-level painting context every row shares: the palette, the
@@ -360,7 +401,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     private func styledRow(
         _ chars: [Character], tabWidth: TabWidth, scrollColumn: Int, width: Int,
         caret: RowCaret?, selection: Range<Int>?, styling: RowStyling
-    ) -> String {
+    ) -> RenderedRow {
         let palette = styling.palette
         let isDisabled = styling.isDisabled
         let background = styling.background
@@ -368,9 +409,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         let windowEnd = scrollColumn + width
 
         let textForeground = isDisabled ? palette.foregroundTertiary : palette.foreground
-        let selectionBackground = palette.accent.opacity(
-            ViewConstants.selectionIndicator, over: background ?? palette.background)
-        let selectionForeground = palette.readableText(on: selectionBackground)
+        let (selectionBackground, selectionForeground) = TextFieldContentRenderer.selectionColors(
+            palette: palette, background: background)
 
         var result = ""
         var runText = ""
@@ -421,73 +461,74 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             }
         }
 
-        // Draws the caret over a character spanning `cells`:
-        // - `.block`: the character itself, in the field's background colour
-        //   on a caret-coloured block (covering a wide character whole) —
-        //   explicit palette colours, never SGR 7.
-        // - `.underscore` over a single-cell non-space: the character itself,
-        //   underlined, in the caret colour.
-        // - `.bar` (and `.underscore` over a space or a WIDE character,
-        //   whose underline support is poor): the shape's standalone glyph
-        //   replaces the first cell; the remainder pads with spaces so
-        //   nothing after it shifts. A bar caret reads as sitting BEFORE the
-        //   character, so it deliberately draws the same left-edge glyph for
-        //   every character — a combining-overlay approach was tried and
-        //   rejected: terminals compose the overlay differently per base
-        //   glyph, often near-invisibly.
-        func emitCaret(_ underlying: Character, cells: Int, appearance: CaretAppearance) {
-            switch appearance.shape {
-            case .block:
-                // Floored against the caret's current colour — see the twin in
-                // `TextFieldContentRenderer.caretCells`.
+        // The caret's cells are drawn by the very code TextField's are
+        // (`TextFieldContentRenderer.caretFrames`), so one `.textCursor(_:)`
+        // setting cannot mean two things — and every frame is built, not just
+        // this tick's, so the cells can be handed to the run loop.
+        //
+        // They are emitted as their own self-contained styled chunk, including
+        // on a blink-OFF frame where they used to coalesce with their
+        // neighbours: a frame spliced in later would otherwise take its colour
+        // from whatever escape happened to precede it in the line. Costs one
+        // escape pair; buys the whole cheap animation path. See
+        // ``AnimatedCellRun``.
+        let caretColors = TextFieldContentRenderer.CaretColors(
+            background: background, blockText: background ?? palette.background,
+            text: textForeground, selectionText: selectionForeground,
+            selectionBackground: selectionBackground)
+        var caretRun: AnimatedCellRun?
+
+        func emitCaret(
+            _ underlying: Character, cells: Int, cycle: RowCaret.Cycle, isSelected: Bool
+        ) {
+            // A caret straddling the window edge falls back to the ordinary
+            // clipped character rather than leaving a run describing cells that
+            // are not on screen — `followCursor` keeps it inside, and a run
+            // that outlived its cells would repaint over whatever took them.
+            guard cellX >= windowStart, cellX + cells <= windowEnd else {
                 emitClipped(
                     underlying, cells: cells,
-                    foreground: palette.background.ensuringRenderedContrast(
-                        atLeast: ViewConstants.labelContrastFloor, against: appearance.color),
-                    background: appearance.color)
-            case .underscore where cells == 1 && underlying != " ":
-                flush()
-                var style = TextStyle()
-                style.foregroundColor = appearance.color
-                style.backgroundColor = background
-                style.isUnderlined = true
-                result += ANSIRenderer.render(
-                    String(underlying), with: style.resolved(with: palette))
-                cellX += 1
-                outputCells += 1
-            case .bar, .underscore:
-                emitClipped(
-                    appearance.shape.character, cells: 1,
-                    foreground: appearance.color, background: background)
-                if cells > 1 {
-                    emitClipped(
-                        " ", cells: cells - 1,
-                        foreground: textForeground, background: background)
-                }
+                    foreground: isSelected ? selectionForeground : textForeground,
+                    background: isSelected ? selectionBackground : background)
+                return
             }
+            let frames = TextFieldContentRenderer.caretFrames(
+                cycle.cursor, shape: cycle.shape, cells: cells,
+                underlying: underlying, isSelected: isSelected, colors: caretColors)
+            flush()
+            result += frames[cycle.cursor.step % frames.count]
+            if cycle.cursor.isAnimating {
+                caretRun = AnimatedCellRun(
+                    offsetX: outputCells, offsetY: 0, width: cells,
+                    frames: frames, clock: .cursor)
+            }
+            cellX += cells
+            outputCells += cells
         }
 
         for character in chars {
             let cells = TabLayout.advance(from: cellX, over: character, tabWidth: tabWidth) - cellX
+            let isSelected = selection.map { $0.contains(cellX) } ?? false
             // The caret sits at a character's start cell (its column is
-            // derived from a character index), so at most one element
-            // matches. Blink-off falls through to normal rendering.
-            if let caret, caret.appearance.visible, caret.column == cellX {
+            // derived from a character index), so at most one element matches.
+            // A blink-OFF frame comes through here too — it is a frame of the
+            // cycle showing the character unadorned, not an absent caret.
+            if let caret, caret.column == cellX {
                 if character == "\t" {
                     // Caret on a tab: the caret occupies the stop run's first
                     // cell, the rest of the run pads.
-                    emitCaret(" ", cells: 1, appearance: caret.appearance)
+                    emitCaret(" ", cells: 1, cycle: caret.cycle, isSelected: isSelected)
                     if cells > 1 {
                         emitClipped(
                             " ", cells: cells - 1,
-                            foreground: textForeground, background: background)
+                            foreground: isSelected ? selectionForeground : textForeground,
+                            background: isSelected ? selectionBackground : background)
                     }
                 } else {
-                    emitCaret(character, cells: cells, appearance: caret.appearance)
+                    emitCaret(character, cells: cells, cycle: caret.cycle, isSelected: isSelected)
                 }
                 continue
             }
-            let isSelected = selection.map { $0.contains(cellX) } ?? false
             let foreground = isSelected ? selectionForeground : textForeground
             let cellBackground = isSelected ? selectionBackground : background
             if character == "\t" {
@@ -502,8 +543,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             }
         }
         // The caret past the last character sits on its own cell.
-        if let caret, caret.appearance.visible, caret.column == cellX {
-            emitCaret(" ", cells: 1, appearance: caret.appearance)
+        if let caret, caret.column == cellX {
+            emitCaret(" ", cells: 1, cycle: caret.cycle, isSelected: false)
         }
         // Pad to exactly `width` cells.
         while outputCells < width {
@@ -511,7 +552,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             outputCells += 1
         }
         flush()
-        return result
+        return RenderedRow(line: result, caret: caretRun)
     }
 
     /// A single wide region: a left-click focuses the editor and drops the

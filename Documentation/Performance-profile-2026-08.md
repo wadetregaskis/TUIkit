@@ -412,7 +412,9 @@ producer. Identified with `rawidle.py`, which shows what is actually written:
 
 `TextEditor` is deliberately left on the old path: its caret has multi-line
 geometry. It costs exactly what it cost before, which is the migration rule
-working.
+working. **Converted since** — see §15's table and the entry below it: the
+multi-line geometry turned out to be two lines of arithmetic the row walk was
+already doing, and leaving it cost 6.7% of a core.
 
 Remaining producers, by the pages they would quiet: scrollbar +
 `scrollIndicatorEmphasis` (Scroll View, Lists, Tables, Picker), Toggle (Forms,
@@ -2837,3 +2839,51 @@ of them the scrollbar:
 | `NotificationHostModifier.startAnimationTask` | 42 Hz full renders, **24–26% of a core** for the 3.5 s a toast is up; ~126 of ~147 frames byte-identical | Not a run: a toast appears and vanishes, and a run loops. Sleep to the next phase boundary instead — the opacity is a flat 1.0 for the whole visible duration. |
 | `_TextEditorCore` caret | 20 Hz full renders, **6.7–7.0% of a core** at 120×40, against 0.2% for a focused `TextField` | Convert. `computeCursorCycle` is the converted twin; `computeCursorState` sets `usesCursor`, which kills replay for **every other run on the page**, not just its own. |
 | `TextEditor.appendScrollbar` | zero today, but only because the caret above forces renders | Convert **with** the caret. Fix the caret alone and this bar freezes while looking correct. |
+
+### The TextEditor pair, converted
+
+Both, in one change, for the reason the table gives. Re-measured the same way
+the row above was measured — the Example's Text Input page at 120×40, the
+editor focused by clicking it, the caret set to blink, CPU over a quiet 6 s
+window:
+
+| | before | after |
+|---|---|---|
+| editor focused, blinking caret | **6.7%** of a core, 117 bytes/s | **0.2%**, 127 bytes/s |
+| the `TextField` above it, for scale | 0.2%, 138 bytes/s | unchanged |
+
+The output rate is the tell in both directions: it barely moved, because the
+caret was always emitting about a hundred bytes a second. What changed is what
+it cost to produce them. The editor now costs what the field costs, which is
+what it should always have cost — same caret, same blink, same clock.
+
+Verified in a PTY rather than only in test, by sampling every cell of the screen
+over three seconds and reporting the ones that took more than one value:
+
+- plain editor, block caret, blink → **one** cell moved, alternating between the
+  character punched out of the caret block and the character on the field
+  surface;
+- bar/underscore caret, pulse → the same one cell, through ten tones;
+- an overflowing editor → **five** cells: the caret, and the four scrollbar
+  cells its thumb covers.
+
+Nothing else on the page moved in any of the three, which is the property the
+CPU number is a proxy for.
+
+Two things came out of the doing.
+
+**The multi-line geometry was not the obstacle.** The caret's row is
+`cursorLine − scrollLine` and its column is the display column the row walk
+already computes for tab expansion — the row returns where in itself the caret
+landed and the loop, which knows which row it is, shifts it. That is the same
+shape `TextFieldContentRenderer.FieldContent` has carried all along.
+
+**The caret's cells are now drawn by the very code the field's are.** The editor
+had its own copy of the shape switch — block punches the character out,
+underscore underlines it, bar takes the first cell — which is how one
+`.textCursor(_:)` setting came to mean two slightly different things. It calls
+`TextFieldContentRenderer.caretFrames` now, and `computeCursorState`, whose last
+caller this was, is deleted. One deliberate behaviour change comes with it: a
+block caret punches its character out in the editor's own field surface rather
+than the page background, which is what the field does and what the shared
+code says.
