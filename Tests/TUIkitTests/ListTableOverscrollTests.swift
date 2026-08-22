@@ -277,6 +277,60 @@ struct ListTableOverscrollTests {
             """)
     }
 
+    @Test("A scrolled Table with indicators HIDDEN maps clicks to the drawn rows")
+    func tableClicksWithIndicatorsHidden() {
+        // The click map allowed a line for the "N more above" indicator
+        // whenever the table was not showing a scrollbar — which is also true
+        // when indicators are hidden outright, and then nothing is drawn there.
+        // Every click landed on the row above the pointer, and the top row
+        // could not be clicked at all.
+        final class Box { var value: Int? }
+        let selected = Box()
+        let ctx = context()
+        let dispatcher = ctx.environment.mouseEventDispatcher!
+        let view = Table(
+            Self.items,
+            selection: Binding(get: { selected.value }, set: { selected.value = $0 })
+        ) {
+            TableColumn("Name", value: \Item.name)
+        }
+        .scrollIndicators(.hidden)
+
+        // Scroll down so `hasContentAbove` is true — the condition the stale
+        // predicate reacted to.
+        let first = renderToBuffer(view, context: ctx)
+        dispatcher.setRegions(first.hitTestRegions)
+        for _ in 0..<3 {
+            _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .scrolled, x: 2, y: 3))
+        }
+
+        let scrolled = renderToBuffer(view, context: ctx)
+        dispatcher.setRegions(scrolled.hitTestRegions)
+        let screen = scrolled.lines.map(\.stripped)
+        // Whatever the topmost DRAWN data row is, clicking it must select it.
+        var found: (line: Int, index: Int)?
+        for (lineIndex, text) in screen.enumerated() {
+            guard let range = text.range(of: "row ") else { continue }
+            let digits = text[range.upperBound...].prefix { $0.isNumber }
+            guard let index = Int(digits) else { continue }
+            found = (lineIndex, index)
+            break
+        }
+        guard let (line, expected) = found else {
+            Issue.record("no data row on screen:\n\(screen.joined(separator: "\n"))")
+            return
+        }
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: line))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: line))
+        #expect(
+            selected.value == expected,
+            """
+            clicking the topmost drawn row selected \(selected.value.map(String.init) ?? "nil"), \
+            want \(expected):
+            \(screen.joined(separator: "\n"))
+            """)
+    }
+
     // MARK: - Inert by default
 
     @Test("Without an allowance neither view moves at all", arguments: [true, false])

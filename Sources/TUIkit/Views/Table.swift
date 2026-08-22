@@ -811,7 +811,13 @@ where Value.ID: Hashable {
                 handler: handler,
                 focusID: persistedFocusID,
                 visibleRange: handler.visibleRange,
-                scrollOffsetAbove: handler.hasContentAbove ? 1 : 0,
+                // Same predicate as the click map above and as the drawing
+                // condition, rather than `hasContentAbove` alone — the
+                // multi-line twin already spells it out. Its consumer is the
+                // ScrollView cursor-follow marker, which was aiming one line
+                // low in the same configuration.
+                scrollOffsetAbove:
+                    (handler.reservesIndicatorLine && handler.hasContentAbove) ? 1 : 0,
                 // Single-line rows: leave empty (no per-frame array); the click
                 // handler maps the line offset straight to the row.
                 visibleRowHeights: [],
@@ -2445,10 +2451,19 @@ where Value.ID: Hashable {
         // it was drawn — the dragged row settling a row below the cursor.
         // (The scrollbar path draws no indicators at all, so its rows never
         // shift.)
-        let hasIndicators = !state.hasScrollbar
         return { event in
+            // `reservesIndicatorLine` — `drawsScrollIndicators && !showsScrollbar`
+            // — is the frame's own answer to "does a 'N more above' line come
+            // out of the content area", and it is what `composeRowLines` draws
+            // by. This used `!state.hasScrollbar` alone, which is TRUE when
+            // indicators are hidden outright: `.scrollIndicators(.hidden)` on a
+            // scrolled table drew no indicator and the click map still allowed
+            // a row for one, so every click selected the row ABOVE the one
+            // under the pointer and the top row could not be clicked at all.
             let firstRowY =
-                interiorTopY + (hasIndicators && captureHandler.hasContentAbove ? 1 : 0)
+                interiorTopY
+                + (captureHandler.reservesIndicatorLine && captureHandler.hasContentAbove
+                    ? 1 : 0)
             // Wheel scrolls the viewport, never the selection.
             // See the matching comment in _ListCore for the
             // model. Routed through the shared
