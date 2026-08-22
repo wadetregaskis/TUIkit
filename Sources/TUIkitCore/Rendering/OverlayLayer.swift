@@ -92,6 +92,39 @@ public struct OverlayLayer: Sendable, Equatable {
     /// modals/alerts; popovers and notifications leave this `false`.
     public var dimsBackground: Bool
 
+    /// Whether this layer is a SCREEN-level panel rather than part of the
+    /// drawing of the view that emitted it.
+    ///
+    /// The distinction three modifiers turn on, and it deserves a name because
+    /// each of them got it wrong once by not having one:
+    ///
+    /// - ``SwiftUICore/View/hidden()`` drops a layer that is this view's own
+    ///   drawing and isolates the subtree so a screen-level one is never
+    ///   presented in the first place;
+    /// - ``SwiftUICore/View/allowsHitTesting(_:)`` disarms an anchored pop-up,
+    ///   because leaving one clickable under a view that just said it was not
+    ///   is the bug it exists to prevent — and leaves a presented dialog's own
+    ///   buttons alone, because that dialog is not this view's hit area;
+    /// - ``SwiftUICore/View/opacity(_:)`` fades an anchored layer with the
+    ///   subtree it belongs to, and does not fade a dialog the subtree merely
+    ///   opened.
+    ///
+    /// It reads ``centered`` because the two coincide exactly today: a layer
+    /// is centred precisely when it is a modal or an alert, which is precisely
+    /// when it is a panel over the whole screen rather than a displaced piece
+    /// of a view. `ScrollView`'s culling relies on the same coincidence from
+    /// the other side — it keeps centred layers through a scroll because they
+    /// are "screen-anchored, not content-anchored".
+    ///
+    /// A separate stored flag was considered and declined. It would answer a
+    /// DIFFERENT question — "is this a presentation" — and a `.popover` is a
+    /// presentation that all three modifiers should still treat as the view's
+    /// own drawing, since it is anchored to it. Placement is the axis they
+    /// actually want. If a centred non-presentation or an uncentred modal ever
+    /// exists, this property is the one line to change, and the three modifiers
+    /// stay correct by construction.
+    public var isScreenLevel: Bool { centered }
+
     /// Creates an overlay layer.
     ///
     /// - Parameters:

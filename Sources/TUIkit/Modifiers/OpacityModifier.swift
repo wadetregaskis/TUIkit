@@ -136,7 +136,7 @@ extension _OpacityView: Renderable {
         //
         // A PRESENTATION layer is not a reason to decline, because it is not
         // faded either way — see `fadingOverlays`.
-        guard !buffer.overlays.contains(where: { !$0.centered }) else { return nil }
+        guard !buffer.overlays.contains(where: { !$0.isScreenLevel }) else { return nil }
         let key = AnimationStore.Key(
             identity: context.identity, owner: ObjectIdentifier(Self.self))
         guard
@@ -165,8 +165,7 @@ extension _OpacityView {
     /// `overlays`, with the ones this view actually DREW faded to match its
     /// lines — and the ones it merely hosts left alone.
     ///
-    /// The distinction is ``OverlayLayer/centered``, which means
-    /// "screen-anchored, not content-anchored", and it is the same one
+    /// The distinction is ``OverlayLayer/isScreenLevel``, and it is the same one
     /// `.hidden()` and `.allowsHitTesting(false)` turn on:
     ///
     /// - an **anchored** layer — an `.offset`/`.position` child, a popover — is
@@ -186,7 +185,7 @@ extension _OpacityView {
     ) -> [OverlayLayer] {
         guard factor < 1 else { return overlays }
         return overlays.map { layer in
-            guard !layer.centered else { return layer }
+            guard !layer.isScreenLevel else { return layer }
             var faded = layer
             faded.content = layer.content.replacingLines(
                 layer.content.lines.map {

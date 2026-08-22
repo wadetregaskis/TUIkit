@@ -153,7 +153,7 @@ private struct _HitTestingView<Content: View>: View, Renderable, Layoutable {
         // and whose every button was dead — and the modifier the author wrote
         // was about the page, not about the dialog it opens.
         drawn.hitTestRegions = []
-        for index in drawn.overlays.indices where !drawn.overlays[index].centered {
+        for index in drawn.overlays.indices where !drawn.overlays[index].isScreenLevel {
             drawn.overlays[index].content.hitTestRegions = []
         }
         return drawn

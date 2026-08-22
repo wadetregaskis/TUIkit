@@ -99,6 +99,25 @@ struct HiddenAndHitTestingPresentationTests {
         #expect(inert.dialogRegions > 0, "the dialog's own buttons were disarmed")
     }
 
+    @Test("The screen-level flag is what the three modifiers agree on")
+    func screenLevelMatchesPlacement() {
+        // `isScreenLevel` reads `centered`, and this is what says the two
+        // coincide — a modal is screen-level, an anchored popover is not. If
+        // that ever stops being true, the three modifiers change behaviour
+        // silently, so it is pinned rather than assumed.
+        let modal = probe(presenting()).overlays.filter { $0.level == .modal }
+        #expect(!modal.isEmpty, "precondition: a modal layer")
+        #expect(modal.allSatisfy { $0.isScreenLevel }, "a modal is not screen-level")
+
+        let popover = probe(
+            Text("anchor").popover(isPresented: .constant(true)) { Text("in") }
+        ).overlays
+        #expect(!popover.isEmpty, "precondition: a popover layer")
+        #expect(
+            popover.allSatisfy { !$0.isScreenLevel },
+            "an anchored popover claimed to be screen-level")
+    }
+
     @Test("…while an anchored pop-up from the same subtree is still disarmed")
     func hitTestingStillDisarmsAnchoredPopups() {
         // The reason the overlay sweep exists: a drop-down is carried in
@@ -110,7 +129,7 @@ struct HiddenAndHitTestingPresentationTests {
             Text("anchor")
                 .popover(isPresented: .constant(true)) { Button("in-popover") {} }
                 .allowsHitTesting(false))
-        let anchored = menu.overlays.filter { !$0.centered }
+        let anchored = menu.overlays.filter { !$0.isScreenLevel }
         #expect(!anchored.isEmpty, "precondition: the popover floated an anchored layer")
         #expect(
             anchored.allSatisfy { $0.content.hitTestRegions.isEmpty },
