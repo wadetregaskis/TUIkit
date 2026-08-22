@@ -183,6 +183,56 @@ struct ModalInputGrabTests {
         }
     }
 
+    @Test("An app-header control does not answer a click from behind a modal")
+    func headerIsGrabbed() {
+        // The header is drawn OUTSIDE the composited content area, so nothing
+        // the presentation does reaches it: the modifier isolates what it
+        // wraps, and the compositor dims what it composites. It was the last
+        // channel a page could still be operated through.
+        func headerRegionsReachTheDispatcher(presented: Bool) -> Bool {
+            let tui = TUIContext()
+            let focusManager = FocusManager()
+            var environment = EnvironmentValues()
+            environment.focusManager = focusManager
+            environment.applyRuntimeServices(from: tui)
+            environment.terminalWidth = 40
+            environment.terminalHeight = 12
+            environment.overlayContentHeight = 10
+            let header = AppHeaderState()
+            environment.appHeader = header
+            let context = RenderContext(
+                availableWidth: 40, availableHeight: 10,
+                environment: environment, tuiContext: tui)
+            let view = VStack { Text("page") }
+                .appHeader { Button("header") {} }
+                .modal(isPresented: .constant(presented)) {
+                    Dialog(title: "D") { Text("body") }
+                }
+            for _ in 0..<2 {
+                tui.mouseEventDispatcher.beginRenderPass()
+                tui.stateStorage.beginRenderPass()
+                tui.renderCache.beginRenderPass()
+                focusManager.beginRenderPass()
+                _ = renderToBuffer(view, context: context)
+                focusManager.endRenderPass()
+                tui.stateStorage.endRenderPass()
+            }
+            // The header publishes its buffer through the environment; whether
+            // its regions reach the dispatcher is RenderLoop's decision, and
+            // `activeSectionIsModal` is the whole of it.
+            // The header publishes its own buffer; whether those regions reach
+            // the dispatcher is RenderLoop's decision, and
+            // `activeSectionIsModal` is the whole of that decision.
+            let published = header.contentBuffer?.hitTestRegions ?? []
+            #expect(!published.isEmpty, "precondition: the header drew a clickable control")
+            return !published.isEmpty && !focusManager.activeSectionIsModal
+        }
+        #expect(!headerRegionsReachTheDispatcher(presented: true),
+            "the header stayed clickable behind a dialog")
+        #expect(headerRegionsReachTheDispatcher(presented: false),
+            "the header stopped being clickable entirely")
+    }
+
     @Test("A page's status-bar item does not fire from behind a modal")
     func statusItemIsGrabbed() {
         let (open, _, firedWhileOpen) = harness(presented: true)

@@ -500,7 +500,19 @@ extension RenderLoop {
         noteStatusBarPresence(statusBarBuffer != nil)
 
         var mergedRegions = buffer.hitTestRegions
-        if let appHeaderBuffer {
+        // The app header is drawn OUTSIDE the composited content area, so
+        // nothing a presentation does can reach it: the modifier isolates what
+        // it wraps, and the compositor dims what it composites. A modal's
+        // guarantee is that the page beneath is inert, and a header button is
+        // part of that page — it was still firing on a click with a dialog up,
+        // the last of the channels a presentation has to close.
+        //
+        // Its regions only, not its appearance. The header stays legible
+        // because it is chrome the app draws around every screen, like the
+        // status bar, which likewise keeps `q quit` live behind a modal by
+        // design. What it must not do is answer a click that the same page's
+        // body would refuse.
+        if let appHeaderBuffer, !focusManager.activeSectionIsModal {
             for region in appHeaderBuffer.hitTestRegions {
                 var shifted = region
                 shifted.offsetY -= appHeader.height
