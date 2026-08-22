@@ -79,14 +79,8 @@ enum TextFieldMouseHandler {
                 displayWidths: widths)
         }
 
-        let mouseHandlerID = mouseDispatcher.register { event in
+        let mouseHandlerID = mouseDispatcher.register(hoverBox: captureHoverBox) { event in
             switch event.phase {
-            case .entered:
-                captureHoverBox.value = true
-                return true
-            case .exited:
-                captureHoverBox.value = false
-                return true
             case .pressed where event.button == .left:
                 focusManager?.focus(id: captureFocusID)
                 if let disclosureRange, disclosureRange.contains(event.x) {

@@ -509,14 +509,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             let captureFocusID = persistedFocusID
             let toggleBinding = isOn
             let captureHoverBox = hoverBox
-            let handlerID = mouseDispatcher.register { event in
+            let handlerID = mouseDispatcher.register(hoverBox: captureHoverBox) { event in
                 switch event.phase {
-                case .entered:
-                    captureHoverBox.value = true
-                    return true
-                case .exited:
-                    captureHoverBox.value = false
-                    return true
                 case .pressed where event.button == .left:
                     return true
                 case .released where event.button == .left:

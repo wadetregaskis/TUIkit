@@ -319,6 +319,36 @@ extension MouseEventDispatcher {
 
     /// Registers a new handler and returns the id `.onMouseEvent`
     /// should emit alongside its region.
+    /// Registers `handler`, with the pointer's enter/exit tracked into
+    /// `hoverBox` first.
+    ///
+    /// Every control that lifts under the pointer opened its handler with the
+    /// same six lines, and three of them had their own copy: `Button`,
+    /// `_ToggleCore` and the text-field handler. Hover is one behaviour — the
+    /// pointer is over the control or it is not — so a change to what that
+    /// means should land once rather than three times, and a fourth control
+    /// should get it by asking rather than by remembering.
+    ///
+    /// Both phases are consumed, as all three copies did: a synthetic
+    /// enter/exit belongs to whichever region the dispatcher resolved it
+    /// against, and passing it on would offer it to the control underneath.
+    func register(
+        hoverBox: StateBox<Bool>, _ handler: @escaping (MouseEvent) -> Bool
+    ) -> HitTestRegion.HandlerID {
+        register { event in
+            switch event.phase {
+            case .entered:
+                hoverBox.value = true
+                return true
+            case .exited:
+                hoverBox.value = false
+                return true
+            default:
+                return handler(event)
+            }
+        }
+    }
+
     func register(_ handler: @escaping (MouseEvent) -> Bool) -> HitTestRegion.HandlerID {
         let id = HitTestRegion.HandlerID(nextHandlerID)
         nextHandlerID += 1

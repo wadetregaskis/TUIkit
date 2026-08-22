@@ -432,14 +432,8 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             let captureFocusID = persistedFocusID
             let captureAction = effectiveAction
             let captureHoverBox = hoverBox
-            let handlerID = mouseDispatcher.register { event in
+            let handlerID = mouseDispatcher.register(hoverBox: captureHoverBox) { event in
                 switch event.phase {
-                case .entered:
-                    captureHoverBox.value = true
-                    return true
-                case .exited:
-                    captureHoverBox.value = false
-                    return true
                 case .pressed where event.button == .left:
                     guard isMenuTrigger else {
                         // Claim the press so the dispatcher routes the
