@@ -345,69 +345,95 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let stateStorage = context.stateStorage!
+        let palette = context.environment.palette
+        // Explicit colour > environment foregroundStyle > palette accent.
+        let effectiveColor =
+            color ?? context.environment.foregroundStyle ?? palette.accent
+        let resolvedColor = effectiveColor.resolve(with: palette)
 
-        // Retrieve or create persistent start time for this spinner.
-        let timeKey = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)
-        let startTimeBox: StateBox<Double> = stateStorage.storage(for: timeKey, default: Date().timeIntervalSinceReferenceDate)
-        stateStorage.markActive(context.identity)
+        /// The whole cycle, already styled — one entry per TICK of the animation
+        /// clock, which is the grid a replayed run is indexed on.
+        ///
+        /// A style's own interval is rounded to a whole number of ticks rather
+        /// than resampled onto them: 0.110 s becomes two 0.05 s ticks, so `.dots`
+        /// runs at 0.10 s instead of 0.11. Every frame then lasts the same time,
+        /// which reads as smooth; resampling would have given 2, 2, 3, 2, 2, 3
+        /// ticks and a visible limp for the sake of an average nobody can see.
+        let ticksPerFrame = max(
+            1, Int((style.interval / AnimationClock.cursor.tickInterval).rounded()))
+        let cycle = spinnerFrames(color: resolvedColor, context: context)
+        let glyphWidths = Set(cycle.map(\.strippedLength))
 
-        // The frame shown is derived from elapsed wall-clock time, so the spinner
-        // only advances when re-rendered over time. Ask the run loop's scheduler
-        // to re-render us at the style's own rate — replacing a per-spinner task
-        // that fired ~42 Hz regardless of the ~7–10 Hz the styles actually want.
-        // Keyed by structural identity; several spinners at one rate coalesce onto
-        // a single render, and a spinner that scrolls off stops re-declaring and
-        // is dropped (so a screen with no spinners renders nothing).
-        context.requestAnimation(
-            token: "spinner-\(context.identity.path)",
-            frequency: 1.0 / style.interval)
-
-        // Calculate frame index from elapsed time.
-        let elapsed = Date().timeIntervalSinceReferenceDate - startTimeBox.value
-        let frameCount: Int
-        switch style {
-        case .bouncing:
-            frameCount = SpinnerStyle.bouncingPositions(trackLength: SpinnerStyle.trackWidth).count
-        default:
-            frameCount = style.frames.count
-        }
-        let frameIndex = Int(elapsed / style.interval) % max(1, frameCount)
-
-        // Resolve color: explicit color > environment foregroundStyle > palette accent
-        let effectiveColor = color ?? context.environment.foregroundStyle ?? context.environment.palette.accent
-        let resolvedColor = effectiveColor.resolve(with: context.environment.palette)
-
-        // Build spinner text — bouncing renders with colored trail, others are plain.
-        let coloredSpinner: String
-        switch style {
-        case .bouncing:
-            coloredSpinner = SpinnerStyle.renderBouncingFrame(
-                frameIndex: frameIndex,
-                color: resolvedColor,
-                trackColor: context.environment.palette.foregroundQuaternary.opacity(
-                    0.4, over: context.environment.palette.background)
-            )
-        default:
-            coloredSpinner = ANSIRenderer.colorize(
-                style.frames[frameIndex],
-                foreground: resolvedColor
-            )
-        }
+        // The clock, not a per-spinner start time: every spinner of a style is
+        // then in phase, and — much more to the point — the frame drawn is the
+        // frame the run loop will replay, so the first tick does not jump.
+        let tick = context.environment.cursorTimer?.elapsedTicks ?? 0
+        let step = tick / ticksPerFrame
+        let frameIndex = cycle.isEmpty ? 0 : ((step % cycle.count) + cycle.count) % cycle.count
+        let coloredSpinner = cycle.isEmpty ? "" : cycle[frameIndex]
 
         let output: String
         if let label, !label.isEmpty {
             // A whitespace-only label is honoured, not dropped: it is an explicit
             // request for trailing space (e.g. the no-break-space padding labels
             // some apps use for alignment — U+00A0 satisfies `isWhitespace`).
-            let styledLabel = ANSIRenderer.colorize(label, foreground: context.environment.palette.foreground)
+            let styledLabel = ANSIRenderer.colorize(label, foreground: palette.foreground)
             output = coloredSpinner + " " + styledLabel
         } else {
             // No label (or an empty one) — render just the spinner glyph, with no
             // trailing separator space.
             output = coloredSpinner
         }
+        var buffer = FrameBuffer(text: output)
 
-        return FrameBuffer(text: output)
+        // A measure pass draws nothing, so a run left on it would describe cells
+        // that were never on screen — and would keep the clock alive from a pass
+        // that produced no frame.
+        guard !context.isMeasuring, let width = glyphWidths.first, glyphWidths.count == 1,
+            width > 0, cycle.count > 1
+        else {
+            // Either nothing to animate, or a cycle whose frames are not all one
+            // width — which a run cannot express, because every frame must
+            // occupy exactly the cells the run claims. A mixed-width
+            // `.custom(_:)` sequence is the only way to get here, and it falls
+            // back to what every spinner used to do: ask the run loop to
+            // re-render the whole screen at the style's rate.
+            if !context.isMeasuring, cycle.count > 1 {
+                context.requestAnimation(
+                    token: "spinner-\(context.identity.path)",
+                    frequency: 1.0 / style.interval)
+            }
+            return buffer
+        }
+
+        // Every tick of the cycle, so the run loop can splice the right glyph
+        // over these cells without asking this view anything. Nothing is
+        // measured, nothing is laid out, and the screen is not re-rendered — the
+        // saving this whole mechanism exists for. See ``AnimatedCellRun``.
+        buffer.animatedCells = [
+            AnimatedCellRun(
+                offsetX: 0, offsetY: 0, width: width,
+                frames: (0..<(cycle.count * ticksPerFrame)).map {
+                    cycle[($0 / ticksPerFrame) % cycle.count]
+                },
+                clock: .cursor)
+        ]
+        return buffer
+    }
+
+    /// The spinner's glyphs, styled, one per frame of the STYLE (not per tick).
+    private func spinnerFrames(color: Color, context: RenderContext) -> [String] {
+        switch style {
+        case .bouncing:
+            let trackColor = context.environment.palette.foregroundQuaternary.opacity(
+                0.4, over: context.environment.palette.background)
+            let positions = SpinnerStyle.bouncingPositions(trackLength: SpinnerStyle.trackWidth)
+            return positions.indices.map {
+                SpinnerStyle.renderBouncingFrame(
+                    frameIndex: $0, color: color, trackColor: trackColor)
+            }
+        default:
+            return style.frames.map { ANSIRenderer.colorize($0, foreground: color) }
+        }
     }
 }

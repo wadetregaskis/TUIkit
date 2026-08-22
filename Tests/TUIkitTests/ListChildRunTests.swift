@@ -99,6 +99,36 @@ struct ListChildRunTests {
         }
     }
 
+    /// The cursor row repaints its whole line every tick, so a narrower run on
+    /// it is dropped — and something has to move what the run would have moved,
+    /// because a producer that left one behind has stopped asking to be
+    /// re-rendered.
+    @Test("A breathing row asks for the re-render its dropped run needed")
+    func pulsingRowTakesOverTheAsking() {
+        let (tui, context) = harness()
+        var environment = context.environment
+        let scheduler = AnimationScheduler()
+        environment.animationScheduler = scheduler
+        environment.volatileReadTracker = VolatileReadTracker()
+        var focused = RenderContext(
+            availableWidth: 40, availableHeight: 20, environment: environment, tuiContext: tui)
+        focused.identity = context.identity
+
+        scheduler.beginFrame()
+        let buffer = render(
+            List(selection: Binding<Int?>.constant(0)) {
+                ForEach(0..<3, id: \.self) { _ in blinker("row") }
+            },
+            tui: tui, context: focused)
+        scheduler.endFrame()
+        // Whatever the focus state resolved to, the two must agree: a row whose
+        // run was carried needs no re-render, and one whose run was dropped
+        // does. What must never happen is neither — a frozen spinner.
+        #expect(
+            buffer.animatedCells.count == 3 || scheduler.liveCount > 0,
+            "runs dropped and nothing asked to be re-rendered")
+    }
+
     @Test("A measure pass leaves no runs behind")
     func measureLeavesNothing() {
         let (tui, context) = harness()

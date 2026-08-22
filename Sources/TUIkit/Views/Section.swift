@@ -213,6 +213,17 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         var lines: [String] = []
+        /// The children's animated runs, moved down by however many lines were
+        /// stacked above them. A `Section` assembles lines by hand rather than
+        /// compositing, so anything else its children's buffers carried is lost
+        /// unless it is carried deliberately — and a run that is lost is a
+        /// spinner or a cursor that only keeps moving because something else
+        /// forces a full re-render.
+        var runs: [AnimatedCellRun] = []
+        func take(_ buffer: FrameBuffer) {
+            runs += buffer.animatedCells.map { $0.shifted(byX: 0, y: lines.count) }
+            lines.append(contentsOf: buffer.lines)
+        }
 
         // Header and footer render under a chrome role, so their text resolves
         // the role's default styling (header bold+dim, footer dim) plus any
@@ -223,19 +234,23 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
                 header, context: sectionChromeContext(context, .sectionHeader))
             // Drop a blank header (e.g. `header: { Text("") }`) rather than show
             // an empty line above the content.
-            if !sectionBufferIsBlank(headerBuffer) { lines.append(contentsOf: headerBuffer.lines) }
+            if !sectionBufferIsBlank(headerBuffer) { take(headerBuffer) }
         }
 
-        let contentBuffer = TUIkit.renderToBuffer(content, context: context)
-        lines.append(contentsOf: contentBuffer.lines)
+        take(TUIkit.renderToBuffer(content, context: context))
 
         if !(footer is EmptyView) {
             let footerBuffer = TUIkit.renderToBuffer(
                 footer, context: sectionChromeContext(context, .sectionFooter))
-            if !sectionBufferIsBlank(footerBuffer) { lines.append(contentsOf: footerBuffer.lines) }
+            if !sectionBufferIsBlank(footerBuffer) { take(footerBuffer) }
         }
 
-        return FrameBuffer(lines: lines)
+        var buffer = FrameBuffer(lines: lines)
+        // A measure pass draws nothing, so a run left on it would describe cells
+        // that were never on screen — and keep the animation clock alive from a
+        // pass that produced no frame.
+        if !context.isMeasuring { buffer.animatedCells = runs }
+        return buffer
     }
 }
 

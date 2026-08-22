@@ -1,20 +1,23 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  SpinnerRowAnimationTests.swift
 //
 //  Regression tests for GitHub issue #1: spinners nested inside ForEach rows
 //  (a Card's VStack, a List) must keep animating. The row-level value memo
 //  (`_MemoizedRow`, and `EquatableView` for explicit `.equatable()`) used to
-//  cache any row whose element compared equal — but a Spinner's output is a
-//  function of *time*, and serving the cached buffer both froze the glyph and
-//  skipped the spinner's per-frame `requestAnimation` re-declaration, so the
-//  scheduler dropped its grid and the demand-driven loop stopped ticking it.
-//  `requestAnimation` now records on the `VolatileReadTracker`, which declines
-//  the cache for time-varying subtrees.
+//  cache any row whose element compared equal — and a Spinner's output was a
+//  function of TIME, so the cached buffer froze the glyph.
 //
-//  Each test drives the same per-frame lifecycle the live RenderLoop uses
-//  (state storage + render cache + animation scheduler begin/end) around
-//  repeated headless renders with real wall-clock time in between, and checks
-//  that the nested spinner advances its frame and keeps its animation token.
+//  What "keeps animating" MEANS changed when the spinner stopped asking to be
+//  re-rendered and started leaving an `AnimatedCellRun` behind instead. The
+//  glyph on the buffer is now just the frame showing at this tick; what makes
+//  the spinner move is the run, replayed by the loop without consulting the
+//  view. So these tests measure the run: it must be there, on the right line,
+//  actually varying, on EVERY frame including the ones served from a memo.
+//
+//  That is a stronger check than the old one, not a weaker one. The old test
+//  asked whether the glyph differed between two renders; a cached row could
+//  pass it by accident if the cache happened to miss. This asks whether the
+//  thing that drives the animation survived the cache, every single frame.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -73,64 +76,66 @@ struct SpinnerRowAnimationTests {
         return buffer
     }
 
-    /// Extracts the `.line`-style spinner glyph (one of `| / - \`) from the
-    /// first stripped line containing `marker`. ASCII `|` is distinct from the
-    /// box-drawing border `│`, so borders never match.
-    private func spinnerGlyph(in buffer: FrameBuffer, onLineContaining marker: String) -> Character? {
-        let lineFrames: Set<Character> = ["|", "/", "-", "\\"]
-        for line in buffer.lines {
-            let stripped = line.stripped
-            if stripped.contains(marker) {
-                return stripped.reversed().first { lineFrames.contains($0) }
-            }
-        }
-        return nil
+    /// The animated runs sitting on the first line whose text contains
+    /// `marker` — the line the spinner shares with its label.
+    private func runs(in buffer: FrameBuffer, onLineContaining marker: String)
+        -> [AnimatedCellRun]
+    {
+        guard let line = buffer.lines.firstIndex(where: { $0.stripped.contains(marker) })
+        else { return [] }
+        return buffer.animatedCells.filter { $0.offsetY == line }
     }
 
-    /// Renders `view` once, then keeps re-rendering (a full simulated frame
-    /// each time) until every marker line's spinner glyph differs from its
-    /// first-frame glyph, or a generous timeout lapses.
+    /// Renders `view` repeatedly — a full simulated frame each time, with real
+    /// time in between so the memo has every chance to serve a cached row — and
+    /// reports, for each marker, the number of frames on which an ANIMATING run
+    /// sat on its line.
     ///
-    /// A fixed sleep is not sound here: the Spinner's frame index is real
-    /// wall-clock elapsed time over the style interval *modulo the frame
-    /// count*, so a loaded machine that stretches one sleep to a multiple of
-    /// the full cycle (`.line`: 4 x 140 ms) aliases a healthy spinner back to
-    /// its old glyph. Polling across many distinct offsets cannot alias — while
-    /// a frozen (wrongly memoized) spinner never changes no matter how long we
-    /// poll, so the regression still fails deterministically.
-    private func pollForGlyphChanges<V: View>(
-        _ view: V,
-        markers: [String]
-    ) async throws -> (changed: Set<String>, live1: Int, liveFinal: Int) {
+    /// A frozen (wrongly memoized, or dropped by a container) spinner shows up
+    /// as a count below the frame count: the run is what moves it, so a frame
+    /// without one is a frame in which nothing will.
+    private func pollForRuns<V: View>(
+        _ view: V, markers: [String], frames: Int = 8
+    ) async throws -> (framesWithRun: [String: Int], frames: Int, sample: AnimatedCellRun?) {
         let tuiContext = TUIContext()
         let scheduler = AnimationScheduler()
         let focusManager = FocusManager()
-
-        let frame1 = renderFrame(
-            view, tuiContext: tuiContext, scheduler: scheduler,
-            focusManager: focusManager, nowNanos: 0)
-        let live1 = scheduler.liveCount
-        let initial = markers.reduce(into: [String: Character?]()) {
-            $0[$1] = spinnerGlyph(in: frame1, onLineContaining: $1)
-        }
-
-        var changed = Set<String>()
-        var liveFinal = live1
+        var counts = markers.reduce(into: [String: Int]()) { $0[$1] = 0 }
+        var sample: AnimatedCellRun?
         var nowNanos: Int64 = 0
-        for _ in 0..<40 where changed.count < markers.count {
-            try await Task.sleep(for: .milliseconds(60))
-            nowNanos += 60_000_000
-            let frame = renderFrame(
+
+        for frame in 0..<frames {
+            if frame > 0 {
+                try await Task.sleep(for: .milliseconds(40))
+                nowNanos += 40_000_000
+            }
+            let buffer = renderFrame(
                 view, tuiContext: tuiContext, scheduler: scheduler,
                 focusManager: focusManager, nowNanos: nowNanos)
-            liveFinal = scheduler.liveCount
-            for marker in markers where !changed.contains(marker) {
-                if spinnerGlyph(in: frame, onLineContaining: marker) != initial[marker] {
-                    changed.insert(marker)
+            for marker in markers {
+                let animating = runs(in: buffer, onLineContaining: marker).filter(\.isAnimating)
+                if !animating.isEmpty {
+                    counts[marker, default: 0] += 1
+                    sample = sample ?? animating.first
                 }
             }
         }
-        return (changed, live1, liveFinal)
+        return (counts, frames, sample)
+    }
+
+    /// Every marker must carry an animating run on every frame.
+    private func expectAnimating(
+        _ result: (framesWithRun: [String: Int], frames: Int, sample: AnimatedCellRun?),
+        _ markers: [String], _ what: String
+    ) {
+        for marker in markers {
+            #expect(
+                result.framesWithRun[marker] == result.frames,
+                """
+                \(what): "\(marker)" carried an animating run on \
+                \(result.framesWithRun[marker] ?? 0) of \(result.frames) frames
+                """)
+        }
     }
 
     @Test("Spinners inside ForEach rows (Card) keep animating")
@@ -155,16 +160,16 @@ struct SpinnerRowAnimationTests {
             }
         }
 
-        let result = try await pollForGlyphChanges(view, markers: ["Welcome", "Alpha"])
+        // "Welcome" is the control — a top-level spinner, never memoized —
+        // and "Alpha" is the bug: a spinner inside a ForEach row.
+        let result = try await pollForRuns(view, markers: ["Welcome", "Alpha"])
+        expectAnimating(result, ["Welcome", "Alpha"], "ForEach row")
 
-        // Control: the top-level spinner must animate.
-        #expect(result.changed.contains("Welcome"), "control failed: top-level spinner did not animate")
-
-        // The bug: the ForEach-row spinner must animate too…
-        #expect(result.changed.contains("Alpha"), "nested (ForEach-row) spinner frozen")
-
-        // …and its animation token must stay declared (4 spinners on screen).
-        #expect(result.liveFinal == result.live1, "nested spinners' animation tokens dropped")
+        // And the run is a real cycle over the style's glyphs, not a
+        // single-frame placeholder that would satisfy the count above.
+        let run = try #require(result.sample)
+        #expect(run.width == 1, "a `.line` spinner is one cell wide, not \(run.width)")
+        #expect(Set(run.frames).count == 4, "expected the four `| / - \\` glyphs")
     }
 
     @Test("Spinners inside List rows keep animating")
@@ -179,10 +184,8 @@ struct SpinnerRowAnimationTests {
             }
         }
 
-        let result = try await pollForGlyphChanges(view, markers: ["Alpha"])
-
-        #expect(result.changed.contains("Alpha"), "List-row spinner frozen (or not visible)")
-        #expect(result.liveFinal == result.live1, "List-row spinners' animation tokens dropped")
+        let result = try await pollForRuns(view, markers: ["Alpha"])
+        expectAnimating(result, ["Alpha"], "List row")
     }
 
     @Test("Spinners inside a ScrollView's rows keep animating")
@@ -200,10 +203,8 @@ struct SpinnerRowAnimationTests {
         }
         .frame(height: 10)
 
-        let result = try await pollForGlyphChanges(view, markers: ["Alpha"])
-
-        #expect(result.changed.contains("Alpha"), "ScrollView-row spinner frozen (or not visible)")
-        #expect(result.liveFinal == result.live1, "ScrollView-row spinners' animation tokens dropped")
+        let result = try await pollForRuns(view, markers: ["Alpha"])
+        expectAnimating(result, ["Alpha"], "ScrollView row")
     }
 
     @Test("Spinners inside a LazyVStack's rendered rows keep animating")
@@ -219,10 +220,8 @@ struct SpinnerRowAnimationTests {
         }
         .frame(height: 10)
 
-        let result = try await pollForGlyphChanges(view, markers: ["Alpha"])
-
-        #expect(result.changed.contains("Alpha"), "LazyVStack-row spinner frozen")
-        #expect(result.liveFinal == result.live1, "LazyVStack-row spinners' animation tokens dropped")
+        let result = try await pollForRuns(view, markers: ["Alpha"])
+        expectAnimating(result, ["Alpha"], "LazyVStack row")
     }
 
     @Test("A Spinner inside .equatable() content keeps animating")
@@ -231,9 +230,7 @@ struct SpinnerRowAnimationTests {
             SpinnerBadge(label: "Working").equatable()
         }
 
-        let result = try await pollForGlyphChanges(view, markers: ["Working"])
-
-        #expect(result.changed.contains("Working"), "spinner frozen inside an EquatableView")
-        #expect(result.liveFinal == result.live1, "EquatableView dropped the spinner's animation token")
+        let result = try await pollForRuns(view, markers: ["Working"])
+        expectAnimating(result, ["Working"], "EquatableView")
     }
 }

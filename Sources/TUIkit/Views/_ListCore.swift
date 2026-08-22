@@ -2370,9 +2370,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // A breathing row repaints its WHOLE line every tick, so a narrower run
         // on the same line would be overwritten by it — two animations claiming
         // one cell, and the wider one wins. The row's own runs are dropped for
-        // the duration, which is the cursor row only, and again costs a saving
-        // rather than an animation: the content is still asking to be
-        // re-rendered.
+        // the duration, which is the cursor row only.
+        //
+        // And then something has to move them, because a producer that left a
+        // run behind is no longer asking to be re-rendered — that is the whole
+        // point of leaving one. So the list takes over the asking on the
+        // dropped run's behalf, at the clock the run would have advanced on. A
+        // spinner on the cursor row therefore costs exactly what every spinner
+        // used to cost, and only while the cursor is on its row.
+        if !childRuns.isEmpty, !context.isMeasuring {
+            context.requestAnimation(
+                token: "list-dropped-run-\(context.identity.path)",
+                frequency: 1.0 / AnimationClock.cursor.tickInterval)
+        }
         // Transposed to line-major, because that is how the runs are asked for:
         // one run per LINE, carrying that line at every point of the cycle.
         let perStep = cycle.colors(dim: dim, bright: bright).map { lines(over: $0) }

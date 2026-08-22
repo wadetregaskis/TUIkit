@@ -193,7 +193,7 @@ def main():
     ap.add_argument("binary")
     ap.add_argument("--scenario", default="tour",
                     choices=["tour", "list", "table", "emoji", "scroll", "mouse", "splitdrag",
-                             "idle", "menu", "progress"])
+                             "idle", "menu", "progress", "spinners"])
     ap.add_argument("--loops", type=int, default=1)
     ap.add_argument("--rows", type=int, default=50)
     ap.add_argument("--cols", type=int, default=160)
