@@ -101,6 +101,88 @@ struct ModalInputGrabTests {
         #expect(firedWhileClosed() == 1, "the page's shortcut stopped working entirely")
     }
 
+    /// Clicks the cell the page's button occupies — located from a render with
+    /// nothing presented — and reports whether the page's action ran.
+    private func clickReachesThePage(cover: Bool, presented: Bool) -> Bool {
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        var environment = EnvironmentValues()
+        environment.focusManager = focusManager
+        environment.applyRuntimeServices(from: tui)
+        environment.terminalWidth = 40
+        environment.terminalHeight = 12
+        environment.overlayContentHeight = 12
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 12,
+            environment: environment, tuiContext: tui)
+        let fired = Counter()
+
+        func screen(presenting: Bool) -> FrameBuffer {
+            let page = VStack {
+                Button("page") { fired.value += 1 }
+                Spacer()
+            }
+            let view =
+                cover
+                ? AnyView(
+                    page.fullScreenCover(isPresented: .constant(presenting)) {
+                        VStack { Text("Loading…") }
+                    })
+                : AnyView(
+                    page.modal(isPresented: .constant(presenting)) {
+                        Dialog(title: "D") { Text("body") }
+                    })
+            var buffer = FrameBuffer(lines: [])
+            for _ in 0..<2 {
+                tui.mouseEventDispatcher.beginRenderPass()
+                tui.stateStorage.beginRenderPass()
+                tui.renderCache.beginRenderPass()
+                focusManager.beginRenderPass()
+                buffer = renderToBuffer(view, context: context)
+                focusManager.endRenderPass()
+                tui.stateStorage.endRenderPass()
+            }
+            return buffer.compositingOverlays(
+                maxWidth: 40, maxHeight: 12, palette: environment.palette)
+        }
+
+        // Where the page's button is when nothing covers it. Aiming there is
+        // the whole question: with a presentation up, that cell belongs to the
+        // presentation (or to nothing), and must not reach the page.
+        guard let pageButton = screen(presenting: false).hitTestRegions.first else {
+            Issue.record("the page published no region to aim at")
+            return false
+        }
+        let target = (x: pageButton.offsetX + 1, y: pageButton.offsetY)
+
+        let composited = screen(presenting: presented)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+        tui.mouseEventDispatcher.setRegions(composited.hitTestRegions)
+        fired.value = 0
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: target.x, y: target.y))
+        _ = tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: target.x, y: target.y))
+        return fired.value > 0
+    }
+
+    @Test("A page behind a presentation cannot be clicked, cover or sheet")
+    func pageIsNotClickable() {
+        // The sheet case passed all along, but only as a side effect: the root
+        // compositor's dimming pass rebuilds the buffer and drops its regions.
+        // A cover does not dim, so nothing dropped them and every control under
+        // it stayed live — "Loading…" over a page whose buttons still worked.
+        for cover in [true, false] {
+            let what = cover ? "fullScreenCover" : "modal"
+            #expect(
+                !clickReachesThePage(cover: cover, presented: true),
+                "\(what): a click reached the page's button")
+            #expect(
+                clickReachesThePage(cover: cover, presented: false),
+                "\(what): the page's button stopped working entirely")
+        }
+    }
+
     @Test("A page's status-bar item does not fire from behind a modal")
     func statusItemIsGrabbed() {
         let (open, _, firedWhileOpen) = harness(presented: true)

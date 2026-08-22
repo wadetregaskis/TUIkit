@@ -199,6 +199,23 @@ extension AlertPresentationModifier: Renderable {
         var baseBuffer = TUIkit.renderToBuffer(
             content, context: contentContext.isolatedForBackground())
 
+        // The page beneath is inert, and that has to be SAID rather than
+        // arrived at. Until now it was a side effect of dimming: the root
+        // compositor's backdrop pass rebuilds the buffer and drops its
+        // hit-test regions on the way. That covers a sheet, which dims — and
+        // leaves a `.fullScreenCover`, which deliberately does not, with every
+        // control underneath it still clickable. A cover over a page with a
+        // button drew "Loading…" and still fired the button when the blank
+        // cell above it was clicked.
+        //
+        // Dropped here instead, for both styles, so inertness follows from
+        // presenting rather than from a rendering detail that only one style
+        // performs. The runs go with them: the page cannot be seen, so
+        // repainting it on a clock is work with no picture at the end of it,
+        // and it would hold the animation clock open behind a modal.
+        baseBuffer.hitTestRegions = []
+        baseBuffer.animatedCells = []
+
         // Render the alert against the CONTENT AREA (screen minus app header and
         // status bar), not the full terminal height, in the alert section. The
         // compositor clamps overlays to that content area top-biased, so a tall
