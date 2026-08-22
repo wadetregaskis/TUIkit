@@ -80,15 +80,63 @@ extension ColorDepth {
     /// pinned depth into every concurrently-rendering test.
     @TaskLocal private static var taskCurrent: ColorDepth?
 
+    /// The process-wide ceiling on ``current``, before any task-local pin.
+    /// `nonisolated(unsafe)` for the same reason ``processCurrent`` is.
+    nonisolated(unsafe) private static var processCap: ColorDepth = .truecolor
+
+    /// A task-scoped ceiling, bound by ``withCap(_:operation:)-9tqqz``.
+    @TaskLocal private static var taskCap: ColorDepth?
+
     /// The color depth to use for rendering.
     ///
-    /// Automatically detected from environment variables at launch.
+    /// Automatically detected from environment variables at launch, and never
+    /// above ``cap``.
     /// Assign a value to override detection process-wide (expected before
     /// rendering starts); use ``withCurrent(_:operation:)-8j0jn`` for a scoped,
     /// task-local pin.
     public static var current: ColorDepth {
-        get { taskCurrent ?? processCurrent }
+        get { min(taskCurrent ?? processCurrent, taskCap ?? processCap) }
         set { processCurrent = newValue }
+    }
+
+    /// The most colour the app will use, whatever the terminal offers.
+    ///
+    /// Separate from ``current`` because the two answer different questions.
+    /// `current` is *what this terminal can do*, detected once and occasionally
+    /// pinned; `cap` is *what this app chooses to use*, and it composes with
+    /// detection rather than replacing it — set it to ``palette256`` and a
+    /// truecolor terminal renders in 256 colours while a 16-colour one still
+    /// renders in 16.
+    ///
+    /// Assigning `current` cannot express that: it would have to be re-derived
+    /// every time detection changed, and would silently UPGRADE a terminal that
+    /// cannot honour it. A ceiling only ever removes colour, which is the safe
+    /// direction and the one worth having — for a deliberately flatter look, to
+    /// see what an app looks like where it will be run, or to cut the bytes a
+    /// frame spends on styling.
+    ///
+    /// Defaults to ``truecolor``, which is no cap at all.
+    public static var cap: ColorDepth {
+        get { taskCap ?? processCap }
+        set { processCap = newValue }
+    }
+
+    /// Runs `operation` with ``cap`` pinned to `depth` on the current task,
+    /// restoring the previous ceiling afterwards. Task-local for the same
+    /// reason ``withCurrent(_:operation:)-8j0jn`` is.
+    @discardableResult
+    public static func withCap<T>(
+        _ depth: ColorDepth, operation: () throws -> T
+    ) rethrows -> T {
+        try $taskCap.withValue(depth, operation: operation)
+    }
+
+    /// Async variant of ``withCap(_:operation:)-9tqqz``.
+    @discardableResult
+    public static func withCap<T>(
+        _ depth: ColorDepth, operation: () async throws -> T
+    ) async rethrows -> T {
+        try await $taskCap.withValue(depth, operation: operation)
     }
 
     /// Runs `operation` with ``current`` pinned to `depth` on the current
