@@ -96,7 +96,26 @@ private struct _HiddenView<Content: View>: View, Renderable, Layoutable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let drawn = TUIkit.renderToBuffer(content, context: context)
+        // Rendered through the backdrop isolation, because a view with no
+        // picture has no powers either. Everything a subtree does happens
+        // WHILE it renders — `FocusRegistration.register` writes into the real
+        // focus manager, `.keyboardShortcut` files itself, `.statusBarItems`
+        // publishes — and throwing the buffer away afterwards undid none of it.
+        // `Button("Press") {}.hidden()` was an invisible, fully live Tab stop.
+        //
+        // Which also fixes the worse case. This modifier's contract says it
+        // leaves "a hole the shape of the view, which takes no clicks and
+        // floats no pop-ups", so dropping a presentation's overlay is intended
+        // — but the presentation had already activated its focus section and
+        // grabbed the keyboard by the time the buffer was discarded, leaving an
+        // invisible dialog holding the keyboard. Isolated, it grabs a throwaway
+        // and the app is unaffected.
+        //
+        // Same treatment, and the same reasoning, as `.dimmed()`: a modifier
+        // that takes the picture away takes the powers with it. `@State`,
+        // `.onAppear`/`.task`, lifecycle and preferences stay shared, so a
+        // hidden view is still alive — as it is in SwiftUI.
+        let drawn = TUIkit.renderToBuffer(content, context: context.isolatedForBackground())
         // Spaces, not zero-width nothing: this is the same convention `Spacer`
         // uses for space that is occupied but blank, and it is what stops the
         // hole from collapsing in a stack. Overlays, hit regions and animated
@@ -122,12 +141,19 @@ private struct _HitTestingView<Content: View>: View, Renderable, Layoutable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         var drawn = TUIkit.renderToBuffer(content, context: context)
         guard !enabled else { return drawn }
-        // The regions of any OVERLAY the subtree floated have to go too — a
-        // pop-up menu is carried in `overlays` rather than in the buffer's own
-        // lines, so clearing only the top level would leave a drop-down
-        // clickable underneath a view that just said it was not.
+        // The regions of any ANCHORED overlay the subtree floated have to go
+        // too — a pop-up menu is carried in `overlays` rather than in the
+        // buffer's own lines, so clearing only the top level would leave a
+        // drop-down clickable underneath a view that just said it was not.
+        //
+        // A CENTRED one is exempt, for the reason `_HiddenView` above spells
+        // out: a `.sheet` presented from this subtree is not part of this
+        // subtree's hit area, it is a panel over the whole screen with its own
+        // buttons. Clearing its regions produced a dialog that drew perfectly
+        // and whose every button was dead — and the modifier the author wrote
+        // was about the page, not about the dialog it opens.
         drawn.hitTestRegions = []
-        for index in drawn.overlays.indices {
+        for index in drawn.overlays.indices where !drawn.overlays[index].centered {
             drawn.overlays[index].content.hitTestRegions = []
         }
         return drawn
