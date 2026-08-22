@@ -447,17 +447,20 @@ private func measureResolved<V: View>(
     // SpacerProtocol` first only added a redundant runtime conformance cast to
     // EVERY measured child (Spacer is the sole conformer and is `Layoutable`).
     // `SpacerProtocol` is still used by the stacks for fill distribution.
-    if let layoutable = view as? Layoutable {
-        // The common path, and the one deep nesting recurses through. When the
-        // parent is already measuring, the context is unchanged — skip the copy
-        // that only flips `isMeasuring` (a no-op then), so a deep chain doesn't
-        // re-copy the context at every level.
-        if context.isMeasuring {
-            return layoutable.sizeThatFits(proposal: proposal, context: context)
+    // The common path, and the one deep nesting recurses through. When the
+    // parent is already measuring, the context is unchanged — skip the copy
+    // that only flips `isMeasuring` (a no-op then), so a deep chain doesn't
+    // re-copy the context at every level.
+    if context.isMeasuring {
+        if let size = V._measureSelf(view, proposal: proposal, context: context) {
+            return size
         }
+    } else {
         var measureContext = context
         measureContext.isMeasuring = true
-        return layoutable.sizeThatFits(proposal: proposal, context: measureContext)
+        if let size = V._measureSelf(view, proposal: proposal, context: measureContext) {
+            return size
+        }
     }
 
     // For composite views (Body != Never, NOT Renderable), descend into the

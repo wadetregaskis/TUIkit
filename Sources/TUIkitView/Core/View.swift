@@ -137,6 +137,39 @@ public protocol View {
     /// boxed. Not to be implemented by hand.
     @MainActor
     static func _animated(_ view: Self, context: RenderContext, isMeasuring: Bool) -> Self?
+
+    /// Static witness: this view rendered procedurally, or `nil` when it is a
+    /// composite whose `body` should be descended into instead.
+    ///
+    /// A witness rather than `view as? Renderable` for the reason
+    /// ``_isAnimatable`` is one, and this is the hotter of the two: the cast
+    /// ran once per view per render, and `swift_dynamicCast` under it accounted
+    /// for **4.5% of a frame** on the `fanout` scenario, 2.2% on `deep` and
+    /// 1.0% on `kitchensink` (Instruments, Time Profiler, `--callers`). It is
+    /// also the cast that succeeds most often, which is what makes it
+    /// expensive rather than merely wasteful — a failing conformance check can
+    /// stop at the metadata, a succeeding one builds the existential.
+    ///
+    /// Returning the BUFFER rather than the `Renderable` is the point: `Self`
+    /// is concrete here, so the call is a direct one and nothing is boxed.
+    /// Handing back `any Renderable` would keep the allocation this exists to
+    /// remove.
+    ///
+    /// Not to be implemented by hand: conform to ``Renderable`` instead.
+    @MainActor
+    static func _renderSelf(_ view: Self, context: RenderContext) -> FrameBuffer?
+
+    /// Static witness: this view's own measured size, or `nil` when it has no
+    /// opinion and its `body` should be measured instead.
+    ///
+    /// The measure-side twin of ``_renderSelf(_:context:)``, replacing
+    /// `view as? Layoutable` on the path deep nesting recurses through.
+    ///
+    /// Not to be implemented by hand: conform to ``Layoutable`` instead.
+    @MainActor
+    static func _measureSelf(
+        _ view: Self, proposal: ProposedSize, context: RenderContext
+    ) -> ViewSize?
 }
 
 public extension View {
@@ -159,4 +192,18 @@ public extension View {
     static func _animated(_ view: Self, context: RenderContext, isMeasuring: Bool) -> Self? {
         nil
     }
+
+    /// Default: a view renders through its `body`, not procedurally.
+    /// ``Renderable`` conformers override this.
+    @inlinable
+    @MainActor
+    static func _renderSelf(_ view: Self, context: RenderContext) -> FrameBuffer? { nil }
+
+    /// Default: a view has no size of its own; its `body` is measured instead.
+    /// ``Layoutable`` conformers override this.
+    @inlinable
+    @MainActor
+    static func _measureSelf(
+        _ view: Self, proposal: ProposedSize, context: RenderContext
+    ) -> ViewSize? { nil }
 }

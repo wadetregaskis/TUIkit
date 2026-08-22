@@ -188,9 +188,9 @@ private func renderResolved<V: View>(_ view: V, context: RenderContext) -> Frame
     // Correctly-sized views hit `clamped`'s fast path, which is a no-op.
     // The composite `body` path below is covered transitively: it recurses
     // through this same function, whose base case is a `Renderable`.
-    if let renderable = view as? Renderable {
-        return renderable.renderToBuffer(context: context)
-            .clamped(toWidth: context.availableWidth, height: context.availableHeight)
+    if let buffer = V._renderSelf(view, context: context) {
+        return buffer.clamped(
+            toWidth: context.availableWidth, height: context.availableHeight)
     }
 
     // Priority 2: Composite view — bind this view's @State to its own identity,
@@ -234,4 +234,32 @@ private func renderResolved<V: View>(_ view: V, context: RenderContext) -> Frame
     // Priority 3: No rendering path — return empty buffer silently.
     // This happens for types with body: Never that forgot Renderable conformance.
     return FrameBuffer()
+}
+
+// MARK: - Static witnesses
+
+extension View where Self: Renderable {
+    /// A ``Renderable`` view draws itself; the render walk calls this instead
+    /// of descending into `body`. See ``View/_renderSelf(_:context:)`` for why
+    /// this is a witness rather than a cast.
+    @MainActor
+    public static func _renderSelf(_ view: Self, context: RenderContext) -> FrameBuffer? {
+        view.renderToBuffer(context: context)
+    }
+}
+
+extension View where Self: Layoutable {
+    /// A ``Layoutable`` view measures itself. See
+    /// ``View/_measureSelf(_:proposal:context:)``.
+    ///
+    /// The `isMeasuring` flip stays at the CALL SITE rather than here, because
+    /// it is the caller that knows whether the context already has it set —
+    /// and skipping the copy when it does is what keeps a deep chain from
+    /// re-copying the context at every level.
+    @MainActor
+    public static func _measureSelf(
+        _ view: Self, proposal: ProposedSize, context: RenderContext
+    ) -> ViewSize? {
+        view.sizeThatFits(proposal: proposal, context: context)
+    }
 }

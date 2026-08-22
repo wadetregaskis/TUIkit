@@ -121,6 +121,8 @@ identifier_name:
     - _providesAlignmentGuide
     - _isAnimatable
     - _animated
+    - _renderSelf
+    - _measureSelf
     # Idiomatic single-letter math / graphics / loop names: keeping
     # them short matches the surrounding domain (coordinates,
     # colour channels, dimensions, indices) better than renaming.
