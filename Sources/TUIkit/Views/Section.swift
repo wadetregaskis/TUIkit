@@ -213,15 +213,30 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         var lines: [String] = []
-        /// The children's animated runs, moved down by however many lines were
-        /// stacked above them. A `Section` assembles lines by hand rather than
-        /// compositing, so anything else its children's buffers carried is lost
-        /// unless it is carried deliberately — and a run that is lost is a
-        /// spinner or a cursor that only keeps moving because something else
-        /// forces a full re-render.
+        // A `Section` assembles its lines by hand rather than compositing, so
+        // EVERYTHING a child's buffer carries beside those lines is lost unless
+        // it is carried deliberately — and each of the three is lost silently,
+        // in a way that reads as an ordinary page:
+        //
+        // - a dropped **run** is a spinner or a caret that only keeps moving
+        //   because something else forces a full re-render;
+        // - a dropped **hit-test region** is a control that draws its hover and
+        //   focus states perfectly and cannot be clicked;
+        // - a dropped **overlay** is a `.sheet`, `.alert`, `.popover`, `Picker`
+        //   drop-down or `.contextMenu` that never reaches the root compositor
+        //   — for a modal, one that takes the keyboard and then does not appear.
+        //
+        // Only the runs were carried at first, which is how the other two came
+        // to be missing for as long as they were: the class was noticed and one
+        // instance of it fixed.
         var runs: [AnimatedCellRun] = []
+        var overlays: [OverlayLayer] = []
+        var regions: [HitTestRegion] = []
         func take(_ buffer: FrameBuffer) {
-            runs += buffer.animatedCells.map { $0.shifted(byX: 0, y: lines.count) }
+            let dy = lines.count
+            runs += buffer.shiftedAnimatedCells(byX: 0, y: dy)
+            overlays += buffer.shiftedOverlays(byX: 0, y: dy)
+            regions += buffer.shiftedHitTestRegions(byX: 0, y: dy)
             lines.append(contentsOf: buffer.lines)
         }
 
@@ -246,9 +261,13 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
         }
 
         var buffer = FrameBuffer(lines: lines)
+        buffer.overlays = overlays
+        buffer.hitTestRegions = regions
         // A measure pass draws nothing, so a run left on it would describe cells
         // that were never on screen — and keep the animation clock alive from a
-        // pass that produced no frame.
+        // pass that produced no frame. Overlays and regions carry either way,
+        // as they do through `replacingLines`: neither holds a clock open, and
+        // a measure buffer is discarded whole.
         if !context.isMeasuring { buffer.animatedCells = runs }
         return buffer
     }
