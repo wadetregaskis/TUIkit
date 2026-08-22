@@ -7,15 +7,16 @@
 import Foundation
 import TUIkit
 
-/// Returns a value in `0...1` that ramps from 0 to 1 over `period`
-/// seconds and then wraps back to 0. The page's render is driven by the
-/// app's animation clock (20 Hz), so reading this on each render produces
-/// a smooth slow animation in the determinate bars without anything in
-/// the page having to remember state. The default `period` of 50 s
-/// is the user's requested "1% every half-second" pace.
-private func animatedFraction(period: Double = 50) -> Double {
-    let now = Date().timeIntervalSinceReferenceDate
-    return now.truncatingRemainder(dividingBy: period) / period
+/// The demo's determinate pace: **1% every half-second**, so 0 to 1 over 50 s.
+///
+/// The update rate is the DATA's rate, not a frame rate, and that is the whole
+/// point of the number. A bar sixty cells wide advances one cell every 0.83 s at
+/// this pace, so ticking ten times a second would draw nine identical screens
+/// out of every ten — and each of those is a full render of the page. A
+/// determinate bar should be advanced when its value changes, and no more often.
+private enum DemoProgress {
+    static let interval: Duration = .milliseconds(500)
+    static let step: Double = 0.01
 }
 
 /// Progress-view demo page.
@@ -23,6 +24,21 @@ private func animatedFraction(period: Double = 50) -> Double {
 /// Shows ``ProgressView`` in its determinate (a known fraction) and
 /// indeterminate (no known total) modes, across every built-in style.
 struct ProgressViewPage: View {
+    /// The determinate demo's value, advanced by ``runDemoProgress()``.
+    ///
+    /// State, driven by a task — NOT a wall-clock read at render time, which is
+    /// what this was. Reading `Date()` while rendering produces a value that
+    /// changes without anything having asked to be re-rendered, so it advances
+    /// only for as long as something ELSE on the page happens to be forcing
+    /// renders. It worked here because the indeterminate bars were demanding 30
+    /// frames a second; the moment they stopped (they leave an
+    /// `AnimatedCellRun` behind instead), these bars froze — while still
+    /// looking, in a screenshot, exactly as they had.
+    ///
+    /// A real app's determinate bar is driven by its data. This is the
+    /// demo's data.
+    @State private var demoFraction: Double = 0
+
     /// The determinate track styles the top "Determinate" section cycles
     /// through with the `s` shortcut. The "Determinate styles" section below
     /// shows the full catalogue in parallel and is unaffected by this.
@@ -73,6 +89,17 @@ struct ProgressViewPage: View {
     /// bars, and flexible content always "fits" whatever is proposed, so
     /// `ViewThatFits` would never reject the side-by-side variant.
     @Environment(\.terminalWidth) private var terminalWidth
+
+    /// Advances ``demoFraction`` on its own, so the determinate bars keep
+    /// moving whatever else is (or is not) driving renders. Cancelled
+    /// automatically when the page goes away.
+    private func runDemoProgress() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: DemoProgress.interval)
+            demoFraction += DemoProgress.step
+            if demoFraction > 1 { demoFraction = 0 }
+        }
+    }
 
     var body: some View {
         let current = Self.cyclableStyles[determinateStyleIndex]
@@ -197,7 +224,7 @@ struct ProgressViewPage: View {
             // ProgressView bars above; the `GaugeStyle` variants follow.
             DemoSection("page.progressView.gaugeSection") {
                 VStack(alignment: .leading, spacing: 1) {
-                    let fraction = animatedFraction()
+                    let fraction = demoFraction
                     Gauge(value: fraction, in: 0...1) {
                         Text("page.newControls.gaugeLabel")
                     } currentValueLabel: {
@@ -247,6 +274,9 @@ struct ProgressViewPage: View {
             Spacer()
         }
         .scrollableDemoPage()
+        .task {
+            await runDemoProgress()
+        }
         .modal(isPresented: $editingGradient) {
             GradientEditorPanel(
                 "page.progressView.gradientTitle",
@@ -274,7 +304,7 @@ struct ProgressViewPage: View {
     private func determinateSection(style: TrackStyle) -> some View {
         DemoSection("page.progressView.determinate") {
             VStack(alignment: .leading, spacing: 1) {
-                let fraction = animatedFraction()
+                let fraction = demoFraction
                 ProgressView("page.progressView.downloadingFiles", value: fraction)
                     .progressViewStyle(style)
 
@@ -320,7 +350,7 @@ struct ProgressViewPage: View {
     private func determinateRow(label: String, style: TrackStyle) -> some View {
         HStack(spacing: 1) {
             Text(label).dim()
-            ProgressView(value: animatedFraction())
+            ProgressView(value: demoFraction)
                 .progressViewStyle(style)
                 .frame(width: 24)
         }

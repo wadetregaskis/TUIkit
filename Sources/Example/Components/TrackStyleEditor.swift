@@ -153,11 +153,23 @@ struct TrackStyleEditor: View {
             emptyGradient: emptyGradientEnabled ? emptyStops : nil)
     }
 
-    /// A slowly-advancing fraction (0→1 over 50 s), shared phase with the
-    /// page's other determinate bars.
-    private var animatedFraction: Double {
-        let now = Date().timeIntervalSinceReferenceDate
-        return now.truncatingRemainder(dividingBy: 50) / 50
+    /// A slowly-advancing fraction (0→1 over 50 s) for the preview bar.
+    ///
+    /// State advanced by ``runPreviewProgress()``, not a wall-clock read at
+    /// render time — which is what this was, and which only ever moved because
+    /// something else on the page was forcing renders. See the same note on
+    /// `ProgressViewPage.demoFraction`.
+    @State private var animatedFraction: Double = 0
+
+    /// Advances the preview on its own. Cancelled when the editor goes away.
+    private func runPreviewProgress() async {
+        while !Task.isCancelled {
+            // 1% every half-second — the data's rate, not a frame rate. See
+            // `DemoProgress` on the ProgressView page.
+            try? await Task.sleep(for: .milliseconds(500))
+            animatedFraction += 0.01
+            if animatedFraction > 1 { animatedFraction = 0 }
+        }
     }
 
     var body: some View {
@@ -230,6 +242,9 @@ struct TrackStyleEditor: View {
                 "component.trackEditor.gradientTitle",
                 stops: gradientStopsBinding,
                 isPresented: $editingGradient)
+        }
+        .task {
+            await runPreviewProgress()
         }
     }
 
