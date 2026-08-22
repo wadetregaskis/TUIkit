@@ -486,63 +486,71 @@ struct ButtonRowTests {
     }
 }
 
-// MARK: - Button Row Builder Tests
+// MARK: - Button Row Content Tests
 
 @MainActor
-@Suite("Button Row Builder Tests")
-struct ButtonRowBuilderTests {
+@Suite("ButtonRow content")
+struct ButtonRowContentTests {
 
-    @Test("ButtonRowBuilder builds array of buttons")
-    func builderCreatesArray() {
-        let buttons = ButtonRowBuilder.buildBlock(
-            Button("A") {},
-            Button("B") {},
-            Button("C") {}
-        )
-
-        #expect(buttons.count == 3)
+    private func render(_ view: some View, width: Int = 40) -> FrameBuffer {
+        renderToBuffer(view, context: makeRenderContext(width: width, height: 4))
     }
 
-    @Test("ButtonRowBuilder handles optional")
-    func builderHandlesOptional() {
-        let buttons: [Button]? = nil
-        let result = ButtonRowBuilder.buildOptional(buttons)
-
-        #expect(result.isEmpty)
-
-        let someButtons: [Button]? = [Button("Test") {}]
-        let result2 = ButtonRowBuilder.buildOptional(someButtons)
-
-        #expect(result2.count == 1)
+    @Test("A row of plain buttons still lays out from the leading edge")
+    func plainButtons() {
+        let buffer = render(
+            ButtonRow {
+                Button("A") {}
+                Button("B") {}
+            })
+        let line = buffer.lines.first?.stripped ?? ""
+        #expect(line.contains("A") && line.contains("B"), "line: \(line)")
+        // Two buttons, two clickable regions — each keeps its own identity.
+        #expect(buffer.hitTestRegions.count == 2, "regions: \(buffer.hitTestRegions.count)")
     }
 
-    @Test("ButtonRowBuilder handles either first")
-    func builderHandlesEitherFirst() {
-        let buttons = [Button("First") {}]
-        let result = ButtonRowBuilder.buildEither(first: buttons)
-
-        #expect(result.count == 1)
-        #expect(result[0].label == "First")
+    @Test("A row's buttons can carry modifiers, including a presentation")
+    func modifiedButtons() {
+        // The reason the `@ButtonRowBuilder` taking `Button...` had to go: a
+        // dialog's footer is exactly where a "More options…" button belongs,
+        // and `.sheet` / `.contextMenu` return `some View`, so every one of
+        // these was a compile error.
+        let buffer = render(
+            ButtonRow {
+                Button("Cancel") {}
+                Button("Advanced…") {}
+                    .modal(isPresented: .constant(true)) {
+                        Dialog(title: "Advanced") { Text("x") }
+                    }
+            })
+        #expect(
+            buffer.overlays.contains { $0.level == .modal },
+            "the footer's presentation did not reach the root")
     }
 
-    @Test("ButtonRowBuilder handles either second")
-    func builderHandlesEitherSecond() {
-        let buttons = [Button("Second") {}]
-        let result = ButtonRowBuilder.buildEither(second: buttons)
-
-        #expect(result.count == 1)
-        #expect(result[0].label == "Second")
+    @Test("A conditional row builds through the ViewBuilder")
+    func conditionalContent() {
+        func row(showingReset: Bool) -> some View {
+            ButtonRow {
+                Button("OK") {}
+                if showingReset {
+                    Button("Reset") {}
+                }
+            }
+        }
+        #expect(render(row(showingReset: true)).hitTestRegions.count == 2)
+        #expect(render(row(showingReset: false)).hitTestRegions.count == 1)
     }
 
-    @Test("ButtonRowBuilder handles array")
-    func builderHandlesArray() {
-        let groups: [[Button]] = [
-            [Button("A") {}],
-            [Button("B") {}, Button("C") {}],
-        ]
-        let result = ButtonRowBuilder.buildArray(groups)
-
-        #expect(result.count == 3)
+    @Test("A ForEach row builds too")
+    func forEachContent() {
+        let buffer = render(
+            ButtonRow {
+                ForEach(["A", "B", "C"], id: \.self) { label in
+                    Button(label) {}
+                }
+            })
+        #expect(buffer.hitTestRegions.count == 3)
     }
 
     @Test("Standard button label truncates with an ellipsis when squeezed")
