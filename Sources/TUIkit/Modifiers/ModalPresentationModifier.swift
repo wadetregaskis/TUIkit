@@ -145,11 +145,20 @@ extension ModalPresentationModifier: Renderable {
             context.environment.keyEventDispatcher!.grabInput(sectionID: sectionID)
 
             // While the modal is on screen ESC should close it. Publish an
-            // ESC=dismiss item on the status bar tied to the modal section
-            // (composition: merge so non-ESC items the page declared still
-            // show), flipping the presentation binding back to false. Section
-            // items are cleared each render pass, so closing the modal naturally
-            // drops the override and restores the page's own ESC item.
+            // ESC=dismiss item on the status bar tied to the modal section,
+            // flipping the presentation binding back to false. Section items
+            // are cleared each render pass, so closing the modal naturally
+            // drops the override and restores the page's own items.
+            //
+            // `.merge` no longer merges anything OF THE PAGE'S: the backdrop
+            // render publishes into a throwaway status bar now
+            // (`isolatedForBackground`), because items that merely showed were
+            // also still firing — `n` behind a dialog ran the page's "new".
+            // What is left to merge with is whatever the app declares outside
+            // the presented subtree, which is live and should show. The bar
+            // therefore reads "⎋ dismiss   q quit" over a dialog, rather than
+            // also advertising the page's own keys, which do nothing while it
+            // is up.
             //
             // …unless the content asked not to be dismissed by hand, in which
             // case the item is not published at all: no key binding, and

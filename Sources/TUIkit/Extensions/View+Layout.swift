@@ -143,7 +143,19 @@ extension View {
     /// Applies a dimming effect to the view content.
     ///
     /// This reduces the visual intensity of the content using the ANSI dim
-    /// escape code. Useful for background content when displaying overlays.
+    /// escape code — a purely visual change.
+    ///
+    /// > Important: This is **not** how you make something modal. It dims how
+    /// > the content LOOKS and nothing else: the content stays focusable,
+    /// > clickable and live to keyboard shortcuts. Presenting a ``Dialog`` or
+    /// > an ``Alert`` over a `.dimmed()` page — rather than through
+    /// > ``SwiftUICore/View/modal(isPresented:onDismiss:content:)`` or
+    /// > ``SwiftUICore/View/alert(_:isPresented:actions:message:)`` — produces
+    /// > a page that looks inert and is not.
+    ///
+    /// It also **drops** anything the content floated: a presentation, a
+    /// `Picker` drop-down or a context menu inside a `.dimmed()` subtree is
+    /// discarded, by construction — a backdrop is meant to be flat and inert.
     ///
     /// # Example
     ///

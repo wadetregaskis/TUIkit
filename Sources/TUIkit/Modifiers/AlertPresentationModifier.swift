@@ -165,6 +165,12 @@ extension AlertPresentationModifier: Renderable {
             // are cleared each render pass, so dismissing restores the page's
             // own item. Same mechanism, and the same reasoning, as
             // `ModalPresentationModifier`.
+            //
+            // The general form of that hazard is closed now: the backdrop
+            // render publishes into a THROWAWAY status bar and shortcut
+            // registry (`isolatedForBackground`), so the page's items neither
+            // show nor fire while an alert is up. This item is still what
+            // makes Escape mean "dismiss" rather than nothing.
             let dismissItem = StatusBarItem(
                 shortcut: Shortcut.escape, label: "dismiss", action: dismiss)
             context.environment.statusBar?.registerSectionItems(

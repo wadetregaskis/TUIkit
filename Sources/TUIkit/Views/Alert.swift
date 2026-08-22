@@ -6,8 +6,9 @@
 
 /// A modal alert view that displays a title, message, and optional action buttons.
 ///
-/// `Alert` is designed to be shown as an overlay on top of other content.
-/// Use it together with `.overlay()` and `.dimmed()` for a modal effect.
+/// `Alert` draws the panel. **Presenting it is a separate job**, and the way to
+/// do it is ``SwiftUICore/View/alert(_:isPresented:actions:message:)`` or
+/// ``SwiftUICore/View/modal(isPresented:onDismiss:content:)``.
 ///
 /// ## Structure
 ///
@@ -27,13 +28,36 @@
 ///     Button("No") { }
 /// }
 ///
-/// // Modal overlay pattern
+/// // Present it. `.alert` builds the panel for you from a title and actions;
+/// // `.modal` takes an Alert (or a Dialog) you built yourself.
 /// mainContent
-///     .dimmed()
-///     .overlay {
-///         Alert(title: "Notice", message: "Operation complete!")
+///     .alert("Notice", isPresented: $showing) {
+///         Button("OK") { showing = false }
+///     } message: {
+///         Text("Operation complete!")
+///     }
+///
+/// mainContent
+///     .modal(isPresented: $showing) {
+///         Alert(title: "Notice", message: "Operation complete!") {
+///             Button("OK") { showing = false }
+///         }
 ///     }
 /// ```
+///
+/// > Important: Do **not** present an `Alert` with bare `.dimmed().overlay()`.
+/// > This documentation taught that pattern, and it does not work: `.dimmed()`
+/// > only dims how the background LOOKS, and `.overlay` composites the panel
+/// > into the page in flow. The background stays focusable and clickable, the
+/// > alert never captures the keyboard, and Escape does not close it. The
+/// > presentation modifiers do all four things — dim the background AND make
+/// > it inert, capture focus in a section of their own, publish ESC to
+/// > dismiss, and centre the panel on the whole screen no matter where in the
+/// > tree the modifier is attached. ``Dialog`` carries the same warning.
+///
+/// Composing an `Alert` inline — in a `ZStack`, or through `.overlay` — is
+/// still legitimate when what you want is an alert-SHAPED panel that is part
+/// of the page. It is only "modal" that it cannot give you.
 public struct Alert<Actions: View>: View {
     /// The alert title.
     let title: String

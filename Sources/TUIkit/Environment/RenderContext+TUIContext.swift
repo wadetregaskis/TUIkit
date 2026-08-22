@@ -95,6 +95,24 @@ extension RenderContext {
     /// Mouse is isolated separately by the dimmed backdrop dropping the page's
     /// hit-test regions. Lifecycle and preferences stay shared (keyed by identity,
     /// unaffected by the backdrop, and must not double-fire / be lost).
+    ///
+    /// ## Every channel a key can arrive on, not just the focus ring
+    ///
+    /// The focus manager and the key dispatcher were isolated from the start,
+    /// which covers Tab and `onKeyPress`. They are not the only ways a page can
+    /// be driven: `InputHandler` runs the status bar as **layer 1** and the
+    /// keyboard-shortcut registry as **layer 3.5**, both *ahead* of the check
+    /// that suppresses app chrome behind a modal. A page rendered as a backdrop
+    /// registered into the real ones, so with a dialog up:
+    ///
+    /// - `Button("Delete") { … }.keyboardShortcut("d")` still deleted on `d`;
+    /// - `.statusBarItems { StatusBarItem(shortcut: "n", …) }` still fired on
+    ///   `n`, and still advertised itself on the bar while doing it.
+    ///
+    /// Both now go to throwaways. The modal itself renders from the ORIGINAL
+    /// context, so its own shortcuts and its ESC item publish exactly as
+    /// before; what stops is the page underneath declaring things that outlive
+    /// its own inertness.
     func isolatedForBackground() -> Self {
         var copy = self
         let backdropFocus = FocusManager()
@@ -102,6 +120,8 @@ extension RenderContext {
         backdropFocus.isBackdrop = true
         copy.environment.focusManager = backdropFocus
         copy.environment.keyEventDispatcher = KeyEventDispatcher()
+        copy.environment.keyboardShortcutRegistry = KeyboardShortcutRegistry()
+        copy.environment.statusBar = StatusBarState()
         return copy
     }
 }
