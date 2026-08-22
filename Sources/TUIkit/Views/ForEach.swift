@@ -146,6 +146,25 @@ extension ForEach: ChildViewProvider {
         // caller went out of their way to place. The static witness costs
         // nothing (it is `false` for every row in almost every tree) and the
         // memo is forfeited only for the rows that cannot survive it.
+        // `element as? any Equatable` is a dynamic cast per row per frame, and
+        // on `fanout` (2000 rows) it is the second-largest source of
+        // `swift_dynamicCast` in the profile at 2.5% — behind the render path's
+        // own, which became a static witness (`View._renderSelf`).
+        //
+        // It cannot get the same treatment, and the reason is worth writing
+        // down so it is not re-derived. A static witness works when the type in
+        // hand is the generic parameter of the function doing the asking; here
+        // the question is about `Data.Element`, and `ForEach` is deliberately
+        // unconstrained over it (SwiftUI's is too). A constrained
+        // `extension ForEach where Data.Element: Equatable` would compile, but
+        // extension methods dispatch STATICALLY — `childViews(context:)` lives
+        // in the unconstrained extension and would bind to the unconstrained
+        // overload for everyone, silently losing the memo. Caching the answer
+        // per element TYPE trades the cast for a dictionary hash, which is not
+        // obviously cheaper and is measurably more code.
+        //
+        // So it stays, and the memo it buys is worth far more than it costs:
+        // building the row eagerly instead cost `fanout` 21% of its frame.
         if !Content._providesAlignmentGuide, let equatableElement = element as? any Equatable {
             // The row view is NOT built here. `_MemoizedRow` takes the element
             // and this `ForEach`'s content closure and builds the row only if

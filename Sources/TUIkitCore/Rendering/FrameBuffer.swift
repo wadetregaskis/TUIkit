@@ -596,6 +596,14 @@ extension FrameBuffer {
                 contentsOf: overlay.shiftedOverlays(byX: position.x, y: position.y))
             result.hitTestRegions.append(
                 contentsOf: overlay.shiftedHitTestRegions(byX: position.x, y: position.y))
+            // …and the runs, which the guard above already tests for and this
+            // did not lift. The in-place twin `composite(with:at:)` does lift
+            // them, so the two disagreed about a zero-size overlay carrying an
+            // animation: through this path the run was dropped, and a dropped
+            // run is not a lost animation but a FROZEN one, since the loop keeps
+            // the clock alive only from the runs that reach the final buffer.
+            result.animatedCells.append(
+                contentsOf: overlay.shiftedAnimatedCells(byX: position.x, y: position.y))
             return result
         }
 
