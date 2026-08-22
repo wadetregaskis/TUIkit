@@ -2757,4 +2757,64 @@ A cycle whose frames differ in width cannot be a run at all — every frame must
 occupy the cells the run claims — so a mixed-width `.custom(_:)` falls back to
 asking for a re-render.
 
+## §15 — The clock stops being a grid, and the last producer converts
+
+A run's frames were indexed by TICK, and a tick was 0.05 s everywhere, so every
+animation had to be resampled onto that grid. That forces a choice with no good
+side — `.dots` wants 0.110 s a frame, so it either limps (2, 2, 3, 2, 2, 3
+ticks) or changes speed — and it caps everything at 20 Hz however precise the
+producer's own timing was.
+
+A run now carries its own `frameDuration`, and the loop wakes on whatever mix is
+on screen: `timeUntilChange(afterElapsed:)` answers in **seconds**, the loop
+takes the soonest across every live run and sleeps exactly that long.
+`AnimationClock.tickInterval` now means only what it should have — how often to
+re-render a view that reads the phase *as it renders* and so cannot say what it
+would draw next.
+
+Two guards, both earned. A 10 ms floor on any frame duration. And
+`timeUntilChange` computes from the frame's own end rather than with
+`truncatingRemainder`, which is not exact in binary: `0.1 % 0.05` is 0.049999…,
+so at every exact frame boundary the answer was one ulp short of a whole frame —
+~1e-17, i.e. a spinning run loop, at the moment the loop is most likely to ask.
+
+### The indeterminate progress bar
+
+The last live-clock producer, and the most expensive: it read `Date()` while
+rendering, so `_ProgressViewCore` asked for **30 frames a second**.
+
+| Progress View page | idle CPU |
+|---|---|
+| before | 24.2% |
+| after | **2.8%** |
+| bytes/s | 11,457 → 10,076 |
+
+Determinate bars are untouched and were already free — their value is the
+caller's data and they never animated.
+
+**The cycle is memoised, and that is the feature rather than an optimisation.**
+A 36-cell `.gradient` cycle is 72 frames of ~840 bytes. This measured **45.3%**
+first — nearly double what it replaced — because
+`StateStorage.storage(for:default:)` does not mark an identity active, so the
+entry was swept every render pass and the cache built to build the cycle once
+built it every time. One `markActive` is the difference between 45.3% and 2.8%.
+
+That is the general shape for any large cycle, and the rule worth remembering:
+**a long run costs at the producing end only.** Replay is O(width) per tick
+whatever the length — `frame(atIndex:)` is an array index — so frames are cheap
+to replay and expensive to build. Build them once.
+
+### And the demo that was free-riding
+
+`ProgressViewPage.animatedFraction()` read `Date()` at render time and moved only
+because the indeterminate bars were forcing renders. Converting them froze it,
+while leaving it looking correct in any screenshot. The same trick sat in
+`TrackStyleEditor`.
+
+Both now own their data — `@State` advanced by a `.task` — and advance at **the
+data's rate, not a frame rate**. A first version at 10 Hz drew nine identical
+screens out of ten and cost 11.5%; at the rate the value actually changes (1%
+every half-second) it is 4.7%. The 1.9 points over a frozen bar is what honestly
+showing a moving determinate bar costs.
+
 The scrollbar named at the end of §13 is still the awkward one and is still open.
