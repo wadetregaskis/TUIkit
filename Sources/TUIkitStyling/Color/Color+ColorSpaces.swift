@@ -91,18 +91,34 @@ extension Color {
             saturation = delta / (2.0 - maxComponent - minComponent)
         }
 
-        let hue: Double
-        switch maxComponent {
-        case normalizedRed:
-            let segment = (normalizedGreen - normalizedBlue) / delta
-            hue = 60 * (segment < 0 ? segment + 6 : segment)
-        case normalizedGreen:
-            hue = 60 * ((normalizedBlue - normalizedRed) / delta + 2)
-        default:
-            hue = 60 * ((normalizedRed - normalizedGreen) / delta + 4)
-        }
+        let hue = Self.hueDegrees(
+            red: normalizedRed, green: normalizedGreen, blue: normalizedBlue,
+            max: maxComponent, delta: delta)
 
         return (hue: hue, saturation: saturation * 100, lightness: lightness * 100)
+    }
+
+    /// The hue angle, in degrees, of an already-normalised RGB triple.
+    ///
+    /// HSL and HSB differ in what they call the third axis and how they derive
+    /// saturation; they agree exactly about hue, and both carried this same
+    /// ten-line switch — including the `segment < 0 ? segment + 6 : segment`
+    /// wrap that keeps red's sector on the positive side of the circle.
+    ///
+    /// The caller has already established `delta > 0`; an achromatic colour has
+    /// no hue to compute and both return 0 before reaching here.
+    private static func hueDegrees(
+        red: Double, green: Double, blue: Double, max maxComponent: Double, delta: Double
+    ) -> Double {
+        switch maxComponent {
+        case red:
+            let segment = (green - blue) / delta
+            return 60 * (segment < 0 ? segment + 6 : segment)
+        case green:
+            return 60 * ((blue - red) / delta + 2)
+        default:
+            return 60 * ((red - green) / delta + 4)
+        }
     }
 
     // MARK: - HSB / HSV
@@ -180,16 +196,9 @@ extension Color {
             return (hue: 0, saturation: 0, brightness: brightness * 100)
         }
 
-        let hue: Double
-        switch maxComponent {
-        case normalizedRed:
-            let segment = (normalizedGreen - normalizedBlue) / delta
-            hue = 60 * (segment < 0 ? segment + 6 : segment)
-        case normalizedGreen:
-            hue = 60 * ((normalizedBlue - normalizedRed) / delta + 2)
-        default:
-            hue = 60 * ((normalizedRed - normalizedGreen) / delta + 4)
-        }
+        let hue = Self.hueDegrees(
+            red: normalizedRed, green: normalizedGreen, blue: normalizedBlue,
+            max: maxComponent, delta: delta)
 
         return (hue: hue, saturation: saturation * 100, brightness: brightness * 100)
     }

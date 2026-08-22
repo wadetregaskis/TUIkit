@@ -70,6 +70,74 @@ struct ColorSpacesTests {
 
     // MARK: - CMYK
 
+    @Test("HSL and HSB report the SAME hue, which is why they share the computation")
+    func hslAndHsbAgreeOnHue() {
+        // The two models differ in what they call the third axis and in how
+        // they derive saturation; they agree exactly about hue. Both carried
+        // their own copy of the ten-line sector switch — including the
+        // `segment + 6` wrap that keeps red on the positive side of the circle
+        // — and nothing compared them. Now one function serves both, and this
+        // is what says that was sound.
+        let samples: [(UInt8, UInt8, UInt8)] = [
+            (255, 0, 0), (0, 255, 0), (0, 0, 255),
+            (255, 255, 0), (0, 255, 255), (255, 0, 255),
+            (128, 64, 32), (32, 128, 64), (64, 32, 128),
+            (200, 200, 100), (17, 250, 3), (3, 17, 250),
+            // Just past each sector boundary, where the wrap and the `+2`/`+4`
+            // offsets are chosen.
+            (255, 1, 0), (255, 0, 1), (1, 255, 0), (0, 255, 1), (1, 0, 255), (0, 1, 255),
+        ]
+        for (red, green, blue) in samples {
+            let hsl = Color.rgbToHSL(red: red, green: green, blue: blue)
+            let hsb = Color.rgbToHSB(red: red, green: green, blue: blue)
+            #expect(
+                abs(hsl.hue - hsb.hue) < 0.000_001,
+                "rgb(\(red),\(green),\(blue)): HSL \(hsl.hue) vs HSB \(hsb.hue)")
+        }
+    }
+
+    @Test("Hue lands in the right sector, including the one that wraps")
+    func hueSectors() {
+        // The agreement test above cannot catch an error in the computation the
+        // two models now SHARE — break it and both move together. So this pins
+        // absolute values, one per 60-degree sector, and in particular the
+        // magenta sector where `(green - blue) / delta` goes negative and the
+        // `+ 6` wrap is what keeps the angle on the circle. Without that wrap
+        // magenta reports -60 instead of 300.
+        let expected: [(red: UInt8, green: UInt8, blue: UInt8, hue: Double)] = [
+            (255, 0, 0, 0),  // red
+            (255, 255, 0, 60),  // yellow
+            (0, 255, 0, 120),  // green
+            (0, 255, 255, 180),  // cyan
+            (0, 0, 255, 240),  // blue
+            (255, 0, 255, 300),  // magenta — the wrap
+            (255, 0, 128, 330),  // rose, mid-wrap
+        ]
+        for sample in expected {
+            let hsl = Color.rgbToHSL(red: sample.red, green: sample.green, blue: sample.blue)
+            let hsb = Color.rgbToHSB(red: sample.red, green: sample.green, blue: sample.blue)
+            #expect(
+                abs(hsl.hue - sample.hue) < 0.5,
+                "HSL rgb(\(sample.red),\(sample.green),\(sample.blue)) = \(hsl.hue), want \(sample.hue)")
+            #expect(
+                abs(hsb.hue - sample.hue) < 0.5,
+                "HSB rgb(\(sample.red),\(sample.green),\(sample.blue)) = \(hsb.hue), want \(sample.hue)")
+        }
+    }
+
+    @Test("A gray has no hue in either model")
+    func grayHasNoHue() {
+        // Both return 0 before the shared computation is reached; the helper
+        // documents that its caller has already established `delta > 0`, so
+        // this is the guard that keeps that true.
+        for level in [UInt8(0), 1, 128, 254, 255] {
+            let hsl = Color.rgbToHSL(red: level, green: level, blue: level)
+            let hsb = Color.rgbToHSB(red: level, green: level, blue: level)
+            #expect(hsl.hue == 0 && hsb.hue == 0)
+            #expect(hsl.saturation == 0 && hsb.saturation == 0)
+        }
+    }
+
     @Test("CMYK primaries resolve to the expected RGB")
     func cmykPrimaries() {
         #expect(Color.cmyk(0, 0, 0, 0) == .rgb(255, 255, 255))
