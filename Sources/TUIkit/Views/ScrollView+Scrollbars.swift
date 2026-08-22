@@ -119,7 +119,12 @@ extension _ScrollViewCore {
         // the rows that actually change earn a run, so a tall bar does not
         // repaint its whole length to move a two-cell thumb.
         if !context.isMeasuring,
-            let cycle = ScrollbarColors.focusCycle(isFocused: isFocused, context: context)
+            // The same hovered cell the draw above lifted. The runs REPLACE
+            // those cells from the first tick, so a pulse that does not know
+            // about the pointer paints the lift away and it never returns
+            // while the pointer sits there.
+            let pulse = ScrollbarColors.focusPulse(
+                isFocused: isFocused, hoveredCell: handler.hoveredBarCell, context: context)
         {
             result.animatedCells += ScrollbarRenderer.verticalScrollbarRuns(
                 height: height,
@@ -128,7 +133,7 @@ extension _ScrollViewCore {
                 offset: handler.scrollOffset,
                 arrows: context.environment.scrollbarArrows,
                 proportional: context.environment.scrollbarProportionalThumb,
-                cycle: cycle, palette: palette
+                pulse: pulse
             ).map { $0.shifted(byX: contentWidth, y: 0) }
         }
         return result
@@ -162,7 +167,9 @@ extension _ScrollViewCore {
             lines, width: contentWidth + (hasVerticalBar ? 1 : 0), uniformWidth: true)
         // The bar occupies the row just appended.
         if !context.isMeasuring,
-            let cycle = ScrollbarColors.focusCycle(isFocused: isFocused, context: context),
+            let pulse = ScrollbarColors.focusPulse(
+                isFocused: isFocused, hoveredCell: handler.horizontal.hoveredBarCell,
+                context: context),
             let run = ScrollbarRenderer.horizontalScrollbarRun(
                 width: contentWidth,
                 extent: handler.horizontal.extent,
@@ -170,7 +177,7 @@ extension _ScrollViewCore {
                 offset: handler.horizontal.scrollOffset,
                 arrows: context.environment.scrollbarArrows,
                 proportional: context.environment.scrollbarProportionalThumb,
-                cycle: cycle, palette: palette)
+                pulse: pulse)
         {
             result.animatedCells.append(run.shifted(byX: 0, y: lines.count - 1))
         }

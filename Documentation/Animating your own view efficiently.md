@@ -380,3 +380,56 @@ every render (now a `nil`-returning resolution and a branch), and three new
 
 The residual is spread thin — a witness call, one function call, one dictionary
 entry — and the remaining candidates all trade a correctness hole for it.
+
+
+## 9. A run does not decorate the cells — it *replaces* them
+
+The failure this section exists for looked like a hover bug and was an
+animation bug. A focused `ScrollView`'s scrollbar answers the pointer by
+lifting the cell under it a step brighter, and it breathes the accent through
+`AnimatedCellRun`s. Both were right on their own. Together the lift appeared
+for one frame and then vanished, and did not come back while the pointer sat
+there — because the runs are the bar from the first tick onward, and they had
+been built by a constructor that knew about the cycle and nothing else.
+
+`ScrollbarColors` had two makers: `focusIndicating(isFocused:hoveredCell:context:)`
+for the drawn bar, and `accented(_:palette:)` for one frame of the cycle. The
+second was missing a field the first had. Nothing in the type system noticed,
+because a missing hover is a `nil` that reads as "no pointer here".
+
+The rule, stated so it generalises:
+
+> **Every input to the drawn cells is an input to the run that replaces them.**
+> A run is not the animation layered over a picture; it *is* the picture, at
+> each phase. Any state the static draw consults — the pointer, the selection,
+> the disabled flag — must be threaded into the frame builder too, or the first
+> tick paints it away.
+
+Two things follow, and both are cheap:
+
+- **Build the frames with the same function that draws the cell**, given a
+  different colour. `_ListCore` does this (`cycle.colors(…).map { lines(over: $0) }`
+  calls the very function that produces the still row) and cannot drift.
+  Anything with a second, parallel constructor can, and did.
+- **Give the animation's colour inputs one owner.** `accented(_:palette:)` is
+  gone; `ScrollbarPulse` — cycle, hovered cell, palette — is the only thing
+  that builds a frame's colours, and `focusPulse(isFocused:hoveredCell:context:)`
+  is the only way to get one. A defaulted `hoveredCell: Int? = nil` would have
+  been the same bug with a nicer signature: it compiles at every call site and
+  is wrong at the ones that forgot. Now the pulse cannot be constructed without
+  answering, and its call sits directly beside the `focusIndicating` call it
+  has to agree with.
+
+**Why the tests did not catch it.** `ScrollbarFocusPulseTests` already asserted
+that replaying a run changes nothing — the right property — but compared
+`.stripped` lines, which discard exactly the SGR bytes the lift lives in. The
+assertion was about glyph placement and read like an assertion about the cells.
+A test for this class has to compare raw bytes, and `ScrollbarHoverPulseTests`
+does, driving a real pointer through the real dispatcher and hovering the cell
+the bar *itself* nominated as animated.
+
+Confirmed live as well as in test: with the pointer parked on the bar's top
+arrow, the cell's foreground before the fix stepped through the plain accent
+breath (`62f662`, `49b849`, `276127`, `0e230e` — the un-hovered tones) and after
+it through the lifted one (`c6f3c6`, `a9ffa9`, `8fbf8f`, `767f76`), never
+falling back.

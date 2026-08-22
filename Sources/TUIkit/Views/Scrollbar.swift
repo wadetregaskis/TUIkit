@@ -402,12 +402,6 @@ struct ScrollbarColors {
             hover: hoveredCell.map { ($0, palette.hoveredForeground(now)) })
     }
 
-    /// The bar with a given accent for its thumb and arrows — one frame of the
-    /// focused bar's cycle.
-    static func accented(_ accent: Color, palette: any Palette) -> Self {
-        Self(thumb: accent, track: palette.foregroundQuaternary, arrow: accent)
-    }
-
     /// The recessive end of the focused bar's breath.
     ///
     /// Floored against the TRACK, not against the page. The dim end is the
@@ -428,19 +422,61 @@ struct ScrollbarColors {
                 against: palette.foregroundQuaternary.resolve(with: palette))
     }
 
-    /// The bar's breathing cycle, or nil when nothing about it moves — not
-    /// focused, scrolling disabled, or `.selectionIndicatorStyle(.none)`.
+    /// Everything the bar's ANIMATION is coloured from, or nil when nothing
+    /// about it moves — not focused, scrolling disabled, or
+    /// `.selectionIndicatorStyle(.none)`.
     ///
-    /// A caller that gets a cycle must hand the bar's cells to the run loop as
+    /// A caller that gets one must hand the bar's cells to the run loop as
     /// ``AnimatedCellRun``s; a caller that gets nil has a still bar and needs no
     /// runs. Nothing here reads a clock.
+    ///
+    /// Takes `hoveredCell` for the same reason
+    /// ``focusIndicating(isFocused:hoveredCell:context:)`` does, and the two
+    /// calls sit together at every call site so that stays visible: the runs
+    /// REPLACE the drawn cells from the first tick, so anything the draw
+    /// answered the pointer with has to be in them too.
     @MainActor
-    static func focusCycle(
-        isFocused: Bool, context: RenderContext
-    ) -> SelectionEmphasisCycle? {
+    static func focusPulse(
+        isFocused: Bool, hoveredCell: Int?, context: RenderContext
+    ) -> ScrollbarPulse? {
         guard context.environment.isScrollEnabled, isFocused else { return nil }
         let cycle = context.environment.selectionEmphasis.cycle(true)
-        return cycle.isAnimating ? cycle : nil
+        guard cycle.isAnimating else { return nil }
+        return ScrollbarPulse(
+            cycle: cycle, hoveredCell: hoveredCell, palette: context.environment.palette)
+    }
+}
+
+/// The colours a focused scrollbar breathes through — one ``ScrollbarColors``
+/// per point of its cycle.
+///
+/// A type rather than three parameters travelling side by side, because it is
+/// the ONLY thing that builds the colours a run replays, and a run replaces
+/// the cells rather than decorating them: every input the drawn bar's colours
+/// have, these need too. Kept apart, the pointer's lift was left out of the
+/// runs and the first tick painted it away — see §9 of
+/// `Documentation/Animating your own view efficiently.md`.
+struct ScrollbarPulse {
+    /// The emphasis cycle, whose points become the frames.
+    let cycle: SelectionEmphasisCycle
+
+    /// The bar-relative cell under the pointer, if any.
+    let hoveredCell: Int?
+
+    let palette: any Palette
+
+    /// One set of colours per point of the cycle, in cycle order.
+    @MainActor
+    var frames: [ScrollbarColors] {
+        cycle.colors(dim: ScrollbarColors.pulseDim(palette), bright: palette.accent)
+            .map { accent in
+                ScrollbarColors(
+                    thumb: accent, track: palette.foregroundQuaternary, arrow: accent,
+                    // The same step further the live draw takes, so the hovered
+                    // cell breathes WITH the bar rather than sitting at a fixed
+                    // tone while everything around it moves.
+                    hover: hoveredCell.map { ($0, palette.hoveredForeground(accent)) })
+            }
     }
 }
 
@@ -632,16 +668,13 @@ enum ScrollbarRenderer {
     @MainActor
     static func verticalScrollbarRuns(
         height: Int, extent: Int, viewport: Int, offset: Int,
-        arrows: ScrollbarArrows, proportional: Bool,
-        cycle: SelectionEmphasisCycle, palette: any Palette
+        arrows: ScrollbarArrows, proportional: Bool, pulse: ScrollbarPulse
     ) -> [AnimatedCellRun] {
-        let frames = cycle.colors(dim: ScrollbarColors.pulseDim(palette), bright: palette.accent)
-            .map { accent in
-                verticalScrollbar(
-                    height: height, extent: extent, viewport: viewport, offset: offset,
-                    arrows: arrows, proportional: proportional,
-                    colors: .accented(accent, palette: palette))
-            }
+        let frames = pulse.frames.map { colors in
+            verticalScrollbar(
+                height: height, extent: extent, viewport: viewport, offset: offset,
+                arrows: arrows, proportional: proportional, colors: colors)
+        }
         guard let first = frames.first else { return [] }
         return (0..<first.count).compactMap { row in
             let cells = frames.map { $0.indices.contains(row) ? $0[row] : "" }
@@ -662,16 +695,13 @@ enum ScrollbarRenderer {
     @MainActor
     static func horizontalScrollbarRun(
         width: Int, extent: Int, viewport: Int, offset: Int,
-        arrows: ScrollbarArrows, proportional: Bool,
-        cycle: SelectionEmphasisCycle, palette: any Palette
+        arrows: ScrollbarArrows, proportional: Bool, pulse: ScrollbarPulse
     ) -> AnimatedCellRun? {
-        let frames = cycle.colors(dim: ScrollbarColors.pulseDim(palette), bright: palette.accent)
-            .map { accent in
-                horizontalScrollbar(
-                    width: width, extent: extent, viewport: viewport, offset: offset,
-                    arrows: arrows, proportional: proportional,
-                    colors: .accented(accent, palette: palette))
-            }
+        let frames = pulse.frames.map { colors in
+            horizontalScrollbar(
+                width: width, extent: extent, viewport: viewport, offset: offset,
+                arrows: arrows, proportional: proportional, colors: colors)
+        }
         guard let first = frames.first, Set(frames).count > 1 else { return nil }
         return AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: first.strippedLength,
