@@ -2702,9 +2702,19 @@ this ramp to three distinct shades, so the ticks between them write nothing —
 Bytes/s rose 21%, which is the known per-run splice overhead (one dead escape
 per run per tick, §10) applied to a run 20 cells wide.
 
-All four producers named in §13 are now converted. What remains above 3% idle
-is the **scrollbar** (Scroll View 27.0, Picker 24.5, Lists 8.5, Tables) —
-the awkward one, because the whole bar pulses, so it wants one run per bar row.
+All four producers named in §13 are now converted. What remained above 3% idle
+was the **scrollbar** — converted shortly afterwards in 27a87525, "The scrollbar
+breathes by the row, not by the frame".
+
+**Do not read the numbers in the sentence this replaces.** They were wrong when
+written and are wronger now. "Picker 24.5" was three `DatePicker`s sharing one
+`$date`, retracted earlier in this file; List and Table bars never pulsed at all
+(each builds a literal static `ScrollbarColors`). And "one run per bar row" is
+not what shipped or what is right — the empty track cells are constant across
+the cycle and earn nothing, so `verticalScrollbarRuns` keeps only the rows whose
+bytes actually differ: about eight runs of width 1 for a 20-row bar, against a
+floor of three. Measured on the current build, Scroll View idles at **1.2%** and
+Picker and Lists at **0.2%**, focused or not.
 
 ## §14 — The spinner, and the container that ate its run
 
@@ -2817,4 +2827,13 @@ screens out of ten and cost 11.5%; at the rate the value actually changes (1%
 every half-second) it is 4.7%. The 1.9 points over a frozen bar is what honestly
 showing a moving determinate bar costs.
 
-The scrollbar named at the end of §13 is still the awkward one and is still open.
+**Nothing named in this file as an open live-clock producer is still open.** A
+sweep of every remaining one — wall-clock reads, every `requestAnimation` caller,
+every render-time read of the clock through the environment — found three, none
+of them the scrollbar:
+
+| producer | measured | verdict |
+|---|---|---|
+| `NotificationHostModifier.startAnimationTask` | 42 Hz full renders, **24–26% of a core** for the 3.5 s a toast is up; ~126 of ~147 frames byte-identical | Not a run: a toast appears and vanishes, and a run loops. Sleep to the next phase boundary instead — the opacity is a flat 1.0 for the whole visible duration. |
+| `_TextEditorCore` caret | 20 Hz full renders, **6.7–7.0% of a core** at 120×40, against 0.2% for a focused `TextField` | Convert. `computeCursorCycle` is the converted twin; `computeCursorState` sets `usesCursor`, which kills replay for **every other run on the page**, not just its own. |
+| `TextEditor.appendScrollbar` | zero today, but only because the caret above forces renders | Convert **with** the caret. Fix the caret alone and this bar freezes while looking correct. |
