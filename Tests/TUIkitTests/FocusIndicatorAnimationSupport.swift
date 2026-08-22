@@ -45,7 +45,7 @@ func expectReplayIsIdentity(
     let before = visibleRows(buffer)
     for run in buffer.animatedCells {
         let replayed = buffer.composited(
-            with: FrameBuffer(lines: [run.frame(at: step)]),
+            with: FrameBuffer(lines: [run.frame(atIndex: step)]),
             at: (x: run.offsetX, y: run.offsetY))
         #expect(
             visibleRows(replayed) == before, comment ?? "run \(run) moved the cells",

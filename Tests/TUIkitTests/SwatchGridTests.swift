@@ -186,7 +186,7 @@ struct SwatchGridRenderTests {
             Set(run.frames.map(\.stripped)).count == 1, "the pulse moved the mark's glyphs")
         // And it sits on the swatch it was drawn from.
         let replayed = pulsing.composited(
-            with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
+            with: FrameBuffer(lines: [run.frame(atIndex: 0)]), at: (x: run.offsetX, y: run.offsetY))
         #expect(replayed.lines.map(\.stripped) == pulsing.lines.map(\.stripped),
             "the run does not sit on the cursor swatch")
 

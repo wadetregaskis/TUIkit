@@ -738,7 +738,7 @@ struct NavigationSplitViewResizeTests {
         // Replaying the step the frame was drawn at must change nothing.
         for run in buffer.animatedCells {
             let replayed = buffer.composited(
-                with: FrameBuffer(lines: [run.frame(at: 0)]),
+                with: FrameBuffer(lines: [run.frame(atIndex: 0)]),
                 at: (x: run.offsetX, y: run.offsetY))
             #expect(replayed.lines.map(\.stripped) == buffer.lines.map(\.stripped),
                 "the divider run does not sit on the cells it was drawn from")

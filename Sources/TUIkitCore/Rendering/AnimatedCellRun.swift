@@ -19,18 +19,32 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
     /// The animation clock: blinks and breaths alike (`CursorTimer`).
     case cursor
 
-    /// How long one tick of this clock lasts.
+    /// How often a view that builds its appearance from the phase AS IT
+    /// RENDERS is re-rendered.
     ///
-    /// The finest step anything replayed can move at, and therefore the grid a
-    /// repeating animation is sampled onto when its cycle is pre-rendered: a
-    /// run's frames are indexed by tick, so a cycle of `period / tickInterval`
-    /// frames is what the loop can actually replay. `CursorTimer` derives its
-    /// own sleep from this, so the two cannot drift apart.
+    /// This is not the rate anything replayed moves at. A pre-rendered cycle
+    /// carries its own ``AnimatedCellRun/frameDuration`` and the loop wakes on
+    /// whatever mix of those is on screen — see
+    /// ``AnimatedCellRun/timeUntilChange(afterElapsed:)``. This interval binds
+    /// only the paths that cannot say in advance what they would draw next: a
+    /// text cursor whose view reads `blinkVisible`, a border whose view reads
+    /// `pulsePhase`. For those, "how often" is a policy, and 20 Hz is it.
+    ///
+    /// It is also the default frame duration for a run that does not name one,
+    /// which is what every producer written before runs carried their own
+    /// timing already assumed.
     public var tickInterval: Double {
         switch self {
         case .cursor: 0.05
         }
     }
+
+    /// The shortest gap the loop will wake on, whatever a run asks for.
+    ///
+    /// A safety floor rather than a policy: a producer naming a two-millisecond
+    /// frame would otherwise spin a core to animate cells no terminal can
+    /// repaint that fast.
+    public static let minimumFrameDuration: Double = 0.01
 }
 
 // MARK: - AnimatedCellRun
@@ -90,12 +104,27 @@ public struct AnimatedCellRun: Sendable, Equatable {
     /// the reflow this whole mechanism exists to avoid.
     public let width: Int
 
-    /// The cycle, one finished styled string per step.
+    /// The cycle, one finished styled string per frame.
     ///
-    /// Indexed modulo `count`, so a run may use any number of steps regardless
-    /// of the clock's own period: two frames on the cursor clock is a blink,
-    /// twenty on the pulse clock is a breath.
+    /// Indexed modulo `count`, so a run may use any number of frames: two is a
+    /// blink, twenty is a breath, forty-seven is a gradient sweeping a bar.
     public let frames: [String]
+
+    /// How long each frame is shown.
+    ///
+    /// The run's own rate, in seconds — NOT a multiple of some grid the loop
+    /// imposes. The loop wakes on whatever mix of durations is on screen, so a
+    /// 0.11 s spinner and a 1/30 s progress bar each keep their own cadence and
+    /// neither is resampled onto the other's.
+    ///
+    /// That matters more than it sounds. Sampling onto a fixed grid forces a
+    /// choice between a visible limp (frames of 2, 2, 3, 2, 2, 3 ticks) and a
+    /// changed speed (rounding 0.11 s to 0.10), and it caps every animation at
+    /// the grid's rate however fine the producer's own timing was.
+    ///
+    /// Defaults to ``AnimationClock/tickInterval``, which is what every
+    /// producer written before this assumed.
+    public let frameDuration: Double
 
     /// The clock that advances this run.
     public let clock: AnimationClock
@@ -108,14 +137,19 @@ public struct AnimatedCellRun: Sendable, Equatable {
     ///   - width: Visible width in cells; every frame must match it.
     ///   - frames: The cycle, already styled. Fewer than two frames is not an
     ///     animation and is rejected by ``isAnimating``.
+    ///   - frameDuration: How long each frame is shown. Defaults to the clock's
+    ///     own interval, and is floored at ``AnimationClock/minimumFrameDuration``.
     ///   - clock: Which clock advances it.
     public init(
-        offsetX: Int, offsetY: Int, width: Int, frames: [String], clock: AnimationClock
+        offsetX: Int, offsetY: Int, width: Int, frames: [String],
+        frameDuration: Double? = nil, clock: AnimationClock
     ) {
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.width = width
         self.frames = frames
+        self.frameDuration = max(
+            AnimationClock.minimumFrameDuration, frameDuration ?? clock.tickInterval)
         self.clock = clock
     }
 
@@ -137,32 +171,91 @@ public struct AnimatedCellRun: Sendable, Equatable {
         return frames.contains { $0 != first }
     }
 
-    /// The frame to show at `step` of the driving clock.
-    public func frame(at step: Int) -> String {
-        guard !frames.isEmpty else { return "" }
+    /// Which frame of the cycle is showing `elapsed` seconds into the
+    /// animation.
+    public func index(atElapsed elapsed: Double) -> Int {
+        guard frames.count > 1 else { return 0 }
+        let step = Int((elapsed / frameDuration).rounded(.down))
         let index = step % frames.count
-        return frames[index < 0 ? index + frames.count : index]
+        return index < 0 ? index + frames.count : index
     }
 
-    /// How many ticks until this run shows something different from what it
-    /// shows at `step` — at least 1, and never more than the cycle's length.
+    /// The frame to show `elapsed` seconds into the animation.
+    public func frame(atElapsed elapsed: Double) -> String {
+        frame(atIndex: index(atElapsed: elapsed))
+    }
+
+    /// The frame at position `index` of the cycle, wrapped.
     ///
-    /// The point is the ticks in between: a pulse quantised to what a
-    /// 256-colour terminal can actually paint repeats each shade for two or
-    /// three ticks, and a blink spends half its cycle on each of two frames.
-    /// Waking the run loop for those is pure cost — it cannot change a single
-    /// cell. Measured on the built-in palettes at the regular speed, a focus
-    /// breath changes 16 times out of 16 ticks in truecolor and **9 out of 16**
-    /// through the cube.
-    public func ticksUntilChange(after step: Int) -> Int {
-        guard frames.count > 1 else { return frames.count }
-        let current = frame(at: step)
-        for delta in 1..<frames.count where frame(at: step + delta) != current {
-            return delta
+    /// Separate from ``frame(atElapsed:)`` because the two ask different
+    /// questions, and a single `frame(at:)` taking a bare number invited the
+    /// wrong one: a caller holding a cycle position and a caller holding a time
+    /// both had something to pass, and only one of them was right.
+    public func frame(atIndex index: Int) -> String {
+        guard !frames.isEmpty else { return "" }
+        let wrapped = index % frames.count
+        return frames[wrapped < 0 ? wrapped + frames.count : wrapped]
+    }
+
+    /// How long until this run shows something DIFFERENT from what it shows at
+    /// `elapsed` — never more than one cycle.
+    ///
+    /// Two savings, and the second is the interesting one:
+    ///
+    /// - Frames that repeat cost no wake-ups. A pulse quantised to what a
+    ///   256-colour terminal can actually paint holds each shade for two or
+    ///   three frames, and a blink spends half its cycle on each of two.
+    ///   Measured on the built-in palettes at the regular speed, a focus breath
+    ///   changes 16 times out of 16 frames in truecolor and **9 out of 16**
+    ///   through the cube.
+    /// - The answer is in SECONDS, so a caller holding several runs takes the
+    ///   minimum and sleeps exactly that long. Nothing is rounded to a shared
+    ///   grid, and a slow run costs nothing extra for sharing a screen with a
+    ///   fast one.
+    public func timeUntilChange(afterElapsed elapsed: Double) -> Double {
+        guard frames.count > 1 else { return frameDuration }
+        let step = (elapsed / frameDuration).rounded(.down)
+        let index = index(atElapsed: elapsed)
+        let current = frames[index]
+        // Time to the end of the frame now showing, then whole frames after it
+        // for as long as they paint the same picture.
+        //
+        // From the frame's own END rather than `truncatingRemainder`, which is
+        // not exact in binary: `0.1 % 0.05` is 0.049999…, so at every exact
+        // frame boundary the remainder came out one ulp short of a whole frame
+        // and the answer was ~1e-17. That is not a rounding blemish, it is a
+        // spinning run loop — a sleep of nothing, at the very moment the loop
+        // is most likely to ask.
+        var remaining = max(
+            Self.shortestUsefulSleep, (step + 1) * frameDuration - elapsed)
+        for offset in 1..<frames.count {
+            if frames[(index + offset) % frames.count] != current { return remaining }
+            remaining += frameDuration
         }
         // Every frame identical: nothing will ever change, so the caller may
         // wait a whole cycle (it will find the same answer again).
-        return frames.count
+        return remaining
+    }
+
+    /// How long one full cycle lasts.
+    public var cycleDuration: Double { Double(frames.count) * frameDuration }
+
+    /// The floor on ``timeUntilChange(afterElapsed:)``'s answer.
+    ///
+    /// Guards the one degenerate case: asked at the exact instant a frame ends,
+    /// the honest answer is zero, and a caller that sleeps for it wakes
+    /// immediately and asks again. A microsecond is far below anything a
+    /// terminal can show and far above zero.
+    private static let shortestUsefulSleep: Double = 0.000_001
+
+    /// A copy sitting on `row`, whatever row it was built for.
+    ///
+    /// For a producer that builds its cycle once and reuses it across renders:
+    /// the frames do not depend on where the run ends up, but the run does.
+    public func movedTo(row: Int) -> Self {
+        var copy = self
+        copy.offsetY = row
+        return copy
     }
 
     /// A copy moved by `(x, y)` — the compositing shift, matching

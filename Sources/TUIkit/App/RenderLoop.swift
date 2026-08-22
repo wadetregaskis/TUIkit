@@ -198,7 +198,7 @@ private struct ReplayableFrame {
     /// even when it looks identical. Diffing the lines therefore reports a
     /// change on every tick — a blinking caret would emit twenty times a second
     /// to change picture twice.
-    var lastSteps: [AnimationClock: Int] = [:]
+    var lastSteps: [AnimationClock: Double] = [:]
 }
 
 @MainActor
@@ -1048,23 +1048,30 @@ extension RenderLoop {
         return lastActivity
     }
 
-    /// How many ticks the clock may sleep before anything on screen would look
-    /// different — 1 whenever that cannot be known.
+    /// How long the clock may sleep before anything on screen would look
+    /// different.
     ///
     /// A frame whose animation is entirely in ``AnimatedCellRun``s knows
-    /// exactly: each run carries its whole cycle, already rendered, so the next
-    /// tick that changes a cell is a lookup. A frame where some view built its
-    /// appearance from the phase *while rendering* does not — only that view
-    /// knows what it would draw next — so the clock keeps its finest step.
+    /// exactly: each run carries its whole cycle, already rendered, at its own
+    /// frame duration, so the next moment a cell changes is a lookup and the
+    /// answer is the soonest of them. Nothing is rounded to a shared grid — a
+    /// 0.11 s spinner beside a 1/30 s progress bar wakes the loop at 0.11 s and
+    /// at 1/30 s, and at neither more often than it asked.
     ///
-    /// This is what makes the quantised pulse cheap on a 256-colour terminal:
-    /// the ramp repeats each shade it can actually paint for two or three
-    /// ticks, and there is no reason to wake for the repeats.
-    func ticksUntilNextChange(from step: Int) -> Int {
-        guard !lastActivity.usesPulse, !lastActivity.usesCursor else { return 1 }
+    /// A frame where some view built its appearance from the phase *while
+    /// rendering* cannot say — only that view knows what it would draw next —
+    /// so those keep the clock's own interval, which is the one thing that
+    /// interval is still for.
+    ///
+    /// This is also what makes the quantised pulse cheap on a 256-colour
+    /// terminal: the ramp repeats each shade it can actually paint for two or
+    /// three frames, and there is no reason to wake for the repeats.
+    func timeUntilNextChange(from elapsed: Double) -> Double {
+        let interval = AnimationClock.cursor.tickInterval
+        guard !lastActivity.usesPulse, !lastActivity.usesCursor else { return interval }
         let runs = replayable?.runs ?? []
-        guard !runs.isEmpty else { return 1 }
-        return runs.map { $0.ticksUntilChange(after: step) }.min() ?? 1
+        guard !runs.isEmpty else { return interval }
+        return runs.map { $0.timeUntilChange(afterElapsed: elapsed) }.min() ?? interval
     }
 
     /// Advances the animated cells of the frame already on screen, without
@@ -1080,19 +1087,19 @@ extension RenderLoop {
     ///   render: there is no frame to patch yet, or nothing on screen animates
     ///   on those clocks.
     @discardableResult
-    func replayAnimations(steps: [AnimationClock: Int]) -> Bool {
+    func replayAnimations(elapsed: [AnimationClock: Double]) -> Bool {
         guard let frame = replayable, !frame.runs.isEmpty else { return false }
-        let due = frame.runs.filter { steps[$0.clock] != nil }
+        let due = frame.runs.filter { elapsed[$0.clock] != nil }
         guard !due.isEmpty else { return false }
 
         // Skip a tick that lands on the picture already showing. A blink spends
         // most of its cycle on the same two frames, and a quantised pulse
         // repeats shades, so most ticks change nothing. See `lastSteps`.
         let unchanged = due.allSatisfy { run in
-            guard let last = frame.lastSteps[run.clock], let step = steps[run.clock] else {
+            guard let last = frame.lastSteps[run.clock], let now = elapsed[run.clock] else {
                 return false  // nothing written since the render: assume it moved
             }
-            return run.frame(at: last) == run.frame(at: step)
+            return run.frame(atElapsed: last) == run.frame(atElapsed: now)
         }
         guard !unchanged else { return true }
 
@@ -1107,7 +1114,7 @@ extension RenderLoop {
         var lines = frame.contentLines
         var touched = false
         for run in due {
-            guard let step = steps[run.clock] else { continue }
+            guard let now = elapsed[run.clock] else { continue }
             let row = run.offsetY
             guard lines.indices.contains(row) else { continue }
             // Spliced through the compositor rather than by hand: it already
@@ -1118,7 +1125,7 @@ extension RenderLoop {
             // this row is already on screen, so nothing will paint a background
             // over it afterwards — see `patchingAnimatedRun(_:atStep:)`.
             let patched = FrameBuffer.patchingAnimatedCells(
-                in: lines[row], with: run.frame(at: step),
+                in: lines[row], with: run.frame(atElapsed: now),
                 atColumn: run.offsetX, width: run.width)
             if patched != lines[row] {
                 lines[row] = patched
@@ -1143,7 +1150,7 @@ extension RenderLoop {
         // `replayable.contentLines` deliberately keeps the RENDER's lines, not
         // these. The diff writer already tracks what is on screen; this is the
         // clean base every future tick patches from. See the note above.
-        for (clock, step) in steps { replayable?.lastSteps[clock] = step }
+        for (clock, now) in elapsed { replayable?.lastSteps[clock] = now }
         return true
     }
 

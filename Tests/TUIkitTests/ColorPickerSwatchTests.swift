@@ -58,7 +58,7 @@ struct ColorPickerSwatchTests {
         // The run has to land on the centre cell of the swatch — replaying the
         // step it was rendered at must change nothing on screen.
         let replayed = buffer.composited(
-            with: FrameBuffer(lines: [runs[0].frame(at: 0)]),
+            with: FrameBuffer(lines: [runs[0].frame(atIndex: 0)]),
             at: (x: runs[0].offsetX, y: runs[0].offsetY))
         #expect(replayed.lines.map { $0.stripped } == buffer.lines.map { $0.stripped },
             "the run does not sit on the bullet")

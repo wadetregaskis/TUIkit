@@ -85,7 +85,7 @@ struct ScrollbarFocusPulseTests {
             // proves the run describes the cells that were drawn.
             let before = buffer.lines.map { $0.stripped }
             let replayed = buffer.composited(
-                with: FrameBuffer(lines: [run.frame(at: 0)]),
+                with: FrameBuffer(lines: [run.frame(atIndex: 0)]),
                 at: (x: run.offsetX, y: run.offsetY))
             #expect(replayed.lines.map { $0.stripped } == before, "the run moved cells: \(run)")
         }
@@ -161,7 +161,7 @@ struct ScrollbarFocusPulseTests {
             // tick's frame changes nothing. This is what catches an offset that
             // forgot the centring padding.
             let replayed = buffer.composited(
-                with: FrameBuffer(lines: [run.frame(at: 0)]),
+                with: FrameBuffer(lines: [run.frame(atIndex: 0)]),
                 at: (x: run.offsetX, y: run.offsetY))
             #expect(replayed.lines.map { $0.stripped } == lines, "the run moved the cells")
         }

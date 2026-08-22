@@ -167,11 +167,11 @@ struct RepeatingOpacityTests {
                 // tick IS the line the render drew. Comparing only the visible
                 // characters would pass with the colours a full cycle out of
                 // phase, which is the mistake worth catching here.
-                #expect(run.frame(at: tick) == buffer.lines[run.offsetY], "tick \(tick)")
+                #expect(run.frame(atIndex: tick) == buffer.lines[run.offsetY], "tick \(tick)")
 
                 // And splicing it really does leave the cells where they were.
                 let replayed = buffer.composited(
-                    with: FrameBuffer(lines: [run.frame(at: tick)]),
+                    with: FrameBuffer(lines: [run.frame(atIndex: tick)]),
                     at: (x: run.offsetX, y: run.offsetY))
                 #expect(
                     replayed.lines.map(\.stripped) == buffer.lines.map(\.stripped),

@@ -104,7 +104,7 @@ struct PublicAnimationAPITests {
         // what says the offset describes the cells that were actually drawn.
         let run = buffer.animatedCells[0]
         let replayed = buffer.composited(
-            with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
+            with: FrameBuffer(lines: [run.frame(atIndex: 0)]), at: (x: run.offsetX, y: run.offsetY))
         #expect(replayed.lines.map(\.stripped) == buffer.lines.map(\.stripped))
     }
 
@@ -151,7 +151,7 @@ struct PublicAnimationAPITests {
         // And every run must sit exactly on the cells that were drawn.
         for run in buffer.animatedCells {
             let replayed = buffer.composited(
-                with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
+                with: FrameBuffer(lines: [run.frame(atIndex: 0)]), at: (x: run.offsetX, y: run.offsetY))
             #expect(replayed.lines.map(\.stripped) == buffer.lines.map(\.stripped),
                 "run \(run.offsetX),\(run.offsetY) moved the cells")
         }

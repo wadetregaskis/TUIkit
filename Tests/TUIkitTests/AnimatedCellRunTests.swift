@@ -31,11 +31,11 @@ struct AnimatedCellRunTests {
     @Test("A cycle is indexed modulo its length, in both directions")
     func framesCycle() {
         let sample = run(x: 0, y: 0, frames: ["a", "b", "c"])
-        #expect(sample.frame(at: 0) == "a")
-        #expect(sample.frame(at: 4) == "b")
+        #expect(sample.frame(atIndex: 0) == "a")
+        #expect(sample.frame(atIndex: 4) == "b")
         // A clock that has wrapped past zero must not trap or index backwards
         // off the front.
-        #expect(sample.frame(at: -1) == "c")
+        #expect(sample.frame(atIndex: -1) == "c")
     }
 
     @Test("One frame is a still picture, not an animation")

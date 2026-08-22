@@ -240,7 +240,7 @@ struct TabViewTests {
         // frame changes nothing.
         let before = buffer.lines.map(\.stripped)
         let replayed = buffer.composited(
-            with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
+            with: FrameBuffer(lines: [run.frame(atIndex: 0)]), at: (x: run.offsetX, y: run.offsetY))
         #expect(replayed.lines.map(\.stripped) == before, "the run moved the chip's cells")
     }
 

@@ -292,28 +292,80 @@ struct ANSIStateAtColumnTests {
 
 // MARK: - Sleeping through the ticks that change nothing
 
-@Suite("Animation tick stride")
+@Suite("Animation wake scheduling")
 struct AnimationTickStrideTests {
+
+    /// The clock's own interval, which is what a run gets when it names none.
+    private let tick = AnimationClock.cursor.tickInterval
+
+    private func expect(_ actual: Double, _ expected: Double, _ label: String) {
+        #expect(abs(actual - expected) < 1e-9, "\(label): \(actual) vs \(expected)")
+    }
 
     @Test("A run says how long until it looks different")
     func runReportsItsNextChange() {
-        // A blink: two frames, each held for half the cycle. From the first
-        // tick of a frame there are three ticks to wait, from the last, one.
+        // A blink: two frames, each held for half the cycle. From the start of a
+        // frame there are three frames to wait, from the last, one.
         let blink = AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 1,
             frames: ["a", "a", "a", "b", "b", "b"], clock: .cursor)
-        #expect(blink.ticksUntilChange(after: 0) == 3)
-        #expect(blink.ticksUntilChange(after: 1) == 2)
-        #expect(blink.ticksUntilChange(after: 2) == 1)
-        #expect(blink.ticksUntilChange(after: 3) == 3)
+        expect(blink.timeUntilChange(afterElapsed: 0), 3 * tick, "at 0")
+        expect(blink.timeUntilChange(afterElapsed: tick), 2 * tick, "one frame in")
+        expect(blink.timeUntilChange(afterElapsed: 2 * tick), tick, "two frames in")
+        expect(blink.timeUntilChange(afterElapsed: 3 * tick), 3 * tick, "the switch")
+        // And PART way through a frame it is the remainder, not a whole frame:
+        // the answer is a time, so it need not land on any grid.
+        expect(blink.timeUntilChange(afterElapsed: 2.5 * tick), 0.5 * tick, "mid-frame")
     }
 
-    @Test("Every tick counts when every tick differs")
+    @Test("Every frame counts when every frame differs")
     func smoothRunsNeverSkip() {
-        // Truecolor: the ramp moves on every tick, so nothing may be skipped.
+        // Truecolor: the ramp moves on every frame, so nothing may be skipped.
         let smooth = AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 1, frames: ["a", "b", "c", "d"], clock: .cursor)
-        for step in 0..<8 { #expect(smooth.ticksUntilChange(after: step) == 1) }
+        for step in 0..<8 {
+            expect(smooth.timeUntilChange(afterElapsed: Double(step) * tick), tick, "step \(step)")
+        }
+    }
+
+    /// The point of the whole redesign: a run's rate is ITS OWN, and a screen
+    /// holding several of them wakes on each one's schedule rather than on a
+    /// grid coarse enough for all of them or fine enough to serve none well.
+    @Test("A run keeps its own rate, whatever else is on screen")
+    func runsKeepTheirOwnRate() {
+        let fast = AnimatedCellRun(
+            offsetX: 0, offsetY: 0, width: 1, frames: ["a", "b"],
+            frameDuration: 1.0 / 30, clock: .cursor)
+        let slow = AnimatedCellRun(
+            offsetX: 0, offsetY: 1, width: 1, frames: ["x", "y"],
+            frameDuration: 0.11, clock: .cursor)
+        expect(fast.timeUntilChange(afterElapsed: 0), 1.0 / 30, "fast")
+        expect(slow.timeUntilChange(afterElapsed: 0), 0.11, "slow")
+        // Together, the loop takes the soonest — so the fast one is not slowed
+        // and the slow one is not woken for frames it does not have.
+        let soonest = [fast, slow].map { $0.timeUntilChange(afterElapsed: 0) }.min()!
+        expect(soonest, 1.0 / 30, "soonest")
+        // A third of a second in, the fast run has moved ten times and the slow
+        // one three; neither has been resampled onto the other.
+        #expect(fast.index(atElapsed: 1.0 / 3) == 10 % 2)
+        #expect(slow.index(atElapsed: 1.0 / 3) == 3 % 2)
+    }
+
+    @Test("A frame duration finer than the floor is clamped, not honoured")
+    func absurdRatesAreFloored() {
+        // A producer naming a two-millisecond frame would spin a core to animate
+        // cells no terminal repaints that fast.
+        let silly = AnimatedCellRun(
+            offsetX: 0, offsetY: 0, width: 1, frames: ["a", "b"],
+            frameDuration: 0.002, clock: .cursor)
+        #expect(silly.frameDuration == AnimationClock.minimumFrameDuration)
+    }
+
+    @Test("A run that names no rate gets the clock's own")
+    func defaultRateIsTheClock() {
+        let plain = AnimatedCellRun(
+            offsetX: 0, offsetY: 0, width: 1, frames: ["a", "b"], clock: .cursor)
+        #expect(plain.frameDuration == AnimationClock.cursor.tickInterval)
     }
 
     @Test("Frames that are all the same picture are not an animation")
@@ -336,6 +388,6 @@ struct AnimationTickStrideTests {
         // loop sees them) — the answer must still be finite.
         let still = AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 1, frames: ["a", "a"], clock: .cursor)
-        #expect(still.ticksUntilChange(after: 0) == 2)
+        expect(still.timeUntilChange(afterElapsed: 0), still.cycleDuration, "a still run")
     }
 }

@@ -351,24 +351,22 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
             color ?? context.environment.foregroundStyle ?? palette.accent
         let resolvedColor = effectiveColor.resolve(with: palette)
 
-        /// The whole cycle, already styled — one entry per TICK of the animation
-        /// clock, which is the grid a replayed run is indexed on.
+        /// The whole cycle, already styled — one entry per frame of the STYLE,
+        /// shown for the style's own interval.
         ///
-        /// A style's own interval is rounded to a whole number of ticks rather
-        /// than resampled onto them: 0.110 s becomes two 0.05 s ticks, so `.dots`
-        /// runs at 0.10 s instead of 0.11. Every frame then lasts the same time,
-        /// which reads as smooth; resampling would have given 2, 2, 3, 2, 2, 3
-        /// ticks and a visible limp for the sake of an average nobody can see.
-        let ticksPerFrame = max(
-            1, Int((style.interval / AnimationClock.cursor.tickInterval).rounded()))
+        /// Its own interval exactly, not rounded to anything: a run carries its
+        /// frame duration, so `.dots` runs at the 0.110 s it asks for and the
+        /// loop wakes for it then. This used to be resampled onto a fixed 0.05 s
+        /// grid, which forced a choice between a visible limp (frames of 2, 2,
+        /// 3, 2, 2, 3 ticks) and a changed speed (0.110 rounded to 0.100).
         let cycle = spinnerFrames(color: resolvedColor, context: context)
         let glyphWidths = Set(cycle.map(\.strippedLength))
 
         // The clock, not a per-spinner start time: every spinner of a style is
         // then in phase, and — much more to the point — the frame drawn is the
         // frame the run loop will replay, so the first tick does not jump.
-        let tick = context.environment.cursorTimer?.elapsedTicks ?? 0
-        let step = tick / ticksPerFrame
+        let elapsed = context.environment.cursorTimer?.elapsedSeconds ?? 0
+        let step = Int((elapsed / style.interval).rounded(.down))
         let frameIndex = cycle.isEmpty ? 0 : ((step % cycle.count) + cycle.count) % cycle.count
         let coloredSpinner = cycle.isEmpty ? "" : cycle[frameIndex]
 
@@ -412,11 +410,8 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         // saving this whole mechanism exists for. See ``AnimatedCellRun``.
         buffer.animatedCells = [
             AnimatedCellRun(
-                offsetX: 0, offsetY: 0, width: width,
-                frames: (0..<(cycle.count * ticksPerFrame)).map {
-                    cycle[($0 / ticksPerFrame) % cycle.count]
-                },
-                clock: .cursor)
+                offsetX: 0, offsetY: 0, width: width, frames: cycle,
+                frameDuration: style.interval, clock: .cursor)
         ]
         return buffer
     }

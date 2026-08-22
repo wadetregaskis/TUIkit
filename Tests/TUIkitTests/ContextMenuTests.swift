@@ -688,7 +688,7 @@ struct ContextMenuTests {
             // And each run must sit on the cells it was drawn from: replaying
             // the step the frame was rendered at changes nothing.
             let replayed = popup.composited(
-                with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
+                with: FrameBuffer(lines: [run.frame(atIndex: 0)]), at: (x: run.offsetX, y: run.offsetY))
             #expect(
                 replayed.lines.map(\.stripped) == popup.lines.map(\.stripped),
                 "the run on row \(run.offsetY) moved the cells")

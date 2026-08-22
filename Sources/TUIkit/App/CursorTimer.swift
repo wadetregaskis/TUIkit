@@ -45,20 +45,30 @@ import Foundation
 /// ```
 @MainActor
 final class CursorTimer {
-    /// Base tick interval in milliseconds.
-    ///
-    /// A fast tick, with phases derived from elapsed time. Taken from
-    /// ``AnimationClock/tickInterval`` rather than written here, because a
-    /// pre-rendered cycle is sampled onto that same grid — a run's frames are
-    /// indexed by tick — and two constants for one interval would eventually
-    /// disagree.
-    private static let tickIntervalMs = Int(AnimationClock.cursor.tickInterval * 1000)
-    private var tickIntervalMs: Int { Self.tickIntervalMs }
+    /// How often a view that reads the phase AS IT RENDERS is re-rendered.
+    /// Taken from ``AnimationClock/tickInterval`` rather than written here so
+    /// there is one number, not two that can disagree.
+    private static let tickInterval = AnimationClock.cursor.tickInterval
 
-    /// Elapsed ticks since timer started.
-    /// Readable so a cell-run replay indexes a cycle by the same tick the blink
-    /// state is computed from.
-    private(set) var elapsedTicks = 0
+    /// The same, in whole milliseconds — what the blink and pulse formulas are
+    /// written in.
+    private static let tickIntervalMs = Int(AnimationClock.cursor.tickInterval * 1000)
+
+    /// Seconds of animation elapsed since the timer started.
+    ///
+    /// The source of truth, and in SECONDS rather than ticks because the sleeps
+    /// are no longer a fixed length: each is however long the frame on screen
+    /// says nothing can change for, so a run animating at 1/30 s and one at
+    /// 0.11 s each get exactly their own cadence. See
+    /// ``RenderLoop/timeUntilNextChange(from:)``.
+    private(set) var elapsedSeconds: Double = 0
+
+    /// Elapsed ticks, for the phase formulas that are still defined on a grid.
+    ///
+    /// Derived rather than counted, so a variable sleep keeps every phase's
+    /// wall-clock meaning: a breath is a breath whether the loop woke six times
+    /// or sixty on the way through it.
+    var elapsedTicks: Int { Int((elapsedSeconds / Self.tickInterval).rounded(.down)) }
 
     /// Whether the cursor clock was read during the current render frame.
     ///
@@ -76,21 +86,21 @@ final class CursorTimer {
     /// The running animation task, or `nil` if stopped.
     private var task: Task<Void, Never>?
 
-    /// How many ticks to advance per wake-up.
+    /// How long the next wake-up is away.
     ///
-    /// One by default — the finest step, and what a view that builds its
-    /// appearance from the phase as it renders needs. A frame whose animation
-    /// is all pre-rendered runs can say exactly when the picture next changes
-    /// (`RenderLoop.ticksUntilNextChange(from:)`), and the clock then sleeps
-    /// through the ticks in between instead of waking to compare two identical
-    /// pictures. The tick COUNT still advances by the stride, so every phase
-    /// formula keeps its wall-clock meaning.
-    private var stride = 1
+    /// The clock's own interval by default — what a view that builds its
+    /// appearance from the phase as it renders needs, because only that view
+    /// knows what it would draw next. A frame whose animation is all
+    /// pre-rendered runs can say exactly when the picture next changes
+    /// (`RenderLoop.timeUntilNextChange(from:)`), and the clock then sleeps
+    /// precisely that long instead of waking to compare identical pictures —
+    /// or, for a run asking for a rate finer than the interval, sooner than the
+    /// interval.
+    private var sleepSeconds = CursorTimer.tickInterval
 
-    /// Sets how far the next wake-up jumps. Takes effect after the current
-    /// sleep, which is at most one tick long.
-    func advanceInSteps(of ticks: Int) {
-        stride = max(1, ticks)
+    /// Sets how far the next wake-up is. Takes effect after the current sleep.
+    func advance(by seconds: Double) {
+        sleepSeconds = max(AnimationClock.minimumFrameDuration, seconds)
     }
 
     /// The render notifier to trigger re-renders.
@@ -131,7 +141,7 @@ extension CursorTimer {
     static func blinkVisible(atTick tick: Int, speed: TextCursorStyle.Speed) -> Bool {
         let cycleMs = speed.blinkCycleMs
         // Visible for the first half of the cycle.
-        return (tick * tickIntervalMs) % cycleMs < (cycleMs / 2)
+        return (tick * Self.tickIntervalMs) % cycleMs < (cycleMs / 2)
     }
 
     /// How many ticks a full cycle of `animation` takes at `speed` — the number
@@ -139,8 +149,8 @@ extension CursorTimer {
     static func cycleTicks(for speed: TextCursorStyle.Speed, animation: TextCursorStyle.Animation) -> Int {
         switch animation {
         case .none: return 1
-        case .blink: return max(1, speed.blinkCycleMs / tickIntervalMs)
-        case .pulse: return max(1, speed.pulseCycleMs / tickIntervalMs)
+        case .blink: return max(1, speed.blinkCycleMs / Self.tickIntervalMs)
+        case .pulse: return max(1, speed.pulseCycleMs / Self.tickIntervalMs)
         }
     }
 
@@ -178,7 +188,7 @@ extension CursorTimer {
     /// for why this is static and why reading it is not a volatile read.
     static func pulsePhase(atTick tick: Int, speed: TextCursorStyle.Speed) -> Double {
         let cycleMs = speed.pulseCycleMs
-        let normalized = Double((tick * tickIntervalMs) % cycleMs) / Double(cycleMs)
+        let normalized = Double((tick * Self.tickIntervalMs) % cycleMs) / Double(cycleMs)
         // Cosine wave: 1 → 0 → 1 over the cycle, so tick 0 is the bright end.
         return (cos(normalized * 2 * .pi) + 1) / 2
     }
@@ -193,17 +203,22 @@ extension CursorTimer {
     func start() {
         guard task == nil else { return }
 
-        let tickNanos = UInt64(tickIntervalMs) * 1_000_000
         task = Task { [weak self] in
             while !Task.isCancelled {
-                let steps = self?.stride ?? 1
+                // Read per iteration: `advance(by:)` is called after each wake,
+                // so the NEXT sleep is the one the frame just served asked for.
+                let seconds = self?.sleepSeconds ?? Self.tickInterval
                 do {
-                    try await Task.sleep(nanoseconds: tickNanos * UInt64(steps))
+                    try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 } catch {
                     return  // cancelled
                 }
                 guard let self else { return }
-                self.elapsedTicks += steps
+                // Advanced by what was SLEPT, not by a grid step, which is what
+                // keeps `elapsedSeconds` a real elapsed time under a variable
+                // cadence — and therefore keeps every phase derived from it
+                // honest.
+                self.elapsedSeconds += seconds
                 self.renderNotifier?.setNeedsAnimationTick(.cursor)
             }
         }
@@ -213,8 +228,8 @@ extension CursorTimer {
     func stop() {
         task?.cancel()
         task = nil
-        elapsedTicks = 0
-        stride = 1
+        elapsedSeconds = 0
+        sleepSeconds = Self.tickInterval
     }
 
     /// Resets the cursor animation to the visible/bright state.
@@ -222,9 +237,9 @@ extension CursorTimer {
     /// Call this when a text field gains focus to ensure the cursor
     /// starts in a visible state.
     func reset() {
-        elapsedTicks = 0
-        stride = 1
-        // The in-flight sleep was sized for the OLD stride: leaving it to
+        elapsedSeconds = 0
+        sleepSeconds = Self.tickInterval
+        // The in-flight sleep was sized for the OLD cadence: leaving it to
         // finish would add that whole stride to a counter that has just been
         // zeroed, so a focus change during a long sleep (the quantised pulse
         // holds a shade for several ticks) jumped the clock past the bright

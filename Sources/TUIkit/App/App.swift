@@ -435,17 +435,17 @@ extension AppRunner {
     ) -> Bool {
         let ticked = appState.consumePendingAnimationClocks()
         guard !ticked.isEmpty else { return true }  // nothing ticked; nothing owed
-        var steps: [AnimationClock: Int] = [:]
+        var elapsed: [AnimationClock: Double] = [:]
         for clock in ticked where renderer.lastActivity.canReplay(clock) {
-            steps[clock] = cursorTimer.elapsedTicks
+            elapsed[clock] = cursorTimer.elapsedSeconds
         }
-        guard steps.count == ticked.count else { return false }
-        let served = renderer.replayAnimations(steps: steps)
+        guard elapsed.count == ticked.count else { return false }
+        let served = renderer.replayAnimations(elapsed: elapsed)
         if served {
-            // The runs are unchanged, but the step is not: recompute how far
+            // The runs are unchanged, but the time is not: recompute how long
             // the clock may sleep from where it now is.
-            cursorTimer.advanceInSteps(
-                of: renderer.ticksUntilNextChange(from: cursorTimer.elapsedTicks))
+            cursorTimer.advance(
+                by: renderer.timeUntilNextChange(from: cursorTimer.elapsedSeconds))
         }
         return served
     }
@@ -472,10 +472,10 @@ extension AppRunner {
             activity.usesPulse || activity.usesCursor
             || activity.animatedClocks.contains(.cursor)
         if clockLive {
-            // Sleep through the ticks that cannot change a cell — see
-            // `RenderLoop.ticksUntilNextChange(from:)`.
-            cursorTimer.advanceInSteps(
-                of: renderer.ticksUntilNextChange(from: cursorTimer.elapsedTicks))
+            // Sleep exactly as long as nothing can change — see
+            // `RenderLoop.timeUntilNextChange(from:)`.
+            cursorTimer.advance(
+                by: renderer.timeUntilNextChange(from: cursorTimer.elapsedSeconds))
             cursorTimer.start()
         } else {
             cursorTimer.stop()
