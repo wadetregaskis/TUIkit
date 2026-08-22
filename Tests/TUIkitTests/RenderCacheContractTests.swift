@@ -233,4 +233,35 @@ struct RenderCacheContractTests {
         frame(shared, CacheLeaf(text: "hi").equatable().environment(\.incomparableProbe, Incomparable()))
         #expect(cache.isEmpty, "nothing may be stored under an uncomparable environment value")
     }
+
+    @Test("A ForEach row declines it too, not just an .equatable() view")
+    func incomparableEnvironmentDeclinesRowCaching() {
+        // The same hazard, through the other memo. `_MemoizedRow` carried the
+        // same five-condition gate as `EquatableView` minus this one clause, so
+        // a row under an uncomparable value cached a buffer nothing could
+        // invalidate. Both go through `RenderCache.isStorable` now.
+        let shared = context()
+        let cache = shared.environment.renderCache!
+        frame(
+            shared,
+            VStack(spacing: 0) {
+                ForEach(["a", "b"], id: \.self) { CacheLeaf(text: $0) }
+            }
+            .environment(\.incomparableProbe, Incomparable()))
+        #expect(cache.isEmpty, "a row cached under an uncomparable environment value")
+    }
+
+    @Test("…and a ForEach row IS cached when nothing uncomparable is in force")
+    func rowsAreCachedNormally() {
+        // The control for the case above: without it, "cache is empty" would
+        // pass for a memo that never stores anything at all.
+        let shared = context()
+        let cache = shared.environment.renderCache!
+        frame(
+            shared,
+            VStack(spacing: 0) {
+                ForEach(["a", "b"], id: \.self) { CacheLeaf(text: $0) }
+            })
+        #expect(!cache.isEmpty, "ForEach rows stopped memoizing entirely")
+    }
 }

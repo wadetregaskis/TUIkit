@@ -194,8 +194,9 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
         //     next frame.
         // The measure pass still benefits — it reads sizes through the size memo
         // (`sizeThatFits`), which is keyed by proposal and so does not clobber.
-        if !context.isMeasuring && buffer.hitTestRegions.isEmpty && buffer.overlays.isEmpty
-            && !readVolatile && !invalidatedDuringRender
+        if RenderCache.isStorable(
+            buffer: buffer, context: context,
+            readVolatile: readVolatile, invalidatedDuringRender: invalidatedDuringRender)
         {
             cache.store(
                 identity: identity, view: element, buffer: buffer,

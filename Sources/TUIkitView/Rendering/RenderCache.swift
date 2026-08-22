@@ -434,6 +434,42 @@ extension RenderCache {
     /// this safe where an identity-only key is not — a hit means identical
     /// content, hence (between invalidations, which also bound environment
     /// changes) an identical size.
+    /// Whether a rendered buffer may be stored — the conditions every memo has
+    /// to satisfy before a frame it produced can be served again.
+    ///
+    /// One predicate because there were two, five conditions each, and they
+    /// differed by one: `_MemoizedRow` was missing the uncomparable-environment
+    /// clause `EquatableView` had, so a `ForEach` row under a non-`Equatable`
+    /// environment injection cached a buffer that nothing could invalidate.
+    ///
+    /// - **A measure pass** produces an INCOMPLETE buffer — interactive
+    ///   controls suppress their hit-test regions while measuring — and it
+    ///   CLOBBERS, since a non-`Layoutable` ancestor renders its children once
+    ///   per measure and again per render at a different size.
+    /// - **Regions or overlays** mean an interactive subtree, whose buffer
+    ///   captures per-frame handler state.
+    /// - **A volatile read** means the next frame differs even though the value
+    ///   compares equal — a cached `Spinner` would freeze.
+    /// - **An invalidation during the render** (a `@State` write from an
+    ///   `onAppear`) already cleared this entry; storing now would resurrect
+    ///   the pre-write buffer.
+    /// - **An uncomparable environment value** could change under the subtree
+    ///   with nothing to notice, the cache key being free of the environment
+    ///   precisely because the modifier compares.
+    public static func isStorable(
+        buffer: FrameBuffer,
+        context: RenderContext,
+        readVolatile: Bool,
+        invalidatedDuringRender: Bool
+    ) -> Bool {
+        !context.isMeasuring
+            && buffer.hitTestRegions.isEmpty
+            && buffer.overlays.isEmpty
+            && !readVolatile
+            && !invalidatedDuringRender
+            && !context.environment.hasUncomparableEnvironmentValue
+    }
+
     public func lookupSize<V: Equatable>(key: SizeKey, view: V) -> ViewSize? {
         guard let entry = sizeEntries[key], let old = entry.viewSnapshot as? V, old == view else {
             stats.misses += 1

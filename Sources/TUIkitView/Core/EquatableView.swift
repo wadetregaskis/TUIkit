@@ -130,9 +130,9 @@ extension EquatableView: Renderable {
         let buffer = TUIkitView.renderToBuffer(content, context: renderContext)
 
         let readVolatile = tracker.cacheUnsafeCount > unsafeBefore
-        if !context.isMeasuring && buffer.hitTestRegions.isEmpty && buffer.overlays.isEmpty
-            && !readVolatile && cache.stats.subtreeClears == clearsBefore
-            && !context.environment.hasUncomparableEnvironmentValue
+        if RenderCache.isStorable(
+            buffer: buffer, context: context, readVolatile: readVolatile,
+            invalidatedDuringRender: cache.stats.subtreeClears > clearsBefore)
         {
             cache.store(
                 identity: identity,
