@@ -157,6 +157,12 @@ private struct ImageColorModeKey: EnvironmentKey {
     static let defaultValue: ASCIIColorMode = .trueColor
 }
 
+/// Environment key for the tone curve applied before anything measures the
+/// image.
+private struct ImageToneCurveKey: EnvironmentKey {
+    static let defaultValue: ASCIIToneCurve? = nil
+}
+
 /// Environment key for the dithering mode used by Image.
 private struct ImageDitheringKey: EnvironmentKey {
     static let defaultValue: DitheringMode = .none
@@ -257,6 +263,13 @@ extension EnvironmentValues {
     var imageColorMode: ASCIIColorMode {
         get { self[ImageColorModeKey.self] }
         set { self[ImageColorModeKey.self] = newValue }
+    }
+
+    /// The recolouring applied before the image is measured or quantised —
+    /// see ``View/imageToneCurve(_:)``.
+    var imageToneCurve: ASCIIToneCurve? {
+        get { self[ImageToneCurveKey.self] }
+        set { self[ImageToneCurveKey.self] = newValue }
     }
 
     /// The supersampling factor for brightness-mapping character sets —
@@ -377,6 +390,24 @@ extension View {
     /// - Returns: A modified view.
     public func imageColorMode(_ colorMode: ASCIIColorMode) -> some View {
         environment(\.imageColorMode, colorMode)
+    }
+
+    /// Recolours the image, by saying what its tones BECOME.
+    ///
+    /// ```swift
+    /// Image("photo.jpg").imageToneCurve(.inverted)
+    /// ```
+    ///
+    /// The pairs are a transfer curve, not a palette: `{black → white, white →
+    /// black}` is a continuous negative in which mid-grey stays mid-grey, not a
+    /// two-colour image. Applied before everything — before the monochrome
+    /// threshold, before dithering, before any ``ASCIIPalette`` mapping —
+    /// because an inversion moves where those land. See ``ASCIIToneCurve``.
+    ///
+    /// - Parameter toneCurve: The recolouring, or `nil` for none.
+    /// - Returns: A modified view.
+    public func imageToneCurve(_ toneCurve: ASCIIToneCurve?) -> some View {
+        environment(\.imageToneCurve, toneCurve)
     }
 
     /// Sets the area-sampling factor for every non-shape renderer: each

@@ -41,6 +41,7 @@ private struct ImageRenderCache: Equatable {
     var shapeAware: Bool
     var colorMode: ASCIIColorMode
     var dithering: DitheringMode
+    var toneCurve: ASCIIToneCurve?
     var supersampling: Int?
     var edgeThreshold: Double?
     var contentMode: ContentMode
@@ -54,7 +55,7 @@ private struct ImageRenderCache: Equatable {
         rawImageWidth: Int, rawImageHeight: Int,
         width: Int, height: Int,
         characterSet: ASCIICharacterSet, shapeAware: Bool, colorMode: ASCIIColorMode,
-        dithering: DitheringMode,
+        dithering: DitheringMode, toneCurve: ASCIIToneCurve?,
         supersampling: Int?, edgeThreshold: Double?,
         contentMode: ContentMode,
         aspectRatioOverride: Double?,
@@ -68,6 +69,7 @@ private struct ImageRenderCache: Equatable {
             && self.shapeAware == shapeAware
             && self.colorMode == colorMode
             && self.dithering == dithering
+            && self.toneCurve == toneCurve
             && self.supersampling == supersampling
             && self.edgeThreshold == edgeThreshold
             && self.contentMode == contentMode
@@ -247,6 +249,8 @@ struct _ImageCore: View, Renderable, Layoutable {
                 shapeAware: shapeAware,
                 colorMode: colorMode,
                 dithering: dithering,
+                toneCurve: context.environment.imageToneCurve?.resolved(
+                    with: context.environment.palette),
                 supersampling: context.environment.imageSupersampling,
                 edgeThreshold: context.environment.imageEdgeThreshold,
                 contentMode: contentMode,
@@ -402,7 +406,7 @@ extension _ImageCore {
         shapeAware: Bool,
         colorMode: ASCIIColorMode,
         dithering: DitheringMode,
-
+        toneCurve: ASCIIToneCurve?,
         supersampling: Int?,
         edgeThreshold: Double?,
         contentMode: ContentMode,
@@ -438,6 +442,7 @@ extension _ImageCore {
             shapeAware: shapeAware,
             colorMode: colorMode,
             dithering: dithering,
+            toneCurve: toneCurve,
             supersampling: supersampling,
             edgeThreshold: edgeThreshold,
             contentMode: contentMode,
@@ -453,7 +458,8 @@ extension _ImageCore {
             colorMode: colorMode,
             dithering: dithering,
             supersampling: supersampling,
-            edgeThreshold: edgeThreshold
+            edgeThreshold: edgeThreshold,
+            toneCurve: toneCurve
         )
         let lines = converter.convert(rawImage, width: targetSize.width, height: targetSize.height)
 
@@ -466,6 +472,7 @@ extension _ImageCore {
             shapeAware: shapeAware,
             colorMode: colorMode,
             dithering: dithering,
+            toneCurve: toneCurve,
             supersampling: supersampling,
             edgeThreshold: edgeThreshold,
             contentMode: contentMode,

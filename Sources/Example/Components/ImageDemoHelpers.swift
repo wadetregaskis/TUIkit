@@ -39,6 +39,25 @@ enum ImageDemoHelpers {
         .palette(ASCIIPalette([.black, .palette.accent, .white]).asToneRamp()),
     ]
 
+    /// No recolouring, a negative, and a duotone — the two shapes a transfer
+    /// curve takes, and the two that show it is a CURVE rather than a palette:
+    /// each keeps every tone the image had and only changes what it is made of.
+    static let toneCurves: [ASCIIToneCurve?] = [
+        nil,
+        .inverted,
+        ASCIIToneCurve([(.rgb(0, 0, 0), .rgb(20, 20, 60)), (.rgb(255, 255, 255), .rgb(255, 215, 130))]),
+        ASCIIToneCurve([(.rgb(0, 0, 0), .black), (.rgb(255, 255, 255), .palette.accent)]),
+    ]
+
+    static func toneCurveLabel(_ index: Int) -> String {
+        switch index {
+        case 1: return "tone:invert"
+        case 2: return "tone:duotone"
+        case 3: return "tone:accent"
+        default: return "tone:off"
+        }
+    }
+
     static func charsetLabel(_ index: Int) -> String {
         switch Charset(rawValue: index) ?? .ascii {
         case .ascii: return "chars:ascii"

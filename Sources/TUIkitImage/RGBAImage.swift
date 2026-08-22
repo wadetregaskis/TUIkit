@@ -91,6 +91,16 @@ extension RGBAImage {
         pixels[y * width + x] = value
     }
 
+    /// Replaces every pixel with `transform(pixel)`, in place.
+    ///
+    /// One pass over the buffer rather than a `map` into a second one: this
+    /// runs on the scaled image at conversion time, and an extra allocation the
+    /// size of the render grid is the kind of thing that shows up in a profile
+    /// of an image redrawn on every spinner tick.
+    public mutating func mapPixels(_ transform: (RGBA) -> RGBA) {
+        for index in pixels.indices { pixels[index] = transform(pixels[index]) }
+    }
+
     /// Adds an error value to the pixel at the given coordinates (for dithering).
     ///
     /// Clamps each channel to the valid 0-255 range.

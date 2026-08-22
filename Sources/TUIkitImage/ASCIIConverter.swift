@@ -247,6 +247,10 @@ public struct ASCIIConverter: Sendable {
     /// triangles), so it does not trace edges.
     let edgeThreshold: Double?
 
+    /// A recolouring applied to every pixel before anything measures the image.
+    /// `nil` leaves the image as it is. See ``ASCIIToneCurve``.
+    let toneCurve: ASCIIToneCurve?
+
     /// Creates a converter with the specified options.
     public init(
         characterSet: ASCIICharacterSet = .blocks(.fine),
@@ -254,7 +258,8 @@ public struct ASCIIConverter: Sendable {
         colorMode: ASCIIColorMode = .trueColor,
         dithering: DitheringMode = .none,
         supersampling: Int? = nil,
-        edgeThreshold: Double? = 0.9
+        edgeThreshold: Double? = 0.9,
+        toneCurve: ASCIIToneCurve? = nil
     ) {
         self.characterSet = characterSet
         self.shapeAware = shapeAware
@@ -262,6 +267,7 @@ public struct ASCIIConverter: Sendable {
         self.dithering = dithering
         self.supersampling = supersampling.map { min(4, max(1, $0)) }
         self.edgeThreshold = edgeThreshold
+        self.toneCurve = toneCurve
     }
 }
 
@@ -366,6 +372,15 @@ extension ASCIIConverter {
         var scaled = image.scaledBilinear(to: pixelWidth, pixelHeight)
         if factor > 1 {
             scaled = scaled.boxReduced(by: factor)
+        }
+
+        // Recolouring comes FIRST, before anything measures or quantises the
+        // image. An inversion moves where the ink/background split falls, so a
+        // threshold taken from the original would be taken from tones that no
+        // longer exist — and a palette would map colours the render is not
+        // going to draw. See ``ASCIIToneCurve``.
+        if let toneCurve, !toneCurve.isIdentity {
+            scaled.mapPixels(toneCurve.apply(to:))
         }
 
         // The split between ink and background, measured from THIS image

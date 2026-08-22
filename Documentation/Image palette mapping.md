@@ -144,9 +144,54 @@ coloured mode, and "draw nothing here" is what `.mono` is for.
 - **Not automatic.** No "detect the theme and use it" default. An image in the
   theme's colours is a strong stylistic choice and should be asked for.
 - **Not a recolouring.** `{black → white, white → black}` is not a two-entry
-  palette; see `ASCIIToneCurve`, which is a separate feature for exactly that
-  reason. The two compose: a curve says what the tones BECOME, a palette says
-  which colours are available to say it in.
+  palette; see below. The two compose: a curve says what the tones BECOME, a
+  palette says which colours are available to say it in.
+
+## The other half: recolouring, as a curve
+
+`.imageToneCurve(_:)` takes pairs — "this becomes that" — and is the answer to
+the request for a colour transformation expressed as a mapping.
+
+```swift
+.imageToneCurve(.inverted)
+.imageToneCurve([(.rgb(0, 0, 0), .rgb(20, 20, 60)),        // navy shadows,
+                 (.rgb(255, 255, 255), .rgb(255, 215, 130))])  // warm highlights
+```
+
+**It is not a palette, and implementing it as one would be a plausible-looking
+wrong answer.** `{black → white, white → black}` asked for as a two-entry
+palette gives a two-colour image; what it means is a *continuous* inversion in
+which mid-grey comes back mid-grey. So the pairs are read as a transfer curve:
+each pixel's tone picks a position, and the colour there replaces it. The image
+keeps all of its depth and only changes what that depth is made of.
+
+Two things it has to get right:
+
+- **Where it lands in the pipeline.** Before everything — before the monochrome
+  threshold, before dithering, before any palette mapping. An inversion moves
+  where the ink/background split falls, so a threshold measured on the original
+  would be measured on tones that no longer exist. There is a test for this
+  through the whole converter rather than a comment claiming it: inverting the
+  image inverts which cells are ink, and the two counts are complementary
+  because Otsu re-measures.
+- **One colour space, not two.** The first version indexed the curve by OKLab
+  lightness and interpolated in linear light, and sent mid-grey to **170** under
+  `.inverted` — a visibly washed-out negative, because 0.6 of the way
+  perceptually is 0.6 of the *light* rather than 0.6 of the way to the other
+  colour. Both the index and the interpolation are now ordinary gamma-encoded
+  sRGB, indexed by this module's own BT.601 luminance, and `.inverted` sends 128
+  to 127. Consistency with the module has a second payoff: the curve's positions
+  agree with where `monoInkThreshold(for:)` will fall, and the curve runs
+  immediately before it.
+
+`.inverted` is spelled with explicit RGB rather than `.black` and `.white`,
+because the named ANSI white is **229**, not 255 — it is a terminal colour, and
+terminals reserve the top of the range for bright white. A negative stopping at
+229 would quietly lose the last of its highlights.
+
+A stop may name a theme colour, resolved the same way a palette entry is. An
+unresolved stop drops out, and a curve left with fewer than two knots is inert
+rather than wrong.
 
 ## Still open
 

@@ -18,6 +18,7 @@ struct ImageFilePage: View {
     @State var shapeAware: Bool = false
     @State var colorModeIndex: Int = 0
     @State var ditheringOn: Bool = false
+    @State var toneCurveIndex: Int = 0
     @State var zoom: Double = 1.0
     @State var supersampling: Int = 0
     @State var edgeLines: Bool = false
@@ -51,6 +52,7 @@ struct ImageFilePage: View {
                 .imageCharacterSet(charSet)
                 .imageShapeAware(shapeAware)
                 .imageColorMode(colorMode)
+                .imageToneCurve(ImageDemoHelpers.toneCurves[toneCurveIndex])
                 .imageDithering(dithering)
                 .imageSupersampling(supersampling == 0 ? nil : supersampling)
                 .imageEdgeThreshold(edgeLines ? edgeThreshold : nil)
@@ -76,6 +78,7 @@ struct ImageFilePage: View {
     private var statusBarItems: [any StatusBarItemProtocol] {
         let charsetCount = ImageDemoHelpers.Charset.allCases.count
         let colorModeCount = ImageDemoHelpers.colorModes.count
+        let toneCurveCount = ImageDemoHelpers.toneCurves.count
         return [
             StatusBarItem(shortcut: Shortcut.escape, label: "page.imageFile.back"),
             // c|C — lowercase cycles forward, uppercase cycles
@@ -118,6 +121,21 @@ struct ImageFilePage: View {
             ) {
                 colorModeIndex =
                     (colorModeIndex - 1 + colorModeCount) % colorModeCount
+            },
+            // A transfer curve, not a palette: it says what the tones BECOME
+            // and keeps every one of them, which is why an inversion here is a
+            // negative rather than a two-colour image.
+            StatusBarItem(
+                shortcut: "n|N",
+                label: ImageDemoHelpers.toneCurveLabel(toneCurveIndex),
+                key: .character("n")
+            ) {
+                toneCurveIndex = (toneCurveIndex + 1) % toneCurveCount
+            },
+            StatusBarItem(
+                shortcut: "N", label: "", key: .character("N"), displayInStatusBar: false
+            ) {
+                toneCurveIndex = (toneCurveIndex - 1 + toneCurveCount) % toneCurveCount
             },
             // d is a binary toggle — a Shift variant would be a
             // no-op, so no "D" partner.

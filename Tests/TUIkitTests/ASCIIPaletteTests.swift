@@ -8,7 +8,7 @@ import Testing
 @testable import TUIkitImage
 import TUIkitStyling
 
-@Suite("Image palettes")
+@Suite("Image palettes and tone curves")
 struct ASCIIPaletteTests {
 
     // MARK: - Generated palettes
@@ -201,6 +201,62 @@ struct ASCIIPaletteTests {
         #expect(basic.sgrParameters(at: 1, background: true) == "104")
     }
 
+    // MARK: - Tone curves
+
+    @Test("Inversion is continuous, not two-colour")
+    func inversionKeepsItsMidtones() {
+        let curve = ASCIIToneCurve.inverted
+        #expect(curve.apply(to: RGBA(r: 0, g: 0, b: 0)) == RGBA(r: 255, g: 255, b: 255))
+        #expect(curve.apply(to: RGBA(r: 255, g: 255, b: 255)) == RGBA(r: 0, g: 0, b: 0))
+        // The whole reason this is a curve and not a two-entry palette: a
+        // mid-grey must come back mid-grey, not snap to one end. And it must
+        // come back where a negative puts it — 127, not some washed-out 170.
+        #expect(curve.apply(to: RGBA(r: 128, g: 128, b: 128)).r == 127)
+        #expect(curve.apply(to: RGBA(r: 64, g: 64, b: 64)).r == 191)
+        // And it is monotonic: darker in, lighter out, at every step.
+        let out = stride(from: 0, through: 255, by: 15).map {
+            curve.apply(to: RGBA(r: UInt8($0), g: UInt8($0), b: UInt8($0))).r
+        }
+        #expect(out == out.sorted(by: >), "not monotonic: \(out)")
+    }
+
+    @Test("A duotone recolours without flattening")
+    func duotoneKeepsItsDepth() {
+        let curve = ASCIIToneCurve([(.black, .rgb(20, 20, 60)), (.white, .rgb(255, 215, 130))])
+        let dark = curve.apply(to: RGBA(r: 0, g: 0, b: 0))
+        let light = curve.apply(to: RGBA(r: 255, g: 255, b: 255))
+        #expect(dark == RGBA(r: 20, g: 20, b: 60))
+        #expect(light == RGBA(r: 255, g: 215, b: 130))
+        let middle = curve.apply(to: RGBA(r: 128, g: 128, b: 128))
+        #expect(middle != dark && middle != light, "the midtone snapped to an end")
+        #expect(middle.r > dark.r && middle.r < light.r)
+    }
+
+    @Test("Outside the named tones the curve holds its ends")
+    func curveDoesNotExtrapolate() {
+        // Two stops covering only the dark half. Anything brighter than the
+        // last stop takes the last stop's colour rather than a colour nobody
+        // named.
+        let curve = ASCIIToneCurve([(.black, .rgb(0, 0, 255)), (.rgb(128, 128, 128), .rgb(0, 255, 0))])
+        #expect(curve.apply(to: RGBA(r: 255, g: 255, b: 255)) == RGBA(r: 0, g: 255, b: 0))
+        #expect(curve.apply(to: RGBA(r: 0, g: 0, b: 0)) == RGBA(r: 0, g: 0, b: 255))
+    }
+
+    @Test("A curve that cannot define a mapping changes nothing")
+    func degenerateCurvesAreInert() {
+        #expect(ASCIIToneCurve.identity.isIdentity)
+        #expect(ASCIIToneCurve([(.black, .white)]).isIdentity)
+        let pixel = RGBA(r: 77, g: 88, b: 99)
+        #expect(ASCIIToneCurve.identity.apply(to: pixel) == pixel)
+        #expect(ASCIIToneCurve([(.black, .white)]).apply(to: pixel) == pixel)
+    }
+
+    @Test("Alpha is carried through — a curve recolours, it does not reveal")
+    func alphaSurvives() {
+        let pixel = RGBA(r: 10, g: 10, b: 10, a: 77)
+        #expect(ASCIIToneCurve.inverted.apply(to: pixel).a == 77)
+    }
+
     // MARK: - Through the converter
 
     /// A gradient, so there is real tonal structure to preserve or destroy.
@@ -250,5 +306,39 @@ struct ASCIIPaletteTests {
         // BACKGROUNDS — the form is what matters here, not which channel.
         #expect(lines.joined().contains("\u{1B}[48;5;"))
         #expect(!lines.joined().contains(";2;"), "truecolor escapes on a 256-colour terminal")
+    }
+
+    /// The ordering claim, checked through the whole pipeline rather than
+    /// asserted in a comment: an inversion moves where the ink/background split
+    /// falls, so the curve has to run BEFORE the threshold is measured.
+    @Test("Inverting an image inverts which cells are ink")
+    func curveRunsBeforeTheThreshold() {
+        func inkCount(curve: ASCIIToneCurve?) -> Int {
+            let converter = ASCIIConverter(
+                characterSet: .blocks(.solid), colorMode: .mono, toneCurve: curve)
+            let lines = ColorDepth.withCurrent(.noColor) {
+                converter.convert(gradient(width: 40, height: 20), width: 20, height: 10)
+            }
+            return lines.joined().filter { $0 != " " && !$0.isNewline }.count
+        }
+        let plain = inkCount(curve: nil)
+        let inverted = inkCount(curve: .inverted)
+        #expect(plain > 0 && inverted > 0)
+        // Otsu re-measures the inverted image, so the two sides swap: what was
+        // ink is now background and the counts are complementary, not equal.
+        let cells = 20 * 10
+        #expect(abs((plain + inverted) - cells) <= cells / 10,
+                "\(plain) + \(inverted) should account for the \(cells) cells")
+        #expect(plain != inverted, "the curve changed nothing")
+    }
+
+    @Test("A curve stop may name a theme colour")
+    func curveResolves() {
+        let curve = ASCIIToneCurve([(.black, .palette.accent), (.white, .white)])
+        // Unresolved, the accent stop has no colour and drops out — leaving one
+        // knot, which cannot define a mapping, so nothing is recoloured. That is
+        // the safe failure: an unresolved curve is inert rather than wrong.
+        #expect(curve.isIdentity)
+        #expect(!curve.resolved(with: SystemPalette.green).isIdentity)
     }
 }
