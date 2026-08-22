@@ -1033,6 +1033,35 @@ extension String {
         (0x40...0x7E).contains(value)
     }
 
+    /// The index just past the CSI escape sequence beginning at `index`, which
+    /// must address the ESC.
+    ///
+    /// One walker, because there were six and five of them used a rule this
+    /// file documents as wrong: "digits and `;`, then a letter" stops at the
+    /// `?` of `ESC[?25l`, leaves the rest to be counted as VISIBLE text, and so
+    /// mis-measures a row the terminal paints in zero cells. The classifiers
+    /// above are the ECMA-48 ones, and everything that skips an escape should
+    /// go through them.
+    ///
+    /// A lone ESC, or an ESC followed by something that is not `[`, yields the
+    /// index just past the ESC — the callers all treat the remainder as
+    /// ordinary content, which is the safe reading for a byte we cannot
+    /// account for.
+    func csiSequenceEnd(from index: Index) -> Index {
+        var cursor = self.index(after: index)
+        guard cursor < endIndex, self[cursor] == "[" else { return cursor }
+        cursor = self.index(after: cursor)
+        func classify(_ test: (UInt32) -> Bool) -> Bool {
+            guard cursor < endIndex else { return false }
+            let scalars = self[cursor].unicodeScalars
+            guard scalars.count == 1, let value = scalars.first?.value else { return false }
+            return test(value)
+        }
+        while classify(Self.isCSIBodyByte) { cursor = self.index(after: cursor) }
+        if classify(Self.isCSIFinalByte) { cursor = self.index(after: cursor) }
+        return cursor
+    }
+
     /// Splits the string into ordered segments — each either a complete
     /// ANSI (CSI) escape sequence or a single visible grapheme cluster.
     ///

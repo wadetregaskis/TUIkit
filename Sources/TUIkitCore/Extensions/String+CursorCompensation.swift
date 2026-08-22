@@ -103,17 +103,11 @@ extension String {
         var index = startIndex
         while index < endIndex {
             if self[index] == "\u{1B}" {
-                // Skip ANSI escape sequences.
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
-                    }
-                    if index < endIndex && self[index].isLetter {
-                        index = self.index(after: index)
-                    }
-                }
+                // Skip ANSI escape sequences — `csiSequenceEnd(from:)`, shared by every escape walk. The
+                // copies that used to sit in this file accepted only digits
+                // and `;` between the `[` and the terminator, which stops at
+                // the `?` of `ESC[?25l` and counts the rest as visible text.
+                index = csiSequenceEnd(from: index)
                 continue
             }
             let c = self[index]
@@ -171,16 +165,7 @@ extension String {
             if c == "\u{1B}" {
                 // Preserve an entire ANSI escape sequence: ESC [ params letter
                 let seqStart = index
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
-                    }
-                    if index < endIndex && self[index].isLetter {
-                        index = self.index(after: index)
-                    }
-                }
+                index = csiSequenceEnd(from: index)
                 result += self[seqStart..<index]
                 continue
             }
@@ -296,16 +281,7 @@ extension String {
             if c == "\u{1B}" {
                 // Preserve an entire ANSI escape sequence: ESC [ params letter
                 let seqStart = index
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
-                    }
-                    if index < endIndex && self[index].isLetter {
-                        index = self.index(after: index)
-                    }
-                }
+                index = csiSequenceEnd(from: index)
                 result += self[seqStart..<index]
                 continue
             }
@@ -422,16 +398,7 @@ extension String {
 
             if c == "\u{1B}" {
                 let seqStart = index
-                index = self.index(after: index)
-                if index < endIndex && self[index] == "[" {
-                    index = self.index(after: index)
-                    while index < endIndex && (self[index].isNumber || self[index] == ";") {
-                        index = self.index(after: index)
-                    }
-                    if index < endIndex && self[index].isLetter {
-                        index = self.index(after: index)
-                    }
-                }
+                index = csiSequenceEnd(from: index)
                 result += self[seqStart..<index]
                 continue
             }
@@ -455,16 +422,7 @@ extension String {
         var index = start
         while index < string.endIndex {
             if string[index] == "\u{1B}" {
-                index = string.index(after: index)
-                if index < string.endIndex && string[index] == "[" {
-                    index = string.index(after: index)
-                    while index < string.endIndex && (string[index].isNumber || string[index] == ";") {
-                        index = string.index(after: index)
-                    }
-                    if index < string.endIndex && string[index].isLetter {
-                        index = string.index(after: index)
-                    }
-                }
+                index = string.csiSequenceEnd(from: index)
                 continue
             }
             if string[index].terminalWidth > 0 {
