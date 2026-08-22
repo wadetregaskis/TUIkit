@@ -2705,3 +2705,56 @@ per run per tick, §10) applied to a run 20 cells wide.
 All four producers named in §13 are now converted. What remains above 3% idle
 is the **scrollbar** (Scroll View 27.0, Picker 24.5, Lists 8.5, Tables) —
 the awkward one, because the whole bar pulses, so it wants one run per bar row.
+
+## §14 — The spinner, and the container that ate its run
+
+The producer §13 did not name, because at the time it was not one: `Spinner`
+derived its glyph from wall-clock elapsed time and asked the run loop to
+re-render it at the style's rate. A full measure-layout-render-diff of the whole
+screen, ten times a second, to change one cell.
+
+| screen | idle CPU before | after |
+|---|---|---|
+| **Spinners** (ten styles at once) | **16.3%** | **1.7%** |
+| Progress View | 24.8% | 23.8% |
+
+Converted the same way everything else was: the cycle is pre-rendered, one entry
+per tick, and the loop splices it. A style's interval is **rounded** to a whole
+number of ticks rather than resampled onto them — `.dots` runs at 0.10 s instead
+of 0.11 — because every frame then lasts the same time. Resampling gives 2, 2, 3,
+2, 2, 3 ticks and a visible limp for the sake of an average nobody perceives.
+
+### The prerequisite, and the thing it found
+
+A producer that leaves a run behind has **stopped asking to be re-rendered**.
+That is the whole point, and it means a container which drops runs freezes
+whatever was inside it — silently, while looking like a performance win. There is
+no way to notice from outside except by watching the thing not move.
+
+Two were dropping them:
+
+- **`_ListCore`** built every row's lines by hand, so a row's own runs went
+  nowhere. Measured with a two-frame run on each of three rows: a `VStack`
+  carried 2 of 2, the `List` carried **0 of 3**. Both kinds of run now travel as
+  one `RowRun` through one pipeline, because every clip, the reorder overrun and
+  the overscroll slide key on the line index alone — two lists that had to be
+  kept in step would drift, and a run spliced one line off repaints the row above
+  or below, every tick, forever.
+- **`Section`**, found by auditing all eighteen containers a spinner can sit in.
+  That audit is now a standing test (`RunPropagationAudit`), for the same reason
+  the failure is invisible.
+
+Two places a run is still dropped, both deliberate:
+
+- A List line whose content is **truncated for a badge**, after which a column no
+  longer means what the child said it meant.
+- Every line of a **breathing cursor row**, whose pulse repaints the whole line
+  and would overwrite a narrower run on it. There the list **takes over the
+  asking** on the dropped run's behalf, so a spinner on the cursor row costs
+  exactly what every spinner used to, and only while the cursor is on its row.
+
+A cycle whose frames differ in width cannot be a run at all — every frame must
+occupy the cells the run claims — so a mixed-width `.custom(_:)` falls back to
+asking for a re-render.
+
+The scrollbar named at the end of §13 is still the awkward one and is still open.
