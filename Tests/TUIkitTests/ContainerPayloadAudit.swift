@@ -181,6 +181,50 @@ struct ContainerPayloadAudit {
         }
     }
 
+    @Test("A disabled container still lets a presentation float to the root")
+    func disabledContainersFloatOverlays() {
+        // Disabling a container is a statement about INTERACTION. It is not a
+        // reason to stop compositing, and the presentation does not know it has
+        // happened — it activates its focus section and grabs the keyboard
+        // either way, so a swallowed overlay is an invisible dialog holding the
+        // app rather than a dialog that politely declined to appear.
+        //
+        // `List` had exactly that: its row-overlay carry lived inside the
+        // mouse-handler attachment, which returns early for a disabled list, so
+        // every row's presentation was dropped — visible rows included.
+        for (what, wrap) in containers() {
+            let overlays = render(wrap(AnyView(presenter())).disabled(true)).overlays
+            #expect(
+                overlays.contains { $0.level == .modal && $0.centered && $0.dimsBackground },
+                "\(what), disabled, swallowed the modal's overlay")
+        }
+    }
+
+    @Test("A disabled List still floats a presentation from a row")
+    func disabledListFloatsRowOverlays() {
+        // The specific shape, pinned separately from the sweep above because
+        // the sweep does not reach it: `List`'s row-overlay carry lived inside
+        // its mouse-handler attachment, which returns early for a disabled
+        // list. So every row's presentation was dropped — visible rows
+        // included, no scrolling involved — while the presentation went on
+        // activating its focus section and grabbing the keyboard.
+        // Written WITHOUT the `AnyView` the sweep's container list needs: the
+        // erasure changes when `List` resolves `@Environment(\.isDisabled)`,
+        // so an erased list does not see the flag and the case silently stops
+        // testing anything. That is why this is a test of its own.
+        let direct = render(List { presenter() }.disabled(true)).overlays
+        #expect(
+            direct.contains { $0.level == .modal },
+            "a disabled List swallowed its row's dialog")
+
+        let rows = render(
+            List { ForEach([1], id: \.self) { _ in presenter() } }.disabled(true)
+        ).overlays
+        #expect(
+            rows.contains { $0.level == .modal },
+            "a disabled List of ForEach rows swallowed its row's dialog")
+    }
+
     @Test("Every container lets a presented modal float to the root")
     func containersFloatOverlays() {
         // The modal has already taken the keyboard by the time its overlay is

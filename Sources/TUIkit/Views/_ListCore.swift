@@ -360,6 +360,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 state: state,
                 paddingTop: style.rowPadding.top
             )
+            // Compositing, not click handling — so it runs even when the list
+            // is disabled or has no mouse dispatcher. See `attachRowOverlays`.
+            attachRowOverlays(
+                to: &buffer,
+                context: context,
+                state: state,
+                paddingTop: style.rowPadding.top
+            )
         }
         return buffer
     }
@@ -1547,15 +1555,41 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     )
                 )
             }
+        }
+    }
 
-            // Overlay layers need the same explicit carry: a modal/alert
-            // presented from row content (or a popover anchored to it) is
-            // emitted into the row's standalone buffer and would otherwise
-            // never reach the root compositor — an invisible dialog that
-            // still grabs focus. Anchored layers translate to the row's
-            // on-screen position (`shifted` leaves screen-centred layers
-            // untouched); no clipping — floating above the in-flow content
-            // is the point of an overlay.
+    /// Carries the rows' overlay layers into the list's buffer.
+    ///
+    /// A modal, alert or popover presented from row content is emitted into
+    /// that row's standalone (per-frame memoised) buffer, and would otherwise
+    /// never reach the root compositor — an invisible dialog that has already
+    /// grabbed the keyboard.
+    ///
+    /// Separate from ``attachMouseHandlers`` on purpose, though it used to live
+    /// inside it. That function returns early for a DISABLED list and for one
+    /// with no mouse dispatcher, which are both perfectly good reasons not to
+    /// register click handling and neither of which has anything to do with
+    /// compositing — so `List { row.sheet(…) }.disabled(true)` dropped the
+    /// overlay for every row, visible ones included, while the presentation
+    /// went on activating its focus section and taking the keyboard. Gated on
+    /// the measure pass alone: a measure buffer is discarded, so an overlay
+    /// left on one describes a dialog that was never drawn.
+    ///
+    /// Anchored layers translate to the row's on-screen position (`shifted`
+    /// leaves screen-centred layers untouched); no clipping — floating above
+    /// the in-flow content is the point of an overlay.
+    private func attachRowOverlays(
+        to buffer: inout FrameBuffer,
+        context: RenderContext,
+        state: PopulatedRenderState,
+        paddingTop: Int
+    ) {
+        guard !context.isMeasuring else { return }
+        let style = context.environment.listStyle
+        let topInset = (style.showsBorder ? 1 : 0) + paddingTop
+        let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
+        for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
+            let clip = visible.index == state.origin.offset ? state.origin.topClip : 0
             buffer.overlays.append(
                 contentsOf: visible.row.buffer.shiftedOverlays(
                     byX: rowContentX, y: topInset + position.yStart - clip))
