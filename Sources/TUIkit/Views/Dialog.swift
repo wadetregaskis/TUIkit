@@ -36,10 +36,11 @@
 /// }
 ///
 /// // Present it modally with `.modal(isPresented:)` (or `.modal { }` for an
-/// // always-on dialog). Do NOT use bare `.dimmed().overlay()` — that only dims
-/// // the background's appearance; the background stays focusable and clickable
-/// // and the dialog never captures the keyboard. The presentation modifiers dim
-/// // the background AND make it inert, capture focus, and centre the dialog.
+/// // always-on dialog). Do NOT use bare `.dimmed().overlay()` — `.dimmed()`
+/// // deadens the subtree it is applied to, but the dialog still never captures
+/// // the keyboard, Escape does not close it, it is not centred on the screen,
+/// // and anything outside that subtree stays live. The presentation modifiers
+/// // do all of it.
 /// mainContent
 ///     .modal(isPresented: $confirming) {
 ///         Dialog(title: "Confirm Action") {

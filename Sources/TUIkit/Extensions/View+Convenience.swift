@@ -18,8 +18,9 @@ extension View {
     /// guarantee the binding-based form gives.
     ///
     /// > Important: Do **not** present a `Dialog` with bare `.dimmed().overlay()`.
-    /// > That only dims the *look* of the background; it leaves the background
-    /// > focusable and clickable, and the dialog never captures focus. Use this
+    /// > `.dimmed()` deadens the subtree it is applied to, but the dialog still
+    /// > never captures focus, Escape does not close it, it is not centred on
+    /// > the screen, and anything outside that subtree stays live. Use this
     /// > modifier (or ``modal(isPresented:onDismiss:content:)`` / `alert(_:isPresented:actions:message:)`).
     ///
     /// ## Example

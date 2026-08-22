@@ -47,9 +47,10 @@
 ///
 /// > Important: Do **not** present an `Alert` with bare `.dimmed().overlay()`.
 /// > This documentation taught that pattern, and it does not work: `.dimmed()`
-/// > only dims how the background LOOKS, and `.overlay` composites the panel
-/// > into the page in flow. The background stays focusable and clickable, the
-/// > alert never captures the keyboard, and Escape does not close it. The
+/// > dims and deadens the background in place, and `.overlay` composites the
+/// > panel into the page in flow. The panel never captures the keyboard,
+/// > Escape does not close it, it is not centred on the screen, and anything
+/// > OUTSIDE the dimmed subtree stays live. The
 /// > presentation modifiers do all four things — dim the background AND make
 /// > it inert, capture focus in a section of their own, publish ESC to
 /// > dismiss, and centre the panel on the whole screen no matter where in the

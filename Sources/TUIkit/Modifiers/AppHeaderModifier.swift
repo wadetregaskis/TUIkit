@@ -53,12 +53,21 @@ extension AppHeaderModifier: Renderable {
         // Render the header content to a buffer and store it in state.
         // The RenderLoop will pick it up and render it separately.
         //
+        // Through the backdrop isolation: a header is CHROME the app draws
+        // around every screen, and chrome is not a Tab stop. Left on the real
+        // focus manager, a `Button` in the header joined the page's focus ring
+        // — so Tab walked out of the content and into the title bar, and the
+        // header's `onKeyPress` and `.keyboardShortcut` registrations were live
+        // alongside the page's. Its buffer still publishes hit-test regions, so
+        // it stays clickable, which is the whole point of putting a control
+        // there.
+        //
         // At the width the STYLE leaves it, not the terminal's: a bordered
         // header spends two columns on its walls, and content laid out at the
         // full width simply lost its last two cells to the right wall
         // ("TUIkit v0.6" for "TUIkit v0.6.0"). The style is known here because
         // it lives on the same state object this writes into.
-        var headerContext = context
+        var headerContext = context.isolatedForBackground()
         headerContext.availableWidth = max(
             0, context.availableWidth - appHeader.style.contentWidthInset)
         let headerBuffer = TUIkit.renderToBuffer(header, context: headerContext)

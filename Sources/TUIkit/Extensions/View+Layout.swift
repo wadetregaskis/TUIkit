@@ -145,13 +145,19 @@ extension View {
     /// This reduces the visual intensity of the content using the ANSI dim
     /// escape code — a purely visual change.
     ///
-    /// > Important: This is **not** how you make something modal. It dims how
-    /// > the content LOOKS and nothing else: the content stays focusable,
-    /// > clickable and live to keyboard shortcuts. Presenting a ``Dialog`` or
-    /// > an ``Alert`` over a `.dimmed()` page — rather than through
+    /// Dimmed content is **inert**: what looks recessive is recessive. It is
+    /// not a Tab stop, its `onKeyPress` and `.keyboardShortcut` do not fire, it
+    /// publishes no status-bar items, and it is not clickable. Its `@State` and
+    /// scroll position survive, so undimming brings it back as it was.
+    ///
+    /// > Important: inert is still not the same as **modal**. This dims and
+    /// > deadens the content it is applied to and nothing else: it does not
+    /// > centre a dialog on the screen, capture focus into a section of its
+    /// > own, publish ESC to dismiss, or stop a sibling elsewhere in the tree
+    /// > from being reached. Present a ``Dialog`` or an ``Alert`` through
     /// > ``SwiftUICore/View/modal(isPresented:onDismiss:content:)`` or
-    /// > ``SwiftUICore/View/alert(_:isPresented:actions:message:)`` — produces
-    /// > a page that looks inert and is not.
+    /// > ``SwiftUICore/View/alert(_:isPresented:actions:message:)``, which do
+    /// > all of that; `.dimmed()` is for content you want recessive in place.
     ///
     /// It also **drops** anything the content floated: a presentation, a
     /// `Picker` drop-down or a context menu inside a `.dimmed()` subtree is
