@@ -79,14 +79,16 @@ public struct VStackLayout: Layout, Sendable, Equatable {
 
     /// Where a subview of this width starts, given the stack's own width.
     ///
-    /// Clamped at zero: a subview wider than the stack starts at the leading
-    /// edge and overflows, rather than being pushed off the front of the line.
+    /// ``HorizontalAlignment/childOffset(childWidth:in:)`` rather than a
+    /// switch of its own: the switch had a `default` that sent every alignment
+    /// it did not name to the centre, which is right for `.center` and silently
+    /// wrong for a CUSTOM guide — the one kind of alignment whose whole purpose
+    /// is to sit somewhere those three cases cannot express. `childOffset`
+    /// resolves through `ViewDimensions`, so it asks the guide where it wants
+    /// to be. It clamps at zero too: a subview wider than the stack starts at
+    /// the leading edge and overflows, rather than being pushed off the front.
     private func alignedOffset(for width: Int, in available: Int) -> Int {
-        switch alignment {
-        case .leading: 0
-        case .trailing: max(0, available - width)
-        default: max(0, (available - width) / 2)
-        }
+        alignment.childOffset(childWidth: width, in: available)
     }
 }
 
@@ -136,12 +138,9 @@ public struct HStackLayout: Layout, Sendable, Equatable {
         }
     }
 
+    /// See ``VStackLayout/alignedOffset(for:in:)`` — same reasoning, other axis.
     private func alignedOffset(for height: Int, in available: Int) -> Int {
-        switch alignment {
-        case .top: 0
-        case .bottom: max(0, available - height)
-        default: max(0, (available - height) / 2)
-        }
+        alignment.childOffset(childHeight: height, in: available)
     }
 }
 
@@ -180,35 +179,14 @@ public struct ZStackLayout: Layout, Sendable, Equatable {
             let size = subview.sizeThatFits(proposal)
             subview.place(
                 at: (
-                    x: bounds.x + offset(for: size.width, in: bounds.width, along: horizontal),
-                    y: bounds.y + offset(for: size.height, in: bounds.height, along: vertical)
+                    x: bounds.x
+                        + alignment.horizontal.childOffset(
+                            childWidth: size.width, in: bounds.width),
+                    y: bounds.y
+                        + alignment.vertical.childOffset(
+                            childHeight: size.height, in: bounds.height)
                 ),
                 proposal: proposal)
-        }
-    }
-
-    /// 0 = leading/top, 1 = centre, 2 = trailing/bottom.
-    private var horizontal: Int {
-        switch alignment.horizontal {
-        case .leading: 0
-        case .trailing: 2
-        default: 1
-        }
-    }
-
-    private var vertical: Int {
-        switch alignment.vertical {
-        case .top: 0
-        case .bottom: 2
-        default: 1
-        }
-    }
-
-    private func offset(for size: Int, in available: Int, along axis: Int) -> Int {
-        switch axis {
-        case 0: 0
-        case 2: max(0, available - size)
-        default: max(0, (available - size) / 2)
         }
     }
 }
