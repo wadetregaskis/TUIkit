@@ -76,7 +76,12 @@ extension _OpacityView: Animatable {
 extension _OpacityView: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let buffer = TUIkit.renderToBuffer(content, context: context)
-        guard !buffer.isEmpty else { return buffer }
+        // `isEmpty` asks about the LINES, and a subtree can draw nothing in
+        // flow while drawing plenty in an overlay: `.offset` and `.position`
+        // return a placeholder of zero-width lines and put the content in a
+        // layer. Short-circuiting on that made `Text("x").offset(x: 2)
+        // .opacity(0.5)` a complete no-op — the fade never ran at all.
+        guard !buffer.isEmpty || !buffer.overlays.isEmpty else { return buffer }
 
         // Resolve first: a semantic colour makes `opacity(_:over:)` a silent
         // no-op and makes `ANSIRenderer` trap outright.
@@ -102,7 +107,10 @@ extension _OpacityView: Renderable {
         if let cycling = cycling(buffer, faded: faded, context: context) { return cycling }
         let factor = min(max(opacity, 0), 1)
         guard factor < 1 else { return buffer }
-        return buffer.replacingLines(faded(by: factor))
+        var result = buffer.replacingLines(faded(by: factor))
+        result.overlays = Self.fadingOverlays(
+            buffer.overlays, by: factor, over: surface, defaultForeground: defaultForeground)
+        return result
     }
 
     /// The whole fade, pre-rendered, when the opacity is on a repeating
@@ -117,6 +125,18 @@ extension _OpacityView: Renderable {
         _ buffer: FrameBuffer, faded: (Double) -> [String], context: RenderContext
     ) -> FrameBuffer? {
         guard !context.isMeasuring, let storage = context.stateStorage else { return nil }
+        // The pre-rendered path builds its runs out of the buffer's LINES, so
+        // it has no way to carry an overlay through the cycle: a repeating fade
+        // over an `.offset` child would replay the lines and freeze the layer
+        // at whichever phase it was first drawn. Declining here keeps such a
+        // subtree on the ordinary per-frame path — it costs a render per frame
+        // while the animation runs, which is what every fade cost before this
+        // path existed. Fading a layer per phase is the better answer and a
+        // larger change; this is the small one that cannot be wrong.
+        //
+        // A PRESENTATION layer is not a reason to decline, because it is not
+        // faded either way — see `fadingOverlays`.
+        guard !buffer.overlays.contains(where: { !$0.centered }) else { return nil }
         let key = AnimationStore.Key(
             identity: context.identity, owner: ObjectIdentifier(Self.self))
         guard
@@ -138,6 +158,46 @@ extension _OpacityView: Renderable {
         var faded = buffer.replacingLines(faded(cycle.current))
         faded.animatedCells += runs
         return faded
+    }
+}
+
+extension _OpacityView {
+    /// `overlays`, with the ones this view actually DREW faded to match its
+    /// lines — and the ones it merely hosts left alone.
+    ///
+    /// The distinction is ``OverlayLayer/centered``, which means
+    /// "screen-anchored, not content-anchored", and it is the same one
+    /// `.hidden()` and `.allowsHitTesting(false)` turn on:
+    ///
+    /// - an **anchored** layer — an `.offset`/`.position` child, a popover — is
+    ///   this subtree's own drawing, displaced. Fading the subtree without
+    ///   fading it left the displaced part at full strength beside faded
+    ///   siblings.
+    /// - a **centred** layer is a `.sheet`/`.alert` panel over the whole
+    ///   screen. `.opacity` recolours what this view draws; it is not a way to
+    ///   dim a dialog the view opened, any more than it is in SwiftUI, where
+    ///   the sheet is hosted by the window and a modifier on the presenter
+    ///   cannot reach it.
+    ///
+    /// Recursive, because a layer's own content can carry layers.
+    static func fadingOverlays(
+        _ overlays: [OverlayLayer], by factor: Double, over surface: Color,
+        defaultForeground: Color
+    ) -> [OverlayLayer] {
+        guard factor < 1 else { return overlays }
+        return overlays.map { layer in
+            guard !layer.centered else { return layer }
+            var faded = layer
+            faded.content = layer.content.replacingLines(
+                layer.content.lines.map {
+                    OpacityFade.fading(
+                        $0, by: factor, over: surface, defaultForeground: defaultForeground)
+                })
+            faded.content.overlays = fadingOverlays(
+                layer.content.overlays, by: factor, over: surface,
+                defaultForeground: defaultForeground)
+            return faded
+        }
     }
 }
 
