@@ -128,16 +128,45 @@ struct ContainerPayloadAudit {
             ("TabView", { child in
                 AnyView(TabView(selection: .constant(0)) { Tab("A", value: 0) { child } })
             }),
+            ("Grid", { child in AnyView(Grid { GridRow { child } }) }),
+            ("LazyVStack", { child in AnyView(ScrollView { LazyVStack { child } }) }),
+            ("DisclosureGroup", { child in
+                AnyView(DisclosureGroup("g", isExpanded: .constant(true)) { child })
+            }),
+            ("NavigationSplitView", { child in
+                AnyView(NavigationSplitView(sidebar: { child }, detail: { Text("d") }))
+            }),
+            // A control's LABEL is a full view slot, and `_ControlLabel` rebuilt
+            // its buffer by hand — so this is the same question `Section` failed.
+            ("a Slider's label", { child in
+                AnyView(Slider(value: .constant(0.5), in: 0...1, label: { child }))
+            }),
+            ("a Stepper's label", { child in
+                AnyView(Stepper(value: .constant(5), in: 0...10, label: { child }))
+            }),
+            ("a Dialog's footer", { child in
+                AnyView(Dialog(title: "d", content: { Text("c") }, footer: { child }))
+            }),
         ]
     }
 
     // MARK: - The three audits
 
+    /// Something with no payload of its own, to measure the container against.
+    ///
+    /// The count has to be a DIFFERENCE: several of these containers carry
+    /// payload of their own — a `Slider` publishes its track's hit region
+    /// whether or not its label has one — so "at least one came out" passes
+    /// while the child's is being dropped. That is exactly how a `Slider`
+    /// label's overlay stayed lost.
+    private func inert() -> some View { Text("x") }
+
     @Test("Every container carries its children's animated runs")
     func containersCarryRuns() {
         for (what, wrap) in containers() {
+            let base = render(wrap(AnyView(inert()))).animatedCells.count
             let found = render(wrap(AnyView(blinker()))).animatedCells.count
-            #expect(found >= 1, "\(what) carried \(found) of 1 run")
+            #expect(found > base, "\(what) dropped the child's run (\(base) → \(found))")
         }
     }
 
@@ -146,8 +175,9 @@ struct ContainerPayloadAudit {
         // A control that cannot be clicked still draws its focus ring and its
         // hover lift, so nothing about the screen says the region is missing.
         for (what, wrap) in containers() {
+            let base = render(wrap(AnyView(inert()))).hitTestRegions.count
             let found = render(wrap(AnyView(clickable()))).hitTestRegions.count
-            #expect(found >= 1, "\(what) carried \(found) of at least 1 region")
+            #expect(found > base, "\(what) dropped the child's region (\(base) → \(found))")
         }
     }
 

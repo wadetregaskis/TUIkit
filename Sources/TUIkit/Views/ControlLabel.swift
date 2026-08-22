@@ -77,6 +77,13 @@ struct _CollapsingLabel<Label: View>: View, Renderable, Layoutable {
                 label, context: context, controlDisabled: controlDisabled),
             context: context)
         guard !buffer.isBlank else { return FrameBuffer() }
-        return FrameBuffer(lines: buffer.lines.map { $0 + " " })
+        // `replacingLines`, not `FrameBuffer(lines:)`: a label is a full view
+        // slot, so its content can carry runs, hit-test regions and overlays,
+        // and the bare initializer drops all three. Appending the gap space
+        // moves nothing — no row is inserted and no cell shifts left — so they
+        // carry through unshifted. A `Slider`'s label holding a Button drew its
+        // hover and focus perfectly and could not be clicked; one presenting a
+        // sheet grabbed the keyboard and drew no sheet.
+        return buffer.replacingLines(buffer.lines.map { $0 + " " })
     }
 }

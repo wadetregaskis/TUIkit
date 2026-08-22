@@ -256,6 +256,7 @@ struct AlertButtonRow: View, Renderable {
         var resultLines: [String] = Array(repeating: "", count: maxHeight)
         var resultRegions: [HitTestRegion] = []
         var resultRuns: [AnimatedCellRun] = []
+        var resultOverlays: [OverlayLayer] = []
         let spacer = String(repeating: " ", count: spacing)
         var xCursor = leftPadding
 
@@ -284,12 +285,20 @@ struct AlertButtonRow: View, Renderable {
             // `_ButtonRowCore`: a dropped run freezes an animation rather than
             // removing it.
             resultRuns.append(contentsOf: buffer.shiftedAnimatedCells(byX: xCursor, y: 0))
+            resultOverlays.append(contentsOf: buffer.shiftedOverlays(byX: xCursor, y: 0))
             xCursor += buffer.width
         }
 
         var result = FrameBuffer(lines: resultLines)
         result.hitTestRegions = resultRegions
         result.animatedCells = resultRuns
+        // Overlays too, for the same reason the other two are carried. No
+        // button can currently float one — these builders take `Button` values,
+        // and `.sheet` / `.contextMenu` return `some View` — so this is the
+        // omission rather than a reachable bug. Carried anyway: two of the
+        // three payloads being handled is precisely the state `Section` and
+        // `_ControlLabel` were found in.
+        result.overlays = resultOverlays
         return result
     }
 }
@@ -325,6 +334,7 @@ struct AlertButtonColumn: View, Renderable {
         var lines: [String] = []
         var regions: [HitTestRegion] = []
         var runs: [AnimatedCellRun] = []
+        var overlays: [OverlayLayer] = []
 
         // Each button renders under its OWN child identity. A `Button`'s
         // default focus ID is derived from `context.identity.path`, so rendering
@@ -354,11 +364,19 @@ struct AlertButtonColumn: View, Renderable {
             regions.append(
                 contentsOf: buffer.shiftedHitTestRegions(byX: leftPadding, y: startY))
             runs.append(contentsOf: buffer.shiftedAnimatedCells(byX: leftPadding, y: startY))
+            overlays.append(contentsOf: buffer.shiftedOverlays(byX: leftPadding, y: startY))
         }
 
         var result = FrameBuffer(lines: lines)
         result.hitTestRegions = regions
         result.animatedCells = runs
+        // Overlays too, for the same reason the other two are carried. No
+        // button can currently float one — these builders take `Button` values,
+        // and `.sheet` / `.contextMenu` return `some View` — so this is the
+        // omission rather than a reachable bug. Carried anyway: two of the
+        // three payloads being handled is precisely the state `Section` and
+        // `_ControlLabel` were found in.
+        result.overlays = overlays
         return result
     }
 }

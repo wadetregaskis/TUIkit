@@ -149,6 +149,7 @@ private struct _ButtonRowCore: View, Renderable, Layoutable {
         var resultLines: [String] = Array(repeating: "", count: maxHeight)
         var resultRegions: [HitTestRegion] = []
         var resultRuns: [AnimatedCellRun] = []
+        var resultOverlays: [OverlayLayer] = []
         let spacer = String(repeating: " ", count: spacing)
         var xCursor = 0
 
@@ -175,12 +176,20 @@ private struct _ButtonRowCore: View, Renderable, Layoutable {
             // alive from the runs that reach the final buffer, so a button
             // whose run never arrives simply stops moving.
             resultRuns.append(contentsOf: buffer.shiftedAnimatedCells(byX: xCursor, y: 0))
+            resultOverlays.append(contentsOf: buffer.shiftedOverlays(byX: xCursor, y: 0))
             xCursor += buffer.width
         }
 
         var result = FrameBuffer(lines: resultLines)
         result.hitTestRegions = resultRegions
         result.animatedCells = resultRuns
+        // Overlays too, for the same reason the other two are carried. No
+        // button can currently float one — the builder takes `Button` values,
+        // and `.sheet` / `.contextMenu` return `some View` — so this is the
+        // omission rather than a reachable bug. Carried anyway: two of the
+        // three payloads being handled is precisely the state `Section` and
+        // `_ControlLabel` were found in.
+        result.overlays = resultOverlays
         return result
     }
 }
