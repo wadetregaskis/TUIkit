@@ -746,42 +746,17 @@ extension TextFieldHandler {
     /// already at the start of a word, to the start of the previous word.
     ///
     /// "Word" here matches the readline convention — runs of alphanumeric or
-    /// underscore characters separated by anything else.
+    /// underscore characters separated by anything else. See ``WordBoundary``,
+    /// which `TextEditor` shares.
     func moveCursorToPreviousWordBoundary() {
-        let chars = Array(text.wrappedValue)
-        var pos = cursorPosition
-        // Skip back over inter-word (non-word) characters.
-        while pos > 0 && !TextFieldHandler.isWordCharacter(chars[pos - 1]) {
-            pos -= 1
-        }
-        // Skip back over the word itself.
-        while pos > 0 && TextFieldHandler.isWordCharacter(chars[pos - 1]) {
-            pos -= 1
-        }
-        cursorPosition = pos
+        cursorPosition = WordBoundary.previous(
+            in: Array(text.wrappedValue), from: cursorPosition)
     }
 
     /// Moves the cursor to the end of the current word, or, if the cursor is
     /// already at the end of a word, to the end of the next word.
     func moveCursorToNextWordBoundary() {
-        let chars = Array(text.wrappedValue)
-        var pos = cursorPosition
-        // Skip forward over inter-word (non-word) characters.
-        while pos < chars.count && !TextFieldHandler.isWordCharacter(chars[pos]) {
-            pos += 1
-        }
-        // Skip forward over the word itself.
-        while pos < chars.count && TextFieldHandler.isWordCharacter(chars[pos]) {
-            pos += 1
-        }
-        cursorPosition = pos
-    }
-
-    /// A "word" character for the purposes of Option+arrow navigation —
-    /// letters, digits, and underscore. Everything else is treated as a word
-    /// separator.
-    fileprivate static func isWordCharacter(_ character: Character) -> Bool {
-        character.isLetter || character.isNumber || character == "_"
+        cursorPosition = WordBoundary.next(in: Array(text.wrappedValue), from: cursorPosition)
     }
 
     /// Ensures the cursor position and selection anchor are within valid bounds.

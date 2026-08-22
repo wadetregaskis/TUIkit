@@ -460,27 +460,16 @@ final class TextEditorHandler: Focusable {
 
     // MARK: - Word motion
 
-    /// A "word" character for word-wise motion: letters and digits.
-    private func isWordCharacter(_ character: Character) -> Bool {
-        character.isLetter || character.isNumber
-    }
-
-    /// The column to the left of `column` at the previous word boundary: skip
-    /// any non-word run, then the word run.
+    /// The column to the left of `column` at the previous word boundary.
+    /// See ``WordBoundary``, which `TextField` shares — the two used to
+    /// disagree about the underscore.
     private func wordBoundaryLeft(_ line: [Character], from column: Int) -> Int {
-        var col = column
-        while col > 0, !isWordCharacter(line[col - 1]) { col -= 1 }
-        while col > 0, isWordCharacter(line[col - 1]) { col -= 1 }
-        return col
+        WordBoundary.previous(in: line, from: column)
     }
 
-    /// The column to the right of `column` at the next word boundary: skip any
-    /// non-word run, then the word run.
+    /// The column to the right of `column` at the next word boundary.
     private func wordBoundaryRight(_ line: [Character], from column: Int) -> Int {
-        var col = column
-        while col < line.count, !isWordCharacter(line[col]) { col += 1 }
-        while col < line.count, isWordCharacter(line[col]) { col += 1 }
-        return col
+        WordBoundary.next(in: line, from: column)
     }
 
     private func moveWordLeft() {
