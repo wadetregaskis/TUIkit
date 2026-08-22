@@ -911,11 +911,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // them (§1.5). `lines` is assembled from the three parts at the end.
         var rowLines: [String] = []
         var ranges: [VisibleRowRange] = []
-        /// The breathing rows' lines, at their position among `rowLines`, and
-        /// every frame of each. Turned into runs at the end, once the reorder
-        /// clip and the overscroll slide have had their say about where those
-        /// lines actually ended up.
-        var pulseRuns: [(y: Int, frames: [String])] = []
+        /// Every animated run among `rowLines` — the breathing rows' whole-line
+        /// pulses and the rows' own narrower runs alike. Turned into
+        /// ``AnimatedCellRun``s at the end, once the reorder clip and the
+        /// overscroll slide have had their say about where those lines actually
+        /// ended up.
+        var pulseRuns: [RowRun] = []
         var topIndicator: (text: String, animation: AnimatedCellRun?)?
         var bottomIndicator: (text: String, animation: AnimatedCellRun?)?
 
@@ -977,41 +978,34 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 context: context,
                 palette: palette
             )
-            var styledLines = rendered.lines
-            // A breathing row's frames are clipped alongside its lines, so
-            // `pulseFrames[i]` stays the frames of `styledLines[i]` — a run is
-            // spliced over cells by position, and an off-by-one here repaints
-            // the row above or below, every tick, forever.
-            var pulseFrames = rendered.pulseFrames
             // Line granularity: the top visible row enters partially, its
-            // first `clip` lines scrolled off above the viewport. Clipped by
+            // first `clip` lines scrolled off above the viewport (clipped by
             // the RESOLVED origin, which is also what the window walk, the
-            // indicators, the bands and the click mapping measure from.
-            if rowIndex == origin.offset, origin.topClip > 0 {
-                let clipped = min(origin.topClip, styledLines.count - 1)
-                styledLines.removeFirst(clipped)
-                pulseFrames?.removeFirst(clipped)
-            }
-            // …and the bottom row leaves partially, clipped at the budget.
+            // indicators, the bands and the click mapping measure from), and
+            // the bottom row leaves partially, clipped at the budget.
+            //
             // During a reorder hold the budget clip is deferred to
             // `clipReorderOverrun` below, which knows not to clip THROUGH the
-            // slot — this mid-loop clip is blind to it, and when the slot was
-            // the last entry (a move to the end) it took away the only thing
-            // on screen saying where the rows would land.
+            // slot — a blind mid-loop clip took away the only thing on screen
+            // saying where the rows would land when the slot was last.
+            var budget: Int?
             if let rowLineBudget, handler.reorder == nil {
                 let remaining = rowLineBudget - rowLinesEmitted
                 if remaining <= 0 { break }
-                if styledLines.count > remaining {
-                    let dropped = styledLines.count - remaining
-                    styledLines.removeLast(dropped)
-                    pulseFrames?.removeLast(dropped)
-                }
+                budget = remaining
             }
+            let (styledLines, pulseFrames, childRuns) = clipRow(
+                rendered,
+                topClip: rowIndex == origin.offset ? origin.topClip : 0,
+                budget: budget)
             let yStart = rowLines.count
             rowLines.append(contentsOf: styledLines)
             if let pulseFrames {
-                pulseRuns += pulseFrames.enumerated().map { (y: yStart + $0.offset, frames: $0.element) }
+                pulseRuns += pulseFrames.enumerated().map {
+                    RowRun(y: yStart + $0.offset, x: 0, width: rowWidth, frames: $0.element)
+                }
             }
+            pulseRuns += childRuns.map { $0.moved(to: yStart + $0.y) }
             rowLinesEmitted += styledLines.count
             ranges.append((
                 rowIndex: rowIndex,
@@ -1060,7 +1054,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// that are no longer its own.
     private func slideAndWrap(
         rowLines: [String], ranges: [VisibleRowRange],
-        pulseRuns: [(y: Int, frames: [String])],
+        pulseRuns: [RowRun],
         topIndicator: (text: String, animation: AnimatedCellRun?)?,
         bottomIndicator: (text: String, animation: AnimatedCellRun?)?,
         handler: ItemListHandler<SelectionValue>, rowWidth: Int
@@ -1090,7 +1084,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// One run per breathing line, moved by the overscroll slide the way
     /// ``slidRanges`` moves the row bands, and offset past the top indicator.
     private func slidRuns(
-        _ pulseRuns: [(y: Int, frames: [String])], handler: ItemListHandler<SelectionValue>,
+        _ pulseRuns: [RowRun], handler: ItemListHandler<SelectionValue>,
         lineCount: Int, topOffset: Int
     ) -> [AnimatedCellRun] {
         pulseRuns.compactMap { run in
@@ -1101,9 +1095,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 else { return nil }
                 y = moved.yStart
             }
-            guard let first = run.frames.first else { return nil }
+            guard !run.frames.isEmpty else { return nil }
             return AnimatedCellRun(
-                offsetX: 0, offsetY: y + topOffset, width: first.strippedLength,
+                offsetX: run.x, offsetY: y + topOffset, width: run.width,
                 frames: run.frames, clock: .cursor)
         }
     }
@@ -1193,7 +1187,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// The breathing rows' lines and every frame of each, at their position
         /// among `lines` — turned into runs at the end, after the reorder clip
         /// and the overscroll slide (see composeRowLines).
-        var pulseRuns: [(y: Int, frames: [String])] = []
+        var pulseRuns: [RowRun] = []
         var sectionContentIndex = 0
         for (rowIndex, row) in visibleRows {
             if case .header = row.type { sectionContentIndex = 0 }
@@ -1209,38 +1203,22 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 context: context,
                 palette: palette
             )
-            var styledLines = rendered.lines
-            // Clipped alongside the lines, so `pulseFrames[i]` stays the frames
-            // of `styledLines[i]` — see composeRowLines.
-            var pulseFrames = rendered.pulseFrames
-            // Line granularity: the top visible row enters partially (see
-            // composeRowLines)…
-            if rowIndex == origin.offset, origin.topClip > 0 {
-                let clipped = min(origin.topClip, styledLines.count - 1)
-                styledLines.removeFirst(clipped)
-                pulseFrames?.removeFirst(clipped)
-            }
-            // …and the bottom row leaves partially: the bar area's height is
-            // the hard budget, so the list never grows to fit a whole row.
-            // Deferred to the slot-aware `clipReorderOverrun` during a hold —
-            // see composeRowLines.
-            //
-            // Not gated on granularity, unlike the bar-less path: a bar spends
-            // no line on indicators, so its height is a hard budget under
-            // EITHER granularity — the same `showsBar ||` shape the Table uses.
-            // With the whole-row window walk above this can now only fire for a
-            // single row taller than the entire content area, where it keeps
-            // the emitted lines and their published hit bands agreeing instead
-            // of letting the container clamp cut lines the bands still claim.
+            // The top visible row enters partially and the bottom leaves
+            // partially — see `clipRow`, which both paths share. The bar area's
+            // height is a hard budget here whatever the granularity, because a
+            // bar spends no line on indicators (the same `showsBar ||` shape the
+            // Table uses); during a reorder hold it defers to the slot-aware
+            // `clipReorderOverrun`, as `composeRowLines` does.
+            var budget: Int?
             if handler.reorder == nil {
                 let remaining = contentHeight - lines.count
                 if remaining <= 0 { break }
-                if styledLines.count > remaining {
-                    let dropped = styledLines.count - remaining
-                    styledLines.removeLast(dropped)
-                    pulseFrames?.removeLast(dropped)
-                }
+                budget = remaining
             }
+            let (styledLines, pulseFrames, childRuns) = clipRow(
+                rendered,
+                topClip: rowIndex == origin.offset ? origin.topClip : 0,
+                budget: budget)
             let yStart = lines.count
             // An intrinsically over-wide row must not push the bar cell past
             // the interior (where the container clamp would cut the bar off);
@@ -1258,9 +1236,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             for (offset, rowLine) in styledLines.enumerated() {
                 lines.append(fitted(rowLine))
                 if let frames = pulseFrames?[offset] {
-                    pulseRuns.append((y: yStart + offset, frames: frames.map(fitted)))
+                    pulseRuns.append(
+                        RowRun(
+                            y: yStart + offset, x: 0, width: contentRowWidth,
+                            frames: frames.map(fitted)))
                 }
             }
+            // The row's own runs need no `fitted` pass — they were already
+            // rejected in `renderRow` if they reached past the content column,
+            // which is the same boundary the hard clip above enforces.
+            pulseRuns += childRuns.map { $0.moved(to: yStart + $0.y) }
             ranges.append((
                 rowIndex: rowIndex,
                 yStart: yStart,
@@ -1288,6 +1273,42 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             slidRuns(pulseRuns, handler: handler, lineCount: slid.count, topOffset: 0))
     }
 
+    /// A row's lines, its pulse frames and its own runs, clipped TOGETHER.
+    ///
+    /// The three have to move as one: a run is spliced over cells by position,
+    /// so `pulseFrames[i]` must stay the frames of `lines[i]` and a run whose
+    /// line was scrolled away must go with it. An off-by-one here repaints the
+    /// row above or below, every tick, forever — which is why both assembly
+    /// paths call this rather than each doing it, and drifting.
+    ///
+    /// - Parameters:
+    ///   - topClip: Lines scrolled off above the viewport (the top visible row
+    ///     only). Never the whole row: one line always survives.
+    ///   - budget: Lines still available below, or `nil` when the caller clips
+    ///     elsewhere (a reorder hold defers to `clipReorderOverrun`, which knows
+    ///     not to clip through the slot).
+    private func clipRow(
+        _ rendered: RenderedRow, topClip: Int, budget: Int?
+    ) -> (lines: [String], pulseFrames: [[String]]?, childRuns: [RowRun]) {
+        var lines = rendered.lines
+        var pulseFrames = rendered.pulseFrames
+        var childRuns = rendered.childRuns
+        if topClip > 0 {
+            let clipped = min(topClip, lines.count - 1)
+            lines.removeFirst(clipped)
+            pulseFrames?.removeFirst(clipped)
+            childRuns = childRuns.compactMap {
+                $0.y >= clipped ? $0.moved(to: $0.y - clipped) : nil
+            }
+        }
+        if let budget, lines.count > budget {
+            let dropped = lines.count - budget
+            lines.removeLast(dropped)
+            pulseFrames?.removeLast(dropped)
+        }
+        return (lines, pulseFrames, childRuns.filter { $0.y < lines.count })
+    }
+
     /// Clips a reorder frame's overrun — away from the SLOT, never through
     /// it. The exact bug the Table fixed in bafc8de1, whose List halves were
     /// still open: the ordinary budget clips take lines off the TAIL, and
@@ -1299,7 +1320,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// the destination in view), and the ranges shift with it.
     private func clipReorderOverrun(
         lines: inout [String], ranges: inout [VisibleRowRange],
-        pulseRuns: inout [(y: Int, frames: [String])], budget: Int
+        pulseRuns: inout [RowRun], budget: Int
     ) {
         let overrun = lines.count - max(1, budget)
         guard overrun > 0 else { return }
@@ -1308,7 +1329,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // The runs move with the lines they describe, and one clipped away
             // above the viewport goes with it.
             pulseRuns = pulseRuns.compactMap {
-                $0.y >= overrun ? (y: $0.y - overrun, frames: $0.frames) : nil
+                $0.y >= overrun ? $0.moved(to: $0.y - overrun) : nil
             }
             ranges = ranges.compactMap { range in
                 let end = range.yStart + range.height - overrun
@@ -2322,9 +2343,36 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             }
         }
 
-        guard case .pulsing(let cycle, let dim, let bright) = background, cycle.isAnimating else {
-            return RenderedRow(lines: lines(over: background.colorNow), pulseFrames: nil)
+        /// The row content's own runs, moved past the leading pad this renderer
+        /// adds. Dropped where they cannot be trusted:
+        ///
+        /// - **Past the row's width.** A run that would extend beyond the cells
+        ///   the row occupies paints over the scrollbar or the border.
+        /// - **On a badged line**, whose content is truncated to make room —
+        ///   after which a column no longer means what the child said it meant.
+        ///
+        /// A dropped run is not a frozen animation: nothing yet relies on this
+        /// path to move, and everything that animates inside a row still asks
+        /// the run loop to re-render it. It is a missed saving, not a bug.
+        var childRuns: [RowRun] = []
+        for run in row.buffer.animatedCells where run.offsetY < row.buffer.lines.count {
+            guard !(shouldRenderBadge && run.offsetY == 0),
+                run.width > 0, 1 + run.offsetX + run.width <= rowWidth
+            else { continue }
+            childRuns.append(
+                RowRun(y: run.offsetY, x: 1 + run.offsetX, width: run.width, frames: run.frames))
         }
+
+        guard case .pulsing(let cycle, let dim, let bright) = background, cycle.isAnimating else {
+            return RenderedRow(
+                lines: lines(over: background.colorNow), pulseFrames: nil, childRuns: childRuns)
+        }
+        // A breathing row repaints its WHOLE line every tick, so a narrower run
+        // on the same line would be overwritten by it — two animations claiming
+        // one cell, and the wider one wins. The row's own runs are dropped for
+        // the duration, which is the cursor row only, and again costs a saving
+        // rather than an animation: the content is still asking to be
+        // re-rendered.
         // Transposed to line-major, because that is how the runs are asked for:
         // one run per LINE, carrying that line at every point of the cycle.
         let perStep = cycle.colors(dim: dim, bright: bright).map { lines(over: $0) }
@@ -2341,6 +2389,34 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let lines: [String]
         /// `pulseFrames[line][step]`, or `nil` for a row that does not animate.
         let pulseFrames: [[String]]?
+        /// Runs the row's OWN content left behind — a spinner, a blinking
+        /// cursor, a pulsing badge — with `line` an index into ``lines`` and `x`
+        /// already past the row's leading pad. Empty for the overwhelming
+        /// majority of rows.
+        var childRuns: [RowRun] = []
+    }
+
+    /// One animated run positioned within the lines being assembled: `y` is the
+    /// index of the line it sits on, and everything else is what the run will
+    /// carry once that line's final position is known.
+    ///
+    /// Both kinds of run travel as this — a whole-line pulse (`x == 0`, `width`
+    /// the row's width) and a row's own narrow run — because every clip, the
+    /// reorder overrun and the overscroll slide all key on `y` alone. One
+    /// pipeline rather than two that have to be kept in step.
+    private struct RowRun {
+        var y: Int
+        var x: Int
+        var width: Int
+        var frames: [String]
+
+        /// The same run on line `y`. Every clip and slide moves runs vertically
+        /// and nothing else, so this is the only motion any of them needs.
+        func moved(to y: Int) -> Self {
+            var copy = self
+            copy.y = y
+            return copy
+        }
     }
 
     /// The background a row shows for its type and visual state — a fixed
