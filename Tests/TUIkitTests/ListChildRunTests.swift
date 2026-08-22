@@ -35,11 +35,17 @@ struct ListChildRunTests {
 
     /// A two-frame run on the cell the view draws, so a container that carries
     /// it can be told apart from one that drops it.
+    ///
+    /// At a rate deliberately UNLIKE the clock's own, so a container that
+    /// rebuilds the run with the defaults is caught rather than flattered.
+    private static let childRate = 0.11
+
     private func blinker(_ text: String) -> some View {
         Text(text).animatedCells([
             AnimatedCellRun(
                 offsetX: 0, offsetY: 0, width: 1,
-                frames: ["\u{1B}[31m*\u{1B}[0m", "\u{1B}[32m+\u{1B}[0m"], clock: .cursor)
+                frames: ["\u{1B}[31m*\u{1B}[0m", "\u{1B}[32m+\u{1B}[0m"],
+                frameDuration: Self.childRate, clock: .cursor)
         ])
     }
 
@@ -70,6 +76,31 @@ struct ListChildRunTests {
         #expect(
             buffer.animatedCells.count == 3,
             "the List carried \(buffer.animatedCells.count) of 3 rows' runs")
+    }
+
+    /// A run rebuilt by a container must keep the rate it asked for. Dropping
+    /// it retimed a `.dots` spinner in a List from 0.110 s a frame to the
+    /// clock's 0.05 s — 2.2x too fast, and indistinguishable from correct in a
+    /// screenshot.
+    @Test("A carried run keeps its own frame rate")
+    func carriedRunsKeepTheirRate() throws {
+        let (tui, context) = harness()
+        let buffer = render(List { blinker("one"); blinker("two") }, tui: tui, context: context)
+        for run in buffer.animatedCells {
+            #expect(run.frameDuration == Self.childRate, "retimed to \(run.frameDuration)")
+        }
+        #expect(!buffer.animatedCells.isEmpty)
+    }
+
+    @Test("A still run is not carried — it would hold the clock open forever")
+    func stillRunsAreDropped() {
+        let (tui, context) = harness()
+        let still = Text("s").animatedCells([
+            AnimatedCellRun(
+                offsetX: 0, offsetY: 0, width: 1, frames: ["=", "="], clock: .cursor)
+        ])
+        let buffer = render(List { still }, tui: tui, context: context)
+        #expect(buffer.animatedCells.isEmpty, "a run that never changes was carried")
     }
 
     @Test("A carried run lands on the cell the row actually drew")

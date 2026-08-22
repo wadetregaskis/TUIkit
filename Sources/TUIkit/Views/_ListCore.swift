@@ -1002,7 +1002,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             rowLines.append(contentsOf: styledLines)
             if let pulseFrames {
                 pulseRuns += pulseFrames.enumerated().map {
-                    RowRun(y: yStart + $0.offset, x: 0, width: rowWidth, frames: $0.element)
+                    RowRun(
+                        y: yStart + $0.offset, x: 0, width: rowWidth, frames: $0.element,
+                        frameDuration: AnimationClock.cursor.tickInterval, clock: .cursor)
                 }
             }
             pulseRuns += childRuns.map { $0.moved(to: yStart + $0.y) }
@@ -1098,7 +1100,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             guard !run.frames.isEmpty else { return nil }
             return AnimatedCellRun(
                 offsetX: run.x, offsetY: y + topOffset, width: run.width,
-                frames: run.frames, clock: .cursor)
+                frames: run.frames, frameDuration: run.frameDuration, clock: run.clock)
         }
     }
 
@@ -1239,7 +1241,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     pulseRuns.append(
                         RowRun(
                             y: yStart + offset, x: 0, width: contentRowWidth,
-                            frames: frames.map(fitted)))
+                            frames: frames.map(fitted),
+                            frameDuration: AnimationClock.cursor.tickInterval, clock: .cursor))
                 }
             }
             // The row's own runs need no `fitted` pass — they were already
@@ -2356,11 +2359,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// the run loop to re-render it. It is a missed saving, not a bug.
         var childRuns: [RowRun] = []
         for run in row.buffer.animatedCells where run.offsetY < row.buffer.lines.count {
-            guard !(shouldRenderBadge && run.offsetY == 0),
+            // `isAnimating` for the same reason `RenderLoop` filters on it
+            // before keeping a frame's runs: a still run holds the animation
+            // clock open forever to repaint a picture that cannot change.
+            guard run.isAnimating, !(shouldRenderBadge && run.offsetY == 0),
                 run.width > 0, 1 + run.offsetX + run.width <= rowWidth
             else { continue }
             childRuns.append(
-                RowRun(y: run.offsetY, x: 1 + run.offsetX, width: run.width, frames: run.frames))
+                RowRun(
+                    y: run.offsetY, x: 1 + run.offsetX, width: run.width, frames: run.frames,
+                    frameDuration: run.frameDuration, clock: run.clock))
         }
 
         guard case .pulsing(let cycle, let dim, let bright) = background, cycle.isAnimating else {
@@ -2419,6 +2427,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var x: Int
         var width: Int
         var frames: [String]
+        /// The rate the run asked for, and the clock it asked on.
+        ///
+        /// Carried rather than assumed. Rebuilding a child's run with the
+        /// defaults silently retimed it: a `.dots` spinner asks for 0.110 s a
+        /// frame and got the clock's own 0.05 s, so a spinner inside a List ran
+        /// 2.2x too fast — and looked, in a screenshot, exactly right.
+        var frameDuration: Double
+        var clock: AnimationClock
 
         /// The same run on line `y`. Every clip and slide moves runs vertically
         /// and nothing else, so this is the only motion any of them needs.
