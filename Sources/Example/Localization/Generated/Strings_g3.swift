@@ -23,6 +23,7 @@ extension ExampleStrings {
             "page.spinners.editorFrames": "Frames",
             "page.spinners.editorLabel": "Label",
             "page.spinners.editorColour": "Colour",
+            "page.spinners.editorThemeColour": "Theme accent",
             "page.spinners.installing": "Installing...",
 
             // List
@@ -260,6 +261,7 @@ extension ExampleStrings {
             "page.spinners.editorFrames": "Bilder",
             "page.spinners.editorLabel": "Beschriftung",
             "page.spinners.editorColour": "Farbe",
+            "page.spinners.editorThemeColour": "Themenakzent",
             "page.spinners.installing": "Wird installiert …",
 
             // List
@@ -497,6 +499,7 @@ extension ExampleStrings {
             "page.spinners.editorFrames": "Images",
             "page.spinners.editorLabel": "Étiquette",
             "page.spinners.editorColour": "Couleur",
+            "page.spinners.editorThemeColour": "Accent du thème",
             "page.spinners.installing": "Installation…",
 
             // List
@@ -734,6 +737,7 @@ extension ExampleStrings {
             "page.spinners.editorFrames": "Fotogrammi",
             "page.spinners.editorLabel": "Etichetta",
             "page.spinners.editorColour": "Colore",
+            "page.spinners.editorThemeColour": "Accento del tema",
             "page.spinners.installing": "Installazione…",
 
             // List
@@ -971,6 +975,7 @@ extension ExampleStrings {
             "page.spinners.editorFrames": "Fotogramas",
             "page.spinners.editorLabel": "Etiqueta",
             "page.spinners.editorColour": "Color",
+            "page.spinners.editorThemeColour": "Acento del tema",
             "page.spinners.installing": "Instalando…",
 
             // List
@@ -1208,6 +1213,7 @@ extension ExampleStrings {
             "page.spinners.editorFrames": "帧",
             "page.spinners.editorLabel": "标签",
             "page.spinners.editorColour": "颜色",
+            "page.spinners.editorThemeColour": "主题强调色",
             "page.spinners.installing": "正在安装…",
 
             // List
@@ -1445,6 +1451,7 @@ extension ExampleStrings {
             "page.spinners.editorFrames": "コマ",
             "page.spinners.editorLabel": "ラベル",
             "page.spinners.editorColour": "色",
+            "page.spinners.editorThemeColour": "テーマのアクセント",
             "page.spinners.installing": "インストール中…",
 
             // List
