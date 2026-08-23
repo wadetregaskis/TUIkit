@@ -242,30 +242,23 @@ extension AppRunner {
 
         isRunning = true
 
-        // Frame-rate cap: never render more than `frameIntervalNanos` apart, so a
-        // burst of render-requests (e.g. an animation ticking faster than the
-        // cap) coalesces into at most one render per frame. Otherwise purely
-        // demand-driven: with nothing pending the loop blocks until woken, so a
-        // static screen does ZERO renders. Rate from the app (default 60 FPS).
-        let frameIntervalNanos: UInt64 = 1_000_000_000 / UInt64(max(1, app.maxFrameRate))
-        var lastRenderAtNanos = DispatchTime.now().uptimeNanoseconds
-        var pendingRender = false
-        // The soonest instant any live animation grid next fires, or nil when
-        // nothing is animating (the loop then blocks until woken — zero idle work).
-        // Set by `renderFrame` from the scheduler each render.
-        var animationDeadlineNanos: UInt64?
-
-        // Renders one frame and adopts the per-frame state it produces: the time
-        // of this render (for the frame-rate cap) and the next animation deadline.
+        // Owns when a frame is due: never renders two frames closer together than
+        // the app's rate (default 60 FPS), so a burst of render-requests — an
+        // animation ticking faster than the cap, say — coalesces into at most one
+        // render per frame. Otherwise purely demand-driven: with nothing pending
+        // the loop blocks until woken, so a static screen does ZERO renders.
+        var pacer = FramePacer(
+            maxFrameRate: app.maxFrameRate,
+            startedAtNanos: DispatchTime.now().uptimeNanoseconds)
         let renderOneFrame = {
-            (lastRenderAtNanos, animationDeadlineNanos) = self.renderFrame(
+            self.renderFrame(
                 renderer: renderer,
                 cursorTimer: cursorTimer,
                 scheduler: animationScheduler)
         }
 
         // Initial render
-        renderOneFrame()
+        pacer.render(renderOneFrame)
 
         // Main loop
         while isRunning {
@@ -288,7 +281,7 @@ extension AppRunner {
             // Terminal resize (SIGWINCH): rewrite every line at the new size.
             if signals.consumeResizeFlag() {
                 renderer.invalidateDiffCache()
-                pendingRender = true
+                pacer.requestRender()
             }
 
             // Ctrl-Z (SIGTSTP): hand the terminal back to the shell, stop for
@@ -305,7 +298,7 @@ extension AppRunner {
                 renderer.render(pulsePhase: cursorTimer.breathPhase, cursorTimer: cursorTimer)
                 suspendUntilContinued(renderer: renderer)
                 tuiContext.scenePhase = .active
-                pendingRender = true
+                pacer.requestRender()
             }
 
             // Resumed from an *external* SIGSTOP, which cannot be caught, so
@@ -313,7 +306,7 @@ extension AppRunner {
             // screen may have been disturbed while the process slept.
             if signals.consumeContinueFlag() {
                 renderer.invalidateDiffCache()
-                pendingRender = true
+                pacer.requestRender()
             }
 
             // Read + dispatch all pending terminal events (non-blocking),
@@ -326,49 +319,33 @@ extension AppRunner {
 
             // Fold a state change, and any animation tick the cheap path could
             // not serve, into the pending-render flag.
-            pendingRender =
-                foldPendingWork(
-                    alreadyPending: pendingRender, renderer: renderer,
-                    cursorTimer: cursorTimer)
+            if foldPendingWork(
+                alreadyPending: pacer.isRenderPending, renderer: renderer,
+                cursorTimer: cursorTimer) {
+                pacer.requestRender()
+            }
 
             // One monotonic reading drives every decision this iteration — the
             // animation-fired test, the render-now test, and the wait length all
             // share it, so none can disagree about whether a deadline has passed.
             let now = DispatchTime.now().uptimeNanoseconds
 
-            // An animation grid fired (its deadline arrived): a frame is due.
-            if let deadline = animationDeadlineNanos, now >= deadline {
-                pendingRender = true
-            }
-
-            // Render if one is due AND the frame-rate cap has cleared. The render
-            // moves `lastRenderAtNanos` and the next deadline strictly past `now`,
-            // so the wait computed below is always a real positive interval — never
-            // a spurious "block forever" right after a render.
-            if pendingRender, now >= lastRenderAtNanos &+ frameIntervalNanos {
-                renderOneFrame()
-                pendingRender = false
-            }
+            // Render if a frame is due — a state change, or an animation grid
+            // whose deadline `now` has reached — AND the frame-rate cap has
+            // cleared. The render moves both the cap and the next deadline
+            // strictly past `now`, so the wait computed below is always a real
+            // positive interval, never a spurious "block forever".
+            pacer.renderIfDue(now: now, renderOneFrame)
 
             // How long to wait until the next render is due (cap and/or animation
-            // folded into one instant), or nil to block until woken.
-            var waitNanos = Self.waitUntilNextRender(
-                now: now,
-                pendingRender: pendingRender,
-                lastRenderAtNanos: lastRenderAtNanos,
-                frameIntervalNanos: frameIntervalNanos,
-                animationDeadlineNanos: animationDeadlineNanos)
-
-            // While the input parser is holding something that resolves on a
-            // timeout — a lone ESC being disambiguated from a sequence, or a
-            // split sequence awaiting its tail — poll soon so it resolves on a
-            // bounded wall-clock deadline (a prompt Escape) instead of waiting
-            // for unrelated input or an animation tick. Only active while a
-            // partial is buffered, so a genuinely idle screen still blocks with
-            // no wakeups.
-            if terminal.hasPendingInput {
-                waitNanos = min(waitNanos ?? Self.pendingInputPollNanos, Self.pendingInputPollNanos)
-            }
+            // folded into one instant), or nil to block until woken. While the
+            // input parser holds something that resolves on a timeout — a lone
+            // ESC being disambiguated from a sequence, or a split sequence
+            // awaiting its tail — the wait is shortened to a poll, so the partial
+            // resolves on a bounded wall-clock deadline (a prompt Escape) instead
+            // of waiting for unrelated input or an animation tick.
+            let waitNanos = pacer.waitNanos(
+                now: now, pollingPendingInput: terminal.hasPendingInput)
 
             // Block until woken (stdin data or a render-request `wake()`), or —
             // when a render is pending or an animation is due — until that target.
@@ -454,7 +431,7 @@ extension AppRunner {
         renderer: RenderLoop<A>,
         cursorTimer: CursorTimer,
         scheduler: AnimationScheduler
-    ) -> (lastRenderAtNanos: UInt64, animationDeadlineNanos: UInt64?) {
+    ) -> FramePacer.Frame {
         scheduler.beginFrame()
         let frameNow = Int64(bitPattern: DispatchTime.now().uptimeNanoseconds)
         let activity = renderer.render(
@@ -486,42 +463,9 @@ extension AppRunner {
         let effective = renderer.effectiveMouseSupport()
         terminal.applyMouseSupport(effective)
         tuiContext.mouseEventDispatcher.setActiveSupport(effective, isFrameFinal: true)
-        return (DispatchTime.now().uptimeNanoseconds, deadline)
-    }
-
-    /// How long to wait before re-checking the input parser while it holds a
-    /// partial (a lone ESC being disambiguated, a split sequence awaiting its
-    /// tail). At ~25 ms a bare Escape commits within a few of these (~75 ms) —
-    /// well under the "feels instant" threshold — without depending on any other
-    /// activity to wake the loop.
-    fileprivate static var pendingInputPollNanos: UInt64 { 25_000_000 }
-
-    /// The delay until the next render is due, or `nil` to block until woken.
-    ///
-    /// Folds the frame-rate cap and the next animation deadline into ONE instant:
-    /// `pendingRender` wants a frame as soon as the cap clears; an animation wants
-    /// one at its deadline but never sooner than the cap (so `max` there). Waiting
-    /// to this single target — rather than to the deadline, waking, finding the cap
-    /// not yet cleared, and waiting again — is what holds the loop to one wait per
-    /// render. With nothing pending and nothing animating the target is `nil` and
-    /// the loop blocks until woken, so a static screen does no work at all.
-    fileprivate static func waitUntilNextRender(
-        now: UInt64,
-        pendingRender: Bool,
-        lastRenderAtNanos: UInt64,
-        frameIntervalNanos: UInt64,
-        animationDeadlineNanos: UInt64?
-    ) -> UInt64? {
-        let capDeadline = lastRenderAtNanos &+ frameIntervalNanos
-        var target: UInt64?
-        if pendingRender {
-            target = capDeadline
-        }
-        if let deadline = animationDeadlineNanos {
-            let animTarget = max(deadline, capDeadline)
-            target = min(target ?? animTarget, animTarget)
-        }
-        return target.map { $0 > now ? $0 &- now : 0 }
+        return FramePacer.Frame(
+            renderedAtNanos: DispatchTime.now().uptimeNanoseconds,
+            animationDeadlineNanos: deadline)
     }
 
     /// Reads and dispatches every terminal event currently pending (up to a
