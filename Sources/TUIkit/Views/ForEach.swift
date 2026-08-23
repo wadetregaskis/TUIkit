@@ -256,26 +256,14 @@ extension ForEach {
     /// SwiftUI maps the indices for the same reason — so it costs a walk of the
     /// collection, not a render of it.
     ///
-    /// Both accessors re-check the index. A row's binding outlives the frame it
-    /// was made in: an `onDelete`, a `.task` reload, or a sibling row's own
-    /// setter can shorten the collection first, and an unguarded
-    /// `collection[index]` would then trap inside a getter the caller has no
-    /// way to see coming. The captured `fallback` answers reads past the end
-    /// with what the row last held, and writes past the end are dropped.
+    /// `Array(data)` because a `Binding` to a mutable collection IS a
+    /// collection of bindings now (`Binding+Collection.swift`), and that
+    /// subscript already carries the out-of-date-index guard this used to spell
+    /// out for itself — see it for why an element binding cannot simply
+    /// subscript the collection.
     static func elementBindings<C>(_ data: Binding<C>) -> [Binding<C.Element>]
     where C: MutableCollection, C: RandomAccessCollection {
-        data.wrappedValue.indices.map { index in
-            let fallback = data.wrappedValue[index]
-            return Binding(
-                get: {
-                    let collection = data.wrappedValue
-                    return collection.indices.contains(index) ? collection[index] : fallback
-                },
-                set: { newValue in
-                    guard data.wrappedValue.indices.contains(index) else { return }
-                    data.wrappedValue[index] = newValue
-                })
-        }
+        Array(data)
     }
 }
 
