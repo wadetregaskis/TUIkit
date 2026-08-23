@@ -644,40 +644,32 @@ extension ItemListHandler {
     ///     indicator. Each is self-consistent; the doc on ``DrawnBand/yStart``
     ///     describes the List's.
     ///
-    ///     Unifying them was tried and reverted. Shifting `Table` onto the
-    ///     List's origin lands every drop one row out as soon as auto-scroll
-    ///     makes an indicator appear mid-drag — `TableReorderDragTests` and
-    ///     `ReorderAutoScrollSlotTests` catch it.
+    ///     Unifying them was tried and reverted, and the notes that stood here
+    ///     while it was being worked out were wrong twice over. Both invented a
+    ///     conflict out of a scenario that cannot happen, so the reasoning is
+    ///     recorded rather than the conclusions:
     ///
-    ///     What the difference actually is, worked through on the case that
-    ///     breaks: an indicator appears, so every row is drawn one line lower.
-    ///     The pointer has not moved.
+    ///     **An indicator never moves rows on screen.** It appears exactly when
+    ///     the view scrolls away from the top, and the scroll pays for its line:
+    ///     going from offset 0 to 1 moves the rows up one while the indicator
+    ///     pushes them down one, so a given row is drawn on the same line before
+    ///     and after. The "chrome appears and everything shifts" case both notes
+    ///     reasoned from does not occur.
     ///
-    ///     * With a LIVE mouse event, both conventions resolve to the row now
-    ///       under the pointer — the rows moved, so a different one is there.
-    ///       `Table` gets this from `firstRowY` growing by one; `_ListCore`
-    ///       from every band's `yStart` growing by one.
-    ///     * On an auto-scroll frame no event arrives, so
-    ///       `retargetForAutoScroll` replays ``lastReorderContentY``. The List's
-    ///       bands moved, so the replay resolves the row now under the pointer —
-    ///       the same answer a live event gives. Table's bands did not, so the
-    ///       replay resolves the row it was over BEFORE the shift — a different
-    ///       answer from the one Table itself gives for a live event one frame
-    ///       later.
+    ///     So there is nothing to arbitrate. A live event and an auto-scroll
+    ///     replay must resolve the same row across that transition, because
+    ///     nothing on screen changed; any convention in which they differ is
+    ///     wrong, not merely different. Both origins can express that.
     ///
-    ///     So the two conventions are not equally good: the List's replay
-    ///     agrees with its live behaviour and Table's does not. Table's tests
-    ///     assert the disagreeing behaviour, which is why moving it fails them.
-    ///
-    ///     That makes the remaining step a change to an ASSERTED behaviour
-    ///     rather than a refactor — unify the origins, and update those tests
-    ///     to expect what a live event at the same pointer position would do.
-    ///     It should be taken deliberately, with someone looking at a real drag,
-    ///     rather than folded into a tidy-up. (Storing the pointer's screen y
-    ///     instead of a derived content y, which an earlier version of this note
-    ///     proposed as a fix, does not decide it either: it makes the replay
-    ///     equal a live event, which is precisely the behaviour Table's tests
-    ///     currently deny.)
+    ///     Which makes the three reorder tests that fail when `Table` is moved
+    ///     onto the List's origin — `TableReorderDragTests`,
+    ///     `ReorderAutoScrollSlotTests` — a report of an off-by-one in the
+    ///     attempted change, not of a behaviour worth preserving. The suspects,
+    ///     for whoever picks it up: `indicatorLines: lines.count` at the
+    ///     `composeRowLines` publisher counts whatever else has been appended to
+    ///     `lines`, not just the indicator; and the multi-line publisher's
+    ///     `window.showAbove` and the mouse closure's `hasContentAbove` are not
+    ///     the same predicate (`ScrollWindowOrigin.absorbing` separates them).
     ///   - lineCount: how many lines the row area actually has, so a band slid
     ///     or clipped past either edge is trimmed to what is on screen and
     ///     dropped when nothing of it is.
