@@ -649,27 +649,35 @@ extension ItemListHandler {
     ///     makes an indicator appear mid-drag — `TableReorderDragTests` and
     ///     `ReorderAutoScrollSlotTests` catch it.
     ///
-    ///     The cause is not the origins. It is ``lastReorderContentY``: a
-    ///     DERIVED coordinate (`event.y − firstRowY`) stored on one frame and
-    ///     replayed on another, by `retargetForAutoScroll`, when the pointer
-    ///     holds still and the rows move under it. Any change to the geometry
-    ///     between those two frames — chrome appearing is one — invalidates it,
-    ///     and whether it happens to survive depends on whether the origin it
-    ///     was measured from moved with the rows. Table's does; the List's does
-    ///     not. That is the whole of the difference, and it is luck rather than
-    ///     design.
+    ///     What the difference actually is, worked through on the case that
+    ///     breaks: an indicator appears, so every row is drawn one line lower.
+    ///     The pointer has not moved.
     ///
-    ///     So the fix is not to pick an origin, and definitely not to decide
-    ///     anything about what a drop should mean: it is to stop replaying a
-    ///     derived value. Store what the pointer is actually at — its screen y —
-    ///     and convert at USE time with the geometry then in force, which is
-    ///     exactly what a live event does. The handler cannot do that
-    ///     conversion today because it does not know the origin; `publishRowBands`
-    ///     already records `visibleRowBandsOffset` for the same class of reason
-    ///     and is where the origin should be recorded too. With that in place
-    ///     the replay reproduces what a live event at the same screen position
-    ///     would compute, both conventions become correct, and unifying them is
-    ///     free.
+    ///     * With a LIVE mouse event, both conventions resolve to the row now
+    ///       under the pointer — the rows moved, so a different one is there.
+    ///       `Table` gets this from `firstRowY` growing by one; `_ListCore`
+    ///       from every band's `yStart` growing by one.
+    ///     * On an auto-scroll frame no event arrives, so
+    ///       `retargetForAutoScroll` replays ``lastReorderContentY``. The List's
+    ///       bands moved, so the replay resolves the row now under the pointer —
+    ///       the same answer a live event gives. Table's bands did not, so the
+    ///       replay resolves the row it was over BEFORE the shift — a different
+    ///       answer from the one Table itself gives for a live event one frame
+    ///       later.
+    ///
+    ///     So the two conventions are not equally good: the List's replay
+    ///     agrees with its live behaviour and Table's does not. Table's tests
+    ///     assert the disagreeing behaviour, which is why moving it fails them.
+    ///
+    ///     That makes the remaining step a change to an ASSERTED behaviour
+    ///     rather than a refactor — unify the origins, and update those tests
+    ///     to expect what a live event at the same pointer position would do.
+    ///     It should be taken deliberately, with someone looking at a real drag,
+    ///     rather than folded into a tidy-up. (Storing the pointer's screen y
+    ///     instead of a derived content y, which an earlier version of this note
+    ///     proposed as a fix, does not decide it either: it makes the replay
+    ///     equal a live event, which is precisely the behaviour Table's tests
+    ///     currently deny.)
     ///   - lineCount: how many lines the row area actually has, so a band slid
     ///     or clipped past either edge is trimmed to what is on screen and
     ///     dropped when nothing of it is.
