@@ -645,26 +645,31 @@ extension ItemListHandler {
     ///     describes the List's.
     ///
     ///     Unifying them was tried and reverted. Shifting `Table` onto the
-    ///     List's origin lands every drop ONE ROW EARLY as soon as auto-scroll
+    ///     List's origin lands every drop one row out as soon as auto-scroll
     ///     makes an indicator appear mid-drag — `TableReorderDragTests` and
     ///     `ReorderAutoScrollSlotTests` catch it.
     ///
-    ///     The value that makes it fail is ``lastReorderContentY``: the one
-    ///     band-space position carried ACROSS frames, stored by `dragReorder`
-    ///     and replayed by `retargetForAutoScroll` when the pointer holds still
-    ///     and the rows move under it. Three sites in all.
+    ///     The cause is not the origins. It is ``lastReorderContentY``: a
+    ///     DERIVED coordinate (`event.y − firstRowY`) stored on one frame and
+    ///     replayed on another, by `retargetForAutoScroll`, when the pointer
+    ///     holds still and the rows move under it. Any change to the geometry
+    ///     between those two frames — chrome appearing is one — invalidates it,
+    ///     and whether it happens to survive depends on whether the origin it
+    ///     was measured from moved with the rows. Table's does; the List's does
+    ///     not. That is the whole of the difference, and it is luck rather than
+    ///     design.
     ///
-    ///     Which makes the blocker a question about MEANING rather than
-    ///     arithmetic, and it should be answered before the next attempt.
-    ///     Table's row-anchored origin is measured from the first row LINE, so
-    ///     an indicator appearing mid-drag moves the rows and the origin
-    ///     together and a still pointer keeps the row it was over. The List's
-    ///     interior-anchored origin does not move, so the same pointer is over
-    ///     the row ABOVE — which is arguably what the screen now shows. The
-    ///     existing tests assert the first reading. Whether a drop should
-    ///     follow the row it was over or the cell the pointer is on is a
-    ///     product decision, and until it is made, "unify the origins" is not
-    ///     a well-posed change.
+    ///     So the fix is not to pick an origin, and definitely not to decide
+    ///     anything about what a drop should mean: it is to stop replaying a
+    ///     derived value. Store what the pointer is actually at — its screen y —
+    ///     and convert at USE time with the geometry then in force, which is
+    ///     exactly what a live event does. The handler cannot do that
+    ///     conversion today because it does not know the origin; `publishRowBands`
+    ///     already records `visibleRowBandsOffset` for the same class of reason
+    ///     and is where the origin should be recorded too. With that in place
+    ///     the replay reproduces what a live event at the same screen position
+    ///     would compute, both conventions become correct, and unifying them is
+    ///     free.
     ///   - lineCount: how many lines the row area actually has, so a band slid
     ///     or clipped past either edge is trimmed to what is on screen and
     ///     dropped when nothing of it is.
