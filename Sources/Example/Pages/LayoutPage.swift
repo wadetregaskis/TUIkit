@@ -447,6 +447,34 @@ struct LayoutPage: View {
                             .offset(x: Int(zstackTopOffset))
                     }
                     .border(.brightBlack)
+
+                    // 5 — Backgrounds, which is where "the last child to draw
+                    // a cell owns it" stops being an abstraction. Both layers
+                    // paint a background across their whole box, including the
+                    // cells their text does not use, so the top layer's colour
+                    // arrives as a solid block with a hard edge — no tint of
+                    // the layer beneath anywhere in it, and no seam. Slide it
+                    // and the lower background reappears cell for cell exactly
+                    // where the upper one stops.
+                    Text("page.layout.zstack.case5")
+                        .foregroundStyle(.palette.foregroundTertiary)
+                    ZStack(alignment: .leading) {
+                        // The lower block's own label sits at its far end,
+                        // beyond anything the upper block can reach, so what
+                        // moves in this demo is the colours rather than a word
+                        // being eaten a letter at a time.
+                        Text("page.layout.zstack.under")
+                            .padding(.trailing, 1)
+                            .frame(width: 36, alignment: .trailing)
+                            .foregroundStyle(.palette.background)
+                            .background(.palette.info)
+                        Text("page.layout.zstack.over")
+                            .frame(width: 12, alignment: .center)
+                            .foregroundStyle(.palette.background)
+                            .background(.palette.warning)
+                            .offset(x: Int(zstackTopOffset))
+                    }
+                    .border(.brightBlack)
                 }
             }
 
