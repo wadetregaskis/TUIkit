@@ -196,6 +196,7 @@ type_name:
     - _PresentationDetentsView
     - _InteractiveDismissView
     - _ListRowInsetsView
+    - _RowEditRestrictionView
     - _ListRowBackgroundView
     - _ListRowColorView
     - _OpacityView

@@ -349,7 +349,14 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// - Returns: Whether a row was deleted. `false` leaves Delete / Backspace
     ///   to fall through, so a plain list never swallows either.
     private func deleteFocusedRow() -> Bool {
-        guard let onDelete, focusedIndex >= 0, focusedIndex < itemCount else { return false }
+        guard let onDelete, focusedIndex >= 0, focusedIndex < itemCount,
+            // `.deleteDisabled()` on the row. Returning FALSE rather than true:
+            // a refused row must leave Delete alone entirely, so it falls
+            // through to whatever else wants the key — exactly as it does in a
+            // list that is not deletable at all. Swallowing it would make a
+            // locked row silently eat a shortcut.
+            !deleteDisabledRows.contains(focusedIndex)
+        else { return false }
         let offset = focusedIndex
         onDelete(IndexSet(integer: offset))
         // The row below slides up into this slot; keep focus on it, clamped to
@@ -358,6 +365,19 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
         ensureFocusedItemVisible()
         return true
     }
+
+    /// Data offsets whose rows carry `.deleteDisabled()`, republished each
+    /// frame by the `List` from what the drawn rows reported.
+    ///
+    /// Absence means allowed. A row that never rendered cannot appear here, and
+    /// does not need to: the only row Delete can name is the focused one, and
+    /// the focus machinery keeps that on screen.
+    var deleteDisabledRows: Set<Int> = []
+
+    /// Data offsets whose rows carry `.moveDisabled()`. Same publication and
+    /// the same reasoning as ``deleteDisabledRows`` — a drag can only grab a
+    /// row it can point at.
+    var moveDisabledRows: Set<Int> = []
 
     /// The `.onDelete(perform:)` action from an editable `ForEach`, if any:
     /// pressing Delete / Backspace on the focused row invokes it with that

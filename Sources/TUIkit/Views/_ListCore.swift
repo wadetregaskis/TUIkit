@@ -283,6 +283,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             rowContext.availableWidth = max(
                 1, context.availableWidth - borderOverhead - listRowGutter)
         }
+        // Where the rows state the edits they refuse, gathered as they render.
+        // Installed BEFORE extraction because the row thunks capture this
+        // context and the handler does not exist yet; the results are handed to
+        // the handler once the visible rows have been materialised.
+        let editRestrictions = RowEditRestrictions()
+        rowContext.environment.listRowEditRestrictions = editRestrictions
         let source = extractRows(from: content, context: rowContext)
 
         // Vertical chrome around the scrollable content; reserve
@@ -319,6 +325,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         } else {
             let result = buildPopulatedContent(
                 source: source,
+                editRestrictions: editRestrictions,
                 context: context,
                 stateStorage: stateStorage,
                 palette: palette,
@@ -404,6 +411,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// clicks can be translated back to a row index).
     private func buildPopulatedContent(
         source: RowSource<SelectionValue>,
+        /// Where the rows report the edits they refuse. Filled as they render,
+        /// so it is only meaningful after the visible window is materialised.
+        editRestrictions: RowEditRestrictions,
         context: RenderContext,
         stateStorage: StateStorage,
         palette: any Palette,
@@ -481,6 +491,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // A `.dimmed` / `.cursor` drag rewrites the rows here, AFTER the
         // window walk: the drag shows an extra row that is not in the data, so
         // it must not take part in choosing which data rows are visible.
+        // The rows have rendered by now, so whatever they refused is known.
+        // Only rows that were DRAWN can have reported, which is exactly the set
+        // an edit can name: Delete acts on the focused row and a drag on the
+        // grabbed one, and both are on screen.
+        handler.deleteDisabledRows = editRestrictions.deleteDisabled
+        handler.moveDisabledRows = editRestrictions.moveDisabled
         visibleRows = decorateForReorder(
             visibleRows, handler: handler, context: context, palette: palette)
 

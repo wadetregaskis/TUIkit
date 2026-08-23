@@ -783,6 +783,14 @@ extension ItemListHandler {
     /// The row also takes the keyboard cursor, so the user can see what they
     /// have hold of before moving anything.
     func beginReorder(grabbing offset: Int) {
+        // `.moveDisabled()` on the row: no gesture starts, so there is no
+        // floating preview and nothing to release. The focus still moves,
+        // because a press is also a click and clicking a locked row should
+        // select it like any other.
+        guard !moveDisabledRows.contains(offset) else {
+            focusedIndex = offset
+            return
+        }
         reorder = RowReorder(grabbedOffset: offset, held: heldRows(grabbing: offset), active: false)
         focusedIndex = offset
     }
