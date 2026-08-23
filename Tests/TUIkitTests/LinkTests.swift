@@ -189,4 +189,56 @@ struct LinkTests {
             "the SF Symbol glyph must not be underlined: \(throughSymbol.debugDescription)")
     }
     #endif
+
+    // MARK: - OpenURLAction.Result
+
+    /// The point of a handler returning something: it can DECLINE. An app
+    /// intercepting its own scheme has to be able to hand every other URL on
+    /// without re-implementing the system opener.
+    @Test("A handler can handle one scheme and hand the rest to the system")
+    func systemActionDefers() {
+        let sink = URLSink()
+        let action = OpenURLAction { url -> OpenURLAction.Result in
+            sink.url = url
+            return url.scheme == "myapp" ? .handled : .systemAction
+        }
+
+        // Asked of the action, not recomputed here: deferring actually LAUNCHES
+        // the system opener, so `result(for:)` is the seam that lets a case see
+        // the decision without one.
+        let mine = URL(string: "myapp://thing")!
+        #expect(action.result(for: mine) == .handled)
+        #expect(sink.url == mine, "the handler saw the URL it was asked about")
+
+        let theirs = URL(string: "https://example.com")!
+        #expect(action.result(for: theirs) == .systemAction)
+        #expect(sink.url == theirs)
+    }
+
+    @Test("The default action is the system opener, stated as such")
+    func defaultDefersToTheSystem() {
+        let action = EnvironmentValues().openURL
+        #expect(action.result(for: URL(string: "https://example.com")!) == .systemAction)
+    }
+
+    @Test("The three dispositions are distinct, and a rewrite carries its URL")
+    func resultCases() {
+        #expect(OpenURLAction.Result.handled != OpenURLAction.Result.discarded)
+        #expect(OpenURLAction.Result.handled != OpenURLAction.Result.systemAction)
+        #expect(OpenURLAction.Result.discarded != OpenURLAction.Result.systemAction)
+        let rewritten = URL(string: "https://example.com/canonical")!
+        #expect(OpenURLAction.Result.systemAction(rewritten) != .systemAction)
+        #expect(OpenURLAction.Result.systemAction(rewritten) == .systemAction(rewritten))
+    }
+
+    /// The Void handler form is TUIkit's own, and must keep winning for a
+    /// closure that returns nothing — otherwise every existing override
+    /// stops compiling.
+    @Test("A Void handler is still a handler")
+    func voidHandlerStillCompiles() {
+        let sink = URLSink()
+        let action = OpenURLAction { sink.url = $0 }
+        action(URL(string: "https://example.com")!)
+        #expect(sink.url?.absoluteString == "https://example.com")
+    }
 }
