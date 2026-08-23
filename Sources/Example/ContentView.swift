@@ -188,7 +188,6 @@ struct ContentView: View {
             // repeating them in the status bar would be noise.
             MainMenuPage(currentPage: $currentPage, menuSelection: $menuSelection)
                 .statusBarItems {
-                    StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "status.nav")
                     StatusBarItem(shortcut: Shortcut.enter, label: "status.select", key: .enter)
                 }
         case .textStyles:

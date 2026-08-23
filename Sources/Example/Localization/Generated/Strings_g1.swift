@@ -208,7 +208,6 @@ extension ExampleStrings {
             "page.overlays.modal.line3": "No Alert or Dialog — just any View!",
             "page.overlays.status.close": "close",
             "page.overlays.status.back": "back",
-            "page.overlays.status.nav": "nav",
             "page.overlays.status.show": "show",
 
             // page.layout
@@ -467,7 +466,6 @@ extension ExampleStrings {
             "page.overlays.modal.line3": "Kein Alert oder Dialog – einfach eine beliebige View!",
             "page.overlays.status.close": "schließen",
             "page.overlays.status.back": "zurück",
-            "page.overlays.status.nav": "navig.",
             "page.overlays.status.show": "zeigen",
 
             // page.layout
@@ -726,7 +724,6 @@ extension ExampleStrings {
             "page.overlays.modal.line3": "Ni Alert ni Dialog — juste une View quelconque !",
             "page.overlays.status.close": "fermer",
             "page.overlays.status.back": "retour",
-            "page.overlays.status.nav": "navig.",
             "page.overlays.status.show": "afficher",
 
             // page.layout
@@ -985,7 +982,6 @@ extension ExampleStrings {
             "page.overlays.modal.line3": "Né Alert né Dialog — solo una View qualsiasi!",
             "page.overlays.status.close": "chiudi",
             "page.overlays.status.back": "indietro",
-            "page.overlays.status.nav": "navig.",
             "page.overlays.status.show": "mostra",
 
             // page.layout
@@ -1244,7 +1240,6 @@ extension ExampleStrings {
             "page.overlays.modal.line3": "Ni Alert ni Dialog: ¡solo cualquier View!",
             "page.overlays.status.close": "cerrar",
             "page.overlays.status.back": "atrás",
-            "page.overlays.status.nav": "naveg.",
             "page.overlays.status.show": "mostrar",
 
             // page.layout
@@ -1503,7 +1498,6 @@ extension ExampleStrings {
             "page.overlays.modal.line3": "没有 Alert 或 Dialog — 任意 View 即可！",
             "page.overlays.status.close": "关闭",
             "page.overlays.status.back": "返回",
-            "page.overlays.status.nav": "导航",
             "page.overlays.status.show": "显示",
 
             // page.layout
@@ -1762,7 +1756,6 @@ extension ExampleStrings {
             "page.overlays.modal.line3": "Alert も Dialog も不要 — 任意の View でOK！",
             "page.overlays.status.close": "閉じる",
             "page.overlays.status.back": "戻る",
-            "page.overlays.status.nav": "移動",
             "page.overlays.status.show": "表示",
 
             // page.layout

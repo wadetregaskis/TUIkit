@@ -177,7 +177,6 @@ struct OverlaysPage: View {
                 StatusBarItem(shortcut: Shortcut.escape, label: "page.overlays.status.back") {
                     onBack()
                 },
-                StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "page.overlays.status.nav"),
                 StatusBarItem(shortcut: Shortcut.enter, label: "page.overlays.status.show"),
             ]
         }
