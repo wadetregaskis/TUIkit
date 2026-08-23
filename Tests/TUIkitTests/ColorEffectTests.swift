@@ -4,6 +4,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -138,5 +139,18 @@ struct ColorEffectTests {
         let end: Double = Angle.degrees(90).animatableData
         angle.animatableData = start + (end - start) * 0.5
         #expect(abs(angle.degrees - 45) < 1e-9)
+    }
+
+    /// `Angle` is `Codable`, as SwiftUI's is — so source that persists one
+    /// compiles. Round-tripped rather than compared against a literal payload:
+    /// the encoded shape is each framework's own business, and pinning JSON
+    /// here would be pinning a synthesized detail.
+    @Test("An Angle survives a Codable round trip")
+    func angleRoundTrips() throws {
+        let original = Angle(degrees: 137.5)
+        let data = try JSONEncoder().encode(original)
+        let restored = try JSONDecoder().decode(Angle.self, from: data)
+        #expect(restored == original)
+        #expect(abs(restored.degrees - 137.5) < 1e-9)
     }
 }

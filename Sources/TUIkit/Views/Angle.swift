@@ -15,7 +15,7 @@ import TUIkitCore
 /// angular. A hue is a position on a wheel, and ``View/hueRotation(_:)`` moves
 /// it — which is a real effect on a character grid, unlike the geometric
 /// rotations SwiftUI uses this type for.
-public struct Angle: Sendable, Equatable, Hashable, Comparable {
+public struct Angle: Sendable, Equatable, Hashable, Comparable, Codable {
     /// The angle in radians.
     public var radians: Double
 
@@ -55,6 +55,17 @@ public struct Angle: Sendable, Equatable, Hashable, Comparable {
 
     public static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.radians < rhs.radians
+    }
+
+    /// `Codable` over the RADIANS, the one stored property.
+    ///
+    /// SwiftUI's `Angle` is `Codable` too, so source that persists one
+    /// compiles; the encoded shape is not an interchange format either way —
+    /// each framework encodes what it stores — so this is the synthesized
+    /// conformance under a name, spelled out only to say which of the two
+    /// properties is the stored one.
+    private enum CodingKeys: String, CodingKey {
+        case radians
     }
 }
 
