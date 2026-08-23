@@ -365,17 +365,6 @@ extension AppRunner {
 // MARK: - Private Helpers
 
 extension AppRunner {
-    /// Renders one frame and returns the per-frame state the run loop tracks: the
-    /// timestamp of this render (for the frame-rate cap) and the soonest instant
-    /// any live animation grid next fires (`nil` if nothing is animating).
-    ///
-    /// The scheduler is fenced begin…end around the render: animating views
-    /// re-declare their rates *during* the render (via `requestAnimation`), then
-    /// the next-firing query reads the union of every still-live grid. Both the
-    /// grids and the query use `frameNow`, so "soonest firing after this frame" is
-    /// exact integer arithmetic, not a clock that drifted between the two. Also
-    /// republishes the demand-driven pulse/cursor clocks (kept ticking only while
-    /// a frame consumed them) and the mouse-tracking mode.
     /// Folds this iteration's reasons to render into one flag.
     ///
     /// A state change always needs a frame. An animation tick usually does not:
@@ -427,6 +416,17 @@ extension AppRunner {
         return served
     }
 
+    /// Renders one frame and returns the per-frame state the run loop tracks: the
+    /// timestamp of this render (for the frame-rate cap) and the soonest instant
+    /// any live animation grid next fires (`nil` if nothing is animating).
+    ///
+    /// The scheduler is fenced begin…end around the render: animating views
+    /// re-declare their rates *during* the render (via `requestAnimation`), then
+    /// the next-firing query reads the union of every still-live grid. Both the
+    /// grids and the query use `frameNow`, so "soonest firing after this frame" is
+    /// exact integer arithmetic, not a clock that drifted between the two. Also
+    /// republishes the demand-driven pulse/cursor clocks (kept ticking only while
+    /// a frame consumed them) and the mouse-tracking mode.
     fileprivate func renderFrame(
         renderer: RenderLoop<A>,
         cursorTimer: CursorTimer,
