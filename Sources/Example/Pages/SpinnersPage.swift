@@ -33,15 +33,15 @@ struct SpinnersPage: View {
             // track editor use.
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 4) {
-                    stylesCatalogue(columns: 2)
+                    stylesCatalogue(columns: 2, color: editedColor, frames: editedFrames)
                     editorAndColour
                 }
                 HStack(alignment: .top, spacing: 4) {
-                    stylesCatalogue(columns: 1)
+                    stylesCatalogue(columns: 1, color: editedColor, frames: editedFrames)
                     editorAndColour
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    stylesCatalogue(columns: 1)
+                    stylesCatalogue(columns: 1, color: editedColor, frames: editedFrames)
                     editorAndColour
                 }
             }
@@ -62,19 +62,21 @@ struct SpinnersPage: View {
     /// spinner is a live animation, and two lists of twelve would be
     /// twenty-four clocks where twelve will do.
     @ViewBuilder
-    private func stylesCatalogue(columns: Int) -> some View {
+    private func stylesCatalogue(columns: Int, color: Color?, frames: String) -> some View {
         // The catalogue's custom row IS the editor's frame field: one custom
         // spinner on the page, edited in one place, rather than a second one
         // frozen at whatever the field happened to say when this list was
         // written.
-        let frames = editedFrames
-        // The colour is part of each row's IDENTITY, not just of its drawing.
-        // A row whose id does not move is a row the value memo may serve from
-        // the last frame's buffer, and the colour it reads is captured from the
-        // page rather than passed in as data — so without this the catalogue
-        // went on showing the theme's accent while every other spinner on the
-        // page had changed.
-        let colorKey = editorUsesThemeColor ? "theme" : editorColorHex
+        //
+        // Both the colour and the frames travel INSIDE the elements, and the
+        // columns are elements too. `ForEach`'s value memo keys on the element,
+        // and its documented hole is exactly the shape this used to be:
+        // `ForEach(0..<columns)` with the rows built from data captured outside
+        // the closure. The column's buffer was then reused for a column whose
+        // contents had changed — the catalogue went on showing the theme's
+        // accent, and the previous frame sequence, while every other spinner on
+        // the page had followed the editor.
+        let colorKey = color.map { String(describing: $0) } ?? "theme"
         let styles: [CatalogueEntry] = [
             ("dots", SpinnerStyle.dots), ("line", .line), ("bouncing", .bouncing),
             ("pie", .pie), ("beachball", .beachball), ("box", .box), ("bars", .bars),
@@ -82,16 +84,20 @@ struct SpinnersPage: View {
             ("clock", .clock), ("custom(\"\(frames)\")", .custom(frames)),
         ].map { CatalogueEntry(name: $0.0, style: $0.1, colorKey: colorKey) }
         let perColumn = (styles.count + columns - 1) / columns
+        let dealt = (0..<columns).map { column in
+            CatalogueColumn(
+                index: column,
+                entries: Array(
+                    styles[
+                        min(column * perColumn, styles.count)
+                            ..< min((column + 1) * perColumn, styles.count)]))
+        }
         DemoSection("page.spinners.styles") {
             HStack(alignment: .top, spacing: 3) {
-                ForEach(Array(0..<columns), id: \.self) { column in
+                ForEach(dealt) { column in
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(
-                            Array(styles[
-                                min(column * perColumn, styles.count)
-                                    ..< min((column + 1) * perColumn, styles.count)])
-                        ) { entry in
-                            spinnerRow(entry.name, entry.style)
+                        ForEach(column.entries) { entry in
+                            spinnerRow(entry.name, entry.style, color: color)
                         }
                     }
                 }
@@ -197,26 +203,38 @@ struct SpinnersPage: View {
 
     /// One row of the style catalogue. Its `id` carries the colour so a colour
     /// change moves it — see `stylesCatalogue(columns:)`.
-    private struct CatalogueEntry: Identifiable {
+    private struct CatalogueEntry: Identifiable, Equatable {
         let name: String
         let style: SpinnerStyle
         let colorKey: String
         var id: String { "\(name)|\(colorKey)" }
+
+        /// The row is what its id says it is — which is what lets the value
+        /// memo tell a changed row from an unchanged one.
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    }
+
+    /// One column of the catalogue, carrying its own rows.
+    ///
+    /// The column has to BE its contents rather than an index into them: an
+    /// index never changes, so a memo keyed on one serves the column it built
+    /// the first time, whatever the rows have become since.
+    private struct CatalogueColumn: Identifiable, Equatable {
+        let index: Int
+        let entries: [CatalogueEntry]
+        var id: String { "\(index)|\(entries.map(\.id).joined(separator: ","))" }
+
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
     }
 
     /// A `[spinner  style-name]` row for the style catalogue, in the colour the
     /// editor is on — "apply to all the examples on the page" being what makes
     /// a colour choice something you can actually judge.
-    ///
-    /// - Note: the catalogue currently redraws a frame late: the rows are
-    ///   rebuilt with the new colour (and the new frame sequence) but the
-    ///   buffer on screen is the previous one until the page is left and
-    ///   re-entered. Not this page's doing — the same lag appears with a plain
-    ///   `Text` in the row — and tracked separately.
+
     @ViewBuilder
-    private func spinnerRow(_ name: String, _ style: SpinnerStyle) -> some View {
+    private func spinnerRow(_ name: String, _ style: SpinnerStyle, color: Color?) -> some View {
         HStack(spacing: 1) {
-            Spinner(style: style, color: editedColor)
+            Spinner(style: style, color: color)
             Text(name).foregroundStyle(.palette.foregroundSecondary)
         }
     }
