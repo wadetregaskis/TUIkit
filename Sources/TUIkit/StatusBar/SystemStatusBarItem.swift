@@ -55,7 +55,27 @@ public enum SystemStatusBarItem {
         )
     }
 
+    /// The Escape entry, labelled by whatever claimed the key this frame.
+    ///
+    /// Informational: it carries no action, so it displays and does not
+    /// intercept — the key goes on to whatever claimed it, through the ordinary
+    /// chain. That is the whole point of the split. A page that wants Escape to
+    /// DO something publishes its own item (`⎋ back`), which wins the shortcut
+    /// dedup and keeps its own action.
+    public static func escape(label: String) -> StatusBarItem {
+        StatusBarItem(shortcut: Shortcut.escape, label: label, order: .escapeKey)
+    }
+
+    /// The Return entry, labelled by whatever claimed the key this frame. See
+    /// ``escape(label:)`` — informational for the same reason.
+    public static func returnKey(label: String) -> StatusBarItem {
+        StatusBarItem(shortcut: Shortcut.enter, label: label, order: .returnKey)
+    }
+
     /// All system items in their default order.
+    ///
+    /// The two common keys are absent: they exist only while something has said
+    /// what they do, so there is no static form of them.
     public static var all: [StatusBarItem] {
         [quit, appearance, theme]
     }

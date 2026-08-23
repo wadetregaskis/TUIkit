@@ -221,11 +221,12 @@ struct OverlaysPage: View {
     /// too.
     private var statusBarItems: [any StatusBarItemProtocol] {
         guard !isPresenting else { return [] }
+        // Escape only. The Return entry is the bar's own, labelled by whatever
+        // holds the focus — which is what "show" was trying and failing to be.
         return [
             StatusBarItem(shortcut: Shortcut.escape, label: "page.overlays.status.back") {
                 onBack()
-            },
-            StatusBarItem(shortcut: Shortcut.enter, label: "page.overlays.status.show"),
+            }
         ]
     }
 

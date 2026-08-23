@@ -34,6 +34,12 @@ struct StatusBarSystemItemsModifier<Content: View>: View {
     /// Whether to show the appearance item (`a`).
     let showAppearance: Bool
 
+    /// Whether the bar carries a Return entry when something claims the key.
+    let showReturn: Bool
+
+    /// Whether the bar carries an Escape entry when something claims the key.
+    let showEscape: Bool
+
     var body: Never {
         fatalError("StatusBarSystemItemsModifier renders via Renderable")
     }
@@ -48,6 +54,8 @@ extension StatusBarSystemItemsModifier: Renderable {
         }
         statusBar.showThemeItem = showTheme
         statusBar.showAppearanceItem = showAppearance
+        statusBar.showReturnItem = showReturn
+        statusBar.showEscapeItem = showEscape
 
         return TUIkit.renderToBuffer(content, context: renderContext)
     }
@@ -86,15 +94,32 @@ extension View {
     /// - Parameters:
     ///   - theme: Whether to show the theme switcher (`t theme`). Default is `false`.
     ///   - appearance: Whether to show the appearance switcher (`a appearance`). Default is `false`.
+    ///   - returnKey: Whether the bar carries a Return entry while something
+    ///     claims the key. Default is `true`.
+    ///   - escapeKey: Whether the bar carries an Escape entry while something
+    ///     claims the key. Default is `true`.
     /// - Returns: A view with the configured system items.
+    ///
+    /// Return and Escape are on by default because they are the two keys common
+    /// enough, and special enough, to be worth a permanent place — and because
+    /// what they do changes with the focus, so a bar that omits them is a bar
+    /// that never says. They appear only while something has said what they do
+    /// this frame; see ``StatusBarState/showEscapeItem``.
+    ///
+    /// Turning either off is a display decision and nothing more. The keys go on
+    /// working exactly as they did.
     public func statusBarSystemItems(
         theme: Bool = false,
-        appearance: Bool = false
+        appearance: Bool = false,
+        returnKey: Bool = true,
+        escapeKey: Bool = true
     ) -> some View {
         StatusBarSystemItemsModifier(
             content: self,
             showTheme: theme,
-            showAppearance: appearance
+            showAppearance: appearance,
+            showReturn: returnKey,
+            showEscape: escapeKey
         )
     }
 }

@@ -90,6 +90,23 @@ public final class StatusBarState: @unchecked Sendable {
     /// Default is `false`.
     public var showThemeItem: Bool = false
 
+    /// Whether the bar carries an Escape entry when something claims the key.
+    ///
+    /// Return and Escape are the two keys common enough — and special
+    /// enough — to be worth a permanent place, so both are on by default. An
+    /// app that wants the space back turns them off with
+    /// ``View/statusBarSystemItems(theme:appearance:returnKey:escapeKey:)``.
+    ///
+    /// Presence only. Turning this off changes nothing about what the key
+    /// DOES: the claim that labels the entry is also what routes Escape to the
+    /// surface that claimed it, and that is independent of whether the bar
+    /// shows anything.
+    public var showEscapeItem: Bool = true
+
+    /// Whether the bar carries a Return entry when something claims the key.
+    /// See ``showEscapeItem``.
+    public var showReturnItem: Bool = true
+
     /// Controls when the quit shortcut is active.
     ///
     /// - `.always`: Quit works from any screen (default).
@@ -234,6 +251,21 @@ public final class StatusBarState: @unchecked Sendable {
         }
         if showAppearanceItem { items.append(SystemStatusBarItem.appearance) }
         if showThemeItem { items.append(SystemStatusBarItem.theme) }
+        // The two common keys appear only while something has said what they
+        // do this frame — a focused control's verb, a presented surface's
+        // claim. Nothing said, nothing shown: an entry for a key that will not
+        // be handled is worse than no entry, and the bar cannot tell what an
+        // undeclared `onKeyPress` closure would do with the key.
+        //
+        // A page that publishes its OWN escape or return item wins the shortcut
+        // dedup below and keeps its action; these are the fallback for a page
+        // that has not.
+        if showEscapeItem, let label = escapeLabelOverride {
+            items.append(SystemStatusBarItem.escape(label: label))
+        }
+        if showReturnItem, let label = activationLabelOverride {
+            items.append(SystemStatusBarItem.returnKey(label: label))
+        }
         return items
     }
 

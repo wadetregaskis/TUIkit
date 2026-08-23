@@ -187,9 +187,9 @@ struct ContentView: View {
             // `.keyboardShortcut`, and the menu lists each next to its title —
             // repeating them in the status bar would be noise.
             MainMenuPage(currentPage: $currentPage, menuSelection: $menuSelection)
-                .statusBarItems {
-                    StatusBarItem(shortcut: Shortcut.enter, label: "status.select", key: .enter)
-                }
+                // No Return item of its own: the bar carries one by default,
+                // labelled by whatever holds the focus — which on this page is
+                // a menu row, so it reads "choose".
         case .textStyles:
             TextStylesPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .colors:

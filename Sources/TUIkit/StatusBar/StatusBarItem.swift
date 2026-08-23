@@ -78,6 +78,14 @@ public struct StatusBarItemOrder: Comparable, Sendable {
 
     /// Order for the quit item (leftmost of system items).
     /// Appears as: `[...user items] [q quit] [a appearance] [t theme]`
+    /// The two common keys the status bar carries by default, ahead of the
+    /// app-wide ones: they change meaning with the focus, so they read best
+    /// nearest the page's own items.
+    public static let escapeKey = Self(850)
+
+    /// See ``escapeKey``.
+    public static let returnKey = Self(860)
+
     public static let quit = Self(900)
 
     /// Order for the appearance item (middle system item).

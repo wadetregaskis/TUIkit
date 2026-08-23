@@ -390,16 +390,15 @@ struct StatusBarItemsModifierTests {
         #expect(rendered.components(separatedBy: "⎋").count == 2)
     }
 
-    @Test("An escape claim with nothing to rename shows an entry of its own")
-    func claimWithoutAnItemStillShows() {
-        // A page that publishes no escape item — or withdraws its items while
-        // something is presented over it — used to leave the claiming surface
-        // advertising no way out, while Escape went on working.
+    @Test("The bar invents nothing: a claim with nothing to rename renames nothing")
+    func claimWithoutAnItemRenamesNothing() {
+        // The entry a claiming surface needs comes from the app's system items
+        // (see `StatusBarCommonKeysTests`), not from the bar deciding for
+        // itself. This view draws what it is handed.
         let rendered = bar(
             items: [StatusBarItem(shortcut: "q", label: "quit")],
             escapeClaim: "close popover")
-        #expect(rendered.contains("close popover"))
-        #expect(rendered.contains("⎋"))
+        #expect(!rendered.contains("close popover"))
         #expect(rendered.contains("quit"))
     }
 

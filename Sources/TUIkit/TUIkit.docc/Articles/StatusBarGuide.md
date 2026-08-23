@@ -85,8 +85,22 @@ TUIkit registers built-in system items automatically:
 | `q` | Quit | Exit the application |
 | `a` | Appearance | Cycle to next border appearance |
 | `t` | Theme | Cycle to next color theme |
+| `⎋` | *(what claimed it)* | None — informational |
+| `↵` | *(what claimed it)* | None — informational |
 
-These appear on the right side of the status bar. Only `q quit` is shown by default. Enable `a appearance` and `t theme` with the ``View/statusBarSystemItems(theme:appearance:)`` modifier.
+These appear on the right side of the status bar. `q quit` is shown by default, `a appearance` and `t theme` are not, and the two common keys are — all four are controlled by ``View/statusBarSystemItems(theme:appearance:returnKey:escapeKey:)``.
+
+### The two common keys
+
+Return and Escape are the only keys the bar carries on their own account. They are common enough, and special enough, to be worth a permanent place — and unlike the rest, what they do changes with the focus, so a page cannot label them once and be right.
+
+So the question is split. **Whether** the bar carries them is the app's decision, made once with the modifier above. **What they say** is the focused view's, published each render: a `Button` says "activate" (or "choose", in a menu), a `Toggle` says "toggle", a closed pop-up says "open menu", a `TextField` with an `onSubmit` says "submit", a list row says "select" — or "open", where the list has a row action.
+
+An entry appears only while something has said what its key does. Nothing said, nothing shown: a slider does nothing with Return, so on a page whose focus is a slider there is no Return entry at all. The bar cannot know what an undeclared `onKeyPress` closure would do with a key, so it does not guess — a key that works without saying so is a silence, which is better than an entry for a key that will do nothing.
+
+Both entries are **informational**: they carry no action, so they display and do not intercept. Turning one off is a display decision and changes nothing about what the key does.
+
+A page that wants Escape (or Return) to do something of its own publishes an ordinary user item for it. That wins the shortcut dedup, keeps its action — and is still renamed in place while a presented surface claims the key, so "⎋ back" reads "⎋ close popover" for as long as the popover is up.
 
 ### Overriding `q quit`
 
@@ -128,7 +142,7 @@ Hide all system items and do not register any user items:
 
 ```swift
 ContentView()
-    .statusBarSystemItems(theme: false, appearance: false)
+    .statusBarSystemItems(theme: false, appearance: false, returnKey: false, escapeKey: false)
 ```
 
 ```swift
