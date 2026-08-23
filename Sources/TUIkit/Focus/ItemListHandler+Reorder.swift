@@ -617,6 +617,66 @@ extension ItemListHandler {
         visibleRowBandsOffset = scrollOffset
     }
 
+    /// The frame's bands, from the entries it drew and where they landed.
+    ///
+    /// One builder for both views, because ``DrawnBand/yStart``'s contract —
+    /// "lines from the first CONTENT line of the interior, with the 'N more
+    /// above' indicator's offset and any overscroll slide already in" — is a
+    /// rule about arithmetic, and two views doing that arithmetic separately is
+    /// how one of them came to skip it. `Table`'s multi-line publisher applied
+    /// neither term.
+    ///
+    /// - Parameters:
+    ///   - drawn: what occupies each drawn entry, top to bottom, with the number
+    ///     of lines it takes. Chrome interleaves with rows, which is why this is
+    ///     a list of entries rather than a range.
+    ///   - offset: everything that moves the rows as a block, added to every
+    ///     `yStart` before clipping. The caller sums its own terms — any rows a
+    ///     clip took off the front, and MINUS the overscroll excursion, because
+    ///     `slid()` draws unslid line `y` at `y − excursion` and the bands have
+    ///     to travel with the rows rather than mirror them.
+    ///
+    ///     **The two views measure `yStart` from different places**, and this
+    ///     builder does not reconcile them: `_ListCore` counts from the first
+    ///     CONTENT line, so its bands carry the "N more above" line, while
+    ///     `Table` counts from the first ROW line, its mouse closure
+    ///     subtracting a `firstRowY` that has already accounted for the
+    ///     indicator. Each is self-consistent; the doc on ``DrawnBand/yStart``
+    ///     describes the List's.
+    ///
+    ///     Unifying them was tried and reverted. Shifting `Table` onto the
+    ///     List's origin lands every drop ONE ROW EARLY as soon as auto-scroll
+    ///     makes an indicator appear mid-drag — three reorder tests catch it —
+    ///     because something in the drag machinery carries a band-space
+    ///     position across frames and an origin change desynchronises it from
+    ///     the freshly published bands. The next attempt should start by
+    ///     finding that value (`retargetForAutoScroll` and whatever it
+    ///     compares against `visibleRowBandsOffset`) rather than at the
+    ///     publishers.
+    ///   - lineCount: how many lines the row area actually has, so a band slid
+    ///     or clipped past either edge is trimmed to what is on screen and
+    ///     dropped when nothing of it is.
+    static func drawnBands(
+        _ drawn: [(entry: DrawnBand.Content, height: Int)],
+        offset: Int,
+        lineCount: Int
+    ) -> [DrawnBand] {
+        var line = 0
+        return drawn.compactMap { entry, height in
+            let yStart = line + offset
+            line += height
+            // DROPPED on a negative start, not trimmed. A row slid off the top
+            // is gone as far as the pointer is concerned, and trimming it to
+            // `yStart = 0` instead leaves it competing for line 0 with the row
+            // that is actually drawn there — which is what a first attempt at
+            // this did, and three reorder-drag tests caught it.
+            guard yStart >= 0 else { return nil }
+            let end = min(lineCount, yStart + height)
+            guard end > yStart else { return nil }
+            return DrawnBand(entry: entry, yStart: yStart, height: end - yStart)
+        }
+    }
+
     func publishRowBands(_ bands: [DrawnBand]) {
         defer { retargetForAutoScroll() }
         visibleRowBandsOffset = scrollOffset

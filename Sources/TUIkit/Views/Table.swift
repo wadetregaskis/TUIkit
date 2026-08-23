@@ -928,7 +928,11 @@ where Value.ID: Hashable {
         let slide =
             clipOverrun(&rowLines, to: contentHeight, drawn: drawnHeights)
             - handler.overscrollState.excursion
-        publishRowBands(handler: handler, drawn: drawnHeights, slide: slide)
+        // The scrollbar path draws no "N more above" line at all — the bar is
+        // the indicator — so nothing sits between the header and the first row.
+        publishRowBands(
+            handler: handler, drawn: drawnHeights, slide: slide,
+            indicatorLines: 0, lineCount: contentHeight)
         while rowLines.count < contentHeight { rowLines.append(padded("")) }
         let blankRow = String(repeating: " ", count: max(0, contentInnerWidth))
         let lines = handler.overscrollState.slid(rowLines, blank: blankRow)
@@ -1120,7 +1124,8 @@ where Value.ID: Hashable {
         let visibleRowHeights = onScreenRowHeights(
             window.range, height: heightOf, topClip: topClip)
         publishMultiLineRowBands(
-            handler: handler, range: window.range, heights: visibleRowHeights)
+            handler: handler, range: window.range, heights: visibleRowHeights,
+            indicatorLines: 0, lineCount: contentHeight)
         return (
             lines: composed.lines,
             runs: composed.runs,
@@ -1863,7 +1868,13 @@ where Value.ID: Hashable {
         let slide =
             clipOverrun(&rowLines, to: drawnBudget, drawn: drawnHeights)
             - handler.overscrollState.excursion
-        publishRowBands(handler: handler, drawn: drawnHeights, slide: slide)
+        publishRowBands(
+            handler: handler, drawn: drawnHeights, slide: slide,
+            // Zero: Table's bands are relative to the first ROW line, and the
+            // mouse closure subtracts a `firstRowY` that already accounts for
+            // the indicator. See `drawnBands` on why the origin differs from
+            // `_ListCore`'s and what it would take to unify them.
+            indicatorLines: 0, lineCount: rowLines.count)
         // The rows start below whatever "N more above" indicator is already in
         // `lines`; their runs take the same slide the bands just did.
         let rowsTop = lines.count
@@ -2092,21 +2103,21 @@ where Value.ID: Hashable {
     private func publishRowBands(
         handler: ItemListHandler<Value.ID>,
         drawn: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)],
-        slide: Int
+        slide: Int,
+        indicatorLines: Int,
+        lineCount: Int
     ) {
         typealias Handler = ItemListHandler<Value.ID>
-        var line = 0
-        handler.publishRowBands(drawn.compactMap { entry, height in
-            let yStart = line + slide
-            line += height
-            guard yStart >= 0 else { return nil }  // slid off the top
-            switch entry {
-            case .row(let rowIndex):
-                return Handler.DrawnBand(entry: .row(rowIndex), yStart: yStart, height: height)
-            case .slot:
-                return Handler.DrawnBand(entry: .slot, yStart: yStart, height: height)
-            }
-        })
+        handler.publishRowBands(
+            Handler.drawnBands(
+                drawn.map { entry, height in
+                    switch entry {
+                    case .row(let rowIndex): return (.row(rowIndex), height)
+                    case .slot: return (.slot, height)
+                    }
+                },
+                offset: slide + indicatorLines,
+                lineCount: lineCount))
     }
 
     /// Starts the floating preview on the first movement of a `.cursor` drag,
@@ -2162,15 +2173,23 @@ where Value.ID: Hashable {
     private func publishMultiLineRowBands(
         handler: ItemListHandler<Value.ID>,
         range: Range<Int>,
-        heights: [Int]
+        heights: [Int],
+        indicatorLines: Int,
+        lineCount: Int
     ) {
         typealias Handler = ItemListHandler<Value.ID>
-        var yStart = 0
-        handler.publishRowBands(range.enumerated().map { offset, rowIndex in
-            let height = offset < heights.count ? max(1, heights[offset]) : 1
-            defer { yStart += height }
-            return Handler.DrawnBand(entry: .row(rowIndex), yStart: yStart, height: height)
-        })
+        handler.publishRowBands(
+            Handler.drawnBands(
+                range.enumerated().map { offset, rowIndex in
+                    (.row(rowIndex), offset < heights.count ? max(1, heights[offset]) : 1)
+                },
+                // The terms this publisher never had. It emitted from `yStart =
+                // 0` with neither the indicator line it had just drawn nor the
+                // overscroll excursion, so a scrolled or overscrolling
+                // multi-line table hit-tested a drag against geometry its rows
+                // were not drawn at.
+                offset: indicatorLines - handler.overscrollState.excursion,
+                lineCount: lineCount))
     }
 
     // MARK: - Mouse handler wiring
