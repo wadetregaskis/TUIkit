@@ -646,13 +646,25 @@ extension ItemListHandler {
     ///
     ///     Unifying them was tried and reverted. Shifting `Table` onto the
     ///     List's origin lands every drop ONE ROW EARLY as soon as auto-scroll
-    ///     makes an indicator appear mid-drag — three reorder tests catch it —
-    ///     because something in the drag machinery carries a band-space
-    ///     position across frames and an origin change desynchronises it from
-    ///     the freshly published bands. The next attempt should start by
-    ///     finding that value (`retargetForAutoScroll` and whatever it
-    ///     compares against `visibleRowBandsOffset`) rather than at the
-    ///     publishers.
+    ///     makes an indicator appear mid-drag — `TableReorderDragTests` and
+    ///     `ReorderAutoScrollSlotTests` catch it.
+    ///
+    ///     The value that makes it fail is ``lastReorderContentY``: the one
+    ///     band-space position carried ACROSS frames, stored by `dragReorder`
+    ///     and replayed by `retargetForAutoScroll` when the pointer holds still
+    ///     and the rows move under it. Three sites in all.
+    ///
+    ///     Which makes the blocker a question about MEANING rather than
+    ///     arithmetic, and it should be answered before the next attempt.
+    ///     Table's row-anchored origin is measured from the first row LINE, so
+    ///     an indicator appearing mid-drag moves the rows and the origin
+    ///     together and a still pointer keeps the row it was over. The List's
+    ///     interior-anchored origin does not move, so the same pointer is over
+    ///     the row ABOVE — which is arguably what the screen now shows. The
+    ///     existing tests assert the first reading. Whether a drop should
+    ///     follow the row it was over or the cell the pointer is on is a
+    ///     product decision, and until it is made, "unify the origins" is not
+    ///     a well-posed change.
     ///   - lineCount: how many lines the row area actually has, so a band slid
     ///     or clipped past either edge is trimmed to what is on screen and
     ///     dropped when nothing of it is.
