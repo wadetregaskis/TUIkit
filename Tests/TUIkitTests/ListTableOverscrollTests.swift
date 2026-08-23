@@ -236,12 +236,13 @@ struct ListTableOverscrollTests {
             """)
     }
 
-    /// The Table twin. Its click path recomputes the row from `visibleRange`
-    /// rather than publishing pre-slid ranges like the List, so it needs its
-    /// own excursion compensation — uncompensated, a click under a 2-row push
-    /// selected the row 2 PAST the one under the pointer (and its published
-    /// bands slid the wrong way entirely: `+excursion` where drawn rows sit at
-    /// `−excursion`, putting bands 2×excursion from the rows they named).
+    /// The Table twin. It reads the same pre-slid bands the List does now, so
+    /// the slide is applied once, where the rows were composed. It used to
+    /// recompute the row from `visibleRange` and undo the excursion at event
+    /// time instead — uncompensated, a click under a 2-row push selected the
+    /// row 2 PAST the one under the pointer, and the published bands slid the
+    /// wrong way entirely (`+excursion` where drawn rows sit at `−excursion`,
+    /// putting bands 2×excursion from the rows they named).
     @Test("Clicking a slid Table row selects that row too")
     func tableRowClicksSlide() {
         final class Box { var value: Int? }
@@ -272,6 +273,58 @@ struct ListTableOverscrollTests {
             selected.value == 1,
             """
             clicking where "row 1" is DRAWN selects row 1, \
+            got \(selected.value.map(String.init) ?? "nil"):
+            \(screen.joined(separator: "\n"))
+            """)
+    }
+
+    /// The MULTI-LINE table under the same push, which no case reached before:
+    /// its bands come from a different publisher, and that publisher gained the
+    /// excursion term by reasoning rather than by demonstration.
+    ///
+    /// Wrapping rows are the whole point — a fixture whose rows happen to fit
+    /// on one line exercises the single-line path however many columns it
+    /// declares, and would pass against the bug.
+    @Test("Clicking a slid multi-line Table row selects that row")
+    func multiLineTableRowClicksSlide() {
+        final class Box { var value: Int? }
+        let selected = Box()
+        let ctx = context(width: 24, height: 10, top: .rows(2))
+        let dispatcher = ctx.environment.mouseEventDispatcher!
+        let view = Table(
+            Self.items,
+            selection: Binding(get: { selected.value }, set: { selected.value = $0 })
+        ) {
+            TableColumn("Detail", value: \Item.detail).lineLimit(3)
+        }
+
+        let first = renderToBuffer(view, context: ctx)
+        dispatcher.setRegions(first.hitTestRegions)
+        #expect(
+            first.lines.contains { $0.stripped.contains("line b") },
+            "the rows really wrap:\n\(first.lines.map(\.stripped).joined(separator: "\n"))")
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: 2, y: 2))
+
+        let pushed = renderToBuffer(view, context: ctx)
+        dispatcher.setRegions(pushed.hitTestRegions)
+        let screen = pushed.lines.map(\.stripped)
+        // A CONTINUATION line, not the row's first: with 3-line rows and a
+        // 2-line push, a click on a row's head or tail resolves to the same row
+        // whether or not the bands took the slide — the unslid band and the
+        // slid one overlap there. The middle line is where they part.
+        guard let row = screen.firstIndex(where: { $0.contains("line b") }) else {
+            Issue.record("a wrapped line is on screen:\n\(screen.joined(separator: "\n"))")
+            return
+        }
+        #expect(
+            screen[row - 1].contains("row 0"),
+            "the pushed rows are where this case thinks:\n\(screen.joined(separator: "\n"))")
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: row))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: row))
+        #expect(
+            selected.value == 0,
+            """
+            clicking the second line of "row 0" as DRAWN selects row 0, \
             got \(selected.value.map(String.init) ?? "nil"):
             \(screen.joined(separator: "\n"))
             """)
