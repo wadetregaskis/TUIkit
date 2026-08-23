@@ -145,8 +145,14 @@ struct FocusRegistration {
         context.environment.volatileReadTracker?.recordRenderSideEffect()
         // A nil focus manager means "no focus system" (e.g. an isolated test or
         // dimmed-backdrop render): skip registration so nothing auto-focuses.
+        // `isFocusSuppressed` is the narrower form of the same thing — a
+        // `.hidden()` subtree, which has no picture for Tab to land on but is
+        // otherwise alive (see `EnvironmentValues.isFocusSuppressed`).
         // markActive is unrelated to focus (state GC) and always runs.
-        context.environment.focusManager?.register(handler, inSection: context.environment.activeFocusSectionID)
+        if !context.environment.isFocusSuppressed {
+            context.environment.focusManager?.register(
+                handler, inSection: context.environment.activeFocusSectionID)
+        }
         context.stateStorage!.markActive(context.identity)
     }
 

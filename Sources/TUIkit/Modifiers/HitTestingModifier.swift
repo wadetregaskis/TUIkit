@@ -60,12 +60,32 @@ extension View {
     ///
     /// Mirrors SwiftUI's `hidden()`. The view is laid out exactly as it would
     /// have been and then draws nothing: a hole the shape of the view, which
-    /// takes no clicks and floats no pop-ups.
+    /// takes no clicks, floats no pop-ups of its own, and is not somewhere Tab
+    /// can land.
     ///
     /// ```swift
     /// // Both rows keep the same width; only one of them is legible.
     /// HStack { Text("total"); Text(amount).hidden() }
     /// ```
+    ///
+    /// ## What a hidden view still does
+    ///
+    /// Hiding takes away the PICTURE, not the view. As in SwiftUI, the subtree
+    /// keeps its `@State`, fires `.onAppear` and `.task`, honours a
+    /// `.keyboardShortcut` — a hidden button holding a shortcut is a real
+    /// idiom — and, if it presents a `.sheet` or an `.alert`, that still
+    /// presents. A presented panel is drawn over the whole screen rather than
+    /// by this view, so hiding the presenter cannot un-present it.
+    ///
+    /// What goes with the picture is what belonged to it: the view's own cells,
+    /// its clicks, its place in the focus ring, and any ANCHORED pop-up (a
+    /// popover, an `.offset` child) — which is this view's drawing, displaced,
+    /// and has nothing left to hang off.
+    ///
+    /// > Note: This is not ``SwiftUICore/View/dimmed()``. That one makes a
+    /// > subtree genuinely inert — no focus, no keys, no shortcuts, no
+    /// > presentation — because it exists to make content recede. `.hidden()`
+    /// > only stops it being drawn.
     ///
     /// Reach for this when the layout must not move — a placeholder holding a
     /// column open, a value that appears later. To remove the space as well,
@@ -96,31 +116,38 @@ private struct _HiddenView<Content: View>: View, Renderable, Layoutable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // Rendered through the backdrop isolation, because a view with no
-        // picture has no powers either. Everything a subtree does happens
-        // WHILE it renders — `FocusRegistration.register` writes into the real
-        // focus manager, `.keyboardShortcut` files itself, `.statusBarItems`
-        // publishes — and throwing the buffer away afterwards undid none of it.
-        // `Button("Press") {}.hidden()` was an invisible, fully live Tab stop.
+        // Rendered with focus SUPPRESSED rather than isolated. Everything a
+        // subtree does happens while it renders, and a hidden view is not
+        // inert — in SwiftUI it keeps its state, fires its lifecycle, honours
+        // its `.keyboardShortcut` (a hidden button holding a shortcut is a real
+        // idiom there) and can still present a sheet, because the sheet is
+        // hosted by the window rather than drawn by the view. The one thing it
+        // is not is somewhere Tab can land, having no picture to land on.
         //
-        // Which also fixes the worse case. This modifier's contract says it
-        // leaves "a hole the shape of the view, which takes no clicks and
-        // floats no pop-ups", so dropping a presentation's overlay is intended
-        // — but the presentation had already activated its focus section and
-        // grabbed the keyboard by the time the buffer was discarded, leaving an
-        // invisible dialog holding the keyboard. Isolated, it grabs a throwaway
-        // and the app is unaffected.
-        //
-        // Same treatment, and the same reasoning, as `.dimmed()`: a modifier
-        // that takes the picture away takes the powers with it. `@State`,
-        // `.onAppear`/`.task`, lifecycle and preferences stay shared, so a
-        // hidden view is still alive — as it is in SwiftUI.
-        let drawn = TUIkit.renderToBuffer(content, context: context.isolatedForBackground())
+        // Full isolation gets the focus part right and the rest wrong: it swaps
+        // the focus manager, so a presentation's own section registration and
+        // `grabInput` go to the throwaway too and the sheet draws with nothing
+        // able to reach it. `isFocusSuppressed` is read by individual controls
+        // and ignored by SECTIONS, which is exactly the split "hidden" needs —
+        // and deliberately not what `.dimmed()` does, that one being inert on
+        // purpose.
+        let drawn = TUIkit.renderToBuffer(
+            content,
+            context: context.withEnvironment(
+                context.environment.setting(\.isFocusSuppressed, to: true)))
         // Spaces, not zero-width nothing: this is the same convention `Spacer`
         // uses for space that is occupied but blank, and it is what stops the
-        // hole from collapsing in a stack. Overlays, hit regions and animated
-        // runs are all left behind by construction.
-        return FrameBuffer(emptyWithWidth: drawn.width, height: drawn.height)
+        // hole from collapsing in a stack. Hit regions and animated runs are
+        // left behind by construction — a hidden view takes no clicks and has
+        // no picture to animate.
+        var hidden = FrameBuffer(emptyWithWidth: drawn.width, height: drawn.height)
+        // A SCREEN-LEVEL layer is not this view's drawing, so hiding the view
+        // does not hide it: a `.sheet` presented from inside a hidden subtree
+        // still presents, as it does in SwiftUI. An ANCHORED layer — a popover,
+        // an `.offset` child — IS this view's drawing, displaced, and goes with
+        // it.
+        hidden.overlays = drawn.overlays.filter { $0.isScreenLevel }
+        return hidden
     }
 }
 

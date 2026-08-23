@@ -63,28 +63,73 @@ struct HiddenAndHitTestingPresentationTests {
 
     // MARK: - .hidden() takes the powers with the picture
 
-    @Test("A hidden subtree floats no presentation AND grabs no keyboard")
-    func hiddenIsInert() {
-        // The overlay was already dropped — the contract says a hidden view
-        // "takes no clicks and floats no pop-ups". What was NOT dropped is
-        // everything the presentation did on its way to being discarded: it
-        // activated its focus section and grabbed the keyboard, so the app sat
-        // there held by a dialog nobody could see.
+    @Test("A hidden subtree still presents its sheet, as SwiftUI does")
+    func hiddenStillPresents() {
+        // A sheet is not drawn by the view that presents it — in SwiftUI the
+        // window hosts it, so hiding the presenter cannot un-present it. TUIkit
+        // matches that: the panel is a screen-level layer, and hiding a view
+        // takes away that view's own picture.
         let hidden = probe(presenting().hidden())
-        #expect(hidden.overlays.isEmpty, "a hidden subtree floated a pop-up")
-        #expect(!hidden.modalSectionActive, "an invisible dialog grabbed the keyboard")
+        #expect(
+            hidden.overlays.contains { $0.level == .modal },
+            "hiding the presenter un-presented the sheet")
+        #expect(hidden.modalSectionActive, "the sheet drew with nothing able to reach it")
+        #expect(hidden.dialogRegions > 0, "the sheet's own buttons were not clickable")
+    }
 
-        // The control: visible, it does both.
-        let visible = probe(presenting())
-        #expect(visible.overlays.contains { $0.level == .modal })
-        #expect(visible.modalSectionActive)
+    @Test("…and an ANCHORED pop-up goes with the view that anchored it")
+    func hiddenTakesAnchoredLayers() {
+        // The other half of the same rule. A popover is this view's drawing,
+        // displaced — there is nothing left for it to hang off.
+        let hidden = probe(
+            Text("anchor")
+                .popover(isPresented: .constant(true)) { Text("in") }
+                .hidden())
+        #expect(
+            hidden.overlays.allSatisfy { $0.isScreenLevel },
+            "a hidden view kept its anchored pop-up: \(hidden.overlays.count)")
     }
 
     @Test("A hidden control is not a Tab stop")
     func hiddenIsNotFocusable() {
+        // The one thing hiding DOES take away besides the picture: there is
+        // nothing to land on.
         #expect(probe(VStack { Button("in") {} }.hidden()).reachable.isEmpty)
         #expect(!probe(VStack { Button("in") {} }).reachable.isEmpty)
     }
+
+    @Test("A hidden button's keyboard shortcut still fires")
+    func hiddenKeepsItsShortcut() {
+        // SwiftUI's hidden-button-as-shortcut-holder is a real idiom, and it is
+        // the clearest case for suppressing FOCUS rather than isolating: full
+        // isolation sends the registration to a throwaway registry and the
+        // shortcut silently stops working.
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        var environment = EnvironmentValues()
+        environment.focusManager = focusManager
+        environment.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 20, availableHeight: 4,
+            environment: environment, tuiContext: tui)
+        let fired = Counter()
+
+        tui.keyboardShortcuts.beginRenderPass()
+        tui.stateStorage.beginRenderPass()
+        focusManager.beginRenderPass()
+        _ = renderToBuffer(
+            Button("Save") { fired.value += 1 }.keyboardShortcut("s", modifiers: []).hidden(),
+            context: context)
+        focusManager.endRenderPass()
+        tui.stateStorage.endRenderPass()
+
+        #expect(
+            tui.keyboardShortcuts.trigger(for: KeyEvent(key: .character("s"))),
+            "a hidden button's shortcut was not registered")
+        #expect(fired.value == 1, "the shortcut registered but did not run the action")
+    }
+
+    private final class Counter: @unchecked Sendable { var value = 0 }
 
     // MARK: - .allowsHitTesting(false) redirects the mouse and nothing else
 

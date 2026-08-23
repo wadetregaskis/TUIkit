@@ -208,6 +208,33 @@ private struct UncomparableEnvironmentKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+private struct FocusSuppressedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether a control rendered here should stay OUT of the focus ring while
+    /// everything else about it goes on working.
+    ///
+    /// Set by `View.hidden()`. A hidden view is not somewhere Tab can land — it
+    /// has no picture to land on — but it is otherwise alive: its `@State`
+    /// persists, its `.onAppear` fires, its `.keyboardShortcut` still works (a
+    /// hidden button holding a shortcut is a real SwiftUI idiom), and a
+    /// `.sheet` it presents still presents.
+    ///
+    /// This is why `.hidden()` cannot use `isolatedForBackground()`, which
+    /// swaps the focus manager wholesale: a presentation's own section
+    /// registration and `grabInput` would go to the throwaway too, and the
+    /// sheet would draw with nothing able to reach it. The flag separates the
+    /// two — individual controls consult it, SECTIONS ignore it — which is the
+    /// distinction "hidden" needs and "inert" (`View.dimmed()`) deliberately
+    /// does not.
+    package var isFocusSuppressed: Bool {
+        get { self[FocusSuppressedKey.self] }
+        set { self[FocusSuppressedKey.self] = newValue }
+    }
+}
+
 extension EnvironmentValues {
     /// Whether some ancestor injected an environment value that is not
     /// `Equatable`.
