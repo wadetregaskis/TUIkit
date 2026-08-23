@@ -87,7 +87,13 @@ struct _AnimatableForegroundStyleView<Content: View>: View {
         // test that says so.
         if let cache = context.renderCache,
             case .changed = cache.noteAppliedEnvironment(
-                style, identity: context.identity, keyPath: \EnvironmentValues.foregroundStyle)
+                // `as Any` deliberately: the value tracked here is the
+                // OPTIONAL, because clearing a style is a change the cache has
+                // to notice as much as setting one. Without the cast this is a
+                // warning on every build — the compiler cannot tell a meant
+                // Optional from a forgotten unwrap.
+                style as Any, identity: context.identity,
+                keyPath: \EnvironmentValues.foregroundStyle)
         {
             cache.clearAffected(by: context.identity)
         }
