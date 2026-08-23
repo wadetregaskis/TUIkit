@@ -340,4 +340,85 @@ struct FocusSectionTests {
             #expect(manager.isFocused(expected), "Shift+Tab step \(step + 1) should focus \(expected.focusID)")
         }
     }
+
+    // MARK: - A modal section is a trap
+
+    @Test("Tab out of a modal section with nothing focusable goes nowhere")
+    func modalWithNoFocusablesTrapsTab() {
+        // A popover holding a paragraph of text: its section exists, is modal,
+        // and has nothing to focus. Tab used to fall through to the page's
+        // section and light up its first control for the rest of the frame,
+        // before end-of-pass validation pulled the focus back out again.
+        let manager = FocusManager()
+        manager.registerSection(id: "page")
+        let pageControl = MockFocusable(id: "page-button")
+        manager.register(pageControl, inSection: "page")
+        manager.registerSection(id: "popover")
+        manager.markSectionModal(id: "popover")
+        manager.activateSection(id: "popover")
+
+        manager.focusNext()
+
+        #expect(manager.isActiveSection("popover"))
+        #expect(!manager.isFocused(pageControl))
+    }
+
+    @Test("Tab inside a modal section wraps within it rather than leaving")
+    func modalSectionWraps() {
+        let manager = FocusManager()
+        manager.registerSection(id: "page")
+        let pageControl = MockFocusable(id: "page-button")
+        manager.register(pageControl, inSection: "page")
+        manager.registerSection(id: "dialog")
+        manager.markSectionModal(id: "dialog")
+        let ok = MockFocusable(id: "dialog-ok")
+        let cancel = MockFocusable(id: "dialog-cancel")
+        manager.register(ok, inSection: "dialog")
+        manager.register(cancel, inSection: "dialog")
+        manager.activateSection(id: "dialog")
+        manager.focus(ok)
+
+        manager.focusNext()
+        #expect(manager.isFocused(cancel))
+
+        // Off the end: back to the first control of the dialog, not out to the
+        // page — which is what a modal means.
+        manager.focusNext()
+        #expect(manager.isActiveSection("dialog"))
+        #expect(manager.isFocused(ok))
+    }
+
+    @Test("Shift+Tab out of the front of a modal section wraps too")
+    func modalSectionWrapsBackward() {
+        let manager = FocusManager()
+        manager.registerSection(id: "page")
+        manager.register(MockFocusable(id: "page-button"), inSection: "page")
+        manager.registerSection(id: "dialog")
+        manager.markSectionModal(id: "dialog")
+        let ok = MockFocusable(id: "dialog-ok")
+        let cancel = MockFocusable(id: "dialog-cancel")
+        manager.register(ok, inSection: "dialog")
+        manager.register(cancel, inSection: "dialog")
+        manager.activateSection(id: "dialog")
+        manager.focus(ok)
+
+        manager.focusPrevious()
+        #expect(manager.isActiveSection("dialog"))
+        #expect(manager.isFocused(cancel))
+    }
+
+    @Test("A section that is not modal still hands Tab on to the next one")
+    func ordinarySectionsStillCycle() {
+        let manager = FocusManager()
+        manager.registerSection(id: "left")
+        manager.registerSection(id: "right")
+        let left = MockFocusable(id: "left-1")
+        let right = MockFocusable(id: "right-1")
+        manager.register(left, inSection: "left")
+        manager.register(right, inSection: "right")
+
+        manager.focusNext()
+        #expect(manager.isActiveSection("right"))
+        #expect(manager.isFocused(right))
+    }
 }

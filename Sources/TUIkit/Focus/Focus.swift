@@ -245,6 +245,16 @@ public final class FocusManager: @unchecked Sendable {
     /// surface that grabs input. The `InputHandler` consults this to suppress the
     /// app's global default key bindings (appearance / theme) so they don't fire
     /// behind a modal. See ``markSectionModal(id:)``.
+    /// Whether the active section belongs to a presented, input-grabbing
+    /// surface — a modal, an alert, a popover, an open menu.
+    ///
+    /// A modal section is a focus TRAP as well as an input grab: Tab cycles
+    /// within it and never past it, exactly as it does when a screen has only
+    /// one section. Letting the ring carry on into the page underneath focused
+    /// a control that is not reachable, could not be operated, and was pulled
+    /// back at the end of the pass — visible as a flicker on the page's first
+    /// control every time Tab was pressed inside a popover whose content had
+    /// nothing to focus.
     var activeSectionIsModal: Bool {
         guard let activeID = activeSectionID else { return false }
         return modalSectionIDs.contains(activeID)
@@ -594,9 +604,10 @@ extension FocusManager {
     /// When multiple sections exist, Tab navigates within the current section
     /// first. Only when the current element is the last in its section does
     /// Tab switch to the next section.
-    /// When only one section exists, this cycles within it (wrapping).
+    /// When only one section exists — or the active one is modal, which is the
+    /// same thing from inside — this cycles within it (wrapping).
     public func focusNext() {
-        if sections.count > 1 {
+        if sections.count > 1, !activeSectionIsModal {
             let moved = moveFocusInSection(direction: .forward, wrap: false)
             if !moved { activateNextSection() }
         } else {
@@ -609,9 +620,10 @@ extension FocusManager {
     /// When multiple sections exist, Shift+Tab navigates within the current
     /// section first. Only when the current element is the first in its section
     /// does Shift+Tab switch to the previous section.
-    /// When only one section exists, this cycles within it (wrapping).
+    /// When only one section exists — or the active one is modal — this cycles
+    /// within it (wrapping).
     public func focusPrevious() {
-        if sections.count > 1 {
+        if sections.count > 1, !activeSectionIsModal {
             let moved = moveFocusInSection(direction: .backward, wrap: false)
             if !moved { activatePreviousSection() }
         } else {
