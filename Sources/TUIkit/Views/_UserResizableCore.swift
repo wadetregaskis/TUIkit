@@ -33,6 +33,12 @@ final class _UserResizeHandler: Focusable {
     var dragStartWidth: Int?
     var dragStartHeight: Int?
 
+    /// Where the press landed, in the coordinates of the region that captured
+    /// the gesture. Every later event in the gesture is localised to that same
+    /// region, so the difference is the cell delta to apply — see
+    /// `handleResizeEvent`.
+    var dragOrigin: (x: Int, y: Int)?
+
     /// Whether the pointer is over one of the resize edges.
     var isHovered = false
 
@@ -200,59 +206,100 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         // enter/exit transitions that light the grip.
         dispatcher.requestFeature(.motion)
 
-        let handlerID = dispatcher.register { event in
-            switch event.phase {
-            case .entered:
-                handler.isHovered = true
-                return true
-            case .exited:
-                handler.isHovered = false
-                return true
-            default:
-                break
-            }
-            guard event.button == .left else { return false }
-            switch event.phase {
-            case .pressed:
-                handler.dragStartWidth = handler.baseWidth
-                handler.dragStartHeight = handler.baseHeight
-                context.environment.focusManager?.focus(id: focusID)
-                return true
-            case .dragged, .released:
-                // `event.x` / `.y` arrive localised to the press, so they are
-                // already the signed cell delta to apply.
-                if handler.axes.contains(.horizontal), let start = handler.dragStartWidth {
-                    handler.requestedWidth = handler.widthBounds.clamping(start + event.x)
-                }
-                if handler.axes.contains(.vertical), let start = handler.dragStartHeight {
-                    handler.requestedHeight = handler.heightBounds.clamping(start + event.y)
-                }
-                if event.phase == .released {
-                    handler.dragStartWidth = nil
-                    handler.dragStartHeight = nil
-                }
-                return true
-            default:
-                return false
+        // One handler per edge, each knowing which dimensions ITS edge changes:
+        // the bottom edge is height, the right edge is width, and the corner —
+        // registered last, so it wins the overlap — is both.
+        func register(_ dragAxes: ResizableAxes) -> HitTestRegion.HandlerID {
+            dispatcher.register { event in
+                self.handleResizeEvent(
+                    event, axes: dragAxes, handler: handler, focusID: focusID, context: context)
             }
         }
 
-        // Two regions rather than one L-shape, because a hit region is a
-        // rectangle. They overlap at the corner, which is harmless — the corner
-        // is the one cell where dragging either way is meant to work.
+        // Regions rather than one L-shape, because a hit region is a rectangle.
         if axes.contains(.vertical) {
             buffer.hitTestRegions.append(
                 HitTestRegion(
                     offsetX: 0, offsetY: buffer.height - 1,
                     width: buffer.width, height: 1,
-                    handlerID: handlerID, focusID: focusID))
+                    handlerID: register(.vertical), focusID: focusID))
         }
         if axes.contains(.horizontal) {
             buffer.hitTestRegions.append(
                 HitTestRegion(
                     offsetX: buffer.width - 1, offsetY: 0,
                     width: 1, height: buffer.height,
-                    handlerID: handlerID, focusID: focusID))
+                    handlerID: register(.horizontal), focusID: focusID))
+        }
+        if axes.contains(.vertical), axes.contains(.horizontal) {
+            // The corner, last so the hit test (which searches the
+            // registrations in reverse) reaches it before the two edges it sits
+            // on. Dragging it moves both dimensions at once — which is what a
+            // corner means, and what the marked cell has always promised.
+            //
+            // Two cells square rather than the one that is marked: a
+            // single-cell target is a hard thing to hit with a pointer, and the
+            // cells it takes from the two edges are the ones nearest the corner
+            // anyway. The mark stays one cell, because two would read as a
+            // broken border rather than as a handle.
+            let size = min(2, min(buffer.width, buffer.height))
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: buffer.width - size, offsetY: buffer.height - size,
+                    width: size, height: size,
+                    handlerID: register(axes), focusID: focusID))
+        }
+    }
+
+    /// One edge's share of a resize gesture.
+    ///
+    /// The deltas are measured from where the PRESS landed, not read out of the
+    /// event. A drag is localised to the region that captured it, so
+    /// `event.x`/`event.y` are offsets from that region's top-left: for the
+    /// bottom edge the y happens to be the delta (its origin is the pressed
+    /// row) and the x is a column number, and for the right edge it is the other
+    /// way about. Treating both as deltas made a corner drag apply a column
+    /// number as a width — which, on a box already at its widest, simply looked
+    /// like the axis not working at all.
+    private func handleResizeEvent(
+        _ event: MouseEvent, axes dragAxes: ResizableAxes,
+        handler: _UserResizeHandler, focusID: String, context: RenderContext
+    ) -> Bool {
+        switch event.phase {
+        case .entered:
+            handler.isHovered = true
+            return true
+        case .exited:
+            handler.isHovered = false
+            return true
+        default:
+            break
+        }
+        guard event.button == .left else { return false }
+        switch event.phase {
+        case .pressed:
+            handler.dragStartWidth = handler.baseWidth
+            handler.dragStartHeight = handler.baseHeight
+            handler.dragOrigin = (x: event.x, y: event.y)
+            context.environment.focusManager?.focus(id: focusID)
+            return true
+        case .dragged, .released:
+            guard let origin = handler.dragOrigin else { return true }
+            if dragAxes.contains(.horizontal), let start = handler.dragStartWidth {
+                handler.requestedWidth = handler.widthBounds.clamping(start + event.x - origin.x)
+            }
+            if dragAxes.contains(.vertical), let start = handler.dragStartHeight {
+                handler.requestedHeight = handler.heightBounds.clamping(
+                    start + event.y - origin.y)
+            }
+            if event.phase == .released {
+                handler.dragStartWidth = nil
+                handler.dragStartHeight = nil
+                handler.dragOrigin = nil
+            }
+            return true
+        default:
+            return false
         }
     }
 
@@ -266,6 +313,14 @@ struct _UserResizableCore<Content: View>: View, Renderable {
     /// by exactly the one cell claimed. A single-axis view marks the edge it
     /// actually resizes instead, so the mark never promises a direction that
     /// does nothing.
+    /// How many cells of the bottom border the horizontal grabber occupies, and
+    /// how many rows of the right border the vertical one does.
+    ///
+    /// Wide enough to read as a handle rather than as a blemish, and odd so it
+    /// centres exactly. Shrunk to fit on a small view (and dropped entirely
+    /// when there is no room beside the corner), because a handle that runs
+    /// into the corner it is distinct from says nothing.
+
     private func drawGrip(
         into buffer: inout FrameBuffer, isFocused: Bool, isHovered: Bool,
         context: RenderContext

@@ -210,20 +210,102 @@ struct UserResizableTests {
         #expect(buffer.hitTestRegions.isEmpty, "a disabled view registered a drag target")
     }
 
-    @Test("The whole of each live edge is a drag target")
+    @Test("The whole of each live edge is a drag target, and the corner is its own")
     func dragTargetCoversTheEdges() {
         let context = makeRenderContext(width: 30, height: 8)
         let view = Text("hello").frame(width: 12, height: 4).border().userResizable()
         let buffer = renderToBuffer(view, context: context)
         // One region for the bottom edge, one for the right — a hit region is a
-        // rectangle, and an L-shape is two of them.
-        #expect(buffer.hitTestRegions.count == 2)
-        let bottom = buffer.hitTestRegions.first { $0.height == 1 }
-        let right = buffer.hitTestRegions.first { $0.width == 1 }
+        // rectangle, and an L-shape is two of them — plus the corner cell they
+        // overlap on, which resizes both and so cannot share either's handler.
+        #expect(buffer.hitTestRegions.count == 3)
+        let bottom = buffer.hitTestRegions.first { $0.height == 1 && $0.width > 1 }
+        let right = buffer.hitTestRegions.first { $0.width == 1 && $0.height > 1 }
+        let corner = buffer.hitTestRegions.last
         #expect(bottom?.width == buffer.width)
         #expect(bottom?.offsetY == buffer.height - 1)
         #expect(right?.height == buffer.height)
         #expect(right?.offsetX == buffer.width - 1)
+        // Two cells square, at the corner: easier to hit than the one cell that
+        // carries the mark, and last, because the hit test searches the
+        // registrations in reverse and the corner has to be reached before the
+        // edges it sits on.
+        #expect(corner?.width == 2)
+        #expect(corner?.height == 2)
+        #expect(corner?.offsetX == buffer.width - 2)
+        #expect(corner?.offsetY == buffer.height - 2)
+    }
+
+    // MARK: - Dragging
+
+    /// Renders a both-axes resizable, drives one drag through the dispatcher,
+    /// and reports the size it draws at afterwards.
+    private func drag(
+        from: (x: Int, y: Int), to: (x: Int, y: Int)
+    ) -> (width: Int, height: Int) {
+        let tui = TUIContext()
+        var environment = EnvironmentValues()
+        environment.focusManager = FocusManager()
+        environment.applyRuntimeServices(from: tui)
+        let statusBar = StatusBarState()
+        environment.statusBar = statusBar
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 12, environment: environment, tuiContext: tui
+        ).isolatingRenderCache()
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+
+        let view = Text("hello").frame(width: 20, height: 6).border()
+            .userResizable(width: 6...30, height: 3...10)
+        tui.mouseEventDispatcher.beginRenderPass()
+        let buffer = renderToBuffer(view, context: context)
+        tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+
+        tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: from.x, y: from.y))
+        tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: to.x, y: to.y))
+        tui.mouseEventDispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: to.x, y: to.y))
+
+        tui.mouseEventDispatcher.beginRenderPass()
+        let after = renderToBuffer(view, context: context)
+        return (after.width, after.height)
+    }
+
+    /// The size the fixture draws at before anything is dragged.
+    private var restingSize: (width: Int, height: Int) {
+        drag(from: (x: 0, y: 0), to: (x: 0, y: 0))
+    }
+
+    @Test("A corner drag resizes both dimensions")
+    func cornerDragMovesBoth() {
+        let resting = restingSize
+        // The corner is the bottom-right cell. Dragging it four left and two up
+        // takes four off the width and two off the height.
+        let result = drag(
+            from: (x: resting.width - 1, y: resting.height - 1),
+            to: (x: resting.width - 5, y: resting.height - 3))
+        #expect(result.width == resting.width - 4)
+        #expect(result.height == resting.height - 2)
+    }
+
+    @Test("An edge drag moves only its own dimension")
+    func edgeDragsStaySingleAxis() {
+        let resting = restingSize
+
+        // The right edge, well above the corner. Pressed one row further in
+        // than the corner region reaches, and at the far end of the drag the
+        // pointer is nowhere near where the press was — which is what proves
+        // the delta is measured from the press rather than read off an event
+        // that is localised to the region's own top-left.
+        let right = drag(from: (x: resting.width - 1, y: 1), to: (x: resting.width - 5, y: 3))
+        #expect(right.width == resting.width - 4)
+        #expect(right.height == resting.height, "the bottom edge was never touched")
+
+        // The bottom edge, well left of the corner.
+        let bottom = drag(from: (x: 3, y: resting.height - 1), to: (x: 7, y: resting.height - 3))
+        #expect(bottom.height == resting.height - 2)
+        #expect(bottom.width == resting.width, "the right edge was never touched")
     }
 
     @Test("Only the named axis gets a drag target")
