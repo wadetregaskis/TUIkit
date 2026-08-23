@@ -185,21 +185,29 @@ struct LayoutPage: View {
         let after: String
     }
 
+    /// The keyword sits early in the first block, in the middle of the second and
+    /// at the very end of the third, so the guide has visibly different amounts
+    /// of text to hoist above it in each column. With the word in the same place
+    /// in all three the blocks line up almost by accident, and the demo shows
+    /// nothing the eye could not have got from a plain row.
     private static let keywordBlocks = [
         Keyworded(
-            before: "a stack asks each child where its own line is, and the child",
+            before: "the child",
             keyword: "answers",
-            after: "with a number of its own choosing."),
+            after: "first, and the stack takes the number it is given: a guide is"
+                + " a question asked of the content, never a position imposed on it."),
         Keyworded(
             before: "the wrap moves the words about as the terminal changes width,"
                 + " and the row this word lands on",
             keyword: "answers",
-            after: "differently every time."),
+            after: "differently every time — so a column written down once would"
+                + " be wrong by the second resize."),
         Keyworded(
-            before: "so the guide is recomputed from the wrap rather than written"
-                + " down once, and the column",
+            before: "the guide is recomputed from the wrap rather than remembered"
+                + " from the last one, which is how a column can go on following"
+                + " the content wherever the content",
             keyword: "answers",
-            after: "to the content instead of to the page."),
+            after: "."),
     ]
 
     /// How wide each of the three prose columns is, given the terminal and the
