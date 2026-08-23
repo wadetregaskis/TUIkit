@@ -70,6 +70,59 @@ struct TransactionTests {
 
     // MARK: - Reaching the render
 
+    // MARK: - A binding's own transaction
+
+    @Test("A binding writes under the transaction it was given")
+    func bindingCarriesItsTransaction() {
+        final class Box { var value = 0 }
+        let box = Box()
+        var seen: Transaction?
+        let binding = Binding(get: { box.value }, set: { box.value = $0 })
+        var stated = Transaction(animation: .easeIn)
+        stated.disablesAnimations = true
+
+        binding.transaction(stated).wrappedValue = 1
+        // The write happened; the transaction was in force WHILE it happened.
+        #expect(box.value == 1)
+
+        let watched = Binding(
+            get: { box.value },
+            set: { _ in seen = Transaction.ambient })
+        watched.transaction(stated).wrappedValue = 2
+        #expect(seen == stated)
+    }
+
+    @Test("A binding with no transaction of its own does not override the caller's")
+    func plainBindingDefersToTheAmbientTransaction() {
+        var seen: Transaction?
+        let binding = Binding(get: { 0 }, set: { _ in seen = Transaction.ambient })
+
+        withAnimation(.linear(duration: 1)) { binding.wrappedValue = 1 }
+        #expect(
+            seen?.animation == .linear(duration: 1),
+            """
+            a plain binding is transparent — storing an empty Transaction here \
+            would silently un-animate every write made inside withAnimation
+            """)
+
+        // …and reads as an empty one, which is what SwiftUI reports.
+        #expect(binding.transaction == Transaction())
+    }
+
+    @Test("animation(_:) is the transaction form under a name")
+    func bindingAnimationIsATransaction() {
+        var seen: Transaction?
+        let binding = Binding(get: { 0 }, set: { _ in seen = Transaction.ambient })
+
+        binding.animation(.easeOut).wrappedValue = 1
+        #expect(seen?.animation == .easeOut)
+
+        // `nil` is a REFUSAL, not an absence: it has to survive an enclosing
+        // withAnimation, which only a stated transaction does.
+        withAnimation(.linear(duration: 1)) { binding.animation(nil).wrappedValue = 2 }
+        #expect(seen != nil && seen?.animation == nil)
+    }
+
     @Test("A change made under an animation stamps the render that follows")
     func changeStampsTheNextRender() {
         // A private instance, not `AppState.shared`: suites run in parallel and

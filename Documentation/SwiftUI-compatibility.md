@@ -99,7 +99,7 @@ Code that uses them compiles and behaves the same.
 | Area | API | TUIkit | Notes |
 |---|---|---|---|
 | Core | `View`, `some View`, `@ViewBuilder`, `ViewModifier` | ✓ | identity & composition match |
-| State | `@State` (`init(wrappedValue:)` + `init(initialValue:)`), `@Binding` (`init(get:set:)`, `.constant`, `init(projectedValue:)`, **dynamic-member lookup**), `@Environment(\.key)` | ✓ | `$model.field` and `initialValue:` both work |
+| State | `@State` (`init(wrappedValue:)` + `init(initialValue:)`), `@Binding` (`init(get:set:)`, `.constant`, `init(projectedValue:)`, **dynamic-member lookup**, `.animation(_:)`, `.transaction` + `.transaction(_:)`), `@Environment(\.key)` | ✓ | `$model.field` and `initialValue:` both work. A binding's `transaction` is `nil` internally until one is stated, and only then does a write wrap itself: an empty `Transaction` is the statement "this change is not animated", so storing one by default would make every plain binding silently override the `withAnimation` its caller is inside. `.animation(_:)` is the same mechanism under a name — `withAnimation(a)` is `withTransaction(Transaction(animation: a))` — and `.animation(nil)` remains an explicit refusal that survives an enclosing animation |
 | Observation | `@Observable` + `@Environment(Type.self)` + `.environment(obj)` | ✓ | modern reference-type state ports as-is |
 | Env / prefs | `EnvironmentKey`, `EnvironmentValues`, `PreferenceKey`, `.environment(_:_:)`, `.preference`/`.onPreferenceChange` | ✓ | custom keys work the SwiftUI way |
 | Stacks | `VStack` / `HStack` / `ZStack` / `LazyVStack` / `LazyHStack` | ✓ | `spacing:` is `Int` → §2.1; default spacing → §2.1 note; lazy-stack semantics differ → §2.8 |

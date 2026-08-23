@@ -334,10 +334,36 @@ public struct Binding<Value> {
     /// The setter for the value.
     private let setValue: (Value) -> Void
 
+    /// The transaction writes through this binding are made under, or `nil`
+    /// for "whatever is ambient".
+    ///
+    /// Optional, where ``transaction`` is not: an empty `Transaction` is a
+    /// STATEMENT — "this change is not animated, whatever the caller said" —
+    /// and a plain binding must not make it. Stored as `nil`, a write inside
+    /// `withAnimation { … }` is animated; stored as `Transaction()`, it would
+    /// silently override the caller. Same third-state shape as `\.font`'s
+    /// `Font??`.
+    private var declaredTransaction: Transaction?
+
+    /// The transaction writes through this binding are made under.
+    ///
+    /// Reads as an empty transaction until one is set, which is what SwiftUI
+    /// reports for a binding that has never been given one.
+    public var transaction: Transaction {
+        get { declaredTransaction ?? Transaction() }
+        set { declaredTransaction = newValue }
+    }
+
     /// The current value.
     public var wrappedValue: Value {
         get { getValue() }
-        nonmutating set { setValue(newValue) }
+        nonmutating set {
+            guard let declaredTransaction else {
+                setValue(newValue)
+                return
+            }
+            withTransaction(declaredTransaction) { setValue(newValue) }
+        }
     }
 
     /// The binding itself (for projectedValue access).
@@ -388,9 +414,28 @@ public struct Binding<Value> {
     ///   binding. `nil` makes them explicitly un-animated.
     /// - Returns: A binding that writes inside ``withAnimation(_:_:)``.
     public func animation(_ animation: Animation? = .default) -> Self {
-        Self(
-            get: getValue,
-            set: { newValue in withAnimation(animation) { self.setValue(newValue) } })
+        // Through the transaction, because that is what it IS —
+        // `withAnimation(a)` is `withTransaction(Transaction(animation: a))`,
+        // so writing the wrapping by hand here was the same mechanism spelled
+        // twice. `nil` still means explicitly un-animated: it is a stated
+        // transaction whose animation is none, not the absence of one.
+        transaction(Transaction(animation: animation))
+    }
+
+    /// A binding whose writes are made under `transaction`.
+    ///
+    /// The general form of ``animation(_:)`` — reach for it when the thing to
+    /// state is not the animation but `disablesAnimations`, so a control's
+    /// writes opt out of whatever the caller is animating.
+    ///
+    /// Reads are untouched; only the write is wrapped.
+    ///
+    /// - Parameter transaction: The context to write under.
+    /// - Returns: A binding that writes inside ``withTransaction(_:_:)``.
+    public func transaction(_ transaction: Transaction) -> Binding<Value> {
+        var copy = self
+        copy.transaction = transaction
+        return copy
     }
 
     /// Derives a binding to a sub-property of the wrapped value via key path.
