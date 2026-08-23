@@ -222,6 +222,12 @@ struct MyApp: App {
 - ``VectorArithmetic``
 - ``AnimatablePair``
 - ``EmptyAnimatableData``
+- ``TimelineSchedule``
+- ``TimelineScheduleMode``
+- ``PeriodicTimelineSchedule``
+- ``EveryMinuteTimelineSchedule``
+- ``ExplicitTimelineSchedule``
+- ``AnimationTimelineSchedule``
 
 ### Environment
 
