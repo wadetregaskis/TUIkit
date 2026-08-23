@@ -541,7 +541,19 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     ///
     /// Draws the same gap a `.cursor` reorder shows, because it means the same
     /// thing: let go here and the rows arrive at this place.
-    var externalDropSlot: Int?
+    var externalDropSlot: Int? {
+        didSet {
+            // The remembered pointer position belongs to the slot: when the slot
+            // goes, so does it.
+            if externalDropSlot == nil { lastExternalDropContentY = nil }
+        }
+    }
+
+    /// The content-space line the incoming drag last hovered, so an auto-scroll
+    /// tick can re-resolve the slot with no mouse event to go on. See
+    /// ``hoverExternalDrop(atContentY:)``, which is the only thing that should
+    /// write it.
+    var lastExternalDropContentY: Int?
 
     /// Set when Escape cancels a drag whose button is still down: the release
     /// that follows must be swallowed rather than read as a click.

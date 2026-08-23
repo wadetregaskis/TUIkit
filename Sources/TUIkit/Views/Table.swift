@@ -2002,10 +2002,10 @@ where Value.ID: Hashable {
                     // The band under the pointer names the row it would land
                     // BEFORE; past the last row it appends. Measured from the
                     // INTERIOR top, which is the space the bands are in — the
-                    // same space `_ListCore` publishes and reads in.
-                    let slot =
-                        handler.dropTarget(atContentY: y - interiorTopY) ?? handler.itemCount
-                    handler.externalDropSlot = min(max(0, slot), handler.itemCount)
+                    // same space `_ListCore` publishes and reads in. Through the
+                    // handler so the line is remembered for an auto-scroll tick,
+                    // which has no pointer event to go on.
+                    handler.hoverExternalDrop(atContentY: y - interiorTopY)
                 }))
     }
 

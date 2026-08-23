@@ -1858,12 +1858,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 },
                 hovering: { _, y in
                     // The band under the pointer names the row it would land
-                    // BEFORE; past the last row it appends.
-                    let contentY = y - topInset
-                    // Clamped: a list that shrank under the pointer must not
-                    // strand the slot past its own end.
-                    let slot = handler.dropTarget(atContentY: contentY) ?? handler.itemCount
-                    handler.externalDropSlot = min(max(0, slot), handler.itemCount)
+                    // BEFORE; past the last row it appends. Through the handler
+                    // so the line is remembered — an auto-scroll tick has to ask
+                    // the same question again with no pointer event to go on.
+                    handler.hoverExternalDrop(atContentY: y - topInset)
                 }))
     }
 

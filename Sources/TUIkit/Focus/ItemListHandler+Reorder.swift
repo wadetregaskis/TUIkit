@@ -487,7 +487,22 @@ extension ItemListHandler {
     /// arrives. Left stale, the slot walks to the top edge as its index scrolls
     /// off, and the eventual drop lands a place out.
     private func retargetForAutoScroll() {
-        guard isAutoScrolling, reorder != nil, let y = lastReorderContentY else { return }
+        guard isAutoScrolling else { return }
+        // A drag from ANOTHER view has the same problem and no reorder state to
+        // solve it with: `hovering` is only called when the pointer moves, so
+        // the slot it last chose is a data index that the scrolling rows carry
+        // away from under the cursor — the gap drifting off the screen while
+        // the drag holds still at the edge.
+        if reorder == nil, let y = lastExternalDropContentY {
+            // Unclamped: `retargetExternalDrop` has its own past-the-end rule,
+            // and it has to, because the gap it is recomputing is itself a
+            // droppable band whose `dropIndex` IS `externalDropSlot`. Clamping
+            // onto that would resolve the slot to the value it already has and
+            // the gap would sit still while the rows streamed past it — the bug.
+            retargetExternalDrop(atContentY: y)
+            return
+        }
+        guard reorder != nil, let y = lastReorderContentY else { return }
         // CLAMPED onto the rows, not replayed verbatim. Auto-scroll engages at
         // the control's edge, and the hot margin is chrome — the indicator line,
         // the header — so the pointer is by definition NOT on a droppable row.
@@ -511,8 +526,11 @@ extension ItemListHandler {
     /// `contentY` moved onto the nearest line that can actually take a drop.
     /// Unchanged when it already is one.
     private func clampedToDroppableRows(_ contentY: Int) -> Int {
-        let droppable = visibleRowBands.filter { $0.dropIndex != nil }
-        guard let first = droppable.first, let last = droppable.last else { return contentY }
+        clamped(contentY, onto: visibleRowBands.filter { $0.dropIndex != nil })
+    }
+
+    private func clamped(_ contentY: Int, onto bands: [RowBand]) -> Int {
+        guard let first = bands.first, let last = bands.last else { return contentY }
         if contentY < first.yStart { return first.yStart }
         let end = last.yStart + max(1, last.height) - 1
         return contentY > end ? end : contentY
