@@ -187,18 +187,33 @@ private struct _StatusBarCore: View, Renderable {
         // Filter out system items that are overridden by user items
         let filteredSystemItems = visibleSystemItems.filter { !userShortcuts.contains($0.shortcut) }
 
-        // Combine: sorted user items + filtered system items (fixed order)
-        let sortedUserItems = visibleUserItems.sorted { $0.order < $1.order }
-        let combinedItems = sortedUserItems + filteredSystemItems
-
-        guard !combinedItems.isEmpty else {
-            return FrameBuffer()
-        }
-
         // Pull the transient escape-label override (set by an open Picker
         // drop-down, an inline editor, etc.) so the escape entry shows
         // "close menu" or similar while the underlying handler is unchanged.
         let escapeOverride = context.environment.statusBar?.escapeLabelOverride
+
+        // Combine: sorted user items + filtered system items (fixed order)
+        let sortedUserItems = visibleUserItems.sorted { $0.order < $1.order }
+        var combinedItems = sortedUserItems + filteredSystemItems
+
+        // A surface that CLAIMED escape but found no escape item to rename gets
+        // one of its own. The override renames in place, which reads best when
+        // the page underneath already offers "⎋ back" — but a page that offers
+        // no escape at all (or withdraws its items while presenting, which is
+        // the sensible thing for a page to do) left the popover advertising no
+        // way out at all, while Escape went on working. The claim is what makes
+        // the entry true; whether anything happened to be there to rename is
+        // not the popover's business.
+        if let escapeOverride,
+            !combinedItems.contains(where: { $0.shortcut == Shortcut.escape })
+        {
+            combinedItems.insert(
+                StatusBarItem(shortcut: Shortcut.escape, label: escapeOverride), at: 0)
+        }
+
+        guard !combinedItems.isEmpty else {
+            return FrameBuffer()
+        }
 
         // Build item strings and capture their visible widths
         // so the layout pass can also report each item's column

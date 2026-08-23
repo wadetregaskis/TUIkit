@@ -354,4 +354,58 @@ struct StatusBarItemsModifierTests {
         // Outer (global) should be active
         #expect(state.currentUserItems[0].label == "outer-item")
     }
+
+    // MARK: - The escape claim
+
+    /// A surface that claims escape (a popover, an open menu) sets
+    /// `escapeLabelOverride` rather than publishing an item, so the entry the
+    /// page already shows is renamed in place instead of duplicated.
+    private func bar(
+        items: [any StatusBarItemProtocol], escapeClaim: String?
+    ) -> String {
+        let tui = TUIContext()
+        let state = StatusBarState()
+        state.escapeLabelOverride = escapeClaim
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tui)
+        environment.statusBar = state
+        let context = RenderContext(
+            availableWidth: 80, availableHeight: 24, environment: environment, tuiContext: tui
+        ).isolatingRenderCache()
+        return renderToBuffer(StatusBar(items: items, style: .compact), context: context)
+            .lines.joined()
+    }
+
+    @Test("An escape claim renames the escape item the page already shows")
+    func claimRenamesInPlace() {
+        let rendered = bar(
+            items: [
+                StatusBarItem(shortcut: Shortcut.escape, label: "back"),
+                StatusBarItem(shortcut: "q", label: "quit"),
+            ],
+            escapeClaim: "close popover")
+        #expect(rendered.contains("close popover"))
+        #expect(!rendered.contains("back"))
+        // Renamed, not added: one escape entry, not two.
+        #expect(rendered.components(separatedBy: "⎋").count == 2)
+    }
+
+    @Test("An escape claim with nothing to rename shows an entry of its own")
+    func claimWithoutAnItemStillShows() {
+        // A page that publishes no escape item — or withdraws its items while
+        // something is presented over it — used to leave the claiming surface
+        // advertising no way out, while Escape went on working.
+        let rendered = bar(
+            items: [StatusBarItem(shortcut: "q", label: "quit")],
+            escapeClaim: "close popover")
+        #expect(rendered.contains("close popover"))
+        #expect(rendered.contains("⎋"))
+        #expect(rendered.contains("quit"))
+    }
+
+    @Test("No claim, no invented escape entry")
+    func noClaimNoEntry() {
+        let rendered = bar(items: [StatusBarItem(shortcut: "q", label: "quit")], escapeClaim: nil)
+        #expect(!rendered.contains("⎋"))
+    }
 }
