@@ -48,10 +48,19 @@ extension OffsetView: Renderable, Layoutable {
         // "a blank view" to a stack — it is "no child": `appendVertically`
         // drops it, spacing and all, so every sibling after an offset view
         // moved up into its place and the floated drawing composited on top of
-        // whatever took it. Zero-WIDTH lines reserve the rows and paint no
-        // cells, which is exactly the shape this needs: the footprint the
-        // measure pass promised, and nothing drawn in it.
-        var placeholder = FrameBuffer(lines: Array(repeating: "", count: rendered.height))
+        // whatever took it. Empty lines reserve the rows and paint no cells,
+        // which is exactly the shape this needs: the footprint the measure pass
+        // promised, and nothing drawn in it.
+        //
+        // The WIDTH is declared even though no cell carries it, because a
+        // container that aligns its children asks each buffer how wide it is:
+        // `_ZStackCore` positions by `alignment.childOffset(childWidth:)`, and
+        // a zero-width answer centres an 8-cell label 4 cells right of centre
+        // and pins a trailing-aligned one to the frame's right edge. Compositing
+        // reads the lines, not this number, so the promise above still holds —
+        // an empty line paints nothing wherever it is placed.
+        var placeholder = FrameBuffer(
+            lines: Array(repeating: "", count: rendered.height), width: rendered.width)
         placeholder.overlays.append(
             OverlayLayer(offsetX: x, offsetY: y, content: rendered, level: .popover))
         return placeholder
