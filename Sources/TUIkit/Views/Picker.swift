@@ -10,8 +10,9 @@
 /// matched to a concrete selection-value type — or a ``Divider`` separating
 /// option groups.
 enum _RawPickerOption {
-    /// A tagged option: the tag (still type-erased) and its label view.
-    case option(tagValue: AnyHashable, label: AnyView)
+    /// A tagged option: the tag (still type-erased), whether it may be
+    /// promoted to the selection's Optional type, and its label view.
+    case option(tagValue: AnyHashable, includeOptional: Bool, label: AnyView)
 
     /// A rule between option groups (a ``Divider`` in the picker content).
     case divider
@@ -30,7 +31,7 @@ protocol PickerOptionProvider {
 
 extension _TaggedView: PickerOptionProvider {
     func pickerOptions() -> [_RawPickerOption] {
-        [.option(tagValue: tagValue, label: AnyView(content))]
+        [.option(tagValue: tagValue, includeOptional: includeOptional, label: AnyView(content))]
     }
 }
 
@@ -239,8 +240,21 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
         guard let provider = content as? PickerOptionProvider else { return [] }
         let entries = provider.pickerOptions().compactMap { raw -> _PickerEntry<SelectionValue>? in
             switch raw {
-            case .option(let tagValue, let label):
-                guard let value = tagValue.base as? SelectionValue else { return nil }
+            case .option(let tagValue, let includeOptional, let label):
+                // Cast the TAG into the selection's type, never compare two
+                // `AnyHashable`s: `as?` promotes a value to its Optional as a
+                // language rule, so `.tag(Speed.slow)` matches a `Speed?`
+                // selection on every platform. (`AnyHashable` equality does the
+                // same thing only for types carrying an ObjC bridge, which is
+                // how `TabView` came to draw the wrong tab on Linux-shaped
+                // input — see its `index(matching:)`.)
+                //
+                // `includeOptional: false` withholds exactly that promotion, by
+                // requiring the tag's DYNAMIC type to be the selection type
+                // rather than something assignable to it.
+                guard includeOptional || type(of: tagValue.base) == SelectionValue.self,
+                    let value = tagValue.base as? SelectionValue
+                else { return nil }
                 return .option(tag: value, label: label)
             case .divider:
                 return .divider

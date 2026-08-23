@@ -30,6 +30,64 @@ struct TagModifierTests {
 
         #expect(tagged.lines.joined().stripped == plain.lines.joined().stripped)
     }
+
+    private enum Speed: Hashable { case slow, fast }
+
+    private func selected(_ view: some View) -> String {
+        renderToBuffer(view, context: createTestContext(width: 40, height: 6))
+            .lines.joined().stripped
+    }
+
+    /// The default, and what an unlabelled `.tag(_:)` has always done: the tag
+    /// is cast INTO the selection's type, and `as?` promotes a value to its
+    /// Optional, so a bare tag matches an Optional selection.
+    @Test("A bare tag matches an Optional selection")
+    func bareTagMatchesOptionalSelection() {
+        let screen = selected(
+            Picker("Speed", selection: .constant(Speed?.some(.fast))) {
+                Text("Slow").tag(Speed.slow)
+                Text("Fast").tag(Speed.fast)
+            })
+        #expect(screen.contains("Fast"), "\(screen)")
+    }
+
+    /// `includeOptional: false` withholds that promotion. The option is not
+    /// merely unselected — it is not an option at all for this picker, which is
+    /// what lets a `nil` tag mean "no choice" without a bare tag shadowing it.
+    @Test("includeOptional: false withholds the promotion")
+    func withheldPromotion() {
+        let screen = selected(
+            Picker("Speed", selection: .constant(Speed?.some(.fast))) {
+                Text("Slow").tag(Speed.slow, includeOptional: false)
+                Text("Fast").tag(Speed.fast, includeOptional: false)
+            })
+        #expect(!screen.contains("Fast"), "no option matches an Optional selection: \(screen)")
+    }
+
+    /// …and it is only the PROMOTION it withholds: an exactly-typed selection
+    /// still matches, so the flag cannot be mistaken for "disable this tag".
+    @Test("includeOptional: false still matches its own type exactly")
+    func withheldPromotionStillMatchesExactly() {
+        let screen = selected(
+            Picker("Speed", selection: .constant(Speed.fast)) {
+                Text("Slow").tag(Speed.slow, includeOptional: false)
+                Text("Fast").tag(Speed.fast, includeOptional: false)
+            })
+        #expect(screen.contains("Fast"), "\(screen)")
+    }
+
+    /// The case the flag exists for: an Optional selection where one row means
+    /// "nothing chosen". With the promotion on, both rows are candidates and
+    /// the bare one shadows the intent.
+    @Test("A nil tag and a value tag can coexist under an Optional selection")
+    func nilTagCoexists() {
+        let screen = selected(
+            Picker("Speed", selection: .constant(Speed?.none)) {
+                Text("Unset").tag(Speed?.none)
+                Text("Fast").tag(Speed.fast, includeOptional: false)
+            })
+        #expect(screen.contains("Unset"), "\(screen)")
+    }
 }
 
 // MARK: - Picker Rendering Tests
