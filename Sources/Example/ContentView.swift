@@ -115,20 +115,19 @@ struct ContentView: View {
         // Show current page based on state
         // Note: Background color is set by AppRunner using theme.background
         pageContent(for: currentPage, pageSetter: pageSetter)
-            // One column of breathing room on the left, on every page. Applied
-            // here rather than in `scrollableDemoPage()` because only 22 of the
-            // 36 pages use that wrapper — a split view, a tab view and the
-            // image pages fill the viewport themselves — and a gutter that
+            // One column of breathing room down each side, on every page.
+            // Applied here rather than in `scrollableDemoPage()` because only 22
+            // of the 36 pages use that wrapper — a split view, a tab view and
+            // the image pages fill the viewport themselves — and a gutter that
             // appeared on two thirds of the app would read as a mistake.
             //
             // Unconditional, not fitted. `ViewThatFits` chooses on IDEAL width,
             // and a page holding a List or a Table has an ideal width of "all
             // of it", so a padded candidate would never be taken there: the
             // gutter would be missing from exactly the wide, busy pages that
-            // most want it. One column costs 0.5% of a 200-column terminal and
-            // 2.5% of an 40-column one, and the alternative is text against the
-            // bezel.
-            .padding(.leading, 1)
+            // most want it. Two columns cost 1% of a 200-column terminal and 5%
+            // of a 40-column one, and the alternative is text against the bezel.
+            .padding(.horizontal, 1)
             // App-wide styling from the Theme page: the scene's `.theme` handles
             // tint; these add chrome + control text styling across every page.
             // `nil` attributes mean "no override", so the toggles are off by default.
