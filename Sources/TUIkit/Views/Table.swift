@@ -2087,22 +2087,20 @@ where Value.ID: Hashable {
     /// the top" — which is exactly right for rows dropped from the front.
     ///
     /// Reunited with its function; see `publishRowBands` on why that is worth a
-    /// commit. `_ListCore.clipReorderOverrun` is the twin, and the two floors
-    /// differ (`lines.count - budget` here, `- max(1, budget)` there) — noted
-    /// rather than reconciled, because which is right needs a reorder driven at
-    /// a budget of zero to settle and neither has a test at that boundary.
+    /// commit. WHICH end gives way, and by how much, is
+    /// ``ItemListHandler/reorderOverrun(lineCount:budget:endsWithSlot:)`` —
+    /// shared with `_ListCore.clipReorderOverrun`, which is the twin. This half
+    /// is only the application: the lines are Table's to move, and the caller
+    /// carries the shift into the bands.
     private func clipOverrun(
         _ lines: inout [String], to budget: Int,
         drawn: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)]
     ) -> Int {
-        let overrun = lines.count - budget
-        guard overrun > 0 else { return 0 }
-        guard drawn.last?.entry == .slot else {
-            lines.removeLast(overrun)
-            return 0
-        }
-        lines.removeFirst(overrun)
-        return -overrun
+        let clip = ItemListHandler<Value.ID>.reorderOverrun(
+            lineCount: lines.count, budget: budget, endsWithSlot: drawn.last?.entry == .slot)
+        if clip.back > 0 { lines.removeLast(clip.back) }
+        if clip.front > 0 { lines.removeFirst(clip.front) }
+        return -clip.front
     }
 
     /// Hands this frame's drawn row geometry to the shared publisher.

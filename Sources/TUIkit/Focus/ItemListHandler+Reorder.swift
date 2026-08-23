@@ -621,6 +621,40 @@ extension ItemListHandler {
         visibleRowBandsOffset = scrollOffset
     }
 
+    /// How much of an over-long reorder frame to clip, and from which end.
+    ///
+    /// A drag never changes how much is on screen, so a frame that overruns its
+    /// budget is clipped — but never THROUGH THE SLOT. It overruns when rows in
+    /// hand have scrolled out of the visible range, and when the slot is the
+    /// last entry (the "move to the end" destination) the tail IS the slot:
+    /// clipping it took away the only thing on screen saying where the rows
+    /// would land, which reads as the selection falling off the bottom. So the
+    /// overrun comes off the FRONT instead — visually, the view scrolled down
+    /// to keep the destination in sight.
+    ///
+    /// One function for both views because it is a rule, and two copies of a
+    /// rule are two chances to state it differently. They had: `Table` clipped
+    /// against `budget` and `_ListCore` against `max(1, budget)`, a difference
+    /// that shows only at a budget below one. Neither view can reach that — the
+    /// List's two budgets are `max(1, …)` at source, and the Table's is a count
+    /// of rows it has already drawn — so the floor was inert, and it is dropped
+    /// rather than adopted: a floor that keeps a line the caller did not budget
+    /// for would overflow the container if it ever did apply, which is the
+    /// wrong direction to fail in.
+    ///
+    /// - Parameters:
+    ///   - lineCount: How many lines the frame drew.
+    ///   - budget: How many it may keep.
+    ///   - endsWithSlot: Whether the last drawn entry is the drop slot.
+    /// - Returns: Lines to drop from each end. At most one is non-zero.
+    static func reorderOverrun(
+        lineCount: Int, budget: Int, endsWithSlot: Bool
+    ) -> (front: Int, back: Int) {
+        let overrun = lineCount - budget
+        guard overrun > 0 else { return (front: 0, back: 0) }
+        return endsWithSlot ? (front: overrun, back: 0) : (front: 0, back: overrun)
+    }
+
     /// The frame's bands, from the entries it drew and where they landed.
     ///
     /// One builder for both views, because ``DrawnBand/yStart``'s contract —

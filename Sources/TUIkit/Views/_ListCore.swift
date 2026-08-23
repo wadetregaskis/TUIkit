@@ -1340,22 +1340,25 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return (lines, pulseFrames, childRuns.filter { $0.y < lines.count })
     }
 
-    /// Clips a reorder frame's overrun — away from the SLOT, never through
-    /// it. The exact bug the Table fixed in bafc8de1, whose List halves were
-    /// still open: the ordinary budget clips take lines off the TAIL, and
-    /// when the slot is the last entry (the "move to the end" destination)
-    /// the tail IS the slot — clipping it took away the only thing on screen
-    /// saying where the rows would land, which reads as the selection falling
-    /// off the bottom of the list. When the slot ends the frame, the overrun
-    /// comes off the FRONT instead (visually: the list scrolled down to keep
-    /// the destination in view), and the ranges shift with it.
+    /// Clips a reorder frame's overrun — away from the SLOT, never through it.
+    ///
+    /// WHICH end gives way, and by how much, is
+    /// ``ItemListHandler/reorderOverrun(lineCount:budget:endsWithSlot:)``,
+    /// shared with `Table.clipOverrun`; see it for the rule and for why the
+    /// `max(1, budget)` floor this used to carry is gone. What is left here is
+    /// the application, which is the List's own: its ranges and pulse runs
+    /// travel with the lines they describe, and one clipped away above the
+    /// viewport goes with it.
     private func clipReorderOverrun(
         lines: inout [String], ranges: inout [VisibleRowRange],
         pulseRuns: inout [RowRun], budget: Int
     ) {
-        let overrun = lines.count - max(1, budget)
+        let clip = ItemListHandler<SelectionValue>.reorderOverrun(
+            lineCount: lines.count, budget: budget,
+            endsWithSlot: ranges.last?.rowIndex == Self.reorderSlotRowIndex)
+        let overrun = max(clip.front, clip.back)
         guard overrun > 0 else { return }
-        if ranges.last?.rowIndex == Self.reorderSlotRowIndex {
+        if clip.front > 0 {
             lines.removeFirst(overrun)
             // The runs move with the lines they describe, and one clipped away
             // above the viewport goes with it.
