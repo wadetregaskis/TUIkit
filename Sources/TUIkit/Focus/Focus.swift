@@ -833,6 +833,18 @@ extension FocusManager {
         modalSectionIDs.insert(id)
     }
 
+    /// Notes that the focused control has changed in a way an enclosing
+    /// `ScrollView` should follow, with no key having been pressed.
+    ///
+    /// Key handling bumps this itself, so the keyboard half of every control
+    /// already gets the follow. A control the POINTER is changing — a view
+    /// being dragged bigger by its corner — has no key to be bumped by, and
+    /// without this it can grow straight off the bottom of the viewport it sits
+    /// in, taking the edge under the cursor with it.
+    func noteFocusedInteraction() {
+        focusedInteractionGeneration &+= 1
+    }
+
     /// Records which device drove the event now being dispatched. Called by the
     /// app's event funnel, before the event reaches any handler.
     func noteInputSource(_ source: InputSource) {

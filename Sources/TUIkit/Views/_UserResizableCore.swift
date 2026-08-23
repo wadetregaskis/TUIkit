@@ -298,12 +298,29 @@ struct _UserResizableCore<Content: View>: View, Renderable {
             return true
         case .dragged, .released:
             guard let origin = handler.dragOrigin else { return true }
+            // The size on SCREEN, not the request: the first event of a
+            // gesture turns "no request" into one, and a press and release that
+            // moved nothing is a click, which should not move anybody's
+            // viewport.
+            let before = (
+                handler.requestedWidth ?? handler.dragStartWidth,
+                handler.requestedHeight ?? handler.dragStartHeight)
             if dragAxes.contains(.horizontal), let start = handler.dragStartWidth {
                 handler.requestedWidth = handler.widthBounds.clamping(start + event.x - origin.x)
             }
             if dragAxes.contains(.vertical), let start = handler.dragStartHeight {
                 handler.requestedHeight = handler.heightBounds.clamping(
                     start + event.y - origin.y)
+            }
+            let after = (
+                handler.requestedWidth ?? handler.dragStartWidth,
+                handler.requestedHeight ?? handler.dragStartHeight)
+            if before != after {
+                // Tell any enclosing ScrollView to follow, exactly as a keyboard
+                // resize does through `dispatchKeyEvent`: grown by its corner
+                // near the bottom of a viewport, the view would otherwise take
+                // the edge under the cursor off the screen with it.
+                context.environment.focusManager?.noteFocusedInteraction()
             }
             if event.phase == .released {
                 handler.dragStartWidth = nil

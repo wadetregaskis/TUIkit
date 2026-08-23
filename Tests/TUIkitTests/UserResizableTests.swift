@@ -243,9 +243,18 @@ struct UserResizableTests {
     private func drag(
         from: (x: Int, y: Int), to: (x: Int, y: Int)
     ) -> (width: Int, height: Int) {
+        dragging(from: from, to: to).size
+    }
+
+    /// The same drag, with the viewport-follow signal as well: how many times
+    /// the focus manager's interaction generation moved during the gesture.
+    private func dragging(
+        from: (x: Int, y: Int), to: (x: Int, y: Int)
+    ) -> (size: (width: Int, height: Int), interactions: UInt64) {
         let tui = TUIContext()
         var environment = EnvironmentValues()
-        environment.focusManager = FocusManager()
+        let focus = FocusManager()
+        environment.focusManager = focus
         environment.applyRuntimeServices(from: tui)
         let statusBar = StatusBarState()
         environment.statusBar = statusBar
@@ -260,6 +269,7 @@ struct UserResizableTests {
         let buffer = renderToBuffer(view, context: context)
         tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
 
+        let generation = focus.focusedInteractionGeneration
         tui.mouseEventDispatcher.dispatch(
             MouseEvent(button: .left, phase: .pressed, x: from.x, y: from.y))
         tui.mouseEventDispatcher.dispatch(
@@ -269,7 +279,7 @@ struct UserResizableTests {
 
         tui.mouseEventDispatcher.beginRenderPass()
         let after = renderToBuffer(view, context: context)
-        return (after.width, after.height)
+        return ((after.width, after.height), focus.focusedInteractionGeneration - generation)
     }
 
     /// The size the fixture draws at before anything is dragged.
@@ -430,5 +440,25 @@ struct UserResizableTests {
         let buffer = gripped(
             Text("hello").frame(width: 24, height: 8).border(style: .block).userResizable())
         #expect(!(buffer.lines.last?.stripped.contains("═") ?? true))
+    }
+
+    @Test("A mouse resize asks the viewport to follow, and a still one does not")
+    func mouseResizeAsksTheViewportToFollow() {
+        let resting = restingSize
+        // Growing by its corner near the bottom of a scroll viewport would
+        // otherwise carry the edge under the cursor straight off the screen:
+        // the keyboard half already gets this, through the bump every consumed
+        // key makes.
+        let moved = dragging(
+            from: (x: resting.width - 1, y: resting.height - 1),
+            to: (x: resting.width - 5, y: resting.height - 3))
+        #expect(moved.interactions > 0)
+
+        // A press and release that changed nothing is a click, and a click
+        // should not move anybody's viewport.
+        let still = dragging(
+            from: (x: resting.width - 1, y: resting.height - 1),
+            to: (x: resting.width - 1, y: resting.height - 1))
+        #expect(still.interactions == 0)
     }
 }
