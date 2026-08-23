@@ -174,6 +174,106 @@ extension View {
     }
 }
 
+// MARK: - confirmationDialog(_:isPresented:titleVisibility:presenting:…)
+
+extension View {
+    /// Presents a confirmation dialog built from `data`.
+    ///
+    /// The `alert` reasoning applies unchanged — see
+    /// ``alert(_:isPresented:presenting:actions:message:)`` for why the value
+    /// is a parameter rather than something the builders close over.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The dialog title, looked up as a localization key.
+    ///   - isPresented: Whether to present the dialog.
+    ///   - titleVisibility: Whether the title is shown.
+    ///   - data: The value to present. `nil` withholds the dialog.
+    ///   - actions: The dialog's buttons, built from `data`.
+    ///   - message: The dialog's message, built from `data`.
+    /// - Returns: A view that presents a confirmation dialog conditionally.
+    public func confirmationDialog<Actions: View, Message: View, T>(
+        _ titleKey: LocalizedStringKey,
+        isPresented: Binding<Bool>,
+        titleVisibility: Visibility = .automatic,
+        presenting data: T?,
+        @ViewBuilder actions: @escaping (T) -> Actions,
+        @ViewBuilder message: @escaping (T) -> Message
+    ) -> some View {
+        confirmationDialog(
+            titleKey.localized, isPresented: isPresented, titleVisibility: titleVisibility,
+            presenting: data, actions: actions, message: message)
+    }
+
+    /// Presents a confirmation dialog built from `data`, titled as written.
+    ///
+    /// - Parameters:
+    ///   - title: The dialog title.
+    ///   - isPresented: Whether to present the dialog.
+    ///   - titleVisibility: Whether the title is shown.
+    ///   - data: The value to present. `nil` withholds the dialog.
+    ///   - actions: The dialog's buttons, built from `data`.
+    ///   - message: The dialog's message, built from `data`.
+    /// - Returns: A view that presents a confirmation dialog conditionally.
+    @_disfavoredOverload
+    public func confirmationDialog<Actions: View, Message: View, T>(
+        _ title: String,
+        isPresented: Binding<Bool>,
+        titleVisibility: Visibility = .automatic,
+        presenting data: T?,
+        @ViewBuilder actions: @escaping (T) -> Actions,
+        @ViewBuilder message: @escaping (T) -> Message
+    ) -> some View {
+        confirmationDialog(
+            title, isPresented: isPresented.andPresent(data), titleVisibility: titleVisibility,
+            actions: { if let data { actions(data) } },
+            message: { if let data { message(data) } })
+    }
+
+    /// Presents a confirmation dialog built from `data`, with no message.
+    ///
+    /// - Parameters:
+    ///   - titleKey: The dialog title, looked up as a localization key.
+    ///   - isPresented: Whether to present the dialog.
+    ///   - titleVisibility: Whether the title is shown.
+    ///   - data: The value to present. `nil` withholds the dialog.
+    ///   - actions: The dialog's buttons, built from `data`.
+    /// - Returns: A view that presents a confirmation dialog conditionally.
+    public func confirmationDialog<Actions: View, T>(
+        _ titleKey: LocalizedStringKey,
+        isPresented: Binding<Bool>,
+        titleVisibility: Visibility = .automatic,
+        presenting data: T?,
+        @ViewBuilder actions: @escaping (T) -> Actions
+    ) -> some View {
+        confirmationDialog(
+            titleKey.localized, isPresented: isPresented, titleVisibility: titleVisibility,
+            presenting: data, actions: actions)
+    }
+
+    /// Presents a confirmation dialog built from `data` with no message, titled
+    /// as written.
+    ///
+    /// - Parameters:
+    ///   - title: The dialog title.
+    ///   - isPresented: Whether to present the dialog.
+    ///   - titleVisibility: Whether the title is shown.
+    ///   - data: The value to present. `nil` withholds the dialog.
+    ///   - actions: The dialog's buttons, built from `data`.
+    /// - Returns: A view that presents a confirmation dialog conditionally.
+    @_disfavoredOverload
+    public func confirmationDialog<Actions: View, T>(
+        _ title: String,
+        isPresented: Binding<Bool>,
+        titleVisibility: Visibility = .automatic,
+        presenting data: T?,
+        @ViewBuilder actions: @escaping (T) -> Actions
+    ) -> some View {
+        confirmationDialog(
+            title, isPresented: isPresented.andPresent(data), titleVisibility: titleVisibility,
+            actions: { if let data { actions(data) } })
+    }
+}
+
 // MARK: - Support
 
 extension LocalizedError {

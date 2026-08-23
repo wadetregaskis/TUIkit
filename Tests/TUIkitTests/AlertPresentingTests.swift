@@ -144,4 +144,52 @@ struct AlertPresentingTests {
         #expect(screen.contains("Suggestion: Delete something."))
         #expect(screen.contains("Retry (The disk is full)"))
     }
+
+    @Test("confirmationDialog takes presenting: on the same terms")
+    func confirmationDialogPresenting() {
+        let screen = render(
+            Text("base")
+                .confirmationDialog(
+                    "Discard?", isPresented: .constant(true), presenting: Doomed(name: "draft")
+                ) { doomed in
+                    Button("Discard \(doomed.name)", role: .destructive) {}
+                    Button("Keep", role: .cancel) {}
+                } message: { doomed in
+                    Text("\(doomed.name) has unsaved changes.")
+                })
+
+        #expect(screen.contains("Discard?"))
+        #expect(screen.contains("draft has unsaved changes."))
+        #expect(screen.contains("Discard draft"))
+        #expect(screen.contains("Keep"))
+    }
+
+    @Test("A nil value withholds the confirmation dialog too")
+    func confirmationDialogNilWithholds() {
+        let screen = render(
+            Text("base")
+                .confirmationDialog(
+                    "Discard?", isPresented: .constant(true), presenting: Doomed?.none
+                ) { doomed in
+                    Button("Discard \(doomed.name)") {}
+                })
+
+        #expect(screen.contains("base"))
+        #expect(!screen.contains("Discard?"), "nothing to confirm: \(screen)")
+    }
+
+    @Test("titleVisibility still suppresses the title of a presenting dialog")
+    func confirmationDialogHiddenTitle() {
+        let screen = render(
+            Text("base")
+                .confirmationDialog(
+                    "Discard?", isPresented: .constant(true), titleVisibility: .hidden,
+                    presenting: Doomed(name: "draft")
+                ) { doomed in
+                    Button("Discard \(doomed.name)") {}
+                })
+
+        #expect(!screen.contains("Discard?"))
+        #expect(screen.contains("Discard draft"))
+    }
 }
