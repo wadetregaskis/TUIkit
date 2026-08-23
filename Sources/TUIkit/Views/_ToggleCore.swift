@@ -353,6 +353,15 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     private func composeLabelBuffer(
         indicator: String, labelContext: RenderContext, isDisabled: Bool, palette: any Palette
     ) -> (buffer: FrameBuffer, titleWidth: Int, titleRows: Int) {
+        // `.labelsHidden()` leaves the indicator alone — the box IS the
+        // control — and takes the separating space with the words, so the
+        // toggle is one glyph wide rather than a glyph and a gap. Every part
+        // goes, subtitle included: an explanatory line under a label that is
+        // not there explains nothing.
+        guard !labelContext.environment.controlLabelsAreHidden else {
+            let buffer = FrameBuffer(lines: [indicator])
+            return (buffer, buffer.width, buffer.height)
+        }
         let parts = resolveChildViews(from: label, context: labelContext)
 
         // Single-view label: flatten the whole label next to the indicator.

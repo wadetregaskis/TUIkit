@@ -450,7 +450,12 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
     /// Renders the label line with label left-aligned and currentValueLabel right-aligned.
     private func renderLabelLine(width: Int, palette: any Palette, context: RenderContext) -> String {
         let labelBuffer: FrameBuffer
-        if let labelView = label, !(labelView is EmptyView) {
+        // `.labelsHidden()` takes the CAPTION, not the readout: the
+        // `currentValueLabel` states the value the bar is showing, which is the
+        // control's content rather than a name for it. With both gone the line
+        // is blank and `visibleLabelLine` drops it, so the bar moves up.
+        if let labelView = label, !(labelView is EmptyView),
+            !context.environment.controlLabelsAreHidden {
             labelBuffer = TUIkit.renderToBuffer(labelView, context: context)
         } else {
             labelBuffer = FrameBuffer()

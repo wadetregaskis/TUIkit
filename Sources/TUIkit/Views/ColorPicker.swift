@@ -40,6 +40,8 @@ public struct ColorPicker: View {
 
     /// How wide the label column is — see ``TUIkit/View/colorPickerLabelWidth(_:)``.
     @Environment(\.colorPickerLabelWidth) private var labelWidth
+    @Environment(\.labelsVisibility) private var labelsVisibility
+    private var labelsHidden: Bool { labelsVisibility == .hidden }
 
     /// Creates a colour picker over an RGB binding, with a localized label.
     ///
@@ -72,9 +74,14 @@ public struct ColorPicker: View {
         // channel's value field reads as its own ("…102  G ◀…", not "102 G"
         // where the G looks like a suffix of the previous channel's value).
         HStack(spacing: 2) {
-            Text(title)
-                .frame(width: labelWidth, alignment: .leading)
-                .foregroundStyle(.palette.foregroundSecondary)
+            // `.labelsHidden()` drops the whole label COLUMN, width and gap
+            // included — the point of `colorPickerLabelWidth` is a shared
+            // pillar, and a pillar of hidden captions is just an indent.
+            if !labelsHidden {
+                Text(title)
+                    .frame(width: labelWidth, alignment: .leading)
+                    .foregroundStyle(.palette.foregroundSecondary)
+            }
             swatch
             channel("R", 0)
             channel("G", 1)

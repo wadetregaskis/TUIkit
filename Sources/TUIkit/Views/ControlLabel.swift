@@ -71,6 +71,12 @@ struct _CollapsingLabel<Label: View>: View, Renderable, Layoutable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // `.labelsHidden()` collapses the label the same way an absent one
+        // does — including the separating space — because the point of hiding
+        // a label is that the layout closes up around it. Answered here rather
+        // than at the three call sites so `Picker`, `Slider` and `Stepper`
+        // cannot come to disagree about what hidden means.
+        guard !context.environment.controlLabelsAreHidden else { return FrameBuffer() }
         guard let label, !(label is EmptyView) else { return FrameBuffer() }
         let buffer = TUIkit.renderToBuffer(
             _ControlLabel.dimmingWhenDisabled(

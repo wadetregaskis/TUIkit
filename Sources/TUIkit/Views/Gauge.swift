@@ -266,7 +266,11 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
     /// The label line (label left, current-value right) if it has visible
     /// content, else `nil` — so a blank label doesn't push the bar down.
     private func visibleLabelLine(width: Int, context: RenderContext) -> String? {
-        let labelText = inlineText(label, context: context)
+        // The caption goes under `.labelsHidden()`; the bound and current-value
+        // labels stay, being readouts of the value rather than names for it.
+        // See the same split in `ProgressView.renderLabelLine`.
+        let labelText =
+            context.environment.controlLabelsAreHidden ? "" : inlineText(label, context: context)
         let valueText = inlineText(currentValueLabel, context: context)
         guard !(labelText.stripped.allSatisfy(\.isWhitespace) && valueText.stripped.allSatisfy(\.isWhitespace))
         else { return nil }

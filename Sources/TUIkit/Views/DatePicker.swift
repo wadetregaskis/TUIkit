@@ -76,8 +76,12 @@ public struct DatePicker<Label: View>: View {
     }
 
     public var body: some View {
-        HStack(spacing: 1) {
-            label
+        // `_CollapsingLabel` rather than the label and a stack gap: it is the
+        // same "label, one separating space, or nothing at all" unit `Picker`,
+        // `Slider` and `Stepper` use, and it is where `.labelsHidden()` is
+        // honoured. Spacing 0 because the unit carries its own space.
+        HStack(spacing: 0) {
+            _CollapsingLabel(label: label, controlDisabled: isDisabled)
             _DatePickerCore(
                 selection: selection, range: range,
                 displayedComponents: displayedComponents, focusID: focusID, isDisabled: isDisabled)

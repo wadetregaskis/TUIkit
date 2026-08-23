@@ -55,8 +55,13 @@ public struct LabeledContent<Label: View, Content: View>: View {
         // frame gives the content the whole remainder and aligns a fixed-width
         // content (the `value:` overloads' `Text`) at its trailing edge, which
         // is where the spacer used to put it.
-        HStack(spacing: 1) {
-            label
+        //
+        // The label goes through `_CollapsingLabel` — the same unit every
+        // labelled control uses — so `.labelsHidden()` leaves the content
+        // holding the whole row. Spacing 0 because that unit carries its own
+        // separating space.
+        HStack(spacing: 0) {
+            _CollapsingLabel(label: label, controlDisabled: false)
             content.frame(maxWidth: .infinity, alignment: .trailing)
         }
     }

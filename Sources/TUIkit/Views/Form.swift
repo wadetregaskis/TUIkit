@@ -262,9 +262,18 @@ private func controlIndent(pillar: Int) -> Int { pillar == 0 ? 0 : pillar + 1 }
 private func baseRowView(_ kind: _FormRowKind, pillar: Int) -> some View {
     switch kind {
     case .field(let label, let content):
-        HStack(spacing: 1) {
-            label.frame(width: pillar, alignment: .trailing)
+        // A pillar of zero means there is no label column: every label
+        // measured empty, or `.labelsHidden()` withheld them all. The gap in
+        // front of the content goes with the column — a form of hidden labels
+        // should read as a column of controls, not a column of controls
+        // indented by one for a label that is not there.
+        if pillar == 0 {
             content
+        } else {
+            HStack(spacing: 1) {
+                label.frame(width: pillar, alignment: .trailing)
+                content
+            }
         }
     case .control(let view):
         view.padding(.leading, controlIndent(pillar: pillar))
@@ -424,7 +433,11 @@ private struct _FormLayout<Content: View>: View, Renderable, Layoutable {
     /// The shared pillar: the widest field label across every row (sections
     /// included), so all field labels right-align to one column.
     private func pillarWidth(of elements: [_FormElement], context: RenderContext) -> Int {
-        formRows(of: elements)
+        // `.labelsHidden()` on a form takes the label COLUMN away, not just
+        // the words in it: a pillar sized to labels nobody draws would indent
+        // every control by the width of the longest invisible caption.
+        guard !context.environment.controlLabelsAreHidden else { return 0 }
+        return formRows(of: elements)
             .compactMap { row -> Int? in
                 guard case .field(let label, _) = row.kind else { return nil }
                 return measureChild(
