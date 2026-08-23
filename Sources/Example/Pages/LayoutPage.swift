@@ -132,6 +132,16 @@ struct LayoutPage: View {
     /// Whether the chips flow onto wrapped lines or stack in one column.
     @State private var flowChipsLayout = true
 
+    /// How far right the ZStack demos' TOP layer is drawn, in cells. One slider
+    /// for all five, because the point being made is the same in each: the top
+    /// layer owns the cells it lands on and nothing shows through, so what
+    /// changes as it slides is only WHICH cells those are.
+    @State private var zstackTopOffset = 0.0
+
+    /// The furthest right the ZStack demos' top layer slides. Every band in the
+    /// section is sized so its label still fits inside at this offset.
+    private static let zstackMaxOffset = 6.0
+
     /// The rows the windowed `LazyVStack` rendered in the last frame.
     @State private var renderedRows: Set<Int> = []
 
@@ -349,6 +359,29 @@ struct LayoutPage: View {
                     Text("page.layout.zstack.explain")
                         .foregroundStyle(.palette.foregroundSecondary)
 
+                    // Slide every example's top layer at once: the partial
+                    // overlaps are where the "no transparency, no blending"
+                    // claim above is actually visible, and they only appear
+                    // once the layers stop lining up.
+                    //
+                    // Each band below is wide enough that its top layer, from
+                    // where alignment puts it, still fits inside at the full
+                    // offset: a centred label of width L needs a band of at
+                    // least L + 2 × the maximum offset. `.offset` does not clip
+                    // — the displaced content paints wherever it lands, border
+                    // included — and a label chewing through the box's right
+                    // edge reads as a rendering fault rather than as the point
+                    // being made.
+                    HStack(spacing: 1) {
+                        Slider(value: $zstackTopOffset, in: 0...Self.zstackMaxOffset, step: 1) {
+                            Text("page.layout.zstack.offset")
+                                .foregroundStyle(.palette.foregroundSecondary)
+                        }
+                        Text(verbatim: "+\(Int(zstackTopOffset))")
+                            .bold()
+                            .foregroundStyle(.palette.accent)
+                    }
+
                     // 1 — What it does. Children stack back-to-front and
                     // alignment positions them within the union of their sizes.
                     Text("page.layout.zstack.case1")
@@ -356,6 +389,7 @@ struct LayoutPage: View {
                     ZStack(alignment: .center) {
                         Text(String(repeating: "▒", count: 28)).foregroundStyle(.palette.accent)
                         Text(" \(L("page.layout.onTop")) ").bold().inverted()
+                            .offset(x: Int(zstackTopOffset))
                     }
                     .border(.brightBlack)
 
@@ -368,15 +402,17 @@ struct LayoutPage: View {
                         .foregroundStyle(.palette.foregroundTertiary)
                     HStack(spacing: 3) {
                         ZStack(alignment: .center) {
-                            Text(String(repeating: "▒", count: 20))
+                            Text(String(repeating: "▒", count: 22))
                                 .foregroundStyle(.palette.accent)
                             Text(verbatim: "   \(L("page.layout.zstack.word"))   ")
+                                .offset(x: Int(zstackTopOffset))
                         }
                         .border(.brightBlack)
                         ZStack(alignment: .center) {
                             Text(String(repeating: "▒", count: 20))
                                 .foregroundStyle(.palette.accent)
                             Text(verbatim: L("page.layout.zstack.word"))
+                                .offset(x: Int(zstackTopOffset))
                         }
                         .border(.brightBlack)
                     }
@@ -392,6 +428,7 @@ struct LayoutPage: View {
                         Text(verbatim: "OVER")
                             .bold()
                             .foregroundStyle(.palette.warning)
+                            .offset(x: Int(zstackTopOffset))
                     }
                     .border(.brightBlack)
 
@@ -403,10 +440,11 @@ struct LayoutPage: View {
                     Text("page.layout.zstack.case4")
                         .foregroundStyle(.palette.foregroundTertiary)
                     ZStack(alignment: .center) {
-                        Text(String(repeating: "▒", count: 28)).foregroundStyle(.palette.accent)
+                        Text(String(repeating: "▒", count: 36)).foregroundStyle(.palette.accent)
                         Text(" \(L("page.layout.zstack.faded")) ")
                             .foregroundStyle(.palette.foreground)
                             .opacity(0.45)
+                            .offset(x: Int(zstackTopOffset))
                     }
                     .border(.brightBlack)
                 }
