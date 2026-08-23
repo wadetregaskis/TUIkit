@@ -42,6 +42,42 @@
 /// }
 /// ```
 ///
+/// ## Presenting from a row
+///
+/// Attach a `.sheet` / `.alert` / `.modal` to the **List**, not to a row:
+///
+/// ```swift
+/// List(selection: $selectedID) {
+///     ForEach(items) { item in
+///         Text(item.name)
+///     }
+/// }
+/// .sheet(item: $editing) { item in            // ← here
+///     Dialog(title: item.name) { … }
+/// }
+/// ```
+///
+/// A `List` is windowed: it renders the rows the viewport can show, not all of
+/// them, which is what keeps a ten-thousand-row list costing the same as a
+/// ten-row one. A modifier attached to a row therefore only exists while that
+/// row does, so
+///
+/// ```swift
+/// ForEach(items) { item in
+///     Text(item.name)
+///         .sheet(item: $editing) { … }        // ← only while this row is drawn
+/// }
+/// ```
+///
+/// presents nothing when `$editing` is set for a row that is scrolled out of
+/// view — and then presents it if the user happens to scroll that row back in,
+/// which makes a dialog's appearance a function of the scroll position.
+///
+/// This is not a TUIkit limitation to work around; SwiftUI's lazy containers
+/// behave the same way for the same reason, and attaching the presentation to
+/// the container is the idiom there too. The rule is worth stating plainly
+/// because the row-attached form looks natural and fails quietly.
+///
 /// ## Visual States
 ///
 /// | State | Rendering |
