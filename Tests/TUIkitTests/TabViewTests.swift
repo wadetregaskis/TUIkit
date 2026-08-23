@@ -551,6 +551,83 @@ struct TabViewTests {
         // The Int convenience is exactly the uniform-EdgeInsets overload.
         #expect(padInt == padInsets, "the two overloads render identically")
     }
+
+    // MARK: - Selection type vs tab value type
+
+    /// Nothing links `Tab<Value>` to `TabView<SelectionValue>` at compile time
+    /// — SwiftUI ties them through `TabContent`'s associated type; this does
+    /// not — so a selection bound to an OPTIONAL while the tabs carry bare
+    /// values type-checks. It used to draw the wrong tab: the match compared
+    /// two `AnyHashable`s erased from different static types, and
+    /// `AnyHashable(Choice.b) == AnyHashable(Choice?.some(.b))` is false.
+    @Test("An Optional selection matches tabs carrying bare values")
+    func optionalSelectionMatchesBareTagValues() {
+        enum Choice: Hashable { case a, b }
+        final class Box { var value: Choice? = .b }
+        let box = Box()
+        let drawn = lines(
+            TabView(selection: Binding(get: { box.value }, set: { box.value = $0 })) {
+                Tab("Alpha", value: Choice.a) { Text("ALPHA BODY") }
+                Tab("Beta", value: Choice.b) { Text("BETA BODY") }
+            })
+        #expect(drawn.contains { $0.contains("BETA BODY") }, "\(drawn)")
+        #expect(!drawn.contains { $0.contains("ALPHA BODY") }, "\(drawn)")
+    }
+
+    /// The `Int` version of the same mistake is the dangerous one: `AnyHashable`
+    /// unwraps Optionals for types carrying an ObjC bridge, so it worked on
+    /// Apple platforms and would have failed on Linux. Here twice, deliberately.
+    @Test("…and so does an Optional Int selection, on every platform")
+    func optionalIntSelectionMatches() {
+        final class Box { var value: Int? = 1 }
+        let box = Box()
+        let drawn = lines(
+            TabView(selection: Binding(get: { box.value }, set: { box.value = $0 })) {
+                Tab("Zero", value: 0) { Text("ZERO BODY") }
+                Tab("One", value: 1) { Text("ONE BODY") }
+            })
+        #expect(drawn.contains { $0.contains("ONE BODY") }, "\(drawn)")
+    }
+
+    /// The keyboard reads the selection through the handler, which compares
+    /// against the TABS' erasures — so the getter has to hand it one of those,
+    /// not a fresh erasure of the selection. Re-erasing put the arrow keys on
+    /// whichever tab the fallback named.
+    @Test("Arrow keys step from the tab an Optional selection actually names")
+    func arrowKeysStepFromTheSelectedTab() {
+        enum Choice: Hashable { case a, b, c }
+        final class Box { var value: Choice? = .b }
+        let box = Box()
+        let context = makeRenderContext(width: 40, height: 8)
+        _ = renderToBuffer(
+            TabView(selection: Binding(get: { box.value }, set: { box.value = $0 })) {
+                Tab("Alpha", value: Choice.a) { Text("A") }
+                Tab("Beta", value: Choice.b) { Text("B") }
+                Tab("Gamma", value: Choice.c) { Text("C") }
+            }, context: context)
+
+        #expect(context.environment.focusManager?.dispatchKeyEvent(KeyEvent(key: .right)) == true)
+        #expect(
+            box.value == .c,
+            "stepped from Beta, not from the fallback: \(String(describing: box.value))")
+    }
+
+    /// The fallback survives the change — an Optional selection naming no tab
+    /// still shows the first one rather than trapping. (The non-Optional twin
+    /// is `unmatchedSelectionFallsBack` above; this is the spelling the new
+    /// matching path takes.)
+    @Test("An Optional selection naming no tab still falls back")
+    func unmatchedOptionalSelectionFallsBack() {
+        enum Choice: Hashable { case a, b, missing }
+        final class Box { var value: Choice? = .missing }
+        let box = Box()
+        let drawn = lines(
+            TabView(selection: Binding(get: { box.value }, set: { box.value = $0 })) {
+                Tab("Alpha", value: Choice.a) { Text("ALPHA BODY") }
+                Tab("Beta", value: Choice.b) { Text("BETA BODY") }
+            })
+        #expect(drawn.contains { $0.contains("ALPHA BODY") }, "falls back to the first: \(drawn)")
+    }
 }
 
 // MARK: - Idle render loop

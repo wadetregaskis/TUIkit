@@ -220,7 +220,32 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     /// Index of the tab whose value matches the selection, or 0 (so something is
     /// always shown even if the binding holds a value with no matching tab).
     private var selectedIndex: Int {
-        tabs.firstIndex { $0.value == AnyHashable(selection.wrappedValue) } ?? 0
+        index(matching: selection.wrappedValue) ?? 0
+    }
+
+    /// The tab `value` names, matched by casting the TAB's value into the
+    /// selection's type.
+    ///
+    /// NOT by comparing two `AnyHashable`s, which is what this did and which is
+    /// wrong whenever the two sides were erased from different static types —
+    /// the case being a `TabView(selection:)` bound to an OPTIONAL while its
+    /// tabs carry bare values. Nothing links `Tab<Value>` to
+    /// `TabView<SelectionValue>` at compile time (SwiftUI ties them through
+    /// `TabContent`'s associated type; this does not), so that combination
+    /// type-checks, and `AnyHashable(Choice.b) == AnyHashable(Choice?.some(.b))`
+    /// is FALSE — the view fell back to tab 0 and drew the wrong body.
+    ///
+    /// Worse than merely wrong: `AnyHashable` unwraps Optionals for types with
+    /// an ObjC bridge, so an `Int`-valued version of the same mistake works on
+    /// Apple platforms and fails on Linux.
+    ///
+    /// `as?` promotes a value to its Optional, as a language rule rather than a
+    /// bridging accident, so casting one way round is exact on both platforms
+    /// and for both spellings. It is what `Picker` has always done with its
+    /// tags (`Picker.swift`) and what the selection's own write-back below
+    /// does; only this read disagreed.
+    private func index(matching value: SelectionValue) -> Int? {
+        tabs.firstIndex { ($0.value.base as? SelectionValue) == value }
     }
 
     /// The render context for the active tab's content: identity branched by the
@@ -433,8 +458,18 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             propertyIndex: StateIndex.focusID)
         let handlerKey = StateStorage.StateKey(
             identity: context.identity, propertyIndex: StateIndex.handler)
+        // The matching TAB's erasure, not the selection's own: the handler
+        // compares this against `values`, which are the tabs', so re-erasing
+        // the selection here reintroduces exactly the mismatch
+        // `index(matching:)` exists to avoid — the arrow keys would step from
+        // whichever tab the fallback named. Falls back to the selection's own
+        // erasure when no tab matches, so the handler always holds something.
         let erased = Binding<AnyHashable>(
-            get: { AnyHashable(selection.wrappedValue) },
+            get: {
+                let current = selection.wrappedValue
+                return index(matching: current).map { tabs[$0].value }
+                    ?? AnyHashable(current)
+            },
             set: { if let v = $0.base as? SelectionValue { selection.wrappedValue = v } })
         let handlerBox: StateBox<TabStripHandler> = stateStorage.storage(
             for: handlerKey,
