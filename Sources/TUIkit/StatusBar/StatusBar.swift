@@ -223,10 +223,12 @@ private struct _StatusBarCore: View, Renderable {
         // below) gets a bumped tint so the user has visual
         // confirmation that an item is clickable.
         let hoveredID = context.environment.statusBar?.hoveredItemID
+        let activationOverride = context.environment.statusBar?.activationLabelOverride
         let layouts = combinedItems.map { item -> ItemLayout in
             let display = renderItemString(
                 item: item,
                 escapeOverride: escapeOverride,
+                activationOverride: activationOverride,
                 isHovered: item.id == hoveredID && itemIsClickable(item)
             )
             return ItemLayout(
@@ -329,9 +331,16 @@ private struct _StatusBarCore: View, Renderable {
     /// override. When `isHovered` is true, the whole item is
     /// underlined so the user has a clear visual confirmation
     /// that they're over a clickable target.
+    /// Whether `shortcut` is the Return key, however the app spelled it.
+    static func isReturnShortcut(_ shortcut: String) -> Bool {
+        shortcut == Shortcut.enter || shortcut == Shortcut.returnKey || shortcut == "enter"
+            || shortcut == "return"
+    }
+
     private func renderItemString(
         item: any StatusBarItemProtocol,
         escapeOverride: String?,
+        activationOverride: String?,
         isHovered: Bool
     ) -> String {
         let shortcutStyled = ANSIRenderer.render(
@@ -346,9 +355,12 @@ private struct _StatusBarCore: View, Renderable {
         )
 
         // Apply the modal escape-label override only to items bound to
-        // the escape key; everything else keeps its declared label.
+        // the escape key, and the focused control's Return verb only to items
+        // bound to Return; everything else keeps its declared label.
         let effectiveLabel: String
         if item.shortcut == Shortcut.escape, let override = escapeOverride {
+            effectiveLabel = override
+        } else if Self.isReturnShortcut(item.shortcut), let override = activationOverride {
             effectiveLabel = override
         } else {
             effectiveLabel = item.label

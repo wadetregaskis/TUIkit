@@ -336,6 +336,9 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
 
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        // Return submits, when the caller gave it something to submit to.
+        FocusRegistration.publishActivationLabel(
+            onSubmitAction != nil ? "submit" : nil, context: context, isFocused: isFocused)
 
         // Hover state persists across renders; the dispatcher
         // flips it on .entered / .exited events synthesised

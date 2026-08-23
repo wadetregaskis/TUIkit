@@ -35,7 +35,14 @@ struct _InlineMenuCore: View, Renderable, Layoutable {
         // the bottom, and the focus reveal keeps the focused item in view as
         // the arrows walk past the edge.
         registerPagingKeys(context: context)
-        return renderMenuColumn(column, context: context, capHeight: context.availableHeight)
+        // The rows are page focus stops (that is what "inline" means), so
+        // nothing else marks them as belonging to a menu — and a `Button` that
+        // does not know it is in one says Return "activates" it rather than
+        // chooses from the menu around it.
+        var menuContext = context
+        menuContext.environment.isInsideMenu = true
+        return renderMenuColumn(
+            column, context: menuContext, capHeight: context.availableHeight)
     }
 
     @ViewBuilder

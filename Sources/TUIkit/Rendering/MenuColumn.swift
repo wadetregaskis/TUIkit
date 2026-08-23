@@ -112,6 +112,10 @@ private struct MenuHighlightedOrdinalKey: EnvironmentKey {
     static let defaultValue: Int? = nil
 }
 
+private struct IsInsideMenuKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
     /// The open pop-up menu a row is rendering into, or `nil` on the page.
     ///
@@ -128,6 +132,17 @@ extension EnvironmentValues {
     var menuHighlightedOrdinal: Int? {
         get { self[MenuHighlightedOrdinalKey.self] }
         set { self[MenuHighlightedOrdinalKey.self] = newValue }
+    }
+
+    /// Whether this view is a row of a menu — of EITHER kind.
+    ///
+    /// Unlike ``menuRowSink``, which is the pop-up's row-claiming channel and
+    /// deliberately absent for an inline menu, this is the plain question "is
+    /// the thing around me a menu". A `Button` reads it to say what Return does
+    /// here: choosing from a menu rather than activating a button on the page.
+    var isInsideMenu: Bool {
+        get { self[IsInsideMenuKey.self] }
+        set { self[IsInsideMenuKey.self] = newValue }
     }
 }
 

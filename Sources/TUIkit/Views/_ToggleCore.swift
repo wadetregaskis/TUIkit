@@ -432,6 +432,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         )
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        FocusRegistration.publishActivationLabel("toggle", context: context, isFocused: isFocused)
         let isOnValue = isOn.wrappedValue
 
         // Hover state — flipped by the dispatcher on .entered / .exited events

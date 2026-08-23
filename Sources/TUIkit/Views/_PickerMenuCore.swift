@@ -108,6 +108,9 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
 
         let isOpen = handler.isOpen && optionCount > 0
         publishOpenEscapeLabel(context: context, isOpen: isOpen)
+        // Return opens the closed drop-down, and picks from the open one.
+        FocusRegistration.publishActivationLabel(
+            isOpen ? "choose" : "open menu", context: context, isFocused: isFocused)
 
         let collapsed = collapsedLine(
             innerWidth: innerWidth,

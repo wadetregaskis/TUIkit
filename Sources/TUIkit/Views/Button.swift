@@ -293,7 +293,16 @@ private struct _ButtonCore: View, Renderable, Layoutable {
                 // dismiss action is.
                 extras: context.environment.buttonKeyExtras)
             FocusRegistration.register(context: context, handler: handler)
-            return FocusRegistration.isFocused(context: context, focusID: focusID)
+            let isFocused = FocusRegistration.isFocused(context: context, focusID: focusID)
+            // What Return does here, for the status bar: a menu trigger opens
+            // its menu, a row of a menu chooses, and a button on the page
+            // activates.
+            let verb =
+                isMenuTrigger
+                ? "open menu" : (context.environment.isInsideMenu ? "choose" : "activate")
+            FocusRegistration.publishActivationLabel(
+                verb, context: context, isFocused: isFocused)
+            return isFocused
         }
         // `FocusRegistration.register` bundles three things; skipping it must
         // not skip the other two. `markActive` is state-GC, not focus — without

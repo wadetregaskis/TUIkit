@@ -74,6 +74,8 @@ func renderMenuColumn(
     // border then clipped — invisible while a row was just a left-aligned
     // label, fatal once a row has something at its trailing edge.
     sized.environment.menuRowWidth = max(1, menuWidth - 6)
+    // For the Return verb: a row of an open pop-up is a row of a menu too.
+    sized.environment.isInsideMenu = true
 
     // Does it fit? A measure is clamped to the context's `availableHeight` —
     // and for an inline menu the cap IS that height — so a measure in place

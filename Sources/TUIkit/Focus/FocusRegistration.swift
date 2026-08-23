@@ -167,4 +167,26 @@ struct FocusRegistration {
     static func isFocused(context: RenderContext, focusID: String) -> Bool {
         context.isMeasuring ? false : (context.environment.focusManager?.isFocused(id: focusID) ?? false)
     }
+
+    /// Says what Return would do to this control, while it holds the focus.
+    ///
+    /// The status bar renames its Return item to this, so one declared item
+    /// stays true as the focus moves between controls that answer the key
+    /// differently — "open menu" over a closed pop-up, "toggle" over a switch,
+    /// "activate" over a button. A control that does nothing with Return says
+    /// nothing and the page's own label stands.
+    ///
+    /// A verb, lower case, no key name: the bar draws the key itself.
+    ///
+    /// - Parameters:
+    ///   - label: What Return does here, or `nil` to say nothing.
+    ///   - context: The current render context.
+    ///   - isFocused: Whether this control holds the focus. Unfocused controls
+    ///     publish nothing, so the claim always belongs to exactly one.
+    static func publishActivationLabel(
+        _ label: String?, context: RenderContext, isFocused: Bool
+    ) {
+        guard isFocused, !context.isMeasuring, let label else { return }
+        context.environment.statusBar?.activationLabelOverride = label
+    }
 }

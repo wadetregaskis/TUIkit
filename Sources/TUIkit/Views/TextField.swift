@@ -368,11 +368,8 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         let contentWidth = max(minContentWidth, context.availableWidth - chrome.width)
 
         let persistedFocusID = FocusRegistration.persistFocusID(
-            context: context,
-            explicitFocusID: focusID,
-            defaultPrefix: "textfield",
-            propertyIndex: StateIndex.focusID
-        )
+            context: context, explicitFocusID: focusID,
+            defaultPrefix: "textfield", propertyIndex: StateIndex.focusID)
 
         let handler = resolveHandler(
             persistedFocusID: persistedFocusID,
@@ -381,6 +378,9 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             context: context)
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        // Return submits, when the caller gave it something to submit to.
+        let submitVerb = onSubmitAction != nil ? "submit" : nil
+        FocusRegistration.publishActivationLabel(submitVerb, context: context, isFocused: isFocused)
 
         // Hover state persists across renders; the dispatcher
         // flips it on .entered / .exited events synthesised from

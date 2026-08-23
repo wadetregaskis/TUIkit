@@ -157,6 +157,23 @@ public final class StatusBarState: @unchecked Sendable {
     /// Meaningless while ``escapeLabelOverride`` is `nil`.
     public var escapeClaimGrabsInput = true
 
+    /// What Return would do to whatever holds the focus right now, or `nil`
+    /// when nothing has said.
+    ///
+    /// The Return counterpart of ``escapeLabelOverride``, and it exists for the
+    /// same reason: a page declares one item for the key and the key means
+    /// something different depending on what is focused. "show" is right over
+    /// the row that opens a dialog and wrong over the toggle beside it, and the
+    /// page cannot know which is which.
+    ///
+    /// Published by the focused control each render (see
+    /// `FocusRegistration.publishActivationLabel(_:context:isFocused:)`) and
+    /// cleared at the top of every frame, so a control that lost the focus
+    /// never leaves its verb behind. A control that does nothing with Return —
+    /// a slider, a stepper — publishes nothing, and the page's own label
+    /// stands.
+    public var activationLabelOverride: String?
+
     /// The `id` of the status-bar item the mouse cursor is
     /// currently hovering over, or `nil` if the cursor isn't on
     /// any item.

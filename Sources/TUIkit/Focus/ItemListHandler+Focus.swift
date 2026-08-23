@@ -48,6 +48,10 @@ extension ItemListHandler {
         FocusRegistration.register(context: context, handler: self)
         let hasFocus = FocusRegistration.isFocused(context: context, focusID: focusID)
         publishEscapeClaim(context: context, isFocused: hasFocus)
+        // What Return does to the focused row: run the row's action where the
+        // list has one, and otherwise settle the selection on it.
+        FocusRegistration.publishActivationLabel(
+            primaryAction != nil ? "open" : "select", context: context, isFocused: hasFocus)
         // The Bottom follow carries the cursor only for the control that owns it.
         isFocusEngaged = hasFocus
         return hasFocus
