@@ -171,6 +171,98 @@ struct TransactionTests {
 
     // MARK: - Narrowing it for a subtree
 
+    // MARK: - transaction(value:)
+
+    /// A live context across frames, so the previous-value memory persists the
+    /// way it does in the run loop.
+    @MainActor
+    private final class Frames {
+        let tui = TUIContext()
+
+        /// `inherited` is what the frame's transaction would be — the run loop
+        /// stamps it from the change that caused the render, so a test states
+        /// it on the context rather than wrapping the RENDER in
+        /// `withAnimation` (which scopes a change, not a draw).
+        func render(_ view: some View, inherited: Transaction = Transaction()) {
+            var env = EnvironmentValues()
+            env.applyRuntimeServices(from: tui)
+            env.transaction = inherited
+            let context = RenderContext(
+                availableWidth: 20, availableHeight: 4, environment: env, tuiContext: tui)
+            tui.stateStorage.beginRenderPass()
+            _ = renderToBuffer(view, context: context)
+            tui.stateStorage.endRenderPass()
+        }
+    }
+
+    @Test("transaction(value:) applies only on the frame its value moved")
+    func valueScopedTransaction() {
+        let frames = Frames()
+        var seen: [Transaction] = []
+        var zoom = 1
+
+        func view() -> some View {
+            TransactionProbe { seen.append($0) }
+                .transaction(value: zoom) { $0.animation = .easeIn }
+        }
+
+        // First render: no previous value, so no change, so nothing applied.
+        frames.render(view())
+        #expect(seen.last?.animation == nil, "the first frame is not a change: \(seen)")
+
+        zoom = 2
+        frames.render(view())
+        #expect(seen.last?.animation == .easeIn, "\(seen)")
+
+        // Unchanged again: back to whatever was inherited.
+        frames.render(view())
+        #expect(seen.last?.animation == nil, "a re-render at the same value is not a change")
+    }
+
+    @Test("It transforms the INHERITED transaction rather than replacing it")
+    func valueScopedTransactionComposes() {
+        let frames = Frames()
+        var seen: [Transaction] = []
+        var zoom = 1
+
+        func view() -> some View {
+            TransactionProbe { seen.append($0) }
+                .transaction(value: zoom) { $0.disablesAnimations = true }
+        }
+
+        frames.render(view())
+        zoom = 2
+        frames.render(view(), inherited: Transaction(animation: .linear(duration: 1)))
+        #expect(seen.last?.animation == .linear(duration: 1), "the inherited animation survived")
+        #expect(seen.last?.disablesAnimations == true, "and the transform reached it")
+        #expect(seen.last?.effectiveAnimation == nil, "so the subtree opts out: \(seen)")
+    }
+
+    @Test("Two values scope independently")
+    func twoValuesScopeIndependently() {
+        let frames = Frames()
+        var seen: [Transaction] = []
+        var zoom = 1
+        var data = 1
+
+        func view() -> some View {
+            TransactionProbe { seen.append($0) }
+                .transaction(value: zoom) { $0.animation = .easeIn }
+                .transaction(value: data) { $0.disablesAnimations = true }
+        }
+
+        frames.render(view())
+        data = 2
+        frames.render(view())
+        #expect(seen.last?.animation == nil, "the data change is not the zoom's business")
+        #expect(seen.last?.disablesAnimations == true)
+
+        zoom = 2
+        frames.render(view())
+        #expect(seen.last?.animation == .easeIn)
+        #expect(seen.last?.disablesAnimations == false, "…and vice versa: \(seen)")
+    }
+
     @Test("A subtree can be opted out of an ambient animation")
     func disablesAnimationsInASubtree() {
         var seen: Transaction?
