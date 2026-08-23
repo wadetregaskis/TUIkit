@@ -103,6 +103,19 @@ private enum StateIndex {
     static let handler = 1
 }
 
+/// How many cells of the bottom border the horizontal grabber occupies, and how
+/// many rows of the right border the vertical one does.
+///
+/// Wide enough to read as a handle rather than as a blemish, and odd so it
+/// centres exactly. Shrunk to fit on a small view, and dropped entirely when
+/// there is no room beside the corners — a handle that runs into the corner it
+/// is distinct from says nothing. Outside the generic for the same reason
+/// `StateIndex` is.
+private enum GripSize {
+    static let horizontal = 7
+    static let vertical = 3
+}
+
 /// The rendering half of ``View/userResizable(_:)``.
 struct _UserResizableCore<Content: View>: View, Renderable {
     let content: Content
@@ -357,6 +370,11 @@ struct _UserResizableCore<Content: View>: View, Renderable {
             ? palette.accent
             : (isHovered ? palette.hoveredForeground(resting) : resting)
         let background = palette.background
+        // Focused, the marks breathe — the same affordance every other focused
+        // control shows, and the reason is the same: a still highlight on a
+        // terminal reads as decoration, a breathing one reads as "this is where
+        // the keyboard is".
+        let animated = AnimatedColor.activeSection(isFocused, in: context.environment)
         let styled = ANSIRenderer.colorize(
             glyph,
             foreground: tint.ensuringRenderedContrast(atLeast: 2.4, against: background),
@@ -365,5 +383,68 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         buffer = buffer.composited(
             with: FrameBuffer(lines: [styled]),
             at: (x: buffer.width - 1, y: buffer.height - 1))
+        if let run = animated?.run(offsetX: buffer.width - 1, offsetY: buffer.height - 1, draw: {
+            ANSIRenderer.colorize(glyph, foreground: $0, background: background)
+        }) {
+            buffer.animatedCells.append(run)
+        }
+
+        guard !paintsItsCells else { return }
+        drawEdgeGrips(
+            into: &buffer, tint: tint, animated: animated, background: background)
+    }
+
+    /// The doubled-line handles in the middle of each live border.
+    ///
+    /// Purely a hint — the whole edge takes the drag, as it did before these
+    /// existed — but a terminal cannot change the pointer's shape at an edge,
+    /// so an edge that can be grabbed has to say so in ink. Doubled lines
+    /// because they read as "special" against every single-line border style
+    /// TUIkit draws, and are Box Drawing rather than pictographs, so every
+    /// terminal advances them by exactly the cells claimed.
+    private func drawEdgeGrips(
+        into buffer: inout FrameBuffer, tint: Color, animated: AnimatedColor?,
+        background: Color
+    ) {
+        func styled(_ text: String, _ colour: Color) -> String {
+            ANSIRenderer.colorize(text, foreground: colour, background: background)
+        }
+
+        // The bottom border is dragged for HEIGHT, so it is marked when the
+        // vertical axis is live; the right border likewise for width.
+        if axes.contains(.vertical) {
+            // Leaving a cell either side of the corner and the far corner, so
+            // the handle never reads as part of them.
+            let room = buffer.width - 4
+            let width = min(GripSize.horizontal, room)
+            if width >= 3 {
+                let x = (buffer.width - width) / 2
+                let y = buffer.height - 1
+                let glyphs = String(repeating: "═", count: width)
+                buffer = buffer.composited(
+                    with: FrameBuffer(lines: [styled(glyphs, tint)]), at: (x: x, y: y))
+                if let run = animated?.run(offsetX: x, offsetY: y, draw: { styled(glyphs, $0) }) {
+                    buffer.animatedCells.append(run)
+                }
+            }
+        }
+
+        if axes.contains(.horizontal) {
+            let room = buffer.height - 4
+            let height = min(GripSize.vertical, room)
+            if height >= 1 {
+                let x = buffer.width - 1
+                let top = (buffer.height - height) / 2
+                for row in top..<(top + height) {
+                    buffer = buffer.composited(
+                        with: FrameBuffer(lines: [styled("║", tint)]), at: (x: x, y: row))
+                    if let run = animated?.run(
+                        offsetX: x, offsetY: row, draw: { styled("║", $0) })
+                    {
+                        buffer.animatedCells.append(run)
+                    }
+                }
+            }
+        }
     }
 }

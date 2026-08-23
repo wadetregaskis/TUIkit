@@ -317,4 +317,118 @@ struct UserResizableTests {
         #expect(buffer.hitTestRegions.count == 1)
         #expect(buffer.hitTestRegions.first?.width == 1, "expected the right edge only")
     }
+
+    // MARK: - The edge handles
+
+    private enum FocusPick { case none, first, resizable }
+
+    private func gripped(
+        _ view: some View, width: Int = 40, height: Int = 14, focusing: FocusPick = .none
+    ) -> FrameBuffer {
+        let tui = TUIContext()
+        let focus = FocusManager()
+        var environment = EnvironmentValues()
+        environment.focusManager = focus
+        environment.applyRuntimeServices(from: tui)
+        environment.statusBar = StatusBarState()
+        let context = RenderContext(
+            availableWidth: width, availableHeight: height, environment: environment,
+            tuiContext: tui
+        ).isolatingRenderCache()
+        var buffer = FrameBuffer()
+        var ids: [String] = []
+        for pass in 0..<2 {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.stateStorage.beginRenderPass()
+            focus.beginRenderPass()
+            buffer = renderToBuffer(view, context: context)
+            // Collected AFTER the render: `beginRenderPass` clears the
+            // section's focusables and the render is what re-registers them.
+            if pass == 0 { ids = focus.registeredFocusIDsInActiveSection() }
+            tui.stateStorage.endRenderPass()
+            focus.endRenderPass()
+            switch focusing {
+            case .none: break
+            case .first: if let id = ids.first { focus.focus(id: id) }
+            case .resizable:
+                if let id = ids.first(where: { $0.hasPrefix("resizable") }) {
+                    focus.focus(id: id)
+                }
+            }
+        }
+        return buffer
+    }
+
+    private func resizableBox() -> some View {
+        Text("hello").frame(width: 24, height: 8).border().userResizable()
+    }
+
+    @Test("Each live edge carries a doubled-line handle in its middle")
+    func edgesCarryHandles() {
+        let buffer = gripped(resizableBox())
+        let bottom = buffer.lines.last?.stripped ?? ""
+        #expect(bottom.contains(String(repeating: "═", count: 7)))
+        // Centred: the same number of border cells either side of it.
+        let before = bottom.prefix { $0 != "═" }.count
+        let after = bottom.reversed().prefix { $0 != "═" }.count
+        #expect(abs(before - after) <= 1, "handle off centre: \(bottom)")
+
+        let rightColumn = buffer.lines.map { line -> Character? in
+            let stripped = line.stripped
+            return stripped.count == buffer.width ? stripped.last : nil
+        }
+        #expect(rightColumn.filter { $0 == "\u{2551}" }.count == 3)
+    }
+
+    @Test("A single-axis view marks only the edge it actually resizes")
+    func singleAxisHandles() {
+        let horizontal = gripped(
+            Text("hello").frame(width: 24, height: 8).border().userResizable(width: 6...30))
+        #expect(!(horizontal.lines.last?.stripped.contains("═") ?? true))
+        let vertical = gripped(
+            Text("hello").frame(width: 24, height: 8).border().userResizable(height: 3...12))
+        #expect(vertical.lines.last?.stripped.contains("═") == true)
+        let rightColumn = vertical.lines.compactMap { $0.stripped.last }
+        #expect(!rightColumn.contains("\u{2551}"))
+    }
+
+    @Test("A view with no room beside its corners carries no handle")
+    func tooSmallForHandles() {
+        // Six cells wide: two borders and the cell either side of each corner
+        // leave nothing for a handle that would still read as one.
+        let buffer = gripped(Text("x").frame(width: 2, height: 3).border().userResizable())
+        #expect(!(buffer.lines.last?.stripped.contains("═") ?? true))
+    }
+
+    @Test("The handles breathe when the view has the focus, and not before")
+    func handlesBreatheWhenFocused() {
+        // A button beside the box, so "not focused" is a state the box can
+        // actually be in: left alone, the end of the render pass hands the
+        // focus to the only thing that can take it.
+        let pair = VStack {
+            Button("elsewhere") {}
+            resizableBox()
+        }
+        // Counted by glyph rather than by run: the button beside the box
+        // breathes its own focus brackets, and those are not what this is about.
+        func handleRuns(_ buffer: FrameBuffer) -> Int {
+            buffer.animatedCells.count { run in
+                run.frames.first.map { frame in
+                    frame.contains("═") || frame.contains("\u{2551}") || frame.contains("╝")
+                } ?? false
+            }
+        }
+        #expect(handleRuns(gripped(pair, focusing: .first)) == 0)
+        // Five runs, not three: a run is a horizontal span of cells, so the
+        // three-row handle down the right edge is three of them. Plus the
+        // corner and the seven-cell handle along the bottom.
+        #expect(handleRuns(gripped(pair, focusing: .resizable)) == 5)
+    }
+
+    @Test("A block border keeps its own cells, handles included")
+    func blockBorderKeepsItsCells() {
+        let buffer = gripped(
+            Text("hello").frame(width: 24, height: 8).border(style: .block).userResizable())
+        #expect(!(buffer.lines.last?.stripped.contains("═") ?? true))
+    }
 }
