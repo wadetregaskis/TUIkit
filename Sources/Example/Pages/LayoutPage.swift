@@ -142,6 +142,49 @@ struct LayoutPage: View {
     /// section is sized so its label still fits inside at this offset.
     private static let zstackMaxOffset = 6.0
 
+    /// Which axes the resize demo offers, driven by the toggles beside it.
+    @State private var resizableWidth = true
+    @State private var resizableHeight = true
+
+    /// The demo box: flexible inside, bounded outside — it fills whatever the
+    /// resizable wrapper offers, and the wrapper offers the range's ceiling
+    /// until someone drags it. A FIXED frame in here would pin the border and
+    /// the resize would only pad around it, which is right: a fixed size is the
+    /// author saying "this size".
+    ///
+    /// The size is reported from inside, through a `GeometryReader`, so it is
+    /// the size the content was actually given rather than the size anybody
+    /// asked for — and it updates as the drag runs.
+    @ViewBuilder
+    private var resizableBox: some View {
+        let box = GeometryReader { proxy in
+            VStack(alignment: .center, spacing: 0) {
+                Spacer()
+                Text("page.layout.resizableBody")
+                Text(verbatim: "\(proxy.size.width) × \(proxy.size.height)")
+                    .foregroundStyle(.palette.foregroundSecondary)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .border(.palette.border)
+
+        // An axis the user turned off is the LAYOUT's business again, and the
+        // content inside is greedy — so without a frame on that axis the box
+        // fills the page rather than staying a box. The size it holds still at
+        // is the middle of the range the other axis is bounded to.
+        switch (resizableWidth, resizableHeight) {
+        case (true, true):
+            box.userResizable(width: 12...40, height: 3...8)
+        case (true, false):
+            box.frame(height: 6).userResizable(width: 12...40)
+        case (false, true):
+            box.frame(width: 30).userResizable(height: 3...8)
+        case (false, false):
+            box.frame(width: 30, height: 6)
+        }
+    }
+
     /// The rows the windowed `LazyVStack` rendered in the last frame.
     @State private var renderedRows: Set<Int> = []
 
@@ -739,16 +782,16 @@ struct LayoutPage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("page.layout.resizableHint")
                         .foregroundStyle(.palette.foregroundSecondary)
-                    // Flexible inside, bounded outside: the box fills whatever
-                    // the resizable wrapper offers it, and the wrapper offers
-                    // the range's ceiling until someone drags it. A FIXED frame
-                    // in here would pin the border and the resize would only
-                    // pad around it — which is right, since a fixed size is the
-                    // author saying "this size".
-                    Text("page.layout.resizableBody")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .border(.palette.border)
-                        .userResizable(width: 12...40, height: 3...8)
+                    // Naming an axis is what makes it resizable, so the toggles
+                    // choose between the four spellings of the modifier rather
+                    // than setting a property on one of them. Turning an axis
+                    // off gives its size back to the layout — which is the same
+                    // thing Escape does, and worth seeing.
+                    HStack(spacing: 3) {
+                        Toggle("page.layout.resizableWidth", isOn: $resizableWidth)
+                        Toggle("page.layout.resizableHeight", isOn: $resizableHeight)
+                    }
+                    resizableBox
                 }
             }
 
