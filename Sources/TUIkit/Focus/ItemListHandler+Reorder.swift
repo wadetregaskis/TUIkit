@@ -496,7 +496,16 @@ extension ItemListHandler {
         // past it: the "wiggle the mouse and it snaps back" report. Clamped, the
         // slot rides the leading edge of the viewport, which is what a drag past
         // the edge means.
-        dragReorder(toContentY: clampedToDroppableRows(y))
+        // Through the resolver, NOT `dragReorder`: that records its argument as
+        // the pointer's position, and the argument here is a clamped derivative
+        // of it. Stored, the clamp compounds — the true position is gone after
+        // the first tick and every later frame re-clamps an already-clamped
+        // value. It stayed invisible because the clamp is idempotent whenever
+        // the last droppable band's end holds still, which it does for as long
+        // as the row area is exactly full of rows. Let a slot or an indicator
+        // move that end and the replay resolves to whatever band has inherited
+        // the stale line.
+        resolveReorderTarget(atContentY: clampedToDroppableRows(y))
     }
 
     /// `contentY` moved onto the nearest line that can actually take a drop.
@@ -836,10 +845,27 @@ extension ItemListHandler {
     /// per slot crossed, so the list itself is the preview. The other modes
     /// only move the cursor to mark where the drop would land.
     func dragReorder(toContentY contentY: Int?) {
-        guard var reorder, onMove != nil else { return }
-        // Kept so the target can be recomputed when the rows move under a
-        // motionless pointer — see `publishRowBands`.
+        guard onMove != nil else { return }
+        // Where the POINTER is, kept so the target can be recomputed when the
+        // rows move under a motionless one — see `retargetForAutoScroll`, which
+        // is why only this entry point records it.
+        //
+        // It is worth holding across frames only because ``DrawnBand/yStart``'s
+        // origin — the interior's first content line — is one a scroll does not
+        // move: the "N more above" indicator appears INSIDE that space rather
+        // than shifting it. A view measuring its bands from the first ROW line
+        // instead would have to re-derive this value every frame.
         lastReorderContentY = contentY
+        resolveReorderTarget(atContentY: contentY)
+    }
+
+    /// Points the drag at whatever `contentY` names, without claiming that is
+    /// where the pointer is.
+    ///
+    /// Split out of ``dragReorder(toContentY:)`` so the auto-scroll replay can
+    /// resolve a clamped position without overwriting the real one.
+    private func resolveReorderTarget(atContentY contentY: Int?) {
+        guard var reorder, onMove != nil else { return }
         // Any movement at all makes this a reorder rather than a click, even
         // when the cursor hasn't yet reached another row.
         reorder.active = true

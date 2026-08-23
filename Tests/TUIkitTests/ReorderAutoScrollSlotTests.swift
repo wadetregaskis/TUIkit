@@ -103,6 +103,106 @@ struct ReorderAutoScrollSlotTests {
         }
     }
 
+    /// The `List` twin of the fixture above. Same gesture, same assertions —
+    /// the two controls keep the same rules in two places, so a case that only
+    /// drives one of them is a case that only half-covers the rule.
+    @MainActor
+    private final class ListFixture {
+        var rows: [String]
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+
+        init(rows: [String], feedback: RowReorderFeedback) {
+            self.rows = rows
+            env.focusManager = FocusManager()
+            env.scrollIndicatorStyle = .text
+            env.rowReorderFeedback = feedback
+            env.applyRuntimeServices(from: tui)
+            tui.mouseEventDispatcher.setActiveSupport(.full)
+            tui.dragAndDropSession.dispatcher = tui.mouseEventDispatcher
+        }
+
+        var dispatcher: MouseEventDispatcher { tui.mouseEventDispatcher }
+        var session: DragAndDropSession { tui.dragAndDropSession }
+
+        @discardableResult
+        func render() -> FrameBuffer {
+            dispatcher.beginRenderPass()
+            session.beginFrame()
+            let list = List(selection: .constant(String?.none)) {
+                ForEach(rows, id: \.self) { Text($0) }
+                    .onMove { self.rows.move(fromOffsets: $0, toOffset: $1) }
+            }
+            .frame(width: 20, height: 9)
+            var context = RenderContext(
+                availableWidth: 20, availableHeight: 11, environment: env, tuiContext: tui)
+            context.hasExplicitHeight = true
+            let buffer = renderToBuffer(list, context: context)
+            dispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        func label(_ buffer: FrameBuffer, onLine line: Int) -> String? {
+            guard buffer.lines.indices.contains(line) else { return nil }
+            let letters = String(buffer.lines[line].stripped.filter(\.isLetter))
+            return rows.contains(letters) ? letters : nil
+        }
+
+        func lineOf(_ buffer: FrameBuffer, _ label: String) -> Int? {
+            buffer.lines.indices.first { self.label(buffer, onLine: $0) == label }
+        }
+
+        func lastRowLine(_ buffer: FrameBuffer) -> Int? {
+            buffer.lines.indices.last { self.label(buffer, onLine: $0) != nil }
+        }
+
+        func slotLine(_ buffer: FrameBuffer) -> Int? {
+            buffer.lines.indices.first { line in
+                let content = buffer.lines[line].stripped.filter { !" \u{2502}".contains($0) }
+                return content.isEmpty && line > 0 && line < buffer.lines.count - 1
+            }
+        }
+    }
+
+    /// The `List` half of the case below, and the one that pins the rule to the
+    /// handler rather than to either view: the replayed position must stay the
+    /// POINTER's, not the clamped derivative of it that the last replay
+    /// produced. Compounded, the clamp walks the slot off the pointer as soon
+    /// as anything moves the last droppable band's end — which a `.cursor`
+    /// drag's own slot does, every time the rows step.
+    @Test("The landing slot rides the pointer while a List scrolls under it")
+    func listSlotStaysOnTheLastRowWhileScrolling() {
+        let names = "abcdefghijklmnopqrst".map(String.init)
+        let fixture = ListFixture(rows: names, feedback: .cursor)
+
+        var buffer = fixture.render()
+        guard let start = fixture.lineOf(buffer, "a") else {
+            Issue.record("row a is drawn: \(buffer.lines.map(\.stripped))")
+            return
+        }
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: start))
+        buffer = fixture.render()
+        let edge = max(0, buffer.lines.count - 2)
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: edge))
+        buffer = fixture.render()
+
+        var offenders: [String] = []
+        for tick in 0...8 {
+            fixture.session.driveAutoScroll(nowNanos: UInt64(tick) &* 1_000_000_000)
+            buffer = fixture.render()
+            guard tick >= 2 else { continue }
+            let slot = fixture.slotLine(buffer)
+            let lastRow = fixture.lastRowLine(buffer)
+            if slot != lastRow.map({ $0 + 1 }) {
+                offenders.append("t=\(tick) slot=\(slot.map(String.init) ?? "\u{2014}") "
+                    + "lastRow=\(lastRow.map(String.init) ?? "\u{2014}")")
+            }
+        }
+        #expect(
+            offenders.isEmpty,
+            "the slot follows the last drawn row every frame: \(offenders)")
+    }
+
     /// The slot must ride the pointer, not trail the rows streaming under it.
     ///
     /// With the pointer parked in the bottom hot margin — on the "▼ N more rows
