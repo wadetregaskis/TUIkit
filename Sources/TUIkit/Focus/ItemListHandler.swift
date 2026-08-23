@@ -1556,55 +1556,6 @@ extension ItemListHandler {
     }
 }
 
-// MARK: - Escape Claim
-
-extension ItemListHandler {
-    /// Publishes this frame's Escape claim when the focused multi-selection
-    /// list would act on it (exit extend mode / clear a non-empty selection).
-    ///
-    /// Status-bar items and page `onKeyPress` handlers see keys BEFORE the
-    /// focused element, so without a claim a page-level "esc back" would
-    /// steal the key and navigate away instead of clearing the selection.
-    /// The claim (the same mechanism an open Picker drop-down uses) routes
-    /// ESC to the focus chain first for this frame AND relabels the status
-    /// bar's escape entry, so what ESC currently does is always visible.
-    /// When Escape has nothing to do here, no claim is published and page
-    /// navigation is completely untouched — the list never blocks it.
-    /// Unlike a modal surface's claim, this one does not suppress the
-    /// global app-chrome shortcuts (`grabsInput` false): a selection is
-    /// ordinary control state, not a transient surface the user must leave.
-    ///
-    /// Called by the owning view during its render pass, after focus
-    /// registration (never on measure passes).
-    func publishEscapeClaim(context: RenderContext, isFocused: Bool) {
-        guard isFocused, !context.isMeasuring else { return }
-
-        // A row in hand owns Escape — it puts the row back — and has to SAY so:
-        // `InputHandler` routes a claimed Escape through the focus system first,
-        // and without the claim a page-level "⎋ back" navigates out from under
-        // the move instead. (Found by driving the real app; the handler-level
-        // tests never see the app's Escape.) It also advertises the mode, which
-        // is what makes it discoverable at all.
-        // A MOUSE drag claims nothing: Escape keeps meaning what it means on
-        // the page, so a row can be picked up here, carried to another subpage,
-        // and dropped there. (See ``cancelMouseDragReorder()``.)
-        if isKeyboardMove {
-            context.environment.statusBar?.escapeLabelOverride = "cancel move"
-            context.environment.statusBar?.escapeClaimGrabsInput = false
-            return
-        }
-
-        guard selectionMode == .multi else { return }
-        if isExtendingSelection {
-            context.environment.statusBar?.escapeLabelOverride = "stop extending selection"
-            context.environment.statusBar?.escapeClaimGrabsInput = false
-        } else if let selection = multiSelection?.wrappedValue, !selection.isEmpty {
-            context.environment.statusBar?.escapeLabelOverride = "clear selection"
-            context.environment.statusBar?.escapeClaimGrabsInput = false
-        }
-    }
-}
-
 // (``hasContentAbove`` / ``hasContentBelow`` / ``visibleRange``
 //  are provided by the ``ScrollableOffsetState`` extension and
 //  read the ``extent`` defined above. The list-specific

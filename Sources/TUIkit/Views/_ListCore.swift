@@ -442,12 +442,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // than inside each window rule: the two rules disagree about indicator
         // lines but not about this.
         let rowBudget = max(1, targetContentHeight - (handler.dropSlotAddsRow ? 1 : 0))
-        FocusRegistration.register(context: context, handler: handler)
-        let listHasFocus = FocusRegistration.isFocused(
-            context: context, focusID: persistedFocusID)
-        handler.publishEscapeClaim(context: context, isFocused: listHasFocus)
-        // The Bottom follow carries the cursor only for the list that owns it.
-        handler.isFocusEngaged = listHasFocus
+        let listHasFocus = handler.engageFocus(context: context, focusID: persistedFocusID)
 
         let origin = windowOrigin(
             handler: handler, source: source,
@@ -602,12 +597,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             context: context,
             contentHeight: targetContentHeight
         )
-        FocusRegistration.register(context: context, handler: handler)
-        let listHasFocus = FocusRegistration.isFocused(
-            context: context, focusID: persistedFocusID)
-        handler.publishEscapeClaim(context: context, isFocused: listHasFocus)
-        // The Bottom follow carries the cursor only for the list that owns it.
-        handler.isFocusEngaged = listHasFocus
+        // The empty path needs the registration and the escape claim, not the
+        // answer — there are no rows for the focus to be on.
+        handler.engageFocus(context: context, focusID: persistedFocusID)
         return PopulatedRenderState(
             handler: handler,
             focusID: persistedFocusID,

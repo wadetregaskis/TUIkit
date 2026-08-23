@@ -792,12 +792,7 @@ where Value.ID: Hashable {
             contentHeight: contentHeight,
             overflows: { data.count + $0 > contentHeight }
         )
-        FocusRegistration.register(context: context, handler: handler)
-        let tableHasFocus = FocusRegistration.isFocused(
-            context: context, focusID: persistedFocusID)
-        handler.publishEscapeClaim(context: context, isFocused: tableHasFocus)
-        // See `_ListCore`: the Bottom follow only moves a cursor someone is on.
-        handler.isFocusEngaged = tableHasFocus
+        let tableHasFocus = handler.engageFocus(context: context, focusID: persistedFocusID)
 
         if overflowing {
             // The landing slot is drawn among the rows and takes one of their
@@ -869,11 +864,7 @@ where Value.ID: Hashable {
         if !context.isMeasuring {
             handler.clampScrollOffset()
         }
-        FocusRegistration.register(context: context, handler: handler)
-        let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
-        handler.publishEscapeClaim(context: context, isFocused: tableHasFocus)
-        // See `_ListCore`: the Bottom follow only moves a cursor someone is on.
-        handler.isFocusEngaged = tableHasFocus
+        let tableHasFocus = handler.engageFocus(context: context, focusID: persistedFocusID)
 
         // The handler's accessor, not a raw `scrollOffset..<min(…)`: the
         // persisted offset can exceed a freshly-shrunk `data.count` during a
@@ -1097,11 +1088,7 @@ where Value.ID: Hashable {
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
 
-        FocusRegistration.register(context: context, handler: handler)
-        let tableHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
-        handler.publishEscapeClaim(context: context, isFocused: tableHasFocus)
-        // See `_ListCore`: the Bottom follow only moves a cursor someone is on.
-        handler.isFocusEngaged = tableHasFocus
+        let tableHasFocus = handler.engageFocus(context: context, focusID: persistedFocusID)
 
         let window = rowWindow(
             scrollOffset: handler.scrollOffset, count: data.count,
@@ -1765,15 +1752,10 @@ where Value.ID: Hashable {
             contentHeight: contentHeight,
             overflows: { _ in false }
         )
-        FocusRegistration.register(context: context, handler: handler)
-        let hasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
-        handler.publishEscapeClaim(context: context, isFocused: hasFocus)
-        // The Bottom follow carries the cursor only for the table that owns it.
-        // Every POPULATED path here sets this; the empty one did not, so an
-        // emptied table kept whatever its last populated frame left — the
-        // mirror image of the missing `publishRowBands([])` on `_ListCore`'s
-        // empty path. Each twin was missing the line the other had.
-        handler.isFocusEngaged = hasFocus
+        // The empty path used to be the one that forgot `isFocusEngaged`, so an
+        // emptied table kept whatever its last populated frame left. It cannot
+        // now: the four statements are one call.
+        handler.engageFocus(context: context, focusID: persistedFocusID)
         // Clears the bands the last populated frame left behind, so nothing
         // hit-tests against rows that are no longer drawn.
         handler.publishRowBands([])
