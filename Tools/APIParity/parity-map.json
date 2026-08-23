@@ -294,9 +294,6 @@
     "AccessibilityZoomGestureAction": {
       "why": "It describes a VoiceOver pinch/zoom gesture (direction, location, point). SGR mouse reporting has no pinch and no sub-cell location, and there is no assistive technology to originate the gesture. TUIkit's real zoom is `.imageZoom(_:)` at Sources/TUIkit/Views/Image.swift:453."
     },
-    "Angle": {
-      "why": "Its consumers here would be rotationEffect / rotation3DEffect / AngularGradient — all unrepresentable on a cell grid (no glyph rotation, no sub-cell geometry) — leaving hue as the only angle-shaped quantity, which TUIkit already carries as plain Double degrees: Color.hsl(_ hue: D"
-    },
     "AnyShape": {
       "why": "Type erasure over a Shape protocol that does not and cannot exist here (see Shape). TUIkit's erasure story is AnyView / AnyLayout (Sources/TUIkit/Views/AnyLayout.swift) — there is nothing shape-shaped to erase."
     },
