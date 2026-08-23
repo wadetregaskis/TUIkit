@@ -200,23 +200,33 @@ struct OverlaysPage: View {
             .statusBarItems(statusBarItems)
     }
 
-    /// Status bar items change depending on whether a modal is open.
-    /// When a modal is presented, ESC closes the modal instead of navigating back.
+    /// Whether any of this page's presentations is on screen.
+    ///
+    /// `.statusBarItems` sits outside every one of them, so the framework's
+    /// backdrop isolation — which drops the items a presented page declares
+    /// *inside* the presentation — does not reach these. The page has to
+    /// withdraw them itself.
+    private var isPresenting: Bool {
+        showOverlay || showConfirm || showPopover || showCover || showDetented
+    }
+
+    /// The page's own footer, withdrawn while anything is presented.
+    ///
+    /// Each presentation publishes its own dismiss item and takes the keys, so
+    /// what the page would add is a promise it can no longer keep: "⎋ back"
+    /// goes nowhere, and "↵ show" describes an Enter that now activates
+    /// whatever the presentation focused. Saying nothing leaves the bar reading
+    /// "⎋ dismiss   q quit" — which is what a dialog already showed, and now
+    /// what the confirmation dialog, the cover, the sheet and the popover show
+    /// too.
     private var statusBarItems: [any StatusBarItemProtocol] {
-        if showOverlay {
-            return [
-                StatusBarItem(shortcut: Shortcut.escape, label: "page.overlays.status.close") {
-                    showOverlay = false
-                },
-            ]
-        } else {
-            return [
-                StatusBarItem(shortcut: Shortcut.escape, label: "page.overlays.status.back") {
-                    onBack()
-                },
-                StatusBarItem(shortcut: Shortcut.enter, label: "page.overlays.status.show"),
-            ]
-        }
+        guard !isPresenting else { return [] }
+        return [
+            StatusBarItem(shortcut: Shortcut.escape, label: "page.overlays.status.back") {
+                onBack()
+            },
+            StatusBarItem(shortcut: Shortcut.enter, label: "page.overlays.status.show"),
+        ]
     }
 
     // MARK: - Background Content

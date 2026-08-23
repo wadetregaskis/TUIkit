@@ -207,7 +207,6 @@ extension ExampleStrings {
             "page.overlays.modal.line1": "This modal uses .modal(isPresented:)",
             "page.overlays.modal.line2": "with completely custom view content.",
             "page.overlays.modal.line3": "No Alert or Dialog — just any View!",
-            "page.overlays.status.close": "close",
             "page.overlays.status.back": "back",
             "page.overlays.status.show": "show",
 
@@ -470,7 +469,6 @@ extension ExampleStrings {
             "page.overlays.modal.line1": "Dieses Modal nutzt .modal(isPresented:)",
             "page.overlays.modal.line2": "mit völlig benutzerdefiniertem Ansichtsinhalt.",
             "page.overlays.modal.line3": "Kein Alert oder Dialog – einfach eine beliebige View!",
-            "page.overlays.status.close": "schließen",
             "page.overlays.status.back": "zurück",
             "page.overlays.status.show": "zeigen",
 
@@ -733,7 +731,6 @@ extension ExampleStrings {
             "page.overlays.modal.line1": "Cette modale utilise .modal(isPresented:)",
             "page.overlays.modal.line2": "avec un contenu de vue entièrement personnalisé.",
             "page.overlays.modal.line3": "Ni Alert ni Dialog — juste une View quelconque !",
-            "page.overlays.status.close": "fermer",
             "page.overlays.status.back": "retour",
             "page.overlays.status.show": "afficher",
 
@@ -996,7 +993,6 @@ extension ExampleStrings {
             "page.overlays.modal.line1": "Questa modale usa .modal(isPresented:)",
             "page.overlays.modal.line2": "con contenuto della vista completamente personalizzato.",
             "page.overlays.modal.line3": "Né Alert né Dialog — solo una View qualsiasi!",
-            "page.overlays.status.close": "chiudi",
             "page.overlays.status.back": "indietro",
             "page.overlays.status.show": "mostra",
 
@@ -1259,7 +1255,6 @@ extension ExampleStrings {
             "page.overlays.modal.line1": "Este modal usa .modal(isPresented:)",
             "page.overlays.modal.line2": "con contenido de vista totalmente personalizado.",
             "page.overlays.modal.line3": "Ni Alert ni Dialog: ¡solo cualquier View!",
-            "page.overlays.status.close": "cerrar",
             "page.overlays.status.back": "atrás",
             "page.overlays.status.show": "mostrar",
 
@@ -1522,7 +1517,6 @@ extension ExampleStrings {
             "page.overlays.modal.line1": "此模态框使用 .modal(isPresented:)",
             "page.overlays.modal.line2": "并具有完全自定义的视图内容。",
             "page.overlays.modal.line3": "没有 Alert 或 Dialog — 任意 View 即可！",
-            "page.overlays.status.close": "关闭",
             "page.overlays.status.back": "返回",
             "page.overlays.status.show": "显示",
 
@@ -1785,7 +1779,6 @@ extension ExampleStrings {
             "page.overlays.modal.line1": "このモーダルは .modal(isPresented:) を使用します",
             "page.overlays.modal.line2": "完全にカスタムなビューコンテンツを備えています。",
             "page.overlays.modal.line3": "Alert も Dialog も不要 — 任意の View でOK！",
-            "page.overlays.status.close": "閉じる",
             "page.overlays.status.back": "戻る",
             "page.overlays.status.show": "表示",
 
