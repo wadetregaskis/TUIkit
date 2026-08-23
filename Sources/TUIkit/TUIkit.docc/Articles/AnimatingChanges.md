@@ -127,6 +127,36 @@ So for a decoration that is not a re-colouring, reach for the lower-level route
 in <doc:AnimatingYourOwnView>, which lets a view hand the loop its own finished
 frames. `withAnimation` is for *changes*; that is for *decorations*.
 
+## Updating on a schedule
+
+Not everything that changes over time is a change to *state*. A clock is not
+animating: it is showing a different value each minute, and the view that shows
+it wants to be re-rendered when the minute turns. That is ``TimelineView``:
+
+```swift
+TimelineView(.everyMinute) { context in
+    Text(context.date, style: .time)
+}
+```
+
+The date the content receives is the schedule's **entry**, not the instant of
+the render. With ``TimelineSchedule/everyMinute`` it is the top of the current
+minute however late in that minute the frame lands, so a clock never shows a
+time that disagrees with the boundary it was drawn for.
+
+The cost model is the one this article keeps coming back to. A timeline is not a
+poll: each frame it declares exactly one wake — the next entry — and the run
+loop sleeps until then. A clock ticking once a minute renders once a minute, and
+a schedule with nothing left to show (an exhausted
+``TimelineSchedule/explicit(_:)``, a paused ``TimelineSchedule/animation``)
+declares no wake at all, so the screen goes fully idle.
+
+``TimelineSchedule/animation`` is the exception that proves it: asking for the
+app's frame rate really does mean a render pass per frame, and it belongs to the
+same "decoration" bucket as `repeatForever` above. If what varies is how the
+content is *coloured* rather than what it *says*, the lower-level route in
+<doc:AnimatingYourOwnView> is cheaper by the width of the render pass.
+
 ## Coming and going
 
 ``View/transition(_:)`` says how a view arrives when it is inserted and how it
@@ -191,6 +221,13 @@ animation retires there.
 - ``VectorArithmetic``
 - ``AnimatablePair``
 - ``EmptyAnimatableData``
+
+### Updating on a schedule
+
+- ``TimelineView``
+- ``TimelineSchedule``
+- ``TimelineScheduleMode``
+- ``TimelineViewDefaultContext``
 
 ### Controlling it
 

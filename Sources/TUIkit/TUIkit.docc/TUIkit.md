@@ -222,6 +222,8 @@ struct MyApp: App {
 - ``VectorArithmetic``
 - ``AnimatablePair``
 - ``EmptyAnimatableData``
+- ``TimelineView``
+- ``TimelineViewDefaultContext``
 - ``TimelineSchedule``
 - ``TimelineScheduleMode``
 - ``PeriodicTimelineSchedule``

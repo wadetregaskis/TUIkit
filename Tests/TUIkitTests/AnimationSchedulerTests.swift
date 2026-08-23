@@ -127,4 +127,65 @@ struct AnimationSchedulerTests {
         }
         #expect(count >= 28 && count <= 31)   // 30 Hz, not 40
     }
+
+    // MARK: one-shot wakes
+
+    @Test("A one-shot wake fires at its instant, and counts as liveness")
+    func wakeFires() {
+        let s = AnimationScheduler()
+        s.beginFrame()
+        s.requestWake("clock", at: 5 * second)
+        s.endFrame()
+        #expect(!s.isIdle)
+        #expect(s.liveWakeCount == 1)
+        #expect(s.liveCount == 0)
+        #expect(s.nextFiring(after: 0) == 5 * second)
+    }
+
+    @Test("A wake the frame has already reached is not a firing")
+    func wakeInThePastIsNotAFiring() {
+        // Otherwise the loop would render, find the instant still behind it, and
+        // render again — a spin. The view re-declares its next wake on the frame
+        // this one produced.
+        let s = AnimationScheduler()
+        s.beginFrame()
+        s.requestWake("clock", at: 5 * second)
+        s.endFrame()
+        #expect(s.nextFiring(after: 5 * second) == nil)
+        #expect(s.nextFiring(after: 6 * second) == nil)
+    }
+
+    @Test("Re-declaring a token moves its wake rather than adding one")
+    func wakeIsReplaced() {
+        let s = AnimationScheduler()
+        s.beginFrame(); s.requestWake("clock", at: 5 * second); s.endFrame()
+        s.beginFrame(); s.requestWake("clock", at: 9 * second); s.endFrame()
+        #expect(s.liveWakeCount == 1)
+        #expect(s.nextFiring(after: 0) == 9 * second)
+    }
+
+    @Test("A wake that stops being re-declared is dropped")
+    func wakeIsDropped() {
+        let s = AnimationScheduler()
+        s.beginFrame(); s.requestWake("clock", at: 5 * second); s.endFrame()
+        s.beginFrame(); s.endFrame()
+        #expect(s.isIdle)
+        #expect(s.nextFiring(after: 0) == nil)
+    }
+
+    @Test("The soonest of a grid and a wake wins, whichever it is")
+    func gridsAndWakesUnion() {
+        let s = AnimationScheduler()
+        s.beginFrame()
+        s.request("spinner", req(30, tol: 0, phase: 0), now: 0)  // fires every 33.3 ms
+        s.requestWake("clock", at: 5 * second)
+        s.endFrame()
+        #expect(s.nextFiring(after: 0) == p30)
+        // Asked from a moment past the last grid firing before the wake, the
+        // wake is still not the answer — the grid keeps firing.
+        #expect(s.nextFiring(after: 4 * second) ?? 0 < 5 * second)
+        // With the grid gone, the wake is.
+        s.beginFrame(); s.requestWake("clock", at: 5 * second); s.endFrame()
+        #expect(s.nextFiring(after: 0) == 5 * second)
+    }
 }

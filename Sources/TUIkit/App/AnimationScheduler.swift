@@ -29,19 +29,31 @@ final class AnimationScheduler {
         var liveThisFrame: Bool
     }
 
+    private struct Wake {
+        let instant: Int64
+        var liveThisFrame: Bool
+    }
+
     private var entries: [String: Entry] = [:]
+    private var wakes: [String: Wake] = [:]
 
     /// Whether any animation is currently live (the loop idles when this is true... none).
-    var isIdle: Bool { entries.isEmpty }
+    var isIdle: Bool { entries.isEmpty && wakes.isEmpty }
 
     /// The number of live grids (introspection / tests).
     var liveCount: Int { entries.count }
+
+    /// The number of live one-shot wakes (introspection / tests).
+    var liveWakeCount: Int { wakes.count }
 
     /// Begins a render frame: every grid is provisionally not-live until it
     /// re-declares this frame.
     func beginFrame() {
         for key in entries.keys {
             entries[key]?.liveThisFrame = false
+        }
+        for key in wakes.keys {
+            wakes[key]?.liveThisFrame = false
         }
     }
 
@@ -63,15 +75,42 @@ final class AnimationScheduler {
         return grid
     }
 
-    /// Ends the frame: drops every grid that did not re-declare.
-    func endFrame() {
-        entries = entries.filter { $0.value.liveThisFrame }
+    /// Declares that the view identified by `token` needs a render at one exact
+    /// instant, rather than at a repeating rate.
+    ///
+    /// The counterpart of ``request(_:_:now:)`` for a schedule that is a *list
+    /// of instants* rather than a lattice — a ``TimelineView``'s, above all,
+    /// whose entries may be irregular, and whose regular ones (the top of each
+    /// minute) have a phase that a grid free to coalesce would not keep. Only
+    /// the next instant is ever declared; the view declares the one after it on
+    /// the frame this one produces.
+    ///
+    /// Re-declared every frame like a grid, and dropped at ``endFrame()`` when
+    /// it is not — which is what lets the screen go idle again.
+    func requestWake(_ token: String, at instant: Int64) {
+        wakes[token] = Wake(instant: instant, liveThisFrame: true)
     }
 
-    /// The soonest firing strictly after `time` across all live grids, or `nil`
-    /// if nothing is animating (the loop then blocks until woken — zero idle work).
+    /// Ends the frame: drops every grid and wake that did not re-declare.
+    func endFrame() {
+        entries = entries.filter { $0.value.liveThisFrame }
+        wakes = wakes.filter { $0.value.liveThisFrame }
+    }
+
+    /// The soonest firing strictly after `time` across all live grids and
+    /// one-shot wakes, or `nil` if nothing is animating (the loop then blocks
+    /// until woken — zero idle work).
+    ///
+    /// A wake already at or behind `time` is not a firing: it names an instant
+    /// this frame has reached, so returning it would ask the loop to render
+    /// again immediately, and again on the frame after that. The view whose
+    /// wake it was declares its next one during this frame.
     func nextFiring(after time: Int64) -> Int64? {
-        entries.values.lazy.map { $0.grid.firing(after: time) }.min()
+        let grids = entries.values.lazy.map { $0.grid.firing(after: time) }.min()
+        let wake = wakes.values.lazy.map(\.instant).filter { $0 > time }.min()
+        guard let grids else { return wake }
+        guard let wake else { return grids }
+        return min(grids, wake)
     }
 
     /// The frozen grid currently registered for `token`, if any.
