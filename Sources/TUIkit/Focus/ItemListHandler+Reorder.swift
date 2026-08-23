@@ -572,22 +572,17 @@ extension ItemListHandler {
 
         /// What is drawn there.
         var entry: Content
-        /// Its first line, counted from the first CONTENT line of the interior.
-        /// Must already include the "N more above" indicator's offset and any
-        /// overscroll slide: this is the space the mouse handler works in.
+        /// Its first line, counted from the first CONTENT line of the interior,
+        /// with the "N more above" indicator's offset and any overscroll slide
+        /// already in: this is the space the mouse handler works in.
         ///
-        /// "Must" is the contract, not a description of every caller. `List`
-        /// pre-slides its ranges before publishing (`_ListCore.slidRanges`) and
-        /// satisfies it. `Table` satisfies it on the single-line path and, on
-        /// the MULTI-LINE one, publishes from `yStart = 0` with no slide at all
-        /// (`Table.publishMultiLineRowBands`) — so a multi-line table that is
-        /// scrolled or mid-overscroll hit-tests a drag against geometry the
-        /// rows are not drawn at.
-        ///
-        /// Recorded here rather than fixed because Table's click path takes its
-        /// own excursion correction at event time instead, so the two mappings
-        /// have to be reconciled together rather than one nudged into
-        /// agreement — see `Table.publishRowBands`.
+        /// The indicator's line is INSIDE this space rather than subtracted out
+        /// ahead of it, which is what makes the origin one a scroll cannot move
+        /// — the reason ``ItemListHandler/lastReorderContentY`` is worth holding
+        /// across frames at all. Both views satisfy it: `List` pre-slides its
+        /// ranges (`_ListCore.slidRanges`) and adds the indicator's offset in
+        /// `slideAndWrap`; `Table`'s three publishers sum the same two terms
+        /// (`Table.publishRowBands`, `Table.publishMultiLineRowBands`).
         var yStart: Int
         /// How many lines it occupies (a clipped row counts what is shown).
         var height: Int
@@ -645,40 +640,13 @@ extension ItemListHandler {
     ///     `slid()` draws unslid line `y` at `y − excursion` and the bands have
     ///     to travel with the rows rather than mirror them.
     ///
-    ///     **The two views measure `yStart` from different places**, and this
-    ///     builder does not reconcile them: `_ListCore` counts from the first
-    ///     CONTENT line, so its bands carry the "N more above" line, while
-    ///     `Table` counts from the first ROW line, its mouse closure
-    ///     subtracting a `firstRowY` that has already accounted for the
-    ///     indicator. Each is self-consistent; the doc on ``DrawnBand/yStart``
-    ///     describes the List's.
-    ///
-    ///     Unifying them was tried and reverted, and the notes that stood here
-    ///     while it was being worked out were wrong twice over. Both invented a
-    ///     conflict out of a scenario that cannot happen, so the reasoning is
-    ///     recorded rather than the conclusions:
-    ///
-    ///     **An indicator never moves rows on screen.** It appears exactly when
-    ///     the view scrolls away from the top, and the scroll pays for its line:
-    ///     going from offset 0 to 1 moves the rows up one while the indicator
-    ///     pushes them down one, so a given row is drawn on the same line before
-    ///     and after. The "chrome appears and everything shifts" case both notes
-    ///     reasoned from does not occur.
-    ///
-    ///     So there is nothing to arbitrate. A live event and an auto-scroll
-    ///     replay must resolve the same row across that transition, because
-    ///     nothing on screen changed; any convention in which they differ is
-    ///     wrong, not merely different. Both origins can express that.
-    ///
-    ///     Which makes the three reorder tests that fail when `Table` is moved
-    ///     onto the List's origin — `TableReorderDragTests`,
-    ///     `ReorderAutoScrollSlotTests` — a report of an off-by-one in the
-    ///     attempted change, not of a behaviour worth preserving. The suspects,
-    ///     for whoever picks it up: `indicatorLines: lines.count` at the
-    ///     `composeRowLines` publisher counts whatever else has been appended to
-    ///     `lines`, not just the indicator; and the multi-line publisher's
-    ///     `window.showAbove` and the mouse closure's `hasContentAbove` are not
-    ///     the same predicate (`ScrollWindowOrigin.absorbing` separates them).
+    ///     Both views now sum the same two terms into it. `Table` measured
+    ///     `yStart` from the first ROW line until 2026-08-22, subtracting the
+    ///     indicator out in its mouse closure instead; that was self-consistent
+    ///     within a frame and wrong across frames, because it put the origin on
+    ///     a line the scroll moves. What survives a scroll is the interior's
+    ///     first CONTENT line, and holding a pointer position across frames
+    ///     (``ItemListHandler/lastReorderContentY``) needs an origin that does.
     ///   - lineCount: how many lines the row area actually has, so a band slid
     ///     or clipped past either edge is trimmed to what is on screen and
     ///     dropped when nothing of it is.

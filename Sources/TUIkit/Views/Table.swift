@@ -617,12 +617,24 @@ where Value.ID: Hashable {
         let handler: ItemListHandler<Value.ID>
         let focusID: String
         let visibleRange: Range<Int>
+        /// One when this frame drew an "N more above" line, zero otherwise —
+        /// each path answering with the condition it actually drew by.
+        ///
+        /// Only the scrollbar's region needs it (see `attachMouseHandlers`);
+        /// the bands carry the same offset for everything else.
         let scrollOffsetAbove: Int
-        /// The line height of each visible row, in `visibleRange` order, so a
-        /// click can map a line to its row when rows span multiple lines. Left
-        /// empty for a single-line table (the line offset is the row offset, with
-        /// no per-frame array to allocate).
-        let visibleRowHeights: [Int]
+        /// Where every drawn entry landed, in ``ItemListHandler/DrawnBand``'s
+        /// space — lines from the interior's first CONTENT line, indicator and
+        /// overscroll slide already in.
+        ///
+        /// The frame's ONE answer to "what is on this line": the hit-test
+        /// closure maps a click through it, the keyboard cursor's marker takes
+        /// its rectangle from it, and the handler is handed the same array for
+        /// the drag to resolve against. `_ListCore` has always worked this way
+        /// (`visibleRowYRanges`); `Table` re-derived it from `visibleRange`,
+        /// per-row heights and a live "is an indicator drawn?" predicate, and
+        /// the predicate did not match the one the rows were drawn by.
+        let drawnBands: [ItemListHandler<Value.ID>.DrawnBand]
         /// Whether a scrollbar column was drawn — by either layout path. Drives
         /// the bar's mouse handler in `attachMouseHandlers`.
         var hasScrollbar = false
@@ -818,9 +830,7 @@ where Value.ID: Hashable {
                 // low in the same configuration.
                 scrollOffsetAbove:
                     (handler.reservesIndicatorLine && handler.hasContentAbove) ? 1 : 0,
-                // Single-line rows: leave empty (no per-frame array); the click
-                // handler maps the line offset straight to the row.
-                visibleRowHeights: [],
+                drawnBands: composed.bands,
                 columnWidths: columnWidths,
                 rowContentWidth: innerWidth
             )
@@ -930,7 +940,7 @@ where Value.ID: Hashable {
             - handler.overscrollState.excursion
         // The scrollbar path draws no "N more above" line at all — the bar is
         // the indicator — so nothing sits between the header and the first row.
-        publishRowBands(
+        let bands = publishRowBands(
             handler: handler, drawn: drawnHeights, slide: slide,
             indicatorLines: 0, lineCount: contentHeight)
         while rowLines.count < contentHeight { rowLines.append(padded("")) }
@@ -947,7 +957,7 @@ where Value.ID: Hashable {
             rowRuns(pulseRuns, slide: slide, topOffset: 0, lineCount: lines.count),
             PopulatedRenderState(
                 handler: handler, focusID: persistedFocusID, visibleRange: visibleRange,
-                scrollOffsetAbove: 0, visibleRowHeights: [], hasScrollbar: true,
+                scrollOffsetAbove: 0, drawnBands: bands, hasScrollbar: true,
                 columnWidths: columnWidths, rowContentWidth: contentInnerWidth))
     }
 
@@ -1121,11 +1131,15 @@ where Value.ID: Hashable {
             columnWidths: columnWidths, innerWidth: innerWidth,
             contentHeight: contentHeight, bar: bar, context: context)
 
-        let visibleRowHeights = onScreenRowHeights(
-            window.range, height: heightOf, topClip: topClip)
-        publishMultiLineRowBands(
-            handler: handler, range: window.range, heights: visibleRowHeights,
-            indicatorLines: 0, lineCount: contentHeight)
+        // ONE answer, named once, for everything that has to agree with what
+        // `composeMultiLineRows` just drew — `window.showAbove` rather than the
+        // handler's `hasContentAbove`, which is false for a top clip inside
+        // row 0 while the indicator is on screen.
+        let indicatorLines = (window.showAbove && handler.drawsScrollIndicators) ? 1 : 0
+        let bands = publishMultiLineRowBands(
+            handler: handler, range: window.range,
+            heights: onScreenRowHeights(window.range, height: heightOf, topClip: topClip),
+            indicatorLines: indicatorLines, lineCount: contentHeight)
         return (
             lines: composed.lines,
             runs: composed.runs,
@@ -1133,8 +1147,8 @@ where Value.ID: Hashable {
                 handler: handler,
                 focusID: persistedFocusID,
                 visibleRange: window.range,
-                scrollOffsetAbove: (window.showAbove && handler.drawsScrollIndicators) ? 1 : 0,
-                visibleRowHeights: visibleRowHeights,
+                scrollOffsetAbove: indicatorLines,
+                drawnBands: bands,
                 hasScrollbar: showsScrollbar,
                 columnWidths: columnWidths,
                 rowContentWidth: tableContentWidth(columnWidths, within: innerWidth)
@@ -1768,7 +1782,7 @@ where Value.ID: Hashable {
             focusID: persistedFocusID,
             visibleRange: 0..<0,
             scrollOffsetAbove: 0,
-            visibleRowHeights: []
+            drawnBands: []
         )
     }
 
@@ -1780,7 +1794,10 @@ where Value.ID: Hashable {
         innerWidth: Int,
         context: RenderContext,
         palette: any Palette
-    ) -> (lines: [String], rowLines: [String], runs: [AnimatedCellRun]) {
+    ) -> (
+        lines: [String], rowLines: [String], runs: [AnimatedCellRun],
+        bands: [ItemListHandler<Value.ID>.DrawnBand]
+    ) {
         let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
         // Resolve the emphasis ONLY when an indicator will actually be drawn:
         // resolving consults the cursor clock, and that read is what tells the
@@ -1868,13 +1885,14 @@ where Value.ID: Hashable {
         let slide =
             clipOverrun(&rowLines, to: drawnBudget, drawn: drawnHeights)
             - handler.overscrollState.excursion
-        publishRowBands(
+        let bands = publishRowBands(
             handler: handler, drawn: drawnHeights, slide: slide,
-            // Zero: Table's bands are relative to the first ROW line, and the
-            // mouse closure subtracts a `firstRowY` that already accounts for
-            // the indicator. See `drawnBands` on why the origin differs from
-            // `_ListCore`'s and what it would take to unify them.
-            indicatorLines: 0, lineCount: rowLines.count)
+            // Whatever chrome is already in `lines` — which at this point is
+            // the "N more above" indicator and nothing else, since the rows go
+            // in on the next statement and the "below" indicator after them.
+            // Counted rather than re-derived from a predicate so it cannot
+            // disagree with what was drawn.
+            indicatorLines: lines.count, lineCount: lines.count + rowLines.count)
         // The rows start below whatever "N more above" indicator is already in
         // `lines`; their runs take the same slide the bands just did.
         let rowsTop = lines.count
@@ -1900,7 +1918,7 @@ where Value.ID: Hashable {
         // The row lines are handed back separately for a `.cursor` drag's
         // floating preview; the press frame is drawn in plain data order, so
         // indexing them by `visibleRange` offset is exact.
-        return (lines, handler.onMove == nil ? [] : rowLines, runs + chromeRuns)
+        return (lines, handler.onMove == nil ? [] : rowLines, runs + chromeRuns, bands)
     }
 
     // MARK: - Reorder drag
@@ -1976,7 +1994,7 @@ where Value.ID: Hashable {
         zoneID: HitTestRegion.HandlerID,
         state: PopulatedRenderState,
         context: RenderContext,
-        firstRowY: Int
+        interiorTopY: Int
     ) {
         let handler = state.handler
         guard let insertion = dropInsertion,
@@ -2001,9 +2019,10 @@ where Value.ID: Hashable {
                 hovering: { _, y in
                     // The band under the pointer names the row it would land
                     // BEFORE; past the last row it appends. Measured from the
-                    // first ROW line, which is the space the bands are in.
+                    // INTERIOR top, which is the space the bands are in — the
+                    // same space `_ListCore` publishes and reads in.
                     let slot =
-                        handler.dropTarget(atContentY: y - firstRowY) ?? handler.itemCount
+                        handler.dropTarget(atContentY: y - interiorTopY) ?? handler.itemCount
                     handler.externalDropSlot = min(max(0, slot), handler.itemCount)
                 }))
     }
@@ -2088,10 +2107,11 @@ where Value.ID: Hashable {
 
     /// Hands this frame's drawn row geometry to the shared publisher.
     ///
-    /// `yStart` is measured from the first row line (past any "N more above"
-    /// indicator), which is the space the mouse handler's `lineOffset` is in,
-    /// and it must include the overscroll `slide` — the rows are drawn shifted
-    /// by it, so a drag hit-tests the wrong row without it.
+    /// `yStart` lands in ``ItemListHandler/DrawnBand/yStart``'s space: lines
+    /// from the first CONTENT line of the interior, so `indicatorLines` — the
+    /// chrome drawn above the rows — and the overscroll `slide` both go in. The
+    /// rows are drawn shifted by the slide, so a drag hit-tests the wrong row
+    /// without it.
     ///
     /// This comment spent a while attached to `registerRowDropDestination`
     /// instead, three hundred lines above, having been separated from its
@@ -2100,24 +2120,29 @@ where Value.ID: Hashable {
     /// the one `publishMultiLineRowBands` does not follow, and it was added
     /// while the rule was sitting on someone else's function where nobody
     /// writing a second publisher would read it.
+    @discardableResult
     private func publishRowBands(
         handler: ItemListHandler<Value.ID>,
         drawn: [(entry: ItemListHandler<Value.ID>.DrawnRow, height: Int)],
         slide: Int,
         indicatorLines: Int,
         lineCount: Int
-    ) {
+    ) -> [ItemListHandler<Value.ID>.DrawnBand] {
         typealias Handler = ItemListHandler<Value.ID>
-        handler.publishRowBands(
-            Handler.drawnBands(
-                drawn.map { entry, height in
-                    switch entry {
-                    case .row(let rowIndex): return (.row(rowIndex), height)
-                    case .slot: return (.slot, height)
-                    }
-                },
-                offset: slide + indicatorLines,
-                lineCount: lineCount))
+        let bands = Handler.drawnBands(
+            drawn.map { entry, height in
+                switch entry {
+                case .row(let rowIndex): return (.row(rowIndex), height)
+                case .slot: return (.slot, height)
+                }
+            },
+            offset: slide + indicatorLines,
+            lineCount: lineCount)
+        handler.publishRowBands(bands)
+        // Handed back as well as published: the frame keeps them on its render
+        // state so the click map and the cursor marker read the same geometry
+        // the drag does, rather than each deriving its own.
+        return bands
     }
 
     /// Starts the floating preview on the first movement of a `.cursor` drag,
@@ -2170,15 +2195,21 @@ where Value.ID: Hashable {
     /// It published nothing at all until now, which did not merely disable
     /// drag-reorder there — it made the gesture swallow the click while doing
     /// nothing, since `dropTarget` had no bands to hit-test against.
+    ///
+    /// `indicatorLines` must be the DRAWING condition `composeMultiLineRows`
+    /// uses (`window.showAbove && drawsText`), not the handler's
+    /// `hasContentAbove`: `showAbove` is also true for a line-granularity top
+    /// clip inside row 0, where `hasContentAbove` is false.
+    @discardableResult
     private func publishMultiLineRowBands(
         handler: ItemListHandler<Value.ID>,
         range: Range<Int>,
         heights: [Int],
         indicatorLines: Int,
         lineCount: Int
-    ) {
+    ) -> [ItemListHandler<Value.ID>.DrawnBand] {
         typealias Handler = ItemListHandler<Value.ID>
-        handler.publishRowBands(
+        let bands =
             Handler.drawnBands(
                 range.enumerated().map { offset, rowIndex in
                     (.row(rowIndex), offset < heights.count ? max(1, heights[offset]) : 1)
@@ -2189,7 +2220,9 @@ where Value.ID: Hashable {
                 // multi-line table hit-tested a drag against geometry its rows
                 // were not drawn at.
                 offset: indicatorLines - handler.overscrollState.excursion,
-                lineCount: lineCount))
+                lineCount: lineCount)
+        handler.publishRowBands(bands)
+        return bands
     }
 
     // MARK: - Mouse handler wiring
@@ -2298,7 +2331,23 @@ where Value.ID: Hashable {
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
         let focusManager = context.environment.focusManager
-        let firstRowY = 2 + state.scrollOffsetAbove
+        // The table's interior: past the top border (0) and the column header
+        // (1). A constant — the header is always drawn, and nothing else sits
+        // between it and the content.
+        //
+        // THIS is the origin the drag geometry works in, matching `_ListCore`'s
+        // `topInset`: `DrawnBand.yStart` counts from the first CONTENT line, so
+        // the "N more above" indicator's line is inside the band space rather
+        // than subtracted out before it. Anything that hit-tests a BAND —
+        // `ReorderHost.topInset`, the drop destination, the session-less
+        // `dragContentY` — measures from here.
+        let interiorTopY = 2
+        // …and the first ROW line, which is one lower when an indicator is
+        // drawn. Only the scrollbar wants this now: its cells are one per ROW,
+        // so the bar's region has to start where the rows do. Everything that
+        // hit-tests a LINE — the click map, the cursor marker, the drag —
+        // works in the band space above instead.
+        let firstRowY = interiorTopY + state.scrollOffsetAbove
 
         // The scrollbar's own handler goes in first so the container's later
         // insert(at: 0) pushes it to a higher index — hit-tested ahead of the
@@ -2345,7 +2394,7 @@ where Value.ID: Hashable {
                 state: state,
                 context: context,
                 focusManager: focusManager,
-                interiorTopY: firstRowY - state.scrollOffsetAbove,
+                interiorTopY: interiorTopY,
                 contentColumns: contentColumns,
                 rowContentLeft: rowContentLeft,
                 previewLine: previewLine
@@ -2376,7 +2425,13 @@ where Value.ID: Hashable {
                 DragAndDropSession.ReorderHost(
                     focusID: state.focusID,
                     handlerID: mouseHandlerID,
-                    topInset: firstRowY,
+                    // The INTERIOR top, not the first row line: the session
+                    // resolves a drag through `DragAndDropSession.contentY`
+                    // (`event.y - localOriginY - topInset`) and hit-tests the
+                    // published bands with it, so this has to name the same
+                    // origin the bands do. `_ListCore` passes its content
+                    // `topInset` here for exactly that reason.
+                    topInset: interiorTopY,
                     contentColumns: contentColumns,
                     handler: state.handler))
         }
@@ -2389,7 +2444,8 @@ where Value.ID: Hashable {
         // `isScrollEnabled` gate below, so a non-scrolling table silently
         // refused every external drag: no slot opened, and release flew home.
         registerRowDropDestination(
-            zoneID: mouseHandlerID, state: state, context: context, firstRowY: firstRowY)
+            zoneID: mouseHandlerID, state: state, context: context,
+            interiorTopY: interiorTopY)
 
         // Register the table as a drag auto-scroll zone (sharing the container
         // region id): a drag hovering near its top/bottom edge scrolls the rows
@@ -2413,32 +2469,21 @@ where Value.ID: Hashable {
         // A one-row region at the keyboard cursor's on-screen line, ahead of
         // the whole-table region so an enclosing ScrollView follows the
         // cursor row — not just the table's top — through a table taller than
-        // the outer viewport. Mirrors the marker in _ListCore (see the
-        // comment there); the y math mirrors containerMouseHandler's
-        // click-to-row mapping.
+        // the outer viewport. Mirrors the marker in _ListCore, and now takes
+        // its rectangle the same way: straight off the band the row was drawn
+        // as. The band already carries the indicator's offset and the
+        // overscroll slide, so there is nothing left to re-derive — the sum of
+        // per-row heights, and the excursion correction that used to follow it,
+        // were both this arithmetic done a second time.
         let cursor = state.handler.focusedIndex
-        if state.visibleRange.contains(cursor) {
-            let rowOffset = cursor - state.visibleRange.lowerBound
-            var cursorY: Int
-            let cursorHeight: Int
-            if state.visibleRowHeights.isEmpty {
-                cursorY = firstRowY + rowOffset
-                cursorHeight = 1
-            } else if rowOffset < state.visibleRowHeights.count {
-                cursorY = firstRowY + state.visibleRowHeights[0..<rowOffset].reduce(0, +)
-                cursorHeight = max(1, state.visibleRowHeights[rowOffset])
-            } else {
-                return
-            }
-            // The marker must sit where the row is DRAWN: overscroll slides
-            // the rows by −excursion, and an enclosing ScrollView reveals by
-            // this region — uncompensated it revealed the wrong line.
-            cursorY -= state.handler.overscrollState.excursion
-            guard cursorY >= firstRowY else { return }
+        if let band = state.drawnBands.first(where: {
+            if case .row(let index) = $0.entry { return index == cursor }
+            return false
+        }) {
             buffer.hitTestRegions.insert(
                 HitTestRegion(
-                    offsetX: 0, offsetY: cursorY,
-                    width: buffer.width, height: cursorHeight,
+                    offsetX: 0, offsetY: interiorTopY + band.yStart,
+                    width: buffer.width, height: max(1, band.height),
                     handlerID: mouseHandlerID,
                     focusID: state.focusID
                 ),
@@ -2462,13 +2507,12 @@ where Value.ID: Hashable {
     ) -> @MainActor (MouseEvent) -> Bool {
         let captureHandler = state.handler
         let captureFocusID = state.focusID
-        let visibleRange = state.visibleRange
-        let visibleRowHeights = state.visibleRowHeights
-        // A value, not a handler read: `rowAt` is a local function, which may
-        // not capture the non-Sendable handler — and the value is current for
-        // every event this closure sees, since any excursion change repaints
-        // (and re-creates this closure) before the next event arrives.
-        let captureExcursion = state.handler.overscrollState.excursion
+        // The press frame's geometry, captured: a press and its release
+        // describe one unchanging layout, and it is the CLICK path that needs
+        // it. The reorder path deliberately reads the handler's freshly
+        // published bands instead — `.live` feedback moves the rows out from
+        // under this copy as the drag goes. Same split as `_ListCore`.
+        let drawnBands = state.drawnBands
         let rowIDs = data.map(\.id)
         let capturedPrimaryAction = primaryAction
         let dragSession = context.environment.dragAndDropSession
@@ -2476,27 +2520,7 @@ where Value.ID: Hashable {
         // drag keeps under the pointer. Held in the closure because the closure
         // IS the gesture (see RowReorderGrabPoint).
         let grab = RowReorderGrabPoint()
-        // Whether an "N more above" line sits between the header and the first
-        // row. Asked of the handler EVERY event, never captured: the press
-        // frame's answer goes stale the moment drag auto-scroll leaves the top,
-        // and the whole gesture routes back to this one closure (the
-        // dispatcher's press capture). Captured, every row read one lower than
-        // it was drawn — the dragged row settling a row below the cursor.
-        // (The scrollbar path draws no indicators at all, so its rows never
-        // shift.)
         return { event in
-            // `reservesIndicatorLine` — `drawsScrollIndicators && !showsScrollbar`
-            // — is the frame's own answer to "does a 'N more above' line come
-            // out of the content area", and it is what `composeRowLines` draws
-            // by. This used `!state.hasScrollbar` alone, which is TRUE when
-            // indicators are hidden outright: `.scrollIndicators(.hidden)` on a
-            // scrolled table drew no indicator and the click map still allowed
-            // a row for one, so every click selected the row ABOVE the one
-            // under the pointer and the top row could not be clicked at all.
-            let firstRowY =
-                interiorTopY
-                + (captureHandler.reservesIndicatorLine && captureHandler.hasContentAbove
-                    ? 1 : 0)
             // Wheel scrolls the viewport, never the selection.
             // See the matching comment in _ListCore for the
             // model. Routed through the shared
@@ -2505,38 +2529,36 @@ where Value.ID: Hashable {
             if captureHandler.handleWheelEvent(event) { return true }
 
             if event.button == .left {
-                /// The clicked line's data row, from the press-frame geometry.
-                /// Single-line tables leave `visibleRowHeights` empty (no
-                /// per-frame array) — the line offset is the row. Multi-line
-                /// tables walk the visible rows' heights, so a click anywhere in
-                /// a tall row hits it.
+                /// The clicked line's data row, from the press frame's bands.
+                ///
+                /// One lookup for both layouts. It used to walk `visibleRange`
+                /// (single-line) or a per-row height array (multi-line) from a
+                /// `firstRowY` recomputed on every event, undoing the overscroll
+                /// slide by hand on the way. Every one of those terms is already
+                /// in the band, and re-deriving them is how the click map came
+                /// to disagree with the drawing: its "is an indicator drawn?"
+                /// test was `hasContentAbove`, while the multi-line path draws
+                /// by `showAbove`, which is also true for a line-granularity
+                /// clip inside row 0. Scrolled one line into the first row, the
+                /// indicator was on screen and every click landed a row low.
                 func rowAt(y: Int) -> Int? {
-                    // Overscroll slides the drawn rows by −excursion; a click
-                    // lands in DRAWN space, so map it back to the unslid row
-                    // grid. (The List's twin gets this for free — its ranges
-                    // are pre-slid by `slidRange` before publication.)
-                    let lineOffset = y - firstRowY + captureExcursion
-                    guard lineOffset >= 0 else { return nil }
-                    if visibleRowHeights.isEmpty {
-                        return lineOffset < visibleRange.count
-                            ? visibleRange.lowerBound + lineOffset : nil
-                    }
-                    var accumulated = 0
-                    for (offset, height) in visibleRowHeights.enumerated() {
-                        if lineOffset < accumulated + height {
-                            return visibleRange.lowerBound + offset
-                        }
-                        accumulated += height
+                    let contentY = y - interiorTopY
+                    for band in drawnBands
+                    where contentY >= band.yStart && contentY < band.yStart + band.height {
+                        if case .row(let rowIndex) = band.entry { return rowIndex }
+                        return nil
                     }
                     return nil
                 }
 
-                /// The drag's position in the handler's band space (lines from the
-                /// first row line), or `nil` once the cursor leaves the content
-                /// columns — which holds the current drop target rather than
-                /// snapping it somewhere the user isn't pointing.
+                /// The drag's position in the handler's band space — lines from
+                /// the interior's first CONTENT line, the same origin
+                /// ``ItemListHandler/DrawnBand/yStart`` counts from — or `nil`
+                /// once the cursor leaves the content columns, which holds the
+                /// current drop target rather than snapping it somewhere the
+                /// user isn't pointing.
                 var dragContentY: Int? {
-                    contentColumns.contains(event.x) ? event.y - firstRowY : nil
+                    contentColumns.contains(event.x) ? event.y - interiorTopY : nil
                 }
 
                 switch event.phase {
