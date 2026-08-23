@@ -67,32 +67,69 @@ private enum OverlayDemo: Int, CaseIterable {
         }
     }
 
-    /// API usage example for the detail panel.
-    var apiUsage: String {
+    /// API usage example for the detail panel, already broken into the lines it
+    /// should be shown on.
+    ///
+    /// Written out the way the call would actually be written rather than
+    /// squeezed onto one line: a trailing-closure API folded into a single
+    /// string is exactly the shape a terminal wraps worst, and what came out the
+    /// other side — a `message:` label orphaned at the start of a line, at the
+    /// panel's own indent — read as a different statement rather than as the
+    /// continuation of one.
+    var apiUsage: [String] {
         switch self {
         case .alertStandard:
-            ".alert(\"Title\", isPresented: $show) { actions } message: { Text(\"...\") }"
+            [
+                ".alert(\"Title\", isPresented: $show) {",
+                "    actions",
+                "} message: {",
+                "    Text(\"...\")",
+                "}",
+            ]
         case .alertWarning:
-            ".modal(isPresented: $show) { Alert.warning(message: \"...\") { actions } }"
+            Self.modalCall("Alert.warning(message: \"...\") { actions }")
         case .alertError:
-            ".modal(isPresented: $show) { Alert.error(message: \"...\") { actions } }"
+            Self.modalCall("Alert.error(message: \"...\") { actions }")
         case .alertInfo:
-            ".modal(isPresented: $show) { Alert.info(message: \"...\") { actions } }"
+            Self.modalCall("Alert.info(message: \"...\") { actions }")
         case .alertSuccess:
-            ".modal(isPresented: $show) { Alert.success(message: \"...\") { actions } }"
+            Self.modalCall("Alert.success(message: \"...\") { actions }")
         case .dialog:
-            ".modal(isPresented: $show) { Dialog(title: \"...\") { content } }"
+            Self.modalCall("Dialog(title: \"...\") { content }")
         case .dialogWithFooter:
-            ".modal(isPresented: $show) { Dialog(title: \"...\") { content } footer: { buttons } }"
+            [
+                ".modal(isPresented: $show) {",
+                "    Dialog(title: \"...\") {",
+                "        content",
+                "    } footer: {",
+                "        buttons",
+                "    }",
+                "}",
+            ]
         case .dialogAuth:
-            ".modal(isPresented: $show) { Dialog(\"Sign in\") { TextField/SecureField } footer: { Cancel; Sign in } }"
+            [
+                ".modal(isPresented: $show) {",
+                "    Dialog(\"Sign in\") {",
+                "        TextField / SecureField",
+                "    } footer: {",
+                "        Cancel; Sign in",
+                "    }",
+                "}",
+            ]
         case .dialogProse:
-            ".modal(isPresented: $show) { Dialog(\"...\") { Text(paragraphs) } }  .dialogPreferredWidth(100)"
+            Self.modalCall("Dialog(\"...\") { Text(paragraphs) }")
+                + [".dialogPreferredWidth(100)"]
         case .modalCustom:
-            ".modal(isPresented: $show) { VStack { ... } }"
+            Self.modalCall("VStack { ... }")
         case .notification:
-            "NotificationService.current.post(\"Saved!\")"
+            ["NotificationService.current.post(\"Saved!\")"]
         }
+    }
+
+    /// The `.modal(isPresented:)` wrapper every dialog demo shares, around one
+    /// line of content.
+    private static func modalCall(_ content: String) -> [String] {
+        [".modal(isPresented: $show) {", "    " + content, "}"]
     }
 
     /// Whether this demo variant is a notification (not a modal).
@@ -318,22 +355,34 @@ struct OverlaysPage: View {
     // MARK: - Description Panel
 
     /// Detail panel showing the selected demo's description and API usage.
+    ///
+    /// No `.frame(width:)`. It used to be pinned to 55 columns, which wrapped
+    /// every API line even with half the page still empty beside it; left to
+    /// size itself the panel takes the width its longest line asks for, bounded
+    /// by what the row has left, so the code only wraps when it genuinely
+    /// cannot fit.
     private var descriptionPanel: some View {
         Panel(selectedDemo.label, titleColor: .palette.accent) {
+            // One blank line between the description and the API block — the
+            // stack's own spacing. There used to be three: the spacing on either
+            // side of an explicit empty `Text`.
             VStack(alignment: .leading, spacing: 1) {
                 Text(selectedDemo.description)
                     .foregroundStyle(.palette.foreground)
 
-                Text("")
-
-                Text("page.overlays.apiLabel")
-                    .bold()
-                    .foregroundStyle(.palette.accent)
-                Text("  \(selectedDemo.apiUsage)")
-                    .foregroundStyle(.palette.foregroundSecondary)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("page.overlays.apiLabel")
+                        .bold()
+                        .foregroundStyle(.palette.accent)
+                    ForEach(selectedDemo.apiUsage, id: \.self) { line in
+                        // Built as a String rather than interpolated into a
+                        // literal, so it stays a string and not a lookup key.
+                        Text("  " + line)
+                            .foregroundStyle(.palette.foregroundSecondary)
+                    }
+                }
             }
         }
-        .frame(width: 55)
     }
 
     // MARK: - The two dialog demos
