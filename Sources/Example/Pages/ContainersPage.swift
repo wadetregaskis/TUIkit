@@ -103,6 +103,12 @@ struct SettingsAndAlignmentRow: View, Equatable {
 struct ContainersPage: View {
     @State var showDetails: Bool = false
 
+    /// The app-wide appearance, which is what decides every border's style.
+    /// Cycled here by `b` / `B` — this being the page whose whole subject is
+    /// bordered containers, and the only one where seeing the six styles in
+    /// turn is the point rather than a side effect.
+    @Environment(\.appearanceManager) private var appearanceManager
+
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             ContainerTypesRow().equatable()
@@ -168,6 +174,13 @@ struct ContainersPage: View {
 
             DemoSection("page.containers.section.appearance") {
                 Text("page.containers.borderStyleHelp").foregroundStyle(.palette.foregroundSecondary)
+                HStack(spacing: 1) {
+                    Text("page.containers.currentBorderStyle")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Text(verbatim: appearanceManager?.currentName ?? "—")
+                        .bold()
+                        .foregroundStyle(.palette.accent)
+                }
             }
 
             // The page had no keyboard help at all, and it is the page whose
@@ -185,5 +198,35 @@ struct ContainersPage: View {
         .appHeader {
             DemoAppHeader("menu.item.containers")
         }
+        .statusBarItems(statusBarItems)
+    }
+
+    /// This page's footer.
+    ///
+    /// `b` cycles the appearance forward and `B` back, the pair spelled the way
+    /// the image pages spell theirs: one visible item carrying the dual-key
+    /// indicator and the current value, and a hidden partner for the uppercase
+    /// key. Escape and the arrows are informational — the page switch and the
+    /// scroll are handled above this page.
+    private var statusBarItems: [any StatusBarItemProtocol] {
+        [
+            StatusBarItem(shortcut: Shortcut.escape, label: "status.back"),
+            StatusBarItem(
+                shortcut: "b|B",
+                label: "border:" + (appearanceManager?.currentAppearance?.id ?? "?"),
+                key: .character("b")
+            ) {
+                appearanceManager?.cycleNext()
+            },
+            StatusBarItem(
+                shortcut: "B",
+                label: "",
+                key: .character("B"),
+                displayInStatusBar: false
+            ) {
+                appearanceManager?.cyclePrevious()
+            },
+            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "status.scroll"),
+        ]
     }
 }

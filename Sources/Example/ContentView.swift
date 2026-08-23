@@ -195,7 +195,8 @@ struct ContentView: View {
         case .colors:
             ColorsPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .containers:
-            ContainersPage().statusBarItems(subPageItems(pageSetter: pageSetter))
+            // Its own footer: it carries the b / B border-style cycling.
+            ContainersPage()
         case .overlays:
             OverlaysPage(onBack: { pageSetter.wrappedValue = .menu })
         case .layout:
