@@ -349,11 +349,17 @@ struct AnimationPage: View {
                     .border(.palette.accent)
                     .transition(Self.transitions[transition].transition)
             }
-        if reservesSpace {
-            panel.frame(height: 3, alignment: .top)
-        } else {
-            panel
-        }
+        // One frame either way, with a height of `nil` when the space is not
+        // reserved — NOT `if reserved { panel.frame(…) } else { panel }`.
+        // Swapping the wrapper is a change of view IDENTITY: every `@State`
+        // below it is recreated at its initial value the moment the toggle
+        // flips, which is a bug this page would have been an unusually good
+        // place to demonstrate accidentally.
+        //
+        // Five rows, which is what the panel IS: a text row, a row of padding
+        // each side of it, and the border's two. Reserving three left the
+        // padding fighting the border for one row.
+        panel.frame(height: reservesSpace ? 5 : nil, alignment: .top)
     }
 
     /// One Bézier control-point coordinate. Named rather than localized: these
