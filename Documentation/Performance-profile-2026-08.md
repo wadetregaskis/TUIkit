@@ -7,6 +7,14 @@ stated so it can be re-run and disagreed with.
 This is a survey, not a fix. It ends with a ranked list of what the numbers say
 is worth doing.
 
+**It is also a dated record, and symbols in it are as they were named on the
+day.** A few have since moved: `FrameNowNanosKey` is now `AnimationFrameKey` in
+`AnimationEnvironment.swift` (with `frameNowNanos` a computed accessor into
+`AnimationFrame`). Where a section describes work that was reverted rather than
+shipped it says so at the point of reverting — §19's automatic memo, §23's
+second attempt, §24's memo-and-digest — so a name from those sections not being
+in the tree is the record working, not rotting.
+
 ---
 
 ## 1. Method
@@ -2762,7 +2770,7 @@ Two were dropping them:
   kept in step would drift, and a run spliced one line off repaints the row above
   or below, every tick, forever.
 - **`Section`**, found by auditing all eighteen containers a spinner can sit in.
-  That audit is now a standing test (`RunPropagationAudit`), for the same reason
+  That audit is now a standing test (`AnimatedRunPropagationTests`), for the same reason
   the failure is invisible.
 
 Two places a run is still dropped, both deliberate:
