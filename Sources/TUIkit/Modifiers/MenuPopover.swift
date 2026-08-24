@@ -306,7 +306,7 @@ func presentMenuPopover<Items: View>(
     // the status bar's own "⎋ back" won — so Escape in an open Menu dismissed
     // the whole page behind it. The Picker drop-down has always claimed it;
     // this is the same claim, from the presentation both share.
-    context.environment.statusBar?.escapeLabelOverride = "close menu"
+    context.environment.statusBar?.escapeLabelOverride = MenuPresentationLabels.popUp.close
     attachMenuKeys(controller: controller, sectionID: sectionID, dismiss: dismiss, context: context)
 
     var menuContext = context

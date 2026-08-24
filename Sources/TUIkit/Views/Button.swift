@@ -299,7 +299,8 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             // activates.
             let verb =
                 isMenuTrigger
-                ? "open menu" : (context.environment.isInsideMenu ? "choose" : "activate")
+                ? MenuPresentationLabels.popUp.open
+                : (context.environment.isInsideMenu ? "choose" : "activate")
             FocusRegistration.publishActivationLabel(
                 verb, context: context, isFocused: isFocused)
             return isFocused

@@ -62,11 +62,17 @@ struct ActivationLabelTests {
         #expect(verb(for: Toggle("On", isOn: .constant(false))) == "toggle")
     }
 
-    @Test("A closed pop-up opens its menu")
+    /// Named the same way at both ends: the Escape item says "close drop-down
+    /// menu" while it is up, and a Return item offering to "open menu" reads as
+    /// a different surface entirely. Both come from ``MenuPresentationLabels``,
+    /// so they cannot be renamed apart.
+    @Test("A closed pop-up opens its menu, by the name it will close under")
     func closedPicker() {
         #expect(
             verb(for: Picker("Pick", selection: .constant(0)) { Text("One").tag(0) })
-                == "open menu")
+                == MenuPresentationLabels.dropDown.open)
+        #expect(MenuPresentationLabels.dropDown.close == "close drop-down menu")
+        #expect(MenuPresentationLabels.popUp.open == "open menu")
     }
 
     @Test("A text field with somewhere to submit says so, and one without says nothing")

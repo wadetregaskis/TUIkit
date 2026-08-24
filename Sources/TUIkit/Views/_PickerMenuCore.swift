@@ -110,7 +110,8 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         publishOpenEscapeLabel(context: context, isOpen: isOpen)
         // Return opens the closed drop-down, and picks from the open one.
         FocusRegistration.publishActivationLabel(
-            isOpen ? "choose" : "open menu", context: context, isFocused: isFocused)
+            isOpen ? "choose" : MenuPresentationLabels.dropDown.open,
+            context: context, isFocused: isFocused)
 
         let collapsed = collapsedLine(
             innerWidth: innerWidth,
@@ -212,7 +213,8 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         context: RenderContext, isOpen: Bool
     ) {
         guard isOpen, !context.isMeasuring else { return }
-        context.environment.statusBar?.escapeLabelOverride = "close drop-down menu"
+        context.environment.statusBar?.escapeLabelOverride =
+            MenuPresentationLabels.dropDown.close
     }
 
     // MARK: - Mouse handler wiring
