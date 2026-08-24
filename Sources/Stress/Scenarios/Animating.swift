@@ -85,7 +85,7 @@ private struct AnimatingView: View {
             // The colour route: resolved and interpolated at render time.
             Text(Synth.slug(mix(config.seed, index)))
                 .padding(.leading, 1)
-                .background(phase > 0.5 ? .accent : .secondary)
+                .background(phase > 0.5 ? .accentColor : .secondary)
                 .animation(.easeInOut(duration: 0.4), value: tick)
         } else {
             AnimatedBar(fraction: phase, width: 24, label: Synth.slug(mix(config.seed, index)))

@@ -14,12 +14,16 @@ became nearest-wins, and the parameters followed. §6 (`labelsHidden()`) and §7
 (`deleteDisabled`/`moveDisabled`) were both implemented after the last review —
 `LabelsVisibility.swift` with `_CollapsingLabel`, `ColorPicker`, `Toggle`,
 `ProgressView` and `DatePicker` all honouring it, and
-`RowEditRestrictionModifiers.swift` with `RowEditRestrictionTests`. The
+`RowEditRestrictionModifiers.swift` with `RowEditRestrictionTests`. §1
+(`Color.primary`/`.secondary`) and §2 (`Color.accentColor`) were answered on
+2026-08-24 and implemented together: the whole "Semantic Colors" block now
+means the palette roles it is named after, and the SwiftUI spelling replaced
+`Color.accent`. The
 reasoning is in those commits; the entries are gone from here rather than
 marked done, as this file's last section requires.
 
 Last reviewed: 2026-08-24 — every remaining entry re-checked against the code
-that day, and the counts below re-measured rather than carried forward.
+that day, and the counts re-measured rather than carried forward. Four left.
 
 **Each entry now ends in a recommendation.** They are recommendations, not
 decisions: the point of this file is that the call is not mine to make. But an
@@ -28,103 +32,7 @@ with an opinion you can disagree with.
 
 ---
 
-## 1. `Color.primary` / `Color.secondary` — a meaning collision
-
-**The gap.** SwiftUI's `.primary` is the primary *label* colour (what text
-defaults to). TUIkit's is `Color.blue`, and `.secondary` is `Color.brightBlack`
-(Color.swift:96, :99). The names match and the meanings do not.
-
-**Why it needs a decision.** Re-pointing them at `Color.palette.foreground` /
-`foregroundSecondary` is the parity-correct move, and it **changes what already
-rendered apps look like**. There are 17 in-tree call sites — `Sources/Example`
-and the whole `Sources/Stress` module — that currently mean "blue" and "grey".
-
-**The technical cost, if the answer is yes.** Making them semantic is not a
-one-line edit. A semantic colour returns `nil` from `rgbComponents`, and
-`opacity(_:)`, `lighter`, `darker`, `lerp` and *both* downsamplers all return the
-colour unchanged for one — after which `ANSIRenderer` hits
-`fatalError("Semantic color must be resolved before rendering")` on any path
-that does not call `resolve(with:)`. `Text` and `BackgroundModifier` do resolve;
-the audit is of everything that does not.
-
-**Options.** (a) Re-point at the palette roles, accept the visual change, do the
-audit. (b) Keep the current meanings and record `.primary`/`.secondary` in
-`parity-map.json` as deliberate divergences. (c) Re-point and add
-differently-named constants for the old meanings. (d) **Re-point `.primary` at
-`Color.default` and leave `.secondary` alone** — see below.
-
-**Re-measured 2026-08-24, and it splits the item in two.**
-
-`.primary` is `Color.blue` and `.secondary` is `Color.brightBlack`
-(`Color.swift:142`, `:145`). Used as colours in `Sources/Example` and
-`Sources/Stress`: **2 sites for `.primary`, 13 for `.secondary`.**
-
-Those two numbers are the argument for treating them separately:
-
-- **`.primary` is plainly wrong.** SwiftUI's is "what text defaults to"; blue is
-  a decoration. Two call sites care.
-- **`.secondary` is approximately right already.** SwiftUI's is a
-  lower-emphasis label colour, and in a terminal that is grey. `brightBlack` IS
-  the grey. Re-pointing it at `palette.foregroundSecondary` would be more
-  themable and is not more *correct*, and it is the option that moves 13 sites.
-
-**Option (d), which the earlier list missed and which costs nothing.**
-`Color.default` (`Color.swift:65`) is `.standard(.default)` — SGR 39, the
-terminal's own foreground. It is CONCRETE, so it triggers none of the
-semantic-colour machinery: no `nil` from `rgbComponents`, no inert `opacity`,
-no `fatalError` in `ANSIRenderer`, no audit. And "the terminal's own
-foreground" is exactly what "the colour text defaults to" means here, in the
-same way SwiftUI's `.primary` means "whatever the system says a label is".
-
-The trade against (a): `palette.foreground` follows the APP's theme, while
-`.default` follows the USER's terminal. For a themed app the first is more
-consistent; for a library default the second is more honest, and it is the one
-an unthemed app already shows everywhere else.
-
-**Recommendation: (d).** Re-point `.primary` at `Color.default`, leave
-`.secondary` as it is, and record `.secondary` in the parity map as a
-deliberate divergence with the reasoning above. That closes the wrong half,
-touches two call sites, and pays nothing for the semantic audit — which can
-then be done on its own merits, for the palette roles, rather than as the price
-of a rename.
-
----
-
-## 2. `Color.accentColor` — a second spelling for a thing that exists
-
-**The gap.** SwiftUI has `.accentColor`; TUIkit already has `Color.accent`
-(Color.swift:102), with 8 in-tree uses.
-
-**Why it needs a decision.** Adding `.accentColor` alongside `.accent` ships two
-spellings of one idea. That is exactly what the "consolidate before adding" rule
-exists to prevent — but the alternative is that ported SwiftUI code does not
-compile.
-
-**Options.** (a) Add `.accentColor` as an alias of `.accent`. (b) Rename `.accent`
-to `.accentColor` and update the sites (pre-1.0, no shim, per the standing
-policy). (c) Record `.accentColor` as a deliberate rename in the parity map.
-
-**Re-measured 2026-08-24: ~10 colour call sites**, and one fact that sharpens
-the question. There are ALREADY two accent spellings, and they mean different
-things: `Color.accent` is `Color.cyan` — a fixed colour — while
-`Color.palette.accent` is `.semantic(.accent)`, the themed one. SwiftUI's
-`.accentColor` is unambiguously the themed one.
-
-So (a) would ship a THIRD spelling, and the one it aliases is the wrong one of
-the two. That reading was not available when the options were first written and
-it removes (a) from consideration.
-
-**Recommendation: (b), pointed at the palette.** Rename the fixed `Color.accent`
-to something that says it is fixed (`Color.cyan` already exists and is what it
-is, so the constant may simply go), and let `.accentColor` be the alias of
-`Color.palette.accent`. That leaves one accent spelling per meaning, and the
-SwiftUI-shaped name lands on the SwiftUI-shaped meaning. It does pay the
-semantic-colour audit of §1 option (a) — `.accentColor` would be semantic — so
-it is worth doing in the same pass as whatever §1 decides.
-
----
-
-## 3. Anything taking `opacity:` — blocked on where alpha lives
+## 1. Anything taking `opacity:` — blocked on where alpha lives
 
 **The gap.** `Color.init(_:red:green:blue:opacity:)`,
 `init(hue:saturation:brightness:opacity:)`, `init(_:white:opacity:)`.
@@ -149,13 +57,13 @@ where alpha lives. Only two answers change this entry:
    initialisers plus §4 should be recorded in the parity map as
    `notImplemented` with that as the `why`.
 
-**Recommendation: none, deliberately** — but note that §3 and §4 are one
+**Recommendation: none, deliberately** — but note that The two entries below are one
 decision wearing two hats, and answering #511 answers both. They should be
 taken off this list together or not at all.
 
 ---
 
-## 4. `Color.clear` — no alpha channel to be clear with
+## 2. `Color.clear` — no alpha channel to be clear with
 
 **The gap.** SwiftUI's fully-transparent colour.
 
@@ -165,7 +73,7 @@ painted. For a *foreground* they do not: `.clear` text is invisible, `.default`
 text is perfectly readable. One mapping cannot be right for both.
 
 **Options.** (a) Map to `.default` and document the foreground caveat. (b) Record
-as not-implementable pending #511. (c) Add a real alpha channel (see #3).
+as not-implementable pending #511. (c) Add a real alpha channel (see §1).
 
 **Why (a) is worse than it looks.** The caveat is not a footnote: `.clear` on
 text is the one thing a reader would reach for to HIDE text, and mapping it to
@@ -187,7 +95,7 @@ will bring it back if `ColorValue` ever grows a channel.
 
 ---
 
-## 5. `View.help(_:)` — what a tooltip means with no pointer
+## 3. `View.help(_:)` — what a tooltip means with no pointer
 
 **The gap.** `help(_:)` in its `LocalizedStringKey`, `Text` and `StringProtocol`
 overloads.
@@ -232,7 +140,7 @@ being (2) rather than the status-bar question, which is now answered.
 
 ---
 
-## 6. `View.focusEffectDisabled(_:)` — which parts of "focused" are an *effect*
+## 4. `View.focusEffectDisabled(_:)` — which parts of "focused" are an *effect*
 
 **The gap.** SwiftUI's modifier suppresses the focus ring without taking the
 view out of the focus ring.

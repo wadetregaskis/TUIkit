@@ -50,7 +50,7 @@ private struct Nest: View {
     var body: some View {
         let h = mix(seed, level)
         if level >= maxDepth {
-            Text(Lf("stress.scenario.deep.leaf", level, Synth.slug(h))).foregroundStyle(.accent)
+            Text(Lf("stress.scenario.deep.leaf", level, Synth.slug(h))).foregroundStyle(.accentColor)
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 Text(Lf("stress.scenario.deep.level", level)).foregroundStyle(level.isMultiple(of: 2) ? .secondary : .primary)

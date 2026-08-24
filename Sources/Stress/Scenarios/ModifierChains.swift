@@ -37,7 +37,7 @@ private struct ModifierChainsView: View {
                     ForEach(0..<count, id: \.self) { index in
                         let h = mix(config.seed, index)
                         Text(Synth.slug(h))
-                            .foregroundStyle(.accent)
+                            .foregroundStyle(.accentColor)
                             .padding(1)
                             .border()
                             .frame(maxWidth: .infinity, alignment: index.isMultiple(of: 2) ? .leading : .trailing)

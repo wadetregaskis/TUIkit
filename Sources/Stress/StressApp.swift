@@ -123,7 +123,7 @@ private struct RootView: View {
                 let scenario = Scenarios.all[index]
                 HStack {
                     Text(index == menuIndex ? "▶ \(scenario.localizedTitle)" : "  \(scenario.localizedTitle)")
-                        .foregroundStyle(index == menuIndex ? .accent : .primary)
+                        .foregroundStyle(index == menuIndex ? .accentColor : .primary)
                     Spacer()
                     Text(scenario.localizedStresses).foregroundStyle(.secondary)
                 }

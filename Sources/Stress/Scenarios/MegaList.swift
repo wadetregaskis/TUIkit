@@ -55,7 +55,7 @@ private struct MegaRow: View, Equatable {
             Text(Synth.slug(h))
             Spacer()
             Text(Synth.status(h)).foregroundStyle(statusColor(h))
-            Text(Synth.bar(Double(h % 100) / 100, width: 10)).foregroundStyle(.accent)
+            Text(Synth.bar(Double(h % 100) / 100, width: 10)).foregroundStyle(.accentColor)
         }
     }
 }

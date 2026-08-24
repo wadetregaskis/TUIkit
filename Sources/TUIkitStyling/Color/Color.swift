@@ -138,23 +138,49 @@ public struct Color: Sendable, Hashable {
 
     // MARK: - Semantic Colors
 
-    /// Primary color (default: blue)
-    public static let primary = Self.blue
+    /// These are the SwiftUI-shaped spellings of the palette roles below, and
+    /// they mean exactly those roles — they are not fixed colours that happen
+    /// to be named after them.
+    ///
+    /// They used to be: `primary` was `Color.blue` and `accent` was
+    /// `Color.cyan`. That was wrong twice over. It disagreed with SwiftUI,
+    /// where `.primary` is the colour a label defaults to rather than a hue;
+    /// and, more fundamentally, **a fixed ANSI name is not a colour anyone can
+    /// predict** — `SGR 34` selects slot 4 of the user's scheme, which they are
+    /// free to make orange. A colour the framework chooses on the user's behalf
+    /// has to be either a palette role, which the app's theme defines, or
+    /// ``default``, which is explicitly the user's own. See "What an ANSI
+    /// colour actually paints" in `Documentation/Terminal-compatibility.md`.
+    ///
+    /// Being semantic, they resolve at render time and return `nil` from
+    /// ``rgbComponents`` until they do — see ``resolve(with:)``.
 
-    /// Secondary color (default: gray)
-    public static let secondary = Self.brightBlack
+    /// The colour text defaults to — SwiftUI's `.primary`, and the palette's
+    /// ``SemanticColor/foreground``.
+    public static let primary = Self.palette.foreground
 
-    /// Accent color (default: cyan)
-    public static let accent = Self.cyan
+    /// A lower-emphasis label colour — SwiftUI's `.secondary`, and the
+    /// palette's ``SemanticColor/foregroundSecondary``.
+    public static let secondary = Self.palette.foregroundSecondary
 
-    /// Warning color
-    public static let warning = Self.yellow
+    /// The app's accent — SwiftUI's `.accentColor`, and the palette's
+    /// ``SemanticColor/accent``.
+    ///
+    /// Spelled as SwiftUI spells it. It was `Color.accent`, which was a second
+    /// name for a thing `Color.palette.accent` already said, and named the
+    /// FIXED cyan rather than the themed role — so ported SwiftUI code that
+    /// wrote `.accentColor` did not compile, and code that wrote `.accent` got
+    /// the un-themed one.
+    public static let accentColor = Self.palette.accent
 
-    /// Error color
-    public static let error = Self.red
+    /// Warning color — the palette's ``SemanticColor/warning``.
+    public static let warning = Self.palette.warning
 
-    /// Success color
-    public static let success = Self.green
+    /// Error color — the palette's ``SemanticColor/error``.
+    public static let error = Self.palette.error
+
+    /// Success color — the palette's ``SemanticColor/success``.
+    public static let success = Self.palette.success
 
     // MARK: - Palette-Aware Semantic Colors
 

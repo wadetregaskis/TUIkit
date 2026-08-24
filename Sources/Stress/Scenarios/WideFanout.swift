@@ -70,7 +70,7 @@ private struct WideFanoutView: View {
                             Text(labels[index]).foregroundStyle(.secondary)
                             Text(slugs[index])
                             Spacer()
-                            Text(bars[index]).foregroundStyle(.accent)
+                            Text(bars[index]).foregroundStyle(.accentColor)
                         }
                     }
                 }

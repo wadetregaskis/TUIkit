@@ -46,7 +46,7 @@ private struct AnyViewStormView: View {
     private func erasedRow(_ index: Int, _ h: UInt64) -> AnyView {
         switch index % 4 {
         case 0:
-            return AnyView(Text("#\(index) \(Synth.slug(h))").foregroundStyle(.accent))
+            return AnyView(Text("#\(index) \(Synth.slug(h))").foregroundStyle(.accentColor))
         case 1:
             return AnyView(HStack {
                 Text("#\(index)").foregroundStyle(.secondary)

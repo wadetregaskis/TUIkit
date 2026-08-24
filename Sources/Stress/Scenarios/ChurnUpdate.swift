@@ -45,7 +45,7 @@ private struct ChurnUpdateView: View {
                             Text("#\(index)").foregroundStyle(.secondary)
                             Text(Synth.slug(h))
                             Spacer()
-                            Text(Synth.bar(Double(h % 100) / 100, width: 14)).foregroundStyle(.accent)
+                            Text(Synth.bar(Double(h % 100) / 100, width: 14)).foregroundStyle(.accentColor)
                         }
                     }
                 }

@@ -61,7 +61,7 @@ private struct TextWallView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     ForEach(0..<count, id: \.self) { index in
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(headers[index]).bold().foregroundStyle(.accent)
+                            Text(headers[index]).bold().foregroundStyle(.accentColor)
                             Text(bodies[index])
                         }
                     }

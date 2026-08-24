@@ -62,7 +62,7 @@ struct MetricCard: View {
         let h = mix(seed, index)
         Panel(Synth.slug(h)) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(Synth.name(h)).foregroundStyle(.accent)
+                Text(Synth.name(h)).foregroundStyle(.accentColor)
                 ForEach(0..<4, id: \.self) { metric in
                     let value = Double(mix(h, metric) % 100) / 100
                     HStack {
