@@ -121,7 +121,7 @@ support in 0.64.0.
 # Build
 swift build
 
-# Run all tests (~3,350 tests, Swift Testing framework)
+# Run all tests (~5,000 tests, Swift Testing framework)
 swift test
 
 # Run a single test suite. NOTE: --filter matches the Swift TYPE name, not the

@@ -113,8 +113,8 @@ struct ContentView: View {
 
 - **Text styling**: `.bold()`, `.italic()`, `.underline()`, `.strikethrough()`, `.fontWeight(_:)`, `.textCase(_:)` on any view; plus `.dim()`, `.blink()`, and `.inverted()` on `Text`.
 - **Colour**: `.foregroundStyle(_:)` and `.background(_:)`. `Color` supports the 8 standard + 8 bright ANSI colours, the 256-colour palette (`Color.palette(_:)`), 24-bit RGB (`Color.rgb(_:_:_:)`), hex (`Color.hex(0xFF5500)` / `Color.hex("#FF5500")`), and the HSL / HSB / CMYK colour spaces. Palette-aware semantic colours resolve against the active palette at render time.
-- **Border styles** (`BorderStyle`): `.line`, `.rounded`, `.doubleLine`, `.heavy`, `.none`, plus a public initialiser for fully custom border characters; applied with `.border(_:color:)`.
-- **Control styles**: `.buttonStyle`, `.toggleStyle`, `.pickerStyle`, `.toggleCharacterSet`, `.menuStyle`, `.listStyle`, `.formStyle`, `.gaugeStyle`, `.tabViewStyle`, `.navigationSplitViewStyle`, plus per-control text-style builders.
+- **Border styles** (`BorderStyle`): `.line`, `.rounded`, `.doubleLine`, `.heavy`, `.block`, `.none`, plus a public initialiser for fully custom border characters; applied with `.border(_:color:)`.
+- **Control styles**: `.buttonStyle`, `.toggleStyle`, `.pickerStyle`, `.toggleCharacterSet`, `.menuStyle`, `.listStyle`, `.formStyle`, `.gaugeStyle`, `.tabViewStyle`, `.navigationSplitViewStyle`, `.trackStyle` (the shared `TrackStyle` that draws a `Slider`'s rail as well as a `ProgressView`'s bar — `.knob` and `.marker` are the two looks that only make sense on a control you can move), plus per-control text-style builders.
 - **Badges**: `.badge(_ count: Int)` (0 hides) or `.badge(_ label:)` on list rows.
 
 ### Internationalization (i18n)
@@ -304,7 +304,7 @@ Sources/
 ├── Example/        Example app (executable target)
 └── Stress/         Performance stress harness, also a complex-TUI demo (executable)
 
-Tests/                    ~3,350 tests across ~510 suites in 341 files
+Tests/                    ~5,000 tests across ~695 suites in 512 files
 ├── TUIkitTests/          The umbrella module's suite (incl. i18n consistency,
 │                         localization & golden-snapshot tests)
 ├── TUIkitCoreTests/      One suite per library module, so a module's tests
