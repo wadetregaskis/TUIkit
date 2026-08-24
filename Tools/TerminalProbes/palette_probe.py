@@ -28,6 +28,15 @@ comparison against the numbers requested.
 
 Run INSIDE the terminal under test; writes JSON to $PROBE_OUT (default
 ./palette_probe.json).
+
+INSIDE is not a formality, and two shortcuts do not work. An agent or script
+whose stdio is a pipe has no terminal to ask — the OSC goes into the pipe and
+nothing answers. Allocating a pty does not help either: the thing at the other
+end is then the script itself, which knows nothing about the emulator the user
+is looking at. And on macOS, `defaults read com.apple.Terminal` reads only the
+profiles the user has CUSTOMISED — the built-in ones (including "Basic", the
+default) carry no colour keys at all, so the preferences cannot answer for the
+common case. Somebody has to run this in the window.
 """
 import json, os, re, select, sys, termios, tty
 

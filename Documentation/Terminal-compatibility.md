@@ -852,10 +852,65 @@ never touch a real session or the user's preferences.
 
 ## What an ANSI colour actually paints
 
-**Status: mechanism documented from the terminals' own specifications; the
-per-terminal numbers are NOT yet measured here.** `Tools/TerminalProbes/palette_probe.py`
-asks a terminal directly (OSC 4 / OSC 10 / OSC 11) and writes the answer as
-JSON; run it in each host and record the results below.
+**Status: MEASURED for Apple Terminal.app 455.1 (default "Basic" profile),
+2026-08-24. Other hosts pending.** `Tools/TerminalProbes/palette_probe.py` asks
+a terminal directly (OSC 4 / OSC 10 / OSC 11) and writes the answer as JSON;
+run it in each host and record the results below.
+
+### Apple Terminal.app 455.1, "Basic" — measured
+
+It answered all 25 queries, and **15 of the 16 ANSI names differ from xterm's
+table**. Only slot 0 (black) matches.
+
+| slot | reported | xterm | | slot | reported | xterm |
+|---|---|---|---|---|---|---|
+| 1 red | 153, 0, 0 | 205, 0, 0 | | 9 | 230, 0, 0 | 255, 0, 0 |
+| 2 green | 0, 166, 0 | 0, 205, 0 | | 10 | 0, 217, 0 | 0, 255, 0 |
+| 3 yellow | 153, 153, 0 | 205, 205, 0 | | 11 | 230, 230, 0 | 255, 255, 0 |
+| 4 blue | 0, 0, 179 | 0, 0, 238 | | 12 | 0, 0, 255 | 92, 92, 255 |
+| 5 magenta | 179, 0, 179 | 205, 0, 205 | | 13 | 230, 0, 230 | 255, 0, 255 |
+| 6 cyan | 0, 166, 179 | 0, 205, 205 | | 14 | 0, 230, 230 | 0, 255, 255 |
+| 7 white | 191, 191, 191 | 229, 229, 229 | | 15 | 230, 230, 230 | 255, 255, 255 |
+| 8 br.black | 102, 102, 102 | 127, 127, 127 | | | | |
+
+**Default foreground `(0, 0, 0)` on background `(255, 255, 255)` — black on
+white.** The out-of-the-box Apple terminal is a LIGHT one, which is worth
+knowing before assuming a dark surface anywhere.
+
+**The 6×6×6 cube and the greyscale ramp match xterm exactly** — 21, 46, 52,
+124, 196, 231, 232, 240 and 255 were all sampled and all agreed. So this host
+remaps the sixteen NAMES and nothing else, which is the pattern the section
+above called conventional, now with one host's evidence behind it.
+
+#### What that costs, computed
+
+Terminal.app's palette is systematically MUTED — every name darker or less
+saturated than xterm's. Against its own white background that makes contrast
+*better* than the table predicts, uniformly:
+
+| slot | believed | actual |
+|---|---|---|
+| 1 red | 5.84 | 8.92 |
+| 2 green | 2.16 | 3.25 |
+| 3 yellow | 1.70 | 3.04 |
+| 4 blue | 9.40 | 12.72 |
+| 6 cyan | 1.98 | 2.96 |
+| 7 white | 1.26 | 1.84 |
+| 8 br.black | 4.00 | 5.74 |
+| 12 br.blue | 4.74 | 8.59 |
+
+So `ensuringContrast` believes every ANSI colour is less legible than it is,
+and **over-corrects** — which is the safe direction to be wrong in (it pushes
+toward legibility, never away). Two things still follow:
+
+- A colour it would have left alone gets adjusted anyway, so an app asking for
+  `Color.red` on this host may not get quite the red it asked for.
+- Slots 3 and 7 are below the floor on either table, so a bare `.yellow` or
+  `.white` foreground on a light terminal is illegible however it is computed.
+  That is a fact about light backgrounds, not about the table.
+
+None of this reaches colours TUIkit chooses itself: those are palette roles,
+which resolve to RGB and are stated exactly.
 
 ### The three colour spellings are not equally literal
 
