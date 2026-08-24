@@ -62,9 +62,10 @@ right everywhere. The candidates:
 | α ≥ 0.5 draws the source glyph | a cross-fade swaps at the midpoint, like a dissolve | a fade-out "pops" at 0.5 rather than vanishing |
 | α = 1 draws the source glyph | perfectly predictable | any fade at all shows the destination's text in the source's colour — nonsense |
 
-**Recommendation: α ≥ 0.5, with α = 0 special-cased to draw nothing at all.**
-The midpoint rule is what a dissolve does, the special case is what makes
-`opacity(0)` mean what SwiftUI says it means, and both are one comparison.
+**Recommendation: α ≥ 0.5, and below it draw nothing at all** — which
+subsumes the α = 0 case rather than special-casing it, and is what §6a builds
+on. The midpoint is what a dissolve does, and "below the midpoint, the layer is
+not there" is one comparison.
 
 A blank cell is not a glyph, and that matters more than it sounds: most of what
 a faded subtree contributes is spaces, and a space should never hide what is
@@ -195,6 +196,88 @@ Two real risks, both measurable before committing to anything:
   over a busy destination, which is the worst case.
 - `Tools/Profiling/idle_cpu.py` on a page with a repeating fade, to catch the
   animation-cycle regression as a *byte rate* rather than as a profile.
+
+## 6a. The stylised alternative, and why it wins
+
+**The suggestion:** don't mimic a GUI compositor. Blend the faded layer's
+foreground *and* background toward **the background colour of the layer below**,
+and always draw the character.
+
+That is a smaller idea than §3–5 and it fixes the fault that actually shows.
+Recall §1 named two faults: the blend target is wrong, and the glyph is drawn
+regardless. This fixes the first and leaves the second — which is exactly the
+right trade if the second is not really a fault. Three candidates, then:
+
+| | needs from the destination | glyph |
+|---|---|---|
+| **A. Full cell compositing** | background, foreground AND character | a threshold decides which character shows |
+| **B. Blend to the surface** | background only | always the source's |
+| **C. B, with the threshold** | background only | source's above ½; below ½, nothing is drawn at all |
+
+**Where B alone breaks, and it is the case you named.** At `opacity(0)` the
+cell becomes a solid block of the destination's background colour. Invisible
+against that background, yes — but it has *erased the destination's character*.
+A faded-out label over text leaves a correctly-coloured hole in the text. And
+because the glyph never yields, that is true at every α, not only at 0: two
+pieces of text can never show through one another.
+
+**C is the two ideas combined, and it costs what B costs.** Below the
+threshold the source cell is not drawn *at all* — not blended, skipped — so the
+destination is simply left alone, character and colours. Above it, the source
+draws its own character over a background blended toward the destination's.
+Either way **the destination's character is never consulted**, only its
+background colour: nothing has to decide *between* two characters, because the
+threshold has already decided *whether* there is a source character to draw.
+
+So C gets A's two headline behaviours — `opacity(0)` genuinely reveals what is
+behind, and text can pass through text — at B's implementation cost, and
+without the part of A that is hardest to justify in a cell grid (tinting the
+destination's text with the source's colour, which is prettier in a GUI and
+less legible here).
+
+Two rules complete it, and both are small:
+
+- **A source SPACE composites the background and keeps the destination's
+  character.** Otherwise a faded `VStack` blanks its whole rectangle: most of
+  what a layer contributes is spaces.
+- **The destination's foreground is left alone.** A translucent pane over text
+  would, in a GUI, tint that text. Here it does not — the text keeps its own
+  colour and the surface behind it changes. That is the "stylised" part, and it
+  is a deliberate simplification rather than an oversight.
+
+**Recommendation: C.** It is what the two instructions converge on — keep it
+simple and always draw the character, plus try the threshold at ½ — and it is
+strictly less machinery than A.
+
+## 6b. Performance: what "losing the pre-rendered fade" actually means
+
+The note above said losing it would cost a full render per frame. That
+overstates it, and the correction matters because it changes whether this is a
+risk or a footnote.
+
+The fast path renders the content once, computes every phase of a repeating
+fade by re-colouring the finished lines, and hands the run loop the lot as
+`AnimatedCellRun`s — after which the loop replays them and never renders again.
+Under composite-time alpha the phases cannot be computed at RENDER time,
+because the destination is unknown then. But they can be computed at
+**composite** time, which is still inside the same frame. So:
+
+- **A fading layer over a STILL destination keeps the fast path**, exactly as
+  today. Composite each phase against the destination once, hand those over,
+  and the loop replays them. This is the common case — a badge fading over a
+  page that is not otherwise moving.
+- **It is lost only when the destination CHANGES**, because the pre-composited
+  phases are then stale. And on such a frame the destination was being
+  re-rendered anyway, so the cost is not a render — it is **N composites of the
+  faded layer instead of one**, where N is the phase count (16 for the current
+  cycles).
+
+So: never "always", and never a full extra render. The worst case is a fade
+over something that moves every frame, which pays 16× the composite of the
+faded layer per frame. Whether that matters depends entirely on the layer's
+area, which is why §6's measurement plan wants a stress scenario with a faded
+layer over a busy destination — that is the case, and nothing existing measures
+it.
 
 ## 7. Staging, and whether it wants a branch
 
