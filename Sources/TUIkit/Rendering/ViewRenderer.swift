@@ -49,11 +49,28 @@ final class ViewRenderer {
     /// A focus manager for the snapshot (interactive views read it).
     private let focusManager = FocusManager()
 
+    /// The host's cursor-advance model.
+    ///
+    /// This path skips the diff, the reuse cache and the whole frame pipeline —
+    /// it draws one buffer once — but it does not get to skip THIS. A terminal
+    /// whose cursor advance disagrees with a glyph's painted width disagrees
+    /// however the bytes were produced, so a snapshot containing `⚙️` on
+    /// Terminal.app puts the rest of its line one cell to the left without it.
+    /// See ``FrameDiffWriter/compensatingCursorAdvance(_:followedByContent:)``
+    /// and `Documentation/Terminal-compatibility.md`.
+    private let writer: FrameDiffWriter
+
     /// Creates a new ViewRenderer.
     ///
-    /// - Parameter terminal: The target terminal (default: new Terminal instance).
-    init(terminal: (any TerminalProtocol)? = nil) {
+    /// - Parameters:
+    ///   - terminal: The target terminal (default: new Terminal instance).
+    ///   - writer: The advance model to emit through (default: the detected
+    ///     host). Injectable for the same reason `terminal` is: `TerminalHost`
+    ///     answers once, from the process environment, so a test cannot ask it
+    ///     what a different terminal would receive.
+    init(terminal: (any TerminalProtocol)? = nil, writer: FrameDiffWriter = FrameDiffWriter()) {
         self.terminal = terminal ?? Terminal()
+        self.writer = writer
         self.context = TUIContext(
             lifecycle: LifecycleManager(firesEffects: false),
             keyEventDispatcher: KeyEventDispatcher(),
@@ -109,7 +126,9 @@ extension ViewRenderer {
     fileprivate func flush(_ buffer: FrameBuffer, atRow row: Int, column: Int) {
         for (index, line) in buffer.lines.enumerated() {
             terminal.moveCursor(toRow: row + index, column: column)
-            terminal.write(line)
+            // Each line is cursor-addressed, so nothing follows this one on its
+            // row and the model's end-of-string rule takes its whole-row answer.
+            terminal.write(writer.compensatingCursorAdvance(line))
         }
     }
 }

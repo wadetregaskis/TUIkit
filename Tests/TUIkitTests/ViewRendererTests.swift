@@ -34,6 +34,45 @@ struct ViewRendererTests {
         }
     }
 
+    /// A terminal that under-advances a glyph does so however the bytes were
+    /// produced, and this path builds none of a frame: no diff, no reuse cache,
+    /// no padding — and, until this was added, no advance model either. So a
+    /// `renderOnce` snapshot containing `⚙️` put the rest of its line one cell
+    /// to the left on Terminal.app, in exactly the way the animation replay did
+    /// (`ReplayCursorCompensationTests`) and for exactly the same reason: it
+    /// wrote content the writer never saw.
+    @Test("A snapshot carries the host's cursor compensation")
+    func snapshotsAreCompensated() throws {
+        let mock = MockTerminal()
+        mock.size = (30, 4)
+        // The host is detected once from the process environment, so which
+        // model is under test has to be said rather than arranged.
+        let appleTerminal = FrameDiffWriter(
+            isAppleTerminal: true, isITerm2: false, isGhostty: false, isWarp: false, isTmux: false)
+
+        ViewRenderer(terminal: mock, writer: appleTerminal).render(Text("⚙️ settings"))
+
+        let line = try #require(
+            mock.writtenOutput.first { $0.unicodeScalars.contains("\u{2699}") },
+            "no write carried the cluster at all")
+        #expect(line.contains("\u{1B}[1C"), "the cluster reached the terminal bare")
+    }
+
+    /// …and a host with no measured model still gets its bytes untouched, so
+    /// the line above is a compensation test and not a "compensate everything"
+    /// test.
+    @Test("A snapshot on an unmodelled host is written verbatim")
+    func unmodelledHostsAreUntouched() {
+        let mock = MockTerminal()
+        mock.size = (30, 4)
+        let plain = FrameDiffWriter(
+            isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: false, isTmux: false)
+
+        ViewRenderer(terminal: mock, writer: plain).render(Text("⚙️ settings"))
+
+        #expect(!mock.writtenOutput.contains { $0.contains("\u{1B}[1C") })
+    }
+
     @Test("Renders without crashing and writes the view's content")
     func rendersContent() {
         let mock = MockTerminal()
