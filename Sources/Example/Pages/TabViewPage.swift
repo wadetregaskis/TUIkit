@@ -45,6 +45,14 @@ struct TabViewPage: View {
     // silently flip "Online" in the bordered one.
     @State private var online = true
 
+    // The nested demo: an outer strip whose tabs carry strips of their own.
+    @State private var nestedOuter = 0
+    @State private var nestedGeneral = 0
+    @State private var nestedNetwork = 0
+    @State private var nestedVolume = 0.4
+    @State private var nestedNotify = false
+    @State private var nestedOnline = true
+
     // Live settings for the "Adjustable" demo below.
     @State private var adjustableSelection = 0
     @State private var headerAlignment: HeaderAlignment = .center
@@ -178,6 +186,14 @@ struct TabViewPage: View {
                 }
             }
 
+            DemoSection("page.tabView.nested") {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("page.tabView.nestedHint")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    nestedTabs
+                }
+            }
+
             KeyboardHelpSection(
                 "page.tabView.navigation",
                 shortcuts: [
@@ -193,5 +209,57 @@ struct TabViewPage: View {
         .appHeader {
             DemoAppHeader("menu.item.tabViews")
         }
+    }
+
+    /// Tab views inside tab views.
+    ///
+    /// A tab's content is an ordinary view, so there is nothing special about
+    /// putting another `TabView` in it — which is the point worth showing, along
+    /// with the two things that follow from it. The strips are independent
+    /// controls: each takes its own turn in the Tab order and ←/→ move whichever
+    /// one holds the focus. And the styles nest either way round: an inner
+    /// `.compact` strip sits inside the outer box's padding as a row of chips,
+    /// while an inner `.bordered` one draws its own box inside the outer one.
+    ///
+    /// Both are worth having on screen at once, because which reads better is a
+    /// judgement about the content, not a rule — chips for a couple of small
+    /// panes, a box when the inner content wants its own frame.
+    private var nestedTabs: some View {
+        TabView(selection: $nestedOuter) {
+            Tab("page.tabView.nested.general", value: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    TabView(selection: $nestedGeneral) {
+                        Tab("page.tabView.nested.appearance", value: 0) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("page.tabView.volume")
+                                Slider(value: $nestedVolume, in: 0...1)
+                                    .frame(width: 24)
+                            }
+                        }
+                        Tab("page.tabView.nested.behaviour", value: 1) {
+                            Toggle("page.tabView.notifications", isOn: $nestedNotify)
+                        }
+                    }
+                    .tabViewStyle(.compact)
+                    .tabViewHeaderAlignment(.leading)
+                }
+            }
+            Tab("page.tabView.nested.network", value: 1) {
+                TabView(selection: $nestedNetwork) {
+                    Tab("page.tabView.nested.proxies", value: 0) {
+                        Toggle("page.tabView.online", isOn: $nestedOnline)
+                    }
+                    Tab("page.tabView.nested.dns", value: 1) {
+                        // Demo data, not prose: nothing here to translate.
+                        Text(verbatim: "1.1.1.1\n8.8.8.8")
+                    }
+                }
+                .tabViewStyle(.bordered)
+            }
+            Tab("page.tabView.nested.plain", value: 2) {
+                Text("page.tabView.nested.plainBody")
+            }
+        }
+        .tabViewStyle(.bordered)
     }
 }
