@@ -147,14 +147,21 @@ struct AnimationPage: View {
     }
 
     /// How fast, in the two independent senses SwiftUI gives them: `duration`
-    /// is the curve's own length, `speed` a multiplier over the top of it.
+    /// is the curve's own length, written into the curve itself
+    /// (`.easeInOut(duration:)`); `speed` is a multiplier applied over the top
+    /// of a finished animation (`.speed(_:)`), which is how you scale one you
+    /// were handed and whose duration you may not know. They multiply out, so
+    /// the second slider reports what the two of them come to — the one number
+    /// that says how long the picture will actually take.
     private var paceSliders: some View {
         VStack(alignment: .leading, spacing: 0) {
             Slider(value: $duration, in: 0.1...2.5, step: 0.05) {
                 caption("\(L("page.animation.duration")) \(String(format: "%.2fs", duration))")
             }
             Slider(value: $speed, in: 0.25...4, step: 0.25) {
-                caption("\(L("page.animation.speed")) \(String(format: "%.2f×", speed))")
+                caption(
+                    "\(L("page.animation.speed")) "
+                        + String(format: "%.2f× → %.2fs", speed, duration / speed))
             }
         }
     }

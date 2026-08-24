@@ -16,7 +16,7 @@ extension ExampleStrings {
         "en": [
             "page.animation.subtitle": "One curve, edited at the top, driving every demo below",
             "page.animation.section.settings": "Animation settings",
-            "page.animation.settings.hint": "These govern every demo on this page — change one and press anything below.",
+            "page.animation.settings.hint": "These govern every demo on this page — change one and press anything below. Duration is the curve's own length; Speed is a multiplier laid over it, for scaling an animation whose duration you did not write. They multiply out to the time shown beside the Speed track.",
             "page.animation.curve.easeIn": "Ease in",
             "page.animation.curve.custom": "Custom (control points)",
             "page.animation.curve.spring": "Spring",
@@ -67,7 +67,7 @@ extension ExampleStrings {
         "de": [
             "page.animation.subtitle": "Eine Kurve, oben eingestellt, für jede Demo darunter",
             "page.animation.section.settings": "Animationseinstellungen",
-            "page.animation.settings.hint": "Diese gelten für jede Demo auf dieser Seite — ändern und unten etwas betätigen.",
+            "page.animation.settings.hint": "Diese gelten für jede Demo auf dieser Seite — ändern und unten etwas betätigen. „Dauer“ ist die Länge der Kurve selbst; „Tempo“ ist ein Faktor darüber, um eine Animation zu skalieren, deren Dauer man nicht selbst geschrieben hat. Beides ergibt zusammen die Zeit neben dem Tempo-Regler.",
             "page.animation.curve.easeIn": "Weich ein",
             "page.animation.curve.custom": "Eigene (Kontrollpunkte)",
             "page.animation.curve.spring": "Feder",
@@ -118,7 +118,7 @@ extension ExampleStrings {
         "fr": [
             "page.animation.subtitle": "Une courbe, réglée en haut, pour toutes les démos ci-dessous",
             "page.animation.section.settings": "Réglages d'animation",
-            "page.animation.settings.hint": "Ils régissent toutes les démos de cette page — changez-en un puis actionnez quelque chose.",
+            "page.animation.settings.hint": "Ils régissent toutes les démos de cette page — changez-en un puis actionnez quelque chose. « Durée » est la longueur de la courbe elle-même ; « Vitesse » est un facteur appliqué par-dessus, pour ajuster une animation dont on n'a pas écrit la durée. Le produit des deux est le temps affiché à côté de la vitesse.",
             "page.animation.curve.easeIn": "Accéléré",
             "page.animation.curve.custom": "Personnalisée (points de contrôle)",
             "page.animation.curve.spring": "Ressort",
@@ -169,7 +169,7 @@ extension ExampleStrings {
         "it": [
             "page.animation.subtitle": "Una curva, impostata in alto, per ogni demo qui sotto",
             "page.animation.section.settings": "Impostazioni di animazione",
-            "page.animation.settings.hint": "Valgono per ogni demo di questa pagina — cambiane una e usa qualcosa qui sotto.",
+            "page.animation.settings.hint": "Valgono per ogni demo di questa pagina — cambiane una e usa qualcosa qui sotto. «Durata» è la lunghezza della curva stessa; «Velocità» è un moltiplicatore che vi si sovrappone, per scalare un'animazione di cui non hai scritto tu la durata. Il prodotto delle due è il tempo indicato accanto alla velocità.",
             "page.animation.curve.easeIn": "Accelerazione",
             "page.animation.curve.custom": "Personalizzata (punti di controllo)",
             "page.animation.curve.spring": "Molla",
@@ -220,7 +220,7 @@ extension ExampleStrings {
         "es": [
             "page.animation.subtitle": "Una curva, ajustada arriba, para todas las demos de abajo",
             "page.animation.section.settings": "Ajustes de animación",
-            "page.animation.settings.hint": "Rigen todas las demos de esta página — cambia uno y usa algo de abajo.",
+            "page.animation.settings.hint": "Rigen todas las demos de esta página — cambia uno y usa algo de abajo. «Duración» es la longitud de la propia curva; «Velocidad» es un multiplicador por encima, para escalar una animación cuya duración no escribiste tú. El producto de ambas es el tiempo que aparece junto a la velocidad.",
             "page.animation.curve.easeIn": "Entrada suave",
             "page.animation.curve.custom": "Personalizada (puntos de control)",
             "page.animation.curve.spring": "Muelle",
@@ -271,7 +271,7 @@ extension ExampleStrings {
         "zh": [
             "page.animation.subtitle": "顶部设定一条曲线，下面每个演示都用它",
             "page.animation.section.settings": "动画设置",
-            "page.animation.settings.hint": "这些设置对本页所有演示生效——改一项，再操作下面任意控件。",
+            "page.animation.settings.hint": "这些设置对本页所有演示生效——改一项，再操作下面任意控件。“时长”是曲线本身的长度；“速度”是叠加在其上的倍数，用来缩放一段并非由你写下时长的动画。两者相乘，即速度滑块旁显示的时间。",
             "page.animation.curve.easeIn": "缓入",
             "page.animation.curve.custom": "自定义（控制点）",
             "page.animation.curve.spring": "弹簧",
@@ -322,7 +322,7 @@ extension ExampleStrings {
         "ja": [
             "page.animation.subtitle": "上で決めた一つのカーブが、下のすべてのデモを動かします",
             "page.animation.section.settings": "アニメーション設定",
-            "page.animation.settings.hint": "このページのすべてのデモに効きます——変更してから下の何かを操作してください。",
+            "page.animation.settings.hint": "このページのすべてのデモに効きます——変更してから下の何かを操作してください。「長さ」はカーブそのものの長さ、「速さ」はその上に掛かる倍率で、自分で長さを書いていないアニメーションを調整するためのものです。二つを掛け合わせた時間が速さのスライダーの横に出ます。",
             "page.animation.curve.easeIn": "イーズイン",
             "page.animation.curve.custom": "カスタム（制御点）",
             "page.animation.curve.spring": "スプリング",
