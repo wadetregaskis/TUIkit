@@ -113,26 +113,57 @@ resizable view grows down and right, and never moves.**
 ## The affordance, as shipped
 
 The design here was two tinted edge runs plus a corner glyph. Building it
-settled that down to **a mark of one cell and a target of two whole edges** —
-see "What building it changed" below. Drawn, always, not on hover:
+settled that down to a mark of one cell; use settled it back, and what ships now
+is **a handle in the middle of each live edge, plus the corner when both axes
+are live** — with the target still the two whole edges. Drawn, always, not on
+hover:
 
-- The **corner cell** carries the mark, and the glyph names the axes that
-  actually work: `╝` for both, `╡` for width only, `╧` for height only. Box
-  Drawing rather than a pictograph, so every repertoire in
-  `Terminal-compatibility.md` advances it by the one cell claimed.
-- **Resting** it takes the palette's border tint, **hovered** the hovered
+- Each **live edge** carries a short handle in the middle of its own border
+  run: seven cells along the bottom, three down the right, shrunk to whatever
+  fits between the corners. It shrinks all the way to the one cell a three-row
+  box has, rather than reserving plain border either side of itself — on a box
+  that small, being told the edge can be dragged matters more than the
+  separation that would have said it more prettily.
+- The **corner** is marked only when BOTH axes are live, because that is what
+  dragging it does. A single-axis view leaves it as the border drew it: the
+  edge handle already says which edge moves, and a corner mark on a one-axis
+  view reads as a corner that moves both. (It used to carry `╡` / `╧` for
+  those cases, which was worse than nothing.)
+- The **weight stands out from the border it sits on**: doubled lines
+  (`═ ║ ╝`) over a single-line, rounded or heavy border, and heavy ones
+  (`━ ┃ ┛`) over a double-line border, where doubles would BE the border and
+  the handle would say nothing at all. Both families are Box Drawing rather
+  than pictographs, so every repertoire in `Terminal-compatibility.md` advances
+  them by exactly the cells claimed.
+- **Resting** they take the palette's border tint, **hovered** the hovered
   foreground, **focused** the accent — the three-step vocabulary every other
   affordance uses, floored through `ensuringRenderedContrast(atLeast:against:)`
   for the same reason everything else is.
 - The **whole bottom edge and right edge** are the drag target, which is what
-  makes a one-cell mark acceptable.
+  lets the marks stay small.
 
 A `.block` border paints its cells rather than drawing lines on them, so
 stamping `╝` onto one would punch a hole in a solid edge — the mark would read
 as damage. The grip keeps whatever glyph is already there in that case and lets
 the **tint alone** do the marking. It reads that from the CELL rather than from
 `BorderStyle.paintsBackground`, because the border is inside the content and
-this modifier is outside it: there is no style to consult, only the result.
+this modifier is outside it: there is no style to consult, only the result —
+which is the same read that picks the weight above.
+
+## An axis with nothing to move
+
+Bounds that pin an axis to one size (`width: 30...30`) take the resizing back
+without taking the bound: the view is 30 wide, its right edge is not marked and
+takes no drag, and the keys leave it alone. A view pinned on every axis is not
+focusable at all.
+
+This is not a special case so much as the honest reading of the bounds, and it
+buys something the four spellings cannot: an app can turn an axis off **without
+changing the view's identity**, which is what keys the stored size. Switching
+between `.userResizable(width:height:)` and `.userResizable(width:)` is a
+different view, and starts the size over — the Example's own demo did exactly
+that, and threw away a size the user had dragged every time they touched a
+toggle.
 
 ## Keyboard
 

@@ -173,7 +173,12 @@ struct UserResizableTests {
 
     // MARK: - Rendering
 
-    @Test("The corner carries a mark, and it names the axes that work")
+    /// The corner is where BOTH axes move at once, so it is marked when both
+    /// are live and left as the border drew it otherwise. It used to carry `╡`
+    /// or `╧` for a single-axis view, which was worse than nothing: the edge
+    /// handle already says which edge moves, and a mark on the corner reads as
+    /// a corner that moves both.
+    @Test("The corner is marked only when both axes move")
     func gripGlyph() {
         let context = makeRenderContext(width: 30, height: 6)
         func lastCell(_ view: some View) -> Character? {
@@ -182,9 +187,10 @@ struct UserResizableTests {
             return line.stripped.last
         }
         let box = Text("hello").frame(width: 12, height: 3).border()
+        let plain = lastCell(box)
         #expect(lastCell(box.userResizable()) == "╝")
-        #expect(lastCell(box.userResizable(.horizontal)) == "╡")
-        #expect(lastCell(box.userResizable(.vertical)) == "╧")
+        #expect(lastCell(box.userResizable(.horizontal)) == plain)
+        #expect(lastCell(box.userResizable(.vertical)) == plain)
     }
 
     @Test("A block border keeps its own glyph and is marked by tint alone")
@@ -402,12 +408,78 @@ struct UserResizableTests {
         #expect(!rightColumn.contains("\u{2551}"))
     }
 
-    @Test("A view with no room beside its corners carries no handle")
-    func tooSmallForHandles() {
-        // Six cells wide: two borders and the cell either side of each corner
-        // leave nothing for a handle that would still read as one.
-        let buffer = gripped(Text("x").frame(width: 2, height: 3).border().userResizable())
-        #expect(!(buffer.lines.last?.stripped.contains("═") ?? true))
+    /// The reported case: "a container which is e.g. 3 rows tall has only one
+    /// cell for its right border (not counting the corners above & below it),
+    /// and we still need the grabber to be shown."
+    ///
+    /// The handles used to reserve a cell of plain border either side of
+    /// themselves, so a box this small carried none at all — and an edge that
+    /// can be dragged and does not say so may as well not be draggable.
+    @Test("A single border cell between the corners still carries a handle")
+    func smallestBoxStillCarriesHandles() {
+        // Three rows and four columns of border box: one cell down the right
+        // edge between the corners, and two along the bottom.
+        let buffer = gripped(Text("xx").frame(width: 2, height: 1).border().userResizable())
+        let bottom = buffer.lines.last?.stripped ?? ""
+        #expect(bottom.contains("═"), "no handle on the bottom edge: \(bottom)")
+        let rightColumn = buffer.lines.compactMap { $0.stripped.last }
+        #expect(rightColumn.contains("\u{2551}"), "no handle down the right edge: \(rightColumn)")
+    }
+
+    /// The other half of the report: "if the border is double lines, the
+    /// grabbers have to be something else."
+    @Test("The handles are drawn in a weight that stands out from the border")
+    func handlesStandOutFromTheBorder() {
+        func handles(_ style: BorderStyle) -> String {
+            let buffer = gripped(
+                Text("hello").frame(width: 24, height: 8)
+                    .border(style: style)
+                    .userResizable())
+            let rightColumn = String(buffer.lines.compactMap { $0.stripped.last })
+            return (buffer.lines.last?.stripped ?? "") + rightColumn
+        }
+        // Doubled lines over the single-line families…
+        #expect(handles(.line).contains("═") && handles(.line).contains("\u{2551}"))
+        #expect(handles(.rounded).contains("═"))
+        #expect(handles(.heavy).contains("═"))
+        // …and heavy ones over the double, where doubles would BE the border.
+        let double = handles(.doubleLine)
+        #expect(double.contains("━"), "no heavy handle over a double border: \(double)")
+        #expect(double.contains("┃"), "no heavy handle over a double border: \(double)")
+        #expect(double.contains("┛"), "the corner did not change weight either: \(double)")
+    }
+
+    /// Bounds that pin an axis leave nothing to drag, so that axis is not
+    /// marked and takes no target — which is how an app turns one axis off
+    /// without changing the view's identity, and with it the stored size.
+    @Test("An axis pinned by its bounds is inert")
+    func fixedAxisIsInert() {
+        let buffer = gripped(
+            Text("hello").frame(width: 24, height: 8).border()
+                .userResizable(width: 12...40, height: 8...8))
+        let bottom = buffer.lines.last?.stripped ?? ""
+        #expect(!bottom.contains("═"), "a pinned height was still marked: \(bottom)")
+        #expect(!bottom.contains("╝"), "a pinned height still claimed the corner: \(bottom)")
+        #expect(
+            buffer.lines.compactMap { $0.stripped.last }.contains("\u{2551}"),
+            "the live axis lost its handle too")
+        // One region, for the one live edge — no corner, and no bottom edge.
+        #expect(buffer.hitTestRegions.count == 1)
+    }
+
+    @Test("A view pinned on every axis is not resizable at all")
+    func fullyFixedIsNotResizable() {
+        let context = makeRenderContext(width: 40, height: 12)
+        // Flexible content, so the offer below is something it can follow — a
+        // fixed child is the author saying "this size", which this modifier has
+        // no business overruling either way.
+        let view = Text("hello").frame(maxWidth: .infinity, maxHeight: .infinity).border()
+            .userResizable(width: 30...30, height: 8...8)
+        let buffer = renderToBuffer(view, context: context)
+        #expect(buffer.hitTestRegions.isEmpty, "a view with nothing to move took a drag target")
+        // The bounds still bound: this is how `width: 30...30` says "this wide".
+        #expect(buffer.width == 30, "the pinned width was not honoured: \(buffer.width)")
+        #expect(buffer.height == 8, "the pinned height was not honoured: \(buffer.height)")
     }
 
     @Test("The handles breathe when the view has the focus, and not before")

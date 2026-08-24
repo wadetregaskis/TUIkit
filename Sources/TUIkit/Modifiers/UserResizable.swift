@@ -66,6 +66,11 @@ public struct ResizeBounds: Sendable, Equatable {
         )
     }
 
+    /// Whether these bounds leave nothing to move: one size, and it is both
+    /// ends. Such an axis is not marked and takes no drag — see
+    /// ``View/userResizable(_:)``.
+    public var isFixed: Bool { maximum == minimum }
+
     /// `value`, brought inside these bounds.
     public func clamping(_ value: Int) -> Int {
         if let maximum { return min(maximum, max(minimum, value)) }
@@ -97,6 +102,13 @@ extension View {
     /// axis set *and* a range, because `.userResizable(.vertical, width: 20...80)`
     /// has no honest meaning.
     ///
+    /// Bounds that pin an axis to one size (`width: 30...30`) take the resizing
+    /// back without taking the bound: the view is 30 wide, and its right edge is
+    /// not marked and takes no drag, because there is nothing there to move.
+    /// That is how an app turns one axis off *without* changing the view's
+    /// identity — which is what a different spelling of this modifier does, and
+    /// what starts the size over (see below).
+    ///
     /// ## What a resize is, and is not
     ///
     /// It is **intent, not law.** The layout still clamps: a terminal narrower
@@ -121,9 +133,13 @@ extension View {
     /// allowed, and Escape returns the view to the size the layout wanted.
     ///
     /// With a mouse, the whole of the bottom edge and the right edge is a drag
-    /// target — the mark is one cell in the corner, because a terminal cannot
-    /// change the pointer's shape to say "you may drag here", but the target it
-    /// stands for is the full run of both edges.
+    /// target. A terminal cannot change the pointer's shape to say "you may drag
+    /// here", so each live edge carries a short handle in the middle of its
+    /// border — and, when BOTH axes are live, the corner between them is marked
+    /// too, because dragging it moves both at once. A single-axis view marks only
+    /// its own edge. The handles are drawn in whichever Box Drawing weight stands
+    /// out from the border they sit on: doubled lines over a single-line or heavy
+    /// border, heavy lines over a double one.
     ///
     /// - Parameter axes: Which directions may be resized. Defaults to both.
     public func userResizable(_ axes: ResizableAxes = .all) -> some View {

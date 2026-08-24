@@ -18,7 +18,7 @@ extension ExampleStrings {
     static let g12: [String: [String: String]] = [
         "en": [
             "page.layout.resizableSection": "Resize it yourself (.userResizable)",
-            "page.layout.resizableHint": "Tab to the box, then ←/→ and ↑/↓ to resize it (Shift for five, Home/End for the limits, Esc to give the size back). Or drag an edge — the doubled lines mark the live ones, and the corner takes both at once. Bounded here to 12…40 by 3…8.",
+            "page.layout.resizableHint": "Tab to the box, then ←/→ and ↑/↓ to resize it (Shift for five, Home/End for the limits, Esc to give the size back). Or drag an edge — the heavier lines mark the live ones, and the corner takes both at once when both are. Bounded here to 12…40 by 3…8.",
             "page.layout.resizableBody": "Drag my edge, or use the arrows",
             "page.layout.resizableWidth": "Width resizable",
             "page.layout.resizableHeight": "Height resizable",
@@ -32,7 +32,7 @@ extension ExampleStrings {
         ],
         "de": [
             "page.layout.resizableSection": "Selbst anpassen (.userResizable)",
-            "page.layout.resizableHint": "Mit Tab zum Kasten, dann ←/→ und ↑/↓ zum Ändern (Umschalt für fünf, Pos1/Ende für die Grenzen, Esc gibt die Größe zurück). Oder eine Kante ziehen — die Doppellinien markieren die aktiven, und die Ecke ändert beides zugleich. Hier begrenzt auf 12…40 mal 3…8.",
+            "page.layout.resizableHint": "Mit Tab zum Kasten, dann ←/→ und ↑/↓ zum Ändern (Umschalt für fünf, Pos1/Ende für die Grenzen, Esc gibt die Größe zurück). Oder eine Kante ziehen — die kräftigeren Linien markieren die aktiven, und die Ecke ändert beides zugleich, wenn beides aktiv ist. Hier begrenzt auf 12…40 mal 3…8.",
             "page.layout.resizableBody": "Zieh an meiner Kante oder nimm die Pfeile",
             "page.layout.resizableWidth": "Breite änderbar",
             "page.layout.resizableHeight": "Höhe änderbar",
@@ -46,7 +46,7 @@ extension ExampleStrings {
         ],
         "fr": [
             "page.layout.resizableSection": "À redimensionner soi-même (.userResizable)",
-            "page.layout.resizableHint": "Tab jusqu'au cadre, puis ←/→ et ↑/↓ pour le redimensionner (Maj pour cinq, Origine/Fin pour les limites, Échap rend la taille). Ou faites glisser un bord — les doubles traits marquent ceux qui répondent, et le coin agit sur les deux à la fois. Borné ici à 12…40 sur 3…8.",
+            "page.layout.resizableHint": "Tab jusqu'au cadre, puis ←/→ et ↑/↓ pour le redimensionner (Maj pour cinq, Origine/Fin pour les limites, Échap rend la taille). Ou faites glisser un bord — les traits plus épais marquent ceux qui répondent, et le coin agit sur les deux à la fois quand les deux le sont. Borné ici à 12…40 sur 3…8.",
             "page.layout.resizableBody": "Tirez mon bord, ou utilisez les flèches",
             "page.layout.resizableWidth": "Largeur ajustable",
             "page.layout.resizableHeight": "Hauteur ajustable",
@@ -60,7 +60,7 @@ extension ExampleStrings {
         ],
         "it": [
             "page.layout.resizableSection": "Ridimensionalo tu (.userResizable)",
-            "page.layout.resizableHint": "Tab fino al riquadro, poi ←/→ e ↑/↓ per ridimensionarlo (Maiusc per cinque, Inizio/Fine per i limiti, Esc restituisce la dimensione). Oppure trascina un bordo — le doppie linee segnano quelli attivi, e l'angolo agisce su entrambi insieme. Qui limitato a 12…40 per 3…8.",
+            "page.layout.resizableHint": "Tab fino al riquadro, poi ←/→ e ↑/↓ per ridimensionarlo (Maiusc per cinque, Inizio/Fine per i limiti, Esc restituisce la dimensione). Oppure trascina un bordo — le linee più marcate segnano quelli attivi, e l'angolo agisce su entrambi insieme quando entrambi lo sono. Qui limitato a 12…40 per 3…8.",
             "page.layout.resizableBody": "Trascina il mio bordo, o usa le frecce",
             "page.layout.resizableWidth": "Larghezza ridimensionabile",
             "page.layout.resizableHeight": "Altezza ridimensionabile",
@@ -74,7 +74,7 @@ extension ExampleStrings {
         ],
         "es": [
             "page.layout.resizableSection": "Cámbialo tú (.userResizable)",
-            "page.layout.resizableHint": "Tab hasta el recuadro y luego ←/→ y ↑/↓ para redimensionarlo (Mayús para cinco, Inicio/Fin para los límites, Esc devuelve el tamaño). O arrastra un borde — las líneas dobles marcan los activos, y la esquina mueve ambos a la vez. Aquí limitado a 12…40 por 3…8.",
+            "page.layout.resizableHint": "Tab hasta el recuadro y luego ←/→ y ↑/↓ para redimensionarlo (Mayús para cinco, Inicio/Fin para los límites, Esc devuelve el tamaño). O arrastra un borde — las líneas más gruesas marcan los activos, y la esquina mueve ambos a la vez cuando ambos lo están. Aquí limitado a 12…40 por 3…8.",
             "page.layout.resizableBody": "Arrastra mi borde, o usa las flechas",
             "page.layout.resizableWidth": "Ancho ajustable",
             "page.layout.resizableHeight": "Alto ajustable",
@@ -88,7 +88,7 @@ extension ExampleStrings {
         ],
         "zh": [
             "page.layout.resizableSection": "自己调整大小 (.userResizable)",
-            "page.layout.resizableHint": "用 Tab 移到方框，再用 ←/→ 和 ↑/↓ 调整大小（Shift 一次五格，Home/End 到上下限，Esc 交还尺寸）。也可以拖动边框 —— 双线标出可拖动的边，拐角处同时改变两个方向。此处限制为 12…40 乘 3…8。",
+            "page.layout.resizableHint": "用 Tab 移到方框，再用 ←/→ 和 ↑/↓ 调整大小（Shift 一次五格，Home/End 到上下限，Esc 交还尺寸）。也可以拖动边框 —— 较粗的线标出可拖动的边；两个方向都可调整时，拐角会同时改变两者。此处限制为 12…40 乘 3…8。",
             "page.layout.resizableBody": "拖我的边，或用方向键",
             "page.layout.resizableWidth": "可调宽度",
             "page.layout.resizableHeight": "可调高度",
@@ -102,7 +102,7 @@ extension ExampleStrings {
         ],
         "ja": [
             "page.layout.resizableSection": "自分でリサイズ (.userResizable)",
-            "page.layout.resizableHint": "Tab で枠に移り、←/→ と ↑/↓ でサイズを変えます（Shift で 5 セル、Home/End で上下限、Esc でサイズを返す）。辺をドラッグしても構いません — 二重線が動く辺の印で、角は両方を同時に変えます。ここでは 12…40 × 3…8 に制限しています。",
+            "page.layout.resizableHint": "Tab で枠に移り、←/→ と ↑/↓ でサイズを変えます（Shift で 5 セル、Home/End で上下限、Esc でサイズを返す）。辺をドラッグしても構いません — 太い線が動く辺の印で、両方が有効なときは角が両方を同時に変えます。ここでは 12…40 × 3…8 に制限しています。",
             "page.layout.resizableBody": "辺をドラッグするか、矢印キーで",
             "page.layout.resizableWidth": "幅を変更可",
             "page.layout.resizableHeight": "高さを変更可",

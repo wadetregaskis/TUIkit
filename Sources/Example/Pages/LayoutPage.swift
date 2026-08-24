@@ -153,6 +153,13 @@ struct LayoutPage: View {
     @State private var resizableWidth = true
     @State private var resizableHeight = true
 
+    /// The size the demo box is actually at, tracked so an axis switched OFF can
+    /// be pinned to it rather than to some number chosen here — toggling an axis
+    /// is not a resize, so nothing should move. Seeded with the ceilings, which
+    /// is where the box starts.
+    @State private var resizableBoxWidth = 40
+    @State private var resizableBoxHeight = 8
+
     /// The demo box: flexible inside, bounded outside — it fills whatever the
     /// resizable wrapper offers, and the wrapper offers the range's ceiling
     /// until someone drags it. A FIXED frame in here would pin the border and
@@ -162,9 +169,8 @@ struct LayoutPage: View {
     /// The size is reported from inside, through a `GeometryReader`, so it is
     /// the size the content was actually given rather than the size anybody
     /// asked for — and it updates as the drag runs.
-    @ViewBuilder
     private var resizableBox: some View {
-        let box = GeometryReader { proxy in
+        GeometryReader { proxy in
             VStack(alignment: .center, spacing: 0) {
                 Spacer()
                 Text("page.layout.resizableBody")
@@ -172,24 +178,24 @@ struct LayoutPage: View {
                     .foregroundStyle(.palette.foregroundSecondary)
                 Spacer()
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .border(.palette.border)
+            // Outside the border, so the number reported is the OUTER size —
+            // the one the bounds below are written in.
+            .onChange(of: proxy.size) { _, size in
+                resizableBoxWidth = size.width
+                resizableBoxHeight = size.height
+            }
         }
-        .border(.palette.border)
-
-        // An axis the user turned off is the LAYOUT's business again, and the
-        // content inside is greedy — so without a frame on that axis the box
-        // fills the page rather than staying a box. The size it holds still at
-        // is the middle of the range the other axis is bounded to.
-        switch (resizableWidth, resizableHeight) {
-        case (true, true):
-            box.userResizable(width: 12...40, height: 3...8)
-        case (true, false):
-            box.frame(height: 6).userResizable(width: 12...40)
-        case (false, true):
-            box.frame(width: 30).userResizable(height: 3...8)
-        case (false, false):
-            box.frame(width: 30, height: 6)
-        }
+        // ONE spelling of the modifier, whatever the toggles say, because the
+        // size lives as long as the view's render identity and four spellings
+        // are four identities: switching between them threw away a size the
+        // user had dragged. An axis turned off is pinned to the size it is
+        // already at, which `userResizable` reads as "nothing to move here" —
+        // no handle, no drag, no keys — so the toggle still shows.
+        .userResizable(
+            width: resizableWidth ? 12...40 : resizableBoxWidth...resizableBoxWidth,
+            height: resizableHeight ? 3...8 : resizableBoxHeight...resizableBoxHeight)
     }
 
     /// The rows the windowed `LazyVStack` rendered in the last frame.

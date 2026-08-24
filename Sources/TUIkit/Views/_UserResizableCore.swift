@@ -107,13 +107,43 @@ private enum StateIndex {
 /// many rows of the right border the vertical one does.
 ///
 /// Wide enough to read as a handle rather than as a blemish, and odd so it
-/// centres exactly. Shrunk to fit on a small view, and dropped entirely when
-/// there is no room beside the corners — a handle that runs into the corner it
-/// is distinct from says nothing. Outside the generic for the same reason
-/// `StateIndex` is.
+/// centres exactly. Shrunk to fit on a small view, down to the single cell a
+/// three-row box has between its corners — being told an edge can be dragged
+/// matters more on a small view than the border cell of separation that used to
+/// be reserved either side. Outside the generic for the same reason `StateIndex`
+/// is.
 private enum GripSize {
     static let horizontal = 7
     static let vertical = 3
+}
+
+/// The glyphs a grabber is drawn with — chosen to stand out from the border it
+/// sits on, which is the whole job of a mark.
+private struct GripGlyphs {
+    let horizontal: String
+    let vertical: String
+    let corner: String
+
+    /// Doubled lines against a single-line or heavy border; heavy ones against a
+    /// double-line border, where doubles would BE the border and the handle
+    /// would say nothing at all. Both families are Box Drawing rather than
+    /// pictographs, so every terminal in `Documentation/Terminal-compatibility.md`
+    /// advances them by exactly the cells claimed.
+    static let doubled = Self(horizontal: "═", vertical: "║", corner: "╝")
+    static let heavy = Self(horizontal: "━", vertical: "┃", corner: "┛")
+
+    /// The family that stands out from `border`, the glyph already in the cell.
+    ///
+    /// Read from the cell rather than from a ``BorderStyle``, because the border
+    /// is drawn INSIDE the content and this modifier wraps it from outside:
+    /// there is no style here to consult, only the result. U+2550…U+256C is the
+    /// Box Drawing block's double-line run — the rounded corners (U+256D…U+2570)
+    /// sit just past it, and the heavy glyphs well below, so both correctly ask
+    /// for doubles.
+    static func standingOut(from border: Character?) -> Self {
+        guard let border, ("\u{2550}"..."\u{256C}").contains(border) else { return .doubled }
+        return .heavy
+    }
 }
 
 /// The rendering half of ``View/userResizable(_:)``.
@@ -144,18 +174,20 @@ struct _UserResizableCore<Content: View>: View, Renderable {
                 identity: context.identity, propertyIndex: StateIndex.handler),
             default: _UserResizeHandler(focusID: focusID)
         ).value
-        handler.axes = axes
+        // The axes the user can actually MOVE. Naming an axis is what makes it
+        // resizable, and bounds that pin it to one size take that back: there is
+        // nothing to drag, so it gets no target, no mark and no keys. The bounds
+        // still bound — `width: 30...30` remains a way to say "this wide", and
+        // the offer below honours it — they just leave nothing to grab, and
+        // marking an edge that cannot move is a promise the drag cannot keep.
+        var liveAxes = axes
+        if widthBounds.isFixed { liveAxes.remove(.horizontal) }
+        if heightBounds.isFixed { liveAxes.remove(.vertical) }
+
+        handler.axes = liveAxes
         handler.widthBounds = widthBounds
         handler.heightBounds = heightBounds
-        handler.canBeFocused = context.environment.isEnabled
-
-        // A disabled view is not resizable and does not take a place in the Tab
-        // order — the same rule every other interactive view follows.
-        guard context.environment.isEnabled else {
-            return TUIkitView.renderToBuffer(content, context: context)
-        }
-        FocusRegistration.register(context: context, handler: handler)
-        let isFocused = FocusRegistration.isFocused(context: context, focusID: focusID)
+        handler.canBeFocused = context.environment.isEnabled && !liveAxes.isEmpty
 
         // The size this view may occupy: what the user asked for, else the
         // ceiling the caller allowed, else whatever the layout was offering.
@@ -188,16 +220,28 @@ struct _UserResizableCore<Content: View>: View, Renderable {
             childContext.availableHeight = min(context.availableHeight, target)
         }
 
+        // A disabled view is not resizable and does not take a place in the Tab
+        // order — the same rule every other interactive view follows — and
+        // neither is one whose every axis is pinned. Both still get the offer
+        // above: the bounds are the caller's, not the user's, and a `.disabled`
+        // box that forgot its ceiling would jump the moment it was disabled.
+        guard handler.canBeFocused else {
+            return TUIkitView.renderToBuffer(content, context: childContext)
+        }
+        FocusRegistration.register(context: context, handler: handler)
+        let isFocused = FocusRegistration.isFocused(context: context, focusID: focusID)
+
         var buffer = TUIkitView.renderToBuffer(content, context: childContext)
         handler.currentWidth = buffer.width
         handler.currentHeight = buffer.height
         guard buffer.width > 0, buffer.height > 0 else { return buffer }
 
         registerDragTarget(
-            handler: handler, buffer: &buffer, focusID: focusID, context: context)
-        drawGrip(
-            into: &buffer, isFocused: isFocused, isHovered: handler.isHovered,
+            handler: handler, axes: liveAxes, buffer: &buffer, focusID: focusID,
             context: context)
+        drawGrip(
+            into: &buffer, axes: liveAxes, isFocused: isFocused,
+            isHovered: handler.isHovered, context: context)
         return buffer
     }
 
@@ -211,8 +255,8 @@ struct _UserResizableCore<Content: View>: View, Renderable {
     /// corner and accepting the edges resolves that: the mark says where, and
     /// the target is generous enough to hit.
     private func registerDragTarget(
-        handler: _UserResizeHandler, buffer: inout FrameBuffer, focusID: String,
-        context: RenderContext
+        handler: _UserResizeHandler, axes: ResizableAxes, buffer: inout FrameBuffer,
+        focusID: String, context: RenderContext
     ) {
         guard let dispatcher = context.environment.mouseEventDispatcher else { return }
         // Motion reporting, so the dispatcher can synthesise the hover
@@ -335,48 +379,33 @@ struct _UserResizableCore<Content: View>: View, Renderable {
 
     // MARK: - The mark
 
-    /// The corner glyph, composited over the view's bottom-right cell.
+    /// The three marks: a handle in the middle of each live edge, and — only
+    /// when BOTH axes are live — the corner that moves them together.
     ///
-    /// `╝` — a double-line corner, which reads as "this corner is special"
-    /// against every border style TUIkit draws and is Box Drawing rather than a
-    /// pictograph, so every terminal in `Terminal-compatibility.md` advances it
-    /// by exactly the one cell claimed. A single-axis view marks the edge it
-    /// actually resizes instead, so the mark never promises a direction that
-    /// does nothing.
-    /// How many cells of the bottom border the horizontal grabber occupies, and
-    /// how many rows of the right border the vertical one does.
+    /// Purely a hint; the whole of each live edge takes the drag, as it did
+    /// before these existed. But a terminal cannot change the pointer's shape at
+    /// an edge, so an edge that can be grabbed has to say so in ink.
     ///
-    /// Wide enough to read as a handle rather than as a blemish, and odd so it
-    /// centres exactly. Shrunk to fit on a small view (and dropped entirely
-    /// when there is no room beside the corner), because a handle that runs
-    /// into the corner it is distinct from says nothing.
-
+    /// A single-axis view marks only its own edge. The corner used to carry a
+    /// glyph there too (`╡`, `╧`) and it was worse than nothing: an edge handle
+    /// already says which edge moves, and a mark on a corner that moves one axis
+    /// looks like a corner that moves both.
     private func drawGrip(
-        into buffer: inout FrameBuffer, isFocused: Bool, isHovered: Bool,
-        context: RenderContext
+        into buffer: inout FrameBuffer, axes liveAxes: ResizableAxes, isFocused: Bool,
+        isHovered: Bool, context: RenderContext
     ) {
+        guard !liveAxes.isEmpty else { return }
         let palette = context.environment.palette
-        let corner: String
-        switch (axes.contains(.horizontal), axes.contains(.vertical)) {
-        case (true, true): corner = "╝"
-        case (true, false): corner = "╡"
-        case (false, true): corner = "╧"
-        case (false, false): return
-        }
 
         // A `.block` border paints its cells rather than drawing lines on them
-        // (see `BorderStyle.paintsBackground`), so a line-drawing corner
-        // stamped onto one would punch a hole in a solid edge — the mark would
-        // read as damage rather than as an affordance. Keep whatever glyph is
-        // there in that case and let the TINT do the marking, which is the same
+        // (see `BorderStyle.paintsBackground`), so a line-drawing glyph stamped
+        // onto one would punch a hole in a solid edge — the mark would read as
+        // damage rather than as an affordance. Keep whatever glyph is there in
+        // that case and let the TINT do the marking, which is the same
         // three-step vocabulary either way.
-        //
-        // Read from the cell rather than from the border style, because the
-        // border is inside the content and this modifier is outside it: there
-        // is no style to consult, only the result.
         let existing = buffer.lines.last?.stripped.last
         let paintsItsCells = existing.map { ("\u{2580}"..."\u{259F}").contains($0) } ?? false
-        let glyph = paintsItsCells ? String(existing!) : corner
+        let glyphs = GripGlyphs.standingOut(from: existing)
 
         // Focused is loudest, hovered next, resting quiet but present — the
         // same three-step vocabulary every other affordance uses, and floored
@@ -392,74 +421,95 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         // terminal reads as decoration, a breathing one reads as "this is where
         // the keyboard is".
         let animated = AnimatedColor.activeSection(isFocused, in: context.environment)
+
+        // The corner belongs to a two-axis drag. A painted border has no line to
+        // replace, so its corner is marked by tint alone — which is the only
+        // mark it can carry, and the reason the block case stops there.
+        if paintsItsCells {
+            stamp(
+                String(existing!), into: &buffer, at: (buffer.width - 1, buffer.height - 1),
+                tint: tint, animated: animated, background: background)
+            return
+        }
+        if liveAxes == .all {
+            stamp(
+                glyphs.corner, into: &buffer, at: (buffer.width - 1, buffer.height - 1),
+                tint: tint, animated: animated, background: background)
+        }
+        drawEdgeGrips(
+            into: &buffer, axes: liveAxes, glyphs: glyphs, tint: tint, animated: animated,
+            background: background)
+    }
+
+    /// Paints `glyph` over one cell, in the resting tint and in every frame of
+    /// the focused breath.
+    private func stamp(
+        _ glyph: String, into buffer: inout FrameBuffer, at cell: (x: Int, y: Int),
+        tint: Color, animated: AnimatedColor?, background: Color
+    ) {
         let styled = ANSIRenderer.colorize(
             glyph,
             foreground: tint.ensuringRenderedContrast(atLeast: 2.4, against: background),
             background: background)
-
-        buffer = buffer.composited(
-            with: FrameBuffer(lines: [styled]),
-            at: (x: buffer.width - 1, y: buffer.height - 1))
-        if let run = animated?.run(offsetX: buffer.width - 1, offsetY: buffer.height - 1, draw: {
+        buffer = buffer.composited(with: FrameBuffer(lines: [styled]), at: cell)
+        if let run = animated?.run(offsetX: cell.x, offsetY: cell.y, draw: {
             ANSIRenderer.colorize(glyph, foreground: $0, background: background)
         }) {
             buffer.animatedCells.append(run)
         }
-
-        guard !paintsItsCells else { return }
-        drawEdgeGrips(
-            into: &buffer, tint: tint, animated: animated, background: background)
     }
 
-    /// The doubled-line handles in the middle of each live border.
+    /// The handles in the middle of each live border.
     ///
-    /// Purely a hint — the whole edge takes the drag, as it did before these
-    /// existed — but a terminal cannot change the pointer's shape at an edge,
-    /// so an edge that can be grabbed has to say so in ink. Doubled lines
-    /// because they read as "special" against every single-line border style
-    /// TUIkit draws, and are Box Drawing rather than pictographs, so every
-    /// terminal advances them by exactly the cells claimed.
+    /// Each sits in the border's own run BETWEEN its two corners, and shrinks to
+    /// fit that run rather than reserving separation either side of it: a
+    /// three-row box has exactly one border cell down its right edge, and on a
+    /// box that small being told the edge can be dragged matters more than the
+    /// cell of border that would have said it more prettily.
     private func drawEdgeGrips(
-        into buffer: inout FrameBuffer, tint: Color, animated: AnimatedColor?,
-        background: Color
+        into buffer: inout FrameBuffer, axes liveAxes: ResizableAxes, glyphs: GripGlyphs,
+        tint: Color, animated: AnimatedColor?, background: Color
     ) {
         func styled(_ text: String, _ colour: Color) -> String {
             ANSIRenderer.colorize(text, foreground: colour, background: background)
         }
 
+        /// `size` cells of `run`, centred — the border's own span between its
+        /// two corners, which is `1..<(extent - 1)`.
+        func centred(in extent: Int, size cap: Int) -> Range<Int>? {
+            let run = extent - 2
+            let size = min(cap, run)
+            guard size >= 1 else { return nil }
+            return (1 + (run - size) / 2)..<(1 + (run - size) / 2 + size)
+        }
+
         // The bottom border is dragged for HEIGHT, so it is marked when the
         // vertical axis is live; the right border likewise for width.
-        if axes.contains(.vertical) {
-            // Leaving a cell either side of the corner and the far corner, so
-            // the handle never reads as part of them.
-            let room = buffer.width - 4
-            let width = min(GripSize.horizontal, room)
-            if width >= 3 {
-                let x = (buffer.width - width) / 2
-                let y = buffer.height - 1
-                let glyphs = String(repeating: "═", count: width)
-                buffer = buffer.composited(
-                    with: FrameBuffer(lines: [styled(glyphs, tint)]), at: (x: x, y: y))
-                if let run = animated?.run(offsetX: x, offsetY: y, draw: { styled(glyphs, $0) }) {
-                    buffer.animatedCells.append(run)
-                }
+        if liveAxes.contains(.vertical),
+            let span = centred(in: buffer.width, size: GripSize.horizontal)
+        {
+            let y = buffer.height - 1
+            let line = String(repeating: glyphs.horizontal, count: span.count)
+            buffer = buffer.composited(
+                with: FrameBuffer(lines: [styled(line, tint)]), at: (x: span.lowerBound, y: y))
+            if let run = animated?.run(
+                offsetX: span.lowerBound, offsetY: y, draw: { styled(line, $0) })
+            {
+                buffer.animatedCells.append(run)
             }
         }
 
-        if axes.contains(.horizontal) {
-            let room = buffer.height - 4
-            let height = min(GripSize.vertical, room)
-            if height >= 1 {
-                let x = buffer.width - 1
-                let top = (buffer.height - height) / 2
-                for row in top..<(top + height) {
-                    buffer = buffer.composited(
-                        with: FrameBuffer(lines: [styled("║", tint)]), at: (x: x, y: row))
-                    if let run = animated?.run(
-                        offsetX: x, offsetY: row, draw: { styled("║", $0) })
-                    {
-                        buffer.animatedCells.append(run)
-                    }
+        if liveAxes.contains(.horizontal),
+            let span = centred(in: buffer.height, size: GripSize.vertical)
+        {
+            let x = buffer.width - 1
+            for row in span {
+                buffer = buffer.composited(
+                    with: FrameBuffer(lines: [styled(glyphs.vertical, tint)]), at: (x: x, y: row))
+                if let run = animated?.run(
+                    offsetX: x, offsetY: row, draw: { styled(glyphs.vertical, $0) })
+                {
+                    buffer.animatedCells.append(run)
                 }
             }
         }
