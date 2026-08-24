@@ -625,6 +625,17 @@ settled what "collapsible" should mean for something one column wide.
 Five items from your list are untouched. Each is a session rather than a batch
 item, and I would rather say so than leave half of one behind.
 
+**Status as of 2026-08-24 — three of the five have since shipped**, so read the
+entries below as the state on 2026-08-20 and this list as the current one:
+
+| | then | now |
+|---|---|---|
+| 1. Scroll granularity | resolved in the correction below | **shipped** — both twins fill the viewport, and the `lineGranularity` threading is gone. The *selection toggle* half is deferred by the owner. |
+| 2. Mono image | threshold done, LUT to design | **shipped** — the LUT is a `GradientEditorPanel` over an `ASCIIToneCurve`; a curve IS "remap N colours with interpolation between", so nothing new was needed but a way to build one. |
+| 3. Text input · Ctrl-A | a decision, options below | **still open** — the two spellings still disagree; the three options below stand unanswered. |
+| 4. View resizing | design note, no code | **shipped** — `.userResizable(_:)`, with edge and corner grips. `Documentation/Resizable views.md` records it. |
+| 5. Horizontal space | two pages done, seven to go | **still partial** — the left gutter is still open. |
+
 ### Correction: the bottom partial row already worked
 
 I told you (commit `1daeecee`) that the bottom of a line-granularity list could
@@ -679,14 +690,17 @@ Table row is one line and the question does not arise there.
    the two by driving granularity from the selection cursor. The toggle you
    asked for is the right way to show that.
 2. **Mono image rendering: adaptive threshold and a colour LUT.** *Threshold
-   done* — see below. The palette LUT is still the part you asked me to design
-   before building beyond mono.
+   done* — see below; it is Otsu's method, in
+   `ASCIIConverter+MonoThreshold.swift`. The palette LUT is still the part you
+   asked me to design before building beyond mono. *(Both shipped since — see
+   the table above.)*
 3. **Text input: the shortcut legend, and reconciling Ctrl-A.** The legend is
    small. The reconciliation is a decision, and I have opinions rather than an
    answer — see below.
 4. **View resizing.** *Design note written* — `Documentation/Resizable views.md`.
    No code yet, deliberately: the affordance is the expensive part to change
-   later. Summary below.
+   later. Summary below. *(Shipped since as `.userResizable(_:)` — see the table
+   above.)*
 5. **The Example-wide horizontal-space review.** *Measured, two worst pages
    done, seven to go* — see above. The left gutter is still open.
 
