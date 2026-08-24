@@ -67,6 +67,22 @@ struct MouseDoubleClickTests {
         #expect(counts() == [1, 2, 3])
     }
 
+    /// What a `List` / `Table` row calls once its double-click has opened
+    /// something: the gesture is spent, so the clicks that follow start a new
+    /// sequence instead of extending this one to three, four, five…
+    @Test("endMultiClickSequence restarts the count at the next press")
+    func endingTheSequenceRestartsTheCount() {
+        var now: UInt64 = 0
+        let (dispatcher, counts) = recordingDispatcher(now: { now })
+        click(dispatcher); now += 90_000_000
+        click(dispatcher)
+        dispatcher.endMultiClickSequence()
+        now += 90_000_000
+        click(dispatcher); now += 90_000_000
+        click(dispatcher)
+        #expect(counts() == [1, 2, 1, 2])
+    }
+
     @Test("A slow second click resets the count to 1")
     func slowClickResets() {
         var now: UInt64 = 0

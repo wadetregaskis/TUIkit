@@ -2418,6 +2418,7 @@ where Value.ID: Hashable {
                 state: state,
                 context: context,
                 focusManager: focusManager,
+                dispatcher: mouseDispatcher,
                 interiorTopY: interiorTopY,
                 contentColumns: contentColumns,
                 rowContentLeft: rowContentLeft,
@@ -2524,6 +2525,7 @@ where Value.ID: Hashable {
         state: PopulatedRenderState,
         context: RenderContext,
         focusManager: FocusManager?,
+        dispatcher: MouseEventDispatcher,
         interiorTopY: Int,
         contentColumns: Range<Int>,
         rowContentLeft: Int,
@@ -2679,6 +2681,8 @@ where Value.ID: Hashable {
                         index >= 0, index < rowIDs.count
                     {
                         captureHandler.focusedIndex = index
+                        // Spent — see the twin in `_ListCore`.
+                        dispatcher.endMultiClickSequence()
                         action(rowIDs[index])
                     } else {
                         captureHandler.handleClickSelection(at: index, event: event)

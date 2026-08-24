@@ -832,6 +832,27 @@ extension MouseEventDispatcher {
         return fired
     }
 
+    /// Ends the multi-click sequence in flight, so the next press starts
+    /// counting from one again.
+    ///
+    /// For a handler that has just ACTED on a multi-click — a `List` or `Table`
+    /// row opening on its double-click. The count is otherwise cumulative for
+    /// as long as the clicks keep coming, because every press extends the
+    /// window from itself: a fifth click 100 ms after the fourth is still one
+    /// sequence. Since "was this a double-click?" is asked as *two or more*,
+    /// drumming a second double-click onto a row inside that window opened it
+    /// again on every click, and a file browser dug two or three levels from
+    /// what the user made as one gesture.
+    ///
+    /// Not done for the handler, on the release of any consumed double-click,
+    /// because only the handler knows whether the gesture was spent — and an
+    /// automatic reset would put ``SwiftUICore/View/onTapGesture(count:_:)``
+    /// with a count of three out of reach, its third click always arriving as
+    /// the first of a new sequence.
+    func endMultiClickSequence() {
+        lastClick = nil
+    }
+
     /// Translates the event's coordinates from absolute screen-space
     /// into the local coordinate space of a hit region.
     private func localize(_ event: MouseEvent, byOffsetX dx: Int, offsetY dy: Int) -> MouseEvent {

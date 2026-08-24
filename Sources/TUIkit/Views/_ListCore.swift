@@ -1466,6 +1466,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 state: state,
                 focusManager: focusManager,
                 dragSession: context.environment.dragAndDropSession,
+                dispatcher: mouseDispatcher,
                 topInset: topInset,
                 // Where a row's own content starts: past the border, the style's
                 // leading padding, and `renderPlainLine`'s 1-cell gutter — the
@@ -1871,6 +1872,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         state: PopulatedRenderState,
         focusManager: FocusManager?,
         dragSession: DragAndDropSession?,
+        dispatcher: MouseEventDispatcher,
         topInset: Int,
         rowContentLeft: Int,
         contentColumns: Range<Int>
@@ -2055,6 +2057,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         // sole selection, shift = range, ctrl/option = toggle).
                         if event.clickCount >= 2, let action = capturedPrimaryAction {
                             captureHandler.focusedIndex = hit.rowIndex
+                            // This gesture is spent: the next press begins a
+                            // new count, so a second double-click opens once
+                            // more rather than once per click.
+                            dispatcher.endMultiClickSequence()
                             action(id)
                         } else {
                             captureHandler.handleClickSelection(at: hit.rowIndex, event: event)
