@@ -12,50 +12,18 @@ import TUIkit
 /// Displays a bundled demo image and provides status bar items to
 /// cycle through character set, color mode, and dithering settings.
 struct ImageFilePage: View {
-    @State var charsetIndex: Int = ImageDemoHelpers.Charset.blocks.rawValue
-    @State var glyphCount: Int = 0
-    @State var blockStyleIndex: Int = 0
-    @State var shapeAware: Bool = false
-    @State var colorModeIndex: Int = 0
-    @State var ditheringOn: Bool = false
-    @State var toneCurveIndex: Int = 0
+    @State var settings = ImageDemoSettings()
     @State var zoom: Double = 1.0
-    @State var supersampling: Int = 0
-    @State var edgeLines: Bool = false
-    @State var edgeThreshold: Double = 0.9
-    @State var customRamp: String = ""
 
     var body: some View {
-        let charSet = ImageDemoHelpers.effectiveCharSet(
-            charsetIndex: charsetIndex, glyphCount: glyphCount,
-            blockStyleIndex: blockStyleIndex, customRamp: customRamp)
-        let colorMode = ImageDemoHelpers.colorModes[colorModeIndex]
-        let dithering: DitheringMode = ditheringOn ? .floydSteinberg : .none
-
         // The image lives in a two-axis ScrollView fitted to the viewport: at zoom 1
         // the whole image shows with no scrollbars; `+`/`-` zoom in and out, and the
         // scrollbars appear automatically once it grows past the visible area.
         // The controls and status-bar shortcuts drive the same @State, so either
         // changes the rendering knobs.
-        VStack(alignment: .leading, spacing: 1) {
-            ImageRenderingControls(
-                charsetIndex: $charsetIndex,
-                glyphCount: $glyphCount,
-                blockStyleIndex: $blockStyleIndex,
-                shapeAware: $shapeAware,
-                colorModeIndex: $colorModeIndex,
-                supersampling: $supersampling,
-                edgeLines: $edgeLines,
-                edgeThreshold: $edgeThreshold,
-                customRamp: $customRamp)
+        ImageDemoLayout(settings: $settings) {
             imageContent
-                .imageCharacterSet(charSet)
-                .imageShapeAware(shapeAware)
-                .imageColorMode(colorMode)
-                .imageToneCurve(ImageDemoHelpers.toneCurves[toneCurveIndex])
-                .imageDithering(dithering)
-                .imageSupersampling(supersampling == 0 ? nil : supersampling)
-                .imageEdgeThreshold(edgeLines ? edgeThreshold : nil)
+                .imageDemoSettings(settings)
         }
         .statusBarItems(statusBarItems)
         .appHeader {
@@ -76,84 +44,6 @@ struct ImageFilePage: View {
     }
 
     private var statusBarItems: [any StatusBarItemProtocol] {
-        let charsetCount = ImageDemoHelpers.Charset.allCases.count
-        let colorModeCount = ImageDemoHelpers.colorModes.count
-        let toneCurveCount = ImageDemoHelpers.toneCurves.count
-        return [
-            StatusBarItem(shortcut: Shortcut.escape, label: "page.imageFile.back"),
-            // c|C — lowercase cycles forward, uppercase cycles
-            // backward. The "C" item is hidden so the bar shows
-            // a single entry with the dual-key indicator.
-            StatusBarItem(
-                shortcut: "c|C",
-                label: ImageDemoHelpers.charsetLabel(charsetIndex),
-                key: .character("c")
-            ) {
-                charsetIndex = (charsetIndex + 1) % charsetCount
-            },
-            StatusBarItem(
-                shortcut: "C",
-                label: "",
-                key: .character("C"),
-                displayInStatusBar: false
-            ) {
-                charsetIndex = (charsetIndex - 1 + charsetCount) % charsetCount
-            },
-            // s toggles shape-aware glyph matching (no-op for custom ramps,
-            // which carry no shape calibration).
-            StatusBarItem(shortcut: "s", label: shapeAware ? "shape:on" : "shape:off") {
-                if ImageDemoHelpers.usesShape(charsetIndex: charsetIndex) {
-                    shapeAware.toggle()
-                }
-            },
-            StatusBarItem(
-                shortcut: "m|M",
-                label: ImageDemoHelpers.colorModeLabel(colorModeIndex),
-                key: .character("m")
-            ) {
-                colorModeIndex = (colorModeIndex + 1) % colorModeCount
-            },
-            StatusBarItem(
-                shortcut: "M",
-                label: "",
-                key: .character("M"),
-                displayInStatusBar: false
-            ) {
-                colorModeIndex =
-                    (colorModeIndex - 1 + colorModeCount) % colorModeCount
-            },
-            // A transfer curve, not a palette: it says what the tones BECOME
-            // and keeps every one of them, which is why an inversion here is a
-            // negative rather than a two-colour image.
-            StatusBarItem(
-                shortcut: "n|N",
-                label: ImageDemoHelpers.toneCurveLabel(toneCurveIndex),
-                key: .character("n")
-            ) {
-                toneCurveIndex = (toneCurveIndex + 1) % toneCurveCount
-            },
-            StatusBarItem(
-                shortcut: "N", label: "", key: .character("N"), displayInStatusBar: false
-            ) {
-                toneCurveIndex = (toneCurveIndex - 1 + toneCurveCount) % toneCurveCount
-            },
-            // d is a binary toggle — a Shift variant would be a
-            // no-op, so no "D" partner.
-            StatusBarItem(shortcut: "d", label: ditheringOn ? "dither:on" : "dither:off") {
-                ditheringOn.toggle()
-            },
-            // +/- zoom. "=" is a hidden synonym for "+" (no Shift needed). At zoom 1
-            // the image fits the viewport; zooming in reveals the scrollbars.
-            StatusBarItem(shortcut: "+|-", label: ImageDemoHelpers.zoomLabel(zoom), key: .character("+")) {
-                zoom = ImageDemoHelpers.zoomedIn(zoom)
-            },
-            StatusBarItem(shortcut: "=", label: "", key: .character("="), displayInStatusBar: false) {
-                zoom = ImageDemoHelpers.zoomedIn(zoom)
-            },
-            StatusBarItem(shortcut: "-", label: "", key: .character("-"), displayInStatusBar: false) {
-                zoom = ImageDemoHelpers.zoomedOut(zoom)
-            },
-            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "page.imageFile.scroll"),
-        ]
+        ImageDemoStatusBar.items(settings: $settings, zoom: $zoom, back: "page.imageFile.back")
     }
 }

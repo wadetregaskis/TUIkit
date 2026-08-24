@@ -1,6 +1,12 @@
 //  🖥️ TUIKit — Terminal UI Kit for Swift
 //  ImageDemoHelpers.swift
 //
+//  What the image demos' knobs MEAN — which ones a given configuration
+//  actually consumes, and how far each may go. The knobs themselves live in
+//  ``ImageDemoSettings``; this is the part that has to agree with
+//  `ASCIIConverter.convert`'s dispatch, and it is shared so the controls, the
+//  status bar and the snapping cannot drift from one another.
+//
 //  Created by LAYERED.work
 //  License: MIT
 
@@ -9,60 +15,33 @@ import TUIkit
 
 /// Shared image demo configuration used by both `ImageFilePage` and `ImageURLPage`.
 enum ImageDemoHelpers {
-    /// The fundamental charsets the demo exposes — the picker mirrors
+    /// The fundamental charsets the demo exposes — mirroring
     /// ``ASCIICharacterSet``'s cases directly rather than a list of
     /// pre-combined modes; size and shape-awareness are separate knobs.
+    ///
+    /// Ordered so each parameterised case is followed in the control pane by
+    /// the control that parameterises it: glyph count under ascii/unicode,
+    /// block resolution under blocks, the ramp field under custom.
     enum Charset: Int, CaseIterable {
         case ascii
-        case blocks
         case unicode
+        case blocks
         case custom
     }
 
-    /// The block charset's discrete styles, in demo cycling order
-    /// (the framework default `.fine` first).
+    /// The block charset's discrete styles, in demo order (the framework
+    /// default `.fine` first).
     static let blockStyles: [ASCIICharacterSet.BlockStyle] = [
         .fine, .solid, .coarse, .braille,
     ]
 
-    /// The fidelity ladder, then the three ways of naming a palette — so the
-    /// cycler walks from "as much colour as this terminal has" all the way to
-    /// "these three, and they follow the theme".
-    static let colorModes: [ASCIIColorMode] = [
-        .trueColor, .ansi256, .grayscale, .mono,
-        .palette(.shades(4)),
-        .palette(.sampled(8)),
-        // As a TONE RAMP, not by nearest colour: the accent and white sit
-        // within 0.04 of each other in OKLab lightness, so by nearest colour
-        // the accent would never be the closest entry to anything in a
-        // photograph and the demo would draw two colours while claiming three.
-        .palette(ASCIIPalette([.black, .palette.accent, .white]).asToneRamp()),
-    ]
+    // MARK: - Labels
 
-    /// No recolouring, a negative, and a duotone — the two shapes a transfer
-    /// curve takes, and the two that show it is a CURVE rather than a palette:
-    /// each keeps every tone the image had and only changes what it is made of.
-    static let toneCurves: [ASCIIToneCurve?] = [
-        nil,
-        .inverted,
-        ASCIIToneCurve([(.rgb(0, 0, 0), .rgb(20, 20, 60)), (.rgb(255, 255, 255), .rgb(255, 215, 130))]),
-        ASCIIToneCurve([(.rgb(0, 0, 0), .black), (.rgb(255, 255, 255), .palette.accent)]),
-    ]
-
-    static func toneCurveLabel(_ index: Int) -> String {
-        switch index {
-        case 1: return "tone:invert"
-        case 2: return "tone:duotone"
-        case 3: return "tone:accent"
-        default: return "tone:off"
-        }
-    }
-
-    static func charsetLabel(_ index: Int) -> String {
-        switch Charset(rawValue: index) ?? .ascii {
+    static func charsetLabel(_ charset: Charset) -> String {
+        switch charset {
         case .ascii: return "chars:ascii"
-        case .blocks: return "chars:blocks"
         case .unicode: return "chars:unicode"
+        case .blocks: return "chars:blocks"
         case .custom: return "chars:custom"
         }
     }
@@ -76,53 +55,15 @@ enum ImageDemoHelpers {
         }
     }
 
-    static func colorModeLabel(_ index: Int) -> String {
-        switch colorModes[index] {
-        case .trueColor: return "color:true"
-        case .ansi256: return "color:256"
-        case .grayscale: return "color:gray"
-        case .mono: return "color:mono"
-        case .palette(let palette):
-            switch palette.colors.count {
-            case 4: return "color:4 greys"
-            case 8: return "color:8 sampled"
-            default: return "color:themed"
-            }
-        }
-    }
-
-    // MARK: - The effective configuration
-
-    /// The ``ASCIICharacterSet`` the controls currently describe.
-    /// `glyphCount` 0 means the full repertoire; an empty custom ramp falls
-    /// back to a 10-glyph ASCII ramp so the demo never renders blank.
-    static func effectiveCharSet(
-        charsetIndex: Int, glyphCount: Int, blockStyleIndex: Int, customRamp: String
-    ) -> ASCIICharacterSet {
-        let glyphs = glyphCount > 0 ? glyphCount : nil
-        switch Charset(rawValue: charsetIndex) ?? .ascii {
-        case .ascii:
-            return .ascii(glyphs: glyphs)
-        case .unicode:
-            return .unicode(glyphs: glyphs)
-        case .blocks:
-            return .blocks(blockStyles[min(blockStyleIndex, blockStyles.count - 1)])
-        case .custom:
-            return customRamp.isEmpty ? .ascii(glyphs: 10) : .customRamp(customRamp)
-        }
-    }
-
     // MARK: - Knob applicability
 
-    /// Shape-awareness applies to every charset except a custom ramp
-    /// (which carries no shape calibration).
-    static func usesShape(charsetIndex: Int) -> Bool {
-        Charset(rawValue: charsetIndex) != .custom
-    }
+    /// Shape-awareness applies to every charset except a custom ramp (which
+    /// carries no shape calibration).
+    static func usesShape(_ charset: Charset) -> Bool { charset != .custom }
 
     /// The glyph-count knob applies to the sizeable charsets.
-    static func usesGlyphCount(charsetIndex: Int) -> Bool {
-        switch Charset(rawValue: charsetIndex) ?? .ascii {
+    static func usesGlyphCount(_ charset: Charset) -> Bool {
+        switch charset {
         case .ascii, .unicode: return true
         case .blocks, .custom: return false
         }
@@ -130,84 +71,38 @@ enum ImageDemoHelpers {
 
     /// The block-resolution knob applies to non-shape blocks (shape-aware
     /// blocks match over the block glyph repertoire instead).
-    static func usesBlockStyle(charsetIndex: Int, shapeAware: Bool) -> Bool {
-        Charset(rawValue: charsetIndex) == .blocks && !shapeAware
+    static func usesBlockStyle(_ charset: Charset, shapeAware: Bool) -> Bool {
+        charset == .blocks && !shapeAware
     }
 
     /// Whether the configuration consumes the supersampling factor — every
-    /// non-shape renderer (each sample becomes an N×N area average; the
-    /// shape matcher's 96-sample grid needs no factor). A custom ramp is
-    /// never shape-matched, so it always qualifies.
-    static func usesSupersampling(charsetIndex: Int, shapeAware: Bool) -> Bool {
-        Charset(rawValue: charsetIndex) == .custom || !shapeAware
+    /// non-shape renderer (each sample becomes an N×N area average; the shape
+    /// matcher's 96-sample grid needs no factor). A custom ramp is never
+    /// shape-matched, so it always qualifies.
+    static func usesSupersampling(_ charset: Charset, shapeAware: Bool) -> Bool {
+        charset == .custom || !shapeAware
     }
 
     /// Whether the configuration consumes the edge-tracing knobs — the
-    /// shape-aware ascii/unicode renderers (the block repertoire carries
-    /// its own directional glyphs).
-    static func usesEdgeTracing(charsetIndex: Int, shapeAware: Bool) -> Bool {
+    /// shape-aware ascii/unicode renderers (the block repertoire carries its
+    /// own directional glyphs).
+    static func usesEdgeTracing(_ charset: Charset, shapeAware: Bool) -> Bool {
         guard shapeAware else { return false }
-        switch Charset(rawValue: charsetIndex) ?? .ascii {
+        switch charset {
         case .ascii, .unicode: return true
         case .blocks, .custom: return false
         }
     }
 
     /// The largest useful glyph count for the current configuration (the
-    /// stepper's upper bound), or 0 when the axis doesn't apply.
-    static func maximumGlyphs(charsetIndex: Int, shapeAware: Bool) -> Int {
-        effectiveCharSet(
-            charsetIndex: charsetIndex, glyphCount: 0,
-            blockStyleIndex: 0, customRamp: ""
-        ).maximumGlyphs(shapeAware: shapeAware) ?? 0
-    }
-
-    // MARK: - State snapping
-
-    /// Snaps every dependent knob to a value the current configuration
-    /// actually renders with, so a disabled control never displays a
-    /// setting that differs from what is being drawn:
-    ///
-    /// - shape-awareness turns off for a custom ramp (which is always
-    ///   luminance-mapped);
-    /// - the supersampling picker returns to Auto while shape matching
-    ///   ignores it;
-    /// - the edge-lines toggle turns off while no edges can be traced;
-    /// - the block resolution returns to its default while the block
-    ///   subdivision path isn't in use;
-    /// - the glyph count clamps to the charset's real ceiling (pool size
-    ///   for shape matching, distinct density levels for luminance), and
-    ///   resets to 0 (= full) when the axis doesn't apply.
-    ///
-    /// Deliberately lossy: a preference does not survive a round-trip
-    /// through a mode that doesn't support it — coherence of what's on
-    /// screen wins over remembering hidden state.
-    static func snap(
-        charsetIndex: Int,
-        glyphCount: inout Int,
-        blockStyleIndex: inout Int,
-        shapeAware: inout Bool,
-        supersampling: inout Int,
-        edgeLines: inout Bool
-    ) {
-        if !usesShape(charsetIndex: charsetIndex) {
-            shapeAware = false
-        }
-        if !usesSupersampling(charsetIndex: charsetIndex, shapeAware: shapeAware) {
-            supersampling = 0
-        }
-        if !usesEdgeTracing(charsetIndex: charsetIndex, shapeAware: shapeAware) {
-            edgeLines = false
-        }
-        if !usesBlockStyle(charsetIndex: charsetIndex, shapeAware: shapeAware) {
-            blockStyleIndex = 0
-        }
-        if usesGlyphCount(charsetIndex: charsetIndex) {
-            glyphCount = min(
-                glyphCount, maximumGlyphs(charsetIndex: charsetIndex, shapeAware: shapeAware))
-        } else {
-            glyphCount = 0
-        }
+    /// slider's upper bound), or 0 when the axis doesn't apply.
+    static func maximumGlyphs(_ charset: Charset, shapeAware: Bool) -> Int {
+        var probe = ImageDemoSettings()
+        probe.charset = charset
+        probe.glyphCount = 0
+        probe.blockStyleIndex = 0
+        probe.customRamp = ""
+        return probe.characterSet.maximumGlyphs(shapeAware: shapeAware) ?? 0
     }
 
     // MARK: - Zoom
