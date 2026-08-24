@@ -142,7 +142,15 @@ extension String {
     ///     push out of place.
     ///
     /// ANSI escape sequences in the input are preserved.
-    public func withTerminalAppCursorCompensation() -> String {
+    ///
+    /// - Parameter followedByContent: Whether visible cells follow this string
+    ///   on the same row. It decides the skin-tone rule above for a cluster at
+    ///   the very end, which a string that is only PART of a row cannot answer
+    ///   for itself — the animation replay compensates one run's frame at a
+    ///   time, and a frame ending in a skin-tone cluster is at the end of the
+    ///   fragment without being at the end of the row. Defaults to `false`, the
+    ///   whole-row answer.
+    public func withTerminalAppCursorCompensation(followedByContent: Bool = false) -> String {
         // Fast path: every cursor-advance quirk is an emoji cluster, which is
         // always non-ASCII, so a line whose bytes are all < 0x80 cannot need
         // compensation — return it untouched and skip the char-by-char rebuild.
@@ -206,7 +214,9 @@ extension String {
                 result += "\u{1B}[\(claimed)X"
                 result.append(c)
                 result += "\u{1B}[\(claimed - actual)C"
-            } else if actual > claimed && Self.hasVisibleContent(in: self, after: self.index(after: index)) {
+            } else if actual > claimed,
+                followedByContent || Self.hasVisibleContent(in: self, after: self.index(after: index))
+            {
                 // Over-advancer followed by content — strip the
                 // Fitzpatrick scalar so Terminal.app doesn't apply the
                 // row-wide LEFT shift.

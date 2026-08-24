@@ -466,3 +466,46 @@ arrow, the cell's foreground before the fix stepped through the plain accent
 breath (`62f662`, `49b849`, `276127`, `0e230e` — the un-hovered tones) and after
 it through the lifted one (`c6f3c6`, `a9ffa9`, `8fbf8f`, `767f76`), never
 falling back.
+
+## 10. A run's frames are content, and content reaches a terminal one way
+
+The same rule as §9, one layer down. There, a run had to be given every input
+the *drawn cells* had. Here, it has to be given every transformation the
+*written bytes* get.
+
+`FrameDiffWriter` turns rendered content into bytes for a specific terminal —
+it clips to the width, restates the background, collapses adjacent SGR, and
+applies the host's cursor-advance model (`Documentation/Terminal-compatibility.md`).
+The replay exists to skip the render, and skipped the writer with it: it
+spliced a run's frame straight into the row on screen. Everything the writer
+does to a row was therefore true of the row and false of the run's frames.
+
+On Terminal.app that is visible immediately, because its advance model is not
+cosmetic. A `List` row reading `⚙️ .swiftlint.yml` painted correctly on the
+frame that rendered it — that one went through the builder — and then shifted
+everything after the emoji one cell left on every tick of its focus pulse. The
+picture was right; the arithmetic was right; only the last few bytes were
+missing, twenty times a second.
+
+> **A run's frames are content, not output.** They are written to a terminal,
+> so they owe that terminal everything a rendered row owes it.
+
+Which is why the splice is `FrameDiffWriter.patchingAnimatedRun` and not
+`FrameBuffer.patchingAnimatedCells` directly. If you are writing a view that
+leaves runs behind, this needs nothing from you — and specifically, **do not
+compensate your own frames**: write the glyph you mean, exactly as you would in
+a still render, and let the writer do it once.
+
+**Why the tests did not catch it**, and this is the part worth generalising:
+every assertion about runs — `expectReplayIsIdentity` included — compares the
+replay against the *buffer*, which is upstream of the writer. That is the right
+comparison for "does the run describe the cells the view drew", and it cannot
+see anything the writer would have added. The gap needed an assertion on the
+BUILT row (`ReplayCursorCompensationTests`), which is the only place the two
+halves are in the same units.
+
+Also worth knowing when reproducing one of these by hand: a PTY capture read
+through `pyte` cannot show it. `pyte` abandons the rest of a write at a U+FE0F,
+so any dump containing an emoji-presentation cluster looks truncated whatever
+the app emitted. Read the raw bytes, or drive the real terminal with
+`Tools/TerminalProbes/`.

@@ -136,19 +136,18 @@ extension RenderLoop {
                 }
                 continue
             }
-            for (offset, run) in runs.enumerated() {
-                _ = offset
+            for run in runs {
                 guard let now = elapsed[run.clock] else { continue }
-            // Spliced through the compositor rather than by hand: it already
-            // knows how to drop a styled run into a styled line at a visible
-            // column and restore the surrounding state afterwards, and getting
-            // that wrong is how a background stops halfway across a row. The
-            // run-specific entry point rather than plain `composited` because
-            // this row is already on screen, so nothing will paint a background
-            // over it afterwards — see `patchingAnimatedRun(_:atStep:)`.
-                let patched = FrameBuffer.patchingAnimatedCells(
+                // Through the diff writer rather than by hand: it knows how
+                // to drop a styled run into a styled line at a visible column
+                // and restore the surrounding state afterwards (getting that
+                // wrong is how a background stops halfway across a row), and
+                // it knows the host's cursor-advance model, which a frame the
+                // view rendered has never met. See `patchingAnimatedRun`.
+                let patched = diffWriter.patchingAnimatedRun(
                     in: lines[row], with: run.frame(atElapsed: now),
-                    atColumn: run.offsetX, width: run.width)
+                    atColumn: run.offsetX, width: run.width,
+                    terminalWidth: frame.terminalWidth)
                 if patched != lines[row] {
                     lines[row] = patched
                     touched = true

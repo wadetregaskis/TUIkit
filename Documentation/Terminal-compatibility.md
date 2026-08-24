@@ -952,10 +952,36 @@ CLAMPS, and reports the same column whatever the row spent:
 
 Nothing wrapped, in any case. So a full-width row spends exactly what it claims,
 both compensation strategies are exact, and **the one-cell shift is what an
-UNCOMPENSATED emission looks like** — which is what a host with no advance model
-in this file receives (the `else { clipped }` arm of `FrameDiffWriter`). If the
-shift is seen on a terminal, that terminal is one to measure and add here, not a
-bug in the arithmetic.
+UNCOMPENSATED emission looks like**.
+
+##### Which is what it was — FIXED 2026-08-24
+
+The shift WAS seen, on Terminal.app, and the table above is what identified it:
+the bytes were uncompensated, so the question was which path emitted them
+without a model rather than which model was wrong. The report named the path
+precisely — the row drew correctly when it was selected and wrong on every
+frame afterwards.
+
+Only the FIRST of those frames is built by `FrameDiffWriter`. The rest are the
+animation replay (`RenderLoop.replayAnimations`), which advances a pulsing row
+by splicing the run's current picture into the row already on screen — and a
+run's frames are content as the view rendered it, which has never been through
+the host's advance model, because the model lives in the builder the replay
+exists to skip. So a focused `⚙️ .swiftlint.yml` painted correctly once and then
+shifted a cell left, at the pulse rate, for as long as it stayed focused.
+
+The splice now goes through `FrameDiffWriter.patchingAnimatedRun`, which
+compensates the frame first. The compensation writes no visible characters
+(ECH and CUF, per the section above), so the run still claims the cells it
+claimed and the splice arithmetic is untouched.
+
+**The general rule this is an instance of:** every byte that reaches the
+terminal passes through this file's advance model exactly once. Any future path
+that writes without going through `FrameDiffWriter` — a partial repaint, a
+direct cursor-addressed write — owes the same, and will show the same one-cell
+shift if it does not. A host with no model here (the `else` arm) legitimately
+receives uncompensated bytes; if the shift is seen on such a terminal, that
+terminal is one to measure and add.
 
 ### Bare (selector-less) pictographs — FIXED 2026-07-14
 

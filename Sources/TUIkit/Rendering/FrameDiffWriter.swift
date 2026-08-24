@@ -403,31 +403,7 @@ extension FrameDiffWriter {
         // the same strip, then a CUF for its lone-regional-indicator
         // under-advance. All models are DSR-measured; see
         // Documentation/Terminal-compatibility.md.
-        let compensated =
-            if isTmux {
-                // FIRST: tmux is a compositor, so ITS grid is what our output
-                // lands in — the outer terminal's quirks apply to tmux's output,
-                // not ours, and its model must win even if a native host's
-                // variable somehow survived into the pane.
-                //
-                // `.bmpOnly`, NOT the blanket strip iTerm2/Warp take: tmux joins
-                // an SMP-based skin-tone cluster (👍🏽 👩🏽‍🚀) into exactly the 2
-                // cells we claim, and only over-advances on a BMP base (✊🏻 ☝🏽).
-                // Stripping the ones it gets right would throw away skin tones
-                // the user asked for and the attached client renders perfectly.
-                clipped.withSkinToneFallback(basePlane: tmuxSkinToneBasePlane)
-                    .withTmuxCursorCompensation()
-            } else if isAppleTerminal {
-                clipped.withTerminalAppCursorCompensation()
-            } else if isITerm2 {
-                clipped.withSkinToneFallback().withITerm2CursorCompensation()
-            } else if isGhostty {
-                clipped.withGhosttyCursorCompensation()
-            } else if isWarp {
-                clipped.withSkinToneFallback().withWarpCursorCompensation()
-            } else {
-                clipped
-            }
+        let compensated = compensatingCursorAdvance(clipped)
         // Native Swift `replacing(_:with:)` — NOT Foundation's
         // `replacingOccurrences`, which bridges to `NSString` and was ~8% of the
         // render loop in a Mode-B (live-app) profile.
@@ -442,6 +418,87 @@ extension FrameDiffWriter {
         // cells, 19,974 of the frame's 32,394 bytes. See
         // ``String/collapsingAdjacentSGR()``.
         return line.collapsingAdjacentSGR()
+    }
+
+    /// `text` with this host's cursor-advance divergences compensated for.
+    ///
+    /// The one place the per-host model is chosen, because there is more than
+    /// one caller and they have to agree: `buildLine` compensates a whole row
+    /// on its way to the screen, and the animation replay compensates the frame
+    /// it splices into a row already there. A frame that skipped this reached
+    /// Terminal.app bare — the row painted correctly once and then shifted a
+    /// cell left on every tick of its pulse, which is exactly what an
+    /// uncompensated emission looks like.
+    ///
+    /// - Parameters:
+    ///   - text: A whole row, or a fragment of one.
+    ///   - followedByContent: Whether visible cells follow `text` on the same
+    ///     row. Only Terminal.app's model asks: it keeps a skin-tone cluster's
+    ///     modifier when nothing follows it (the over-advance then has nothing
+    ///     to shove out of place) and strips it when something does — and a
+    ///     fragment cannot see past its own end. `false`, the whole-row answer,
+    ///     is the default.
+    func compensatingCursorAdvance(_ text: String, followedByContent: Bool = false) -> String {
+        if isTmux {
+            // FIRST: tmux is a compositor, so ITS grid is what our output
+            // lands in — the outer terminal's quirks apply to tmux's output,
+            // not ours, and its model must win even if a native host's
+            // variable somehow survived into the pane.
+            //
+            // `.bmpOnly`, NOT the blanket strip iTerm2/Warp take: tmux joins
+            // an SMP-based skin-tone cluster (👍🏽 👩🏽‍🚀) into exactly the 2
+            // cells we claim, and only over-advances on a BMP base (✊🏻 ☝🏽).
+            // Stripping the ones it gets right would throw away skin tones
+            // the user asked for and the attached client renders perfectly.
+            return text.withSkinToneFallback(basePlane: tmuxSkinToneBasePlane)
+                .withTmuxCursorCompensation()
+        } else if isAppleTerminal {
+            return text.withTerminalAppCursorCompensation(followedByContent: followedByContent)
+        } else if isITerm2 {
+            return text.withSkinToneFallback().withITerm2CursorCompensation()
+        } else if isGhostty {
+            return text.withGhosttyCursorCompensation()
+        } else if isWarp {
+            return text.withSkinToneFallback().withWarpCursorCompensation()
+        } else {
+            return text
+        }
+    }
+
+    /// One row this writer has already built, with an animated run's current
+    /// `frame` redrawn over the `width` cells starting at `column`.
+    ///
+    /// The animation tick, and the reason it lives here rather than at the call
+    /// site: a run's frames are *rendered content*, and rendered content
+    /// reaches a terminal only through this type, because this is where the
+    /// host's cursor-advance model is. A frame spliced straight into a built
+    /// row has never met that model — so on Terminal.app a row carrying `⚙️`
+    /// painted correctly on the frame that rendered it and then shifted
+    /// everything after the emoji one cell left on every tick of its pulse,
+    /// which is precisely what an uncompensated emission measures as
+    /// (`Tools/TerminalProbes/row_probe.py`; see
+    /// `Documentation/Terminal-compatibility.md`).
+    ///
+    /// The compensation cannot move a cell — it erases, draws and steps, and
+    /// writes no visible characters — so the splice arithmetic below is
+    /// unaffected by it.
+    ///
+    /// - Parameters:
+    ///   - line: A row as `buildOutputLines` produced it.
+    ///   - frame: The run's picture for this tick, as the view rendered it.
+    ///   - column: The run's first visible column.
+    ///   - width: How many cells the run covers.
+    ///   - terminalWidth: The row's full width, which is what says whether the
+    ///     row continues past the run — see `compensatingCursorAdvance`.
+    func patchingAnimatedRun(
+        in line: String, with frame: String, atColumn column: Int, width: Int,
+        terminalWidth: Int
+    ) -> String {
+        FrameBuffer.patchingAnimatedCells(
+            in: line,
+            with: compensatingCursorAdvance(
+                frame, followedByContent: column + width < terminalWidth),
+            atColumn: column, width: width)
     }
 
     private func reuseCache(for region: OutputRegion) -> LineReuseCache {
