@@ -9,17 +9,8 @@ import Testing
 @testable import TUIkitCore
 @testable import TUIkitView
 
-#if os(Linux)
-    private let isLinux = true
-#else
-    private let isLinux = false
-#endif
-
 @MainActor
-@Suite(
-    "State Property Wrapper Tests",
-    .disabled(if: isLinux, "Skipped on Linux due to Swift runtime race condition in StateStorage")
-)
+@Suite("State Property Wrapper Tests")
 struct StatePropertyWrapperTests {
 
     @Test("State can be mutated")
