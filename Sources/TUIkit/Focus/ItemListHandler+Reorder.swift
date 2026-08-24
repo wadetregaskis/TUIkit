@@ -494,6 +494,11 @@ extension ItemListHandler {
         // away from under the cursor — the gap drifting off the screen while
         // the drag holds still at the edge.
         if reorder == nil, let y = lastExternalDropContentY {
+            // Only when the rows have actually MOVED. That is the whole reason
+            // this path exists, and asking again when they have not is not
+            // merely wasted: the answer is read off bands that the previous
+            // answer helped lay out, so it can oscillate. See
+            // ``ItemListHandler/externalDropResolvedOffset``.
             // Unclamped: `retargetExternalDrop` has its own past-the-end rule,
             // and it has to, because the gap it is recomputing is itself a
             // droppable band whose `dropIndex` IS `externalDropSlot`. Clamping

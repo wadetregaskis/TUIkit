@@ -545,7 +545,10 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
         didSet {
             // The remembered pointer position belongs to the slot: when the slot
             // goes, so does it.
-            if externalDropSlot == nil { lastExternalDropContentY = nil }
+            if externalDropSlot == nil {
+                lastExternalDropContentY = nil
+                externalDropResolvedOffset = nil
+            }
         }
     }
 
@@ -554,6 +557,25 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// ``hoverExternalDrop(atContentY:)``, which is the only thing that should
     /// write it.
     var lastExternalDropContentY: Int?
+
+    /// The scroll offset the auto-scroll retarget last answered for, or `nil`
+    /// if the pointer has moved since.
+    ///
+    /// That retarget exists for one reason: the rows move under a motionless
+    /// pointer, so the slot the pointer named goes stale. It follows that it
+    /// must not run again while the rows sit still — and there it is worse than
+    /// useless, because the question it asks is answered by bands that its own
+    /// previous answer helped lay out. On a list whose rows exactly fill it,
+    /// the slot's line pushes the last row out of view, which changes which row
+    /// is last, which changes the answer, which puts the line back: the gap
+    /// flips between two places on alternate frames with the pointer perfectly
+    /// still.
+    ///
+    /// `nil` after every hover, so a newly-named pointer position always gets
+    /// one answer — the pointer that starts auto-scroll is by definition on
+    /// chrome, where the hover's own rule ("past the rows means append") is not
+    /// the answer wanted.
+    var externalDropResolvedOffset: Int?
 
     /// Set when Escape cancels a drag whose button is still down: the release
     /// that follows must be swallowed rather than read as a click.

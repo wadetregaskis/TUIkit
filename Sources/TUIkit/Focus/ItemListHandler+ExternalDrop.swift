@@ -24,6 +24,9 @@ extension ItemListHandler {
     /// against the next frame's rows.
     func hoverExternalDrop(atContentY contentY: Int) {
         lastExternalDropContentY = contentY
+        // A new pointer position is a new situation: the auto-scroll retarget
+        // gets one run against it, whatever the rows have done since.
+        externalDropResolvedOffset = nil
         // Past the rows, a pointer that is simply resting there means "append"
         // — the conventional answer, and the one a short list has always given.
         // Only the auto-scroll retarget below reads it differently, because
@@ -54,6 +57,9 @@ extension ItemListHandler {
     /// fixed point, and puts the gap at the viewport's leading edge — the same
     /// place a reorder's slot rides, for the same reason.
     func retargetExternalDrop(atContentY contentY: Int) {
+        // Answered for THIS offset. The caller will not ask again until the
+        // rows have moved — see ``ItemListHandler/externalDropResolvedOffset``.
+        externalDropResolvedOffset = scrollOffset
         let rows = visibleRowBands.compactMap { band -> (band: RowBand, index: Int)? in
             guard band.isContent, let index = band.dropIndex else { return nil }
             return (band, index)
