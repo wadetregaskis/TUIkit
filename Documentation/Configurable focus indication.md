@@ -33,15 +33,27 @@ decided by what each control has spare:
 | `NavigationSplitView` | the divider |
 | `TextField`, `TextEditor` | the text cursor (its own clock) |
 | Menu items | the row background, plus bold |
-| **`Table` row** | a `●` in the 2-cell indicator gutter **and** the row background |
-| **`List` row** | the row background **only** |
+| **`Table` row** | a `●` in its indicator gutter **and** the row background |
+| **`List` row** | a `●` in its indicator gutter **and** the row background |
 
-So the inconsistency is not scattered: it is one row of that table. `List`
-reserves a one-cell gutter for every row (`renderPlainLine` prepends a space) and
-never draws in it, while `Table` puts a bullet in its own. Same state, same
-palette, same pulse — one shows a bullet and the other does not. That is almost
-certainly what prompted the question, and it is a two-line fix independent of
-everything below.
+So the inconsistency was not scattered: it was one row of that table. `List`
+reserved a one-cell gutter for every row (`renderPlainLine` prepends a space) and
+never drew in it, while `Table` put a bullet in its own. Same state, same
+palette, same pulse — one showed the bullet and the other did not.
+
+**Fixed 2026-08-24.** Both now ask ``RowSelectionIndicator`` — one description of
+the rules, beside ``RowBackground``, which carries the same warning about these
+two views drifting. The mark lands in the cell each already reserved, so no
+label moved and no list changed width; the `List`'s gutter is one cell against
+the `Table`'s wider one, which is a difference in indentation the two have
+always had.
+
+Worth being exact about what the mark means, because it is not what the title of
+this document assumes: **it marks SELECTION, not focus.** Which row the cursor is
+on is said by the background, which breathes. A row merely under the cursor has
+not been chosen and shows a still highlight and no glyph, so a control with no
+selection draws no glyph anywhere — which is what a plain `List` looked like
+before and still looks like now.
 
 The other apparent variety — caps, arrows, bullets — is not arbitrariness. It is
 one idea meeting different geometry: a control marks the cell it has, and a
@@ -127,7 +139,8 @@ actually recommend them:
 
 Fix the actual inconsistency first — `List`'s empty gutter — and see whether the
 question survives it. It is a small change, it is measurable, and it costs
-nothing to reverse.
+nothing to reverse. **Done**, as above; what follows is still open, and now has
+one fewer thing pushing for it.
 
 If configurability is still wanted after that, ship option 1. `.marker` is the
 mode with a property worth having (it cannot be overpainted, per Finding 1), and

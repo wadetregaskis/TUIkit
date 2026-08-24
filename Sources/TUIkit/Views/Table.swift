@@ -3032,33 +3032,28 @@ where Value.ID: Hashable {
         context: RenderContext,
         palette: any Palette
     ) -> (indicator: String, indicatorColor: Color, background: RowBackground) {
-        if isFocused && isSelected {
-            // The cursor row of a focused table breathes. As a CYCLE, not a
-            // live phase: the phase read marks the frame as having consulted
-            // the clock, so the whole page was re-rendered on every tick to
-            // recolour one row. The caller turns the cycle into
-            // ``AnimatedCellRun``s over the row's own lines. Same colour pair
-            // as `_ListCore`'s cursor row, from the same place.
-            return ("●", palette.accent, .focusedSelection(in: context, palette: palette))
-        } else if isFocused {
-            return (" ", palette.foregroundTertiary, .fixed(palette.focusBackground))
-        } else if isSelected {
-            // Selected row while the table itself doesn't have
-            // focus. Same model as _ListCore: the
-            // `unfocusedSelectionVisibility` env value controls
-            // whether the indicator is shown. `.hidden` collapses
-            // the row's visual state into the same as an
-            // unselected unfocused row.
-            if context.environment.unfocusedSelectionVisibility == .hidden {
-                return (" ", palette.foregroundTertiary, .none)
+        // The glyph is ``RowSelectionIndicator``'s answer, not a fourth copy of
+        // the rules: `_ListCore` asks the same thing for the same gutter.
+        let indicator = RowSelectionIndicator.forRow(
+            isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
+        let background: RowBackground =
+            if isFocused && isSelected {
+                // The cursor row of a focused table breathes. As a CYCLE, not a
+                // live phase: the phase read marks the frame as having consulted
+                // the clock, so the whole page was re-rendered on every tick to
+                // recolour one row. The caller turns the cycle into
+                // ``AnimatedCellRun``s over the row's own lines. Same colour
+                // pair as `_ListCore`'s cursor row, from the same place.
+                .focusedSelection(in: context, palette: palette)
+            } else if isFocused {
+                .fixed(palette.focusBackground)
+            } else {
+                // A selected row while the table itself does not have focus
+                // draws its mark and no fill; `.hidden` suppresses both, and
+                // the indicator has already agreed to that.
+                .none
             }
-            return (
-                "●",
-                palette.accent.opacity(ViewConstants.selectionIndicator, over: palette.background),
-                .none)
-        } else {
-            return (" ", palette.foregroundTertiary, .none)
-        }
+        return (indicator.glyph, indicator.color, background)
     }
 
     // MARK: - Text Alignment

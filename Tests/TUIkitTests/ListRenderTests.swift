@@ -219,9 +219,23 @@ struct ListRenderTests {
             },
             context: listContext()
         )
-        // Same stripped text…
-        #expect(selected.lines[2].stripped == unselected.lines[2].stripped)
-        // …but different raw ANSI (the selection highlight).
+        // The label is untouched — only the row's own cells change.
+        #expect(
+            selected.lines[2].stripped.contains("Beta")
+                && unselected.lines[2].stripped.contains("Beta"))
+        // The mark lands in the gutter the row already reserves, so the label
+        // does not move: `Table` has always drawn it there and `List` left the
+        // identical cell empty. See `RowSelectionIndicator`.
+        #expect(
+            selected.lines[2].stripped.hasPrefix("│●"),
+            "the selected row drew no mark: \(selected.lines[2].stripped)")
+        #expect(
+            unselected.lines[2].stripped.hasPrefix("│ "),
+            "an unselected row must leave the gutter blank: \(unselected.lines[2].stripped)")
+        #expect(
+            selected.lines[2].strippedLength == unselected.lines[2].strippedLength,
+            "the mark took a cell from the content")
+        // …and the highlight is still there behind it.
         #expect(
             selected.lines[2] != unselected.lines[2],
             "selected row should differ from the unselected render"

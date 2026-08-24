@@ -2366,6 +2366,21 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             background = row.backgroundOverride
         }
 
+        // The mark for the one-cell gutter every row already reserves — the
+        // same answer the `Table` puts in its own, from the same place, because
+        // an empty gutter beside a filled one was the whole of the
+        // inconsistency. On the FIRST line only, as the badge is: a tall row is
+        // one entry in the list, and one entry earns one mark.
+        let indicator =
+            row.isSelectable
+            ? RowSelectionIndicator.forRow(
+                isFocused: state.isFocused, isSelected: state.isSelected,
+                context: context, palette: palette)
+            : RowSelectionIndicator(glyph: " ", color: palette.foregroundTertiary)
+        let gutter =
+            indicator.isBlank
+            ? " " : ANSIRenderer.colorize(indicator.glyph, foreground: indicator.color)
+
         // Check for badge on the row (only for content rows, on first line only)
         let badge = row.badge
         let shouldRenderBadge = badge != nil && !badge!.isHidden && row.isSelectable
@@ -2381,13 +2396,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         badge: badge!,
                         rowWidth: rowWidth,
                         backgroundColor: backgroundColor,
-                        palette: palette
+                        palette: palette,
+                        gutter: gutter
                     )
                 } else {
                     return renderPlainLine(
                         line: line,
                         rowWidth: rowWidth,
-                        backgroundColor: backgroundColor
+                        backgroundColor: backgroundColor,
+                        gutter: lineIndex == 0 ? gutter : " "
                     )
                 }
             }
@@ -2577,7 +2594,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         badge: BadgeValue,
         rowWidth: Int,
         backgroundColor: Color?,
-        palette: any Palette
+        palette: any Palette,
+        gutter: String
     ) -> String {
         let badgeText = badge.displayText
         let styledBadge = ANSIRenderer.colorize(badgeText, foreground: palette.foregroundTertiary)
@@ -2595,7 +2613,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let usedWidth = 1 + fittedLine.strippedLength + badgeWidth + 1
         let fillPadding = max(1, rowWidth - usedWidth)
         let paddedLine =
-            " " + fittedLine + String(repeating: " ", count: fillPadding) + styledBadge + " "
+            gutter + fittedLine + String(repeating: " ", count: fillPadding) + styledBadge + " "
 
         return terminatedBackground(paddedLine, backgroundColor)
     }
@@ -2605,12 +2623,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private func renderPlainLine(
         line: String,
         rowWidth: Int,
-        backgroundColor: Color?
+        backgroundColor: Color?,
+        gutter: String
     ) -> String {
         let lineLength = line.strippedLength
         let usedWidth = 1 + lineLength
         let rightPadding = max(1, rowWidth - usedWidth)
-        let paddedLine = " " + line + String(repeating: " ", count: rightPadding)
+        let paddedLine = gutter + line + String(repeating: " ", count: rightPadding)
 
         return terminatedBackground(paddedLine, backgroundColor)
     }
