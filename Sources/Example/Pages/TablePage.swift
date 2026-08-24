@@ -291,6 +291,17 @@ struct TablePage: View {
                 .frame(maxWidth: .infinity)
             }
 
+            // Directly under the two tables it reports on — the file browser
+            // above and the multi-selection table beside it. It used to sit at
+            // the foot of the page, half a dozen demos away from either, where
+            // there was no way to tell what it was reporting.
+            DemoSection("page.table.currentSelections") {
+                VStack(alignment: .leading, spacing: 1) {
+                    ValueDisplayRow("page.table.single", singleSelection ?? L("page.table.none"))
+                    ValueDisplayRow("page.table.multi", multiSelection.isEmpty ? L("page.table.none") : multiSelection.sorted().joined(separator: ", "))
+                }
+            }
+
             Text("page.table.ratioCaption")
                 .foregroundStyle(.palette.foregroundSecondary)
             Table(FileEntry.sampleFiles, selection: $ratioSelection) {
@@ -374,13 +385,6 @@ struct TablePage: View {
                     .frame(height: 8)
                     .rowReorderFeedback(
                         ReorderFeedbackChoice(rawValue: reorderFeedback)?.feedback ?? .live)
-                }
-            }
-
-            DemoSection("page.table.currentSelections") {
-                VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow("page.table.single", singleSelection ?? L("page.table.none"))
-                    ValueDisplayRow("page.table.multi", multiSelection.isEmpty ? L("page.table.none") : multiSelection.sorted().joined(separator: ", "))
                 }
             }
 
