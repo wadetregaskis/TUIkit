@@ -175,6 +175,85 @@ struct ColorPickerPanelRenderTests {
 }
 
 @MainActor
+@Suite("ColorPickerPanel — the preview follows the colour", .serialized)
+struct ColorPickerPanelPreviewTests {
+
+    /// A render context on a cache the test owns, so the memo under inspection
+    /// is not the shared one every other suite is also filling.
+    private func makeContext(cache: RenderCache) -> RenderContext {
+        let tui = TUIContext()
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tui)
+        environment.renderCache = cache
+        return RenderContext(
+            availableWidth: 90, availableHeight: 30, environment: environment,
+            identity: ViewIdentity(path: "Root"))
+    }
+
+    /// The preview block's rows — the ten-cell run of █ — as rendered.
+    private func previewRows(_ buffer: FrameBuffer) -> [String] {
+        buffer.lines.filter { $0.contains(String(repeating: "█", count: 10)) }
+    }
+
+    /// The panel edits its binding LIVE, which means the preview has to follow
+    /// it within the frame the slider moved — not at the next tab switch.
+    ///
+    /// It did not. The block was `ForEach(0..<5, id: \.self)` with the colour
+    /// read from outside the closure, so `ForEach`'s value memo — keyed on the
+    /// element, which is the row NUMBER — served the buffer it built the first
+    /// time. Switching tabs rebuilt the subtree and appeared to fix it, which
+    /// is what made it look like a tab bug rather than a memo one.
+    ///
+    /// Two renders through ONE cache, because a fresh cache cannot go stale and
+    /// the stale answer is the whole question.
+    @Test("The preview block repaints when the bound colour changes")
+    func previewFollowsTheBinding() throws {
+        let cache = RenderCache()
+        let context = makeContext(cache: cache)
+        var colour = Color.rgb(200, 0, 0)
+        var presented = true
+        let panel = ColorPickerPanel(
+            "Accent",
+            selection: Binding(get: { colour }, set: { colour = $0 }),
+            isPresented: Binding(get: { presented }, set: { presented = $0 }))
+
+        cache.beginRenderPass()
+        let before = previewRows(renderToBuffer(panel, context: context))
+        #expect(before.count == 5, "the preview block is 5 rows; found \(before.count)")
+        #expect(before.allSatisfy { $0.contains("48;2;200;0;0") }, "the block did not open red")
+
+        colour = .rgb(0, 0, 200)
+        cache.beginRenderPass()
+        let after = previewRows(renderToBuffer(panel, context: context))
+        #expect(
+            after.allSatisfy { $0.contains("48;2;0;0;200") },
+            "the preview is still showing the colour the dialog opened with")
+    }
+
+    /// …and the memo is still doing its job, which is why the fix is "the row
+    /// carries its colour" rather than "the row is not memoized". A frame that
+    /// changes nothing must still be served from the cache.
+    @Test("An unchanged frame is still served from the cache")
+    func unchangedFramesStillHit() {
+        let cache = RenderCache()
+        let context = makeContext(cache: cache)
+        var colour = Color.rgb(200, 0, 0)
+        var presented = true
+        let panel = ColorPickerPanel(
+            "Accent",
+            selection: Binding(get: { colour }, set: { colour = $0 }),
+            isPresented: Binding(get: { presented }, set: { presented = $0 }))
+
+        cache.beginRenderPass()
+        _ = renderToBuffer(panel, context: context)
+        let afterFirst = cache.stats.hits
+        cache.beginRenderPass()
+        _ = renderToBuffer(panel, context: context)
+        #expect(cache.stats.hits > afterFirst, "the second identical frame rebuilt everything")
+    }
+}
+
+@MainActor
 @Suite("ColorPickerPanel — semantic tab")
 struct ColorPickerPanelSemanticTests {
 

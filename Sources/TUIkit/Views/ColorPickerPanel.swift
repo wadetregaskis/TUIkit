@@ -261,16 +261,20 @@ struct _ColorPickerBody: View {
         let resolved = selection.wrappedValue.resolve(with: palette)
         let components = resolved.rgbComponents
         return HStack(alignment: .center, spacing: 2) {
-            // A large solid block of the current colour (10 wide × 5 tall). Both
-            // the glyph and the background are the colour: the █ glyphs keep it
-            // visible in terminals that don't paint a background behind spaces,
-            // and the matching background fills any hairline gaps a font leaves
-            // between the block glyphs — so it's solid either way.
+            // A large solid block of the current colour (10 wide × 5 tall).
             VStack(spacing: 0) {
-                ForEach(0..<5, id: \.self) { _ in
+                // Each row IS its colour, not an index into one. `ForEach`'s
+                // value memo keys on the element, so `ForEach(0..<5)` with the
+                // colour read from OUTSIDE the closure serves the buffer it
+                // built the first time, whatever the sliders have done since —
+                // the documented hole, and the same shape as
+                // `SpinnersPage.catalogueColumns`. The preview stayed on the
+                // colour the dialog opened with until a tab switch rebuilt the
+                // subtree, which is exactly what "live editing" must not do.
+                ForEach(Self.previewRows(resolved)) { row in
                     Text(String(repeating: "█", count: 10))
-                        .foregroundStyle(resolved)
-                        .background(resolved)
+                        .foregroundStyle(row.color)
+                        .background(row.color)
                 }
             }
             VStack(alignment: .leading, spacing: 0) {
@@ -287,6 +291,29 @@ struct _ColorPickerBody: View {
                     .foregroundStyle(.palette.foregroundTertiary)
             }
         }
+    }
+
+    /// One line of the preview block: the colour it paints, and which line it
+    /// is (so five of them are five rows rather than one).
+    private struct PreviewRow: Identifiable, Equatable {
+        let line: Int
+        let color: Color
+
+        /// The row is what its id says it is — which is what lets the value
+        /// memo tell a changed row from an unchanged one.
+        var id: String { "\(line)|\(color)" }
+
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    }
+
+    /// The preview block's rows: ten cells wide, five tall, all one colour.
+    ///
+    /// Both the glyph and the background are the colour: the █ keeps it visible
+    /// in terminals that do not paint a background behind spaces, and the
+    /// matching background fills any hairline gaps a font leaves between the
+    /// block glyphs — so it is solid either way.
+    private static func previewRows(_ color: Color) -> [PreviewRow] {
+        (0..<5).map { PreviewRow(line: $0, color: color) }
     }
 
     // MARK: Semantic tab
