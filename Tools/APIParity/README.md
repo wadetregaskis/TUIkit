@@ -37,9 +37,12 @@ naive diff:
    reappearing as `ButtonBorderShape.fill`, and so on across ~800 types. On the
    SDK this was written against that was **79,162 of SwiftUI's 83,254 entries**.
    They are one declaration each and are dropped.
-3. **Deprecated API has to go, from both sides.** SwiftUI deprecated
-   `foregroundColor` in favour of `foregroundStyle`; TUIkit still has it. An
-   unfiltered diff reports it as missing from *both*.
+3. **Deprecated API has to go, from both sides.** Otherwise TUIkit is charged
+   with gaps for surface SwiftUI is itself retiring, and a symbol either side
+   still has is reported as missing from *both*. `foregroundColor` was the
+   example this note was written around — SwiftUI deprecated it in favour of
+   `foregroundStyle` — and it no longer illustrates it, because TUIkit has since
+   dropped it for `foregroundStyle` too. The rule outlived the example.
 4. **A symbol graph is only reproducible against its toolchain.** The report and
    the baseline are stamped with the compiler version for that reason.
 

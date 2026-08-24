@@ -16,8 +16,8 @@ Everything the comparison rests on is derived, never asserted:
     conforming type — 79,162 of SwiftUI's 83,254 entries on the SDK this was
     written against. Those are one declaration each and are dropped.
   * Deprecated and unavailable symbols are dropped from both sides. Keeping
-    them makes live API look missing: SwiftUI deprecated `foregroundColor`,
-    which TUIkit has, so an unfiltered diff reports it as absent from BOTH.
+    them charges TUIkit with gaps for surface SwiftUI is itself retiring, and
+    reports anything either side still has as absent from BOTH.
 
 What is left is a real difference, and every real difference is either
 explained by `parity-map.json` or reported. The map is the curated half — a
