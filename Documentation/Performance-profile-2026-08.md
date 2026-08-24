@@ -332,8 +332,11 @@ debugger attach is denied. Traces are git-ignored and must stay that way —
 ## 9. Follow-up: the first two producers converted (2026-08-11)
 
 `AnimatedCellRun` (§6, §7) is now shipped *and* delivering on the pages whose
-only animating control is a button. Re-measured with `pagecost.py` against the
-same binary pair:
+only animating control is a button. Re-measured against the same binary pair
+with a one-off driver — idle CPU per page, one page per run — that was never
+committed; `Tools/Profiling/idle_cpu.py` is the committed probe that measures
+the same thing (CPU and bytes over a no-input window), and takes the keys to
+reach a page as its last argument:
 
 | page | idle% before | idle% after |
 |---|---|---|
@@ -391,7 +394,11 @@ now asserts that resting controls consult no clock, with a complement test that
 focused ones still animate — so the class cannot come back silently.
 
 Everything above ~8% that is not a legitimate animation is now a known
-producer. Identified with `rawidle.py`, which shows what is actually written:
+producer. Identified by reading the RAW bytes written during an idle window —
+which names what actually moves, rather than what a profile says is hot. That
+was a one-off script at the time; `Tools/Smoke/raw_probe.py` (2026-08-24) does
+it in committed form, and a `CSI row;col H` scan of its capture gives the same
+per-row answer:
 
 - **Theme** — the focused radio button's `●`, pulsing at 12 writes/s
   (`RadioButton.swift:515`). A straight conversion.
@@ -423,8 +430,8 @@ grids and the menu renderers.
 
 ## 10. The radio bullet converted (2026-08-11)
 
-Same binary pair, `idlepage.py`, 150×50, the Theme page idle with its radio
-group focused:
+Same binary pair, the same one-off per-page driver as §9, 150×50, the Theme
+page idle with its radio group focused:
 
 | | idle CPU | writes/s | bytes/s |
 |---|---|---|---|
@@ -475,7 +482,8 @@ It bought nothing measurable:
 | before | 11.5% | 2.2 |
 | after | 12.4% | 2.2 |
 
-**So the chip was never that page's cost.** §9 named it from `rawidle.py` —
+**So the chip was never that page's cost.** §9 named it from the raw-byte
+read —
 what *changes on screen* when the page is idle — and that is a different
 question from what *keeps the clock running*. Only one reader anywhere in the
 frame is needed to force a full render for everyone; the chip was simply the
@@ -497,7 +505,8 @@ What the numbers say now:
   live app shell — header, status bar, navigation bar — to reproduce, and that
   is where to look next.
 
-The lesson for the remaining conversions: **`rawidle.py` finds what moves, not
+The lesson for the remaining conversions: **reading the raw bytes finds what
+moves, not
 what costs.** Before converting a producer to quiet a page, confirm the page's
 clock is actually being held open by *that* producer — a `VolatileReadTracker`
 render of the page is the cheap way to ask.

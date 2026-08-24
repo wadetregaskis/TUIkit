@@ -942,9 +942,16 @@ share one implementation.
 
 Tier 4 is the only per-view-type knowledge anywhere. It's irreducible (only
 `Menu` knows which row is selected) and it's a *consolidation*, not an
-addition — `_MenuCore` already builds `lineItemIndex` mapping content lines
-back to items for click routing (`Menu.swift:303-321`). One function serves
-both, so click routing and reveal cannot disagree.
+addition — the menu renderer already maps content lines back to items for
+click routing, as a `HitTestRegion` per row
+(`DropdownMenuRenderer.swift`). One function serves both, so click routing and
+reveal cannot disagree.
+
+(Written when that mapping was a `lineItemIndex` array built by a single
+`_MenuCore`. The menus have since been split — `_InlineMenuCore`,
+`_MenuPopupCore`, `_PickerMenuCore` — and the mapping is now the hit regions
+the renderer emits. The argument is unchanged: the knowledge exists already and
+this consolidates it rather than adding it.)
 
 Identity-transparent wrappers (`AnyView`, `EquatableView`, `_MemoizedRow`)
 are `Renderable` and must **forward** placements — `_MemoizedRow` wraps

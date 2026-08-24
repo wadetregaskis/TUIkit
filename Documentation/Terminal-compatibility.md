@@ -998,7 +998,7 @@ to `terminalWidth` and reported 2, contradicting its own probe data. Model
 == claim ⇒ no CUF ⇒ the row sheared one cell left.
 
 **Both halves measured 2026-07-14** — advance by DSR (`advance_probe.py`),
-paint by eye (`paintcard.py`, a `|<glyph>|X` row: if the closing pipe
+paint by eye (`Tools/TerminalProbes/visual_card.py`, a `|<glyph>|X` row: if the closing pipe
 survives the glyph painted 1):
 
 | Class | Example | `isEmojiPresentation` | Claim | Advance | Paint (Apple) |
