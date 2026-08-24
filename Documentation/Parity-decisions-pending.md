@@ -95,8 +95,16 @@ constant is itself a decision, but it means (b)'s `why` should say "no alpha
 channel, and the foreground case would need a glyph substitution rather than a
 colour" rather than the flat "not implementable".
 
-**Recommendation: (b)** until #511 lands, with that fuller `why`. `--stale`
-will bring it back if `ColorValue` ever grows a channel.
+**DECIDED 2026-08-24 — (b), and (a) is ruled out rather than merely
+outranked.** Mapping `.clear` to something that is not clear is not an option
+at any price: the one thing a reader reaches for `.clear` to do is hide
+something, and `.default` renders it perfectly legibly. So this entry waits on
+#511, and moves with it — if alpha becomes a field of `ColorValue`, `.clear` is
+alpha 0 and falls out for free; if alpha stays a composite-time operation on
+buffers, this is recorded as `notImplemented` with the fuller `why` above.
+
+Not "pending" in the sense of undecided, then. The decision is made; what is
+outstanding is the fact it depends on.
 
 ---
 
