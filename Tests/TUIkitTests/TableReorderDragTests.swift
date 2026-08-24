@@ -23,133 +23,25 @@ import Testing
 @MainActor
 @Suite("Table drag-to-reorder")
 struct TableReorderDragTests {
-
-    private struct Row: Identifiable, Sendable {
-        let id: String
-        var name: String { id }
-    }
-
-    /// A row-order holder plus the pieces to render it. A reference type so the
-    /// `onMove` closure — which fires during a later mouse dispatch, not during
-    /// the render that installed it — writes straight back into `rows`.
-    @MainActor
-    private final class Fixture {
-        var rows: [String]
-        let reorderable: Bool
-        /// Rows selected before the gesture. Non-empty switches the table to
-        /// multi-selection, which is what makes a drag pick up a block.
-        var selection: Set<String> = []
-        private(set) var moves = 0
-        let tui = TUIContext()
-        var env = EnvironmentValues()
-
-        init(
-            rows: [String] = ["a", "b", "c", "d", "e"], reorderable: Bool = true,
-            feedback: RowReorderFeedback = .live,
-            scrollbar: ScrollIndicatorVisibility = .automatic
-        ) {
-            self.rows = rows
-            self.reorderable = reorderable
-            env.focusManager = FocusManager()
-            // The "▲/▼ N more" style, spelled out. Since #555 the visibility
-            // and the style are separate questions, and the cases below read
-            // row geometry off the screen: which line the indicator took, where
-            // a slot sits. The `scrollbar:` argument answers the first question
-            // — the cases that want a bar pass `.visible` AND ask for the bar
-            // style, which is what the two together mean.
-            env.scrollIndicatorStyle = scrollbar == .visible ? .scrollbar : .text
-            env.rowReorderFeedback = feedback
-            // Vertical only: a `Table` has no horizontal bar to configure.
-            env.verticalScrollIndicatorVisibility = scrollbar
-            env.applyRuntimeServices(from: tui)
-            tui.mouseEventDispatcher.setActiveSupport(.full)
-        }
-
-        var dispatcher: MouseEventDispatcher { tui.mouseEventDispatcher }
-
-        @discardableResult
-        func render() -> FrameBuffer {
-            dispatcher.beginRenderPass()
-            let move: (IndexSet, Int) -> Void = {
-                self.moves += 1
-                self.rows.move(fromOffsets: $0, toOffset: $1)
-            }
-            let table: AnyView
-            if selection.isEmpty {
-                let base = Table(rows.map(Row.init), selection: .constant(String?.none)) {
-                    TableColumn<Row>("Name", value: \.name)
-                }
-                table = AnyView(reorderable ? AnyView(base.onMove(move)) : AnyView(base))
-            } else {
-                let base = Table(
-                    rows.map(Row.init),
-                    selection: Binding(get: { self.selection }, set: { self.selection = $0 })
-                ) {
-                    TableColumn<Row>("Name", value: \.name)
-                }
-                table = AnyView(reorderable ? AnyView(base.onMove(move)) : AnyView(base))
-            }
-            let view = table.frame(width: 20, height: 9)
-            var context = RenderContext(
-                availableWidth: 20, availableHeight: 11, environment: env, tuiContext: tui)
-            context.hasExplicitHeight = true
-            let buffer = renderToBuffer(view, context: context)
-            dispatcher.setRegions(buffer.hitTestRegions)
-            return buffer
-        }
-
-        /// The table's own handler — the press focuses it, which is what makes
-        /// it reachable from here.
-        var handler: ItemListHandler<String>? {
-            env.focusManager?.currentFocused as? ItemListHandler<String>
-        }
-
-        /// The screen line of the row whose text IS `label`, matched on its
-        /// letters alone.
-        ///
-        /// Not "contains": a Table draws a column HEADER ("Name"), and matching
-        /// by containment pressed that instead of row "a". And not the whole
-        /// stripped line either: the scrollbar path appends a bar cell (▲/█/▼) to
-        /// every row, which is why the same test passed without a bar and missed
-        /// every row with one.
-        func rowY(_ buffer: FrameBuffer, _ label: String) -> Int {
-            buffer.lines.firstIndex { $0.stripped.filter(\.isLetter) == label } ?? -1
-        }
-
-        /// Press on `source`'s line, drag to `target`'s, release there — with a
-        /// render between each step, as the run loop has.
-        func drag(from source: String, to target: String) {
-            let buffer = render()
-            let ySource = rowY(buffer, source)
-            let yTarget = rowY(buffer, target)
-            dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: ySource))
-            render()
-            dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: yTarget))
-            render()
-            dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: yTarget))
-            render()
-        }
-    }
-
     // MARK: - The gesture
 
     @Test("Dragging a row downward drops it after the target")
     func dragDown() {
-        let fixture = Fixture()
+        let fixture = TableReorderFixture()
         fixture.drag(from: "a", to: "c")
         #expect(fixture.rows == ["b", "c", "a", "d", "e"])
     }
 
     @Test("Dragging a row upward drops it before the target")
     func dragUp() {
-        let fixture = Fixture()
+        let fixture = TableReorderFixture()
         fixture.drag(from: "d", to: "b")
         #expect(fixture.rows == ["a", "d", "b", "c", "e"])
     }
 
     @Test("A table with no onMove does not reorder", arguments: [true, false])
     func withoutOnMoveNothingMoves(scrollbar: Bool) {
-        let fixture = Fixture(
+        let fixture = TableReorderFixture(
             reorderable: false, scrollbar: scrollbar ? .visible : .hidden)
         fixture.drag(from: "a", to: "d")
         #expect(fixture.rows == ["a", "b", "c", "d", "e"], "the rows are exactly as they were")
@@ -157,7 +49,7 @@ struct TableReorderDragTests {
 
     @Test("A press released without moving is a click, not a reorder")
     func motionlessPressIsAClick() {
-        let fixture = Fixture()
+        let fixture = TableReorderFixture()
         let buffer = fixture.render()
         let y = fixture.rowY(buffer, "b")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: y))
@@ -174,7 +66,7 @@ struct TableReorderDragTests {
     /// the rows, so the click-to-line mapping differs.
     @Test("Reordering works on the scrollbar path too")
     func dragWithScrollbar() {
-        let fixture = Fixture(scrollbar: .visible)
+        let fixture = TableReorderFixture(scrollbar: .visible)
         fixture.drag(from: "a", to: "c")
         #expect(fixture.rows == ["b", "c", "a", "d", "e"])
     }
@@ -185,7 +77,7 @@ struct TableReorderDragTests {
     /// each slot, so one drag fires `onMove` more than once.
     @Test("Live feedback moves the rows as the drag goes")
     func liveMovesAsItGoes() {
-        let fixture = Fixture(feedback: .live)
+        let fixture = TableReorderFixture(feedback: .live)
         fixture.drag(from: "a", to: "c")
         #expect(fixture.rows == ["b", "c", "a", "d", "e"])
         #expect(fixture.moves >= 1, "the list itself was the preview")
@@ -197,7 +89,7 @@ struct TableReorderDragTests {
         "Dimmed and cursor feedback move the row exactly once, on the drop",
         arguments: [RowReorderFeedback.dimmed, .cursor])
     func slotModesMoveOnceOnDrop(feedback: RowReorderFeedback) {
-        let fixture = Fixture(feedback: feedback)
+        let fixture = TableReorderFixture(feedback: feedback)
         fixture.drag(from: "a", to: "c")
         #expect(fixture.rows == ["b", "c", "a", "d", "e"])
         #expect(fixture.moves == 1, "one move, at the drop — the drag showed a slot instead")
@@ -208,7 +100,7 @@ struct TableReorderDragTests {
     /// faintly, under `.dimmed`) — never twice.
     @Test("Mid-drag the row is out of the table, and the slot is where it lands")
     func midDragShowsTheSlot() {
-        let fixture = Fixture(feedback: .dimmed)
+        let fixture = TableReorderFixture(feedback: .dimmed)
         let buffer = fixture.render()
         let ySource = fixture.rowY(buffer, "a")
         let yTarget = fixture.rowY(buffer, "c")
@@ -239,7 +131,7 @@ struct TableReorderDragTests {
     /// been advertising rather than reading as "off the rows".
     @Test("Releasing on the slot commits the move it was showing")
     func releaseOnTheSlotCommits() {
-        let fixture = Fixture(feedback: .cursor)
+        let fixture = TableReorderFixture(feedback: .cursor)
         let buffer = fixture.render()
         let ySource = fixture.rowY(buffer, "a")
         let yTarget = fixture.rowY(buffer, "d")
@@ -261,7 +153,7 @@ struct TableReorderDragTests {
     /// it is the only way to change your mind — and it must leave the order alone.
     @Test("Dragging back to where it started changes nothing")
     func dragBackToTheOrigin() {
-        let fixture = Fixture(feedback: .dimmed)
+        let fixture = TableReorderFixture(feedback: .dimmed)
         let buffer = fixture.render()
         let yOrigin = fixture.rowY(buffer, "b")
         let yAway = fixture.rowY(buffer, "d")
@@ -285,7 +177,7 @@ struct TableReorderDragTests {
     /// that; asserting that no reset is left un-reopened can.
     @Test("The dimmed slot stays faint past the row's own resets")
     func dimmedSlotIsFaintThroughout() {
-        let fixture = Fixture(feedback: .dimmed)
+        let fixture = TableReorderFixture(feedback: .dimmed)
         let buffer = fixture.render()
         let ySource = fixture.rowY(buffer, "b")
         let yTarget = fixture.rowY(buffer, "d")
@@ -319,7 +211,7 @@ struct TableReorderDragTests {
     /// styled line, the overhang painted over the scrollbar and the border.
     @Test("The floating row lands on the row's own left edge")
     func cursorPreviewAnchorsToTheRow() {
-        let fixture = Fixture(feedback: .cursor)
+        let fixture = TableReorderFixture(feedback: .cursor)
         let buffer = fixture.render()
         let y = fixture.rowY(buffer, "b")
         guard let line = buffer.lines.first(where: { $0.stripped.contains("b") }),
@@ -365,7 +257,7 @@ struct TableReorderDragTests {
     /// the preview trim (rightly) keeps it.
     @Test("The floating row is the row itself, not its line in the grid")
     func cursorPreviewIsUnstyled() {
-        let fixture = Fixture(feedback: .cursor, scrollbar: .visible)
+        let fixture = TableReorderFixture(feedback: .cursor, scrollbar: .visible)
         var buffer = fixture.render()
         let y = fixture.rowY(buffer, "b")
         // Select it first: the row you drag is normally the row you are on.
@@ -437,8 +329,8 @@ struct TableReorderDragTests {
         @discardableResult
         func render() -> FrameBuffer {
             dispatcher.beginRenderPass()
-            let view = Table(rows.map(Row.init), selection: .constant(String?.none)) {
-                TableColumn<Row>("Name", value: \.name).lineLimit(2)
+            let view = Table(rows.map(TableReorderRow.init), selection: .constant(String?.none)) {
+                TableColumn<TableReorderRow>("Name", value: \.name).lineLimit(2)
             }
             .onMove { self.rows.move(fromOffsets: $0, toOffset: $1) }
             .frame(width: 14, height: 12)
@@ -462,7 +354,7 @@ struct TableReorderDragTests {
     /// whole block, so it is as tall as the rows it holds.
     @Test("A dimmed multi-row drag shows every row it is carrying")
     func dimmedMultiRowShowsThemAll() {
-        let fixture = Fixture(feedback: .dimmed)
+        let fixture = TableReorderFixture(feedback: .dimmed)
         fixture.selection = ["a", "b"]
         let buffer = fixture.render()
         let height = buffer.height
@@ -483,7 +375,7 @@ struct TableReorderDragTests {
     /// the block: one line per row, not just the row that was grabbed.
     @Test("A cursor multi-row drag floats every row it is carrying")
     func cursorMultiRowFloatsThemAll() {
-        let fixture = Fixture(feedback: .cursor)
+        let fixture = TableReorderFixture(feedback: .cursor)
         fixture.selection = ["a", "b"]
         let buffer = fixture.render()
         let session = fixture.tui.dragAndDropSession
@@ -507,7 +399,7 @@ struct TableReorderDragTests {
     /// settling a row below the cursor, exactly as reported.
     @Test("A drag still tracks the cursor after the viewport leaves the top")
     func dragTracksAfterScrollingAwayFromTheTop() {
-        let fixture = Fixture(rows: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"])
+        let fixture = TableReorderFixture(rows: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"])
         let buffer = fixture.render()
         fixture.dispatcher.dispatch(
             MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "a")))
@@ -536,7 +428,7 @@ struct TableReorderDragTests {
     /// Table too, and nothing is drawn faint (that is the keyboard's cue).
     @Test("A live multi-row mouse drag shuffles the block, undimmed")
     func liveMultiRowShufflesAsItGoes() {
-        let fixture = Fixture(feedback: .live)
+        let fixture = TableReorderFixture(feedback: .live)
         fixture.selection = ["a", "b"]
         let buffer = fixture.render()
         fixture.dispatcher.dispatch(
@@ -559,7 +451,7 @@ struct TableReorderDragTests {
     /// apart.
     @Test("A cursor drag floats a condensed row, not a grid-width one")
     func cursorFloatIsCondensed() {
-        let fixture = Fixture(rows: ["a", "b", "c"], feedback: .cursor)
+        let fixture = TableReorderFixture(rows: ["a", "b", "c"], feedback: .cursor)
         let buffer = fixture.render()
         let session = fixture.tui.dragAndDropSession
         fixture.dispatcher.dispatch(
@@ -582,7 +474,7 @@ struct TableReorderDragTests {
     /// contribute no hit-test region of its own at all once its rows were gone.
     @Test("An empty table still claims its frame")
     func emptyTableStaysInteractive() throws {
-        let fixture = Fixture(rows: [])
+        let fixture = TableReorderFixture(rows: [])
         let buffer = fixture.render()
         let focused = buffer.hitTestRegions.filter { $0.focusID != nil }
         #expect(!focused.isEmpty, "the container region carries the table's focusID")
@@ -620,9 +512,9 @@ struct TableReorderDragTests {
             tui.mouseEventDispatcher.beginRenderPass()
             tui.dragAndDropSession.beginFrame()
             let view = Table(
-                ["a", "b", "c", "d"].map(Row.init), selection: .constant(String?.none)
+                ["a", "b", "c", "d"].map(TableReorderRow.init), selection: .constant(String?.none)
             ) {
-                TableColumn<Row>("Name", value: \.name)
+                TableColumn<TableReorderRow>("Name", value: \.name)
             }
             .dropDestination(for: String.self) { index, values in log.got.append((index, values)) }
             .frame(width: 20, height: 7)
@@ -688,8 +580,8 @@ struct TableReorderDragTests {
         func render(_ rows: [String]) -> FrameBuffer {
             tui.mouseEventDispatcher.beginRenderPass()
             tui.dragAndDropSession.beginFrame()
-            let view = Table(rows.map(Row.init), selection: .constant(String?.none)) {
-                TableColumn<Row>("Name", value: \.name)
+            let view = Table(rows.map(TableReorderRow.init), selection: .constant(String?.none)) {
+                TableColumn<TableReorderRow>("Name", value: \.name)
             }
             .dropDestination(for: String.self) { index, values in log.got.append((index, values)) }
             .frame(width: 20, height: 9)
@@ -746,8 +638,8 @@ struct TableReorderDragTests {
         func render() -> FrameBuffer {
             tui.mouseEventDispatcher.beginRenderPass()
             tui.dragAndDropSession.beginFrame()
-            let view = Table(["a", "b", "c"].map(Row.init), selection: .constant(String?.none)) {
-                TableColumn<Row>("Name", value: \.name)
+            let view = Table(["a", "b", "c"].map(TableReorderRow.init), selection: .constant(String?.none)) {
+                TableColumn<TableReorderRow>("Name", value: \.name)
             }
             .dropDestination(for: String.self) { index, values in log.got.append((index, values)) }
             .scrollDisabled(true)
@@ -775,7 +667,7 @@ struct TableReorderDragTests {
 
     @Test("A Table block in hand also shows which row the cursor is on")
     func multiRowKeyboardMoveKeepsTheCursorRow() {
-        let fixture = Fixture(feedback: .dimmed)
+        let fixture = TableReorderFixture(feedback: .dimmed)
         fixture.selection = ["a", "b", "c"]
         _ = fixture.render()
         _ = fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .down))
@@ -797,7 +689,7 @@ struct TableReorderDragTests {
 
     @Test("The Table held slot's emphasis starts where a focused row's does")
     func heldSlotEmphasisReachesTheFirstCell() {
-        let fixture = Fixture(feedback: .dimmed)
+        let fixture = TableReorderFixture(feedback: .dimmed)
         _ = fixture.render()
         _ = fixture.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .down))
         _ = fixture.env.focusManager?.dispatchKeyEvent(
@@ -817,7 +709,7 @@ struct TableReorderDragTests {
         // outside its own highlight, the slot may leave too. Comparing against
         // it rather than against "border only" is what keeps this honest — a
         // Table's container adds a padding column that belongs to no row.
-        let plain = Fixture()
+        let plain = TableReorderFixture()
         _ = plain.render()
         _ = plain.env.focusManager?.dispatchKeyEvent(KeyEvent(key: .down))
         let focused = plain.render()
