@@ -256,6 +256,7 @@ struct _ImageCore: View, Renderable, Layoutable {
                 contentMode: contentMode,
                 aspectRatioOverride: aspectRatioOverride,
                 cellAspect: context.environment.imageCellAspect,
+                palette: context.environment.palette,
                 stateStorage: stateStorage,
                 identity: identity
             )
@@ -412,6 +413,7 @@ extension _ImageCore {
         contentMode: ContentMode,
         aspectRatioOverride: Double?,
         cellAspect: Double,
+        palette: any Palette,
         stateStorage: StateStorage,
         identity: ViewIdentity
     ) -> FrameBuffer {
@@ -449,7 +451,7 @@ extension _ImageCore {
             aspectRatioOverride: aspectRatioOverride,
             cellAspect: cellAspect
         ) {
-            return FrameBuffer(lines: cache.lines)
+            return FrameBuffer(lines: inked(cache.lines, mode: colorMode, palette: palette))
         }
 
         let converter = ASCIIConverter(
@@ -481,7 +483,30 @@ extension _ImageCore {
             lines: lines
         )
 
-        return FrameBuffer(lines: lines)
+        return FrameBuffer(lines: inked(lines, mode: colorMode, palette: palette))
+    }
+
+    /// Mono output, given the theme's ink and paper.
+    ///
+    /// ``ASCIIColorMode/mono`` emits no colour at all — that is the point of it,
+    /// and what makes it work on a terminal that has none. Inside an app that
+    /// paints its own background, though, "no colour" is not black and white:
+    /// it is the TERMINAL's defaults, over a page the app has already painted.
+    /// Under a dark theme with a dark terminal default that is ink on ink, and
+    /// the image simply does not appear.
+    ///
+    /// Applied here rather than in the converter, and AFTER the render cache,
+    /// because the cache is not keyed on the palette: baking the colours into
+    /// the cached lines would serve the old theme's ink forever. Same reason
+    /// ``ASCIIColorMode/resolved(with:)`` is applied before it.
+    private func inked(
+        _ lines: [String], mode: ASCIIColorMode, palette: any Palette
+    ) -> [String] {
+        guard mode == .mono else { return lines }
+        return lines.map {
+            ANSIRenderer.colorize(
+                $0, foreground: palette.foreground, background: palette.background)
+        }
     }
 }
 
