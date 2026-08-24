@@ -69,13 +69,33 @@ public struct AnyEquatableBox: Equatable {
 /// **Known hole — captured data.** The memo assumes a row is a pure function
 /// of its element. A row whose content *captures* mutable data from outside
 /// its own subtree (e.g. `ForEach(0..<2) { _ in row drawn from some outer
-/// state }`) serves a stale buffer when that data changes: the element key
-/// is unchanged and the changed state's identity is not a descendant of the
-/// row, so `clearAffected` never reaches it. Undetectable here (closures are
-/// opaque). Framework views must not build display-only rows from captured
-/// mutable data under an `Equatable`-element `ForEach` — iterate the data
-/// itself (so it IS the element), or drop the `ForEach`. The gradient
-/// editor's frozen preview strip was this exact shape.
+/// state }`) can serve a stale buffer when that data changes: the element key
+/// is unchanged, so nothing but `clearAffected` can save it.
+///
+/// **Which writes save it, and which do not** — measured 2026-08-24, because
+/// the boundary decides whether a given `ForEach` is a bug or merely ugly.
+/// `clearAffected(by:)` drops the writer's identity, its ANCESTORS and its
+/// DESCENDANTS. So:
+///
+/// - **A write from an ancestor reaches the row.** `@State` in an enclosing
+///   view — the overwhelmingly common case — clears the row and it rebuilds.
+///   This is why the pattern survives in so much code without being noticed.
+/// - **A write from a COUSIN does not.** State owned by a sibling subtree is
+///   neither, so the clear matches nothing and the row keeps its buffer for as
+///   long as its element is unchanged.
+///
+/// The second is not hypothetical. `ColorPickerPanel`'s preview block was
+/// `ForEach(0..<5)` reading a colour from outside, and the writes that moved
+/// that colour came from the panel's OWN sliders and tabs — `_TabViewCore`,
+/// `_EditableValueField`, siblings of the block. Measured on the live app:
+/// four slider drags, six `clearAffected` calls, `0 of 5` entries dropped
+/// every time, and the swatch held the colour the dialog opened with while the
+/// read-out beside it — the same value, not memoized — followed every drag.
+///
+/// Undetectable here (closures are opaque). Framework views must not build
+/// display-only rows from captured mutable data under an `Equatable`-element
+/// `ForEach` — iterate the data itself (so it IS the element), or drop the
+/// `ForEach`. The gradient editor's frozen preview strip was this exact shape.
 ///
 /// For `List` the selection highlight is applied *outside* the cached row
 /// buffer, so selection/scroll never invalidate it — only the row's own content
