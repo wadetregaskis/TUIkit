@@ -396,6 +396,9 @@ def audit_map(swiftui, tuikit, parity_map):
 
 def report(swiftui, tuikit, gaps, explained, stale, deviations, baseline, compatible=None):
     print(f"toolchain:  {toolchain_version()}")
+    recorded = baseline.get("toolchain")
+    if recorded and recorded != toolchain_version():
+        print(f"  BASELINE RECORDED AGAINST: {recorded}")
     print(f"SwiftUI:    {len(swiftui):>5} live public symbols "
           f"({'+'.join(SWIFTUI_MODULES)})")
     print(f"TUIkit:     {len(tuikit):>5} live public symbols "
@@ -555,10 +558,21 @@ def main():
             print(f"\nbaseline recorded: {len(gaps)} gaps")
             return 0
 
-        if args.check and (new or stale or new_deviations):
-            print("\nFAIL: new unexplained differences, or the map has gone stale.")
+        # `fixed` counts too. A closed gap left unrecorded is how the baseline
+        # goes quietly out of date, and an out-of-date baseline is the one thing
+        # that makes every other number here untrustworthy: `new` is measured
+        # against it. The remedy is the same one command either way.
+        if args.check and (new or fixed or stale or new_deviations):
+            print("\nFAIL: the recorded baseline no longer describes reality.")
             print("Either implement the API, add it to parity-map.json with a "
-                  "reason, or run --accept if it is a gap you are accepting.")
+                  "reason, or run --accept to record gaps you are accepting "
+                  "and gaps you have closed.")
+            recorded = baseline.get("toolchain")
+            if recorded and recorded != toolchain_version():
+                print("Note: the baseline was recorded against a DIFFERENT "
+                      "toolchain, which is enough on its own to move these "
+                      "numbers. Compare against a matching one before reading "
+                      "the differences as real.")
             return 1
         return 0
     finally:

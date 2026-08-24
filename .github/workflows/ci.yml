@@ -113,6 +113,36 @@ jobs:
       - name: Validate package manifest is consumable
         run: ./Tools/validate-package-manifest.sh
 
+  # ── SwiftUI API parity ─────────────────────────────────────────────────────
+  # One runner, one Xcode, deliberately. Both sides of the comparison come out
+  # of `swift symbolgraph-extract` against the SDK, so the answer is a property
+  # of the toolchain as much as of the code: run this on two SDKs and the two
+  # reports disagree for reasons that have nothing to do with TUIkit. The
+  # baseline records the toolchain it was taken on, and the tool says so when
+  # they differ — but pinning the lane is what stops that ever mattering.
+  parity:
+    name: "SwiftUI API parity"
+    needs: lint
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26"
+
+      - name: Toolchain version
+        run: swift --version
+
+      # Fails on a new unexplained gap, on a gap CLOSED but not recorded, on a
+      # new argument-label deviation, and on a map entry that has gone stale.
+      # The last two are the ones no human notices: a map nobody audits stops
+      # being a record of decisions and becomes a list of excuses.
+      - name: API parity against SwiftUI
+        run: python3 Tools/APIParity/api_parity.py --check
+
   # ── macOS ──────────────────────────────────────────────────────────────────
   macos:
     name: ${{ matrix.name }}
@@ -517,7 +547,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [lint, macos, linux, windows_container, windows_native, docs, consumer]
+    needs: [lint, parity, macos, linux, windows_container, windows_native, docs, consumer]
     runs-on: ubuntu-24.04
     steps:
       - name: Check required lanes
@@ -526,6 +556,7 @@ jobs:
           # never ran has proved nothing, but branch protection would read the
           # skip as success if it were watching that job directly.
           required="lint:${{ needs.lint.result }}
+          parity:${{ needs.parity.result }}
           macos:${{ needs.macos.result }}
           linux:${{ needs.linux.result }}
           docs:${{ needs.docs.result }}
