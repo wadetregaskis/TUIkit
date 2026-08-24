@@ -850,6 +850,52 @@ never touch a real session or the user's preferences.
 
 ---
 
+## What an ANSI colour actually paints
+
+**Status: mechanism documented from the terminals' own specifications; the
+per-terminal numbers are NOT yet measured here.** `Tools/TerminalProbes/palette_probe.py`
+asks a terminal directly (OSC 4 / OSC 10 / OSC 11) and writes the answer as
+JSON; run it in each host and record the results below.
+
+### The three colour spellings are not equally literal
+
+| what we emit | what the terminal does with it |
+|---|---|
+| `SGR 30–37` / `90–97` (the 16 names) | Looks up slot *n* of the **user's colour scheme**. "Red" is a name, not a colour, and the user may make it green. |
+| `SGR 38;5;n` (256-colour) | Slots 0–15 are the same sixteen, so they are remapped identically. 16–231 (the 6×6×6 cube) and 232–255 (the grey ramp) are conventionally fixed — but `OSC 4` can set any index, so "conventionally" is the strongest word available. |
+| `SGR 38;2;r;g;b` (24-bit) | The colour is stated exactly and there is nothing to look up. It can still be *adjusted* — iTerm2's minimum-contrast setting will move a foreground it judges illegible against its background, and a terminal applying a colour profile shifts everything. |
+| `SGR 39` / `49` (default fg/bg) | The user's configured default. This is what ``Color/default`` means, and it is the only spelling that is *defined* as "whatever the user chose". |
+
+### Why this is load-bearing rather than trivia
+
+`ANSIColor.rgbValues` carries xterm's conventional table — and its doc comment
+says so. Two things derive real decisions from it:
+
+- **The contrast floor.** `ensuringContrast` computes a WCAG ratio, which needs
+  luminances, which need RGB. Against a remapped scheme the ratio it computes
+  is not the ratio on screen.
+- **Quantisation.** Downsampling a truecolor value for a 256-colour terminal
+  searches for the nearest entry by RGB distance. If the first sixteen entries
+  are not where the table thinks, the "nearest" one may not look nearest.
+
+Both degrade rather than break: they are approximations against an unknown
+palette, and they are the best available, because **an app cannot know the
+user's scheme unless it asks** — which is what the probe does, and what nothing
+in the render path does today.
+
+### What follows for the framework's own colours
+
+A colour TUIkit chooses for the user — a focus highlight, a disabled label —
+should not be a fixed ANSI name, because the name's appearance is not ours to
+predict. It should be either a **palette role**, which the app's theme defines
+and which resolves to something we did choose, or ``Color/default``, which is
+explicitly the user's. Naming `Color.blue` and hoping is the one option with no
+defensible reading. (This is the reasoning that re-pointed
+``Color/primary``/``Color/secondary``/``Color/accentColor`` at palette roles;
+see `Documentation/Parity-decisions-pending.md` §1–2 for the decision.)
+
+---
+
 ## Measured advance table (divergences and key rows)
 
 DSR-measured on the ALTERNATE screen (the app's buffer). Terminal.app +

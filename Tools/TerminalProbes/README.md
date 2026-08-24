@@ -27,6 +27,13 @@ when unset), the visual/aspect probes print to the terminal.
   `Image` needs to render undistorted), via `TIOCGWINSZ` pixel fields and
   the `CSI 14t`/`18t` escape queries. Prints to stdout.
 
+`palette_probe.py` asks a different question from the rest: not how the cursor
+moves, but what colour the terminal actually paints for a name we emit. The
+sixteen ANSI colours are slots in the user's scheme, so `SGR 31` is "red" only
+by convention — and TUIkit's contrast floor and 256-colour quantiser both
+derive from a table of what those slots conventionally hold. Run it in each
+host and record the answers in the compatibility document.
+
 Extend the battery in `advance_probe.py` rather than hand-rolling one-off
 probes, and record new results (with `TERM_PROGRAM_VERSION`) in the
 compatibility document.
