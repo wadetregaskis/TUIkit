@@ -173,8 +173,37 @@ extension String {
             let claimed = c.terminalWidth
             let actual = c.terminalAppCursorAdvance
             if claimed > actual {
-                // Under-advancer — push the cursor forward to the
-                // visual end of the glyph with CUF.
+                // Under-advancer. The cursor has to reach the glyph's visual
+                // end, and the cells the glyph covers have to carry whatever
+                // background is in force — which CUF alone cannot do, because
+                // it MOVES the cursor without painting anything.
+                //
+                // So the cells are ERASED first — ECH (CSI n X) paints n cells
+                // from the cursor in the current background and does not move
+                // it — and then the glyph is drawn over them. The one the
+                // cursor never returns to keeps the paint.
+                //
+                // ECH rather than spaces-and-backtrack, which also works: ECH
+                // writes no visible CHARACTERS, so `strippedLength` still
+                // counts the cells the row occupies. Spaces would inflate every
+                // width measurement taken after compensation by the width of
+                // each emoji on the line.
+                //
+                // It takes the current background without this function having
+                // to track SGR state at all, because the escapes it is walking
+                // past have already set it.
+                //
+                // Measured on Terminal.app 455.1, alternate screen, ⚙️ 🖥️ and
+                // an SF Symbol, eight in a row on a coloured run: with CUF
+                // alone every second cell keeps the terminal's default and the
+                // row reads as a comb; with the erase first, the run is
+                // unbroken and the glyph is not clipped. Advance is 2 either
+                // way. (`Tools/TerminalProbes/background_probe.py`.)
+                //
+                // Terminal.app only. iTerm2 and Ghostty were measured on the
+                // same battery and already paint every cell a wide glyph
+                // covers, so their walks need nothing here.
+                result += "\u{1B}[\(claimed)X"
                 result.append(c)
                 result += "\u{1B}[\(claimed - actual)C"
             } else if actual > claimed && Self.hasVisibleContent(in: self, after: self.index(after: index)) {

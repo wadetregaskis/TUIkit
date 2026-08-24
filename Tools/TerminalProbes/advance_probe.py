@@ -83,6 +83,13 @@ BATTERY.update({
     "zwj_heart_fire": "\u2764\uFE0F\u200D\U0001F525",  # ❤️‍🔥
     "vs16_umbrella": "\u2602\uFE0F",           # ☂️
     "vs16_check": "\u2714\uFE0F",              # ✔️
+    # BMP Miscellaneous Symbols with VS-16 — the family a file list reaches
+    # for as icons, and the one a reported `.swiftlint.yml` row was drawn with.
+    "vs16_gear": "\u2699\uFE0F",               # ⚙️
+    "bare_gear": "\u2699",                     # ⚙
+    "vs16_scissors": "\u2702\uFE0F",           # ✂️
+    "vs16_hammer_pick": "\u2692\uFE0F",        # ⚒️
+    "vs16_warning": "\u26A0\uFE0F",            # ⚠️
     "braille": "\u28FF",
     "powerline": "\uE0B0",                      # BMP PUA powerline
 })

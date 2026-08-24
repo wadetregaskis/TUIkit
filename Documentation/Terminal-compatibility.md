@@ -869,7 +869,7 @@ and (much more so) Warp do NOT — always probe with `PROBE_ALT=1`.
 | CJK 中, `██`(2), `▐▌`(2) | 2 | 2 | 2 | 2 | 2 |
 | ⬛︎ ⬜︎ (VS-15 chrome) | 2 | 2 | 2 | **1** | 2 |
 | ⌚ ⌛ ⏩ ⏰ 👍 ✊ (emoji presentation) | 2 | 2 | 2 | 2 | 2 |
-| ❤️ ✏️ ☎️ ☂️ ✔️ 🖥️ 🛡️ (VS-16) | 2 | **1** | **1** | 2 | 2 |
+| ❤️ ✏️ ☎️ ☂️ ✔️ 🖥️ 🛡️ ⚙️ ⚠️ ✂️ ⚒️ (VS-16) | 2 | **1** | **1** | 2 | 2 |
 | 〰️ 〽️ (EAW base + VS-16) | 2 | 2 | 2 | 2 | **3** |
 | 🇺🇸 (flag pair) | 2 | 2 | 2 | 2 | 2 |
 | 🇦 (lone regional indicator) | 2 | **1** | 2 | 2 | **1** |
@@ -889,6 +889,44 @@ and (much more so) Warp do NOT — always probe with `PROBE_ALT=1`.
 tmux is a fifth advance model and is measured separately (its grid is
 client-independent, so it needs no per-client column) — see
 [the tmux cursor-advance table](#cursor-advance--where-tmux-disagrees-with-tuikit-and-how-it-is-handled).
+
+### A skipped cell is not a painted cell — Terminal.app, FIXED 2026-08-23
+
+Cursor advance is only half of an under-advancing cluster. The other half is
+what happens to the cell the cursor was pushed PAST.
+
+`CUF` moves without painting, so inside a coloured run that cell keeps whatever
+was in it — and a wide glyph is drawn across it regardless. On a highlighted row
+the emoji therefore came with a hole in it: the row's fill stopped at the
+glyph's first cell and resumed after its second, in the terminal's default
+background. Reported against a file list drawing `⚙️ .swiftlint.yml` on a
+selected row.
+
+**Measured** (`Tools/TerminalProbes/background_probe.py`, `PROBE_ALT=1`,
+2026-08-23) by drawing eight clusters in a row on a coloured run, which turns a
+one-cell hole into stripes no screenshot can be ambiguous about:
+
+| host | cell the cursor skipped | with `CUF` alone |
+|---|---|---|
+| Terminal.app 455.1 | **not painted** | a comb: every second cell the terminal's default |
+| iTerm2 3.6.11 | painted | unbroken run |
+| Ghostty 1.3.1 | painted | unbroken run |
+
+So the fix is Terminal.app's alone. `withTerminalAppCursorCompensation` now
+emits **ECH** (`CSI n X`) before the cluster: it erases n cells from the cursor
+in the current background and does not move it, so the glyph is then drawn over
+cells that already carry the fill. Measured identical advance (2), unbroken
+fill, and the glyph is NOT clipped by the erase.
+
+ECH rather than "n spaces, then CUB(n)", which also works and was tried first:
+the spaces are visible CHARACTERS, so every width measured after compensation —
+`strippedLength` above all — inflates by the width of each emoji on the line.
+ECH writes none.
+
+Also measured, on the same run: an ECH-compensated cluster, a natively 2-cell
+cluster (`📁`), and plain ASCII each put the character AFTER them in the same
+column. The layout arithmetic is exact; what remains is only how Apple's font
+paints a narrow glyph inside the two cells it owns.
 
 ### Bare (selector-less) pictographs — FIXED 2026-07-14
 

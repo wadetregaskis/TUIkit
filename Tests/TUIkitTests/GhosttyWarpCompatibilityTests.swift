@@ -128,10 +128,16 @@ struct GhosttyWarpCompatibilityTests {
         // Without the model fix every one of these is a no-op and the "|"
         // lands a cell early — the shear this whole class is about.
         let raw = "\u{1F5A5}|"
-        #expect(raw.withTerminalAppCursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
+        // Terminal.app erases the pair of cells first, because it is the one
+        // host measured NOT to paint the cell its cursor skips — see
+        // `withTerminalAppCursorCompensation`. The advance is identical.
+        #expect(raw.withTerminalAppCursorCompensation() == "\u{1B}[2X\u{1F5A5}\u{1B}[1C|")
         #expect(raw.withITerm2CursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
         #expect(raw.withGhosttyCursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
         #expect(raw.withWarpCursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
+        // The erase writes no visible characters, so every width measured
+        // after compensation still counts the cells the row occupies.
+        #expect(raw.withTerminalAppCursorCompensation().strippedLength == raw.strippedLength)
     }
 
     @Test(
