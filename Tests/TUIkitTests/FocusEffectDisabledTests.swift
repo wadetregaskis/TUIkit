@@ -164,17 +164,17 @@ struct FocusEffectDisabledTests {
         expectIndistinguishable(list, "List")
     }
 
-    /// A `DatePicker`'s active-field marker says which field the arrows will
-    /// change — the same thing a caret says about typing — so it survives, and
-    /// this asserts that rather than the sweep.
-    @Test("A DatePicker keeps the marker that says which field is active")
-    func datePickerKeepsItsFieldMarker() {
+    /// A `DatePicker`'s active-field marker goes with everything else.
+    ///
+    /// It looks like a caret and is not one: a caret says where TYPING goes,
+    /// and there is no typing here — the field is active only because the
+    /// control is focused, which makes the mark an announcement of focus like
+    /// a `Button`'s bold.
+    @Test("DatePicker")
+    func datePicker() {
         let picker = DatePicker("when", selection: .constant(Date(timeIntervalSince1970: 0)))
-        let unfocused = rendered(picker, focusOnSubject: false, effectsDisabled: false)
-        let suppressed = rendered(picker, focusOnSubject: true, effectsDisabled: true)
-        #expect(
-            suppressed != unfocused,
-            "the active-field marker went away; it is this control's caret")
+        expectDistinguishable(picker, "DatePicker")
+        expectIndistinguishable(picker, "DatePicker")
     }
 
     /// A `TextField` is the documented exception, and the exception is

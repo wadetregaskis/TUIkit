@@ -150,10 +150,11 @@ because it decides the case this document has not seen:
 > Does the cell say **where you are**, or **what you can do**?
 
 A text cursor is the second — it is the insertion point, and it tells you where
-typing will go — so it stays and animates as usual. So does a `DatePicker`'s
-active-field marker, which is that control's caret: it says which field the
-arrows will change. A row highlight, a bold label and a coloured arrow are all
-the first, and go.
+typing will go — so it stays and animates as usual. That is the whole of the
+exception, and **the test is typing**: a `DatePicker`'s active-field marker
+looks like a caret and is not one, because nothing is typed there and the field
+is active only because the control is focused. A row highlight, a bold label, a
+coloured arrow and that mark are all the first, and go.
 
 If you write your own view, gate its focus styling on
 ``RenderContext/indicatesFocus(_:)`` rather than on `\.isFocused` directly.

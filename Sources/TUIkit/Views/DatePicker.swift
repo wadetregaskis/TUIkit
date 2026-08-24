@@ -330,7 +330,17 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         if clamped != selection.wrappedValue { selection.wrappedValue = clamped }
 
         FocusRegistration.register(context: context, handler: handler)
-        let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. The arrows
+        // still move between fields and still change the value; what goes is
+        // the mark saying which field they are on.
+        //
+        // That mark reads like this control's caret, and the first version of
+        // `focusEffectDisabled` kept it for that reason. It is not: a caret
+        // says where TYPING goes, and there is no typing here — the field is
+        // active because the control is focused, so the mark is an announcement
+        // of focus like any other. A `TextField`'s caret stays; this does not.
+        let isFocused = context.indicatesFocus(
+            FocusRegistration.isFocused(context: context, focusID: persistedFocusID))
 
         let isHovered =
             !isDisabled

@@ -41,11 +41,15 @@ extension RenderContext {
     /// usable at all, and what distinguishes it from `.disabled(true)`.
     ///
     /// What deliberately survives it: a **text cursor**. A caret is the
-    /// insertion point, not decoration — it says where typing will go, which
+    /// insertion point, not decoration — it says where TYPING will go, which
     /// is a fact about the control rather than an announcement about focus —
-    /// and SwiftUI keeps it under this modifier for the same reason. The same
-    /// argument keeps a `DatePicker`'s active-field marker, which is that
-    /// control's caret: it says which field the arrows will change.
+    /// and SwiftUI keeps it under this modifier for the same reason.
+    ///
+    /// That is the whole of the exception, and the test is typing. A
+    /// `DatePicker`'s active-field marker looks like a caret and is not one:
+    /// nothing is typed there, and the field is active only because the
+    /// control is focused, so the mark announces focus exactly as a `Button`'s
+    /// bold does. It goes.
     public func indicatesFocus(_ isFocused: Bool) -> Bool {
         isFocused && !environment.focusEffectDisabled
     }
@@ -61,8 +65,9 @@ extension View {
     /// ```
     ///
     /// Everything a control does to say "I am focused" goes: the pulse, the
-    /// caps, the bold, the recoloured glyphs and arrows, the highlighted row.
-    /// A text cursor stays, and animates as it always did.
+    /// caps, the bold, the recoloured glyphs and arrows, the highlighted row,
+    /// a `DatePicker`'s active-field mark. A text cursor stays, and animates
+    /// as it always did.
     ///
     /// Be aware of what that costs. A terminal has no pointer to fall back on
     /// when the keyboard is the only way to navigate, so a subtree with its
