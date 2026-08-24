@@ -928,6 +928,35 @@ cluster (`📁`), and plain ASCII each put the character AFTER them in the same
 column. The layout arithmetic is exact; what remains is only how Apple's font
 paints a narrow glyph inside the two cells it owns.
 
+#### …and on a FULL-WIDTH row, which is the case an app actually draws
+
+The report that prompted the section above had a second half — the row also
+appearing to sit one cell left, borders and scrollbar included — and a short
+line cannot ask that question: `FrameDiffWriter.repaintRightEdge` documents a
+family that consumes more line budget than it claims and WRAPS, and a row padded
+to the terminal's exact width is where that would show.
+
+**Measured** (`Tools/TerminalProbes/row_probe.py`, `PROBE_ALT=1`, Terminal.app
+455.1 / macOS 15.7, 80 columns). Each row carries one cluster and is padded to
+four cells short of the edge, where the cursor is read — at the edge itself it
+CLAMPS, and reports the same column whatever the row spent:
+
+| row | end column | verdict |
+|---|---|---|
+| `📁`, no compensation | 77 | the reference |
+| plain ASCII | 77 | the reference |
+| `⚙️` + `CUF(1)` | 77 | correct |
+| `⚙️` + `ECH(2)` + `CUF(1)` | 77 | correct |
+| `⚙️` **bare** | **76** | one cell short |
+| `🖥️` bare | **76** | one cell short |
+
+Nothing wrapped, in any case. So a full-width row spends exactly what it claims,
+both compensation strategies are exact, and **the one-cell shift is what an
+UNCOMPENSATED emission looks like** — which is what a host with no advance model
+in this file receives (the `else { clipped }` arm of `FrameDiffWriter`). If the
+shift is seen on a terminal, that terminal is one to measure and add here, not a
+bug in the arithmetic.
+
 ### Bare (selector-less) pictographs — FIXED 2026-07-14
 
 **Not to be confused with `🖥️`** (U+1F5A5 **+ U+FE0F**) — the form the demo

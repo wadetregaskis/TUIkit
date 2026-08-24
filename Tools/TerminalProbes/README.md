@@ -12,6 +12,15 @@ when unset), the visual/aspect probes print to the terminal.
 - `visual_card.py` — static `|<cluster>|X` alignment card with a column
   ruler, for screenshot inspection of PAINTED width (which DSR can't see),
   merged-vs-split clusters, seams, and swatches.
+- `background_probe.py` — does the cell an under-advancing cluster's `CUF`
+  skipped keep the background in force? Draws each compensation strategy as a
+  RUN of clusters, so a one-cell hole reads as stripes on a screenshot, and
+  DSR-measures the advance of each at the same time. `PROBE_WIDE=1` draws the
+  rows double-width (DECDWL) for the capture.
+- `row_probe.py` — the same clusters on a FULL-WIDTH row, which is what an app
+  draws: does the row spend exactly what it claims, or overspend and wrap? The
+  measurement is taken four cells short of the edge, because the cursor CLAMPS
+  at the last column and reports the same number either way.
 - `mouse_probe.py` — raw-mode SGR mouse byte capture (1000/1002/1006);
   every input sequence is appended human-readably. `q` quits.
 - `cell_aspect_probe.py` — the terminal cell's height:width ratio (what
@@ -21,3 +30,9 @@ when unset), the visual/aspect probes print to the terminal.
 Extend the battery in `advance_probe.py` rather than hand-rolling one-off
 probes, and record new results (with `TERM_PROGRAM_VERSION`) in the
 compatibility document.
+
+A note on the PTY harnesses in the scratch tooling: `pyte` drops everything
+after a **U+FE0F** in the same write (VS-16 is width 0 with combining class 0,
+so its `Screen.draw` hits the `else: break`). A dump containing ⚙️ ⚠️ ✂️ ⚒️
+therefore shows a truncated row whatever the app emitted — read the raw capture,
+or use these probes against the real host.
