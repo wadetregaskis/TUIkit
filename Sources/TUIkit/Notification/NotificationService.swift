@@ -76,14 +76,22 @@ struct NotificationEntry: Identifiable, Sendable {
 public final class NotificationService: @unchecked Sendable {
     /// The shared instance used by the running application.
     ///
-    /// This is a static accessor rather than environment-only because TUIKit
-    /// does not have an `@Environment` property wrapper. Button callbacks,
-    /// `onSelect` handlers, and other user-facing closures run outside the
-    /// render context and therefore cannot read `EnvironmentValues`. A static
-    /// reference is the only way to reach the service from those call sites.
+    /// Prefer the environment where you can: the render loop installs this
+    /// instance at ``EnvironmentValues/notificationService`` every frame, so a
+    /// view body reaches it with `@Environment(\.notificationService)` and a
+    /// test can substitute its own without touching global state.
     ///
-    /// The same pattern is used by `AppState.shared` for the same reason.
-    /// For tests, create a fresh instance instead of using `current`.
+    /// The static remains because a closure is not a body. Button actions,
+    /// `onSelect` handlers and the rest run at EVENT time, when there is no
+    /// render context to read an environment from — an `@Environment` property
+    /// is nil there. A view that has a body can capture the service into its
+    /// closure at render time; one that does not, and any code reached from
+    /// outside the view tree at all, has only this.
+    ///
+    /// `AppState.shared` stands for the same reason.
+    ///
+    /// For tests, construct a fresh instance rather than reaching for
+    /// `current`, which every test in the process shares.
     ///
     /// ```swift
     /// NotificationService.current.post("Done!")
