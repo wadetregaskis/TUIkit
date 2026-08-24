@@ -15,15 +15,20 @@ became nearest-wins, and the parameters followed. §6 (`labelsHidden()`) and §7
 `LabelsVisibility.swift` with `_CollapsingLabel`, `ColorPicker`, `Toggle`,
 `ProgressView` and `DatePicker` all honouring it, and
 `RowEditRestrictionModifiers.swift` with `RowEditRestrictionTests`. §1
-(`Color.primary`/`.secondary`) and §2 (`Color.accentColor`) were answered on
-2026-08-24 and implemented together: the whole "Semantic Colors" block now
+(`Color.primary`/`.secondary`), §2 (`Color.accentColor`) and §8
+(`focusEffectDisabled`) were answered on 2026-08-24. The colours were
+implemented together: the whole "Semantic Colors" block now
 means the palette roles it is named after, and the SwiftUI spelling replaced
-`Color.accent`. The
+`Color.accent`. `focusEffectDisabled` took the strict reading — every focus
+indication goes, not only the animated part — with the caret and the
+`DatePicker`'s field marker surviving as insertion points rather than
+announcements, gated through one `RenderContext.indicatesFocus(_:)` so it
+cannot be honoured by some controls and forgotten by others. The
 reasoning is in those commits; the entries are gone from here rather than
 marked done, as this file's last section requires.
 
 Last reviewed: 2026-08-24 — every remaining entry re-checked against the code
-that day, and the counts re-measured rather than carried forward. Four left.
+that day, and the counts re-measured rather than carried forward. Three left.
 
 **Each entry now ends in a recommendation.** They are recommendations, not
 decisions: the point of this file is that the call is not mine to make. But an
@@ -139,79 +144,6 @@ record it as `notImplemented` in the parity map until then, with the reason
 being (2) rather than the status-bar question, which is now answered.
 
 ---
-
-## 4. `View.focusEffectDisabled(_:)` — which parts of "focused" are an *effect*
-
-**The gap.** SwiftUI's modifier suppresses the focus ring without taking the
-view out of the focus ring.
-
-**Why it needs a decision — measured, not guessed.** The obvious seam looked
-universal: every control's emphasis resolves through
-`SelectionEmphasisClock.cycle(_:)` / `SelectionIndicator.resolve(isFocused:…)`,
-two functions. Gating both, then running a sweep that renders each control
-focused-with-effects-off and compares it to the same control genuinely
-unfocused (a live focus manager, focus parked on a sibling), **seven of eight
-subjects still differed**:
-
-| control | what still indicated focus |
-|---|---|
-| `Button` | the bold attribute (`ESC[1;…`) |
-| `Toggle` | the glyph's colour |
-| `TextField`, `SecureField` | the text cursor cell |
-| `Stepper` | the ◀ ▶ arrow colours |
-| `Slider` | the ◀ ▶ arrow colours |
-| `DatePicker` | the active field's background |
-
-The clock carries the *pulse*; each control separately branches on `isFocused`
-for its base colours and attributes. So this is a change to every control's
-focused-styling branch, not two gates — the same "not a universal seam" shape
-already declined twice on this list, and the reason a partial version must not
-ship: a control that kept indicating focus would read as a bug in that control.
-
-**And one genuine question.** Is a focused `TextField`'s **cursor** a focus
-*effect*? SwiftUI keeps the caret under `focusEffectDisabled` — the caret is
-the insertion point, not decoration — so "suppress everything that differs when
-focused" is the wrong rule for at least one control, and the right rule has to
-be stated per control rather than derived.
-
-**Options.** (a) Answer the caret question, then sweep every control. (b) Ship
-a narrower TUI-specific modifier that suppresses only the *pulse* (the animated
-part), under a name that does not promise SwiftUI's semantics. (c) Record as
-not-implemented in `parity-map.json`.
-
-**The rule that makes (a) tractable**, which the table above is really asking
-for. "Suppress everything that differs when focused" is the wrong rule, and the
-caret proves it. The right one is a distinction each control can be asked
-about, one at a time:
-
-> Does this cell tell you WHERE YOU ARE, or WHAT YOU CAN DO?
-
-A `TextField`'s caret says what you can do — type here, at this position. It is
-the insertion point and it must survive. A `Button`'s bold, a `Toggle`'s glyph
-colour, a `Stepper`'s arrow colours all say where you are, and go. A
-`DatePicker`'s active-field background is the interesting one: it says BOTH —
-which field the arrows will change is an insertion point of a sort — and by
-this rule it stays, which is also what SwiftUI does with a focused date field.
-
-That leaves the table with one answer per row rather than a policy argument,
-and it is a rule an implementer can apply to a control this list has not seen.
-
-**Recommendation: (b) now, (a) later, and never a partial (a).** The pulse is
-the part apps actually ask to turn off (a dashboard that should not breathe),
-it is one gate at
-`SelectionEmphasisClock.cycle(_:)`, and under a TUI-specific name it promises
-only what it does. Shipping `focusEffectDisabled` itself with six of eight
-controls converted would read as a bug in the other two — which is why the
-sweep below is the gate on (a), not a nice-to-have.
-
-**The sweep is worth keeping either way** — a byte-comparison against a
-genuinely-unfocused baseline is what turned an assumption into the table above,
-and it will catch producers a future implementer forgets. It is not currently a
-committed test; it should be, whichever option is taken, because the table is
-the only thing standing between (a) and a half-done sweep.
-
----
-
 
 ## Recording the answers
 

@@ -360,9 +360,14 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         let menuOrdinal =
             context.isMeasuring
             ? nil : context.environment.menuRowSink?.claimOrdinal(for: context.identity)
-        let isFocused = claimHighlight(
-            menuOrdinal: menuOrdinal, focusID: persistedFocusID, action: effectiveAction,
-            isDisabled: isDisabled, context: context)
+        // Gated for DRAWING only — see `RenderContext.indicatesFocus(_:)`.
+        // `claimHighlight` still runs with the true answer inside it, because
+        // it also publishes the status bar's Return verb, and what a key does
+        // is not a focus effect.
+        let isFocused = context.indicatesFocus(
+            claimHighlight(
+                menuOrdinal: menuOrdinal, focusID: persistedFocusID, action: effectiveAction,
+                isDisabled: isDisabled, context: context))
 
         // Hover state persists across renders via StateStorage —
         // the dispatcher flips it on .entered / .exited events

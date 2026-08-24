@@ -468,7 +468,11 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         handler.clampValue()
 
         FocusRegistration.register(context: context, handler: handler)
-        let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        // Everything below this line is drawing, so the gate goes here —
+        // see `RenderContext.indicatesFocus(_:)`. Key handling is the
+        // registered handler's and is untouched: the slider still moves.
+        let isFocused = context.indicatesFocus(
+            FocusRegistration.isFocused(context: context, focusID: persistedFocusID))
 
         let hoverKey = StateStorage.StateKey(
             identity: context.identity, propertyIndex: StateIndex.isHovered)

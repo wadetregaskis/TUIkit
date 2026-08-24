@@ -322,7 +322,10 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
             isDisabled: isDisabled, context: context)
 
         FocusRegistration.register(context: context, handler: handler)
-        let groupHasFocus = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. The group
+        // keeps the focus and the arrows keep moving between items.
+        let groupHasFocus = context.indicatesFocus(
+            FocusRegistration.isFocused(context: context, focusID: persistedFocusID))
 
         // Hover state for the group — at most one item is
         // hovered at a time, so a single StateBox<Int> holds

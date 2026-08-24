@@ -833,7 +833,12 @@ where Value.ID: Hashable {
             contentHeight: contentHeight,
             overflows: { data.count + $0 > contentHeight }
         )
-        let tableHasFocus = handler.engageFocus(context: context, focusID: persistedFocusID)
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. `engageFocus`
+        // still runs with the true answer: it publishes the Escape claim and
+        // the status bar's Return verb, and sets `isFocusEngaged`, none of
+        // which are focus EFFECTS.
+        let tableHasFocus = context.indicatesFocus(
+            handler.engageFocus(context: context, focusID: persistedFocusID))
 
         if overflowing {
             // The landing slot is drawn among the rows and takes one of their
@@ -905,7 +910,12 @@ where Value.ID: Hashable {
         if !context.isMeasuring {
             handler.clampScrollOffset()
         }
-        let tableHasFocus = handler.engageFocus(context: context, focusID: persistedFocusID)
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. `engageFocus`
+        // still runs with the true answer: it publishes the Escape claim and
+        // the status bar's Return verb, and sets `isFocusEngaged`, none of
+        // which are focus EFFECTS.
+        let tableHasFocus = context.indicatesFocus(
+            handler.engageFocus(context: context, focusID: persistedFocusID))
 
         // The handler's accessor, not a raw `scrollOffset..<min(…)`: the
         // persisted offset can exceed a freshly-shrunk `data.count` during a
@@ -1136,7 +1146,12 @@ where Value.ID: Hashable {
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
 
-        let tableHasFocus = handler.engageFocus(context: context, focusID: persistedFocusID)
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. `engageFocus`
+        // still runs with the true answer: it publishes the Escape claim and
+        // the status bar's Return verb, and sets `isFocusEngaged`, none of
+        // which are focus EFFECTS.
+        let tableHasFocus = context.indicatesFocus(
+            handler.engageFocus(context: context, focusID: persistedFocusID))
 
         let window = rowWindow(
             scrollOffset: handler.scrollOffset, count: data.count,

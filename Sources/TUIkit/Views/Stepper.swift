@@ -463,7 +463,10 @@ private struct _StepperCore: View, Renderable, Layoutable {
         handler.clampValue()
 
         FocusRegistration.register(context: context, handler: handler)
-        let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. The
+        // registered handler still has the focus and still takes the keys.
+        let isFocused = context.indicatesFocus(
+            FocusRegistration.isFocused(context: context, focusID: persistedFocusID))
 
         let hoverKey = StateStorage.StateKey(
             identity: context.identity, propertyIndex: StateIndex.isHovered)

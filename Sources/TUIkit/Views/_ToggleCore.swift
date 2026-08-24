@@ -431,7 +431,10 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             canBeFocused: !isDisabled
         )
         FocusRegistration.register(context: context, handler: handler)
-        let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. Space still
+        // flips it.
+        let isFocused = context.indicatesFocus(
+            FocusRegistration.isFocused(context: context, focusID: persistedFocusID))
         FocusRegistration.publishActivationLabel("toggle", context: context, isFocused: isFocused)
         let isOnValue = isOn.wrappedValue
 

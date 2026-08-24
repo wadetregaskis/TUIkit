@@ -442,7 +442,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // than inside each window rule: the two rules disagree about indicator
         // lines but not about this.
         let rowBudget = max(1, targetContentHeight - (handler.dropSlotAddsRow ? 1 : 0))
-        let listHasFocus = handler.engageFocus(context: context, focusID: persistedFocusID)
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. `engageFocus`
+        // still runs with the true answer: it publishes the Escape claim and
+        // the status bar's Return verb, and sets `isFocusEngaged`, none of
+        // which are focus EFFECTS.
+        let listHasFocus = context.indicatesFocus(
+            handler.engageFocus(context: context, focusID: persistedFocusID))
 
         let origin = windowOrigin(
             handler: handler, source: source,

@@ -135,6 +135,36 @@ To give **your own** view the same affordance, read the two environment values
 the built-in controls read: `\.isFocused` says whether this subtree holds focus,
 and `\.selectionEmphasis` carries the current point on the pulse.
 
+### Turning it off
+
+``SwiftUICore/View/focusEffectDisabled(_:)`` suppresses the indication without
+taking the view out of the focus ring — SwiftUI's modifier and SwiftUI's
+contract. Tab still reaches the control, it still takes the keys, it simply
+stops advertising that it has arrived. Everything goes: the pulse, a `Button`'s
+caps and bold, a `Toggle`'s glyph colour, a `Slider`'s and `Stepper`'s arrows,
+a `List`'s or `Table`'s cursor-row highlight.
+
+Two things deliberately survive, and the rule behind them is worth stating
+because it decides the case this document has not seen:
+
+> Does the cell say **where you are**, or **what you can do**?
+
+A text cursor is the second — it is the insertion point, and it tells you where
+typing will go — so it stays and animates as usual. So does a `DatePicker`'s
+active-field marker, which is that control's caret: it says which field the
+arrows will change. A row highlight, a bold label and a coloured arrow are all
+the first, and go.
+
+If you write your own view, gate its focus styling on
+``RenderContext/indicatesFocus(_:)`` rather than on `\.isFocused` directly.
+That is the one question every built-in control asks, and it is what stops the
+modifier being honoured by six controls and forgotten by two — a partial
+suppression reads as a bug in whichever control kept shouting.
+
+**Know what it costs.** A terminal has no pointer to fall back on, so a subtree
+with its focus effects off can be genuinely impossible to navigate by keyboard.
+That is the same trade SwiftUI's modifier makes, and it is the caller's to make.
+
 ## Focus in the Event Loop
 
 Focus dispatch happens in Layer 3 of the key event pipeline (see <doc:AppLifecycle> for the whole ladder, including the ESC pre-route and Layer 3.5):
