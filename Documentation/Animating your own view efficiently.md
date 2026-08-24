@@ -507,5 +507,6 @@ halves are in the same units.
 Also worth knowing when reproducing one of these by hand: a PTY capture read
 through `pyte` cannot show it. `pyte` abandons the rest of a write at a U+FE0F,
 so any dump containing an emoji-presentation cluster looks truncated whatever
-the app emitted. Read the raw bytes, or drive the real terminal with
-`Tools/TerminalProbes/`.
+the app emitted. `Tools/Smoke/raw_probe.py` answers the question the bytes can
+(it decodes nothing, and `--term-program` forces a host model from any
+terminal); `Tools/TerminalProbes/` answers what a real terminal then draws.

@@ -31,8 +31,15 @@ Extend the battery in `advance_probe.py` rather than hand-rolling one-off
 probes, and record new results (with `TERM_PROGRAM_VERSION`) in the
 compatibility document.
 
-A note on the PTY harnesses in the scratch tooling: `pyte` drops everything
-after a **U+FE0F** in the same write (VS-16 is width 0 with combining class 0,
-so its `Screen.draw` hits the `else: break`). A dump containing ⚙️ ⚠️ ✂️ ⚒️
-therefore shows a truncated row whatever the app emitted — read the raw capture,
-or use these probes against the real host.
+A note on the PTY harnesses: `pyte` drops everything after a **U+FE0F** in the
+same write (VS-16 is width 0 with combining class 0, so its `Screen.draw` hits
+the `else: break`). A dump containing ⚙️ ⚠️ ✂️ ⚒️ therefore shows a truncated
+row whatever the app emitted, which is a trap `tui_walk.py` and
+`tui_screens.py` both sit in.
+
+Two ways round it, and they answer different questions. For what a TERMINAL
+draws, use the probes here, against the real host. For what the APP emitted,
+use `Tools/Smoke/raw_probe.py`, which decodes nothing: it drives the app
+through a key script and counts patterns in the bytes themselves — including
+whether a cluster carried its cursor compensation, and `--term-program` to
+force a host model from any terminal.
