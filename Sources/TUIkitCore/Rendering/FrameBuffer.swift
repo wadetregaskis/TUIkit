@@ -149,6 +149,29 @@ public struct FrameBuffer: Sendable, Equatable {
     /// because a run *is* a claim about particular cells. See ``AnimatedCellRun``.
     public var animatedCells: [AnimatedCellRun] = []
 
+    /// How opaque this buffer is when it is drawn onto something else, `0`
+    /// through `1`.
+    ///
+    /// `1` — the default — is the identity, costs nothing, and is what almost
+    /// every buffer carries.
+    ///
+    /// A view with `.opacity(_:)` sets this rather than fading its own colours,
+    /// and the difference is the whole design: **a colour cannot be faded
+    /// toward a surface the view cannot see.** Fading at render time has to
+    /// guess what is behind, and the guess is the app background — which is
+    /// wrong over any sibling that painted something, and which leaves
+    /// `opacity(0)` drawing a near-black rectangle rather than revealing what
+    /// it sits on. So the fade is deferred to the moment the buffer is drawn
+    /// onto another one, where the destination is finally known. See
+    /// `Documentation/Opacity as composition.md`.
+    ///
+    /// Carried by every operation that preserves a buffer's content, and
+    /// CONSUMED by the ones that draw it onto something else. A buffer that
+    /// reaches the terminal without ever being drawn onto anything is resolved
+    /// against the app's background, which is the same answer the old
+    /// render-time fade gave — correct there, and only there.
+    public var opacity: Double = 1
+
     /// Creates an empty buffer.
     public init() {
         self.storage = []
@@ -795,6 +818,7 @@ extension FrameBuffer {
         // composited separately at the root — clamping the in-flow
         // content must never discard them.
         result.overlays = overlays
+        result.opacity = opacity
         result.hitTestRegions = hitTestRegions
         // Runs describe CELLS, so unlike the free-floating layers above they are
         // dropped when their cells are clipped away — otherwise a run scrolled
@@ -869,6 +893,9 @@ extension FrameBuffer {
         // finds on the final buffer, so a run lost on the way up stops the clock
         // for everything (see `AnimatedRunPropagationTests`).
         result.animatedCells = shiftedAnimatedCells(byX: overlayShiftX, y: overlayShiftY)
+        // Content-preserving, so the layer's opacity is preserved with it. A
+        // `.padding` or `.frame` around a faded view must not make it opaque.
+        result.opacity = opacity
         return result
     }
 }
