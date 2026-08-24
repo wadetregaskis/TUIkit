@@ -1,10 +1,16 @@
 # Synchronising a search field with the system Find pasteboard
 
-**Status: research. Nothing is implemented, and nothing has been decided.**
+**Status: DECLINED, 2026-08-24.** Not built, and not to be built in this shape.
+The research below stands as the record of why — the short version is that the
+half with consequences (writing global system state on whichever machine the app
+happens to be running on) is gated by a test that cannot be made exact, and the
+terminal-native mechanism that would sidestep the question does not reach a find
+pasteboard at all.
+
 Asked once before and, as far as the repository records, never answered: there
-is no code, no doc, no commit and no entry in `Parity-decisions-pending.md` that
-touches the find pasteboard. `SystemClipboard` reaches the *general* pasteboard
-and only that.
+was no code, no doc, no commit and no entry in `Parity-decisions-pending.md`
+touching the find pasteboard. `SystemClipboard` reaches the *general* pasteboard
+and only that, and still does.
 
 This note is what the question is actually made of, and it turns out to be two
 questions with different answers.
@@ -141,7 +147,12 @@ probes in `Tools/TerminalProbes/` if it ever mattered.
 So: the local case is reachable by exactly one mechanism, and the remote case is
 reachable by none.
 
-## Recommendation
+## What was recommended, and what was decided
+
+The recommendation was to ship it defaulted off and opted into per app. That was
+**declined**: see the status at the top. The list is kept because it is the
+design anyone reopening this would otherwise have to derive again, and because
+points 3 and 4 are the parts that would still be right in any future shape.
 
 1. **Default off.** The write is global state, the "is the viewer local" test
    has a known false-positive, and nobody loses anything they had. An opt-in
@@ -168,7 +179,9 @@ reachable by none.
    mode are the app's business here, `pbcopy` writes plain text, and a partial
    plist would be worse than none.
 
-None of this is urgent, and the value is real but small: it is one of those
-touches that makes a terminal app feel like it belongs on the machine. The cost
-is a platform-specific side effect on global state, gated by a test that cannot
-be made exact. That trade is the decision to take, and it has not been taken.
+The value is real but small: it is one of those touches that makes a terminal
+app feel like it belongs on the machine. The cost is a platform-specific side
+effect on global state, gated by a test that cannot be made exact — and a
+terminal app is the kind of program most likely to be run somewhere other than
+where it is being watched, which is exactly the case the gate gets wrong. That
+is the trade, and it was taken against.
