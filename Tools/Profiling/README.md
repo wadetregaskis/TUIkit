@@ -198,6 +198,35 @@ animation-clocks work.
 python3 Tools/Profiling/idle_cpu.py BIN [settle_s] [window_s] [keys]
 ```
 
+### `analyze_stream.py` — where the BYTES went
+Attributes the output a run produced, rather than the time it took. Give it a
+stream captured by `drive.py --dump OUT.ansi` and it splits it into the three
+things a stream can be — styling (SGR), positioning and erasing (other CSI),
+and the cells themselves — then replays it through a minimal terminal model to
+say how much of the styling was *necessary*. That last part is the point: a
+frame can be correct, fast to produce, and still spend most of itself
+restating a colour the terminal already had.
+
+```bash
+python3 Tools/Profiling/drive.py BIN --dump /tmp/frames.ansi
+python3 Tools/Profiling/analyze_stream.py /tmp/frames.ansi
+```
+
+### `idle-image.sh` + `IdleProbe` — idle cost with nothing else awake
+`idle_cpu.py` answers "what does a static screen cost?" only for a screen that
+is genuinely static, and every `Example` page carrying an `Image` also carries
+focusable controls — a focused control pulses, so the loop is legitimately
+awake and the reading says nothing about the image. `IdleProbe` is a minimal
+app whose whole scene is the thing under test and nothing else;
+`idle-image.sh` builds and runs it for the `Image` case.
+
+```bash
+Tools/Profiling/idle-image.sh
+```
+
+Reach for this shape whenever the question is "does X keep the loop awake?"
+and X shares a page with anything else that legitimately does.
+
 ## Interpreting a run
 
 A driven `tour` trace typically shows (on this hardware):
