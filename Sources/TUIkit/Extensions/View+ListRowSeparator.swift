@@ -9,10 +9,10 @@
 extension View {
     /// Sets the visibility of row separators within a list.
     ///
-    /// This modifier exists for SwiftUI API compatibility but has no visual effect
-    /// in TUIkit. Terminal-based UIs do not support fine-grained separator styling.
-    ///
-    /// A warning is logged to stderr the first time this modifier is used.
+    /// Accepted for SwiftUI source compatibility, and inert: a TUIkit `List`
+    /// draws no row separators, so `.hidden` is already the state and
+    /// `.visible` has nothing to show. A row's own border — `.border()` on the
+    /// row content — is the terminal's version of the same idea.
     ///
     /// # Example
     ///

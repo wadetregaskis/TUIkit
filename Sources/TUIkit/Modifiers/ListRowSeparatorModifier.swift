@@ -4,13 +4,13 @@
 //  Created by LAYERED.work
 //  License: MIT
 
-/// A stub modifier for list row separators.
+/// Carries ``SwiftUICore/View/listRowSeparator(_:edges:)``'s arguments and
+/// renders its content unchanged.
 ///
-/// This modifier exists for SwiftUI API compatibility but has no visual effect
-/// in TUIkit. Terminal-based UIs do not support the fine-grained separator
-/// styling that SwiftUI provides.
-///
-/// A warning is logged when this modifier is used.
+/// Inert by construction: a TUIkit `List` draws no row separators, so there is
+/// nothing for the visibility to govern. The arguments are stored anyway so
+/// the modifier compares equal only to itself — an `EquatableView` above it
+/// must not treat two differently-configured rows as the same view.
 public struct ListRowSeparatorModifier<Content: View>: View {
     /// The content view.
     let content: Content
@@ -98,9 +98,10 @@ extension Visibility: Equatable {}
 
 extension ListRowSeparatorModifier: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // This is a stub modifier for SwiftUI API compatibility.
-        // List row separators are not supported in terminal UIs.
-        // We silently return content unchanged (no warning to avoid noise).
+        // Nothing to draw: see the type's note. Silently, too — a warning
+        // here was removed in 90017af8 for being neither concurrency-safe on
+        // Linux nor useful, and a stub modifier that shouts once per app is
+        // noise wherever it is correct to have written it.
         TUIkit.renderToBuffer(content, context: context)
     }
 }
