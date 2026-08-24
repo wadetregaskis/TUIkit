@@ -393,9 +393,24 @@ struct DragAndDropTests {
             "and gone from its place while carried: \(during.lines.map(\.stripped))")
         #expect(during.height == before.height, "the space it owns is kept")
 
+        // Released over nothing, so the preview flies home — and the place it
+        // is flying to must stay empty until it arrives, or the same row is on
+        // screen twice for the length of the flight.
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 8, y: 2))
+        let flying = renderToBuffer(tree, context: context)
+        #expect(
+            !flying.lines.contains { $0.stripped.contains("CHIP") },
+            "it came back before the picture did: \(flying.lines.map(\.stripped))")
+
+        // Land the flight: the loop drives it once per frame, and it is done
+        // when it stops asking for the next one.
+        let session = tui.dragAndDropSession
+        _ = session.driveReturnFlight(nowNanos: 0)
+        _ = session.driveReturnFlight(
+            nowNanos: DragAndDropSession.ReturnFlight.durationNanos &+ 1)
+        #expect(session.returnFlight == nil, "the flight did not land")
         let after = renderToBuffer(tree, context: context)
-        #expect(after.lines.contains { $0.stripped.contains("CHIP") }, "and back when let go")
+        #expect(after.lines.contains { $0.stripped.contains("CHIP") }, "and back once it has")
     }
 
     @Test("dragPreviewAnchor(.offset) trails the cursor; DropInfo reports the frame")

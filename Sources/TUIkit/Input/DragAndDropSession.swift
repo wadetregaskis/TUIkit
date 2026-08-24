@@ -299,9 +299,23 @@ final class DragAndDropSession: @unchecked Sendable {
     /// where a path prefix could not — row 1's path is a prefix of row 11's.
     private(set) var source: ViewIdentity?
 
-    /// Whether `identity` names the view whose drag is in flight.
+    /// Whether `identity` names the view whose drag is in flight — **or whose
+    /// preview is still flying home to it**.
+    ///
+    /// The second half is what stops a cancelled drag showing the row twice.
+    /// A release over nothing sends the preview back where it came from, and
+    /// the view it came from used to reappear the instant the button came up:
+    /// for the length of the flight the same row was on screen in both places,
+    /// one in the list and one in the air above it.
+    ///
+    /// This is the DRAWING question only. ``isDragSource(within:)`` — the one a
+    /// container asks to decide whether a row has left its layout — deliberately
+    /// does not follow, because keeping a row out of the list for the flight is
+    /// a change of length, and a list that changes length after the gesture is
+    /// over moves the rows the user is looking at.
     func isDragSource(_ identity: ViewIdentity) -> Bool {
-        active != nil && source == identity
+        if active != nil, source == identity { return true }
+        return returnFlight?.source == identity
     }
 
     /// Whether the drag in flight started *inside* `identity` — at it, or
@@ -470,6 +484,10 @@ final class DragAndDropSession: @unchecked Sendable {
         let toX: Int, toY: Int
         var startNanos: UInt64?
 
+        /// The view the preview is flying back TO, so it can keep drawing as
+        /// gone until the picture arrives — see ``isDragSource(_:)``.
+        let source: ViewIdentity?
+
         /// How long the row takes to get back. Long enough to read as a
         /// movement, short enough not to make a cancel feel like a wait.
         static let durationNanos: UInt64 = 200_000_000
@@ -498,7 +516,11 @@ final class DragAndDropSession: @unchecked Sendable {
                 preview: drag.preview,
                 fromX: frame.x, fromY: frame.y,
                 toX: drag.originX, toY: drag.originY,
-                startNanos: nil)
+                startNanos: nil,
+                // Carried past `end()`, which is what clears `source`: the
+                // whole point is that the view stays gone while the picture
+                // travels back to it.
+                source: source)
         }
         end()
     }

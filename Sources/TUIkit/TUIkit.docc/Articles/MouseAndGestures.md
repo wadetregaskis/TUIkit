@@ -217,6 +217,14 @@ goes blank rather than vanishing from the layout: the space is still the view's,
 and a list closing up mid-drag would move the very rows the drop is aimed
 between.
 
+It stays blank until the picture is back, not until the button comes up. A
+release over nothing sends the preview home rather than letting it vanish under
+the pointer, and for the length of that flight the view it is flying to is still
+somewhere else — so it keeps its blank, and one row lands in one place. (The
+LIST's own accounting does not follow: keeping a row out of the layout for the
+flight is a change of length, and a list that changes length after the gesture
+is over moves the rows the user is looking at.)
+
 A list whose rows fill it exactly borrows a row's worth of scrolling while a
 drag hovers it, because the landing slot needs a line and nothing left the list
 to free one. It does not grow — the page must not shift under the pointer —
