@@ -1271,7 +1271,7 @@ extension ExampleStrings {
             "page.theme.help.moveFocus": "[Tab] / [↑↓] 移动焦点；[←→] 调整选中的颜色通道",
             "page.theme.help.cyclePalette": "[F2] / [F3] 可从任意页面循环切换调色板 / 外观",
             "page.theme.help.everyChange": "此处的每次更改都会即时为整个应用重新设置主题",
-            "page.theme.help.openSwatch": "在颜色的色块上按 [Return] 打开完整编辑器（RGB · HSL · HSB · CMYK · 语义 · 256）",
+            "page.theme.help.openSwatch": "[Return] 在颜色色块上打开完整编辑器（RGB · HSL · HSB · CMYK · 语义 · 256）",
             // ContentUnavailable
             "page.contentUnavailable.titleOnly": "仅标题",
             "page.contentUnavailable.noResults": "无结果",
@@ -1483,7 +1483,7 @@ extension ExampleStrings {
             "page.theme.help.moveFocus": "[Tab] / [↑↓] でフォーカスを移動、[←→] で選択中のカラーチャンネルを調整",
             "page.theme.help.cyclePalette": "[F2] / [F3] でどのページからでもパレット / 外観を切り替え",
             "page.theme.help.everyChange": "ここでの変更はすべて、アプリ全体に即座にテーマを再適用します",
-            "page.theme.help.openSwatch": "色のスウォッチで [Return] を押すと完全なエディタが開きます（RGB · HSL · HSB · CMYK · セマンティック · 256）",
+            "page.theme.help.openSwatch": "[Return] 色のスウォッチで完全なエディタを開く（RGB · HSL · HSB · CMYK · セマンティック · 256）",
             // ContentUnavailable
             "page.contentUnavailable.titleOnly": "タイトルのみ",
             "page.contentUnavailable.noResults": "結果なし",
