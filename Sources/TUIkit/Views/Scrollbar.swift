@@ -394,7 +394,9 @@ struct ScrollbarColors {
         let cycle = context.environment.selectionEmphasis.cycle(true)
         // A focused bar is already breathing the accent; the pointer says so by
         // stepping the cell it is over further, not by starting a second story.
-        let now = cycle.colorNow(dim: Self.pulseDim(palette), bright: palette.accent)
+        let track = palette.foregroundQuaternary.resolve(with: palette)
+        let now = Self.separated(
+            cycle.colorNow(dim: Self.pulseDim(palette), bright: palette.accent), from: track)
         return Self(
             thumb: now,
             track: palette.foregroundQuaternary,
@@ -404,22 +406,34 @@ struct ScrollbarColors {
 
     /// The recessive end of the focused bar's breath.
     ///
-    /// Floored against the TRACK, not against the page. The dim end is the
-    /// accent faded toward the background, and on several palettes that lands
-    /// on — or past — the track's own quiet tone, so the thumb disappeared into
-    /// its track once per breath and took the scroll position with it. Reported
-    /// as the scroller going momentarily invisible, and it is: for those frames
-    /// there is nothing on the bar to read.
-    ///
-    /// Through the cube (``Color/ensuringRenderedContrast(atLeast:against:)``),
-    /// because that is where two quiet tones collapse onto one entry.
+    /// The accent faded toward the background — which on several palettes lands
+    /// on, or past, the track's own quiet tone. Separated from the track by
+    /// ``separated(_:from:)``, like every other point of the breath.
     @MainActor
     static func pulseDim(_ palette: any Palette) -> Color {
-        palette.accent
-            .opacity(ViewConstants.focusPulseMin, over: palette.background)
-            .ensuringRenderedContrast(
-                atLeast: ViewConstants.chromeSeparationFloor,
-                against: palette.foregroundQuaternary.resolve(with: palette))
+        separated(
+            palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
+            from: palette.foregroundQuaternary.resolve(with: palette))
+    }
+
+    /// `thumb`, pushed until it is legible against `track`.
+    ///
+    /// Applied to EVERY point of the breath, not only to its recessive end.
+    /// Flooring the endpoints is not enough, and the reason is the cube: the
+    /// points between them are interpolated in RGB and then quantised, and a
+    /// quiet accent and a quiet grey collapse onto one 256-entry somewhere in
+    /// the middle of a span whose ends are both clear of each other. So the
+    /// thumb still vanished into its track once per breath — a scroll position
+    /// that flickers out is worse than one drawn flat, because the eye is
+    /// tracking it.
+    ///
+    /// Through the cube (``Color/ensuringRenderedContrast(atLeast:against:)``),
+    /// because that is where the collapse happens; measured in sRGB it never
+    /// shows up at all.
+    @MainActor
+    static func separated(_ thumb: Color, from track: Color) -> Color {
+        thumb.ensuringRenderedContrast(
+            atLeast: ViewConstants.chromeSeparationFloor, against: track)
     }
 
     /// Everything the bar's ANIMATION is coloured from, or nil when nothing
@@ -468,7 +482,9 @@ struct ScrollbarPulse {
     /// One set of colours per point of the cycle, in cycle order.
     @MainActor
     var frames: [ScrollbarColors] {
-        cycle.colors(dim: ScrollbarColors.pulseDim(palette), bright: palette.accent)
+        let track = palette.foregroundQuaternary.resolve(with: palette)
+        return cycle.colors(dim: ScrollbarColors.pulseDim(palette), bright: palette.accent)
+            .map { ScrollbarColors.separated($0, from: track) }
             .map { accent in
                 ScrollbarColors(
                     thumb: accent, track: palette.foregroundQuaternary, arrow: accent,
