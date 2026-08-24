@@ -131,9 +131,27 @@ public struct PaddingModifier: ViewModifier {
 
     public func adjustContext(_ context: RenderContext) -> RenderContext {
         var adjusted = context
-        adjusted.availableWidth = max(0, context.availableWidth - insets.leading - insets.trailing)
-        adjusted.availableHeight = max(0, context.availableHeight - insets.top - insets.bottom)
+        // Padding never takes the LAST cell from its content. Where there is
+        // room for anything at all, the content keeps at least one cell of it
+        // and the padding is what overflows — decoration losing to the thing it
+        // decorates, which is the only order that degrades legibly.
+        //
+        // Clamped flat at zero, a `.padding(1).border()` in three rows offered
+        // its text -1 lines, which became 0, which rendered nothing, which
+        // collapsed the box to an empty 6×3 frame — the width gone too, because
+        // a view with no content has no width to report. A height constraint
+        // must not decide a width.
+        adjusted.availableWidth = Self.remaining(
+            context.availableWidth, less: insets.leading + insets.trailing)
+        adjusted.availableHeight = Self.remaining(
+            context.availableHeight, less: insets.top + insets.bottom)
         return adjusted
+    }
+
+    /// `available` less `taken`, but never below one cell while `available` has
+    /// one to give.
+    private static func remaining(_ available: Int, less taken: Int) -> Int {
+        available <= 0 ? 0 : max(1, available - taken)
     }
 
     public func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
