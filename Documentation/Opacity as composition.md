@@ -339,3 +339,99 @@ are separate commits and the second may need several attempts.
 - **`Color.init(…opacity:)` × 3** — mechanical under (c).
 - **`Color.opacity(_:)`** stops being a documented lie, and
   `opacity(_:over:)` becomes redundant rather than necessary.
+
+---
+
+## 9. What mapping the combining sites found (2026-08-24)
+
+Every place a `FrameBuffer` is drawn onto another was read before writing the
+consuming code. It changed the design, and it is recorded in full because most
+of these fail SILENTLY — the picture is plausible and only slightly wrong.
+
+### 9.1 The shape has to be regions, not a scalar
+
+`appendVertically` does `storage.append(contentsOf: other.lines)` and discards
+everything else about `other`. So a whole-buffer `opacity` dies at the first
+stack:
+
+```swift
+ZStack {
+    Color.red
+    VStack { Text("x").opacity(0.5) }   // never reaches the composite carrying α
+}
+```
+
+**Every `VStack`, `HStack`, `Grid` row, `TupleView` and `Group` is such a
+barrier**, which is very nearly every faded view anyone will write. A scalar
+therefore delivers the promise only when the faded view is composited
+*directly*, and quietly gives today's answer otherwise — the worst kind of
+partial fix, because the caveat is invisible at the call site.
+
+So the payload is **a list of regions** — rect plus α — shaped exactly like
+``FrameBuffer/animatedCells``: shifted by every combining operation, consumed
+at the composite or at the root. That pattern is already load-bearing in this
+codebase for runs, hit-test regions and overlay layers, and there is a standing
+audit (`ContainerPayloadAudit`) that exists because each of those was dropped
+by a container at least once. A fourth payload joins the audit rather than
+inventing a mechanism.
+
+The scalar committed as step 1 is superseded by this and must be replaced
+before anything consumes it.
+
+### 9.2 Both source channels blend; the destination's foreground does not
+
+Worth pinning because the two rules read similarly. The **source's foreground
+and background** both blend toward the destination's background. The
+**destination's foreground** is left alone. Blending only the source's
+background would leave green text on the plain app background completely
+unfaded, which is not a fade at all.
+
+### 9.3 The destination's background is usually not in the destination
+
+**The hardest part, and it is not the blend.** The palette background is
+injected LAST — by `FrameDiffWriter.buildLine`, and by
+`ANSIRenderer.applyPersistentBackground` for a `.background(_:)` container. So
+`line.ansiSGRStateAt(visibleColumn:).renderedBackground` — the only
+destination read that exists today, the one `patchingAnimatedCells` uses —
+returns `""` for the majority of cells.
+
+"Blend toward the destination's background" therefore has a two-part answer:
+the destination's **explicit** background where it painted one, and an
+**ambient surface handed in from outside** where it did not. Every consuming
+site needs that surface, and it is not the same colour everywhere: the content
+area's is `palette.background`, the app header's is
+`palette.appHeaderBackground`, the status bar's is
+`palette.statusBarBackground`. `RenderBackgroundCodes` already keeps the three
+apart for exactly this reason.
+
+### 9.4 The leak paths, each of which fails silently
+
+| | what leaks | what it needs |
+|---|---|---|
+| **L2** | `composited` builds its result with a bare `Self(lines:)` and drops the DESTINATION's own α | carry it onto the result |
+| **L3** | 65 bare `FrameBuffer(lines:)` rebuilds, live ones in `DimmedModifier`, `DropdownMenuRenderer`, `AppHeader`, `Alert`, `ProgressView`, `NavigationSplitView`, `Color256Grid` | convert to `replacingLines`, and a test that α survives a `.padding`/`.border`/`.frame` wrap |
+| **L4** | `.offset`/`.position` return a placeholder of empty lines with the real drawing in `overlays[…].content`, so α on the placeholder fades nothing | multiply into every non-screen-level layer's content, recursively — the recursion `cyclingOverlays`/`fadingOverlays` already perform |
+| **L5** | the app header and status bar render real view trees and go straight to `buildOutputLines` | resolve against their OWN backgrounds, not `palette.background` |
+| **L6** | runs emitted by other views inside a faded subtree — a pulsing button under `.opacity(0.5)` — carry unfaded frames and replay at full strength over a faded row | the composite fades a source's `animatedCells` frames too, or drops them |
+| **L7** | `FrameBuffer.==` excludes the new payload, and the render/measure memo keys on it — so an unfaded buffer is served where a faded one is wanted | include it in `==`; α is content, not a perf hint |
+| **L8** | golden snapshots and interaction tests drive `renderToBuffer` / `compositingOverlays` directly, and nothing resolves α there — so every golden of a faded view records the UNRESOLVED buffer and passes while the app is wrong | a public `resolvingOpacity(over:)`, called by the snapshot harness |
+| **L9** | `FrameBuffer.overlay(_:)` is public, unused, and a fourth combining semantics that would ignore α | delete it (pre-1.0, no shims) |
+
+L8 is the one worth dwelling on: it is the "test passed while the app broke"
+shape exactly, and it would have been introduced by this change rather than
+found by it.
+
+### 9.5 Revised staging
+
+1. **Payload as regions**, carried and shifted, consumed by nothing —
+   including `==` (L7) and the `ContainerPayloadAudit` case. Behaviour-neutral.
+2. **L3 and L9**: convert the bare rebuilds, delete the dead `overlay(_:)`.
+   Behaviour-neutral, and it is what stops step 3 leaking.
+3. **The blend**, at the composite and at the three roots, with the ambient
+   surface plumbed (9.3). Still nothing sets a region, so still
+   behaviour-neutral.
+4. **`OpacityModifier` sets regions instead of fading.** The behaviour change,
+   and the frame where the fast path regresses to a render per frame — its own
+   commit, with `idle_cpu.py` before/after in the message.
+5. **Restore the fast path** (§6b), the Example demo, the stress scenario, the
+   A/B.
