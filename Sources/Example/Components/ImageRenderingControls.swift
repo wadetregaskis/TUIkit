@@ -218,13 +218,13 @@ struct ImageRenderingControls: View {
     /// thing they define.
     private var lutPreview: some View {
         let width = 12
+        // As a ramp, not cell by cell: on a 256-colour terminal the per-cell
+        // nearest match bands. See `Color.quantisedRamp(stops:count:depth:)`.
+        let ramp = Color.quantisedRamp(
+            stops: settings.lutStops, count: width, depth: ColorDepth.current)
         return HStack(spacing: 0) {
-            ForEach(0..<width, id: \.self) { cell in
-                Text(verbatim: "\u{2588}")
-                    .foregroundStyle(
-                        Color.interpolate(
-                            stops: settings.lutStops,
-                            phase: Double(cell) / Double(max(1, width - 1))))
+            ForEach(ramp.indices, id: \.self) { cell in
+                Text(verbatim: "\u{2588}").foregroundStyle(ramp[cell])
             }
         }
     }

@@ -72,6 +72,10 @@ public struct GradientEditorPanel: View {
     /// and gradient chips, so no row grows the dialog past the preview.
     private static let previewWidth = 36
 
+    /// ``previewWidth``, for the test that asserts the strip IS the quantised
+    /// ramp — which has to know how long the ramp is to look for it.
+    static var previewWidthForTesting: Int { previewWidth }
+
     /// Creates a gradient-editor panel with a localized title.
     ///
     /// A string **literal** binds here, so it is a lookup key — see
@@ -165,12 +169,15 @@ public struct GradientEditorPanel: View {
     /// froze until something else invalidated the cache.
     private var previewStrip: some View {
         let list = stops.wrappedValue
+        // Through the RAMP overload, which quantises the whole strip at once
+        // and repairs it into a monotone one. Per cell — which this was — a
+        // nearest match has no memory of its neighbours, so the editor's own
+        // preview banded on a 256-colour terminal while the track it was
+        // configuring did not. See `Color.quantisedRamp(stops:count:depth:)`.
         let cells = (0..<Self.previewWidth).map { index in
             TrackRenderer.gradientColor(
-                stops: list,
-                parameter: Self.previewWidth > 1
-                    ? Double(index) / Double(Self.previewWidth - 1) : 0,
-                fallback: list.first ?? .palette.accent)
+                stops: list, index: index, span: Self.previewWidth,
+                fallback: list.first ?? .palette.accent, depth: ColorDepth.current)
         }
         return VStack(spacing: 0) {
             colorCellRow(cells)
@@ -312,9 +319,8 @@ public struct GradientEditorPanel: View {
     private func gradientChip(_ gradient: [Color]) -> some View {
         let cells = (0..<Self.chipStripWidth).map { index in
             TrackRenderer.gradientColor(
-                stops: gradient,
-                parameter: Double(index) / Double(Self.chipStripWidth - 1),
-                fallback: gradient.first ?? .palette.accent)
+                stops: gradient, index: index, span: Self.chipStripWidth,
+                fallback: gradient.first ?? .palette.accent, depth: ColorDepth.current)
         }
         return Button {
             stops.wrappedValue = gradient

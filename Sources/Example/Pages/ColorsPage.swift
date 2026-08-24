@@ -138,36 +138,23 @@ private struct GradientStrip: View, Renderable {
         let cells = max(0, context.availableWidth)
         guard cells > 0 else { return FrameBuffer(lines: [""]) }
 
+        // Quantised as a RAMP, not cell by cell. On a 256-colour terminal a
+        // per-cell nearest match has no memory of its neighbours, and the
+        // strip's smoothness is a property of the SEQUENCE — see
+        // `Color.quantisedRamp(stops:count:depth:)`. This demo had its own
+        // interpolation and got the per-cell answer: "teal → purple" put three
+        // out-of-place cells in every strip it drew.
+        let ramp = Color.quantisedRamp(
+            stops: stops.map { Color.rgb($0.r, $0.g, $0.b) },
+            count: cells, depth: ColorDepth.current)
         var line = ""
         line.reserveCapacity(cells * 20)
-        let denom = max(1, cells - 1)
-        for index in 0..<cells {
-            let parameter = Double(index) / Double(denom)
-            let (r, g, b) = sampleStop(at: parameter)
-            let styled = Text(Self.glyph).foregroundStyle(.rgb(r, g, b))
+        for colour in ramp {
+            let styled = Text(Self.glyph).foregroundStyle(colour)
             let buffer = TUIkit.renderToBuffer(styled, context: context)
             line += buffer.lines.first ?? Self.glyph
         }
         return FrameBuffer(lines: [line])
-    }
-
-    /// Interpolates between the configured stops at a parameter in `0...1`.
-    private func sampleStop(at parameter: Double) -> (UInt8, UInt8, UInt8) {
-        guard stops.count >= 2 else {
-            let stop = stops.first ?? (0, 0, 0)
-            return (stop.r, stop.g, stop.b)
-        }
-        let segments = Double(stops.count - 1)
-        let scaled = max(0.0, min(segments, parameter * segments))
-        let lowerIndex = min(Int(scaled), stops.count - 2)
-        let mix = scaled - Double(lowerIndex)
-        let lower = stops[lowerIndex]
-        let upper = stops[lowerIndex + 1]
-        func lerp(_ start: UInt8, _ end: UInt8) -> UInt8 {
-            let blended = Double(start) + (Double(end) - Double(start)) * mix
-            return UInt8(max(0, min(255, Int(blended.rounded()))))
-        }
-        return (lerp(lower.r, upper.r), lerp(lower.g, upper.g), lerp(lower.b, upper.b))
     }
 }
 
