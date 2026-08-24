@@ -380,15 +380,17 @@ def audit_map(swiftui, tuikit, parity_map):
             elif key in tuikit:
                 stale.append((key, section,
                               "TUIkit has this symbol now — delete the entry"))
-    # A family rule that no longer matches anything absent is either obsolete
-    # or was always too narrow to earn its keep.
+    # A family pattern that matches nothing absent is either obsolete or was
+    # always wrong. Checked one PATTERN at a time, not one rule at a time: a
+    # rule is a list of spellings for the same reason, and a live sibling hides
+    # a dead one indefinitely. `View.gesture` sat dead in the gesture family for
+    # as long as `*Gesture` next to it kept matching, and the nine symbols it
+    # was written for were reported as unexplained gaps the whole time.
     absent = {key for key in swiftui if key not in tuikit}
     for rule in parity_map["families"]:
-        if not any(
-            fnmatch.fnmatch(key, pattern)
-            for pattern in rule["match"] for key in absent
-        ):
-            stale.append((", ".join(rule["match"]), "family", "matches nothing absent"))
+        for pattern in rule["match"]:
+            if not any(fnmatch.fnmatch(key, pattern) for key in absent):
+                stale.append((pattern, "family", "matches nothing absent"))
     return stale
 
 

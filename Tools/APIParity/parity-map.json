@@ -22,7 +22,7 @@
         "AX*",
         "*.accessibility*",
         "View.accessibility*",
-        "View.speech*"
+        "*.speech*"
       ],
       "why": "A terminal has no assistive-technology stack: no VoiceOver, no rotor, no accessibility tree for anything to read. The screen reader IS the terminal's own, driven by the text TUIkit already emits, so contrast and labelling are the levers that carry over — and those are TUIkit's own API."
     },
@@ -37,22 +37,12 @@
     },
     {
       "match": [
-        "*Representable*",
-        "NSView*",
-        "UIView*",
-        "NSViewController*",
-        "UIViewController*"
-      ],
-      "why": "AppKit/UIKit bridging. There is no NSView to wrap in a terminal."
-    },
-    {
-      "match": [
         "*Gesture",
         "*GestureMask*",
         "GestureState*",
-        "View.gesture",
-        "View.highPriorityGesture",
-        "View.simultaneousGesture"
+        "View.gesture*",
+        "View.highPriorityGesture*",
+        "View.simultaneousGesture*"
       ],
       "why": "SwiftUI's gesture algebra composes continuous multi-touch streams. A terminal reports discrete press/release/wheel events with no pressure, no velocity and no simultaneous touches, so there is nothing for a recognizer to arbitrate. TUIkit exposes the events it does get: onTapGesture, onHover, and drag-and-drop."
     },
@@ -88,10 +78,9 @@
     {
       "match": [
         "*.animatableData",
-        "Animatable*",
-        "VectorArithmetic*"
+        "Animatable*"
       ],
-      "why": "SwiftUI interpolates continuous geometry between frames. A cell grid has no sub-cell position to interpolate towards: a glyph is in a cell or it is not. TUIkit animates by re-rendering discrete states instead."
+      "why": "TUIkit has `Animatable`, `AnimatablePair` and `VectorArithmetic`, and interpolates through them. What is absent under this rule is the CONFORMANCE on types TUIkit does not have — CoreGraphics geometry, SwiftUI's shapes — which is reported on the type itself, and `AnimatableValues`, whose variadic packing exists to drive that same geometry."
     },
     {
       "match": [
