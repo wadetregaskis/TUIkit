@@ -65,37 +65,57 @@ what the spec rules out.
 
 **This wants `focus(id:reason:)`** — `.keyboard` / `.pointer` / `.programmatic`
 — with the default keeping today's behaviour and the five sites naming theirs.
-Small, exact, and useful beyond tooltips: "was this focus change the user's
-keyboard?" is a question the reveal machinery also asks in a roundabout way.
 
-The alternative — infer it from a mouse event having arrived this frame — is a
-heuristic that fails when a click focuses one view while the pointer rests over
-another, which is the ordinary case for a click on a scrollbar.
+**There is no difficulty here**, and this entry is a note rather than a
+concern: it is a defaulted parameter and five one-word call-site changes. It is
+recorded because it modifies a shared API that nothing else has asked to
+change, which is a decision worth making deliberately rather than in passing —
+not because it is hard.
+
+The reason not to take the cheap route: inferring "the mouse did it" from a
+mouse event having arrived this frame is a heuristic that fails whenever a
+click focuses one view while the pointer rests over another, which is exactly
+what clicking a scrollbar does.
 
 ## 4. Presentation 1 — a status-bar row
 
 `StatusBar.height` is `style.barHeight(contentRows: 1)`; the tooltip makes that
 `1 + wrapped lines`. The content area is whatever is left.
 
-**The finding, and it is the one the owner asked to watch for.** The bar's
-height is computed in `RenderLoop` *before* the content renders
-(`RenderLoop.swift:451`), and the tooltip's text is published *during* that
-render, by whichever view the pointer is over. So the height is known one frame
-late: the tooltip appears, and the content shifts up on the NEXT frame.
+**No second pass is needed, and my first reading of this was wrong.** It said
+the height would be known a frame late because the tooltip's text is published
+during the content render. It is not: what is published during the render is
+the `.onHover` *registration*. The **invocation** is a mouse event, and events
+are dispatched before the frame begins — `statusBar.height` is read at
+`RenderLoop.swift:451`, well after `mouseEventDispatcher` has processed
+whatever arrived. Focus works the same way (a key event), and so does the
+delay expiring (a scheduled wake, which lands between frames).
 
-Three ways out, and the choice is a UX one:
+So at the moment the height is computed, the frame already knows: whether a
+tooltip is showing, what its text is, and — since the bar's width is the
+terminal's — exactly how many lines it wraps to. One pass, correct height, no
+content shift, at one line or at four.
 
-| | content shift | wasted space | obstructs |
-|---|---|---|---|
-| **Accept the lag** — bar grows next frame | one frame of jump, every appear and disappear | none | no |
-| **Reserve the row always** | none | one row, forever | no |
-| **Draw it as an overlay** over the bar's rows | none | none | the bar's own items, while shown |
-| **Two-pass the frame** — render, read the height, render again | none | none | no (costs a second render pass) |
+The one case that does lag is narrow and probably not worth solving: if the
+help TEXT ITSELF changes while the tooltip is already up (the view re-renders
+with a different string), the bar shows the previous string for one frame,
+because the closure carrying it was registered last frame. A tooltip whose
+text changes under a stationary pointer is not a case worth a second render
+pass.
 
-The last is what `RenderLoop` already does for a header whose height changed
-(there is a correction re-render), so the machinery exists and the cost is
-bounded to frames where the tooltip appears or disappears. **That is the
-recommendation**; the lag is the fallback if the second pass proves expensive.
+That leaves the two real choices as presentation questions rather than
+plumbing ones:
+
+| | content shift | wasted space |
+|---|---|---|
+| **Bar grows and shrinks with the tooltip** | the content area resizes as tooltips come and go | none |
+| **Reserve the row always** | none | one row, forever |
+
+Growing is the recommendation, because the shift is now *synchronous* with the
+tooltip rather than a frame behind it — the content moves and the tooltip
+appears in the same frame, which reads as one event. Reserving is the fallback
+if that still feels unsettled in use, and it is a one-line change to the height
+calculation rather than a different design.
 
 Wrapping is ordinary text wrapping at the bar's width, and the row is drawn
 above the shortcut items, in the bar's own chrome.
