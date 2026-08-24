@@ -883,12 +883,9 @@ extension _NavigationSplitViewCore {
                 : palette.foregroundTertiary
             // Background: pulses across the whole divider while focused /
             // dragging (same min/max the List focus-pulse uses).
+            let pulse = palette.accentFillPulse()
             let background: Color? = info.isActive
-                ? emphasis.color(
-                    dim: palette.accent.opacity(
-                        ViewConstants.focusPulseMin, over: palette.background),
-                    bright: palette.accent.opacity(
-                        ViewConstants.focusPulseMax, over: palette.background))
+                ? emphasis.color(dim: pulse.dim, bright: pulse.bright)
                 : nil
             // Each cell is a self-contained styled string — it ends with a
             // reset — so the pulsing background stays scoped to the divider's

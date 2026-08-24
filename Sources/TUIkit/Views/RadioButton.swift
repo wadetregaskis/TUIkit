@@ -566,7 +566,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
             // the run loop to breathe on its own. Asking for the live phase
             // instead would keep the clock ticking and re-render this entire
             // page ten times a second to repaint one cell.
-            let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
+            let dimAccent = palette.accentPulse().dim
             let cycle = context.environment.selectionEmphasis.cycle(true)
             indicatorColor = cycle.colorNow(dim: dimAccent, bright: palette.accent)
             if !context.isMeasuring {

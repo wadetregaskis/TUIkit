@@ -62,7 +62,7 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
 
         let palette = context.environment.palette
         let cycle = context.environment.selectionEmphasis.cycle(true)
-        let dim = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
+        let dim = palette.accentPulse().dim
         let bright = palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
 
         // Squared off first: the bar spans the row, and a short line would

@@ -141,7 +141,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         }
         return IndicatorCycle(
             isFocused: isFocused && !isDisabled,
-            dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
+            dim: palette.accentPulse().dim,
             bright: palette.accent,
             resting: resting,
             context: context)

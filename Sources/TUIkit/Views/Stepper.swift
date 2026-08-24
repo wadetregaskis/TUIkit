@@ -710,15 +710,6 @@ private struct _StepperCore: View, Renderable, Layoutable {
         return box.value
     }
 
-    /// The two endpoints a focused stepper's arrows breathe between.
-    ///
-    /// One definition, because the drawn arrow and the run that replays it must
-    /// agree: a run built from different endpoints would jump to another colour
-    /// the moment the loop took over from the render.
-    private func focusPulseEndpoints(palette: any Palette) -> (dim: Color, bright: Color) {
-        (palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background), palette.accent)
-    }
-
     /// The runs that breathe the two arrows, so the loop can advance them
     /// without walking the view tree. Empty unless the stepper is focused and
     /// the indicator style actually animates.
@@ -731,7 +722,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         cycle: SelectionEmphasisCycle, palette: any Palette, totalWidth: Int
     ) -> [AnimatedCellRun] {
         guard cycle.isAnimating, totalWidth > 1 else { return [] }
-        let (dim, bright) = focusPulseEndpoints(palette: palette)
+        let (dim, bright) = palette.accentPulse()
         return [
             cycle.run(TerminalSymbols.leftArrow, dim: dim, bright: bright, offsetX: 0, offsetY: 0),
             cycle.run(
@@ -762,8 +753,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
                 ViewConstants.disabledForeground, over: palette.background)
             valueColor = palette.foregroundTertiary
         } else if isFocused {
-            // Pulse between 35% and 100% accent
-            let (dimAccent, brightAccent) = focusPulseEndpoints(palette: palette)
+            let (dimAccent, brightAccent) = palette.accentPulse()
             arrowColor = emphasis.colorNow(dim: dimAccent, bright: brightAccent)
             valueColor = palette.foreground
         } else if isHovered {

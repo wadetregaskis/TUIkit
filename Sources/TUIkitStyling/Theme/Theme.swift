@@ -687,6 +687,50 @@ extension Palette {
 }
 
 extension Palette {
+    /// The two ends a focus pulse breathes between, for a mark drawn in the
+    /// accent over the page.
+    ///
+    /// One definition, in one place, because the two ends have to agree three
+    /// ways at once: with the colour the view *draws*, with the endpoints the
+    /// ``AnimatedCellRun`` that replays it is built from — a run made from a
+    /// different pair jumps the moment the run loop takes over from the render
+    /// — and with every other pulsing control on screen, which is the only
+    /// reason a pulse reads as one property of the UI rather than as several
+    /// controls that happen to blink.
+    ///
+    /// Over ``background`` specifically: ``Color/opacity(_:)`` alone fades
+    /// toward black, which on a light palette is not a dimmer accent but a
+    /// different colour.
+    ///
+    /// - Parameter surface: What the mark is drawn over, when that is not the
+    ///   page — a filled row, a well. The dim end is blended toward it, so the
+    ///   pulse stays a pulse of the accent rather than a fade toward the page's
+    ///   colour somewhere the page is not.
+    public func accentPulse(over surface: Color? = nil) -> (dim: Color, bright: Color) {
+        (accent.opacity(ViewConstants.focusPulseMin, over: surface ?? background), accent)
+    }
+
+    /// The two ends a focus pulse breathes between, for a FILL that content is
+    /// drawn on top of — a selected row's background, a highlighted date cell,
+    /// a dragging split-view divider.
+    ///
+    /// The dim end is the same; the bright end stops at ``ViewConstants/focusPulseMax``
+    /// rather than reaching the accent, and that is the whole difference between
+    /// the two. A fill carries arbitrary foreground content that keeps its own
+    /// colour, so the bright end is bounded by what that content stays readable
+    /// against — the pair `PaletteContrastAuditTests` measures. A mark drawn IN
+    /// the accent has nothing on top of it and can go all the way.
+    ///
+    /// - Parameter surface: What the fill sits on, when that is not the page.
+    public func accentFillPulse(over surface: Color? = nil) -> (dim: Color, bright: Color) {
+        let ground = surface ?? background
+        return (
+            accent.opacity(ViewConstants.focusPulseMin, over: ground),
+            accent.opacity(ViewConstants.focusPulseMax, over: ground))
+    }
+}
+
+extension Palette {
     /// The more readable of the palette's foreground / background on
     /// `surface`, nudged (hue-preserving) until it reaches body-text
     /// contrast (4.5:1) where possible.

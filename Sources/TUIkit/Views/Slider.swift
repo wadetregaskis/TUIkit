@@ -764,15 +764,6 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         return box.value
     }
 
-    /// The two endpoints a focused slider's arrows breathe between.
-    ///
-    /// One definition, because the drawn arrow and the run that replays it must
-    /// agree: a run built from different endpoints would jump to another colour
-    /// the moment the loop took over from the render.
-    private func focusPulseEndpoints(palette: any Palette) -> (dim: Color, bright: Color) {
-        (palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background), palette.accent)
-    }
-
     /// The runs that breathe the two arrows, so the loop can advance them
     /// without walking the view tree. Empty unless the slider is focused and
     /// the indicator style actually animates.
@@ -785,7 +776,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         cycle: SelectionEmphasisCycle, palette: any Palette, trackWidth: Int
     ) -> [AnimatedCellRun] {
         guard cycle.isAnimating else { return [] }
-        let (dim, bright) = focusPulseEndpoints(palette: palette)
+        let (dim, bright) = palette.accentPulse()
         let trackLeft = 2  // "◀ "
         return [
             cycle.run(
@@ -826,8 +817,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             arrowColor = palette.foregroundTertiary.opacity(
                 ViewConstants.disabledForeground, over: palette.background)
         } else if isFocused {
-            // Pulse between 35% and 100% accent
-            let (dimAccent, brightAccent) = focusPulseEndpoints(palette: palette)
+            let (dimAccent, brightAccent) = palette.accentPulse()
             arrowColor = indicator.colorNow(dim: dimAccent, bright: brightAccent)
         } else if isHovered {
             arrowColor = palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)

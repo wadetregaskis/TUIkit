@@ -392,7 +392,7 @@ enum DropdownMenu {
         // accent — the same affordance ``List`` uses for its focused row —
         // to make it visually obvious that the arrow keys and Enter are
         // driving the menu rather than whatever sits behind it.
-        let dimAccent = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
+        let dimAccent = palette.accentPulse().dim
         let brightAccent = palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
         let highlightBg = emphasis.color(dim: dimAccent, bright: brightAccent)
         // The border echoes the highlight pulse at lower intensity so the

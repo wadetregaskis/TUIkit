@@ -44,10 +44,8 @@ enum RowBackground {
     /// this type exists to prevent.
     @MainActor
     static func focusedSelection(in context: RenderContext, palette: any Palette) -> Self {
-        .pulsing(
-            context.environment.selectionEmphasis.cycle(true),
-            dim: palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
-            bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background))
+        let (dim, bright) = palette.accentFillPulse()
+        return .pulsing(context.environment.selectionEmphasis.cycle(true), dim: dim, bright: bright)
     }
 
     /// The colour to draw with in the frame being rendered now.

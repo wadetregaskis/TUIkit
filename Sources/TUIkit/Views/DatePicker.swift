@@ -355,10 +355,7 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         // whether or not it's applied.
         let cycle = context.environment.selectionEmphasis.cycle(
             isFocused && !context.isMeasuring)
-        let dimBlock = palette.accent.opacity(
-            ViewConstants.focusPulseMin, over: palette.background)
-        let brightBlock = palette.accent.opacity(
-            ViewConstants.focusPulseMax, over: palette.background)
+        let (dimBlock, brightBlock) = palette.accentFillPulse()
         let activeHighlight: Color? = isFocused && !context.isMeasuring
             ? cycle.colorNow(dim: dimBlock, bright: brightBlock) : nil
 
