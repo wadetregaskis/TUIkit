@@ -9,9 +9,9 @@ import TUIkitStyling
 /// A recolouring of an image, written as "this becomes that".
 ///
 /// ```swift
-/// .imageToneCurve(.inverted)                              // a negative
 /// .imageToneCurve([(.black, .rgb(20, 20, 60)),            // a duotone:
 ///                  (.white, .rgb(255, 215, 130))])        // navy shadows, warm highlights
+/// .imageToneCurve(.inverted)                              // a negative — see below
 /// ```
 ///
 /// ## Why this is not a palette
@@ -37,8 +37,23 @@ import TUIkitStyling
 /// ``ASCIIConverter/monoInkThreshold(for:)``.
 public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
 
-    /// The pairs, as the caller wrote them.
+    /// The pairs, as the caller wrote them. Empty for ``inverted``, which is
+    /// not a mapping from tone to colour — see ``negatesChannels``.
     public let stops: [Stop]
+
+    /// Whether this is the photographic negative rather than a transfer curve.
+    ///
+    /// A transfer curve is by construction a function of LUMINANCE alone: the
+    /// pixel's tone picks a position, and the colour there replaces it. Every
+    /// pixel of the same tone therefore comes out the same colour, whatever its
+    /// hue was — which is exactly right for a duotone, and exactly wrong for a
+    /// negative. Written as `{black → white, white → black}` it produced a
+    /// grey image from a colour one: correct arithmetic, wrong operation.
+    ///
+    /// A negative complements each channel independently, so red becomes cyan
+    /// and the picture keeps its colour. That cannot be said as a curve at all,
+    /// so it is said here instead.
+    public let negatesChannels: Bool
 
     /// One "this becomes that".
     public struct Stop: Sendable, Equatable {
@@ -64,7 +79,15 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
 
     public init(_ stops: [Stop]) {
         self.stops = stops
+        self.negatesChannels = false
         self.knots = Self.knots(from: stops)
+    }
+
+    /// The photographic negative. Private because ``inverted`` is the spelling.
+    private init(negatingChannels: Bool) {
+        self.stops = []
+        self.negatesChannels = negatingChannels
+        self.knots = []
     }
 
     public init(_ pairs: [(Color, Color)]) {
@@ -75,29 +98,28 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
         self.init(elements)
     }
 
-    public static func == (lhs: Self, rhs: Self) -> Bool { lhs.stops == rhs.stops }
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.stops == rhs.stops && lhs.negatesChannels == rhs.negatesChannels
+    }
 
     /// A curve that changes nothing — the spelling for "no recolouring", and
     /// the one an empty list needs, since `ASCIIToneCurve([])` cannot say on
     /// its own which kind of empty list it is.
     public static let identity = Self([Stop]())
 
-    /// Black becomes white and white becomes black: a photographic negative,
-    /// continuous through every tone between.
+    /// A photographic negative: every channel complemented, so light becomes
+    /// dark and red becomes cyan, with the picture's colour intact.
     ///
-    /// Spelled with explicit RGB rather than ``Color/black`` and
-    /// ``Color/white``: the named ANSI white is 229, not 255 — it is a
-    /// TERMINAL colour, and terminals reserve the top of the range for bright
-    /// white. A negative that stopped at 229 would quietly lose the last of its
-    /// highlights, and this is one of the few places where the sRGB extreme is
-    /// what is actually meant.
-    public static let inverted = Self([Stop(from: .rgb(0, 0, 0), to: .rgb(255, 255, 255)),
-                                       Stop(from: .rgb(255, 255, 255), to: .rgb(0, 0, 0))])
+    /// Not a curve, and it cannot be one — see ``negatesChannels``. Written as
+    /// `{black → white, white → black}` it read each pixel's TONE and replaced
+    /// the pixel with the grey at that position, which inverted a colour
+    /// photograph into a black-and-white one.
+    public static let inverted = Self(negatingChannels: true)
 
     /// Whether this curve would change anything. An empty or single-stop curve
     /// cannot define a mapping and is skipped rather than applied as a
     /// flattening constant.
-    var isIdentity: Bool { knots.count < 2 }
+    var isIdentity: Bool { !negatesChannels && knots.count < 2 }
 
     /// `pixel` recoloured by this curve.
     ///
@@ -122,6 +144,9 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
     /// reveal or hide.
     func apply(to pixel: RGBA) -> RGBA {
         guard !isIdentity else { return pixel }
+        if negatesChannels {
+            return RGBA(r: 255 &- pixel.r, g: 255 &- pixel.g, b: 255 &- pixel.b, a: pixel.a)
+        }
         let tone = pixel.luminance
         // Below the first knot and above the last, the curve holds its end
         // value rather than extrapolating into colours nobody named.
@@ -175,6 +200,8 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
     /// This curve with every colour it names made concrete, so a stop may be
     /// `.palette.accent` and follow the theme exactly as a palette entry does.
     public func resolved(with palette: any Palette) -> Self {
-        Self(stops.map { Stop(from: $0.from.resolve(with: palette), to: $0.to.resolve(with: palette)) })
+        guard !negatesChannels else { return self }  // names no colours
+        return Self(
+            stops.map { Stop(from: $0.from.resolve(with: palette), to: $0.to.resolve(with: palette)) })
     }
 }
