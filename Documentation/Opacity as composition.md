@@ -273,11 +273,47 @@ because the destination is unknown then. But they can be computed at
   cycles).
 
 So: never "always", and never a full extra render. The worst case is a fade
-over something that moves every frame, which pays 16× the composite of the
-faded layer per frame. Whether that matters depends entirely on the layer's
-area, which is why §6's measurement plan wants a stress scenario with a faded
-layer over a busy destination — that is the case, and nothing existing measures
-it.
+over something that moves every frame, which re-bakes the phases every frame.
+Whether that matters depends entirely on the layer's area, which is why §6's
+measurement plan wants a stress scenario with a faded layer over a busy
+destination — that is the case, and nothing existing measures it.
+
+### What a read of the fast path adds, and it is the binding constraint
+
+Four facts, from mapping `_OpacityView.cycling` → `AnimatedBufferCycle.runs` →
+`ReplayableFrame` → `replayAnimations`:
+
+1. **A phase is a finished STRING**, not a colour and a rule. Colour
+   resolution, contrast correction and 256-cube downsampling are all done at
+   bake time and frozen into bytes. Up to 120 phases, one line-set each.
+2. **It has to be**, and this is the constraint rather than a choice:
+   `AnimatedCellRun` lives in `TUIkitCore`, which cannot see `Color` at all
+   (`TUIkitCore` and `TUIkitStyling` are siblings with no dependency between
+   them). A run cannot carry "this colour, faded by that much" because it
+   cannot name a colour.
+3. **`ReplayableFrame` keeps no way back.** It holds finished rows, run
+   offsets and a frame index — no view tree, no palette, no link from a run to
+   the buffer that produced it. The replay indexes an array and splices; it
+   cannot recompute a frame.
+4. **The frames are load-bearing for scheduling**, not only for painting:
+   `timeUntilNextChange` derives the loop's sleep from string equality between
+   consecutive frames, so a quantised fade whose phases render identically
+   costs no wake-ups.
+
+Two consequences for the implementation:
+
+- **The bake must move to composite time, and it can**, because every one of
+  the eight `composited` callers lives in the umbrella module where `Color` is
+  visible. The bake costs the same as it does today — N phases × rows of string
+  rewriting — it simply happens against a real destination instead of an
+  assumed one. It is only *repeated* when the destination changes.
+- **The replay needs nothing new.** `patchingAnimatedCells` already reads the
+  destination's background at the run's column and re-states it around the
+  frame; that a destination read exists there at all is what makes the
+  splice-a-pre-baked-frame model survive this change.
+
+So the fast path is keepable, and keeping it is a matter of moving one call
+rather than redesigning the replay.
 
 ## 7. Staging, and whether it wants a branch
 
