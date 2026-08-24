@@ -870,6 +870,29 @@ extension ItemListHandler {
     /// How many rows the drag has hold of. One outside a multi-row gesture.
     var heldRowCount: Int { reorder?.held.count ?? 0 }
 
+    /// `contentY` if it is a line of this control's ROW space, `nil` when it is
+    /// not: above the first row line (the top border, a title, a `Table`'s
+    /// column header) or at or past the end of the content area (the bottom
+    /// border, and everything below the control).
+    ///
+    /// The horizontal half of the same question is the caller's — only it knows
+    /// which of its columns are rows — but the vertical bound belongs here,
+    /// where ``contentHeight`` is, and it has to be asked at all: a `contentY`
+    /// off the rows still names a LINE, and every consumer that merely fails to
+    /// find a band there treats it as "the pointer is somewhere I can't resolve"
+    /// rather than "the pointer is not on this control". Auto-scroll's retarget
+    /// then clamps it onto the nearest row — which is right for a chrome line
+    /// INSIDE the row space (the "N more" indicator the hot margin sits on) and
+    /// wrong for a cursor that has left the control, where it resurrected a drop
+    /// slot nowhere near the pointer and let a release outside land at an edge.
+    func rowSpaceContentY(_ contentY: Int) -> Int? {
+        guard contentY >= 0 else { return nil }
+        // No content height means the owner reserves its own lines and cannot
+        // say where its row space ends (the handler's own unit tests).
+        if let contentHeight, contentY >= contentHeight { return nil }
+        return contentY
+    }
+
     /// Tracks a drag to `contentY` (`nil` when the cursor is off the rows —
     /// over the border, a header, or past the last row — which holds the
     /// current target rather than snapping anywhere).

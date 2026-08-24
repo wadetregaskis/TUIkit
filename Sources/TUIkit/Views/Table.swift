@@ -2575,11 +2575,12 @@ where Value.ID: Hashable {
                 /// The drag's position in the handler's band space — lines from
                 /// the interior's first CONTENT line, the same origin
                 /// ``ItemListHandler/DrawnBand/yStart`` counts from — or `nil`
-                /// once the cursor leaves the content columns, which holds the
-                /// current drop target rather than snapping it somewhere the
-                /// user isn't pointing.
+                /// once the cursor leaves the rows, in either axis. The session
+                /// path asks the same two questions in
+                /// `DragAndDropSession.contentY(in:)`, and the two must agree.
                 var dragContentY: Int? {
-                    contentColumns.contains(event.x) ? event.y - interiorTopY : nil
+                    contentColumns.contains(event.x)
+                        ? captureHandler.rowSpaceContentY(event.y - interiorTopY) : nil
                 }
 
                 switch event.phase {

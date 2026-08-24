@@ -129,7 +129,19 @@ extension DragAndDropSession {
             cancelReturningToOrigin()
             return true
         }
-        let contentY = contentY(in: host)
+        guard let contentY = contentY(in: host) else {
+            // Released off the rows — outside the control, or on its border.
+            // There is nowhere to land, so the gesture is abandoned outright
+            // under EVERY feedback mode: `.dimmed` would otherwise commit to
+            // the slot it was still holding, and `.live` would leave the rows
+            // wherever the pointer last was inside the list, when what the user
+            // did was carry them out and let go. Releasing over nothing is the
+            // cancel, as it is on macOS.
+            guard wasReordering else { return false }
+            host.handler.cancelReorder()
+            cancelReturningToOrigin()
+            return true
+        }
         // Asked BEFORE the drop, which clears the state it reads.
         let landsNowhere = host.handler.reorderLandsNowhere(atContentY: contentY)
         guard host.handler.dropReorder(atContentY: contentY) else { return false }
@@ -256,17 +268,27 @@ extension DragAndDropSession {
     }
 
     /// Where the cursor sits in a host's content-line space — the coordinates
-    /// its rows are laid out in — or `nil` when it is off the rows' columns.
+    /// its rows are laid out in — or `nil` when it is off the rows: outside the
+    /// columns they occupy, or outside the lines.
     ///
     /// Derived from the ABSOLUTE cursor and this frame's rectangle, never from
     /// the coordinates the captured mouse closure was handed: the dispatcher
     /// localises a captured gesture by the offsets stamped at the *press*, which
     /// stop describing anything real the moment the control moves under it.
+    ///
+    /// Both bounds matter, and only the horizontal one was here. A cursor
+    /// dragged past the top or bottom edge kept naming a line — a negative one,
+    /// or one past the content area — which reads as "somewhere I can't resolve"
+    /// rather than "not on this control", and auto-scroll's retarget clamps the
+    /// former onto the nearest row. So a drag held outside the control showed a
+    /// drop slot at whichever edge it had left by, and releasing there landed
+    /// the rows at the start or the end of the list. See
+    /// ``ItemListHandler/rowSpaceContentY(_:)``.
     private func contentY(in host: ReorderHost) -> Int? {
         guard let event = lastAbsoluteEvent,
             let rect = dispatcher?.regionRect(for: host.handlerID)
         else { return nil }
         guard host.contentColumns.contains(event.x - rect.offsetX) else { return nil }
-        return event.y - rect.localOriginY - host.topInset
+        return host.handler.rowSpaceContentY(event.y - rect.localOriginY - host.topInset)
     }
 }

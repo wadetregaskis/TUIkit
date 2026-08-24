@@ -17,20 +17,35 @@
 /// knob for it. A terminal has no translucency and no motion between frames, so
 /// the trade-offs differ enough to be worth exposing — see
 /// ``TUIkit/View/rowReorderFeedback(_:)``.
+///
+/// Whichever mode is in force, a release **off the rows** — past the control's
+/// edge, or on its border — abandons the gesture: the rows go back where they
+/// were picked up and the preview walks home. Only a pointer over a row is
+/// pointing at a place to land, and dragging out is how a user changes their
+/// mind — there is no key for it, because a drag has to stay carriable across
+/// the app and that needs the navigation keys to keep navigating.
 public enum RowReorderFeedback: String, Sendable, Hashable, CaseIterable {
     /// The rows reorder **as the cursor moves**, so the list always shows the
     /// result of dropping right here. The default.
     ///
     /// The cost is that `onMove` fires once per slot the row crosses rather
-    /// than once for the whole gesture. Prefer ``dimmed`` or ``cursor`` when
-    /// each move is expensive or separately undoable.
+    /// than once for the whole gesture — and a release off the rows adds one
+    /// more, since undoing a move that has already happened is itself a move.
+    /// Prefer ``dimmed`` or ``cursor`` when each move is expensive or
+    /// separately undoable.
     case live
 
     /// The row leaves its place and reappears **dimmed** in the slot it would
     /// land in. The list closes up behind it and keeps its length, so what is on
     /// screen is exactly the order a drop would produce.
     ///
-    /// `onMove` fires once, on release.
+    /// The row stays drawn at the slot it was last over even while the pointer
+    /// is off the rows — nothing else on screen is holding it, so it has to be
+    /// somewhere — but that is only where it is drawn. A release out there still
+    /// abandons the gesture.
+    ///
+    /// `onMove` fires once, on release, and not at all when released away from
+    /// the rows.
     case dimmed
 
     /// Like ``dimmed``, but the row rides the **pointer**: a copy of it floats

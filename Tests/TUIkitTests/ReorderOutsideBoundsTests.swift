@@ -1,0 +1,245 @@
+//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  ReorderOutsideBoundsTests.swift
+//
+//  Where a reorder drag can and cannot land: the rows, and nothing else. A
+//  cursor carried past a control's edge is not pointing at its first or last
+//  row — it is pointing at nothing — so no drop slot follows it out there and
+//  releasing is a cancel, whatever the feedback mode.
+//
+//  Both twins, in one file: the rule is one rule, and `List` and `Table` reach
+//  it through their own geometry (a title vs a column header, child buffers vs
+//  lines of text).
+//
+//  Created by Wade Tregaskis
+//  License: MIT
+
+import Foundation
+import Testing
+
+@testable import TUIkit
+@testable import TUIkitCore
+
+@MainActor
+@Suite("A reorder released off the rows is a cancel")
+struct ReorderOutsideBoundsTests {
+
+    /// The screen line of a control's bottom border.
+    private func bottomBorder(_ buffer: FrameBuffer) -> Int {
+        buffer.lines.lastIndex { $0.stripped.contains("╰") } ?? -1
+    }
+
+    // MARK: - Table
+
+    /// Presses `source`, drags through `via`, then out to `escape` — one render
+    /// between each step, as the run loop has.
+    private func dragOut(
+        _ fixture: TableReorderFixture, from source: String, via: String,
+        escapeBy: (FrameBuffer) -> Int, release: Bool = true
+    ) -> ItemListHandler<String>? {
+        let buffer = fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, source)))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, via)))
+        fixture.render()
+        let away = escapeBy(buffer)
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: away))
+        fixture.render()
+        let handler = fixture.handler
+        if release {
+            fixture.dispatcher.dispatch(
+                MouseEvent(button: .left, phase: .released, x: 2, y: away))
+            fixture.render()
+        }
+        return handler
+    }
+
+    @Test("Table (.cursor): the gap does not follow the cursor out of the table")
+    func tableCursorGapDisappearsOutside() {
+        let fixture = TableReorderFixture(feedback: .cursor)
+        let handler = dragOut(
+            fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) + 2 }, release: false)
+        #expect(
+            handler?.reorder?.targetOffset == nil,
+            "a slot below the table is a slot the pointer is nowhere near")
+    }
+
+    @Test("Table (.cursor): releasing below the table leaves the order alone")
+    func tableCursorReleaseOutsideCancels() {
+        let fixture = TableReorderFixture(feedback: .cursor)
+        _ = dragOut(fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) + 2 })
+        #expect(fixture.rows == ["a", "b", "c", "d", "e"])
+    }
+
+    /// `.dimmed` keeps showing the row at the slot it was last over — it has to,
+    /// since nothing else on screen is holding it — but that is a *drawing*
+    /// decision. The release is still a release over nothing.
+    @Test("Table (.dimmed): releasing below the table leaves the order alone")
+    func tableDimmedReleaseOutsideCancels() {
+        let fixture = TableReorderFixture(feedback: .dimmed)
+        _ = dragOut(fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) + 2 })
+        #expect(fixture.rows == ["a", "b", "c", "d", "e"])
+    }
+
+    /// `.live` has been moving the rows all along, so its cancel has something
+    /// to undo: the block goes back to where the gesture picked it up.
+    @Test("Table (.live): releasing below the table puts the rows back")
+    func tableLiveReleaseOutsideRestores() {
+        let fixture = TableReorderFixture(feedback: .live)
+        _ = dragOut(fixture, from: "a", via: "c", escapeBy: { bottomBorder($0) + 2 })
+        #expect(fixture.rows == ["a", "b", "c", "d", "e"])
+    }
+
+    /// The border shares a line with nothing droppable — it is chrome, exactly
+    /// as it is for a click (which focuses the control without selecting a row).
+    @Test("Table: the bottom border is not the last row")
+    func tableBorderIsNotARow() {
+        let fixture = TableReorderFixture(feedback: .cursor)
+        _ = dragOut(fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) })
+        #expect(fixture.rows == ["a", "b", "c", "d", "e"])
+    }
+
+    /// The guard against over-correcting: an ordinary drag that never leaves the
+    /// rows still lands. (The suites next door cover this at length; it is here
+    /// so this file fails loudly if the bound is drawn one line too tight.)
+    @Test("Table: a drag that stays on the rows still moves them")
+    func tableInsideStillDrops() {
+        let fixture = TableReorderFixture(feedback: .cursor)
+        fixture.drag(from: "a", to: "c")
+        #expect(fixture.rows == ["b", "c", "a", "d", "e"])
+    }
+
+    /// The auto-scroll case, which is where this actually bit. A drag held past
+    /// an edge keeps the list scrolling, and the retarget that makes the slot
+    /// ride the leading edge while the rows stream past it CLAMPS the pointer
+    /// onto the rows — right for a chrome line inside the row area (the "N more"
+    /// indicator the hot margin sits on), and wrong for a pointer that has left
+    /// the control, where it resurrected a gap two lines below the table and let
+    /// the release land the rows at the end of the list.
+    ///
+    /// The engaged flag is asserted too: without it this passes vacuously, on a
+    /// drag that never auto-scrolled at all.
+    @Test("Table: auto-scrolling past the bottom edge opens no slot out there")
+    func tableAutoScrollOutsideOpensNoSlot() {
+        let order = ["a", "b", "c", "d", "e", "f", "g", "h"]
+        let fixture = TableReorderFixture(rows: order, feedback: .cursor)
+        var buffer = fixture.render()
+        let away = bottomBorder(buffer) + 2
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "b")))
+        fixture.render()
+        var seen: [String] = []
+        for tick in 0..<10 {
+            // A real pointer keeps reporting while it is held — one report and
+            // the auto-scroll lapses.
+            fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: away))
+            fixture.tui.dragAndDropSession.driveAutoScroll(
+                nowNanos: UInt64(tick) &* 200_000_000)
+            buffer = fixture.render()
+            seen.append(
+                (fixture.handler?.reorder?.targetOffset.map(String.init) ?? "-")
+                    + (fixture.handler?.isAutoScrolling == true ? "!" : ""))
+        }
+        #expect(seen.contains { $0.hasSuffix("!") }, "auto-scroll never engaged: \(seen)")
+        #expect(seen.allSatisfy { $0.hasPrefix("-") }, "a slot opened outside: \(seen)")
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: away))
+        fixture.render()
+        #expect(fixture.rows == order)
+    }
+
+    // MARK: - List
+
+    private func dragOut(
+        _ fixture: ListReorderFixture, from source: String, via: String,
+        escapeBy: (FrameBuffer) -> Int, release: Bool = true
+    ) -> ItemListHandler<String>? {
+        let buffer = fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, source)))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: fixture.rowY(buffer, via)))
+        fixture.render()
+        let away = escapeBy(buffer)
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: away))
+        fixture.render()
+        let handler = fixture.handler
+        if release {
+            fixture.dispatcher.dispatch(
+                MouseEvent(button: .left, phase: .released, x: 2, y: away))
+            fixture.render()
+        }
+        return handler
+    }
+
+    @Test("List (.cursor): the gap does not follow the cursor out of the list")
+    func listCursorGapDisappearsOutside() {
+        let fixture = ListReorderFixture(feedback: .cursor)
+        let handler = dragOut(
+            fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) + 2 }, release: false)
+        #expect(handler?.reorder?.targetOffset == nil)
+    }
+
+    @Test("List (.cursor): releasing below the list leaves the order alone")
+    func listCursorReleaseOutsideCancels() {
+        let fixture = ListReorderFixture(feedback: .cursor)
+        _ = dragOut(fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) + 2 })
+        #expect(fixture.items == ["a", "b", "c", "d", "e"])
+    }
+
+    @Test("List (.dimmed): releasing below the list leaves the order alone")
+    func listDimmedReleaseOutsideCancels() {
+        let fixture = ListReorderFixture(feedback: .dimmed)
+        _ = dragOut(fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) + 2 })
+        #expect(fixture.items == ["a", "b", "c", "d", "e"])
+    }
+
+    @Test("List (.live): releasing below the list puts the rows back")
+    func listLiveReleaseOutsideRestores() {
+        let fixture = ListReorderFixture(feedback: .live)
+        _ = dragOut(fixture, from: "a", via: "c", escapeBy: { bottomBorder($0) + 2 })
+        #expect(fixture.items == ["a", "b", "c", "d", "e"])
+    }
+
+    @Test("List: the bottom border is not the last row")
+    func listBorderIsNotARow() {
+        let fixture = ListReorderFixture(feedback: .cursor)
+        _ = dragOut(fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) })
+        #expect(fixture.items == ["a", "b", "c", "d", "e"])
+    }
+
+    @Test("List: a drag that stays on the rows still moves them")
+    func listInsideStillDrops() {
+        let fixture = ListReorderFixture(feedback: .cursor)
+        fixture.drag(from: "a", to: "c")
+        #expect(fixture.items == ["b", "c", "a", "d", "e"])
+    }
+
+    /// The `Table` twin above, through a `List`'s geometry.
+    @Test("List: auto-scrolling past the bottom edge opens no slot out there")
+    func listAutoScrollOutsideOpensNoSlot() {
+        let order = ["a", "b", "c", "d", "e", "f", "g", "h"]
+        let fixture = ListReorderFixture(items: order, feedback: .cursor)
+        var buffer = fixture.render()
+        let away = bottomBorder(buffer) + 2
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "b")))
+        fixture.render()
+        var seen: [String] = []
+        for tick in 0..<10 {
+            fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: away))
+            fixture.tui.dragAndDropSession.driveAutoScroll(
+                nowNanos: UInt64(tick) &* 200_000_000)
+            buffer = fixture.render()
+            seen.append(
+                (fixture.handler?.reorder?.targetOffset.map(String.init) ?? "-")
+                    + (fixture.handler?.isAutoScrolling == true ? "!" : ""))
+        }
+        #expect(seen.contains { $0.hasSuffix("!") }, "auto-scroll never engaged: \(seen)")
+        #expect(seen.allSatisfy { $0.hasPrefix("-") }, "a slot opened outside: \(seen)")
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: away))
+        fixture.render()
+        #expect(fixture.items == order)
+    }
+}

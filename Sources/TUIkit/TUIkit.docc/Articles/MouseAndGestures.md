@@ -290,6 +290,12 @@ edge and it auto-scrolls, and the slot stays where you are pointing while the
 rows stream past underneath. It is a place in the list you are aiming at, and
 you have not moved.
 
+*Near* the edge is not the same as *past* it. Auto-scroll engages from a hot
+margin just inside the control, where the pointer is still on a row — and one
+dragged beyond the frame is not on anything, so the slot closes and a release
+there abandons the gesture rather than landing at whichever end it left by.
+Dragging out is how a user changes their mind.
+
 A **row reorder** is carriable in the same way, with one limit that follows from
 what it is: a reorder can only land in the list it came from, so leaving that
 list's page and coming back resumes the gesture, and releasing anywhere else

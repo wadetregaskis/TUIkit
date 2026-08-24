@@ -1906,11 +1906,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 }
 
                 /// The drag's position in the handler's content-line space, or
-                /// `nil` once the cursor leaves the content columns — which
-                /// holds the current drop target rather than snapping it
-                /// somewhere the user isn't pointing.
+                /// `nil` once the cursor leaves the rows, in either axis. The
+                /// session path asks the same two questions in
+                /// `DragAndDropSession.contentY(in:)`, and the two must agree.
                 var dragContentY: Int? {
-                    contentColumns.contains(event.x) ? event.y - topInset : nil
+                    contentColumns.contains(event.x)
+                        ? captureHandler.rowSpaceContentY(event.y - topInset) : nil
                 }
 
                 switch event.phase {

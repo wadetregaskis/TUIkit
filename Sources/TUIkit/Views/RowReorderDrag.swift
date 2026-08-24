@@ -113,6 +113,10 @@ protocol RowReorderHosting: AnyObject {
     /// The held rows that sat above the one the pointer took hold of.
     var reorderHeldRowsAboveGrab: [Int] { get }
 
+    /// `contentY` if it is a line of this control's ROW space, `nil` when the
+    /// cursor is somewhere no row can be — see the implementation.
+    func rowSpaceContentY(_ contentY: Int) -> Int?
+
     /// Tracks the drag to a position in this control's content-line space.
     func dragReorder(toContentY contentY: Int?)
 
