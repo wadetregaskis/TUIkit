@@ -63,4 +63,19 @@ walk() {
 cd "$REPO"
 walk Example "$EXAMPLE_ITEMS"
 walk Stress  "$STRESS_ITEMS"
+
+# A different class of check, and the only one that needs TWO processes: does a
+# setting written in one launch come back in the next? The framework's storage
+# layer has unit tests; what they cannot say is whether an app's own keys
+# round-trip through a real exit. ~11 s, and `full` only — `quick` runs on
+# every lane and is budgeted at about a minute.
+#
+# Its own config directory, NOT the exported one above: the probe's whole
+# method is a fresh directory against a reused one, and it must not inherit a
+# directory the walks have already written to.
+if [ "$DEPTH" = "full" ]; then
+    echo "── persistence: settings survive a relaunch ──"
+    "$VENV/bin/python" "$HERE/persistence_probe.py" --binary "$REPO/$BUILD_DIR/Example"
+fi
+
 echo "PTY smoke ($DEPTH): both apps survived."
