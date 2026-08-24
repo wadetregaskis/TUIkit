@@ -149,28 +149,19 @@ public struct FrameBuffer: Sendable, Equatable {
     /// because a run *is* a claim about particular cells. See ``AnimatedCellRun``.
     public var animatedCells: [AnimatedCellRun] = []
 
-    /// How opaque this buffer is when it is drawn onto something else, `0`
-    /// through `1`.
+    /// Rectangles of this buffer that are drawn at less than full opacity,
+    /// carried and shifted exactly like ``hitTestRegions`` and ``animatedCells``
+    /// — because opacity, like a run, is a claim about particular cells.
     ///
-    /// `1` — the default — is the identity, costs nothing, and is what almost
-    /// every buffer carries.
+    /// Empty for almost every buffer, which is the identity and costs nothing.
     ///
-    /// A view with `.opacity(_:)` sets this rather than fading its own colours,
-    /// and the difference is the whole design: **a colour cannot be faded
-    /// toward a surface the view cannot see.** Fading at render time has to
-    /// guess what is behind, and the guess is the app background — which is
-    /// wrong over any sibling that painted something, and which leaves
-    /// `opacity(0)` drawing a near-black rectangle rather than revealing what
-    /// it sits on. So the fade is deferred to the moment the buffer is drawn
-    /// onto another one, where the destination is finally known. See
+    /// A view with `.opacity(_:)` emits one of these rather than fading its own
+    /// colours, because **a colour cannot be faded toward a surface the view
+    /// cannot see**. The fade is deferred to whatever finally draws the buffer
+    /// onto something — a `ZStack`, an overlay, or the root — where the
+    /// destination is known. See ``OpacityRegion`` and
     /// `Documentation/Opacity as composition.md`.
-    ///
-    /// Carried by every operation that preserves a buffer's content, and
-    /// CONSUMED by the ones that draw it onto something else. A buffer that
-    /// reaches the terminal without ever being drawn onto anything is resolved
-    /// against the app's background, which is the same answer the old
-    /// render-time fade gave — correct there, and only there.
-    public var opacity: Double = 1
+    public var opacityRegions: [OpacityRegion] = []
 
     /// Creates an empty buffer.
     public init() {
@@ -301,6 +292,11 @@ extension FrameBuffer {
             && lhs.overlays == rhs.overlays
             && lhs.hitTestRegions == rhs.hitTestRegions
             && lhs.animatedCells == rhs.animatedCells
+            // Opacity is CONTENT, not a hint: the render and measure memos key
+            // on this equality, so leaving it out would serve an unfaded buffer
+            // where a faded one was wanted — and the two are identical in every
+            // other respect, which is exactly when a memo hits.
+            && lhs.opacityRegions == rhs.opacityRegions
     }
 }
 
@@ -352,6 +348,10 @@ extension FrameBuffer {
             if !other.animatedCells.isEmpty {
                 animatedCells.append(
                     contentsOf: other.shiftedAnimatedCells(byX: 0, y: priorHeight))
+            }
+            if !other.opacityRegions.isEmpty {
+                opacityRegions.append(
+                    contentsOf: other.shiftedOpacityRegions(byX: 0, y: priorHeight))
             }
             return
         }
@@ -431,6 +431,10 @@ extension FrameBuffer {
             animatedCells.append(
                 contentsOf: other.shiftedAnimatedCells(byX: 0, y: verticalShift))
         }
+        if !other.opacityRegions.isEmpty {
+            opacityRegions.append(
+                contentsOf: other.shiftedOpacityRegions(byX: 0, y: verticalShift))
+        }
     }
 
     /// Places another buffer to the right of this one with optional spacing.
@@ -471,6 +475,10 @@ extension FrameBuffer {
             if !other.animatedCells.isEmpty {
                 animatedCells.append(
                     contentsOf: other.shiftedAnimatedCells(byX: priorWidth, y: 0))
+            }
+            if !other.opacityRegions.isEmpty {
+                opacityRegions.append(
+                    contentsOf: other.shiftedOpacityRegions(byX: priorWidth, y: 0))
             }
             return
         }
@@ -570,6 +578,10 @@ extension FrameBuffer {
             animatedCells.append(
                 contentsOf: other.shiftedAnimatedCells(byX: myWidth + spacingApplied, y: 0))
         }
+        if !other.opacityRegions.isEmpty {
+            opacityRegions.append(
+                contentsOf: other.shiftedOpacityRegions(byX: myWidth + spacingApplied, y: 0))
+        }
     }
 
     /// Layers another buffer on top of this one (ZStack behavior).
@@ -596,6 +608,7 @@ extension FrameBuffer {
         overlays.append(contentsOf: overlay.overlays)
         hitTestRegions.append(contentsOf: overlay.hitTestRegions)
         animatedCells.append(contentsOf: overlay.animatedCells)
+        opacityRegions.append(contentsOf: overlay.opacityRegions)
     }
 
     /// Creates a new buffer with another buffer composited on top at the specified position.
@@ -634,6 +647,8 @@ extension FrameBuffer {
             // the clock alive only from the runs that reach the final buffer.
             result.animatedCells.append(
                 contentsOf: overlay.shiftedAnimatedCells(byX: position.x, y: position.y))
+            result.opacityRegions.append(
+                contentsOf: overlay.shiftedOpacityRegions(byX: position.x, y: position.y))
             return result
         }
 
@@ -676,6 +691,14 @@ extension FrameBuffer {
         composited.animatedCells =
             animatedCells
             + overlay.shiftedAnimatedCells(byX: position.x, y: position.y)
+        // BOTH sides. The result is built from a bare `Self(lines:)`, so the
+        // DESTINATION's own regions are as easy to drop here as the overlay's
+        // — and dropping them un-fades a faded buffer the moment anything is
+        // composited into it, which is what `_UserResizableCore` and `Grid` do
+        // to their contents routinely.
+        composited.opacityRegions =
+            opacityRegions
+            + overlay.shiftedOpacityRegions(byX: position.x, y: position.y)
         return composited
     }
 
@@ -704,6 +727,8 @@ extension FrameBuffer {
                 contentsOf: overlay.shiftedHitTestRegions(byX: position.x, y: position.y))
             animatedCells.append(
                 contentsOf: overlay.shiftedAnimatedCells(byX: position.x, y: position.y))
+            opacityRegions.append(
+                contentsOf: overlay.shiftedOpacityRegions(byX: position.x, y: position.y))
             return
         }
         guard linesAreUniformWidth else {
@@ -818,7 +843,7 @@ extension FrameBuffer {
         // composited separately at the root — clamping the in-flow
         // content must never discard them.
         result.overlays = overlays
-        result.opacity = opacity
+        result.opacityRegions = opacityRegions
         result.hitTestRegions = hitTestRegions
         // Runs describe CELLS, so unlike the free-floating layers above they are
         // dropped when their cells are clipped away — otherwise a run scrolled
@@ -893,9 +918,10 @@ extension FrameBuffer {
         // finds on the final buffer, so a run lost on the way up stops the clock
         // for everything (see `AnimatedRunPropagationTests`).
         result.animatedCells = shiftedAnimatedCells(byX: overlayShiftX, y: overlayShiftY)
-        // Content-preserving, so the layer's opacity is preserved with it. A
-        // `.padding` or `.frame` around a faded view must not make it opaque.
-        result.opacity = opacity
+        // Content-preserving, so the faded regions travel with the content. A
+        // `.padding` or `.frame` around a faded view must not make it opaque,
+        // and the shift is the same one its runs and regions take.
+        result.opacityRegions = shiftedOpacityRegions(byX: overlayShiftX, y: overlayShiftY)
         return result
     }
 }
@@ -913,6 +939,17 @@ extension FrameBuffer {
         guard !animatedCells.isEmpty else { return [] }
         guard dx != 0 || dy != 0 else { return animatedCells }
         return animatedCells.map { $0.shifted(byX: dx, y: dy) }
+    }
+
+    /// This buffer's ``opacityRegions``, each shifted by `(dx, dy)`.
+    ///
+    /// Mirrors ``shiftedAnimatedCells(byX:y:)`` — and for the same reason: a
+    /// combining operation that moves the cells must move every claim about
+    /// them, or the claim lands on somebody else's content.
+    public func shiftedOpacityRegions(byX dx: Int, y dy: Int) -> [OpacityRegion] {
+        guard !opacityRegions.isEmpty else { return [] }
+        guard dx != 0 || dy != 0 else { return opacityRegions }
+        return opacityRegions.map { $0.shifted(byX: dx, y: dy) }
     }
 
     public func shiftedHitTestRegions(byX dx: Int, y dy: Int) -> [HitTestRegion] {
