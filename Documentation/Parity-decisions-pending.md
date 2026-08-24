@@ -10,11 +10,21 @@ Everything *not* on this list is ordinary work and is being done.
 
 **Answered so far:** §9 (`Text.bold(_:)` and its siblings) — resolved by taking
 its option (a): `TextStyle`'s five cascaded flags became tri-state, the merge
-became nearest-wins, and the parameters followed. The reasoning is in those
-commits; the entry is gone from here rather than marked done, as this file's
-last section requires.
+became nearest-wins, and the parameters followed. §6 (`labelsHidden()`) and §7
+(`deleteDisabled`/`moveDisabled`) were both implemented after the last review —
+`LabelsVisibility.swift` with `_CollapsingLabel`, `ColorPicker`, `Toggle`,
+`ProgressView` and `DatePicker` all honouring it, and
+`RowEditRestrictionModifiers.swift` with `RowEditRestrictionTests`. The
+reasoning is in those commits; the entries are gone from here rather than
+marked done, as this file's last section requires.
 
-Last reviewed: 2026-08-17.
+Last reviewed: 2026-08-24 — every remaining entry re-checked against the code
+that day, and the counts below re-measured rather than carried forward.
+
+**Each entry now ends in a recommendation.** They are recommendations, not
+decisions: the point of this file is that the call is not mine to make. But an
+option list with no opinion attached is a worse thing to be handed than one
+with an opinion you can disagree with.
 
 ---
 
@@ -37,10 +47,46 @@ colour unchanged for one — after which `ANSIRenderer` hits
 that does not call `resolve(with:)`. `Text` and `BackgroundModifier` do resolve;
 the audit is of everything that does not.
 
-**Options.** (a) Re-point, accept the visual change, do the audit. (b) Keep the
-current meanings and record `.primary`/`.secondary` in `parity-map.json` as
-deliberate divergences. (c) Re-point and add differently-named constants for the
-old meanings.
+**Options.** (a) Re-point at the palette roles, accept the visual change, do the
+audit. (b) Keep the current meanings and record `.primary`/`.secondary` in
+`parity-map.json` as deliberate divergences. (c) Re-point and add
+differently-named constants for the old meanings. (d) **Re-point `.primary` at
+`Color.default` and leave `.secondary` alone** — see below.
+
+**Re-measured 2026-08-24, and it splits the item in two.**
+
+`.primary` is `Color.blue` and `.secondary` is `Color.brightBlack`
+(`Color.swift:142`, `:145`). Used as colours in `Sources/Example` and
+`Sources/Stress`: **2 sites for `.primary`, 13 for `.secondary`.**
+
+Those two numbers are the argument for treating them separately:
+
+- **`.primary` is plainly wrong.** SwiftUI's is "what text defaults to"; blue is
+  a decoration. Two call sites care.
+- **`.secondary` is approximately right already.** SwiftUI's is a
+  lower-emphasis label colour, and in a terminal that is grey. `brightBlack` IS
+  the grey. Re-pointing it at `palette.foregroundSecondary` would be more
+  themable and is not more *correct*, and it is the option that moves 13 sites.
+
+**Option (d), which the earlier list missed and which costs nothing.**
+`Color.default` (`Color.swift:65`) is `.standard(.default)` — SGR 39, the
+terminal's own foreground. It is CONCRETE, so it triggers none of the
+semantic-colour machinery: no `nil` from `rgbComponents`, no inert `opacity`,
+no `fatalError` in `ANSIRenderer`, no audit. And "the terminal's own
+foreground" is exactly what "the colour text defaults to" means here, in the
+same way SwiftUI's `.primary` means "whatever the system says a label is".
+
+The trade against (a): `palette.foreground` follows the APP's theme, while
+`.default` follows the USER's terminal. For a themed app the first is more
+consistent; for a library default the second is more honest, and it is the one
+an unthemed app already shows everywhere else.
+
+**Recommendation: (d).** Re-point `.primary` at `Color.default`, leave
+`.secondary` as it is, and record `.secondary` in the parity map as a
+deliberate divergence with the reasoning above. That closes the wrong half,
+touches two call sites, and pays nothing for the semantic audit — which can
+then be done on its own merits, for the palette roles, rather than as the price
+of a rename.
 
 ---
 
@@ -55,8 +101,26 @@ exists to prevent — but the alternative is that ported SwiftUI code does not
 compile.
 
 **Options.** (a) Add `.accentColor` as an alias of `.accent`. (b) Rename `.accent`
-to `.accentColor` and update the 8 sites (pre-1.0, no shim, per the standing
+to `.accentColor` and update the sites (pre-1.0, no shim, per the standing
 policy). (c) Record `.accentColor` as a deliberate rename in the parity map.
+
+**Re-measured 2026-08-24: ~10 colour call sites**, and one fact that sharpens
+the question. There are ALREADY two accent spellings, and they mean different
+things: `Color.accent` is `Color.cyan` — a fixed colour — while
+`Color.palette.accent` is `.semantic(.accent)`, the themed one. SwiftUI's
+`.accentColor` is unambiguously the themed one.
+
+So (a) would ship a THIRD spelling, and the one it aliases is the wrong one of
+the two. That reading was not available when the options were first written and
+it removes (a) from consideration.
+
+**Recommendation: (b), pointed at the palette.** Rename the fixed `Color.accent`
+to something that says it is fixed (`Color.cyan` already exists and is what it
+is, so the constant may simply go), and let `.accentColor` be the alias of
+`Color.palette.accent`. That leaves one accent spelling per meaning, and the
+SwiftUI-shaped name lands on the SwiftUI-shaped meaning. It does pay the
+semantic-colour audit of §1 option (a) — `.accentColor` would be semantic — so
+it is worth doing in the same pass as whatever §1 decides.
 
 ---
 
@@ -74,6 +138,21 @@ public door.
 
 **Blocked on:** task #511. Not a question that can be answered independently.
 
+**What would unblock it, stated so the dependency is checkable.** #511 decides
+where alpha lives. Only two answers change this entry:
+
+1. **Alpha becomes a field of `Color.ColorValue`** — then `opacity:` is a real
+   parameter, these three initialisers are mechanical, and `Color.clear` (§4)
+   falls out for free as alpha 0.
+2. **Alpha stays a composite-time operation on BUFFERS, not on colours** — then
+   a colour cannot carry one, `opacity:` can never be honoured, and all three
+   initialisers plus §4 should be recorded in the parity map as
+   `notImplemented` with that as the `why`.
+
+**Recommendation: none, deliberately** — but note that §3 and §4 are one
+decision wearing two hats, and answering #511 answers both. They should be
+taken off this list together or not at all.
+
 ---
 
 ## 4. `Color.clear` — no alpha channel to be clear with
@@ -87,6 +166,24 @@ text is perfectly readable. One mapping cannot be right for both.
 
 **Options.** (a) Map to `.default` and document the foreground caveat. (b) Record
 as not-implementable pending #511. (c) Add a real alpha channel (see #3).
+
+**Why (a) is worse than it looks.** The caveat is not a footnote: `.clear` on
+text is the one thing a reader would reach for to HIDE text, and mapping it to
+`.default` makes that line perfectly legible. A modifier that silently does the
+opposite of what it says is worse than one that does not exist — and it cannot
+be diagnosed at compile time, because both are just a `Color`.
+
+There is a narrow shape that does work, and it is worth recording as it changes
+what "not implementable" means here: a `.clear` FOREGROUND is expressible as
+"emit no glyph" — draw a space. That is not a colour, it is a substitution, and
+it would have to happen where the glyph is chosen rather than where the colour
+is resolved. Whether that is worth a special case in `ANSIRenderer` for one
+constant is itself a decision, but it means (b)'s `why` should say "no alpha
+channel, and the foreground case would need a glyph substitution rather than a
+colour" rather than the flat "not implementable".
+
+**Recommendation: (b)** until #511 lands, with that fuller `why`. `--stale`
+will bring it back if `ColorValue` ever grows a channel.
 
 ---
 
@@ -105,41 +202,37 @@ focus manager directly. Any help-on-focus mechanism routed only through
 `FocusRegistration` would work for most focusables and silently not for those —
 the failure mode already declined twice on this list.
 
----
+**Found 2026-08-24: most of the mechanism already exists.** The status bar
+already carries a string contributed by the focused control —
+`StatusBarState.activationLabelOverride`, written by
+`FocusRegistration.swift:190` and read by `StatusBar.swift:214`. "The focused
+view's help text appears in the status bar" is therefore not a new surface; it
+is a second writer of a slot that already has one.
 
-## 6. `View.labelsHidden()` — what happens to the space
+That converts the open question from "what is the status bar for" into two
+smaller and much more answerable ones:
 
-**The gap.** Hides a control's label while keeping the control.
+1. **What happens when a control has both?** The existing override is a VERB —
+   what Return will do ("choose", "open", "select"). A help string is a
+   description. They are different things and both are useful, so either the
+   bar grows a second slot, or help wins while focused and the verb returns
+   when there is none, or help is shown only when the control offers no verb.
+   The third is the cheapest and reads worst — the controls most worth
+   documenting are the ones that do something.
+2. **Does `help(_:)` on a NON-focusable view do anything at all?** SwiftUI
+   attaches tooltips to anything. If the answer is "only focusables", then
+   `help(_:)` on a `Text` compiles and silently does nothing, which is the
+   failure mode this list keeps declining.
 
-**Why it needs a decision.** In a `Form`, labels occupy an aligned pillar. When
-they are hidden, does the pillar collapse to zero (controls slide left, rows no
-longer align with unhidden rows elsewhere) or stay reserved (alignment holds,
-blank column)? Both are defensible and they look completely different.
-
-**Effort, once decided: large.** There *is* a shared seam — `_CollapsingLabel`
-(ControlLabel.swift:54), used by Picker, Slider and Stepper — which corrects an
-earlier claim of mine that all eight controls were separate. But `Form` has three
-independent measure surfaces (`_FormLayout.renderToBuffer`, `pillarWidth`,
-`contentWidth`) that must agree, `groupedRowView` is a second `baseRowView` caller
-that a naive fix misses, and `ColorPicker` — the most canonical use of this
-modifier in SwiftUI — draws its title in a fixed 18-cell frame and is not on the
-seam at all.
-
----
-
-## 7. `deleteDisabled(_:)` / `moveDisabled(_:)` — where row vetoes live
-
-**The gap.** Per-row veto of delete/move.
-
-**Why it needs a decision.** SwiftUI applies these to individual *rows*. TUIkit's
-delete/move actions live on the `ForEach` and dispatch by data offset. Honouring
-a per-row veto means collecting vetoes during a lazy render and having them
-available to the handler *before* a key arrives — which is a design decision
-about where row-level state lives, not plumbing.
+**Recommendation: (1) a second slot, and (2) yes-but-inert-is-not-acceptable.**
+Concretely: implement `help(_:)` only if it is honoured for every focusable —
+which means fixing the two direct registrants first, as its own commit — and
+record it as `notImplemented` in the parity map until then, with the reason
+being (2) rather than the status-bar question, which is now answered.
 
 ---
 
-## 8. `View.focusEffectDisabled(_:)` — which parts of "focused" are an *effect*
+## 6. `View.focusEffectDisabled(_:)` — which parts of "focused" are an *effect*
 
 **The gap.** SwiftUI's modifier suppresses the focus ring without taking the
 view out of the focus ring.
@@ -178,9 +271,36 @@ a narrower TUI-specific modifier that suppresses only the *pulse* (the animated
 part), under a name that does not promise SwiftUI's semantics. (c) Record as
 not-implemented in `parity-map.json`.
 
+**The rule that makes (a) tractable**, which the table above is really asking
+for. "Suppress everything that differs when focused" is the wrong rule, and the
+caret proves it. The right one is a distinction each control can be asked
+about, one at a time:
+
+> Does this cell tell you WHERE YOU ARE, or WHAT YOU CAN DO?
+
+A `TextField`'s caret says what you can do — type here, at this position. It is
+the insertion point and it must survive. A `Button`'s bold, a `Toggle`'s glyph
+colour, a `Stepper`'s arrow colours all say where you are, and go. A
+`DatePicker`'s active-field background is the interesting one: it says BOTH —
+which field the arrows will change is an insertion point of a sort — and by
+this rule it stays, which is also what SwiftUI does with a focused date field.
+
+That leaves the table with one answer per row rather than a policy argument,
+and it is a rule an implementer can apply to a control this list has not seen.
+
+**Recommendation: (b) now, (a) later, and never a partial (a).** The pulse is
+the part apps actually ask to turn off (a dashboard that should not breathe),
+it is one gate at
+`SelectionEmphasisClock.cycle(_:)`, and under a TUI-specific name it promises
+only what it does. Shipping `focusEffectDisabled` itself with six of eight
+controls converted would read as a bug in the other two — which is why the
+sweep below is the gate on (a), not a nice-to-have.
+
 **The sweep is worth keeping either way** — a byte-comparison against a
 genuinely-unfocused baseline is what turned an assumption into the table above,
-and it will catch producers a future implementer forgets.
+and it will catch producers a future implementer forgets. It is not currently a
+committed test; it should be, whichever option is taken, because the table is
+the only thing standing between (a) and a half-done sweep.
 
 ---
 
