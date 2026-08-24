@@ -127,11 +127,15 @@ terminal in alternate-screen / raw mode.
 
 ## Key Event Dispatch
 
-When the terminal delivers a key event, the `InputHandler` dispatches it through five layers (plus two refinements: an ESC pre-route before Layer 1 when an open drop-down has claimed Escape, and a semantic-shortcut stage — Layer 3.5 — between Layers 3 and 4). Layer 0 and Layer 3 are mutually exclusive based on `focusManager.hasTextInputFocus`:
+When the terminal delivers a key event, the `InputHandler` dispatches it through five layers (plus three refinements: an ESC pre-route before Layer 1 when an open drop-down has claimed Escape, the mid-drag Layer 0.5, and a semantic-shortcut stage — Layer 3.5 — between Layers 3 and 4). Layer 0 and Layer 3 are mutually exclusive based on `focusManager.hasTextInputFocus`:
 
 ### Layer 0: Text Input (conditional)
 
 When a text input element (TextField/SecureField) is focused, `focusManager.dispatchKeyEvent()` runs first. This ensures printable characters, backspace, delete, arrows, home, end, and enter reach the text field before any other layer. Only keys the text field does not consume (Escape, Tab, unhandled Ctrl+shortcuts) fall through.
+
+### Layer 0.5: Drag Navigators
+
+While something is in hand, the arrow and paging keys scroll whatever the pointer is over — how you reach a drop destination that is off screen without letting go. This has to beat every layer below it, all of which would otherwise spend the key on the focused control: a page-level `onKeyPress` returning to the menu, or the source list moving its own selection. It declines unless a drag is actually in flight *and* the pointer is over something that drag could land in.
 
 ### Layer 1: Status Bar Items
 

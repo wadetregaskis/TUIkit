@@ -137,13 +137,13 @@ let lifecycleRunCreates = Diagram(
 
 /// KeyboardShortcuts.md + Architecture.md + AppLifecycle.md — the five-layer
 /// keyboard dispatch with its two refinement stages: the modal-claimed ESC
-/// pre-route (before Layer 1) and the semantic-shortcut Layer 3.5 (default /
-/// cancel action, between Layers 3 and 4) — plus the two `hasTextInputFocus`
-/// gates that switch Layer 0 on and Layer 3 off. Mirrors
-/// `InputHandler.handle(_:)`.
+/// pre-route (before Layer 1), the mid-drag Layer 0.5 and the
+/// semantic-shortcut Layer 3.5 (default / cancel action, between Layers 3 and
+/// 4) — plus the two `hasTextInputFocus` gates that switch Layer 0 on and Layer
+/// 3 off. Mirrors `InputHandler.handle(_:)`.
 let keyboardEventDispatch = Diagram(
     name: "keyboard-event-dispatch",
-    title: "Keyboard event dispatch — five layers + two refinement stages",
+    title: "Keyboard event dispatch — five layers + three refinement stages",
     nodes: [
         Node(id: "ev", title: "KeyEvent", kind: .terminal),
         Node(id: "g0", title: "text input focused?", kind: .decision),
@@ -152,6 +152,8 @@ let keyboardEventDispatch = Diagram(
         Node(id: "gesc", title: "ESC claimed by an open surface?", kind: .decision),
         Node(id: "pre", title: "ESC pre-route · Focus system",
              detail: ["open drop-down closes FIRST", "before any page-level handler"]),
+        Node(id: "l05", title: "Layer 0.5 · Drag navigators",
+             detail: ["scrolls what the pointer is over", "only while a drag is in flight"]),
         Node(id: "l1", title: "Layer 1 · Status bar items", detail: ["shortcut-triggered actions"]),
         Node(id: "l2", title: "Layer 2 · View handlers", detail: [".onKeyPress · deepest view first"]),
         Node(id: "g3", title: "still has text focus?", kind: .decision),
@@ -169,10 +171,11 @@ let keyboardEventDispatch = Diagram(
         Edge("g0", "gesc", label: "no"),
         // With text focus, the ESC pre-route is skipped (Layer 0 already
         // routed through the focus system).
-        Edge("l0", "l1"),
+        Edge("l0", "l05"),
         Edge("gesc", "pre", label: "yes"),
-        Edge("gesc", "l1", label: "no"),
-        Edge("pre", "l1"),
+        Edge("gesc", "l05", label: "no"),
+        Edge("pre", "l05"),
+        Edge("l05", "l1"),
         Edge("l1", "l2"),
         Edge("l2", "g3"),
         Edge("g3", "l35", label: "yes — skip L3"),
