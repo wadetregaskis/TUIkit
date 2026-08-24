@@ -287,6 +287,9 @@ struct TextFieldContentRenderer {
         // made an idle form cost 41% of a core. See ``CursorCycle``.
         let cycle = Self.computeCursorCycle(
             baseColor: palette.cursorColor,
+            // What the caret is drawn ON. `.plain` emits no background, so the
+            // caret is over whatever holds the field: the page.
+            over: background ?? palette.background,
             animation: cursorStyle.animation,
             speed: cursorStyle.speed,
             cursorTimer: cursorTimer
@@ -309,8 +312,7 @@ struct TextFieldContentRenderer {
         var result = ""
         var runText = ""
         var runForeground = textForeground
-        var runBackground: Color? = background
-        var hasRun = false
+        var (runBackground, hasRun): (Color?, Bool) = (background, false)
 
         func flushRun() {
             guard hasRun else { return }
@@ -552,12 +554,15 @@ struct TextFieldContentRenderer {
     /// The caret's whole cycle, without reading the clock. See ``CursorCycle``.
     static func computeCursorCycle(
         baseColor: Color,
+        over surface: Color,
         animation: TextCursorStyle.Animation,
         speed: TextCursorStyle.Speed,
         cursorTimer: CursorTimer?
     ) -> CursorCycle {
         let states = (0..<CursorTimer.cycleTicks(for: speed, animation: animation)).map { tick in
-            caretState(atTick: tick, baseColor: baseColor, animation: animation, speed: speed)
+            caretState(
+                atTick: tick, baseColor: baseColor, over: surface,
+                animation: animation, speed: speed)
         }
         // `elapsedTicks` is a plain read: unlike `blinkVisible(for:)` it does not
         // mark the frame as having consulted the clock, so a producer that uses
@@ -568,7 +573,7 @@ struct TextFieldContentRenderer {
     /// The caret's visibility and colour at one tick of the cycle, from the
     /// static formulas rather than the live clock.
     private static func caretState(
-        atTick tick: Int, baseColor: Color,
+        atTick tick: Int, baseColor: Color, over surface: Color,
         animation: TextCursorStyle.Animation, speed: TextCursorStyle.Speed
     ) -> (visible: Bool, color: Color) {
         switch animation {
@@ -578,10 +583,12 @@ struct TextFieldContentRenderer {
             return (CursorTimer.blinkVisible(atTick: tick, speed: speed), baseColor)
         case .pulse:
             let phase = CursorTimer.pulsePhase(atTick: tick, speed: speed)
-            return (
-                true,
-                Color.lerp(baseColor.opacity(ViewConstants.focusPulseMin), baseColor, phase: phase)
-            )
+            // Blended toward the field, not toward black. Bare `opacity` fades
+            // to black, which on a light palette makes the dim end of the
+            // pulse a DARKER mark than the bright end rather than a fainter
+            // one — the caret thickens as it "fades".
+            let dim = baseColor.opacity(ViewConstants.focusPulseMin, over: surface)
+            return (true, Color.lerp(dim, baseColor, phase: phase))
         }
     }
 }

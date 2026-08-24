@@ -214,6 +214,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                 shape: cursorStyle.shape,
                 cursor: TextFieldContentRenderer.computeCursorCycle(
                     baseColor: palette.cursorColor,
+                    over: fieldBackground ?? palette.background,
                     animation: cursorStyle.animation,
                     speed: cursorStyle.speed,
                     cursorTimer: context.environment.cursorTimer))
