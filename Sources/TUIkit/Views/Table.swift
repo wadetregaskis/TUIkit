@@ -274,6 +274,47 @@ extension Table {
     }
 }
 
+// MARK: - No-Selection Initializer
+
+extension Table {
+    /// Creates a table with no selection.
+    ///
+    /// SwiftUI's `Table(_:columns:)`. The rows are shown and scrolled; nothing
+    /// is selectable, so the table has no row cursor to move and no binding to
+    /// write into.
+    ///
+    /// Worth reaching for whenever the rows are a display: a table that carries
+    /// a cursor invites a click that means nothing, and while a cursor is being
+    /// followed every scroll is chased by another scroll bringing it back into
+    /// view — which makes a table's actual scrolling behaviour impossible to
+    /// see. `.disabled(true)` is not the same thing: that also greys the rows
+    /// and takes the table out of the focus ring, so it can no longer be
+    /// scrolled from the keyboard.
+    ///
+    /// - Parameters:
+    ///   - data: The data items to display.
+    ///   - sortOrder: A binding to the sort the column headers drive. Supplying
+    ///     one makes the sortable columns' headers clickable; omitting it
+    ///     leaves them inert, as a SwiftUI `Table` without one has them.
+    ///   - focusID: The unique focus identifier (default: auto-generated).
+    ///   - columnSpacing: Spacing between columns (default: 2).
+    ///   - emptyPlaceholder: Placeholder text when empty (default: "No items").
+    ///   - columns: A builder that defines the table columns.
+    public init(
+        _ data: [Value],
+        sortOrder: Binding<[KeyPathComparator<Value>]>? = nil,
+        focusID: String? = nil,
+        columnSpacing: Int = 2,
+        emptyPlaceholder: String = "No items",
+        @TableColumnBuilder<Value> columns: () -> [TableColumn<Value>]
+    ) {
+        self.init(
+            data, selection: .constant(Value.ID?.none), sortOrder: sortOrder,
+            focusID: focusID, columnSpacing: columnSpacing,
+            emptyPlaceholder: emptyPlaceholder, columns: columns)
+    }
+}
+
 // MARK: - Multi Selection Initializer
 
 extension Table {
