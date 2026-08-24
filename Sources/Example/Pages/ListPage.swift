@@ -219,23 +219,6 @@ struct ListPage: View {
             }
 
             DemoSection(
-                "page.list.wheelSection"
-            ) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("page.list.wheelBody")
-                    .foregroundStyle(.palette.foregroundSecondary)
-
-                    List("\(longLines.count) \(L("page.list.linesSuffix"))") {
-                        ForEach(longLines, id: \.self) { line in
-                            Text(line)
-                        }
-                    }
-                    .frame(height: 8)
-                    .scrollIndicators(.visible)
-                }
-            }
-
-            DemoSection(
                 "page.list.unfocusedSection"
             ) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -358,13 +341,6 @@ struct ListPage: View {
                 ]
             )
         }
-    }
-
-    /// A long list of numbered lines used by the wheel-scrolling
-    /// demo. Long enough that the viewport always overflows so
-    /// wheel scrolling is visible.
-    private var longLines: [String] {
-        (1...100).map { "Line \($0) — scroll the wheel to move past me." }
     }
 
     /// The multi-line cells list — extracted so the granularity toggle can
