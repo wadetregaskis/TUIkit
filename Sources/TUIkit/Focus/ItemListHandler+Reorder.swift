@@ -498,7 +498,13 @@ extension ItemListHandler {
             // this path exists, and asking again when they have not is not
             // merely wasted: the answer is read off bands that the previous
             // answer helped lay out, so it can oscillate. See
-            // ``ItemListHandler/externalDropResolvedOffset``.
+            // ``ItemListHandler/externalDropResolvedOffset``, which is written
+            // by the retarget and cleared by every hover — and which, until
+            // 2026-08-24, nothing read: the guard these three comments describe
+            // was documented and never written, so the retarget re-answered
+            // every frame and the gap flipped above and below the last row for
+            // as long as the pointer was held there.
+            guard externalDropResolvedOffset != scrollOffset else { return }
             // Unclamped: `retargetExternalDrop` has its own past-the-end rule,
             // and it has to, because the gap it is recomputing is itself a
             // droppable band whose `dropIndex` IS `externalDropSlot`. Clamping

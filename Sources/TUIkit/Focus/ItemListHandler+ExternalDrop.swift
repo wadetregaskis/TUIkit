@@ -23,10 +23,20 @@ extension ItemListHandler {
     /// the line is kept so ``publishRowBands(_:)`` can ask the question again
     /// against the next frame's rows.
     func hoverExternalDrop(atContentY contentY: Int) {
-        lastExternalDropContentY = contentY
-        // A new pointer position is a new situation: the auto-scroll retarget
+        // A NEW pointer position is a new situation: the auto-scroll retarget
         // gets one run against it, whatever the rows have done since.
-        externalDropResolvedOffset = nil
+        //
+        // The SAME position repeated is not, and the difference is the whole
+        // reason this is a condition rather than an assignment. A held pointer
+        // keeps reporting — a trackpad reports many times a second without
+        // moving a cell — and re-arming the retarget on every report let its
+        // answer and this one alternate forever: on a list whose rows exactly
+        // fill it, this method reads the gap's own band and keeps it where the
+        // pointer is, while the retarget's past-the-rows rule pulls it onto the
+        // last row. Two defensible answers, one per frame, and the gap flipped
+        // between them for as long as the drag was held there.
+        if lastExternalDropContentY != contentY { externalDropResolvedOffset = nil }
+        lastExternalDropContentY = contentY
         // Past the rows, a pointer that is simply resting there means "append"
         // — the conventional answer, and the one a short list has always given.
         // Only the auto-scroll retarget below reads it differently, because

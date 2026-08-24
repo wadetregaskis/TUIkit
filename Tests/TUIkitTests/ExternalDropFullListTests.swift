@@ -101,6 +101,63 @@ struct ExternalDropFullListTests {
         }
     }
 
+    /// One pointer position gets ONE answer — the invariant the flip broke.
+    ///
+    /// A held pointer keeps reporting: a trackpad sends many events a second
+    /// without moving a cell. Each report ran `hoverExternalDrop`, which reads
+    /// the gap's own band and keeps the gap where the pointer is; each render
+    /// then re-armed and ran the auto-scroll retarget, whose past-the-rows rule
+    /// pulls the gap onto the last row instead. Both answers are defensible and
+    /// they are not the same, so the gap flipped between two lines for as long
+    /// as the drag was held — measured live at up to 3.6 kB of repaint per
+    /// half-second against a settled 0.
+    ///
+    /// So the assertion is not "it settles eventually" (the case below already
+    /// covers that, and passed throughout) but "a render does not change the
+    /// answer the pointer just gave". That is what tells the two rules apart.
+    @Test("A repeated report at the same cell is not a new pointer position")
+    func aHeldPointerGetsOneAnswer() {
+        for rowCount in 3...6 {
+            let names = Array("abcdefgh".map(String.init).prefix(rowCount))
+            let fixture = Fixture(rows: names, height: rowCount + 2)
+            var buffer = fixture.render()
+            guard let bottom = fixture.rowLines(buffer).last,
+                let top = fixture.rowLines(buffer).first
+            else {
+                Issue.record("\(rowCount): no rows drawn")
+                continue
+            }
+            for target in [bottom, top] {
+                fixture.hold(at: target)
+                // Let auto-scroll do whatever it is going to do first: the
+                // question is about the STEADY state, where the rows have
+                // stopped and only the pointer is still talking.
+                for tick in 0..<12 {
+                    fixture.tui.dragAndDropSession.driveAutoScroll(
+                        nowNanos: UInt64(tick) &* 120_000_000)
+                    fixture.move(to: target)
+                    _ = fixture.render()
+                }
+                for report in 0..<6 {
+                    fixture.move(to: target)
+                    let answered = fixture.handler?.externalDropSlot
+                    buffer = fixture.render()
+                    #expect(
+                        fixture.handler?.externalDropSlot == answered,
+                        """
+                        \(rowCount) rows, held on line \(target), report \(report): \
+                        the render moved the gap from \
+                        \(answered.map(String.init) ?? "-") to \
+                        \(fixture.handler?.externalDropSlot.map(String.init) ?? "-")
+                        """)
+                }
+                fixture.tui.dragAndDropSession.cancelReturningToOrigin()
+                fixture.tui.dragAndDropSession.end()
+                _ = fixture.render()
+            }
+        }
+    }
+
     /// The reported case: five rows in five lines of room, a sixth dragged in
     /// and held over the bottom row.
     ///
