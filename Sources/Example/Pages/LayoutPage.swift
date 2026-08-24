@@ -132,15 +132,22 @@ struct LayoutPage: View {
     /// Whether the chips flow onto wrapped lines or stack in one column.
     @State private var flowChipsLayout = true
 
-    /// How far right the ZStack demos' TOP layer is drawn, in cells. One slider
-    /// for all five, because the point being made is the same in each: the top
-    /// layer owns the cells it lands on and nothing shows through, so what
-    /// changes as it slides is only WHICH cells those are.
-    @State private var zstackTopOffset = 0.0
+    /// Where the ZStack demos' TOP layer sits, as a fraction of its full
+    /// travel: `-1` is clear of the layer beneath it on the left, `0` is where
+    /// its alignment puts it, `+1` is clear on the right.
+    ///
+    /// A fraction rather than a cell count, because the five bands are
+    /// different widths and their top layers are aligned differently — so one
+    /// count of cells would run out of travel in some and past the end in
+    /// others. Each case turns the fraction into its own offset.
+    ///
+    /// One control for all five, because the point being made is the same in
+    /// each: the top layer owns the cells it lands on and nothing shows
+    /// through, so what changes as it slides is only WHICH cells those are.
+    @State var zstackTravel = 0.0
 
-    /// The furthest right the ZStack demos' top layer slides. Every band in the
-    /// section is sized so its label still fits inside at this offset.
-    private static let zstackMaxOffset = 6.0
+    /// Whether the travel sweeps back and forth on its own.
+    @State var zstackAnimates = false
 
     /// Which axes the resize demo offers, driven by the toggles beside it.
     @State private var resizableWidth = true
@@ -397,129 +404,7 @@ struct LayoutPage: View {
                 .border(.brightBlack)
             }
 
-            DemoSection("page.layout.section.zstack") {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("page.layout.zstack.explain")
-                        .foregroundStyle(.palette.foregroundSecondary)
-
-                    // Slide every example's top layer at once: the partial
-                    // overlaps are where the "no transparency, no blending"
-                    // claim above is actually visible, and they only appear
-                    // once the layers stop lining up.
-                    //
-                    // Each band below is wide enough that its top layer, from
-                    // where alignment puts it, still fits inside at the full
-                    // offset: a centred label of width L needs a band of at
-                    // least L + 2 × the maximum offset. `.offset` does not clip
-                    // — the displaced content paints wherever it lands, border
-                    // included — and a label chewing through the box's right
-                    // edge reads as a rendering fault rather than as the point
-                    // being made.
-                    HStack(spacing: 1) {
-                        Slider(value: $zstackTopOffset, in: 0...Self.zstackMaxOffset, step: 1) {
-                            Text("page.layout.zstack.offset")
-                                .foregroundStyle(.palette.foregroundSecondary)
-                        }
-                        Text(verbatim: "+\(Int(zstackTopOffset))")
-                            .bold()
-                            .foregroundStyle(.palette.accent)
-                    }
-
-                    // 1 — What it does. Children stack back-to-front and
-                    // alignment positions them within the union of their sizes.
-                    Text("page.layout.zstack.case1")
-                        .foregroundStyle(.palette.foregroundTertiary)
-                    ZStack(alignment: .center) {
-                        Text(String(repeating: "▒", count: 28)).foregroundStyle(.palette.accent)
-                        Text(" \(L("page.layout.onTop")) ").bold().inverted()
-                            .offset(x: Int(zstackTopOffset))
-                    }
-                    .border(.brightBlack)
-
-                    // 2 — There is no transparency, and this is the demo that
-                    // says so. The label's own SPACES are cells like any other,
-                    // so they punch a hole in the band rather than letting it
-                    // through. Beside it, the same label with no padding: the
-                    // hole shrinks to exactly the glyphs.
-                    Text("page.layout.zstack.case2")
-                        .foregroundStyle(.palette.foregroundTertiary)
-                    HStack(spacing: 3) {
-                        ZStack(alignment: .center) {
-                            Text(String(repeating: "▒", count: 22))
-                                .foregroundStyle(.palette.accent)
-                            Text(verbatim: "   \(L("page.layout.zstack.word"))   ")
-                                .offset(x: Int(zstackTopOffset))
-                        }
-                        .border(.brightBlack)
-                        ZStack(alignment: .center) {
-                            Text(String(repeating: "▒", count: 20))
-                                .foregroundStyle(.palette.accent)
-                            Text(verbatim: L("page.layout.zstack.word"))
-                                .offset(x: Int(zstackTopOffset))
-                        }
-                        .border(.brightBlack)
-                    }
-
-                    // 3 — Nor is there any blending. Two words over each other
-                    // give the top one's cells, not a mixture of both; the
-                    // lower one survives only where the upper does not reach.
-                    Text("page.layout.zstack.case3")
-                        .foregroundStyle(.palette.foregroundTertiary)
-                    ZStack(alignment: .leading) {
-                        Text(verbatim: "UNDERNEATH·UNDERNEATH")
-                            .foregroundStyle(.palette.foregroundSecondary)
-                        Text(verbatim: "OVER")
-                            .bold()
-                            .foregroundStyle(.palette.warning)
-                            .offset(x: Int(zstackTopOffset))
-                    }
-                    .border(.brightBlack)
-
-                    // 4 — What to reach for instead. `.opacity` is not
-                    // compositing: it moves a COLOUR toward the background and
-                    // the cell stays as opaque as it was, which is why it can
-                    // fade text that has nothing behind it and cannot show what
-                    // does.
-                    Text("page.layout.zstack.case4")
-                        .foregroundStyle(.palette.foregroundTertiary)
-                    ZStack(alignment: .center) {
-                        Text(String(repeating: "▒", count: 36)).foregroundStyle(.palette.accent)
-                        Text(" \(L("page.layout.zstack.faded")) ")
-                            .foregroundStyle(.palette.foreground)
-                            .opacity(0.45)
-                            .offset(x: Int(zstackTopOffset))
-                    }
-                    .border(.brightBlack)
-
-                    // 5 — Backgrounds, which is where "the last child to draw
-                    // a cell owns it" stops being an abstraction. Both layers
-                    // paint a background across their whole box, including the
-                    // cells their text does not use, so the top layer's colour
-                    // arrives as a solid block with a hard edge — no tint of
-                    // the layer beneath anywhere in it, and no seam. Slide it
-                    // and the lower background reappears cell for cell exactly
-                    // where the upper one stops.
-                    Text("page.layout.zstack.case5")
-                        .foregroundStyle(.palette.foregroundTertiary)
-                    ZStack(alignment: .leading) {
-                        // The lower block's own label sits at its far end,
-                        // beyond anything the upper block can reach, so what
-                        // moves in this demo is the colours rather than a word
-                        // being eaten a letter at a time.
-                        Text("page.layout.zstack.under")
-                            .padding(.trailing, 1)
-                            .frame(width: 36, alignment: .trailing)
-                            .foregroundStyle(.palette.background)
-                            .background(.palette.info)
-                        Text("page.layout.zstack.over")
-                            .frame(width: 12, alignment: .center)
-                            .foregroundStyle(.palette.background)
-                            .background(.palette.warning)
-                            .offset(x: Int(zstackTopOffset))
-                    }
-                    .border(.brightBlack)
-                }
-            }
+            zstackSection
 
             DemoSection("page.layout.section.alignmentGuide") {
                 VStack(alignment: .leading, spacing: 1) {
