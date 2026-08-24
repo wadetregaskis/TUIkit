@@ -15,16 +15,13 @@ extension ExampleStrings {
         "en": [
             // Spinners
             "page.spinners.styles": "Styles",
-            "page.spinners.customColorSection": "Custom Colour",
-            "page.spinners.editorSection": "Build one",
-            "page.spinners.editorHint": "Every knob a Spinner has. A custom spinner IS its frame sequence — one character per frame.",
-            "page.spinners.editorStyle": "Style",
-            "page.spinners.editorUseCustom": "Custom frames",
+            "page.spinners.editorSection": "Customise",
+            "page.spinners.editorHint": "One colour for every spinner on the page. A custom spinner IS its frame sequence — one character per frame.",
             "page.spinners.editorFrames": "Frames",
             "page.spinners.editorLabel": "Label",
             "page.spinners.editorColour": "Colour",
             "page.spinners.editorThemeColour": "Theme accent",
-            "page.spinners.installing": "Installing...",
+            "page.spinners.editorCustomColour": "Custom colour",
 
             // List
             "page.list.singleSelection": "Single Selection",
@@ -253,16 +250,13 @@ extension ExampleStrings {
         "de": [
             // Spinners
             "page.spinners.styles": "Stile",
-            "page.spinners.customColorSection": "Benutzerdefinierte Farbe",
-            "page.spinners.editorSection": "Selbst bauen",
-            "page.spinners.editorHint": "Alle Stellschrauben eines Spinners. Ein eigener Spinner IST seine Bildfolge — ein Zeichen je Bild.",
-            "page.spinners.editorStyle": "Stil",
-            "page.spinners.editorUseCustom": "Eigene Bildfolge",
+            "page.spinners.editorSection": "Anpassen",
+            "page.spinners.editorHint": "Eine Farbe für alle Spinner auf der Seite. Ein eigener Spinner IST seine Bildfolge — ein Zeichen je Bild.",
             "page.spinners.editorFrames": "Bilder",
             "page.spinners.editorLabel": "Beschriftung",
             "page.spinners.editorColour": "Farbe",
             "page.spinners.editorThemeColour": "Themenakzent",
-            "page.spinners.installing": "Wird installiert …",
+            "page.spinners.editorCustomColour": "Eigene Farbe",
 
             // List
             "page.list.singleSelection": "Einfachauswahl",
@@ -491,16 +485,13 @@ extension ExampleStrings {
         "fr": [
             // Spinners
             "page.spinners.styles": "Styles",
-            "page.spinners.customColorSection": "Couleur personnalisée",
-            "page.spinners.editorSection": "En construire un",
-            "page.spinners.editorHint": "Tous les réglages d'un Spinner. Un spinner personnalisé EST sa séquence d'images — un caractère par image.",
-            "page.spinners.editorStyle": "Style",
-            "page.spinners.editorUseCustom": "Images personnalisées",
+            "page.spinners.editorSection": "Personnaliser",
+            "page.spinners.editorHint": "Une couleur pour tous les spinners de la page. Un spinner personnalisé EST sa séquence d’images — un caractère par image.",
             "page.spinners.editorFrames": "Images",
             "page.spinners.editorLabel": "Étiquette",
             "page.spinners.editorColour": "Couleur",
             "page.spinners.editorThemeColour": "Accent du thème",
-            "page.spinners.installing": "Installation…",
+            "page.spinners.editorCustomColour": "Couleur personnalisée",
 
             // List
             "page.list.singleSelection": "Sélection unique",
@@ -729,16 +720,13 @@ extension ExampleStrings {
         "it": [
             // Spinners
             "page.spinners.styles": "Stili",
-            "page.spinners.customColorSection": "Colore personalizzato",
-            "page.spinners.editorSection": "Costruiscine uno",
-            "page.spinners.editorHint": "Tutte le manopole di uno Spinner. Uno spinner personalizzato È la sua sequenza di fotogrammi — un carattere per fotogramma.",
-            "page.spinners.editorStyle": "Stile",
-            "page.spinners.editorUseCustom": "Fotogrammi personalizzati",
+            "page.spinners.editorSection": "Personalizza",
+            "page.spinners.editorHint": "Un colore per tutti gli spinner della pagina. Uno spinner personalizzato È la sua sequenza di fotogrammi — un carattere per fotogramma.",
             "page.spinners.editorFrames": "Fotogrammi",
             "page.spinners.editorLabel": "Etichetta",
             "page.spinners.editorColour": "Colore",
             "page.spinners.editorThemeColour": "Accento del tema",
-            "page.spinners.installing": "Installazione…",
+            "page.spinners.editorCustomColour": "Colore personalizzato",
 
             // List
             "page.list.singleSelection": "Selezione singola",
@@ -967,16 +955,13 @@ extension ExampleStrings {
         "es": [
             // Spinners
             "page.spinners.styles": "Estilos",
-            "page.spinners.customColorSection": "Color personalizado",
-            "page.spinners.editorSection": "Construye uno",
-            "page.spinners.editorHint": "Todos los mandos de un Spinner. Un spinner personalizado ES su secuencia de fotogramas — un carácter por fotograma.",
-            "page.spinners.editorStyle": "Estilo",
-            "page.spinners.editorUseCustom": "Fotogramas propios",
+            "page.spinners.editorSection": "Personalizar",
+            "page.spinners.editorHint": "Un color para todos los spinners de la página. Un spinner personalizado ES su secuencia de fotogramas — un carácter por fotograma.",
             "page.spinners.editorFrames": "Fotogramas",
             "page.spinners.editorLabel": "Etiqueta",
             "page.spinners.editorColour": "Color",
             "page.spinners.editorThemeColour": "Acento del tema",
-            "page.spinners.installing": "Instalando…",
+            "page.spinners.editorCustomColour": "Color personalizado",
 
             // List
             "page.list.singleSelection": "Selección única",
@@ -1205,16 +1190,13 @@ extension ExampleStrings {
         "zh": [
             // Spinners
             "page.spinners.styles": "样式",
-            "page.spinners.customColorSection": "自定义颜色",
-            "page.spinners.editorSection": "自己做一个",
-            "page.spinners.editorHint": "Spinner 的全部可调项。自定义 spinner 就是它的帧序列——每帧一个字符。",
-            "page.spinners.editorStyle": "样式",
-            "page.spinners.editorUseCustom": "自定义帧",
+            "page.spinners.editorSection": "自定义",
+            "page.spinners.editorHint": "页面上所有加载指示器共用一种颜色。自定义指示器就是它的帧序列——每帧一个字符。",
             "page.spinners.editorFrames": "帧",
             "page.spinners.editorLabel": "标签",
             "page.spinners.editorColour": "颜色",
             "page.spinners.editorThemeColour": "主题强调色",
-            "page.spinners.installing": "正在安装…",
+            "page.spinners.editorCustomColour": "自定义颜色",
 
             // List
             "page.list.singleSelection": "单选",
@@ -1443,16 +1425,13 @@ extension ExampleStrings {
         "ja": [
             // Spinners
             "page.spinners.styles": "スタイル",
-            "page.spinners.customColorSection": "カスタムカラー",
-            "page.spinners.editorSection": "自分で作る",
-            "page.spinners.editorHint": "Spinner のつまみのすべて。カスタムのスピナーはコマ列そのものです——1 コマにつき 1 文字。",
-            "page.spinners.editorStyle": "スタイル",
-            "page.spinners.editorUseCustom": "自分のコマ列",
+            "page.spinners.editorSection": "カスタマイズ",
+            "page.spinners.editorHint": "ページ上のすべてのスピナーに同じ色を。カスタムスピナーはフレーム列そのものです — 1 フレームにつき 1 文字。",
             "page.spinners.editorFrames": "コマ",
             "page.spinners.editorLabel": "ラベル",
             "page.spinners.editorColour": "色",
             "page.spinners.editorThemeColour": "テーマのアクセント",
-            "page.spinners.installing": "インストール中…",
+            "page.spinners.editorCustomColour": "カスタムカラー",
 
             // List
             "page.list.singleSelection": "単一選択",

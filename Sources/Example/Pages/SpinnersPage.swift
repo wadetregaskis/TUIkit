@@ -8,8 +8,6 @@ import TUIkit
 
 /// A demo page showing all Spinner styles.
 struct SpinnersPage: View {
-    @AppStorage("spinners.editorStyle") private var editorStyle = "dots"
-    @AppStorage("spinners.editorCustom") private var editorUsesCustom = false
     @AppStorage("spinners.editorFrames") private var editorFrames = "123432"
     @AppStorage("spinners.editorLabel") private var editorLabel = ""
     /// The edited colour, as hex — the same spelling the track editor and the
@@ -17,7 +15,7 @@ struct SpinnersPage: View {
     /// a spinner's colour is an ordinary `Color`, so the ordinary editor for one
     /// is what belongs.
     @AppStorage("spinners.editorColour") private var editorColorHex = "FF00FF"
-    /// Whether the spinner takes the theme's own accent instead — the default a
+    /// Whether the spinners take the theme's own accent instead — the default a
     /// `Spinner` has when nobody names a colour, and a state you can come back
     /// to rather than an approximation of it in the hex field.
     @AppStorage("spinners.editorThemeColour") private var editorUsesThemeColor = true
@@ -25,24 +23,24 @@ struct SpinnersPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            // A twelve-row catalogue twenty-five columns wide, then an editor
-            // eighty-five wide, one under the other: 45% of a wide terminal
-            // used and the catalogue's own shape wasted. Preferred arrangement
-            // first, then progressively narrower ones — the
+            // A twelve-row catalogue twenty-five columns wide, then the
+            // customiser, one under the other: 45% of a wide terminal used and
+            // the catalogue's own shape wasted. Preferred arrangement first,
+            // then progressively narrower ones — the
             // `ViewThatFits(in: .horizontal)` shape the Animation page and the
             // track editor use.
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 4) {
-                    stylesCatalogue(columns: 2, color: editedColor, frames: editedFrames)
-                    editorAndColour
+                    stylesCatalogue(columns: 2)
+                    customiser
                 }
                 HStack(alignment: .top, spacing: 4) {
-                    stylesCatalogue(columns: 1, color: editedColor, frames: editedFrames)
-                    editorAndColour
+                    stylesCatalogue(columns: 1)
+                    customiser
                 }
                 VStack(alignment: .leading, spacing: 1) {
-                    stylesCatalogue(columns: 1, color: editedColor, frames: editedFrames)
-                    editorAndColour
+                    stylesCatalogue(columns: 1)
+                    customiser
                 }
             }
 
@@ -58,46 +56,21 @@ struct SpinnersPage: View {
     /// dealt into `columns` columns. The labels are the API case names (an API
     /// surface, left untranslated), like the ProgressView catalogue.
     ///
-    /// Column count is a parameter rather than a second copy of the list: a
+    /// This IS the page's set of examples, and the customiser edits all of it:
+    /// a colour you can only see on one spinner is a colour you cannot judge.
+    /// Column count is a parameter rather than a second copy of the list — a
     /// spinner is a live animation, and two lists of twelve would be
     /// twenty-four clocks where twelve will do.
     @ViewBuilder
-    private func stylesCatalogue(columns: Int, color: Color?, frames: String) -> some View {
-        // The catalogue's custom row IS the editor's frame field: one custom
-        // spinner on the page, edited in one place, rather than a second one
-        // frozen at whatever the field happened to say when this list was
-        // written.
-        //
-        // Both the colour and the frames travel INSIDE the elements, and the
-        // columns are elements too. `ForEach`'s value memo keys on the element,
-        // and its documented hole is exactly the shape this used to be:
-        // `ForEach(0..<columns)` with the rows built from data captured outside
-        // the closure. The column's buffer was then reused for a column whose
-        // contents had changed — the catalogue went on showing the theme's
-        // accent, and the previous frame sequence, while every other spinner on
-        // the page had followed the editor.
-        let colorKey = color.map { String(describing: $0) } ?? "theme"
-        let styles: [CatalogueEntry] = [
-            ("dots", SpinnerStyle.dots), ("line", .line), ("bouncing", .bouncing),
-            ("pie", .pie), ("beachball", .beachball), ("box", .box), ("bars", .bars),
-            ("blockWedge", .blockWedge), ("moon", .moon), ("earth", .earth),
-            ("clock", .clock), ("custom(\"\(frames)\")", .custom(frames)),
-        ].map { CatalogueEntry(name: $0.0, style: $0.1, colorKey: colorKey) }
-        let perColumn = (styles.count + columns - 1) / columns
-        let dealt = (0..<columns).map { column in
-            CatalogueColumn(
-                index: column,
-                entries: Array(
-                    styles[
-                        min(column * perColumn, styles.count)
-                            ..< min((column + 1) * perColumn, styles.count)]))
-        }
+    private func stylesCatalogue(columns: Int) -> some View {
+        let color = editedColor
+        let dealt = catalogueColumns(columns: columns, color: color)
         DemoSection("page.spinners.styles") {
             HStack(alignment: .top, spacing: 3) {
                 ForEach(dealt) { column in
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(column.entries) { entry in
-                            spinnerRow(entry.name, entry.style, color: color)
+                            spinnerRow(entry, color: color)
                         }
                     }
                 }
@@ -105,51 +78,97 @@ struct SpinnersPage: View {
         }
     }
 
-    /// The editor and the custom-colour example, which always travel together:
-    /// both are about choosing how one spinner looks, and the second is the
-    /// answer to a question the first raises.
-    @ViewBuilder
-    private var editorAndColour: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            DemoSection("page.spinners.editorSection") {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("page.spinners.editorHint")
-                        .foregroundStyle(.palette.foregroundSecondary)
-                    editorControls
-                    // The thing being edited, at the size it will be used —
-                    // beside a label, which is how a spinner is nearly always
-                    // written.
-                    Spinner(editedLabel, style: editedStyle, color: editedColor)
-                        .padding(.leading, 1)
-                }
-            }
+    /// The catalogue's rows, dealt into `columns` columns.
+    ///
+    /// Everything the customiser touches travels INSIDE the elements, and the
+    /// columns are elements too. `ForEach`'s value memo keys on the element,
+    /// and its documented hole is exactly the shape this used to be:
+    /// `ForEach(0..<columns)` with the rows built from data captured outside
+    /// the closure. The column's buffer was then reused for a column whose
+    /// contents had changed — the catalogue went on showing the theme's accent,
+    /// and the previous frame sequence, while every other spinner on the page
+    /// had followed the editor.
+    private func catalogueColumns(columns: Int, color: Color?) -> [CatalogueColumn] {
+        let colorKey = color.map { String(describing: $0) } ?? "theme"
+        let frames = editedFrames
+        // The catalogue's custom row IS the customiser's frame and label
+        // fields: one custom spinner on the page, edited in one place, rather
+        // than a second one frozen at whatever the fields happened to say when
+        // this list was written. It is the only row they reach, which is why it
+        // is built apart from the eleven fixed ones.
+        let styles: [CatalogueEntry] =
+            [
+                ("dots", SpinnerStyle.dots), ("line", .line), ("bouncing", .bouncing),
+                ("pie", .pie), ("beachball", .beachball), ("box", .box), ("bars", .bars),
+                ("blockWedge", .blockWedge), ("moon", .moon), ("earth", .earth),
+                ("clock", .clock),
+            ].map { CatalogueEntry(name: $0.0, style: $0.1, label: nil, colorKey: colorKey) }
+            + [
+                CatalogueEntry(
+                    name: "custom(\"\(frames)\")", style: .custom(frames),
+                    label: editedLabel, colorKey: colorKey)
+            ]
+        let perColumn = (styles.count + columns - 1) / columns
+        return (0..<columns).map { column in
+            CatalogueColumn(
+                index: column,
+                entries: Array(
+                    styles[
+                        min(column * perColumn, styles.count)
+                            ..< min((column + 1) * perColumn, styles.count)]))
+        }
+    }
 
-            DemoSection("page.spinners.customColorSection") {
-                // The editor's colour, beside a label, at the size a spinner is
-                // nearly always used at. It used to be a literal magenta, which
-                // said "a spinner can take a colour" and nothing about the one
-                // being chosen two lines above.
-                Spinner("page.spinners.installing", style: .bouncing, color: editedColor)
+    /// Everything you can change about the spinners on the left.
+    @ViewBuilder
+    private var customiser: some View {
+        DemoSection("page.spinners.editorSection") {
+            VStack(alignment: .leading, spacing: 1) {
+                // Wrapped, not run on: `ViewThatFits` chooses on IDEAL width,
+                // so one long line of prose is enough on its own to rule out
+                // every side-by-side arrangement of the page.
+                Text("page.spinners.editorHint")
+                    .frame(width: 44, alignment: .leading)
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                // No blank row between the choice and the thing it chooses.
+                VStack(alignment: .leading, spacing: 0) {
+                    // Two states of one choice, so two radio buttons rather
+                    // than a checkbox: "theme accent" is not a modifier on the
+                    // colour below it, it is the alternative to it. As a
+                    // `Toggle` the two controls read as unrelated, and nothing
+                    // said that switching it off is what makes the colour take
+                    // effect.
+                    RadioButtonGroup(selection: colorSourceBinding) {
+                        RadioButtonItem(ColorSource.theme, "page.spinners.editorThemeColour")
+                        RadioButtonItem(ColorSource.custom, "page.spinners.editorCustomColour")
+                    }
+
+                    // Indented to the second radio button's LABEL, and disabled
+                    // while the first one is chosen — the two together are what
+                    // say "this is the colour that option means".
+                    //
+                    // Swatch only: the inline R/G/B sliders are ninety cells
+                    // wide, which alone decided this page's layout — no
+                    // side-by-side arrangement could fit, so the customiser
+                    // fell below the catalogue. The swatch still focuses and
+                    // still opens the full editor on Return, Space or a click.
+                    ColorPicker("page.spinners.editorColour", selection: colorBinding)
+                        .colorPickerChannels(.hidden)
+                        .colorPickerLabelWidth(8)
+                        .disabled(editorUsesThemeColor)
+                        .padding(.leading, 2)
+                }
+
+                customFields
             }
         }
     }
 
-    /// The editor's controls: the pickers on one row, the two free-text fields
-    /// on another. Two rows rather than three columns because a `TextField`
-    /// needs a caption above it (its title is a placeholder, as in SwiftUI, and
-    /// vanishes the moment the field has anything in it) while a `Picker` draws
-    /// its own label inline — so mixing them in one row leaves the row ragged.
-    @ViewBuilder private var editorControls: some View {
-        HStack(spacing: 3) {
-            SpinnerStylePicker(titleKey: "page.spinners.editorStyle", selection: $editorStyle)
-            Toggle("page.spinners.editorThemeColour", isOn: $editorUsesThemeColor)
-            Toggle("page.spinners.editorUseCustom", isOn: $editorUsesCustom)
-        }
-        // The whole colour, not six of them: the same `ColorPicker` the Theme
-        // page edits a palette with, disabled while the theme's accent is in
-        // force so the control still says what the spinner is showing.
-        ColorPicker("page.spinners.editorColour", selection: colorBinding)
-            .disabled(editorUsesThemeColor)
+    /// The two fields that reach the `custom` row alone. Side by side, each
+    /// under its own caption: a `TextField`'s title is a placeholder, as in
+    /// SwiftUI, and vanishes the moment the field has anything in it.
+    @ViewBuilder private var customFields: some View {
         HStack(alignment: .top, spacing: 3) {
             VStack(alignment: .leading, spacing: 0) {
                 // A `.custom` spinner IS its frame sequence — one character per
@@ -171,6 +190,20 @@ struct SpinnersPage: View {
         Text(textKey).foregroundStyle(.palette.foregroundSecondary)
     }
 
+    /// Where the spinners' colour comes from.
+    private enum ColorSource: Hashable {
+        case theme
+        case custom
+    }
+
+    /// The radio group's selection, over the stored flag. Stored as the flag it
+    /// has always been so the preference survives this page's rearrangement.
+    private var colorSourceBinding: Binding<ColorSource> {
+        Binding(
+            get: { editorUsesThemeColor ? .theme : .custom },
+            set: { editorUsesThemeColor = $0 == .theme })
+    }
+
     /// The edited colour as a binding the `ColorPicker` can drive, hex in the
     /// persisted store and a `Color` in the control.
     private var colorBinding: Binding<Color> {
@@ -185,12 +218,6 @@ struct SpinnersPage: View {
         editorFrames.isEmpty ? "123432" : editorFrames
     }
 
-    private var editedStyle: SpinnerStyle {
-        editorUsesCustom
-            ? .custom(editedFrames)
-            : (SpinnerStyleChoice(rawValue: editorStyle) ?? .dots).style
-    }
-
     /// `nil` means "whatever a Spinner does by default", which is the theme's
     /// accent — an absence rather than a copy of it.
     private var editedColor: Color? {
@@ -201,13 +228,15 @@ struct SpinnersPage: View {
         editorLabel.isEmpty ? nil : editorLabel
     }
 
-    /// One row of the style catalogue. Its `id` carries the colour so a colour
-    /// change moves it — see `stylesCatalogue(columns:)`.
+    /// One row of the style catalogue. Its `id` carries everything the
+    /// customiser can change about it, so a change moves it — see
+    /// `stylesCatalogue(columns:)`.
     private struct CatalogueEntry: Identifiable, Equatable {
         let name: String
         let style: SpinnerStyle
+        let label: String?
         let colorKey: String
-        var id: String { "\(name)|\(colorKey)" }
+        var id: String { "\(name)|\(label ?? "")|\(colorKey)" }
 
         /// The row is what its id says it is — which is what lets the value
         /// memo tell a changed row from an unchanged one.
@@ -228,14 +257,13 @@ struct SpinnersPage: View {
     }
 
     /// A `[spinner  style-name]` row for the style catalogue, in the colour the
-    /// editor is on — "apply to all the examples on the page" being what makes
-    /// a colour choice something you can actually judge.
-
+    /// customiser is on — "apply to all the examples on the page" being what
+    /// makes a colour choice something you can actually judge.
     @ViewBuilder
-    private func spinnerRow(_ name: String, _ style: SpinnerStyle, color: Color?) -> some View {
+    private func spinnerRow(_ entry: CatalogueEntry, color: Color?) -> some View {
         HStack(spacing: 1) {
-            Spinner(style: style, color: color)
-            Text(name).foregroundStyle(.palette.foregroundSecondary)
+            Spinner(entry.label, style: entry.style, color: color)
+            Text(entry.name).foregroundStyle(.palette.foregroundSecondary)
         }
     }
 }
