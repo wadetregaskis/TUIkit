@@ -1005,7 +1005,12 @@ where Value.ID: Hashable {
         // the viewport reach past the last one.
         handler.dropSlotAddsRow = handler.externalDropSlot != nil
         let rowArea = max(1, contentHeight - (handler.dropSlotAddsRow ? 1 : 0))
-        handler.contentHeight = rowArea
+        // The FULL area, not `rowArea`: `dropSlotAddsRow` is already set above,
+        // and every reader inside the handler that has to account for the slot
+        // subtracts it itself (``rowLineBudget``). Passing the reduced figure
+        // charges for the slot twice — see the twin at the single-line path,
+        // which passes `contentHeight` for the same reason.
+        handler.contentHeight = contentHeight
         handler.canBeFocused = !isDisabled
         handler.primaryAction = primaryAction
         handler.onMove = moveAction
@@ -1990,9 +1995,7 @@ where Value.ID: Hashable {
                 handlerID: zoneID,
                 accepts: insertion.accepts,
                 perform: { payload, _ in
-                    let slot = handler.externalDropSlot ?? handler.itemCount
-                    handler.externalDropSlot = nil
-                    insertion.perform(min(max(0, slot), handler.itemCount), [payload])
+                    insertion.perform(handler.takeExternalDropSlot(), [payload])
                     return true
                 },
                 setTargeted: { targeted in

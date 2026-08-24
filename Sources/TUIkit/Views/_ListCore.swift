@@ -1848,9 +1848,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 handlerID: zoneID,
                 accepts: insertion.accepts,
                 perform: { payload, _ in
-                    let slot = handler.externalDropSlot ?? handler.itemCount
-                    handler.externalDropSlot = nil
-                    insertion.perform(slot, [payload])
+                    insertion.perform(handler.takeExternalDropSlot(), [payload])
                     return true
                 },
                 setTargeted: { targeted in

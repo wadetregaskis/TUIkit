@@ -71,6 +71,23 @@ extension ItemListHandler {
         }
     }
 
+    /// Consumes the slot for a drop that is happening now: the clamped index
+    /// to insert at, with the hover state cleared.
+    ///
+    /// The clamp is here and not only in ``setExternalDropSlot(_:)`` because
+    /// the two are answers to different questions. That one keeps a *hover*
+    /// truthful as rows come and go; this one is read at the moment of
+    /// insertion, and between the last hover and the drop the data can shrink
+    /// with no pointer event to re-clamp on — a filter narrowing, a sibling
+    /// view taking the item, the drag's own source removing it. The documented
+    /// use of this index is `insert(contentsOf:at:)`, which traps rather than
+    /// clamping, so the read side has to be sure on its own.
+    func takeExternalDropSlot() -> Int {
+        let slot = externalDropSlot ?? itemCount
+        externalDropSlot = nil
+        return min(max(0, slot), itemCount)
+    }
+
     /// The slot, clamped to the list's own bounds — a list that shrank under
     /// the pointer must not strand it past the end.
     private func setExternalDropSlot(_ slot: Int) {

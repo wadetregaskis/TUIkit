@@ -161,4 +161,37 @@ struct ExternalDropAutoScrollTests {
             (firstVisible...lastVisible + 1).contains(landed),
             "landed at \(landed), outside the visible \(firstVisible)…\(lastVisible)")
     }
+
+    /// A drop index is only ever handed to the app, and the documented use of
+    /// it is `insert(contentsOf:at:)` — which traps rather than clamping. So it
+    /// has to be in range at the moment of the drop, not merely at the moment
+    /// of the hover.
+    ///
+    /// Between the two the data can shrink with no pointer event to re-clamp
+    /// on: a filter narrowing, a sibling view taking the item, the drag's own
+    /// source removing it. Here the list simply loses rows while the pointer
+    /// holds still past the end of it — the hover named the old count, and
+    /// nothing else asks the question again.
+    @Test("A list that shrinks under a held pointer still yields a usable index")
+    func slotIsClampedWhenTheListShrinksBeforeTheDrop() {
+        let fixture = Fixture(rows: ["a", "b", "c", "d", "e", "f", "g", "h"])
+        let buffer = fixture.render()
+        fixture.dragToBottomEdge(of: buffer)
+        // Past every row: the conventional "append" answer, which is exactly
+        // the index that a shrinking list strands.
+        fixture.handler?.hoverExternalDrop(atContentY: 999)
+        #expect(fixture.handler?.externalDropSlot == 8, "the hover named the end")
+
+        fixture.rows = ["a", "b", "c"]
+        _ = fixture.render()
+        fixture.session.performDrop()
+
+        guard let landed = fixture.dropped?.slot else {
+            Issue.record("nothing was dropped")
+            return
+        }
+        #expect(
+            (0...fixture.rows.count).contains(landed),
+            "landed at \(landed), outside 0…\(fixture.rows.count)")
+    }
 }
