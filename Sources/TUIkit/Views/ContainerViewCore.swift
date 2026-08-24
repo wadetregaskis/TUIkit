@@ -673,6 +673,13 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
             bodyBuffer: bodyBuffer, footerBuffer: footerBuffer, innerWidth: innerWidth,
             borderStyle: borderStyle, borderColor: borderColor,
             focusIndicator: focusIndicator, lineCount: lines.count, palette: palette)
+        // Content sits one cell inside the wall — the same shift its overlays
+        // and hit regions take just above.
+        result.opacityRegions = bodyBuffer.shiftedOpacityRegions(byX: 1, y: 1)
+        if let footerBuf = footerBuffer, !footerBuf.isEmpty {
+            result.opacityRegions += footerBuf.shiftedOpacityRegions(
+                byX: 1, y: 1 + bodyBuffer.lines.count + (style.showFooterSeparator ? 1 : 0))
+        }
         return result
     }
 
@@ -860,15 +867,20 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         var carriedOverlays = bodyBuffer.shiftedOverlays(byX: 0, y: titleRows)
         var carriedRuns = bodyBuffer.shiftedAnimatedCells(byX: 0, y: titleRows)
         var carriedRegions = bodyBuffer.shiftedHitTestRegions(byX: 0, y: titleRows)
+        var carriedOpacity = bodyBuffer.shiftedOpacityRegions(byX: 0, y: titleRows)
         if let footerBuf = footerBuffer, !footerBuf.isEmpty {
             let footerRow = titleRows + bodyBuffer.lines.count + footerSeparatorRows
             carriedOverlays += footerBuf.shiftedOverlays(byX: 0, y: footerRow)
             carriedRegions += footerBuf.shiftedHitTestRegions(byX: 0, y: footerRow)
             carriedRuns += footerBuf.shiftedAnimatedCells(byX: 0, y: footerRow)
+            carriedOpacity += footerBuf.shiftedOpacityRegions(byX: 0, y: footerRow)
         }
         result.overlays = carriedOverlays
         result.hitTestRegions = carriedRegions
         result.animatedCells = carriedRuns
+        // The fourth payload. This rebuilds with a bare `FrameBuffer(lines:)`,
+        // so anything not re-attached here is simply gone.
+        result.opacityRegions = carriedOpacity
         return result
     }
 }
