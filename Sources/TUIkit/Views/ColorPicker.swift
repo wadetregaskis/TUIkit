@@ -18,6 +18,9 @@
 /// (There is no opacity channel — terminal colours have no alpha — so
 /// `supportsOpacity` is omitted.)
 ///
+/// ``TUIkit/View/colorPickerChannels(_:)`` drops the inline sliders, leaving
+/// label and swatch — SwiftUI's own shape, and what a narrow row has space for.
+///
 /// The swatch shows focus and hover in its centre cell — a bullet, pulsing
 /// while focused — rather than by re-colouring itself, because its colour is
 /// its content (``_ColorSwatchButtonStyle``).
@@ -42,6 +45,11 @@ public struct ColorPicker: View {
     @Environment(\.colorPickerLabelWidth) private var labelWidth
     @Environment(\.labelsVisibility) private var labelsVisibility
     private var labelsHidden: Bool { labelsVisibility == .hidden }
+
+    /// Whether the inline channel sliders are drawn — see
+    /// ``TUIkit/View/colorPickerChannels(_:)``.
+    @Environment(\.colorPickerChannels) private var channelsVisibility
+    private var channelsHidden: Bool { channelsVisibility == .hidden }
 
     /// Creates a colour picker over an RGB binding, with a localized label.
     ///
@@ -83,9 +91,11 @@ public struct ColorPicker: View {
                     .foregroundStyle(.palette.foregroundSecondary)
             }
             swatch
-            channel("R", 0)
-            channel("G", 1)
-            channel("B", 2)
+            if !channelsHidden {
+                channel("R", 0)
+                channel("G", 1)
+                channel("B", 2)
+            }
         }
     }
 
@@ -195,5 +205,49 @@ extension View {
     /// - Parameter width: The column width in cells.
     public func colorPickerLabelWidth(_ width: Int) -> some View {
         environment(\.colorPickerLabelWidth, width)
+    }
+}
+
+// MARK: - Inline Channels
+
+private struct ColorPickerChannelsKey: EnvironmentKey {
+    /// Shown. A terminal row usually has the space, and editing in place beats
+    /// opening a panel for a five-unit nudge.
+    static let defaultValue: Visibility = .automatic
+}
+
+extension EnvironmentValues {
+    /// Whether ``ColorPicker`` draws its inline channel sliders. See
+    /// ``TUIkit/View/colorPickerChannels(_:)``.
+    public var colorPickerChannels: Visibility {
+        get { self[ColorPickerChannelsKey.self] }
+        set { self[ColorPickerChannelsKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Shows or hides the inline R/G/B sliders in every ``ColorPicker`` in this
+    /// view, leaving the label and the swatch.
+    ///
+    /// The swatch is a `Button`: it still focuses, still shows hover, and still
+    /// opens the full ``ColorPickerPanel`` on Return, Space or a click. So
+    /// hiding the channels removes a way to edit, not the ability to.
+    ///
+    /// Worth doing wherever the sliders are the widest thing on the row and the
+    /// colour is not the row's subject — three sliders are some ninety cells,
+    /// which is enough to decide a whole page's layout.
+    ///
+    /// ```swift
+    /// ColorPicker("Tint", selection: $tint)
+    ///     .colorPickerChannels(.hidden)
+    /// ```
+    ///
+    /// TUI-specific: SwiftUI's control is label-and-swatch, with no inline
+    /// channels to hide.
+    ///
+    /// - Parameter visibility: `.hidden` for the swatch alone; `.visible` or
+    ///   `.automatic` for the full row.
+    public func colorPickerChannels(_ visibility: Visibility) -> some View {
+        environment(\.colorPickerChannels, visibility)
     }
 }
