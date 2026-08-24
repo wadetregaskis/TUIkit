@@ -1139,7 +1139,6 @@ where Value.ID: Hashable {
         let window = rowWindow(
             scrollOffset: handler.scrollOffset, count: data.count,
             contentHeight: contentHeight, topClip: handler.scrollTopClipLines,
-            lineGranularity: context.environment.scrollGranularity == .line,
             drawsTextIndicators: handler.drawsScrollIndicators, height: heightOf)
         // The window may have absorbed a top clip (or a whole first row) that
         // an indicator would otherwise have announced — the rows are drawn
@@ -1319,7 +1318,7 @@ where Value.ID: Hashable {
     /// shown. Mirrors the single-line indicator reservation, height-aware.
     private func rowWindow(
         scrollOffset: Int, count: Int, contentHeight: Int, topClip: Int = 0,
-        lineGranularity: Bool = false, drawsTextIndicators: Bool = true,
+        drawsTextIndicators: Bool = true,
         height: (Int) -> Int
     ) -> (range: Range<Int>, showAbove: Bool, showBelow: Bool, topClip: Int) {
         guard count > 0 else { return (0..<0, false, false, 0) }
@@ -1343,13 +1342,14 @@ where Value.ID: Hashable {
             while end < count {
                 let rowH = height(end)
                 if used + rowH > budget && end > offset {
-                    // Line granularity fills the viewport EXACTLY: the row
-                    // that straddles the budget enters the window (the
-                    // renderer clips its tail), rather than leaving the
-                    // spare lines empty — a whole-row window underfills
-                    // whenever the visible rows don't sum to the budget,
-                    // which made the table's frame breathe as it scrolled.
-                    if lineGranularity && used < budget { end += 1 }
+                    // The viewport fills EXACTLY under either granularity: the
+                    // row that straddles the budget enters the window and the
+                    // renderer clips its tail, rather than leaving the spare
+                    // lines empty. Granularity is about the STEP and where the
+                    // TOP may rest — a whole-row window left the bottom lines
+                    // of the content area blank, which reads as the table
+                    // truncating its own viewport.
+                    if used < budget { end += 1 }
                     break
                 }
                 used += rowH
@@ -1422,17 +1422,14 @@ where Value.ID: Hashable {
             if let run = indicator.animation { chromeRuns.append(run.shifted(byX: 0, y: 0)) }
             lines.append(indicator.text)
         }
-        // Line granularity fills the content area EXACTLY: the bottom row may
-        // be partially clipped (the top row already can be, via
-        // `scrollTopClipLines`), so the table's height never changes with
-        // which rows happen to be visible. Row granularity keeps whole rows.
-        // A bar takes no line of its own, so the rows have the whole content
-        // area — and they must be clipped to it under EITHER granularity, since
-        // there is no indicator line left to absorb a row that overruns.
-        let rowLineBudget: Int? =
-            !drawsText || context.environment.scrollGranularity == .line
-            ? max(1, contentHeight - lines.count - ((window.showBelow && drawsText) ? 1 : 0))
-            : nil
+        // The content area fills EXACTLY: the bottom row may be partially
+        // clipped (the top row already can be, via `scrollTopClipLines`), so
+        // the table's height never changes with which rows happen to be
+        // visible. Under EITHER granularity — a whole-row viewport underfills
+        // whenever the visible rows don't sum to the budget, and the blank
+        // lines that left at the bottom read as the table truncating itself.
+        let rowLineBudget =
+            max(1, contentHeight - lines.count - ((window.showBelow && drawsText) ? 1 : 0))
         var rowLinesEmitted = 0
         // The rows are collected apart from the indicator chrome so that only
         // they take an overscroll slide (§1.5).
@@ -1450,7 +1447,7 @@ where Value.ID: Hashable {
             // Clipped alongside the lines, so `pulseFrames[i]` stays the frames
             // of `rowLines[i]`.
             var pulseFrames = rendered.pulseFrames
-            // Line granularity: the top row enters partially, its first lines
+            // A top clip means the top row enters partially, its first lines
             // scrolled off above the viewport. Clip by the WINDOW's resolved
             // origin, not the handler's raw state — the window may have
             // absorbed a one-line clip (drawing the line instead of a "▲ 1
@@ -1462,14 +1459,12 @@ where Value.ID: Hashable {
                 pulseFrames?.removeFirst(clipped)
             }
             // …and the bottom row leaves partially, clipped at the budget.
-            if let rowLineBudget {
-                let remaining = rowLineBudget - rowLinesEmitted
-                if remaining <= 0 { break }
-                if rowLines.count > remaining {
-                    let dropped = rowLines.count - remaining
-                    rowLines.removeLast(dropped)
-                    pulseFrames?.removeLast(dropped)
-                }
+            let remaining = rowLineBudget - rowLinesEmitted
+            if remaining <= 0 { break }
+            if rowLines.count > remaining {
+                let dropped = rowLines.count - remaining
+                rowLines.removeLast(dropped)
+                pulseFrames?.removeLast(dropped)
             }
             collect(
                 RenderedRow(lines: rowLines, pulseFrames: pulseFrames),

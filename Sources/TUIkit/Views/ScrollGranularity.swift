@@ -13,17 +13,23 @@
 /// - ``line``: the viewport moves one terminal *line* at a time — a tall row
 ///   scrolls into view gradually, and can be partially clipped at the top of
 ///   the viewport, exactly like a GUI list mid-scroll. The default.
-/// - ``row``: the viewport moves one whole *row* at a time — the top visible
-///   row is always fully shown (the classic TUI behaviour).
+/// - ``row``: the viewport moves one whole *row* at a time, so the row a step
+///   lands on is fully shown at the top (the classic TUI behaviour).
 ///
 /// Selection and the keyboard focus cursor are row-based in both modes; the
-/// granularity affects only how the viewport moves (wheel, scrollbar arrows)
-/// and where it may rest. With single-line rows the two are identical.
+/// granularity affects only how far one scroll STEP moves (wheel, trackpad,
+/// scrollbar arrows) and where the top may come to rest. With single-line rows
+/// the two are identical.
+///
+/// Neither mode leaves part of the viewport blank: the row that straddles the
+/// bottom edge is drawn as far as it fits under both, so a fixed-height list
+/// never appears to truncate its own visible area. The trailing row is not
+/// where the promise about whole rows lives — a step lands on one.
 public enum ScrollGranularity: Sendable, Equatable {
     /// Scroll by terminal lines; a tall top row may be partially clipped.
     case line
 
-    /// Scroll by whole rows; the top row is always fully visible.
+    /// Scroll by whole rows; a step lands with the top row fully visible.
     case row
 }
 
@@ -49,8 +55,9 @@ extension View {
     /// when rows span multiple lines — by terminal ``ScrollGranularity/line``
     /// (the default: tall rows scroll into view gradually and may be
     /// partially clipped at the top edge) or by whole
-    /// ``ScrollGranularity/row`` (the classic TUI behaviour: the top row is
-    /// always fully visible).
+    /// ``ScrollGranularity/row`` (the classic TUI behaviour: a step lands with
+    /// the top row fully visible). Either way the viewport fills exactly, the
+    /// row at the bottom edge drawn as far as it fits.
     public func scrollGranularity(_ granularity: ScrollGranularity) -> some View {
         environment(\.scrollGranularity, granularity)
     }

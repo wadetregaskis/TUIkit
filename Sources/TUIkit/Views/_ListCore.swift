@@ -455,22 +455,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // row too high), and no overflow in the middle. With a bar,
         // the whole content area is the viewport (no reservation).
         var visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)]
-        // Deliberately not defaulted anywhere below: an implicit default is
-        // exactly how these window rules drift apart.
-        let lineGranularity = context.environment.scrollGranularity == .line
         if !handler.drawsScrollIndicators {
             // Nothing comes out of the content area: a bar spends a column, and
             // hidden indicators spend nothing at all.
             visibleRows = calculateVisibleRows(
-                source: source, origin: origin, viewportHeight: rowBudget,
-                lineGranularity: lineGranularity)
+                source: source, origin: origin, viewportHeight: rowBudget)
         } else {
             visibleRows = resolveVisibleWindow(
                 source: source,
                 origin: origin,
                 contentHeight: rowBudget,
-                overflowing: overflowing,
-                lineGranularity: lineGranularity
+                overflowing: overflowing
             )
         }
         // Sync the viewport to the DATA rows this window covers — BEFORE the
@@ -970,17 +965,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             )
         }
 
-        // Line granularity fills the content area EXACTLY: the bottom row may
-        // be partially clipped (as the top row already can be, via
-        // `scrollTopClipLines`), so the list's height never changes with
-        // which rows happen to be visible. Row granularity keeps whole rows.
+        // The content area fills EXACTLY, under either granularity: the bottom
+        // row may be partially clipped (as the top row already can be, via
+        // `scrollTopClipLines`), so the list's height never changes with which
+        // rows happen to be visible.
         let indicatorLines =
             (topIndicator == nil ? 0 : 1)
             + (handler.drawsScrollIndicators && handler.hasContentBelow ? 1 : 0)
-        let rowLineBudget: Int? =
-            context.environment.scrollGranularity == .line
-            ? max(1, contentHeight - indicatorLines)
-            : nil
+        let rowLineBudget = max(1, contentHeight - indicatorLines)
         var rowLinesEmitted = 0
 
         var sectionContentIndex = 0
@@ -998,18 +990,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 context: context,
                 palette: palette
             )
-            // Line granularity: the top visible row enters partially, its
-            // first `clip` lines scrolled off above the viewport (clipped by
-            // the RESOLVED origin, which is also what the window walk, the
-            // indicators, the bands and the click mapping measure from), and
-            // the bottom row leaves partially, clipped at the budget.
+            // The top visible row enters partially, its first `clip` lines
+            // scrolled off above the viewport (clipped by the RESOLVED origin,
+            // which is also what the window walk, the indicators, the bands and
+            // the click mapping measure from), and the bottom row leaves
+            // partially, clipped at the budget.
             //
             // During a reorder hold the budget clip is deferred to
             // `clipReorderOverrun` below, which knows not to clip THROUGH the
             // slot — a blind mid-loop clip took away the only thing on screen
             // saying where the rows would land when the slot was last.
             var budget: Int?
-            if let rowLineBudget, handler.reorder == nil {
+            if handler.reorder == nil {
                 let remaining = rowLineBudget - rowLinesEmitted
                 if remaining <= 0 { break }
                 budget = remaining
@@ -1039,14 +1031,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
 
         // A drag never changes how much is on screen, so a reorder frame's
-        // overrun is clipped here, slot-aware, for BOTH granularities (row
-        // granularity has no other clip at all — the window fit before the
-        // slot was added, so held rows scrolled out of it overflowed the
-        // content area by the slot's height).
+        // overrun is clipped here, slot-aware: the per-row clip above stands
+        // down for a hold, and the window fit before the slot was added, so
+        // held rows scrolled out of it overflow the content area by the slot's
+        // height.
         if handler.reorder != nil {
             clipReorderOverrun(
                 lines: &rowLines, ranges: &ranges, pulseRuns: &pulseRuns,
-                budget: rowLineBudget ?? max(1, contentHeight - indicatorLines))
+                budget: rowLineBudget)
         }
 
         if handler.drawsScrollIndicators, handler.hasContentBelow {
@@ -2262,13 +2254,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         source: RowSource<SelectionValue>,
         origin: WindowOrigin,
         contentHeight: Int,
-        overflowing: Bool,
-        lineGranularity: Bool
+        overflowing: Bool
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
         guard overflowing else {
             return calculateVisibleRows(
-                source: source, origin: origin, viewportHeight: contentHeight,
-                lineGranularity: lineGranularity)
+                source: source, origin: origin, viewportHeight: contentHeight)
         }
         // A line-granularity top clip means the top row is partially hidden,
         // which warrants the "above" indicator just like whole hidden rows.
@@ -2278,8 +2268,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let withoutBelow = calculateVisibleRows(
             source: source,
             origin: origin,
-            viewportHeight: max(1, contentHeight - aboveLines),
-            lineGranularity: lineGranularity)
+            viewportHeight: max(1, contentHeight - aboveLines))
         // …then, if rows remain past that window, a "below" indicator
         // is needed, so reserve its line and refill.
         let belowShown = origin.offset + withoutBelow.count < source.count
@@ -2287,19 +2276,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return calculateVisibleRows(
             source: source,
             origin: origin,
-            viewportHeight: max(1, contentHeight - aboveLines - 1),
-            lineGranularity: lineGranularity)
+            viewportHeight: max(1, contentHeight - aboveLines - 1))
     }
 
-    /// - Parameter lineGranularity: Whether the viewport may end mid-row. See
-    ///   the straddle branch below — this is the whole reason the flag is
-    ///   threaded down here rather than read from the environment at the point
-    ///   of use, so every window walk answers it the same way.
     private func calculateVisibleRows(
         source: RowSource<SelectionValue>,
         origin: WindowOrigin,
-        viewportHeight: Int,
-        lineGranularity: Bool
+        viewportHeight: Int
     ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
         var result: [(Int, SelectableListRow<SelectionValue>)] = []
         // A line-granularity top clip hides the first `clip` lines of the top
@@ -2318,23 +2301,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 linesUsed += rowHeight
                 currentIndex += 1
             } else {
-                // The row that straddles the remaining budget. Line granularity
-                // fills the viewport EXACTLY — the row enters and the renderer
-                // clips its tail. Row granularity promises WHOLE rows, so it
-                // stays out and waits for the next screenful; the shortfall is
-                // padded downstream. `Table.rowWindow` has always had this rule
-                // (its `lineGranularity && used < budget` test); the List never
-                // learned it, and its compose paths tried to undo the over-emit
-                // with a budget clip that is itself gated on `.line` — so under
-                // `.row` nothing trimmed it and the container's blind bottom
-                // clamp ate whatever was last: the "▼ N more below" indicator,
-                // or the tail of the bottom row on the scrollbar path.
+                // The row that straddles the remaining budget enters the
+                // window under EITHER granularity, and the renderer clips its
+                // tail: the viewport fills exactly. What granularity decides is
+                // the size of a scroll STEP and where the TOP may rest — held
+                // to whole rows at the bottom too, the viewport underfilled
+                // whenever the visible rows didn't sum to the budget, and the
+                // blank lines that left read as the list truncating itself.
                 //
-                // A window is never empty, though: a first row taller than the
-                // whole viewport still enters (clipped), or nothing would draw.
-                if lineGranularity || result.isEmpty {
-                    result.append((currentIndex, row))
-                }
+                // The clip is what makes this safe: without it the over-emitted
+                // row met the container's blind bottom clamp, which ate
+                // whatever came last — the "▼ N more below" indicator, or the
+                // tail of the bottom row on the scrollbar path.
+                result.append((currentIndex, row))
                 break
             }
         }

@@ -340,41 +340,40 @@ struct ScrollGranularityTests {
         #expect(body == atTop, "the absorbed frame draws the un-clipped window:\n\(body)")
     }
 
-    @Test("List (row granularity): whole rows only, so the below indicator survives")
-    func listRowGranularityKeepsBelowIndicator() {
+    @Test("List (row granularity): the straddling row is part-drawn, indicator and all")
+    func listRowGranularityFillsAndKeepsBelowIndicator() {
         // Six 3-line rows in an 11-line frame → a 9-line content area. Rows a,
         // b, c sum to exactly 9, leaving no line for "▼ N more rows below" — so
-        // under WHOLE-ROW granularity only a and b may show, and the freed line
-        // carries the indicator. Before the window walk learned the rule, row c
-        // was emitted anyway and the container's bottom clamp ate the indicator
-        // instead: the list looked like it ended at row c.
+        // the indicator takes one and row c is drawn two lines deep.
+        //
+        // Neither half can be given up. Emitting c whole cost the indicator:
+        // the container's blind bottom clamp ate it, and the list looked as
+        // though it ended at row c. But keeping WHOLE rows cost the ninth line
+        // instead, which is the bug the user reported — the viewport visibly
+        // short of the height it had reserved.
         let body = renderList(granularity: .row, linesPerRow: 3)
-        #expect(body.contains("b-3"), "the last row that FITS is drawn whole:\n\(body)")
-        #expect(!body.contains("c-1"), "the straddling row stays out of the window:\n\(body)")
         #expect(body.contains("more rows below"), "the below indicator survives:\n\(body)")
+        #expect(body.contains("c-2"), "the straddling row is drawn as far as it fits:\n\(body)")
+        #expect(!body.contains("c-3"), "…and no further:\n\(body)")
     }
 
-    @Test("List (row granularity, scrollbar): the bottom row is whole, not part-drawn")
-    func listRowGranularityScrollbarKeepsWholeRows() {
-        // The same over-emission on the scrollbar path, where there is no
-        // indicator to lose — the container clamp cut the bottom ROW instead,
-        // leaving one line of it on screen in whole-row mode. 4-line rows in a
-        // 9-line content area: two fit, the third must wait.
-        let body = renderList(
-            granularity: .row, linesPerRow: 4, frameHeight: 11, showsScrollbar: true)
-        #expect(body.contains("b-4"), "the last row that fits is drawn whole:\n\(body)")
-        #expect(!body.contains("c-1"), "the row that does not fit is not part-drawn:\n\(body)")
-    }
-
-    @Test("List (line granularity, scrollbar): the bottom row still fills the area")
-    func listLineGranularityScrollbarFillsArea() {
-        // The guard against over-correcting: line granularity must still spend
-        // the spare line on a partial row. Identical before and after the
-        // whole-row fix, which is the point — it pins the fix to `.row`.
-        let body = renderList(
-            granularity: .line, linesPerRow: 4, frameHeight: 11, showsScrollbar: true)
-        #expect(body.contains("c-1"), "line mode spends the ninth line on row c:\n\(body)")
-        #expect(!body.contains("c-2"), "…and clips the rest of it:\n\(body)")
+    @Test("List: the bottom edge is cut the same way under either granularity")
+    func listGranularityAgreesAtTheBottomEdge() {
+        // 4-line rows in a 9-line content area with a scrollbar, so there is no
+        // indicator line for anything to hide behind: two rows fit and the
+        // third is drawn one line deep.
+        //
+        // Granularity sizes a STEP and decides where the top may rest, so at
+        // the SAME resting offset the two modes have nothing left to disagree
+        // about. This is where they used to: `.row` left that ninth line blank.
+        func body(_ granularity: ScrollGranularity) -> String {
+            renderList(
+                granularity: granularity, linesPerRow: 4, frameHeight: 11, showsScrollbar: true)
+        }
+        let row = body(.row)
+        #expect(row.contains("c-1"), "the ninth line is spent on row c:\n\(row)")
+        #expect(!row.contains("c-2"), "…and the rest of it clipped:\n\(row)")
+        #expect(row == body(.line), "the two modes draw the same frame at rest:\n\(row)")
     }
 
     @Test("List (row granularity): a wheel event moves three whole ROWS")
@@ -489,11 +488,11 @@ struct ScrollGranularityTests {
         #expect(Set(heights).count == 1, "the table's box never changes: \(heights)")
     }
 
-    @Test("Table (row granularity): the height ALSO stays constant (padded)")
+    @Test("Table (row granularity): the height ALSO stays constant")
     func tableRowGranularityConstantHeight() {
-        // Whole rows can't always fill the viewport exactly; the shortfall
-        // must be padded — a fixed-height table's frame never breathes as
-        // rows of different heights scroll through.
+        // Whole rows can't always fill the viewport exactly, so the row at the
+        // bottom edge is drawn as far as it fits — a fixed-height table's frame
+        // never breathes as rows of different heights scroll through.
         let frames = renderTableFrames(granularity: .row, wheelTicks: 6)
         let heights = frames.map(tableBoxHeight)
         #expect(Set(heights).count == 1, "the table's box never changes: \(heights)")

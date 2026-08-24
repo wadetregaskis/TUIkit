@@ -170,14 +170,18 @@ TableColumn("Path", value: \.path)
 
 When rows span multiple lines, ``ScrollGranularity`` controls how finely the
 content scrolls. The default is `.line`: tall rows scroll into view gradually
-and may rest partially clipped at the top edge, keeping the overall height
-constant. Opt into `.row` for the classic TUI behaviour, where the top row is
-always fully visible:
+and may rest partially clipped at the top edge. Opt into `.row` for the classic
+TUI behaviour, where a scroll step lands with the top row fully visible:
 
 ```swift
 List("Notes", selection: $selected) { ... }
     .scrollGranularity(.row)
 ```
+
+Granularity sizes a *step*; it is not a promise about the bottom edge. Under
+both modes the row that straddles it is drawn as far as it fits, so the
+viewport is always exactly filled and a fixed-height list never looks as though
+it truncated its own visible area.
 
 Multi-line rows also have a *height*, and a scrollbar metered in lines needs
 the total. Measuring every row to find it means wrapping the text of rows
