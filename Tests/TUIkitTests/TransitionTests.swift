@@ -117,6 +117,48 @@ struct TransitionTests {
         #expect(draw(false, atMillis: 1200).isEmpty)
     }
 
+    /// A transition swapped while the view is ON SCREEN belongs to the next
+    /// departure, not to the one that was current when it arrived.
+    ///
+    /// The parting picture is left behind on every frame the view renders — but
+    /// only frames that carried an animation were recording one, and every
+    /// frame after the arrival is an ordinary state change with no animation in
+    /// force. So the store kept the removal from the arrival: the Example's
+    /// panel went on fading out long after the picker had been moved to Slide,
+    /// and only adopted it on the trip after next.
+    @Test("A transition changed while the view is up takes effect when it leaves")
+    func removalFollowsTheCurrentTransition() {
+        var context = makeRenderContext(width: 8, height: 4)
+        context.environment.canAnimate = true
+
+        func draw(_ showing: Bool, _ transition: AnyTransition, animated: Bool, atMillis millis: Int)
+            -> [String]
+        {
+            context.environment.frameNowNanos = Int64(millis) * 1_000_000
+            // Only the show and the hide are animated. The frames in between —
+            // where the transition is chosen — are plain state changes, which
+            // is what the app actually does.
+            context.environment.transaction = Transaction(
+                animation: animated ? .linear(duration: 1) : nil)
+            let storage = context.environment.stateStorage!
+            storage.beginRenderPass()
+            defer { storage.endRenderPass() }
+            let content: Text? = showing ? Text("XXXX") : nil
+            return renderToBuffer(
+                content.map { $0.transition(transition) }, context: context
+            ).lines.map(\.stripped)
+        }
+
+        // Arrives under a fade…
+        _ = draw(true, .opacity, animated: true, atMillis: 0)
+        _ = draw(true, .opacity, animated: false, atMillis: 1200)
+        // …then the choice changes, with nothing animating.
+        _ = draw(true, .move(edge: .trailing), animated: false, atMillis: 1300)
+        // …and leaving must slide, not fade.
+        _ = draw(false, .move(edge: .trailing), animated: true, atMillis: 1400)
+        #expect(draw(false, .move(edge: .trailing), animated: true, atMillis: 1900).first == "  XX")
+    }
+
     // MARK: - Leaving
 
     @Test("A removal inside a stack plays out, holding its row open")

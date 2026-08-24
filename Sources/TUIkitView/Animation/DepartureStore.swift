@@ -91,6 +91,18 @@ extension DepartureStore {
         entries[identity] = Entry(departure: departure, leftAtNanos: nil, presentThisPass: true)
     }
 
+    /// The animation a record at `identity` was taken with, if there is one.
+    ///
+    /// For re-declaring a departure on a frame that carries no animation of its
+    /// own. A view only records a departure while something animated is in
+    /// force — that is what makes an un-animated removal snap rather than play
+    /// — but once it has one, the PICTURE it would play has to keep up with
+    /// the view: a transition swapped while the view is on screen belongs to
+    /// the next departure, not to the one that was current when it arrived.
+    public func recordedAnimation(at identity: ViewIdentity) -> Animation? {
+        entries[identity]?.departure.animation
+    }
+
     /// The picture to draw in the slot at `identity`, for a view that has gone.
     ///
     /// Returns `nil` when nothing left from there, or when the removal has

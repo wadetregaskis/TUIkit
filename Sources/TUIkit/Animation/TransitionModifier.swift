@@ -86,7 +86,18 @@ extension _TransitionView: Renderable {
         // this slot can play it out if the next frame does not contain us.
         // Re-declared each frame because nothing else can report an absence —
         // see `DepartureStore`.
-        if let leaving = animation ?? transition.explicitAnimation {
+        //
+        // Falling back to the animation already on record, so "every frame"
+        // means every frame and not just the animated ones. A view arrives
+        // inside `withAnimation`, and everything after that — including
+        // choosing a different transition — is an ordinary state change with no
+        // animation in force. Skipping those frames left the store holding the
+        // removal that was current when the view arrived, so the panel went on
+        // fading out long after the picker had been moved to Slide, and only
+        // adopted it on the trip after next.
+        if let leaving = animation ?? transition.explicitAnimation
+            ?? storage.departures.recordedAnimation(at: context.identity)
+        {
             let removal = transition.removal
             storage.departures.present(
                 DepartureStore.Departure(
