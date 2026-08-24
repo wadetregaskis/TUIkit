@@ -305,7 +305,7 @@ struct ListPage: View {
                     // otherwise every wheel tick is followed by the list
                     // scrolling to keep the cursor in view, and the two
                     // behaviours are impossible to tell apart.
-                    Toggle("page.list.selectable", isOn: $multiLineSelectable)
+                    Toggle("demo.selectionEnabled", isOn: $multiLineSelectable)
                     // How early the list scrolls to follow the moving
                     // selection: at the edge (default), 2 lines early, or
                     // keeping the selection centred.

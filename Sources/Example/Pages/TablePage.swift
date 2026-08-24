@@ -179,6 +179,8 @@ struct TablePage: View {
     @State var fixedHeightScrollbar = true
     @State var browserURL: URL = FileBrowser.seedDirectory()
     @State var liveSelection: Int?
+    /// Whether the big notes table has a row cursor. See the toggle's note.
+    @State var notesSelectable = true
     /// Drives the animated-cells table: bumped by a `.task` loop (250 ms).
     @State var liveTick: Int = 0
     /// The reorder demo's selection is a SET, so several rows can travel
@@ -193,6 +195,26 @@ struct TablePage: View {
     @State fileprivate var sortedTracks = Track.playlist
     @State fileprivate var trackSort = [KeyPathComparator(\Track.title, order: .forward)]
     @State var sortSelection: String?
+
+    /// The 300-row notes table, with or without a selection binding — two
+    /// different `Table` initializers, so this is a branch rather than an
+    /// optional. The List page's multi-line demo is built the same way.
+    @ViewBuilder private var notesTable: some View {
+        if notesSelectable {
+            Table(NoteEntry.bigNotes, selection: $notesSelection) { notesColumns }
+        } else {
+            Table(NoteEntry.bigNotes) { notesColumns }
+        }
+    }
+
+    @TableColumnBuilder<NoteEntry> private var notesColumns: [TableColumn<NoteEntry>] {
+        TableColumn("#", value: \NoteEntry.index)
+            .width(.fixed(5))
+            .alignment(.trailing)
+        TableColumn("page.table.column.details", value: \NoteEntry.note)
+            .width(.flexible)
+            .lineLimit(3)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -266,22 +288,22 @@ struct TablePage: View {
                         .foregroundStyle(.palette.foregroundSecondary)
                     Toggle("demo.scrollGranularity.line", isOn: $fixedHeightByLine)
                     Toggle("page.table.useScrollbar", isOn: $fixedHeightScrollbar)
+                    // Same reason as the List page's multi-line demo: scroll
+                    // granularity is a property of a SCROLL, and while a
+                    // selection is being followed every wheel tick is chased by
+                    // a scroll that keeps the cursor in view, so there is no
+                    // telling the two behaviours apart.
+                    Toggle("demo.selectionEnabled", isOn: $notesSelectable)
                     // How early the table scrolls to follow the moving
                     // cursor: at the edge (default), 2 lines early, or centred.
                     FollowMarginPicker(selection: $fixedHeightFollowMargin)
+                        .disabled(!notesSelectable)
                     // 300 rows in a fixed 20-row viewport → it scrolls. The Note
                     // column is `.flexible` with `.lineLimit(3)`, so each row's
                     // height varies: short notes stay one line, longer ones wrap
                     // to two or three, and the tallest fold their tail with an
                     // ellipsis (plus mid-word truncation and explicit breaks).
-                    Table(NoteEntry.bigNotes, selection: $notesSelection) {
-                        TableColumn("#", value: \NoteEntry.index)
-                            .width(.fixed(5))
-                            .alignment(.trailing)
-                        TableColumn("page.table.column.details", value: \NoteEntry.note)
-                            .width(.flexible)
-                            .lineLimit(3)
-                    }
+                    notesTable
                     .frame(height: 20)
                     .scrollIndicatorStyle(fixedHeightScrollbar ? .scrollbar : .text)
                     .scrollGranularity(fixedHeightByLine ? .line : .row)
