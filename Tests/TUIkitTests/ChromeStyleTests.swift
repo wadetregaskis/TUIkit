@@ -132,6 +132,44 @@ struct ChromeStyleTests {
         }
     }
 
+    /// The header is drawn across the terminal, but the modifier that lays its
+    /// content out sits inside the view tree, where padding on the way down has
+    /// already narrowed the context. Taking the width from there and padding to
+    /// the drawn width leaves a trailing gap the size of that padding — the
+    /// Example's one-column gutter put two columns of air on the right of every
+    /// header and one on the left.
+    @Test("A page's own padding does not push the header's content off centre")
+    func headerIgnoresPaddingAboveIt() {
+        let width = 40
+        for gutter in [0, 1, 3] {
+            let state = AppHeaderState()
+            state.style = .bordered
+            state.renderWidth = width
+            let context = makeRenderContext(width: width, height: 10) { environment, _ in
+                environment.appHeader = state
+            }
+            _ = renderToBuffer(
+                Text("page")
+                    .appHeader {
+                        HStack {
+                            Text("Left")
+                            Spacer()
+                            Text("Right")
+                        }
+                    }
+                    .padding(.horizontal, gutter),
+                context: context)
+
+            let boxed = renderToBuffer(
+                AppHeader(contentBuffer: state.contentBuffer ?? FrameBuffer(), style: .bordered),
+                context: makeRenderContext(width: width, height: 10))
+            let row = boxed.lines[1].stripped
+            // Both ends flush against their walls, whatever the gutter was.
+            #expect(row.hasPrefix("\u{2502}Left"), "gutter \(gutter): \(row)")
+            #expect(row.hasSuffix("Right\u{2502}"), "gutter \(gutter): \(row)")
+        }
+    }
+
     @Test("A boxed header shifts its content's click targets inside the wall")
     func borderedHeaderShiftsRegions() {
         // The header content can hold a Button; boxing it moves those cells

@@ -396,6 +396,10 @@ extension RenderLoop {
         let terminalSize = terminal.getSize()
         let terminalWidth = terminalSize.width
         let terminalHeight = terminalSize.height
+        // Before the tree renders, because `AppHeaderModifier` reads it while
+        // laying the header content out and it is drawn across the whole
+        // terminal rather than at whatever width the tree offers it.
+        appHeader.renderWidth = terminalWidth
 
         // Create render context with environment
         var environment = buildEnvironment()

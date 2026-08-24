@@ -52,6 +52,20 @@ final class AppHeaderState: @unchecked Sendable {
         return !buffer.isEmpty
     }
 
+    /// The width the header will be DRAWN at — the whole terminal.
+    ///
+    /// Set by `RenderLoop` before the view tree renders, and read by
+    /// ``AppHeaderModifier`` when it lays the header content out. The two have
+    /// to agree, and they cannot both read it from their own context: the
+    /// modifier is applied inside the view tree, where padding on the way down
+    /// has already narrowed `availableWidth`, while the header is drawn across
+    /// the terminal. Laying out at the narrower figure and padding to the wider
+    /// one leaves a trailing gap the size of that padding.
+    ///
+    /// `nil` outside a run loop, where the modifier falls back to its own
+    /// context — the best available answer when nobody has drawn a header yet.
+    var renderWidth: Int?
+
     /// How the header frames itself against the page.
     ///
     /// Defaults to ``ChromeStyle/bordered`` — a box, like a container view,

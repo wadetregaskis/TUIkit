@@ -62,14 +62,24 @@ extension AppHeaderModifier: Renderable {
         // it stays clickable, which is the whole point of putting a control
         // there.
         //
-        // At the width the STYLE leaves it, not the terminal's: a bordered
-        // header spends two columns on its walls, and content laid out at the
-        // full width simply lost its last two cells to the right wall
-        // ("TUIkit v0.6" for "TUIkit v0.6.0"). The style is known here because
-        // it lives on the same state object this writes into.
+        // At the width the header is actually DRAWN at, less what the style
+        // spends on itself: a bordered header takes two columns for its walls,
+        // and content laid out at the full width simply lost its last two cells
+        // to the right wall ("TUIkit v0.6" for "TUIkit v0.6.0"). The style is
+        // known here because it lives on the same state object this writes into.
+        //
+        // From the width the header will be DRAWN at, NOT this context's. This
+        // modifier is applied inside the view tree, where any padding on the way
+        // down has already narrowed `availableWidth`, while the header is drawn
+        // across the whole terminal. Laying out at the narrower figure and
+        // padding to the wider one is a trailing gap the size of that padding —
+        // an app with a one-column gutter got two columns of air on the right of
+        // its header and one on the left. See ``AppHeaderState/renderWidth``.
         var headerContext = context.isolatedForBackground()
         headerContext.availableWidth = max(
-            0, context.availableWidth - appHeader.style.contentWidthInset)
+            0,
+            (appHeader.renderWidth ?? context.availableWidth)
+                - appHeader.style.contentWidthInset)
         let headerBuffer = TUIkit.renderToBuffer(header, context: headerContext)
         appHeader.contentBuffer = headerBuffer
 
