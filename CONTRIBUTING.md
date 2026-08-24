@@ -107,8 +107,11 @@ The known blockers, in rough order of difficulty:
    `termios`, and VT output must be opted into with
    `ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN`.
    `GetConsoleScreenBufferInfo` replaces `ioctl(TIOCGWINSZ)`.
-4. **The PTY smoke harness.** `Tools/Smoke/tui_walk.py` uses `pty`/`termios`,
-   so it is POSIX-only; a Windows equivalent needs ConPTY.
+4. **The PTY smoke harness.** Everything in `Tools/Smoke/` — `tui_walk.py`,
+   `tui_screens.py`, `raw_probe.py`, `persistence_probe.py` — uses
+   `pty`/`termios`, so it is POSIX-only; a Windows equivalent needs ConPTY.
+   `Tools/Smoke/ci-pty-smoke.sh` is skipped on the Windows lanes for this
+   reason, and they run `Stress --selfcheck` alone.
 
 Two things that are *not* blockers, despite looking like them: `@AppStorage`
 already falls back to JSON-file storage off Apple platforms, so the open

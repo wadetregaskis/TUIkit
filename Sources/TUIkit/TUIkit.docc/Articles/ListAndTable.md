@@ -74,14 +74,28 @@ List("Files", selection: $selectedIDs) {
 
 ### Visual States
 
-List rows display different visual states:
+A row says two things at once, and they are separate questions. The
+**background** says where the cursor is; the **mark** in the row's leading
+gutter says what is selected. `List` and `Table` answer both identically —
+they reserve a gutter of the same purpose, and since 2026-08-24 both draw in
+it.
 
-| State | Appearance |
-|-------|------------|
-| Focused + Selected | Pulsing accent background |
-| Focused only | Highlight background bar |
-| Selected only | Subtle accent background |
-| Neither | Default appearance |
+| State | Background | Gutter |
+|-------|------------|--------|
+| Focused + Selected | Pulsing accent | `●` in the accent |
+| Focused only (the cursor row) | Highlight bar | blank |
+| Selected only (control unfocused) | Subtle accent | `●`, dimmed |
+| Neither | Default | blank |
+
+So a control with no selection draws no mark on any row: being under the
+cursor is not being chosen. `.unfocusedSelectionVisibility(.hidden)`
+collapses the third row of that table into the fourth — background and mark
+together — for a transient list where an ambient highlight is more noise
+than signal.
+
+How the pulse animates is a separate setting again:
+`.selectionIndicatorStyle(.none | .blink | .pulse)`, with a speed. It governs
+the emphasis, not which cells carry it.
 
 ## Table
 
