@@ -577,6 +577,36 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// the answer wanted.
     var externalDropResolvedOffset: Int?
 
+    /// Rows whose picture is still flying home, drawn BLANK where they belong.
+    ///
+    /// A cancelled reorder puts its rows back the instant the button comes up,
+    /// while the preview takes a fifth of a second to walk back to them — so
+    /// for that fifth of a second the same rows were on screen twice, once in
+    /// the list and once in the air above it.
+    ///
+    /// Blank in place, NOT held out of the list. Taking them out for the
+    /// duration would change the list's length after the gesture is over,
+    /// which moves the very rows the user is looking at (and can change what
+    /// the list can scroll to). Their space is theirs; they simply have nothing
+    /// drawn in it until the picture lands. So this is a question the RENDERER
+    /// asks and the layout never does — no window, band, budget or index
+    /// arithmetic reads it.
+    ///
+    /// Cleared by the owning view on any frame with no flight in the air, which
+    /// makes it self-limiting: a path that sets it without starting a flight
+    /// loses it on the very next render rather than blanking a row for ever.
+    var returningRows: IndexSet = []
+
+    /// Drops any blanking left over from a flight that has already landed.
+    ///
+    /// Called by the owning view every render — both of them, on every path,
+    /// which is why it is a method rather than the two lines it replaces: the
+    /// rule is "a row blanks itself only while a picture is walking back to
+    /// it", and a path that forgot to say so left a row blank for good.
+    func syncReturningRows(with session: DragAndDropSession?) {
+        if session?.returnFlight == nil { returningRows = [] }
+    }
+
     /// Set when Escape cancels a drag whose button is still down: the release
     /// that follows must be swallowed rather than read as a click.
     var reorderCancelled = false

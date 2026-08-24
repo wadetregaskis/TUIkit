@@ -1009,6 +1009,12 @@ extension ItemListHandler {
         guard let target = reorder.targetOffset
             ?? contentY.flatMap({ dropTarget(atContentY: $0) })
         else {
+            // Nothing moves, so the rows are already where the floating
+            // picture is about to arrive — and it takes a fifth of a second to
+            // get there. They draw blank until it does; without that the same
+            // rows are on screen twice for the length of the flight. Same
+            // reason, and same mechanism, as `cancelReorder`.
+            returningRows = reorder.held
             focusedIndex = clampedRowIndex(reorder.grabbedOffset)
             return true
         }
@@ -1050,6 +1056,15 @@ extension ItemListHandler {
 
     /// Drops any in-flight reorder without moving anything.
     func cancelReorder() {
+        // The rows the floating picture is about to walk back to: they draw
+        // blank until it lands, so the row is on screen once rather than twice
+        // for the length of the flight (see ``returningRows``).
+        //
+        // Empty under `.live`, and correctly so: that mode has been moving the
+        // data itself at every step and shows no float, so there is no picture
+        // in the air to wait for. ``reorderRemovedRows`` already answers
+        // exactly that question — the rows this drag took OUT of the drawing.
+        returningRows = reorderRemovedRows
         // `.live` has been moving the data at every step of the drag, so
         // clearing the state is not a cancel — the row is wherever the pointer
         // last left it. Put it back where it was picked up. (The slot modes

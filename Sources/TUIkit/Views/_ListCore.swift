@@ -742,6 +742,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // nothing left this list to make room for it — so while one is hovering
         // the list has a row's worth of content more than it has rows.
         handler.dropSlotAddsRow = borrowsDropRow(source, handler: handler, context: context)
+        handler.syncReturningRows(with: context.environment.dragAndDropSession)
         // BEFORE the rows are composed: the slot's position is decided down
         // there, and under auto-scroll the answer it would otherwise use was
         // resolved against the previous frame's rows.
@@ -982,8 +983,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let isSelected = handler.isSelected(at: rowIndex)
             let rendered = renderRow(
                 row: row,
-                isFocused: isFocused,
-                isSelected: isSelected,
+                state: RowDrawState(
+                    isFocused: isFocused, isSelected: isSelected,
+                    isReturningHome: handler.returningRows.contains(rowIndex)),
                 rowWidth: rowWidth,
                 sectionContentIndex: sectionContentIndex,
                 style: style,
@@ -1209,8 +1211,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let isSelected = handler.isSelected(at: rowIndex)
             let rendered = renderRow(
                 row: row,
-                isFocused: isFocused,
-                isSelected: isSelected,
+                state: RowDrawState(
+                    isFocused: isFocused, isSelected: isSelected,
+                    isReturningHome: handler.returningRows.contains(rowIndex)),
                 rowWidth: contentRowWidth,
                 sectionContentIndex: sectionContentIndex,
                 style: style,
@@ -2324,10 +2327,23 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
     // MARK: - Row Rendering
 
+    /// What this frame knows about one row that changes how it is drawn.
+    ///
+    /// Three booleans travelling together rather than three parameters: they
+    /// are all "the state of THIS row right now", they are all read from the
+    /// handler at the same moment, and both assembly paths have to ask for the
+    /// same three or drift.
+    private struct RowDrawState {
+        let isFocused: Bool
+        let isSelected: Bool
+        /// The row's picture is still walking home to it, so it keeps its space
+        /// and draws nothing in it — see ``ItemListHandler/returningRows``.
+        let isReturningHome: Bool
+    }
+
     private func renderRow(
         row: SelectableListRow<SelectionValue>,
-        isFocused: Bool,
-        isSelected: Bool,
+        state: RowDrawState,
         rowWidth: Int,
         sectionContentIndex: Int,
         style: any ListStyle,
@@ -2340,8 +2356,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if case .none = row.backgroundOverride {
             background = rowBackground(
                 rowType: row.type,
-                isFocused: isFocused,
-                isSelected: isSelected,
+                isFocused: state.isFocused,
+                isSelected: state.isSelected,
                 sectionContentIndex: sectionContentIndex,
                 style: style,
                 context: context,
@@ -2402,6 +2418,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     frameDuration: run.frameDuration, clock: run.clock))
         }
 
+        // A row whose picture is still walking back to it keeps its space and
+        // draws nothing in it — see ``ItemListHandler/returningRows``. Blanked
+        // from the FINISHED lines rather than short-circuited above, so the
+        // blank is exactly as wide as the row it stands in for, gutter and
+        // badge column included, whatever this renderer did to get there.
+        // Nothing animates: a run would paint over the blank on its next tick.
+        guard !state.isReturningHome else {
+            return RenderedRow(
+                lines: lines(over: nil).map { String(repeating: " ", count: $0.strippedLength) },
+                pulseFrames: nil, childRuns: [])
+        }
         guard case .pulsing(let cycle, let dim, let bright) = background, cycle.isAnimating else {
             return RenderedRow(
                 lines: lines(over: background.colorNow), pulseFrames: nil, childRuns: childRuns)

@@ -146,6 +146,8 @@ extension DragAndDropSession {
         let landsNowhere = host.handler.reorderLandsNowhere(atContentY: contentY)
         guard host.handler.dropReorder(atContentY: contentY) else { return false }
         if landsNowhere {
+            // The rows stay where they were picked up; `dropReorder` has
+            // already marked them as waiting for the picture to arrive.
             cancelReturningToOrigin()
         } else {
             end()

@@ -173,6 +173,68 @@ struct ReorderOutsideBoundsTests {
         return handler
     }
 
+    /// A row released over nothing walks back — and used to be back before its
+    /// picture was, so for the length of the flight the same row was on screen
+    /// twice: once in the list and once in the air above it.
+    ///
+    /// It now keeps its SPACE and draws nothing in it until the picture lands.
+    /// Blank, not absent: taking the row out for the flight would change the
+    /// list's length after the gesture is over, which moves the very rows the
+    /// user is looking at — so the height is asserted too, and it is the half
+    /// of this that a naive fix gets wrong.
+    @Test("List (.cursor): a row released over nothing is blank until its picture lands")
+    func listReturningRowStaysBlank() {
+        let fixture = ListReorderFixture(feedback: .cursor)
+        let settled = fixture.render()
+        _ = dragOut(fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) + 2 })
+
+        let flying = fixture.render()
+        #expect(fixture.tui.dragAndDropSession.returnFlight != nil, "nothing is flying home")
+        #expect(
+            fixture.rowY(flying, "b") < 0,
+            "the row was back before its picture: \(flying.lines.map(\.stripped))")
+        #expect(flying.lines.count == settled.lines.count, "the list changed length mid-flight")
+
+        // Land it, as the run loop does — once to start the clock, once past
+        // the end.
+        let session = fixture.tui.dragAndDropSession
+        _ = session.driveReturnFlight(nowNanos: 0)
+        _ = session.driveReturnFlight(
+            nowNanos: DragAndDropSession.ReturnFlight.durationNanos &+ 1)
+        let landed = fixture.render()
+        #expect(
+            fixture.rowY(landed, "b") >= 0,
+            "and never came back: \(landed.lines.map(\.stripped))")
+        #expect(fixture.items == ["a", "b", "c", "d", "e"], "the order changed")
+    }
+
+    /// The same for the twin. `Table` draws its rows itself rather than from
+    /// child buffers, so "blank" is a different piece of code reaching the same
+    /// answer — which is exactly the pair that keeps drifting.
+    @Test("Table (.cursor): a row released over nothing is blank until its picture lands")
+    func tableReturningRowStaysBlank() {
+        let fixture = TableReorderFixture(feedback: .cursor)
+        let settled = fixture.render()
+        _ = dragOut(fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) + 2 })
+
+        let flying = fixture.render()
+        #expect(fixture.tui.dragAndDropSession.returnFlight != nil, "nothing is flying home")
+        #expect(
+            fixture.rowY(flying, "b") < 0,
+            "the row was back before its picture: \(flying.lines.map(\.stripped))")
+        #expect(flying.lines.count == settled.lines.count, "the table changed height mid-flight")
+
+        let session = fixture.tui.dragAndDropSession
+        _ = session.driveReturnFlight(nowNanos: 0)
+        _ = session.driveReturnFlight(
+            nowNanos: DragAndDropSession.ReturnFlight.durationNanos &+ 1)
+        let landed = fixture.render()
+        #expect(
+            fixture.rowY(landed, "b") >= 0,
+            "and never came back: \(landed.lines.map(\.stripped))")
+        #expect(fixture.rows == ["a", "b", "c", "d", "e"], "the order changed")
+    }
+
     @Test("List (.cursor): the gap does not follow the cursor out of the list")
     func listCursorGapDisappearsOutside() {
         let fixture = ListReorderFixture(feedback: .cursor)

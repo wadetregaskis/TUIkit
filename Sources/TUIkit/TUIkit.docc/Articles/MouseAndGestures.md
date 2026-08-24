@@ -220,10 +220,15 @@ between.
 It stays blank until the picture is back, not until the button comes up. A
 release over nothing sends the preview home rather than letting it vanish under
 the pointer, and for the length of that flight the view it is flying to is still
-somewhere else — so it keeps its blank, and one row lands in one place. (The
-LIST's own accounting does not follow: keeping a row out of the layout for the
-flight is a change of length, and a list that changes length after the gesture
-is over moves the rows the user is looking at.)
+somewhere else — so it keeps its blank, and one row lands in one place.
+
+A cancelled row REORDER reads the same way, and gets there differently. Its rows
+are put back in the data the moment the button comes up — a `List` that changed
+length after the gesture was over would move the very rows you are looking at —
+so they are back in the layout and simply draw nothing until the picture
+arrives. Their space is held open, blank, and then the row appears in it. Both
+twins do this, and neither one's window, budget or index arithmetic knows about
+it: it is a question the renderer asks and the layout never does.
 
 A list whose rows fill it exactly borrows a row's worth of scrolling while a
 drag hovers it, because the landing slot needs a line and nothing left the list

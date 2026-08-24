@@ -948,6 +948,7 @@ where Value.ID: Hashable {
                     item: data[rowIndex], columnWidths: columnWidths,
                     isFocused: handler.isCursorRow(rowIndex) && tableHasFocus,
                     isSelected: handler.isSelected(at: rowIndex),
+                    isReturningHome: handler.returningRows.contains(rowIndex),
                     rowWidth: contentInnerWidth, context: context, palette: palette)
                 collect(
                     line: row.line, frames: row.pulseFrames, into: &rowLines,
@@ -1045,6 +1046,7 @@ where Value.ID: Hashable {
         // area minus it and ``ItemListHandler/extent`` gains the row that lets
         // the viewport reach past the last one.
         handler.dropSlotAddsRow = handler.externalDropSlot != nil
+        handler.syncReturningRows(with: context.environment.dragAndDropSession)
         let rowArea = max(1, contentHeight - (handler.dropSlotAddsRow ? 1 : 0))
         // The FULL area, not `rowArea`: `dropSlotAddsRow` is already set above,
         // and every reader inside the handler that has to account for the slot
@@ -1633,6 +1635,7 @@ where Value.ID: Hashable {
         // same-table case to exclude: its rows are built from `data`, so they
         // cannot be `.draggable`.
         handler.dropSlotAddsRow = handler.externalDropSlot != nil
+        handler.syncReturningRows(with: context.environment.dragAndDropSession)
         let overflowing = overflows(handler.dropSlotAddsRow ? 1 : 0)
         // Clamp against the largest possible visible-row count (one
         // indicator, at an end); the exact viewport is finalised by
@@ -1876,6 +1879,7 @@ where Value.ID: Hashable {
                     columnWidths: columnWidths,
                     isFocused: handler.isCursorRow(rowIndex) && tableHasFocus,
                     isSelected: handler.isSelected(at: rowIndex),
+                    isReturningHome: handler.returningRows.contains(rowIndex),
                     rowWidth: contentWidth,
                     context: context,
                     palette: palette
@@ -2896,10 +2900,18 @@ where Value.ID: Hashable {
         columnWidths: [Int],
         isFocused: Bool,
         isSelected: Bool,
+        isReturningHome: Bool = false,
         rowWidth: Int,
         context: RenderContext,
         palette: any Palette,
     ) -> (line: String, pulseFrames: [String]?) {
+        // A row whose picture is still walking back to it keeps its space and
+        // draws nothing in it — see ``ItemListHandler/returningRows``, and
+        // `_ListCore.renderRow`, which does the same for the same reason.
+        // Nothing animates: a run would paint over the blank on its next tick.
+        guard !isReturningHome else {
+            return (String(repeating: " ", count: max(0, rowWidth)), nil)
+        }
         let visualState = rowVisualState(
             isFocused: isFocused,
             isSelected: isSelected,
