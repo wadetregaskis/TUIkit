@@ -75,16 +75,21 @@ The original terminal settings are saved and restored during cleanup.
 
 ### Re-render Triggers
 
-Several sources cause a new frame to be rendered. Each sets a flag the loop checks (`appState.needsRender` or the resize flag) **and** `wake()`s the loop if it is currently idle-blocked:
+Several sources cause a new frame to be rendered. Each sets state the loop checks and `wake()`s the loop if it is currently idle-blocked:
 
 | Trigger | Path | Main loop check |
 |---------|------|-----------------|
 | SIGWINCH | Dispatch signal source sets the resize flag + wakes the loop | `consumeResizeFlag()` |
 | @State mutation | `AppState.setNeedsRender()` sets the flag; observer wakes the loop | `appState.needsRender` |
-| CursorTimer (while active) | Calls `appState.setNeedsRender()` | `appState.needsRender` |
+| CursorTimer (while active) | Calls `appState.setNeedsAnimationTick(_:)`, naming the clock | `consumePendingAnimationClocks()` |
 | Focus change | Calls `appState.setNeedsRender()` | `appState.needsRender` |
 
-All triggers set boolean flags and wake the loop; the actual rendering always happens on the main thread — signal handlers never render directly.
+A clock tick is the one that is not simply a render request. It records which
+clock ticked, and the loop first tries to serve it from the frame already on
+screen — see <doc:RenderCycle> — rendering only when some view would build a
+different picture from the new phase.
+
+The rest set boolean flags and wake the loop; the actual rendering always happens on the main thread — signal handlers never render directly.
 
 ## Signal Handling
 

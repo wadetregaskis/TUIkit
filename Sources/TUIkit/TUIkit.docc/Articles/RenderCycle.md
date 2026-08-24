@@ -8,16 +8,26 @@ Every frame in TUIkit follows the same synchronous pipeline: **clear per-frame s
 
 ## What Triggers a Frame
 
-Several sources cause `RenderLoop` to produce a new frame. They converge on two boolean checks in the main loop (`consumeResizeFlag()` and `appState.needsRender`):
+Several sources cause `RenderLoop` to produce a new frame. Most converge on two boolean checks in the main loop (`consumeResizeFlag()` and `appState.needsRender`):
 
 | Trigger | Source | Mechanism |
 |---------|--------|-----------|
 | Terminal resize | `SIGWINCH` signal | `SignalManager`'s dispatch signal source sets the resize flag |
 | State mutation | `@State` property change | `AppState.setNeedsRender()` sets `needsRender`; the observer wakes the loop |
-| Animation clock | CursorTimer (50 ms) | Calls `appState.setNeedsRender()` |
-| Focus change | `FocusManager.onFocusChange` | Resets pulse timer and calls `appState.setNeedsRender()` |
+| Animation clock | `CursorTimer`, at whatever interval the last frame asked for | `AppState.setNeedsAnimationTick(_:)` records WHICH clock ticked — see below |
+| Focus change | `FocusManager.onFocusChange` | Resets the pulse phase and calls `appState.setNeedsRender()` |
 
-All triggers converge on boolean flags that the main loop checks each iteration. The actual rendering always happens on the main thread: signal handlers never render directly.
+A clock tick is deliberately not a render request. It names the clock
+(`AnimationClock.cursor`, and so on) and the loop then asks whether the frame
+already on screen can be brought up to date without re-rendering: if every
+clock that ticked drives only pre-rendered animated cell runs, `replayAnimations`
+splices the new cells into the existing frame and no render happens at all. It
+falls back to a full render the moment some view builds its appearance from a
+phase as it renders, which is the behaviour this replaced — so the fallback is
+always safe. A frame that renders for any other reason drops the pending ticks:
+it supersedes them.
+
+The rest converge on boolean flags that the main loop checks each iteration. The actual rendering always happens on the main thread: signal handlers never render directly.
 
 ## The Render Pipeline
 
