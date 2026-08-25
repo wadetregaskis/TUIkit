@@ -1,8 +1,11 @@
 # Opacity as composition, not as a blend
 
-**Status: §9.5 steps 1–4 are implemented as of 2026-08-24; step 5's demo,
-stress scenario and A/B are outstanding, as is `Color`-level alpha (`.clear`
-and the `opacity:` initialisers).** Commissioned
+**Status: implemented in full as of 2026-08-24 — §9.5's staging, and then the
+§10 refinements (continuous colours, the contested-only threshold, parallel
+matched cells, linear-light arithmetic, displayed-colour reads, ink coverage,
+wide-character footprints). Outstanding: `Color`-level alpha (`.clear` and the
+`opacity:` initialisers), recorded in `Parity-decisions-pending.md`.**
+Commissioned
 to answer two questions before any of it is built — does it add complexity or
 caveats, and does it cost performance — and to settle the two parity entries
 that depend on it (`Color.clear`, and every initialiser taking `opacity:`).
@@ -596,3 +599,11 @@ The rules, updated as each lands:
    character fades it by the alpha at its start column, and a destination wide
    character whose start lies outside the resolved span reveals as its field —
    the terminal cannot draw half of it either.
+
+Checked for §10 and found already handled, no change needed: quantisation can
+make adjacent phases of a repeating fade byte-identical, and the replay
+machinery already charges nothing for them — `timeUntilChange` scans past
+identical frames when scheduling wakes, and the replay tick-skip compares
+frame CONTENT, so a repeated frame costs neither a wake nor a write. Measured
+unchanged either way: the Example's breathing fade replays at the same byte
+rate and CPU before and after the refinements.
