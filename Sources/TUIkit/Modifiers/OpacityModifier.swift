@@ -357,9 +357,24 @@ enum SGRColorRewrite {
         let parameters = body.split(separator: ";", omittingEmptySubsequences: false).map(String.init)
         var index = 0
         while index < parameters.count {
-            // An empty parameter is 0 — `ESC[m` and `ESC[;m` are both resets —
-            // which is the same reading `rewritingSGR` takes.
-            let parameter = Int(parameters[index]) ?? 0
+            let raw = parameters[index]
+            guard let parameter = raw.isEmpty ? 0 : Int(raw) else {
+                // Not a plain code. The colon sub-parameter form packs a whole
+                // colour into ONE `;`-parameter ("38:5:104", or ITU T.416's
+                // "38:2:<colourspace>:r:g:b") — read whole it fails Int
+                // parsing, and falling to 0 here read a COLOUR as a RESET,
+                // clearing both tracked slots. The same failure
+                // `background(after:)` documents having had. Anything else
+                // unparseable is skipped: guessing would be worse than
+                // treating the cell as unchanged.
+                //
+                // (An EMPTY parameter really is 0 — `ESC[m` and `ESC[;m` are
+                // both resets — which is the same reading `rewritingSGR`
+                // takes.)
+                if let (slot, color) = Self.colonFormColor(raw) { report(slot, color) }
+                index += 1
+                continue
+            }
             switch parameter {
             case 0:
                 report(.reset, nil)
@@ -388,6 +403,25 @@ enum SGRColorRewrite {
             }
             index += 1
         }
+    }
+
+    /// The colour a colon sub-parameter form names, or `nil` when `raw` is
+    /// not one. Handles `38:5:n`, `38:2:r:g:b` and ITU T.416's
+    /// `38:2:<colourspace>:r:g:b` (the colourspace is dropped), plus the `48`
+    /// background spellings, by normalising to the `;`-split shape
+    /// ``extendedColor(_:from:)`` already parses.
+    private static func colonFormColor(_ raw: String) -> (ColorSlot, Color)? {
+        guard raw.contains(":") else { return nil }
+        var parts = raw.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard let introducer = Int(parts[0]), introducer == 38 || introducer == 48 else {
+            return nil
+        }
+        if parts.count >= 3, parts[1] == "2", parts.count > 5 {
+            parts.remove(at: 2)
+        }
+        let (color, _) = Self.extendedColor(parts, from: 0)
+        guard let color else { return nil }
+        return (introducer == 38 ? .foreground : .background, color)
     }
 
     /// The colour named by `38;5;n` / `38;2;r;g;b` (or the `48` background

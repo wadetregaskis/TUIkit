@@ -378,3 +378,47 @@ struct OpacityTests {
         #expect(faded.lines.allSatisfy { $0.stripped.trimmingCharacters(in: .whitespaces).isEmpty })
     }
 }
+
+/// `SGRColorRewrite.readingColors` on the colon sub-parameter forms — the ITU
+/// T.416 spelling some terminals and third-party content emit, which TUIkit
+/// itself never does but must not misread destructively.
+@MainActor
+@Suite("Reading colon-form colours")
+struct ColonFormColorReadingTests {
+
+    private func reports(_ sequence: String) -> [(SGRColorRewrite.ColorSlot, Color?)] {
+        var seen: [(SGRColorRewrite.ColorSlot, Color?)] = []
+        SGRColorRewrite.readingColors(sequence) { seen.append(($0, $1)) }
+        return seen
+    }
+
+    @Test("A colon-form colour is a colour, never a reset")
+    func colonFormIsNotAReset() {
+        // "38:5:104" is ONE ;-parameter; read whole it fails Int parsing and
+        // fell to 0 — a reset, clearing BOTH tracked colours because a colour
+        // appeared. The same failure background(after:) documents having had.
+        let seen = reports("\u{1B}[38:5:104m")
+        #expect(!seen.contains { $0.0 == .reset })
+        #expect(seen.count == 1)
+        #expect(seen.first?.0 == .foreground)
+        #expect(seen.first?.1 == Color.palette(104))
+    }
+
+    @Test("The truecolor colon forms parse, with and without colourspace")
+    func colonTruecolorForms() {
+        let plain = reports("\u{1B}[48:2:10:20:30m")
+        #expect(plain.first?.0 == .background)
+        #expect(plain.first?.1 == Color.rgb(10, 20, 30))
+
+        // ITU T.416 inserts a colourspace identifier after the 2.
+        let spaced = reports("\u{1B}[38:2::10:20:30m")
+        #expect(spaced.first?.0 == .foreground)
+        #expect(spaced.first?.1 == Color.rgb(10, 20, 30))
+    }
+
+    @Test("An unparseable parameter is skipped, not read as anything")
+    func garbageIsSkipped() {
+        #expect(reports("\u{1B}[x;31m").count == 1)
+        #expect(reports("\u{1B}[x;31m").first?.0 == .foreground)
+    }
+}
