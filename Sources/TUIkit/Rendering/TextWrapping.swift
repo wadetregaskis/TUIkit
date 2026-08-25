@@ -151,7 +151,13 @@ enum TextWrapping {
         if let maxLines, maxLines >= 1, lines.count > maxLines {
             let keptCount = max(0, maxLines - 1)
             var kept = Array(lines.prefix(keptCount))
-            let remainder = lines[keptCount...].joined(separator: " ")
+            // The fold rebuilt from the SOURCE, so each former boundary
+            // contributes exactly what the wrap consumed there: the space a
+            // word-break ate, or NOTHING at an ideograph break. Joining the
+            // wrapped lines with " " invented a separator per boundary inside
+            // space-less text — spurious gaps in continuous CJK prose, each
+            // displacing a real character from the width budget.
+            let remainder = foldRemainder(of: text, afterConsuming: kept)
             kept.append(
                 remainder.truncatedToWidth(
                     width, mode: mode, atWordBoundary: atWordBoundary, forceEllipsis: true))
@@ -188,6 +194,30 @@ enum TextWrapping {
     /// - Parameter firstLineWidth: The budget for the FIRST line only, when it
     ///   differs from `width` — the indent case below, where the leading run
     ///   eats into line 1 and nothing else. `nil` means every line gets `width`.
+    /// The source's tail once the kept lines are consumed — matching each
+    /// kept character against the source, skipping only the whitespace and
+    /// newlines the wrap consumed at breaks. Newlines inside the tail read
+    /// joined, as the line-based fold always rendered them.
+    private static func foldRemainder(of text: String, afterConsuming kept: [String]) -> String {
+        var cursor = text.startIndex
+        for line in kept {
+            for character in line {
+                while cursor < text.endIndex, text[cursor] != character,
+                    text[cursor].isWhitespace || text[cursor].isNewline
+                {
+                    cursor = text.index(after: cursor)
+                }
+                guard cursor < text.endIndex, text[cursor] == character else { continue }
+                cursor = text.index(after: cursor)
+            }
+        }
+        while cursor < text.endIndex, text[cursor].isWhitespace || text[cursor].isNewline {
+            cursor = text.index(after: cursor)
+        }
+        return String(text[cursor...]).replacingOccurrences(
+            of: "[\r\n]+", with: " ", options: .regularExpression)
+    }
+
     private static func wrapParagraph(
         _ text: String, width: Int, firstLineWidth: Int? = nil
     ) -> Wrapped {

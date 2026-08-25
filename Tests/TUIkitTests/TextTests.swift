@@ -420,3 +420,34 @@ struct TextTruncationTests {
         #expect(buffer.height > 2, "lineLimit(nil) should not cap the lines, got \(buffer.height)")
     }
 }
+
+/// The line-limit fold rebuilt from the source: a boundary contributes what
+/// the wrap consumed there — a space at a word break, nothing at an
+/// ideograph break.
+@MainActor
+@Suite("The fold's separators are the source's")
+struct FoldSeparatorTests {
+
+    @Test("A folded CJK tail gains no invented spaces")
+    func cjkFoldHasNoGaps() {
+        let folded = TextWrapping.fitMeasured("日本語の文章です。", width: 4, maxLines: 2)
+        #expect(folded.lines.count == 2)
+        #expect(!folded.lines[1].contains(" "), "\(folded.lines)")
+    }
+
+    @Test("A folded Latin tail keeps its real spaces")
+    func latinFoldKeepsSpaces() {
+        let folded = TextWrapping.fitMeasured("one two three four five", width: 9, maxLines: 2)
+        #expect(folded.lines.count == 2)
+        #expect(!folded.lines[1].contains("twothree"), "\(folded.lines)")
+        #expect(!folded.lines[1].contains("threefour"), "\(folded.lines)")
+    }
+
+    @Test("A mixed tail keeps the space that was really there")
+    func mixedFoldKeepsRealSpace() {
+        let folded = TextWrapping.fitMeasured("words 日本語です", width: 5, maxLines: 2)
+        #expect(folded.lines.count == 2)
+        let tail = folded.lines[1]
+        #expect(!tail.contains("語 で") && !tail.contains("本 語"), "\(folded.lines)")
+    }
+}
