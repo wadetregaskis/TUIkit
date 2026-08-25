@@ -17,9 +17,10 @@ import TUIkit
 /// composite against what is there agree exactly, and the difference only shows
 /// where something else has painted.
 ///
-/// One slider drives all of them, so the two thresholds are explorable rather
-/// than described: the glyph appears at ½, and colours move continuously either
-/// side of it.
+/// One slider drives all of them, so the rules are explorable rather than
+/// described: colours blend continuously at every value, a character contested
+/// by one underneath swaps at ½, and a character over anything blank simply
+/// fades all the way out.
 struct OpacityPage: View {
     @State private var opacity: Double = 0.5
     @State private var outer: Double = 1
