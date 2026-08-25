@@ -89,7 +89,7 @@ struct OpacityResolutionTests {
             over: destination, surface: .black, palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
-        let expected = Color.rgb(0, 255, 0).opacity(0.3, over: .rgb(255, 0, 0))
+        let expected = Color.rgb(0, 255, 0).compositing(0.3, over: .rgb(255, 0, 0))
         #expect(resolved.lines[0].contains(codes(expected)))
         #expect(!resolved.lines[0].contains(codes(.rgb(255, 0, 0))))
         #expect(!resolved.lines[0].contains(codes(.rgb(0, 255, 0))))
@@ -133,7 +133,7 @@ struct OpacityResolutionTests {
         #expect(resolved.lines[0].stripped == "world")
         #expect(resolved.lines[0].contains(codes(.red)))
         #expect(!resolved.lines[0].contains(codes(.green)))
-        let expected = Color.rgb(0, 0, 255).opacity(0.25, over: .rgb(255, 0, 0))
+        let expected = Color.rgb(0, 0, 255).compositing(0.25, over: .rgb(255, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
         #expect(!resolved.lines[0].contains(backgroundCodes(.rgb(255, 0, 0))))
     }
@@ -162,7 +162,7 @@ struct OpacityResolutionTests {
 
         #expect(resolved.lines[0].stripped == "hello")
         // Half green, half red — neither endpoint, and nowhere near black.
-        let expected = Color.rgb(0, 255, 0).opacity(0.5, over: .rgb(255, 0, 0))
+        let expected = Color.rgb(0, 255, 0).compositing(0.5, over: .rgb(255, 0, 0))
         #expect(resolved.lines[0].contains(codes(expected)))
         #expect(!resolved.lines[0].contains(codes(.rgb(0, 255, 0))))
     }
@@ -192,7 +192,7 @@ struct OpacityResolutionTests {
         // does not tint the text — on a background half way to blue.
         #expect(resolved.lines[0].stripped == "world")
         #expect(resolved.lines[0].contains(codes(.red)))
-        let expected = Color.rgb(0, 0, 255).opacity(0.5, over: .rgb(0, 0, 0))
+        let expected = Color.rgb(0, 0, 255).compositing(0.5, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
 
@@ -209,7 +209,7 @@ struct OpacityResolutionTests {
 
         #expect(resolved.lines[0].stripped == "world")
         #expect(resolved.lines[0].contains(codes(.red)))
-        let expected = Color.rgb(0, 0, 255).opacity(0.25, over: .rgb(0, 0, 0))
+        let expected = Color.rgb(0, 0, 255).compositing(0.25, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
 
@@ -220,7 +220,7 @@ struct OpacityResolutionTests {
         let resolved = source.resolvingOpacity(
             over: FrameBuffer(), surface: surface, palette: palette())
 
-        let expected = Color.rgb(255, 255, 0).opacity(0.5, over: surface)
+        let expected = Color.rgb(255, 255, 0).compositing(0.5, over: surface)
         #expect(resolved.lines[0].contains(codes(expected)))
     }
 
@@ -241,8 +241,8 @@ struct OpacityResolutionTests {
         // Nothing contests these cells, so every character draws — the first
         // two at the inner product, the rest at the outer alpha alone.
         #expect(resolved.lines[0].stripped == "hello")
-        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).opacity(0.25, over: .black))))
-        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).opacity(0.75, over: .black))))
+        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).compositing(0.25, over: .black))))
+        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).compositing(0.75, over: .black))))
     }
 
     @Test("Over a blank cell there is no contest, and text fades all the way out")
@@ -258,7 +258,7 @@ struct OpacityResolutionTests {
             over: destination, surface: .black, palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
-        let expected = Color.rgb(0, 255, 0).opacity(0.2, over: .rgb(255, 0, 0))
+        let expected = Color.rgb(0, 255, 0).compositing(0.2, over: .rgb(255, 0, 0))
         #expect(resolved.lines[0].contains(codes(expected)))
     }
 

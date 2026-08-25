@@ -84,7 +84,7 @@ struct OpacityTests {
         // a switch.
         #expect(!faded.lines[0].contains(codes(.red)))
         #expect(!faded.lines[0].contains(codes(background)))
-        #expect(faded.lines[0].contains(codes(Color.red.opacity(0.5, over: background))))
+        #expect(faded.lines[0].contains(codes(Color.red.compositing(0.5, over: background))))
     }
 
     @Test("Hue survives the fade")
@@ -92,8 +92,8 @@ struct OpacityTests {
         // The reason to parse the colour back out rather than flatten to a
         // single dim grey: a red heading at 0.5 must still read as red.
         let background = Color.rgb(0, 0, 0)
-        let red = Color.rgb(200, 20, 20).opacity(0.5, over: background)
-        let blue = Color.rgb(20, 20, 200).opacity(0.5, over: background)
+        let red = Color.rgb(200, 20, 20).compositing(0.5, over: background)
+        let blue = Color.rgb(20, 20, 200).compositing(0.5, over: background)
         #expect(codes(red) != codes(blue))
 
         let context = makeRenderContext(width: 24, height: 2)
@@ -105,8 +105,8 @@ struct OpacityTests {
             context: context
         ).lines[0]
         let surface = context.environment.palette.background
-        #expect(line.contains(codes(Color.rgb(200, 20, 20).opacity(0.5, over: surface))))
-        #expect(line.contains(codes(Color.rgb(20, 20, 200).opacity(0.5, over: surface))))
+        #expect(line.contains(codes(Color.rgb(200, 20, 20).compositing(0.5, over: surface))))
+        #expect(line.contains(codes(Color.rgb(20, 20, 200).compositing(0.5, over: surface))))
     }
 
     @Test("Text with no colour of its own still fades")
@@ -125,7 +125,7 @@ struct OpacityTests {
         let palette = context.environment.palette
         #expect(
             faded.lines[0].contains(
-                codes(palette.foreground.opacity(0.6, over: palette.background))))
+                codes(palette.foreground.compositing(0.6, over: palette.background))))
     }
 
     @Test("Every colour form is understood")
@@ -139,7 +139,7 @@ struct OpacityTests {
             let faded = renderToScreen(
                 Text("x").foregroundStyle(color).opacity(0.5), context: context)
             #expect(
-                faded.lines[0].contains(codes(color.opacity(0.5, over: surface))),
+                faded.lines[0].contains(codes(color.compositing(0.5, over: surface))),
                 "\(color) did not fade")
             #expect(!faded.lines[0].contains(";\(codes(color))m"), "\(color) survived unfaded")
         }
@@ -151,7 +151,7 @@ struct OpacityTests {
         let surface = context.environment.palette.background
         let faded = renderToScreen(
             Text("hi").background(Color.blue).opacity(0.5), context: context)
-        let expected = ANSIRenderer.backgroundCodes(for: Color.blue.opacity(0.5, over: surface))
+        let expected = ANSIRenderer.backgroundCodes(for: Color.blue.compositing(0.5, over: surface))
             .joined(separator: ";")
         #expect(faded.lines[0].contains(expected))
     }
@@ -308,7 +308,7 @@ struct OpacityTests {
         let faded = OpacityFade.fading(
             "\u{1B}[39mx\u{1B}[49my", by: 0.5, over: surface, defaultForeground: foreground)
         #expect(faded.contains(
-            ANSIRenderer.foregroundCodes(for: foreground.opacity(0.5, over: surface))
+            ANSIRenderer.foregroundCodes(for: foreground.compositing(0.5, over: surface))
                 .joined(separator: ";")))
         #expect(!faded.contains("[39m"))
         #expect(!faded.contains("[49m"))
@@ -368,7 +368,7 @@ struct OpacityTests {
 
         // The blend actually happened, against the RESOLVED background.
         #expect(faded.lines[0].contains(
-            codes(Color.rgb(200, 20, 20).opacity(0.5, over: palette.accent))))
+            codes(Color.rgb(200, 20, 20).compositing(0.5, over: palette.accent))))
     }
 
     @Test("An empty buffer survives")

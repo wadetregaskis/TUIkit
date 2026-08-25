@@ -542,3 +542,17 @@ The rules, updated as each lands:
    space rule, which is the same statement for the character " ".) The one
    thing that cannot blend is weight — bold is on or off — so a matched cell's
    non-colour styling follows whichever side alpha favours.
+
+5. **The blend happens in linear light.** `Color.opacity(_:over:)` (and
+   `lerp`, underneath it) interpolates the ENCODED sRGB components. For style
+   derivation that is right — every palette the framework derives was tuned by
+   eye in encoded space, and re-deriving them through different arithmetic
+   would re-tint the whole system, so those stay as they are. Simulating a
+   translucent layer is a different question with a physical answer: light
+   adds linearly, and mixing encoded bytes understates it (halfway between
+   white and black lands at 22% of white's light rather than half), so an
+   encoded-space fade spends most of its range darker than the light it
+   stands for and pops at the end. The resolution — and the transition
+   dissolve, which is the same operation against the palette background —
+   now blends through `Color.compositing(_:over:)`: decode via the shared
+   IEC 61966-2-1 helpers, mix, re-encode with rounding.

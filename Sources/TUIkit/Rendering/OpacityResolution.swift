@@ -62,7 +62,7 @@ extension FrameBuffer {
     ///   - palette: Resolves `surface` and SGR 39, and is asked for nothing
     ///     else. Taken rather than assumed because a semantic colour reaching
     ///     the arithmetic is a silent no-op in one direction and a trap in the
-    ///     other — see ``Color/opacity(_:over:)`` and `ANSIRenderer`.
+    ///     other — see ``Color/compositing(_:over:)`` and `ANSIRenderer`.
     /// - Returns: A buffer with no opacity regions, ready to composite.
     public func resolvingOpacity(
         over destination: Self = Self(),
@@ -323,7 +323,7 @@ extension FrameBuffer {
     private static func compositingField(
         of source: RowCell, onto destination: RowCell?, alpha: Double, behind: Color
     ) -> RowCell {
-        guard let fadedBackground = source.background.map({ $0.opacity(alpha, over: behind) })
+        guard let fadedBackground = source.background.map({ $0.compositing(alpha, over: behind) })
         else {
             return destination ?? RowCell(character: " ", style: SGRState())
         }
@@ -375,9 +375,9 @@ extension FrameBuffer {
         if let destination, destination.character == source.character {
             var result = source
             let foreground = (source.foreground ?? defaultForeground)
-                .opacity(alpha, over: destination.foreground ?? defaultForeground)
+                .compositing(alpha, over: destination.foreground ?? defaultForeground)
             let background =
-                source.background.map { $0.opacity(alpha, over: behind) }
+                source.background.map { $0.compositing(alpha, over: behind) }
                 ?? destination.background
             // Weight cannot blend: bold, underline and their kin are on or
             // off, so the glyph's non-colour styling follows whichever side
@@ -404,9 +404,9 @@ extension FrameBuffer {
         if alpha < 0.5, let destination, destination.character != " " {
             return compositingField(of: source, onto: destination, alpha: alpha, behind: behind)
         }
-        let fadedBackground = source.background.map { $0.opacity(alpha, over: behind) }
+        let fadedBackground = source.background.map { $0.compositing(alpha, over: behind) }
         var result = source
-        let foreground = (source.foreground ?? defaultForeground).opacity(alpha, over: behind)
+        let foreground = (source.foreground ?? defaultForeground).compositing(alpha, over: behind)
         // Where neither side paints a background, the cell keeps naming none —
         // which is the surface, and is what it named before.
         let background = fadedBackground ?? destination?.background

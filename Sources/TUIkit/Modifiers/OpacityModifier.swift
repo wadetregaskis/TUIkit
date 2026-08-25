@@ -242,7 +242,7 @@ enum OpacityFade {
     ) -> String {
         SGRColorRewrite.rewriting(
             line, defaultForeground: defaultForeground, defaultBackground: surface
-        ) { $0.opacity(factor, over: surface) }
+        ) { $0.compositing(factor, over: surface) }
     }
 }
 
