@@ -11,15 +11,17 @@
 //  the reasoning behind picking it, is in `Documentation/Opacity as
 //  composition.md` §6a; in short:
 //
-//  * **below ½ the source cell is not drawn at all** — not blended, skipped —
-//    so `opacity(0)` genuinely reveals what is behind it rather than painting a
+//  * **below ½ the source's glyph is not drawn** — the destination keeps its
+//    character — and at 0 the source contributes nothing at all, so
+//    `opacity(0)` genuinely reveals what is behind it rather than painting a
 //    near-black smudge over it, which is what the render-time fade does today;
 //  * **at or above ½ the source's character is drawn**, with its foreground AND
 //    background blended toward the background colour of what is behind it;
-//  * **a source SPACE is not a glyph**: it composites its background and keeps
-//    the destination's character. Without this, fading a `VStack` would blank
-//    the whole rectangle it occupies, because most of what a layer contributes
-//    is spaces;
+//  * **a source SPACE is not a glyph**: it composites its background — at
+//    EVERY alpha, because colours blend at any strength and only glyphs need
+//    the threshold — and keeps the destination's character. Without this,
+//    fading a `VStack` would blank the whole rectangle it occupies, because
+//    most of what a layer contributes is spaces;
 //  * **the destination's foreground is left alone.** A translucent pane over
 //    text does not tint that text; the text keeps its colour and the surface
 //    behind it changes. That is the deliberate simplification — tinting reads
@@ -312,22 +314,29 @@ extension FrameBuffer {
     ) -> RowCell {
         // Uncovered, or fully opaque: the source stands as it is.
         guard let alpha, alpha < 1 else { return source }
+        // At zero the source contributes nothing at all, and the destination
+        // is not merely approximated, it is UNTOUCHED: character, colours and
+        // attributes, byte for byte. Every blend below converges here as
+        // alpha does, so this is a shortcut, not a discontinuity.
+        guard alpha > 0 else {
+            return destination ?? RowCell(character: " ", style: SGRState())
+        }
         // What the destination actually shows where it paints nothing of its
         // own. A cell with no background is not transparent to the terminal —
         // it is the surface.
         let behind = destination?.background ?? surface
-        // Below the threshold the source is not there at all. The destination
-        // is not merely revealed, it is UNTOUCHED: character, colours and
-        // attributes, exactly as it drew them.
-        guard alpha >= 0.5 else {
-            return destination ?? RowCell(character: " ", style: SGRState())
-        }
-        let fadedBackground = source.background.map { $0.opacity(alpha, over: behind) }
         // A space carries no ink, so it yields the character and composites only
         // its background — and where it has none, it changes nothing at all.
         // That last part is what makes a faded `VStack`'s padding transparent
         // instead of a rectangle of blanks punched through the page.
+        //
+        // At EVERY alpha, not only above the glyph threshold: colours can blend
+        // at any strength — the threshold exists because two characters cannot
+        // share a cell, and a space is not a character contest. Gating this on
+        // ½ made a translucent panel vanish whole at the midpoint instead of
+        // fading smoothly to nothing.
         if source.character == " " {
+            let fadedBackground = source.background.map { $0.opacity(alpha, over: behind) }
             guard let fadedBackground else {
                 return destination ?? RowCell(character: " ", style: SGRState())
             }
@@ -336,6 +345,12 @@ extension FrameBuffer {
             kept.style = kept.style.settingBackground(fadedBackground)
             return kept
         }
+        // Below the threshold the source's glyph is not drawn. The destination
+        // keeps its character, its colours and its attributes.
+        guard alpha >= 0.5 else {
+            return destination ?? RowCell(character: " ", style: SGRState())
+        }
+        let fadedBackground = source.background.map { $0.opacity(alpha, over: behind) }
         var result = source
         let foreground = (source.foreground ?? defaultForeground).opacity(alpha, over: behind)
         // Where neither side paints a background, the cell keeps naming none —

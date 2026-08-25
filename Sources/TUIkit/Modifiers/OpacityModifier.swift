@@ -31,13 +31,14 @@ extension View {
     /// multiplies, as in SwiftUI: `0.5` inside `0.5` shows at `0.25`.
     ///
     /// > Important: Colours compose exactly; **characters cannot**. Two
-    ///   characters cannot share one cell at half strength each, so alpha
-    ///   becomes a decision rather than a mix: **at or above `0.5` this view's
-    ///   character is drawn, and below it nothing of this view is drawn at
-    ///   all**. A cross-fade therefore swaps characters at the midpoint rather
-    ///   than dissolving through it — there is no way around that in a cell
-    ///   grid — and `opacity(0)` genuinely reveals what is behind, rather than
-    ///   painting an invisible-coloured rectangle over it.
+    ///   characters cannot share one cell at half strength each, so for glyphs
+    ///   alpha becomes a decision rather than a mix: **at or above `0.5` this
+    ///   view's character is drawn, and below it the character behind shows
+    ///   instead** — colours keep blending at every alpha; only the choice of
+    ///   character snaps. A cross-fade therefore swaps characters at the
+    ///   midpoint rather than dissolving through it — there is no way around
+    ///   that in a cell grid — and `opacity(0)` genuinely reveals what is
+    ///   behind, rather than painting an invisible-coloured rectangle over it.
     ///
     /// > Note: A space is not a character for this purpose. A faded view's
     ///   blank cells composite their background and let what is behind them

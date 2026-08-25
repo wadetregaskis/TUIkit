@@ -131,6 +131,23 @@ struct OpacityResolutionTests {
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
 
+    @Test("A space's background composites below the threshold too")
+    func aSpaceFadesContinuously() {
+        // The threshold decides which GLYPH shows, and a space is not a glyph
+        // contest — so a translucent panel thins out smoothly instead of
+        // vanishing whole at the midpoint.
+        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .red)])
+        let source = faded(
+            ANSIRenderer.colorize("     ", background: .rgb(0, 0, 255)), 0.25, width: 5)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .rgb(0, 0, 0), palette: palette())
+
+        #expect(resolved.lines[0].stripped == "world")
+        #expect(resolved.lines[0].contains(codes(.red)))
+        let expected = Color.rgb(0, 0, 255).opacity(0.25, over: .rgb(0, 0, 0))
+        #expect(resolved.lines[0].contains(backgroundCodes(expected)))
+    }
+
     @Test("With nothing behind it, the surface is what is behind it")
     func atARootTheSurfaceStandsIn() {
         let surface = Color.rgb(0, 0, 255)

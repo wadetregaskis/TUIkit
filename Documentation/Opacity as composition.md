@@ -494,3 +494,23 @@ found by it.
   common prefix and suffix across a row's frames and re-state the style at the
   trimmed start, which would narrow every cycle producer's runs and not just
   this one.
+
+## 10. The refined blend (2026-08-24)
+
+§6a chose the stylised model, and it shipped as described. Working with it on
+screen surfaced refinements; this section is the current rule set, and §6a
+stands as the record of why the family of models looks like this at all. The
+organising principle the refinements converge on:
+
+> **Colours blend at every alpha; only the choice of glyph needs a decision,
+> and only where two glyphs genuinely contest the cell.**
+
+The rules, updated as each lands:
+
+1. **A source space composites its background at every alpha**, not only at or
+   above the glyph threshold. The threshold exists because two characters
+   cannot share a cell; a space is not a character contest, and gating its
+   background on ½ made a translucent panel vanish whole at the midpoint
+   instead of fading smoothly to nothing. (The panel-pop was the visible
+   artefact of the first implementation: the ½ guard sat above the space rule
+   and gated colours it had no business deciding.)
