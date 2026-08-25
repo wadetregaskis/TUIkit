@@ -1,8 +1,8 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ContainerPayloadAudit.swift
 //
-//  A rendered buffer carries three things beside its lines, and every container
-//  a view can sit in has to pass all three up. Each is lost silently, and each
+//  A rendered buffer carries four things beside its lines, and every container
+//  a view can sit in has to pass all four up. Each is lost silently, and each
 //  loss reads as an ordinary page:
 //
 //  * a dropped **animated run** freezes a spinner or a caret — and looks like a
@@ -11,13 +11,16 @@
 //    focus states perfectly and cannot be clicked;
 //  * a dropped **overlay** is a `.sheet`, `.alert`, `.popover`, `Picker`
 //    drop-down or `.contextMenu` that never reaches the root compositor — for a
-//    modal, one that takes the keyboard and then does not appear.
+//    modal, one that takes the keyboard and then does not appear;
+//  * a dropped **opacity region** is a `.opacity(…)` that draws at full
+//    strength, which is the least alarming of the four and so the easiest to
+//    ship.
 //
 //  So this is a standing audit rather than a one-off: put each payload inside
 //  each container in turn and require it to come out. `Section` was the
 //  container that dropped them — runs first (found by the audit's earlier,
 //  runs-only form) and then, for longer, the other two, because fixing the
-//  instance did not close the class. That is why the three now share one list.
+//  instance did not close the class. That is why the four now share one list.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -142,6 +145,17 @@ struct ContainerPayloadAudit {
             ("TabView", { child in
                 AnyView(TabView(selection: .constant(0)) { Tab("A", value: 0) { child } })
             }),
+            // Both styles: the compact panel composes with `replacingLines` +
+            // `appendVertically` and carries everything for free, while the
+            // bordered one rebuilds its rows as fresh strings and has to
+            // re-attach each payload by hand. Only the second can fail, and
+            // only the second was failing.
+            ("a bordered TabView", { child in
+                AnyView(
+                    TabView(selection: .constant(0)) { Tab("A", value: 0) { child } }
+                        .tabViewStyle(.bordered))
+            }),
+
             ("Grid", { child in AnyView(Grid { GridRow { child } }) }),
             ("LazyVStack", { child in AnyView(ScrollView { LazyVStack { child } }) }),
             ("DisclosureGroup", { child in
@@ -220,6 +234,37 @@ struct ContainerPayloadAudit {
             let found = render(wrap(AnyView(clickable()))).hitTestRegions.count
             #expect(found > base, "\(what) dropped the child's region (\(base) → \(found))")
         }
+    }
+
+    /// Three sites that assemble a buffer by hand — outside the container list
+    /// because the differencing above cannot see them.
+    ///
+    /// The app header is composed at the ROOT, by the render loop, so it never
+    /// appears in the page's buffer at all and the audit's before/after reads
+    /// zero either way. A `Button`'s label holds a nested `Button` badly (two
+    /// buttons publish one region between them, so the hit-region difference is
+    /// zero for a reason that has nothing to do with carrying). Both still
+    /// rebuild their lines as fresh strings and re-attach each payload by hand,
+    /// which is the failure this file exists for — so they are checked here,
+    /// with the one payload that reads the same at every site.
+    @Test("The hand-assembled buffers carry an opacity region")
+    func handAssembledBuffersCarryOpacity() {
+        // The prefix path: a plain button's label, shifted right past the focus
+        // indicator's width.
+        let label = render(Button(action: {}, label: { faded() }).buttonStyle(.plain))
+        #expect(label.opacityRegions.count == 1)
+        #expect(label.opacityRegions.first?.offsetX == BorderRenderer.focusIndicatorWidth)
+
+        // The header takes its content PRE-RENDERED, so it is handed the
+        // probe's buffer directly rather than reached through a page.
+        let context = harness().1
+        let content = renderToBuffer(faded(), context: context)
+        let header = AppHeader(contentBuffer: content, style: .bordered)
+            .renderToBuffer(context: context)
+        #expect(header.opacityRegions.count == 1)
+        // Inside the box's wall and below its top rule.
+        #expect(header.opacityRegions.first?.offsetX == 1)
+        #expect(header.opacityRegions.first?.offsetY == 1)
     }
 
     @Test("A disabled container still lets a presentation float to the root")

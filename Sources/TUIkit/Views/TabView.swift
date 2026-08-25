@@ -683,6 +683,12 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
                 contentsOf: visibleContent.shiftedAnimatedCells(
                     byX: contentShiftX, y: contentStartY))
         }
+        // …and the opacity regions, likewise. Only this style needs saying: the
+        // `.compact` panel composes with `replacingLines` + `appendVertically`,
+        // which carry every payload on their own.
+        buffer.opacityRegions.append(
+            contentsOf: visibleContent.shiftedOpacityRegions(
+                byX: contentShiftX, y: contentStartY))
         attachTabClicks(to: &buffer, regions: regions, context: context)
         return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }

@@ -86,6 +86,10 @@ extension AppHeader: Renderable {
             style == .bordered
             ? contentBuffer.shiftedHitTestRegions(byX: 1, y: 1)
             : contentBuffer.hitTestRegions
+        result.opacityRegions =
+            style == .bordered
+            ? contentBuffer.shiftedOpacityRegions(byX: 1, y: 1)
+            : contentBuffer.opacityRegions
         return result
     }
 }

@@ -282,6 +282,7 @@ struct AlertButtonRow: View, Renderable {
         var resultRegions: [HitTestRegion] = []
         var resultRuns: [AnimatedCellRun] = []
         var resultOverlays: [OverlayLayer] = []
+        var resultFaded: [OpacityRegion] = []
         let spacer = String(repeating: " ", count: spacing)
         var xCursor = leftPadding
 
@@ -311,12 +312,14 @@ struct AlertButtonRow: View, Renderable {
             // removing it.
             resultRuns.append(contentsOf: buffer.shiftedAnimatedCells(byX: xCursor, y: 0))
             resultOverlays.append(contentsOf: buffer.shiftedOverlays(byX: xCursor, y: 0))
+            resultFaded.append(contentsOf: buffer.shiftedOpacityRegions(byX: xCursor, y: 0))
             xCursor += buffer.width
         }
 
         var result = FrameBuffer(lines: resultLines)
         result.hitTestRegions = resultRegions
         result.animatedCells = resultRuns
+        result.opacityRegions = resultFaded
         // Overlays too, for the same reason the other two are carried. No
         // button can currently float one — these builders take `Button` values,
         // and `.sheet` / `.contextMenu` return `some View` — so this is the
@@ -360,6 +363,7 @@ struct AlertButtonColumn: View, Renderable {
         var regions: [HitTestRegion] = []
         var runs: [AnimatedCellRun] = []
         var overlays: [OverlayLayer] = []
+        var faded: [OpacityRegion] = []
 
         // Each button renders under its OWN child identity. A `Button`'s
         // default focus ID is derived from `context.identity.path`, so rendering
@@ -390,11 +394,13 @@ struct AlertButtonColumn: View, Renderable {
                 contentsOf: buffer.shiftedHitTestRegions(byX: leftPadding, y: startY))
             runs.append(contentsOf: buffer.shiftedAnimatedCells(byX: leftPadding, y: startY))
             overlays.append(contentsOf: buffer.shiftedOverlays(byX: leftPadding, y: startY))
+            faded.append(contentsOf: buffer.shiftedOpacityRegions(byX: leftPadding, y: startY))
         }
 
         var result = FrameBuffer(lines: lines)
         result.hitTestRegions = regions
         result.animatedCells = runs
+        result.opacityRegions = faded
         // Overlays too, for the same reason the other two are carried. No
         // button can currently float one — these builders take `Button` values,
         // and `.sheet` / `.contextMenu` return `some View` — so this is the

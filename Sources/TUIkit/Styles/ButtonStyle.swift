@@ -587,6 +587,8 @@ private struct _ButtonStyleBody: View, Renderable {
             // its own run.
             buffer.animatedCells = body.shiftedAnimatedCells(
                 byX: BorderRenderer.focusIndicatorWidth, y: 0)
+            buffer.opacityRegions = body.shiftedOpacityRegions(
+                byX: BorderRenderer.focusIndicatorWidth, y: 0)
             if cycle.isAnimating {
                 buffer.animatedCells += body.lines.indices.map { row in
                     AnimatedCellRun(
