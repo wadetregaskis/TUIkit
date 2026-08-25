@@ -10,8 +10,11 @@
 /// out of the generic struct because Swift does not allow
 /// static stored properties in generic types.
 private enum ToggleStateIndex {
-    static let focusID = 0
-    static let isHovered = 1
+    // Negative: the label renders at the core's own identity, and 0...
+    // belongs to a composite label's own @State. See
+    // `StateStorage.StateKey`'s reserved-range table.
+    static let focusID = -50
+    static let isHovered = -51
 }
 
 /// The switch style's knob glyphs, selected by the ambient ``ToggleCharacterSet``'s

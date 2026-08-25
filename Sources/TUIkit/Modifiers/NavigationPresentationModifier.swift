@@ -85,7 +85,11 @@ extension View {
 /// StateStorage property indices for ``NavigationPresentationModifier``.
 private enum StateIndex {
     /// Whether THIS modifier is what put its token on the path.
-    static let didPush = 0
+    ///
+    /// Negative: infrastructure slots share the wrapped content's identity,
+    /// and 0... belongs to a composite content view's own @State. See
+    /// `StateStorage.StateKey`'s reserved-range table.
+    static let didPush = -30
 }
 
 /// Keeps one token on the enclosing stack's path in step with a Boolean.

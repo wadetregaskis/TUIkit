@@ -189,6 +189,12 @@ private enum StateIndex {
 }
 ```
 - Never use bare integer literals for `propertyIndex`
+- **Indices `0...` belong to composite `@State`.** A wrapper that renders
+  caller-supplied content at its OWN identity (no `withChildIdentity`) must
+  use **negative** indices from a reserved range — the table lives on
+  `StateStorage.StateKey` — or the content's first `@State` aliases the
+  wrapper's box. Leaf cores whose slots can never share an identity with
+  composite content keep `0...`.
 
 #### Disabled state
 - Disabled views MUST NOT register with the focus system

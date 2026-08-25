@@ -39,11 +39,42 @@ public final class StateStorage: @unchecked Sendable {
     // MARK: - State Key
 
     /// A unique key for a single `@State` property on a specific view.
+    ///
+    /// ## The property-index namespace
+    ///
+    /// Indices `0...` belong to a composite view's own wrapped properties,
+    /// bound by declaration order. Framework infrastructure that persists a
+    /// box at the SAME identity as content it renders — a `Renderable`
+    /// modifier or control that pushes no child identity — must use
+    /// **negative** indices, or a wrapped composite view's first `@State`
+    /// aliases the infrastructure's box: same type and the two share one
+    /// value; different types and `storage(for:)` replaces the box each
+    /// frame, resetting both sides to their defaults every render.
+    ///
+    /// Negative indices are reserved in RANGES, one per purpose, so wrappers
+    /// stacked on one identity cannot collide with each other either. The
+    /// allocation, in tens (a purpose grows downward within its ten):
+    ///
+    /// | range | owner |
+    /// |---|---|
+    /// | -10… | `FocusableModifier` |
+    /// | -20… | `RefreshableModifier` |
+    /// | -30… | `NavigationPresentationModifier` |
+    /// | -40… | `_UserResizableCore` |
+    /// | -50… | `_ToggleCore` |
+    ///
+    /// Taking a new range: claim the next free ten here, in this table.
+    /// (Leaf `Renderable` views whose slots can never share an identity with
+    /// composite content keep their historical `0...` constants; anything
+    /// that renders a caller-supplied `@ViewBuilder` at its own identity
+    /// belongs in this table.)
     public struct StateKey: Hashable {
         /// The view's structural identity in the render tree.
         public let identity: ViewIdentity
 
-        /// The property's declaration index within the view (0, 1, 2, ...).
+        /// The property's declaration index within the view (0, 1, 2, ...),
+        /// or a reserved NEGATIVE infrastructure index — see the
+        /// property-index namespace note above.
         public let propertyIndex: Int
 
         /// Creates a new state key.

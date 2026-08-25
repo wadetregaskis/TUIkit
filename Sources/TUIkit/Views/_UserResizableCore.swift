@@ -99,8 +99,11 @@ final class _UserResizeHandler: Focusable {
 /// Named indices, so no bare integer decides which slot holds what. Outside the
 /// generic type because a generic may not carry static stored properties.
 private enum StateIndex {
-    static let focusID = 0
-    static let handler = 1
+    // Negative: infrastructure slots share the wrapped content's identity,
+    // and 0... belongs to a composite content view's own @State. See
+    // `StateStorage.StateKey`'s reserved-range table.
+    static let focusID = -40
+    static let handler = -41
 }
 
 /// How many cells of the bottom border the horizontal grabber occupies, and how

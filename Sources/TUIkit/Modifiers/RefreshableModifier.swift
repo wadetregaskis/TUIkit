@@ -162,7 +162,10 @@ extension View {
 /// Where ``RefreshableModifier`` keeps its persistent state. A namespace of
 /// its own because a generic type cannot hold static stored properties.
 private enum RefreshableStateIndex {
-    static let runState = 0
+    // Negative: infrastructure slots share the wrapped content's identity,
+    // and 0... belongs to a composite content view's own @State. See
+    // `StateStorage.StateKey`'s reserved-range table.
+    static let runState = -20
 }
 
 /// Publishes a ``RefreshAction`` to its subtree, binds it to

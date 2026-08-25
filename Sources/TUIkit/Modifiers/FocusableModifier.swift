@@ -50,7 +50,10 @@ extension View {
 /// `StateStorage` property indices for ``FocusableModifier`` (a static index on
 /// the generic type isn't allowed, so it lives at file scope).
 private enum FocusableStateIndex {
-    static let focusID = 0
+    // Negative: infrastructure slots share the wrapped content's identity,
+    // and 0... belongs to a composite content view's own @State. See
+    // `StateStorage.StateKey`'s reserved-range table.
+    static let focusID = -10
 }
 
 /// Registers its content as a focus stop (see ``View/focusable(_:)``). It is
