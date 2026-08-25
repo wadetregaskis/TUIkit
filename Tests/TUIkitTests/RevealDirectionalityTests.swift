@@ -81,6 +81,85 @@ struct RevealDirectionalityTests {
         }
     }
 
+    @Test("An off-band focused row's regions never land inside the visible band")
+    func offBandGraftDoesNotStealClicks() {
+        // The anchored walk (variable heights, > 256 rows) grafts the focused
+        // off-band row's hit regions at an ESTIMATED y. With the tall section
+        // between the band and the focused row, the running pitch average
+        // undershoots and the graft used to land INSIDE the band — where the
+        // ScrollView's viewport clip kept it, overlaying a visible row and
+        // stealing its clicks.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let view = ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<300, id: \.self) { i in
+                    if i == 0 || i == 203 {
+                        Button("b\(i)") {}
+                    } else if i >= 200, i < 210 {
+                        Text(Array(repeating: "tall \(i)", count: 20).joined(separator: "\n"))
+                    } else {
+                        Text("row \(i)")
+                    }
+                }
+            }
+        }
+        .frame(height: 8)
+
+        func renderBuffer() -> FrameBuffer {
+            var environment = EnvironmentValues()
+            environment.focusManager = focusManager
+            environment.applyRuntimeServices(from: tuiContext)
+            environment.scrollIndicatorStyle = .text
+            let context = RenderContext(
+                availableWidth: 30, availableHeight: 8,
+                environment: environment, tuiContext: tuiContext)
+            tuiContext.preferences.beginRenderPass()
+            tuiContext.stateStorage.beginRenderPass()
+            tuiContext.renderCache.beginRenderPass()
+            focusManager.beginRenderPass()
+            let buffer = renderToBuffer(view, context: context)
+            focusManager.endRenderPass()
+            tuiContext.stateStorage.endRenderPass()
+            tuiContext.renderCache.removeInactive()
+            return buffer
+        }
+        func regions203(_ buffer: FrameBuffer) -> [HitTestRegion] {
+            buffer.hitTestRegions.filter { $0.focusID?.contains("[203]") == true }
+        }
+
+        _ = renderBuffer()
+        let id0 = focusManager.registeredFocusIDsInActiveSection().first ?? ""
+        focusManager.focus(id: id0.replacingOccurrences(of: "[0]", with: "[203]"))
+        // Jump the viewport straight from the top into the tall section
+        // (peek: the handler offset is what wheel scrolling writes). On the
+        // first anchored frames the running pitch average still reflects the
+        // 1-line rows above, so the focused row's graft estimate undershoots
+        // through the 20-line rows — landing its regions inside the viewport,
+        // over a visible row, where they steal its clicks. Sweep the
+        // section; wherever the focused row is NOT on screen, none of its
+        // regions may sit inside the viewport.
+        let handler = focusManager.activeSection?.focusables
+            .compactMap { $0 as? ScrollViewHandler }.first
+        #expect(handler != nil)
+        for offset in stride(from: 180, through: 300, by: 5) {
+            handler?.scrollOffset = offset
+            let frame = renderBuffer()
+            guard !frame.lines.contains(where: { $0.stripped.contains("b203") })
+            else { continue }
+            // The viewport INTERIOR: the first and last line belong to the
+            // "N more" indicators, and a row scrolled exactly under one is
+            // edge adjacency, not an estimate landing rows deep in the band.
+            let strays = regions203(frame).filter { region in
+                region.offsetY < 7 && region.offsetY + region.height > 1
+            }
+            let placements = strays.map { ($0.offsetY, $0.height) }
+            #expect(
+                strays.isEmpty,
+                "offset \(offset): off-screen row 203's region inside the viewport: \(placements)")
+        }
+    }
+
     @Test("A focused List consuming arrows snaps back after a scroll-away peek")
     func containerInteractionSnapsBackFromPeek() {
         // The interactionGeneration half of the reveal, for CONTAINER focus.

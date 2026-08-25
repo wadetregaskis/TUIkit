@@ -544,8 +544,30 @@ extension _VStackCore {
         }
         guard !frame.sawSpacer else { return nil }
         for (ordinal, y) in grafts {
+            // The graft's y is an ESTIMATE (ordinal distance × running pitch
+            // average), and on this path's whole domain — variable-height
+            // rows — it can land INSIDE the rendered band, where the grafted
+            // row's hit regions would overlay a visible row's and steal its
+            // clicks. An off-band row is outside the band by definition, so
+            // clamp a wayward estimate to the nearest edge OUTSIDE on its
+            // true side (known from the ordinal): the reveal math keeps the
+            // direction and the viewport clip drops the regions, exactly as
+            // the accurate-estimate case always behaved.
+            var bandLocalY = y - sliceOrigin
+            let bandHeight = cursor - sliceOrigin
+            if let firstPlaced = sorted.first?.0, ordinal < firstPlaced {
+                // A full viewport height clear of the band top: the grafted
+                // regions are at most viewportHeight tall (the row renders at
+                // that height), so nothing can poke past 0 — a row-pitch
+                // margin was not enough when the region outlived the pitch.
+                bandLocalY = min(bandLocalY, -window.viewportHeight)
+            } else {
+                // Below — or BETWEEN placed runs, where the estimate is
+                // ambiguous: out of the band is the contract either way.
+                bandLocalY = max(bandLocalY, bandHeight)
+            }
             graftOffBandRow(
-                frame.child(at: ordinal), into: &result, bandLocalY: y - sliceOrigin,
+                frame.child(at: ordinal), into: &result, bandLocalY: bandLocalY,
                 width: width, viewportHeight: window.viewportHeight, context: context)
             if let key = frame.children.key(at: ordinal) { memo[key] = ordinal }
         }
