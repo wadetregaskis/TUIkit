@@ -200,3 +200,47 @@ struct OpacityResolutionTests {
         #expect(resolved.lines[1] != second)
     }
 }
+
+// MARK: - Foreign runs
+
+@MainActor
+@Suite("Opacity and other views' animations")
+struct OpacityForeignRunTests {
+
+    private func palette() -> any Palette {
+        makeRenderContext(width: 24, height: 4).environment.palette
+    }
+
+    @Test("A run inside a faded region is dropped, not left to replay unfaded")
+    func foreignRunsAreDropped() {
+        // The frames were coloured by a view that never saw the fade, so the
+        // render draws the faded picture and the next replay tick paints the
+        // unfaded frames back over it — a control that pops to full strength
+        // one tick after every render.
+        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello", foreground: .green)])
+        buffer.animatedCells = [
+            AnimatedCellRun(
+                offsetX: 0, offsetY: 0, width: 5, frames: ["aaaaa", "bbbbb"], clock: .cursor)
+        ]
+        buffer.opacityRegions = [
+            OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 0.6)
+        ]
+        let resolved = buffer.resolvingOpacity(surface: .black, palette: palette())
+        #expect(resolved.animatedCells.isEmpty)
+    }
+
+    @Test("A run beside the region is left alone")
+    func runsOutsideTheRegionSurvive() {
+        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello world", foreground: .green)])
+        buffer.animatedCells = [
+            AnimatedCellRun(
+                offsetX: 6, offsetY: 0, width: 5, frames: ["aaaaa", "bbbbb"], clock: .cursor)
+        ]
+        buffer.opacityRegions = [
+            OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 0.6)
+        ]
+        let resolved = buffer.resolvingOpacity(surface: .black, palette: palette())
+        #expect(resolved.animatedCells.count == 1)
+        #expect(resolved.animatedCells.first?.offsetX == 6)
+    }
+}

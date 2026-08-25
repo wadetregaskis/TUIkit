@@ -136,6 +136,25 @@ extension FrameBuffer {
 
         var result = replacingLines(rewritten)
         result.opacityRegions = []
+        // A run emitted by some OTHER view inside the faded subtree — a focused
+        // button's breathing caps, a spinner — carries frames coloured at full
+        // strength, because the view that built them never saw the fade. Left
+        // in place, the render would draw the faded picture and the very next
+        // replay tick would paint the unfaded frames back over it.
+        //
+        // So they go. A dropped run is a missed saving rather than a frozen
+        // animation: `noteServedByRuns` is the only thing that stops the loop
+        // rendering for an animation, and `.opacity` is its only caller — every
+        // other producer keeps asking for frames and simply pays for them. Same
+        // reasoning, and the same trade, as the runs `_ListCore` declines to
+        // carry out of a badged row.
+        result.animatedCells = result.animatedCells.filter { run in
+            !translucent.contains { region in
+                region.spans(row: run.offsetY)
+                    && run.offsetX < region.offsetX + region.width
+                    && region.offsetX < run.offsetX + run.width
+            }
+        }
         result.animatedCells += Self.cyclingRuns(
             of: translucent, over: lines, rebuilding: rebuild)
         return result
