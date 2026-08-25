@@ -160,6 +160,62 @@ struct RevealDirectionalityTests {
         }
     }
 
+    @Test("A far focus jump is pursued until the row is actually on screen")
+    func farFocusJumpConverges() {
+        // The snap toward an off-band row scrolls to its grafted region,
+        // whose position is an ESTIMATE that can land short — and with focus
+        // unchanged, nothing used to re-check: the viewport parked one band
+        // away from the row it was sent to (reproducibly, at 'tall 200' with
+        // focus on row 203, forever). The reveal now pursues while its own
+        // last write is still the offset and the target remains off-band.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let view = ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<300, id: \.self) { i in
+                    if i == 0 || i == 203 {
+                        Button("b\(i)") {}
+                    } else if i >= 200, i < 210 {
+                        Text(Array(repeating: "tall \(i)", count: 20).joined(separator: "\n"))
+                    } else {
+                        Text("row \(i)")
+                    }
+                }
+            }
+        }
+        .frame(height: 8)
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
+        let id0 = focusManager.registeredFocusIDsInActiveSection().first ?? ""
+        focusManager.focus(id: id0.replacingOccurrences(of: "[0]", with: "[203]"))
+
+        var frame: [String] = []
+        var framesToConverge = 0
+        for step in 1...25 {
+            frame = renderFrame(
+                view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
+            framesToConverge = step
+            if frame.contains(where: { $0.contains("b203") }) { break }
+        }
+        #expect(
+            frame.contains { $0.contains("b203") },
+            "the reveal parked after \(framesToConverge) frames: \(frame)")
+
+        // And once revealed, a wheel peek away STAYS: the pursuit's memory is
+        // its own last write, so any other writer ends it.
+        let handler = focusManager.activeSection?.focusables
+            .compactMap { $0 as? ScrollViewHandler }.first
+        #expect(handler != nil)
+        handler?.scrollOffset = max(0, (handler?.scrollOffset ?? 0) - 60)
+        for _ in 0..<3 {
+            let peeked = renderFrame(
+                view, tuiContext: tuiContext, focusManager: focusManager, height: 8)
+            #expect(
+                !peeked.contains { $0.contains("b203") },
+                "the peek must stick — pursuit re-armed and snapped back: \(peeked)")
+        }
+    }
+
     @Test("A focused List consuming arrows snaps back after a scroll-away peek")
     func containerInteractionSnapsBackFromPeek() {
         // The interactionGeneration half of the reveal, for CONTAINER focus.

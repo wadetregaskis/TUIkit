@@ -161,6 +161,7 @@ enum ScrollViewStateIndex {
     static let lastFocusedID = 2
     static let lastInteractionGen = 3
     static let lastViewport = 4
+    static let revealPursuit = 5
 }
 
 /// A lightweight String-box used by ``_ScrollViewCore`` to track
@@ -179,6 +180,21 @@ final class LastFocusedIDBox: @unchecked Sendable {
 /// ``LastFocusedIDBox``.
 final class LastInteractionGenBox: @unchecked Sendable {
     var value: UInt64 = 0
+}
+
+/// The scroll offset the reveal's last snap WROTE, or `nil` when no reveal
+/// is in flight.
+///
+/// The reveal's convergence memory: a focus jump to a far-off row scrolls to
+/// the row's grafted region, whose position is an ESTIMATE — ordinal distance
+/// times the running pitch average — so the hop can land short. Focus being
+/// unchanged, nothing used to re-check, and the viewport parked one band away
+/// from the row it was sent to. While this box matches the handler's offset
+/// (nobody else has scrolled — a wheel peek clears it, so peek mode still
+/// wins) and the target's region is still outside the visible band, the snap
+/// keeps pursuing; a hop that no longer moves ends it.
+final class RevealPursuitBox: @unchecked Sendable {
+    var value: Int?
 }
 
 /// The content rect this scroller was last laid out into, on a RENDER pass.
@@ -433,7 +449,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // control when focus moved or it just consumed a key. A render-pass-
         // only side effect; the helper documents the full rationale and the
         // measure-pass gate.
-        snapViewportToFocusedControl(
+        let pursuitArmed = snapViewportToFocusedControl(
             handler: handler,
             fullBuffer: fullBuffer,
             viewportHeight: contentViewportHeight,
@@ -446,20 +462,14 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, context: context)
         if wasGluedToBottom, seekOffset == nil {
-            // A coverage render refines the content-height estimate, which
-            // can move maxOffset out from under the earlier re-glue —
-            // leaving the view a hair off the tail, where the NEXT frame's
-            // glue condition (offset >= maxOffset) would silently release
-            // the follow. Re-glue against the refined number; the guard
-            // render is a no-op once a band actually reaches the tail,
-            // whose totals are exact (§3: estimates cover only what was
-            // never rendered), so this converges — no loop.
-            handler.scrollOffset = handler.maxOffset
-            coverSnappedViewport(
+            reglueToRefinedTail(
                 handler: handler, fullBuffer: &fullBuffer, contentSlice: &contentSlice,
                 contentWidth: contentWidth, viewportHeight: contentViewportHeight,
                 horizontal: wantsHorizontal, context: context)
         }
+        // Settle the pursuit AFTER coverage/re-glue, when the frame's offset
+        // is final — see the helper.
+        settleRevealPursuit(armed: pursuitArmed, handler: handler, context: context)
         let sliceOriginY = contentSlice?.originY ?? 0
 
         // Only be a Tab stop when there is actually something to scroll.

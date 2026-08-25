@@ -42,6 +42,13 @@ extension _ScrollViewCore {
     /// un-suppressed snap would yank the viewport straight back to it), but
     /// the baselines must advance or the NEXT frame would fire the deferred
     /// snap and undo the scroll anyway.
+    /// - Returns: Whether the snap MOVED the offset this frame — the caller
+    ///   stamps the pursuit with the frame's final, settled offset via
+    ///   ``settleRevealPursuit(armed:handler:context:)`` once coverage,
+    ///   re-glue, and clamping have all had their say. Stamping here, with
+    ///   the raw write, made the pursuit read its own clamped-next-frame
+    ///   offset as a foreign scroll and cancel one hop in.
+    @discardableResult
     func snapViewportToFocusedControl(
         handler: ScrollViewHandler,
         fullBuffer: FrameBuffer,
@@ -50,7 +57,7 @@ extension _ScrollViewCore {
         indicatorsActive: Bool = true,
         suppressed: Bool = false,
         context: RenderContext
-    ) {
+    ) -> Bool {
         let stateStorage = context.stateStorage!
         let lastFocusedKey = StateStorage.StateKey(
             identity: context.identity,
@@ -66,10 +73,10 @@ extension _ScrollViewCore {
         let lastInteractionBox: StateBox<LastInteractionGenBox> = stateStorage.storage(
             for: lastInteractionKey, default: LastInteractionGenBox())
 
-        guard !context.isMeasuring else { return }
+        guard !context.isMeasuring else { return false }
 
         // No focus system → nothing to reveal-on-focus.
-        guard let focusManager = context.environment.focusManager else { return }
+        guard let focusManager = context.environment.focusManager else { return false }
         // Usually "what has the focus", but a subtree may name its own target
         // instead — an open pop-up menu owns an ordinal rather than a focus id,
         // and its highlighted row still has to be scrolled into view.
@@ -99,7 +106,25 @@ extension _ScrollViewCore {
 
         let focusJustChanged = currentFocusedID != lastFocusedBox.value.value
         let interactionJustFired = currentInteractionGen != lastInteractionBox.value.value
-        let shouldSnap = focusJustChanged || interactionJustFired || viewportJustChanged
+
+        // The pursuit (see `RevealPursuitBox`): a snap toward an off-band row
+        // scrolls to an ESTIMATED position and can land short, and with focus
+        // unchanged nothing used to re-check — the viewport parked one band
+        // away. Pursue while the last snap's own write is still the offset
+        // (any other writer — a wheel peek, a scrollTo — wins and ends it)
+        // and the target remains outside the visible band.
+        let pursuitKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.revealPursuit)
+        let pursuitBox: StateBox<RevealPursuitBox> = stateStorage.storage(
+            for: pursuitKey, default: RevealPursuitBox())
+        let pursuing = pursuitBox.value.value == handler.scrollOffset
+        if pursuitBox.value.value != nil, !pursuing {
+            pursuitBox.value.value = nil
+        }
+        if suppressed { pursuitBox.value.value = nil }
+
+        let shouldSnap =
+            focusJustChanged || interactionJustFired || viewportJustChanged || pursuing
 
         if shouldSnap, !suppressed,
            let focusedID = currentFocusedID,
@@ -150,6 +175,7 @@ extension _ScrollViewCore {
             let visibleTop = viewportTop + (topIndicatorShows ? 1 : 0) + margin
             let visibleBottom = viewportBottom - (bottomIndicatorShows ? 1 : 0) - margin
 
+            let offsetBeforeSnap = handler.scrollOffset
             if regionTop < visibleTop || (regionBottom > visibleBottom && region.height >= viewportHeight) {
                 // Scroll-up: align the region's top with viewportTop, leaving
                 // 1 row of headroom for the top indicator when one appears.
@@ -181,9 +207,63 @@ extension _ScrollViewCore {
                     )
                 )
             }
+            // A FOCUS-JUMP snap that MOVED arms (or continues) the pursuit
+            // for the next frame, where refined estimates may relocate the
+            // target; one that did not — the target is visible, or the clamp
+            // has no further to give — is convergence, and the pursuit ends.
+            // Ending on a stalled hop is also what keeps this from
+            // re-rendering forever against an unreachable estimate. An
+            // INTERACTION snap never arms: its target rendered this frame
+            // and the hop is exact — pursuing it made the reveal re-snap a
+            // focused List/Table to its own top every frame, fighting the
+            // control's internal cursor-follow.
+            lastFocusedBox.value.value = currentFocusedID
+            lastInteractionBox.value.value = currentInteractionGen
+            return (focusJustChanged || pursuing) && handler.scrollOffset != offsetBeforeSnap
         }
         lastFocusedBox.value.value = currentFocusedID
         lastInteractionBox.value.value = currentInteractionGen
+        return false
+    }
+
+    /// A coverage render refines the content-height estimate, which can move
+    /// maxOffset out from under the earlier re-glue — leaving the view a hair
+    /// off the tail, where the NEXT frame's glue condition
+    /// (offset >= maxOffset) would silently release the follow. Re-glue
+    /// against the refined number; the guard render is a no-op once a band
+    /// actually reaches the tail, whose totals are exact (§3: estimates cover
+    /// only what was never rendered), so this converges — no loop.
+    func reglueToRefinedTail(
+        handler: ScrollViewHandler, fullBuffer: inout FrameBuffer,
+        contentSlice: inout (originY: Int, totalHeight: Int, totalIsEstimate: Bool)?,
+        contentWidth: Int, viewportHeight: Int,
+        horizontal: Bool, context: RenderContext
+    ) {
+        handler.scrollOffset = handler.maxOffset
+        coverSnappedViewport(
+            handler: handler, fullBuffer: &fullBuffer, contentSlice: &contentSlice,
+            contentWidth: contentWidth, viewportHeight: viewportHeight,
+            horizontal: horizontal, context: context)
+    }
+
+    /// Records the reveal pursuit's memory for the next frame: the offset the
+    /// frame SETTLED on when the snap moved it, or nothing when it did not.
+    ///
+    /// Called after ``coverSnappedViewport``, the tail re-glue, and a final
+    /// clamp — everything that legitimately adjusts the offset within the
+    /// frame — so that next frame's "did anyone else scroll?" comparison sees
+    /// the number that will actually still be there. See
+    /// ``RevealPursuitBox``.
+    func settleRevealPursuit(armed: Bool, handler: ScrollViewHandler, context: RenderContext) {
+        guard !context.isMeasuring, let stateStorage = context.stateStorage else { return }
+        // The clamp against the coverage-refined content height is part of
+        // what this frame's offset really is.
+        handler.clampScrollOffset()
+        let key = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.revealPursuit)
+        let box: StateBox<RevealPursuitBox> = stateStorage.storage(
+            for: key, default: RevealPursuitBox())
+        box.value.value = armed ? handler.scrollOffset : nil
     }
 
     /// Re-renders the content at the (post-snap) scroll offset when the
