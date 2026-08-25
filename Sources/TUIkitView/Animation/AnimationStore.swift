@@ -60,7 +60,15 @@ public final class AnimationStore: @unchecked Sendable {
     /// `StateStorage.trackedValues` is: the store is one dictionary and the
     /// values in it are of whatever type each call site animates.
     private struct Record {
-        /// Where the picture was when this animation began.
+        /// Where the picture was when this animation began — and, once the
+        /// animation has retired (`animation == nil`), where it SETTLED.
+        ///
+        /// The settled value is not always the target: an even-count
+        /// autoreversing animation ends back where it started, so retiring to
+        /// the target would snap the picture on the next unrelated render.
+        /// Every nil-animation store keeps this invariant — first sight and
+        /// unanimated snaps settle AT the target, retirement settles at
+        /// whatever the final frame presented.
         var from: Any
 
         /// What the tree last said the value is.
@@ -169,9 +177,17 @@ extension AnimationStore {
         guard recorded != target else {
             // Unchanged. Retire a finished animation so the next frame does not
             // have to ask again, and so the loop stops rendering for it.
+            //
+            // Retire to what the final frame PRESENTED, not to the target: an
+            // even-count autoreversing animation finishes at fraction 0 — back
+            // at `from` — and retiring to the target made the very next
+            // unrelated render (a key press, minutes later) snap the picture
+            // from the start value to the target. The target is still recorded
+            // as `target`, so an unchanged re-declaration stays settled and a
+            // NEW value animates from where the picture actually is.
             if let running = record.animation, running.isFinished(at: elapsed(record, nowNanos)) {
                 store(
-                    Record(from: recorded, target: recorded, animation: nil, startNanos: nowNanos),
+                    Record(from: presented, target: recorded, animation: nil, startNanos: nowNanos),
                     for: key, isMeasuring: isMeasuring)
             }
             return presented
@@ -310,7 +326,11 @@ extension AnimationStore {
     private func presented<D: VectorArithmetic>(
         _ record: Record, from: D, target: D, nowNanos: Int64
     ) -> D {
-        guard let animation = record.animation else { return target }
+        // A record with no animation is settled, and `from` is where it
+        // settled (see `Record.from`). For every nil-animation record but a
+        // retired even-count autoreverse the two are equal, so this changes
+        // nothing there.
+        guard let animation = record.animation else { return from }
         return from.interpolated(
             towards: target, amount: animation.fraction(at: elapsed(record, nowNanos)))
     }
