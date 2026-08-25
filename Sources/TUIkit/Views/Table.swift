@@ -863,14 +863,16 @@ where Value.ID: Hashable {
             state: PopulatedRenderState(
                 handler: handler,
                 focusID: persistedFocusID,
-                visibleRange: handler.visibleRange,
+                // As DRAWN — the origin after the single-line absorb — so the
+                // click map subscripts the rows actually on screen.
+                visibleRange: handler.drawnVisibleRange,
                 // Same predicate as the click map above and as the drawing
                 // condition, rather than `hasContentAbove` alone — the
                 // multi-line twin already spells it out. Its consumer is the
                 // ScrollView cursor-follow marker, which was aiming one line
                 // low in the same configuration.
                 scrollOffsetAbove:
-                    (handler.reservesIndicatorLine && handler.hasContentAbove) ? 1 : 0,
+                    (handler.reservesIndicatorLine && handler.drawnOffset > 0) ? 1 : 0,
                 drawnBands: composed.bands,
                 columnWidths: columnWidths,
                 rowContentWidth: innerWidth
@@ -1772,18 +1774,30 @@ where Value.ID: Hashable {
         // draws — hidden indicators cost nothing, and the bar path never calls
         // this at all.
         let drawsText = handler.drawsScrollIndicators
-        let aboveLines = (drawsText && handler.scrollOffset > 0) ? 1 : 0
-        let remaining = data.count - handler.scrollOffset
+        // Through the shared absorb, like List and the multi-line path: at
+        // offset 1 a "▲ 1 more" line would hide exactly the one single-line
+        // row it stands for, so the window draws from row 0 instead. The
+        // resting settle normally snaps 1 → 0 before render — but
+        // deliberately not while steering (auto-scroll, reorder, a hovering
+        // external drag), which is exactly when offset 1 survives to here.
+        let origin =
+            drawsText
+            ? ScrollWindowOrigin.absorbing(
+                offset: handler.scrollOffset, topClip: 0, firstRowHeight: 1
+            ).offset
+            : handler.scrollOffset
+        let aboveLines = (drawsText && origin > 0) ? 1 : 0
+        let remaining = data.count - origin
         let rowsWithoutBelow = min(remaining, max(1, contentHeight - aboveLines))
-        let belowShown = handler.scrollOffset + rowsWithoutBelow < data.count
+        let belowShown = origin + rowsWithoutBelow < data.count
         let visibleRowCount =
             belowShown && drawsText
             ? max(1, contentHeight - aboveLines - 1)
             : rowsWithoutBelow
         handler.viewportHeight = max(1, min(visibleRowCount, remaining))
-        // Uniform single-line rows: nothing to absorb, so the drawn origin is
-        // the offset. Published for the same reason the scrollbar path does.
-        handler.drawnOffset = handler.scrollOffset
+        // Published for the same reason the scrollbar path does — and the
+        // indicators and the row window below count from it.
+        handler.drawnOffset = origin
     }
 
     /// The interaction state of a table with no rows: a real handler (its
@@ -1849,8 +1863,10 @@ where Value.ID: Hashable {
         // …and only when they are this table's indicator at all: hidden ones
         // draw nothing, and the bar has its own compose path.
         let drawsText = handler.drawsScrollIndicators
+        let drawnAbove = handler.drawnOffset
+        let drawnBelow = max(0, handler.itemCount - handler.drawnVisibleRange.upperBound)
         let indicatorCycle =
-            drawsText && (handler.hasContentAbove || handler.hasContentBelow)
+            drawsText && (drawnAbove > 0 || drawnBelow > 0)
             ? scrollIndicatorCycle(isFocused: tableHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
         // The "N more" indicators are chrome — they describe where the content
@@ -1860,10 +1876,10 @@ where Value.ID: Hashable {
         /// The indicators' own runs, at the assembled lines they were appended
         /// to — the rows slide past them, so those positions are final.
         var chromeRuns: [AnimatedCellRun] = []
-        if drawsText, handler.hasContentAbove {
+        if drawsText, drawnAbove > 0 {
             let indicator = renderScrollIndicator(
                 direction: .up,
-                count: handler.rowsAbove,
+                count: drawnAbove,
                 unit: .rows,
                 width: contentWidth,
                 palette: palette,
@@ -1873,7 +1889,7 @@ where Value.ID: Hashable {
             if let run = indicator.animation { chromeRuns.append(run.shifted(byX: 0, y: 0)) }
             lines.append(indicator.text)
         }
-        let visibleRange = handler.visibleRange
+        let visibleRange = handler.drawnVisibleRange
         // A reorder drag takes the dragged row out and opens a slot where it
         // would land, so what is DRAWN is the order a drop would produce. The
         // sequence (and the arithmetic behind it) is the handler's, shared with
@@ -1942,10 +1958,10 @@ where Value.ID: Hashable {
             rowLines, blank: String(repeating: " ", count: max(0, contentWidth))))
         let runs = rowRuns(
             pulseRuns, slide: slide, topOffset: rowsTop, lineCount: rowsTop + rowLines.count)
-        if drawsText, handler.hasContentBelow {
+        if drawsText, drawnBelow > 0 {
             let indicator = renderScrollIndicator(
                 direction: .down,
-                count: handler.rowsBelow,
+                count: drawnBelow,
                 unit: .rows,
                 width: contentWidth,
                 palette: palette,

@@ -1256,6 +1256,18 @@ extension ItemListHandler {
         return start..<min(itemCount, start + max(0, viewportHeight))
     }
 
+    /// The rows on screen as DRAWN — from ``drawnOffset``, the origin after
+    /// the single-line absorb — where ``visibleRange`` reads the raw offset.
+    /// The doctrine is +Resting's: everything derived from the offset picks a
+    /// side, and *the indicators count from `drawnOffset`*; the two differ
+    /// only at offset 1 under text indicators, which survives to render
+    /// exactly while steering.
+    var drawnVisibleRange: Range<Int> {
+        guard itemCount > 0 else { return 0..<0 }
+        let start = max(0, min(drawnOffset, itemCount - 1))
+        return start..<min(itemCount, start + max(0, viewportHeight))
+    }
+
     /// The wheel/arrow step (``ScrollableOffsetState`` requirement). Under
     /// ``ScrollGranularity/line`` with multi-line rows, each step moves one
     /// terminal LINE: the top clip advances within the top row and rolls into

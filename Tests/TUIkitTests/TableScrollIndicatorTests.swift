@@ -49,14 +49,20 @@ struct TableScrollIndicatorTests {
     private func renderBuffer(
         tui: TUIContext, fm: FocusManager,
         twoLineRows: Bool = false,
+        singleLinePath: Bool = false,
         granularity: ScrollGranularity = .row,
         scrollbar: ScrollIndicatorVisibility = .hidden
     ) -> FrameBuffer {
         let rows = (0..<20).map(Note.init(id:))
+        // A line limit above 1 takes the MULTI-line layout path even for
+        // one-line values; `singleLinePath` leaves it off to reach the
+        // uniform single-line path, which windows rows its own way.
         let table = Table(rows, selection: .constant(Int?.none)) {
-            twoLineRows
-                ? TableColumn("Name", value: \Note.twoLine).lineLimit(2)
-                : TableColumn("Name", value: \Note.name).lineLimit(2)
+            singleLinePath
+                ? TableColumn("Name", value: \Note.name)
+                : twoLineRows
+                    ? TableColumn("Name", value: \Note.twoLine).lineLimit(2)
+                    : TableColumn("Name", value: \Note.name).lineLimit(2)
         }
         .frame(height: Self.height)
 
@@ -108,6 +114,34 @@ struct TableScrollIndicatorTests {
         // The cursor's row stays visible — absorbing the offset must not cost
         // the reveal its target.
         #expect(lines.contains { $0.contains("row 9") }, "cursor row scrolled off: \(lines)")
+    }
+
+    /// The single-line path, while STEERING — the one state where offset 1
+    /// survives to render, because the resting settle deliberately does not
+    /// snap it while an auto-scroll / reorder / external drag is in flight.
+    @Test("The single-line path absorbs offset 1 even while steering")
+    func singleLineAbsorbsWhileSteering() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        _ = renderBuffer(tui: tui, fm: fm, singleLinePath: true)
+        let handler = fm.currentFocused as? ItemListHandler<Int>
+        #expect(handler != nil, "the table registered its handler")
+        handler?.scrollOffset = 1
+        handler?.isAutoScrolling = true
+        tui.renderCache.clearAll()
+
+        tui.preferences.beginRenderPass()
+        tui.stateStorage.beginRenderPass()
+        tui.renderCache.beginRenderPass()
+        fm.beginRenderPass()
+        let lines = renderBuffer(tui: tui, fm: fm, singleLinePath: true).lines.map { $0.stripped }
+
+        #expect(
+            !lines.contains { $0.contains("more row above") },
+            "the indicator hid exactly the one row it stands for: \(lines)")
+        #expect(
+            lines.contains { $0.contains("row 0") },
+            "the shared absorb draws row 0 instead — as List and the multi-line path do: \(lines)")
     }
 
     /// The converse: an indicator that hides more than its own line is worth
