@@ -112,18 +112,41 @@ public struct SGRState: Sendable, Equatable {
                 background = [code]
             case 49:
                 background = nil
-            case 38, 48:
-                // Extended colour: `5;n` (256) or `2;r;g;b` (24-bit).
-                let span = extendedColourSpan(codes, from: index)
-                let parameters = Array(codes[index..<min(codes.count, index + span)])
-                if value == 38 { foreground = parameters } else { background = parameters }
-                index += span
+            case 38, 48, 58:
+                index += applyExtendedColour(value, codes, from: index)
                 continue
             default:
                 passthrough.append(code)
             }
             index += 1
         }
+    }
+
+    /// Folds one extended-colour sequence — `5;n` (256) or `2;r;g;b` (24-bit)
+    /// after a 38/48/58 introducer — and returns how many parameters it
+    /// consumed. 58 is the underline colour: not a colour this models, but
+    /// its arguments belong to IT and must not be re-parsed as top-level
+    /// codes — `58;5;4` read that way nets to blink + underline, two
+    /// attributes nobody set — so it rides passthrough as one atom.
+    ///
+    /// A truncated introducer — `38;5` with no index, `38;2` short of three
+    /// channels — is dropped rather than stored: parameter lists are joined
+    /// back to back on re-emission, so a stored fragment would consume
+    /// whatever code came next (a following `41` becoming the "missing"
+    /// palette index, and the background vanishing). What the terminal did
+    /// with the malformed original is undefined; eating a neighbour is not.
+    private mutating func applyExtendedColour(
+        _ introducer: Int, _ codes: [String], from index: Int
+    ) -> Int {
+        let span = extendedColourSpan(codes, from: index)
+        let parameters = Array(codes[index..<min(codes.count, index + span)])
+        guard Self.isCompleteExtendedColour(parameters) else { return span }
+        switch introducer {
+        case 38: foreground = parameters
+        case 48: background = parameters
+        default: passthrough.append(parameters.joined(separator: ";"))
+        }
+        return span
     }
 
     /// How many parameters an extended-colour introducer consumes, including
@@ -134,6 +157,17 @@ public struct SGRState: Sendable, Equatable {
         case "5": return min(3, codes.count - index)
         case "2": return min(5, codes.count - index)
         default: return 1
+        }
+    }
+
+    /// Whether an extended-colour parameter list is whole: introducer, form,
+    /// and every channel the form promises.
+    private static func isCompleteExtendedColour(_ parameters: [String]) -> Bool {
+        guard parameters.count >= 2 else { return false }
+        switch parameters[1] {
+        case "5": return parameters.count == 3
+        case "2": return parameters.count == 5
+        default: return false
         }
     }
 
