@@ -26,17 +26,33 @@ struct SGRCollapsingTests {
     /// `SGRState`'s netting, and checking it against itself would grade
     /// nothing.
     private func statesAlongTheLine(_ line: String) -> [String] {
+        // Walked at the SCALAR level, as a terminal's own parser does: an
+        // escape's final byte can fuse with a following combining scalar into
+        // one Character, and a Character-level walk would hand the model a
+        // "sequence" with the mark inside it — grading the implementation
+        // against its own mistake.
         var state = ReferenceStyle()
         var states: [String] = []
-        var index = line.startIndex
-        while index < line.endIndex {
-            if line[index] == "\u{1B}", let end = escapeEnd(line, from: index) {
-                state.apply(String(line[index..<end]))
-                index = end
-                continue
+        let scalars = Array(line.unicodeScalars)
+        var index = 0
+        while index < scalars.count {
+            if scalars[index] == "\u{1B}", index + 1 < scalars.count, scalars[index + 1] == "[" {
+                var end = index + 2
+                while end < scalars.count, !scalars[end].properties.isAlphabetic { end += 1 }
+                if end < scalars.count {
+                    state.apply(String(String.UnicodeScalarView(scalars[index...end])))
+                    index = end + 1
+                    continue
+                }
             }
-            states.append(state.appearance(of: line[index]))
-            index = line.index(after: index)
+            // Zero-width scalars have no cell of their own — they modify the
+            // previous glyph, whose cell was already graded — so their
+            // position relative to invisible styling is not part of the
+            // contract. Their PRESENCE is, asserted separately.
+            if Character(scalars[index]).terminalWidth > 0 {
+                states.append(state.appearance(of: Character(scalars[index])))
+            }
+            index += 1
         }
         // The state a row ENDS in is load-bearing whatever the last cell shows:
         // it is what the next thing drawn inherits.
@@ -44,18 +60,6 @@ struct SGRCollapsingTests {
             "<end>|\(state.attributes.sorted())|\(state.foreground ?? [])"
                 + "|\(state.background ?? [])|\(state.passthrough)")
         return states
-    }
-
-    private func escapeEnd(_ line: String, from start: String.Index) -> String.Index? {
-        var index = line.index(after: start)
-        guard index < line.endIndex, line[index] == "[" else { return nil }
-        index = line.index(after: index)
-        while index < line.endIndex {
-            let character = line[index]
-            index = line.index(after: index)
-            if character.isLetter { return index }
-        }
-        return nil
     }
 
     private func check(_ line: String, expectSaving: Bool = true) {
@@ -68,6 +72,19 @@ struct SGRCollapsingTests {
                 collapsed.count < line.count,
                 "no saving: \(collapsed.count) vs \(line.count) — \(collapsed.debugDescription)")
         }
+    }
+
+    @Test("An SGR whose terminator fused with a combining scalar still nets")
+    func fusedTerminatorStaysSGR() {
+        // Swift fuses `m` + U+0301 into one Character, so a Character-level
+        // scan returns a "sequence" that no longer ends in m and takes the
+        // barrier branch: emitted verbatim, never applied to the model. The
+        // state diverges silently, and a later escape that nets to what the
+        // model BELIEVES is on the wire reconciles to nothing — a dropped
+        // reset. The mark itself must also survive as content.
+        let line = "\(esc)[0m\(esc)[48;5;16ma\(esc)[0m\(esc)[38;5;196m\u{0301}x\(esc)[0mb"
+        check(line, expectSaving: false)
+        #expect(line.collapsingAdjacentSGR().unicodeScalars.contains("\u{0301}"))
     }
 
     @Test("The shape the diff writer actually emits: reset, then re-establish")

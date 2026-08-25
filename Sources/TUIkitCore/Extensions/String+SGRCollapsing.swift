@@ -132,7 +132,28 @@ extension String {
         var index = startIndex
         while index < endIndex {
             if self[index] == "\u{1B}", let end = escapeEnd(from: index) {
-                let sequence = String(self[index..<end])
+                var sequence = String(self[index..<end])
+                // The escape's final byte can FUSE with following zero-width
+                // scalars (a combining mark, a variation selector) into one
+                // Character, leaving a "sequence" that no longer ends in its
+                // own terminator: it would take the barrier branch below,
+                // never reach the model, and the state would diverge silently
+                // — a later escape netting to what the model believes is on
+                // the wire then reconciles to nothing, dropping a reset. Peel
+                // the fused scalars back off: they are CONTENT, binding to
+                // the previous glyph wherever they sit relative to styling.
+                var fusedContent = ""
+                if let last = sequence.last, last.unicodeScalars.count > 1,
+                    last.unicodeScalars.first?.properties.isAlphabetic == true
+                {
+                    let scalars = last.unicodeScalars
+                    fusedContent = String(String.UnicodeScalarView(scalars.dropFirst()))
+                    sequence = String(sequence.dropLast())
+                        + String(String.UnicodeScalarView(scalars.prefix(1)))
+                }
+                defer {
+                    if !fusedContent.isEmpty { result += fusedContent }
+                }
                 if sequence.hasSuffix("m") {
                     if sawReset {
                         desired.apply(sequence)
@@ -201,7 +222,11 @@ extension String {
         while index < endIndex {
             let character = self[index]
             index = self.index(after: index)
-            if character.isLetter { return index }
+            // The FIRST scalar, not the Character: the terminator can fuse
+            // with a following combining scalar into a cluster (`m` + U+0301
+            // is one Character, "ḿ") whose letter-ness is an accident of the
+            // mark. The caller peels the fused scalars back off the sequence.
+            if character.unicodeScalars.first?.properties.isAlphabetic == true { return index }
         }
         return nil
     }
