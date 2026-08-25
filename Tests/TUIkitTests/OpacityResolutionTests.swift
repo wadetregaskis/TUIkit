@@ -199,6 +199,50 @@ struct OpacityResolutionTests {
         #expect(!resolved.lines[0].contains(codes(.rgb(0, 255, 0).compositing(0.6, over: .rgb(255, 0, 0)))))
     }
 
+    @Test("A reversed cell passed through unchanged still displays swapped")
+    func aReversedPassThroughKeepsItsDisplay() {
+        // Two regions with a gap: the span runs across all of them, and the
+        // uncovered cells in the gap pass through re-emitted. Normalisation
+        // strips SGR 7 at parse — so the re-emitted style must carry the
+        // SWAPPED colours, or the cell displays its ink and field exchanged.
+        // Original: reverse + blue fg + red bg displays RED ink on BLUE field.
+        let reversed = "\u{1B}[7;38;2;0;0;255;48;2;255;0;0mABCDEF\u{1B}[0m"
+        var buffer = FrameBuffer(lines: [reversed])
+        buffer.opacityRegions = [
+            OpacityRegion(offsetX: 0, offsetY: 0, width: 2, height: 1, opacity: 0.5),
+            OpacityRegion(offsetX: 4, offsetY: 0, width: 2, height: 1, opacity: 0.5),
+        ]
+        let resolved = buffer.resolvingOpacity(
+            over: FrameBuffer(), surface: .black, palette: palette())
+
+        #expect(resolved.lines[0].stripped == "ABCDEF")
+        // The gap cells display red ink on a blue field, exactly as before.
+        #expect(resolved.lines[0].contains(codes(.rgb(255, 0, 0))))
+        #expect(resolved.lines[0].contains(backgroundCodes(.rgb(0, 0, 255))))
+        // And never the exchange: blue ink or a red field.
+        #expect(!resolved.lines[0].contains(codes(.rgb(0, 0, 255))))
+        #expect(!resolved.lines[0].contains(backgroundCodes(.rgb(255, 0, 0))))
+    }
+
+    @Test("A veil over reversed text keeps the ink the viewer saw")
+    func aVeilOverReversedTextKeepsItsInk() {
+        // Reversed destination: blue fg + red bg displays RED ink on BLUE
+        // field. A translucent pane below ½ keeps the glyph and tints only
+        // the field — the ink must stay red, not revert to the stored blue.
+        let reversed = "\u{1B}[7;38;2;0;0;255;48;2;255;0;0mhello\u{1B}[0m"
+        let destination = FrameBuffer(lines: [reversed])
+        let source = faded(
+            ANSIRenderer.colorize("     ", background: .rgb(0, 200, 0)), 0.25, width: 5)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        #expect(resolved.lines[0].stripped == "hello")
+        #expect(resolved.lines[0].contains(codes(.rgb(255, 0, 0))))
+        #expect(!resolved.lines[0].contains(codes(.rgb(0, 0, 255))))
+        let expected = Color.rgb(0, 200, 0).compositing(0.25, over: .rgb(0, 0, 255))
+        #expect(resolved.lines[0].contains(backgroundCodes(expected)))
+    }
+
     @Test("An underlined space has ink, and is something to reveal")
     func anUnderlinedBlankIsInk() {
         // Underline draws a pattern in the foreground colour with no glyph

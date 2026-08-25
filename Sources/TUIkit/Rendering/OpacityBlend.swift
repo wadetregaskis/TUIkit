@@ -320,9 +320,18 @@ extension FrameBuffer {
                 if state.reversesVideo {
                     var unreversed = state
                     unreversed.apply("\u{1B}[27m")
-                    cell.style = unreversed
                     cell.foreground = background ?? surface
                     cell.background = foreground ?? defaultForeground
+                    // The STYLE's colour parameters swap too, not only the
+                    // cell's fields: several blend outcomes re-emit the style
+                    // as it stands — an uncovered column passing through, the
+                    // zero-alpha reveal, a yielded contest that sets only the
+                    // background — and a style still holding the unswapped
+                    // lists would display the ink and field exchanged, with
+                    // the inversion that used to exchange them back stripped.
+                    cell.style = unreversed
+                        .settingForeground(cell.foreground)
+                        .settingBackground(cell.background)
                 }
                 result[column] = cell
                 column += max(1, character.terminalWidth)
