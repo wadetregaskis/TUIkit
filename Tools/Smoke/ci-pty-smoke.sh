@@ -33,7 +33,7 @@ VENV="${TMPDIR:-/tmp}/tuikit-smoke-venv"
 
 case "$DEPTH" in
     quick) EXAMPLE_ITEMS=12; STRESS_ITEMS=6 ;;
-    full)  EXAMPLE_ITEMS=34; STRESS_ITEMS=15 ;;
+    full)  EXAMPLE_ITEMS=35; STRESS_ITEMS=15 ;;
     *)     echo "usage: $0 [quick|full] [build-dir]" >&2; exit 2 ;;
 esac
 
