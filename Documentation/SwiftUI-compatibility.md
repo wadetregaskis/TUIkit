@@ -393,10 +393,15 @@ TUIkit re-renders the tree every frame and retains no view objects, so
 window**, not a deferred-creation machine:
 
 - **Standalone** (the stack itself is the clipping container), they are
-  genuinely lazy: whole children render top-down until the next would
-  overflow `availableHeight`, and children past the fold are *never
-  rendered* (so their `onAppear`/`task` correctly never fire). `VStack`
-  instead distributes and clips at the cell.
+  genuinely lazy: children render top-down until the next would overflow
+  `availableHeight`; the first child that does not fit whole renders
+  **clipped at the cell** — the same overflow picture as the eager
+  stacks — and children past it are *never rendered* (so their
+  `onAppear`/`task` correctly never fire; a child that would show zero
+  lines is not rendered either). A saturated stack measures as the
+  limit, exactly as `VStack`'s `min(total, proposal)` does — a
+  row-boundary measure used to end the natural-extent ladder early and
+  silently truncate scrollable content.
 - **Inside a `ScrollView`** (as the *direct* content), a `LazyVStack` now
   **windows to the visible viewport**: the ScrollView publishes its scroll
   slice and the stack renders only the rows intersecting it (into a
