@@ -93,46 +93,50 @@ public struct _ValueScopedTransactionView<Content: View, V: Equatable>: View {
 
 extension _ValueScopedTransactionView: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // A measure pass is a question, not an update — and there are several
-        // per frame, so comparing on one would consume the change before the
-        // render could see it. The transaction has no geometric effect, so
-        // measuring as a plain pass-through costs nothing. Same rule, and the
-        // same reason, as `OnChangeModifier`.
-        guard !context.isMeasuring, let storage = context.stateStorage else {
-            return TUIkit.renderToBuffer(content, context: context)
-        }
-        // The comparison is per-frame work a cached buffer cannot reproduce: a
-        // value-memoized subtree containing this would compare once and then
-        // never notice another change.
+        TUIkit.renderToBuffer(content, context: transformedContext(context) ?? context)
+    }
+
+    /// The context with the transform applied — on the frames `value` moved —
+    /// or `nil` when it did not.
+    ///
+    /// Applied on BOTH walks. "A transaction moves nothing" was this file's
+    /// original premise, and it is false: the transform can enable an
+    /// animation on an animatable geometry value (`.padding`, `.frame`), and
+    /// on the frame the value changes a measure that did not see the
+    /// animation measured the TARGET while the render drew the START — the
+    /// subtree was laid out for a frame that was not on screen.
+    ///
+    /// The change question is answered by ``AnimationStore/triggerChanged``,
+    /// which records on render passes only — so every measure of a frame
+    /// reaches the same answer its render will, no matter how many run, and
+    /// none of them consumes the change. That also retires the positional
+    /// `nextOnChangeIndex` slot this used to claim, which the measure walk
+    /// could never share (claim order does not hold there). Distinctness of
+    /// chained `.transaction(value:)`s now rides on the OWNER type instead:
+    /// each wraps the previous, so `Content` — and with it `Self` — differs
+    /// at every link of the chain.
+    private func transformedContext(_ context: RenderContext) -> RenderContext? {
+        guard let storage = context.stateStorage else { return nil }
+        // The comparison is per-frame work a cached buffer OR a cached size
+        // cannot reproduce: a memoized subtree containing this would compare
+        // once and then never notice another change.
         context.environment.volatileReadTracker?.recordRenderSideEffect()
-
-        // A unique slot per modifier at this identity, claimed POSITIONALLY —
-        // the same counter `onChange` uses, and needed for the same reason. A
-        // `Renderable` adds no child identity, so two `.transaction(value:)`s
-        // on one view render under the SAME `context.identity`; a fixed
-        // property index would put both on one slot, and each would read the
-        // other's previous value. Two independent values then fired each
-        // other's transform, which is what the two-value case caught.
-        let key = StateStorage.StateKey(
-            identity: context.identity,
-            propertyIndex: storage.nextOnChangeIndex(for: context.identity))
-        let previous: V? = storage.trackedValue(for: key)
-        storage.setTrackedValue(value, for: key)
-        // Manual tracked values are pruned unless the identity is marked.
-        storage.markActive(context.identity)
-
-        guard let previous, previous != value else {
-            return TUIkit.renderToBuffer(content, context: context)
-        }
+        let key = AnimationStore.Key(
+            identity: context.identity, owner: ObjectIdentifier(Self.self))
+        guard
+            storage.animations.triggerChanged(
+                value, for: key, isMeasuring: context.isMeasuring)
+        else { return nil }
         var child = context
         transform(&child.environment.transaction)
-        return TUIkit.renderToBuffer(content, context: child)
+        return child
     }
 }
 
 extension _ValueScopedTransactionView: Layoutable {
-    /// Measures as its content: a transaction moves nothing.
+    /// Measures as its content — under the same transaction the render will
+    /// use, so animatable geometry is measured where it is drawn.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureChild(content, proposal: proposal, context: context)
+        measureChild(content, proposal: proposal, context: transformedContext(context) ?? context)
     }
 }

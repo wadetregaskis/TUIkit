@@ -193,6 +193,24 @@ struct TransactionTests {
             _ = renderToBuffer(view, context: context)
             tui.stateStorage.endRenderPass()
         }
+
+        /// One frame the way the run loop performs it — measure first, then
+        /// render, under one shared context — reporting each walk's height.
+        func measureAndRender(
+            _ view: some View, nowNanos: Int64
+        ) -> (measured: Int, rendered: Int) {
+            var env = EnvironmentValues()
+            env.applyRuntimeServices(from: tui)
+            env.animationFrame = AnimationFrame(nowNanos: nowNanos, canAnimate: true)
+            let context = RenderContext(
+                availableWidth: 20, availableHeight: 10, environment: env, tuiContext: tui)
+            tui.stateStorage.beginRenderPass()
+            let size = measureChild(
+                view, proposal: ProposedSize(width: 20, height: 10), context: context)
+            let buffer = renderToBuffer(view, context: context)
+            tui.stateStorage.endRenderPass()
+            return (size.height, buffer.lines.count)
+        }
     }
 
     @Test("transaction(value:) applies only on the frame its value moved")
@@ -261,6 +279,34 @@ struct TransactionTests {
         frames.render(view())
         #expect(seen.last?.animation == .easeIn)
         #expect(seen.last?.disablesAnimations == false, "…and vice versa: \(seen)")
+    }
+
+    @Test("Animatable geometry is measured where it is drawn on the change frame")
+    func measureMatchesRenderOnTheChangeFrame() {
+        // The transform enables an animation on an animatable geometry value.
+        // On the frame both values move, the measure walk and the render walk
+        // must see the SAME transaction: a measure that missed the transform
+        // measured the target height while the render drew the start.
+        let frames = Frames()
+        var pad = 0
+        var trigger = 0
+
+        func view() -> some View {
+            Text("X")
+                .padding(pad)
+                .transaction(value: trigger) { $0.animation = .linear(duration: 60) }
+        }
+
+        _ = frames.measureAndRender(view(), nowNanos: 0)
+
+        pad = 2
+        trigger = 1
+        let frame2 = frames.measureAndRender(view(), nowNanos: 1_000_000)
+        #expect(
+            frame2.measured == frame2.rendered,
+            "measured \(frame2.measured) rows but drew \(frame2.rendered)")
+        // And specifically at the START of the glide, not the target.
+        #expect(frame2.rendered == 1, "\(frame2)")
     }
 
     @Test("A subtree can be opted out of an ambient animation")
