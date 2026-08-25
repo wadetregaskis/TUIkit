@@ -179,14 +179,61 @@ enum TextRunAttribution {
                     cursor.run += 1
                     cursor.offset = 0
                 }
+            } else if !character.isWhitespace,
+                let resynced = Self.scanAhead(for: character, in: runTexts, from: cursor)
+            {
+                // The source between the cursor and here was DROPPED by a
+                // truncation: an over-wide word cut mid-line leaves the
+                // cursor inside it, and a .head/.middle cut drops a span the
+                // whitespace-only skip above cannot cross — after which every
+                // later character mismatched forever and the rest of the text
+                // wore whichever run was current at the desync. Jumping to
+                // the next occurrence is a nearest-match heuristic; for
+                // repeated characters it can bind a step early, which costs a
+                // fragment boundary a character, not the resync. Whitespace
+                // never triggers it: an inserted alignment space must not eat
+                // real source hunting for a space to match.
+                cursor = resynced
+                if cursor.run != currentRun {
+                    flush()
+                    currentRun = cursor.run
+                }
+                current.append(character)
+                cursor.offset += 1
+                if cursor.offset == runTexts[cursor.run].count {
+                    cursor.run += 1
+                    cursor.offset = 0
+                }
             } else {
-                // Not in the source at this position either: an inserted
-                // ellipsis, or alignment padding. Keep it with the run in hand
-                // rather than dropping it.
+                // Not in the source at all: an inserted ellipsis, or
+                // alignment padding. Keep it with the run in hand rather
+                // than dropping it.
                 current.append(character)
             }
         }
         flush()
         return result
+    }
+
+    /// The next occurrence of `character` at or after `cursor`, across run
+    /// boundaries, or `nil` when the remaining source never contains it.
+    private static func scanAhead(
+        for character: Character, in runTexts: [String],
+        from cursor: (run: Int, offset: Int)
+    ) -> (run: Int, offset: Int)? {
+        var run = cursor.run
+        var offset = cursor.offset
+        while run < runTexts.count {
+            let text = runTexts[run]
+            var index = text.index(text.startIndex, offsetBy: offset)
+            while index < text.endIndex {
+                if text[index] == character { return (run, offset) }
+                offset += 1
+                index = text.index(after: index)
+            }
+            run += 1
+            offset = 0
+        }
+        return nil
     }
 }

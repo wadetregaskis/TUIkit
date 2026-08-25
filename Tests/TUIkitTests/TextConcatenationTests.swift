@@ -293,3 +293,37 @@ struct TextConcatenationTests {
         #expect(parts.allSatisfy { $0.run == 0 })
     }
 }
+
+/// Resync past DROPPED source: a truncation leaves the attribution cursor
+/// inside the cut span, and without a forward scan every later character
+/// mismatched forever — the rest of the text wore whichever run was current
+/// at the desync.
+@MainActor
+@Suite("Run attribution resyncs past truncation")
+struct RunAttributionResyncTests {
+
+    @Test("An over-wide word cut mid-line does not poison the next line")
+    func tailCutResyncs() {
+        // Line 1 truncates inside "supercalifragilistic"; line 2 must still
+        // attribute "OK" to the bold run, not the red one.
+        let runs = ["supercalifragilistic done ", "OK"]
+        var cursor = (run: 0, offset: 0)
+        _ = TextRunAttribution.fragments(of: "supercali…", runTexts: runs, cursor: &cursor)
+        let second = TextRunAttribution.fragments(of: "done OK", runTexts: runs, cursor: &cursor)
+        #expect(second.count == 2, "\(second)")
+        #expect(second.last?.text == "OK")
+        #expect(second.last?.run == 1, "OK wore run \(second.last?.run ?? -1)")
+    }
+
+    @Test("A head truncation lands the tail in the right run")
+    func headCutResyncs() {
+        // "…" + the tail of run 1: the ellipsis is chrome (kept with the run
+        // in hand); the tail's characters belong to run 1.
+        let runs = ["path/to/some/", "filename.txt"]
+        var cursor = (run: 0, offset: 0)
+        let fragments = TextRunAttribution.fragments(
+            of: "…name.txt", runTexts: runs, cursor: &cursor)
+        #expect(fragments.last?.run == 1, "\(fragments)")
+        #expect(fragments.last?.text.hasSuffix("name.txt") == true, "\(fragments)")
+    }
+}
