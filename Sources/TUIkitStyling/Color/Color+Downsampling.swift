@@ -336,13 +336,9 @@ extension Color {
     /// not paired with ``hueWeightedDistanceSquared``, which is load-bearing for
     /// palette derivation and must not acquire callers outside this file.
     package static func oklab(red: UInt8, green: UInt8, blue: UInt8) -> (l: Double, a: Double, b: Double) {
-        func linear(_ value: UInt8) -> Double {
-            let c = Double(value) / 255.0
-            return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
-        }
-        let linearRed = linear(red)
-        let linearGreen = linear(green)
-        let linearBlue = linear(blue)
+        let linearRed = linearChannel(red)
+        let linearGreen = linearChannel(green)
+        let linearBlue = linearChannel(blue)
         let long = cbrt(
             0.4122214708 * linearRed + 0.5363325363 * linearGreen + 0.0514459929 * linearBlue)
         let medium = cbrt(

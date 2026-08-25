@@ -21,11 +21,8 @@ extension Color {
     /// colours without concrete RGB components (e.g. unresolved semantics).
     public var relativeLuminance: Double? {
         guard let (red, green, blue) = rgbComponents else { return nil }
-        func channel(_ value: UInt8) -> Double {
-            let c = Double(value) / 255.0
-            return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
-        }
-        return 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue)
+        return 0.2126 * Self.linearChannel(red) + 0.7152 * Self.linearChannel(green)
+            + 0.0722 * Self.linearChannel(blue)
     }
 
     /// The CIE **L\*** lightness of this colour (0...100), or `nil` for colours
