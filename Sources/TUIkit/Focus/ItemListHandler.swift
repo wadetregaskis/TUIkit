@@ -404,6 +404,10 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// ``ItemListHandler/beginKeyboardMove()``) rather than by a drag.
     var isKeyboardMove = false
 
+    /// The row the last left release landed on — the identity half of the
+    /// multi-click question. See ``completesMultiClick(on:clickCount:)``.
+    var lastClickedRow: Int?
+
     /// Whether a dragged row can actually be floated at the pointer — there has
     /// to be a drag-and-drop session to draw it above the frame. Captured at
     /// render; see ``effectiveReorderFeedback``.

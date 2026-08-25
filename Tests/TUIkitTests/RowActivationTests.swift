@@ -206,6 +206,44 @@ struct RowActivationTests {
         }
     }
 
+    @Test("Two quick clicks on ADJACENT rows open nothing")
+    func adjacentRowClicksDoNotOpen() {
+        // The dispatcher's multi-click proximity is one cell — a jitter
+        // allowance — and rows are one cell tall, so a click on row A
+        // followed quickly by row B arrived stamped clickCount 2: row B
+        // opened from two clicks that each landed once.
+        var opened: [String] = []
+        let context = makeRenderContext(width: 28, height: 10) { environment, tui in
+            environment.mouseEventDispatcher = tui.mouseEventDispatcher
+            environment.focusManager = FocusManager()
+        }
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(["Folder-A", "Folder-B"], id: \.self) { Text($0) }
+        }
+        .onRowActivate { opened.append($0) }
+        .frame(height: 8)
+
+        let buffer = renderToBuffer(view, context: context)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setRegions(buffer.hitTestRegions)
+        guard let rowA = buffer.lines.firstIndex(where: { $0.stripped.contains("Folder-A") })
+        else {
+            Issue.record("row not found")
+            return
+        }
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: rowA))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: rowA))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: rowA + 1))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: rowA + 1))
+        #expect(opened.isEmpty, "adjacent single clicks opened a row: \(opened)")
+
+        // A real double on the second row still opens it.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: rowA + 1))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: rowA + 1))
+        #expect(opened == ["Folder-B"], "\(opened)")
+    }
+
     /// The `Table` twin of ``listBurstOpensOncePerPair()``. Both had the bug,
     /// in their own copy of the release path.
     @Test("A burst of clicks opens once per pair — Table")

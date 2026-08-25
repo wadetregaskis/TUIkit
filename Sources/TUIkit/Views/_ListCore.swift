@@ -2108,7 +2108,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         // A double-click fires the row's activation ("open"); a
                         // single click selects with macOS semantics (plain =
                         // sole selection, shift = range, ctrl/option = toggle).
-                        if event.clickCount >= 2, let action = capturedPrimaryAction {
+                        if captureHandler.completesMultiClick(
+                            on: hit.rowIndex, clickCount: event.clickCount),
+                            let action = capturedPrimaryAction
+                        {
                             captureHandler.focusedIndex = hit.rowIndex
                             // This gesture is spent: the next press begins a
                             // new count, so a second double-click opens once

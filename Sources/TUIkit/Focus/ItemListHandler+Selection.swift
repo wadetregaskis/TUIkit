@@ -135,6 +135,19 @@ extension ItemListHandler {
     ///
     /// Single-selection mode keeps its existing click-to-toggle behaviour;
     /// the keyboard path (Space toggles at the focus cursor) is unchanged.
+    /// Whether a release stamped `clickCount` on `row` completes a
+    /// multi-click ON THAT ROW.
+    ///
+    /// The dispatcher counts by proximity — within one cell, a jitter
+    /// allowance for cell-quantised coordinates — and rows are one cell
+    /// tall, so two quick clicks on ADJACENT rows arrived stamped 1 and 2:
+    /// the second row opened from two clicks that each landed once. The row
+    /// identity lives here, where rows exist, shared by both twins.
+    func completesMultiClick(on row: Int, clickCount: Int) -> Bool {
+        defer { lastClickedRow = row }
+        return clickCount >= 2 && lastClickedRow == row
+    }
+
     func handleClickSelection(at index: Int, event: MouseEvent) {
         defer { anchorOnSelection(at: index) }
         focusedIndex = index

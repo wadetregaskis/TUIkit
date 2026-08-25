@@ -2708,7 +2708,8 @@ where Value.ID: Hashable {
                     // a single click selects with macOS semantics (plain =
                     // sole selection, shift = range, ctrl/option = toggle) —
                     // see ItemListHandler.handleClickSelection.
-                    if event.clickCount >= 2, let action = capturedPrimaryAction,
+                    if captureHandler.completesMultiClick(on: index, clickCount: event.clickCount),
+                        let action = capturedPrimaryAction,
                         index >= 0, index < rowIDs.count
                     {
                         captureHandler.focusedIndex = index
