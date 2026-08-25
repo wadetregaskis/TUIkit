@@ -506,6 +506,21 @@ extension AppRunner {
         signals.expectSelfResume()
         kill(getpid(), SIGSTOP)
         // ── stopped; `fg` resumes here ──
+        //
+        // So does `bg`, and a BACKGROUND process must not touch the terminal:
+        // the escapes below would garble the shell's prompt, and grabbing raw
+        // mode would steal the foreground shell's keystrokes. Re-stop until
+        // the shell actually hands the terminal over (`fg` makes this group
+        // the foreground group) — which is also what the kernel's SIGTTOU
+        // default would do to a background job touching the tty, so `bg`
+        // behaves the way it does for any full-screen program: the job
+        // reports stopped again, and finishes its resume when foregrounded.
+        // The `>= 0` guards a failed query (not a tty): never loop on an
+        // answer that cannot change.
+        while tcgetpgrp(STDIN_FILENO) >= 0, tcgetpgrp(STDIN_FILENO) != getpgrp() {
+            signals.expectSelfResume()
+            kill(getpid(), SIGSTOP)
+        }
         terminal.enterAlternateScreen()
         terminal.hideCursor()
         terminal.enableRawMode()
