@@ -219,13 +219,19 @@ struct OpacityTests {
     @Test("The threshold applies to the PRODUCT, not to each fade")
     func nestingCrossesTheThresholdOnce() {
         let context = makeRenderContext(width: 24, height: 2)
-        // Half of a half is a quarter, which is below the threshold — so
-        // nothing is drawn, even though neither fade alone would have hidden
-        // anything. Applying the threshold per layer would draw this at full
-        // character strength, faded twice.
+        // Half of a half is a quarter, which is below the threshold — so the
+        // contested cells show the text BEHIND, even though neither fade alone
+        // would have yielded them. Applying the threshold per layer would draw
+        // the front text at full character strength, faded twice. (The contest
+        // is what makes this observable: over a blank cell there is no
+        // threshold to cross, and the glyph would simply fade.)
         let faded = renderToScreen(
-            Text("hi").foregroundStyle(.red).opacity(0.5).opacity(0.5), context: context)
-        #expect(faded.lines[0].stripped.trimmingCharacters(in: .whitespaces).isEmpty)
+            ZStack {
+                Text("no").foregroundStyle(.green)
+                Text("hi").foregroundStyle(.red).opacity(0.5).opacity(0.5)
+            },
+            context: context)
+        #expect(faded.lines[0].stripped.trimmingCharacters(in: .whitespaces) == "no")
     }
 
     @Test("Every rendered run names its own colour and ends reset")

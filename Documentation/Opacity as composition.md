@@ -514,3 +514,11 @@ The rules, updated as each lands:
    instead of fading smoothly to nothing. (The panel-pop was the visible
    artefact of the first implementation: the ½ guard sat above the space rule
    and gated colours it had no business deciding.)
+
+2. **The threshold applies only where two glyphs genuinely contest the cell.**
+   Over a blank destination cell the source's character draws at any alpha,
+   fading continuously toward what is behind it — there was never anything to
+   reveal underneath, so gating it on ½ made text over a plain panel vanish at
+   the midpoint of a fade for no one's benefit. The ½ decision now fires only
+   where the destination has a character of its own, which is the case §6a's
+   argument was actually about.

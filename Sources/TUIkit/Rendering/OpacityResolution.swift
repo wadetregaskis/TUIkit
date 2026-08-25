@@ -11,12 +11,15 @@
 //  the reasoning behind picking it, is in `Documentation/Opacity as
 //  composition.md` §6a; in short:
 //
-//  * **below ½ the source's glyph is not drawn** — the destination keeps its
-//    character — and at 0 the source contributes nothing at all, so
-//    `opacity(0)` genuinely reveals what is behind it rather than painting a
-//    near-black smudge over it, which is what the render-time fade does today;
-//  * **at or above ½ the source's character is drawn**, with its foreground AND
-//    background blended toward the background colour of what is behind it;
+//  * **the ½ threshold decides a glyph CONTEST, and only applies where there
+//    is one**: over a blank destination cell the source's character draws at
+//    any alpha, fading continuously toward what is behind it; where the
+//    destination has a character of its own, at or above ½ the source's
+//    character is drawn and below ½ the destination keeps its own. At 0 the
+//    source contributes nothing at all, so `opacity(0)` genuinely reveals what
+//    is behind it rather than painting a near-black smudge over it;
+//  * **a drawn source character blends both channels** — foreground AND
+//    background — toward the background colour of what is behind it;
 //  * **a source SPACE is not a glyph**: it composites its background — at
 //    EVERY alpha, because colours blend at any strength and only glyphs need
 //    the threshold — and keeps the destination's character. Without this,
@@ -345,10 +348,17 @@ extension FrameBuffer {
             kept.style = kept.style.settingBackground(fadedBackground)
             return kept
         }
-        // Below the threshold the source's glyph is not drawn. The destination
-        // keeps its character, its colours and its attributes.
-        guard alpha >= 0.5 else {
-            return destination ?? RowCell(character: " ", style: SGRState())
+        // The threshold decides a CONTEST — two glyphs wanting one cell — and
+        // only applies where there is one. Where the destination is blank, the
+        // source's character draws at any alpha, fading toward what is behind
+        // it and reaching invisibility at 0 with nothing to pop: gating it on ½
+        // made text over a plain panel vanish at the midpoint of a fade when
+        // there was never anything to reveal underneath it.
+        //
+        // Where the destination DOES have a character, below ½ the source's
+        // glyph is not drawn and the destination keeps its own.
+        if alpha < 0.5, let destination, destination.character != " " {
+            return destination
         }
         let fadedBackground = source.background.map { $0.opacity(alpha, over: behind) }
         var result = source

@@ -173,10 +173,28 @@ struct OpacityResolutionTests {
         let resolved = source.resolvingOpacity(
             over: FrameBuffer(), surface: .black, palette: palette())
 
-        // The first two cells fall below the threshold and are not drawn; the
-        // rest draw at 0.75.
-        #expect(resolved.lines[0].stripped == "  llo")
+        // Nothing contests these cells, so every character draws — the first
+        // two at the inner product, the rest at the outer alpha alone.
+        #expect(resolved.lines[0].stripped == "hello")
+        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).opacity(0.25, over: .black))))
         #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).opacity(0.75, over: .black))))
+    }
+
+    @Test("Over a blank cell there is no contest, and text fades all the way out")
+    func noContestMeansNoThreshold() {
+        // The destination paints a background but no character: nothing to
+        // reveal, so the source's glyph draws at ANY alpha rather than
+        // vanishing at the midpoint of a fade.
+        let destination = FrameBuffer(lines: [
+            ANSIRenderer.colorize("     ", background: .rgb(255, 0, 0))
+        ])
+        let source = faded(ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)), 0.2, width: 5)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        #expect(resolved.lines[0].stripped == "hello")
+        let expected = Color.rgb(0, 255, 0).opacity(0.2, over: .rgb(255, 0, 0))
+        #expect(resolved.lines[0].contains(codes(expected)))
     }
 
     @Test("Bold survives the blend")
