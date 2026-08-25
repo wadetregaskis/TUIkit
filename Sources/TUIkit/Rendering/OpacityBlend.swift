@@ -314,6 +314,24 @@ extension FrameBuffer {
                 }
             case .visible(let character):
                 guard column < width else { return result }
+                if character.terminalWidth == 0 {
+                    // A zero-width scalar — a combining mark separated from
+                    // its base by an escape. It has no cell of its own; it
+                    // belongs to the nearest preceding character, and granting
+                    // it a column displaced every colour decision after it one
+                    // cell to the right of the real row. (At the row's very
+                    // start there is no base, and nothing to attach to.)
+                    var owner = column - 1
+                    while owner >= 0, result[owner] == nil { owner -= 1 }
+                    if owner >= 0, var cell = result[owner] {
+                        let combined = String(cell.character) + String(character)
+                        if combined.count == 1, let merged = combined.first {
+                            cell.character = merged
+                            result[owner] = cell
+                        }
+                    }
+                    continue
+                }
                 var cell = RowCell(
                     character: character, style: state,
                     foreground: foreground, background: background)

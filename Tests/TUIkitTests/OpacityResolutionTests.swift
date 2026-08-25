@@ -463,6 +463,43 @@ struct OpacityResolutionTests {
         #expect(resolved.lines[0].strippedLength == 6)
     }
 
+    @Test("A zero-width scalar occupies no column of the cell model")
+    func zeroWidthScalarsClaimNoColumn() {
+        // A combining mark separated from its base by an escape is its own
+        // segment. Giving it a column of the model displaced every COLOUR
+        // decision after it one cell to the right of the real row — the
+        // glyphs still came out in order, which is what let this hide.
+        let green = "\u{1B}[38;2;0;255;0m"
+        let source = green + "a" + green + "\u{0301}bc"  // displays á b c: 3 columns
+        // Three distinct fields, so each column's blend target is its own.
+        let destination = FrameBuffer(lines: [
+            ANSIRenderer.colorize(" ", background: .rgb(9, 9, 9))
+                + ANSIRenderer.colorize(" ", background: .rgb(200, 0, 0))
+                + ANSIRenderer.colorize(" ", background: .rgb(0, 0, 200))
+        ])
+
+        var buffer = FrameBuffer(lines: [source])
+        buffer.opacityRegions = [
+            OpacityRegion(offsetX: 0, offsetY: 0, width: 3, height: 1, opacity: 0.8)
+        ]
+        let drawn = buffer.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        #expect(drawn.lines[0].strippedLength == 3)
+        // The mark survives, attached to its base.
+        #expect(drawn.lines[0].unicodeScalars.contains("\u{0301}"))
+        // b fades toward ITS field (red, column 1) and c toward its own
+        // (blue, column 2) — not each toward its neighbour's.
+        let sourceColor = Color.rgb(0, 255, 0)
+        #expect(drawn.lines[0].contains(codes(sourceColor.compositing(0.8, over: .rgb(200, 0, 0)))))
+        #expect(drawn.lines[0].contains(codes(sourceColor.compositing(0.8, over: .rgb(0, 0, 200)))))
+        // And the first column blended toward its own field too — all three
+        // cells inside the region were faded. (The source's full-strength
+        // green may still appear once, in the splice's restored trailing
+        // state after the last cell, where it styles nothing.)
+        #expect(drawn.lines[0].contains(codes(sourceColor.compositing(0.8, over: .rgb(9, 9, 9)))))
+    }
+
     @Test("Aligned wide characters reveal whole")
     func alignedWideRevealIsWhole() {
         // Wide over wide: the source's continuation columns were already
