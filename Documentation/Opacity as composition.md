@@ -441,9 +441,28 @@ found by it.
    turn "Breathe" on — 512 B/s at 0.2–0.3% CPU before, **480 B/s at 0.2–0.3%
    after**, against 214 B/s for the same page with the fade off. So the
    never-ending fade still costs no render passes.
-5. **Outstanding**: the Example demo page with a slider and stacked layers,
-   the stress scenario, the A/B, and `Color`-level alpha (`.clear` and the
-   three `opacity:` initialisers — §8).
+5. ~~**Restore the fast path**, the Example demo, the stress scenario, the
+   A/B.~~ **Done.** The demo is the Example's Opacity page (`o`); the scenario
+   is `translucent`, a large faded panel over a destination that redraws every
+   frame, which is §6's named worst case and which nothing else measured.
+
+   The A/B, `ab_bench.py` against the commit before the switch-over, both
+   binaries carrying the same scenario:
+
+   | | old µs | new µs | change | 95% CI | verdict |
+   |---|---|---|---|---|---|
+   | `translucent` | 684.1 | 680.5 | +0.0% | −2.5% … +0.9% | indistinguishable |
+
+   And the seventeen-scenario default sweep, to catch a cost paid by trees that
+   do not use opacity at all: every one indistinguishable, `dashboard` (−1.3%)
+   and `kitchensink` (−0.4%) marginally faster. So the payload costs nothing
+   where it is absent, and the blend costs nothing measurable where it is
+   present.
+
+6. **Outstanding**: `Color`-level alpha — `.clear` and the three `opacity:`
+   initialisers (§8). See `Parity-decisions-pending.md` §1–2: the region is a
+   claim about a whole CELL, a colour's alpha is a claim about one CHANNEL, and
+   nothing knows which cells a colour painted.
 
 ### 9.6 What the implementation added to the design
 
@@ -463,3 +482,15 @@ found by it.
   before any layer is drawn over it. Left pending, a region would go on naming
   cells a layer had since replaced, and the LAYER's cells would be faded at
   the root.
+- **A baked run covers the whole ROW, not the region's columns.** That is what
+  makes the frame the loop splices byte-identical to the line the render drew
+  rather than merely equivalent to it — a narrower frame would be a SLICE of
+  the line, and a slice re-establishes SGR state at its start, so the bytes
+  part company even where the cells do not. The cost is that a narrow fade on a
+  wide page bakes page-width rows: for the Example's breathing text, ~30
+  columns on a 120-column page, four times the strings the old render-time bake
+  built. Measured as immaterial (unchanged CPU, 480 vs 512 B/s), so it stands.
+  If it ever matters, the fix is in `AnimatedBufferCycle`, not here: trim the
+  common prefix and suffix across a row's frames and re-state the style at the
+  trimmed start, which would narrow every cycle producer's runs and not just
+  this one.

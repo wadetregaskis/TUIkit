@@ -63,6 +63,7 @@ enum Scenarios {
         FramedColumnsScenario.descriptor,
         ChurnUpdateScenario.descriptor,
         AnimatingScenario.descriptor,
+        TranslucentScenario.descriptor,
         KitchenSinkScenario.descriptor,
     ]
 

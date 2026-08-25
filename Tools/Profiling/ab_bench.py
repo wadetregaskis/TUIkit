@@ -46,6 +46,10 @@ import statistics
 import subprocess
 import sys
 
+# The default sweep. Not every scenario: `animating` and `translucent` are both
+# driven by the harness's frame counter, so a fixed-iteration run measures a
+# different mix of in-flight work each time — ask for them by name, where the
+# question is about animation or compositing rather than about layout.
 SCENARIOS = [
     "megalist", "scrollfollow", "table", "table-multiline", "tables-scroll",
     "tables-vstack", "deep", "fanout", "modifiers", "textwall", "anyview",
