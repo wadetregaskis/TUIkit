@@ -184,3 +184,82 @@ struct RegionClippingTests {
             "the clipped edge must be recorded, not forgotten")
     }
 }
+
+/// Hover across a tree reshape: handler ids are per-frame numbers, so the
+/// dispatcher re-resolves the resting cursor against each frame's regions by
+/// the region's own identity, exiting what left and entering what arrived.
+@MainActor
+@Suite("Hover survives a reshape")
+struct HoverReshapeTests {
+
+    @Test("The hovered control keeps its hover when ids shift under it")
+    func hoverSurvivesIDShift() {
+        let dispatcher = MouseEventDispatcher()
+        dispatcher.setActiveSupport(.full)
+        var events: [MousePhase] = []
+
+        func frame(withExtraSiblingFirst extra: Bool) {
+            dispatcher.beginRenderPass()
+            if extra {
+                _ = dispatcher.register { _ in false }  // shifts every later id
+            }
+            let id = dispatcher.register { event in
+                events.append(event.phase)
+                return true
+            }
+            var regions: [HitTestRegion] = []
+            if extra {
+                regions.append(
+                    HitTestRegion(offsetX: 0, offsetY: 5, width: 4, height: 1,
+                                  handlerID: HitTestRegion.HandlerID(0)))
+            }
+            regions.append(
+                HitTestRegion(offsetX: 2, offsetY: 0, width: 6, height: 2, handlerID: id))
+            dispatcher.setRegions(regions)
+        }
+
+        frame(withExtraSiblingFirst: false)
+        _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 3, y: 1))
+        #expect(events == [.entered], "\(events)")
+
+        // Next frame: an extra sibling registers first, shifting the ids.
+        // The same rectangle is the same control — no exit, no re-enter.
+        events = []
+        frame(withExtraSiblingFirst: true)
+        #expect(events.isEmpty, "a reshape must not flicker an unchanged hover: \(events)")
+
+        // Motion inside it still routes to the RIGHT handler after the shift.
+        _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 4, y: 1))
+        #expect(events == [.moved], "\(events)")
+    }
+
+    @Test("A control that leaves the resting cursor is exited; the newcomer entered")
+    func reshapeMovesHover() {
+        let dispatcher = MouseEventDispatcher()
+        dispatcher.setActiveSupport(.full)
+        var aEvents: [MousePhase] = []
+        var bEvents: [MousePhase] = []
+
+        dispatcher.beginRenderPass()
+        let aID = dispatcher.register { aEvents.append($0.phase); return true }
+        dispatcher.setRegions([
+            HitTestRegion(
+                offsetX: 0, offsetY: 0, width: 6, height: 1, handlerID: aID, focusID: "a")
+        ])
+        _ = dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 2, y: 0))
+        #expect(aEvents == [.entered])
+
+        // Next frame the tree reshapes: A moved away, B sits under the cursor.
+        aEvents = []
+        dispatcher.beginRenderPass()
+        let bID = dispatcher.register { bEvents.append($0.phase); return true }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 3, width: 6, height: 1,
+                          handlerID: HitTestRegion.HandlerID(99), focusID: "a"),
+            HitTestRegion(
+                offsetX: 0, offsetY: 0, width: 6, height: 1, handlerID: bID, focusID: "b"),
+        ])
+        #expect(aEvents == [.exited], "the control that left must be exited: \(aEvents)")
+        #expect(bEvents == [.entered], "the newcomer under the cursor lights up: \(bEvents)")
+    }
+}

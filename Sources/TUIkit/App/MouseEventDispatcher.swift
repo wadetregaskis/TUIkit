@@ -114,6 +114,22 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// the common case.
     private var lastHoveredHandlerID: HitTestRegion.HandlerID?
 
+    /// The hovered REGION itself, kept beside the id: handler ids are
+    /// per-frame numbers, so identifying "the same control" across a render
+    /// needs the region's own identity — its focusID when it has one, its
+    /// rectangle otherwise. See ``reconcileHoverAfterReshape()``.
+    private var lastHoveredRegion: HitTestRegion?
+
+    /// Where the cursor last reported motion, so a reshaped tree can be
+    /// re-resolved against a RESTING cursor.
+    private var lastMotionPosition: (x: Int, y: Int)?
+
+    /// The hovered control's closure, retained across the handler-table
+    /// rebuild: if the reshape puts a different control under the resting
+    /// cursor, `.exited` must still reach the control that was left — by
+    /// then its numeric id belongs to someone else, or to no one.
+    private var pendingHoverExit: (region: HitTestRegion, handler: (MouseEvent) -> Bool)?
+
     /// Per-frame feature requests posted by view modifiers that
     /// genuinely need a higher mouse-tracking level than the base
     /// configuration provides (e.g. an ``.onHover`` modifier asks
@@ -208,6 +224,13 @@ extension MouseEventDispatcher {
     /// cleared here — captures span multiple frames, ended only by the
     /// matching `.released`.
     func beginRenderPass() {
+        // Retain the hovered control's closure before the table dies — see
+        // `pendingHoverExit`.
+        if let id = lastHoveredHandlerID, let handler = handlers[id],
+            let region = lastHoveredRegion
+        {
+            pendingHoverExit = (region, handler)
+        }
         handlers.removeAll(keepingCapacity: true)
         regions.removeAll(keepingCapacity: true)
         nextHandlerID = 0
@@ -315,6 +338,73 @@ extension MouseEventDispatcher {
     /// SwiftUI / AppKit view tree.
     func setRegions(_ regions: [HitTestRegion]) {
         self.regions = regions
+        reconcileHoverAfterReshape()
+    }
+
+    /// Re-resolves the hover after the tree reshapes under a resting cursor.
+    ///
+    /// Handler ids are reassigned from zero every frame, but
+    /// `lastHoveredHandlerID` survived — so after any shape change the region
+    /// now under the stationary cursor commonly INHERITED the old number:
+    /// the same-region branch of `dispatchMotion` then synthesised nothing,
+    /// stranding hover on a control the cursor left (its box stuck lit) and
+    /// never lighting the one that arrived. The id is remapped here by the
+    /// region's own identity — focusID when it has one, rectangle otherwise —
+    /// and when a genuinely different control (or none) sits under the
+    /// cursor, `.exited` goes to the RETAINED closure of the one that was
+    /// left and `.entered` to the newcomer.
+    private func reconcileHoverAfterReshape() {
+        guard let position = lastMotionPosition,
+            lastHoveredRegion != nil || pendingHoverExit != nil
+        else {
+            pendingHoverExit = nil
+            return
+        }
+        let current = matchingRegions(at: position.x, y: position.y).first
+        let previous = pendingHoverExit?.region ?? lastHoveredRegion
+        if let current, isSameControl(previous, current) {
+            lastHoveredHandlerID = current.handlerID
+            lastHoveredRegion = current
+            pendingHoverExit = nil
+            return
+        }
+        if let pending = pendingHoverExit {
+            let exit = MouseEvent(
+                button: .none, phase: .exited,
+                x: position.x - pending.region.localOriginX,
+                y: position.y - pending.region.localOriginY)
+            _ = pending.handler(exit)
+        } else if let oldID = lastHoveredHandlerID, let oldHandler = handlers[oldID],
+            let oldRegion = lastHoveredRegion
+        {
+            // Regions replaced within one frame (no beginRenderPass between):
+            // the old handler is still registered, and the trailing exit is
+            // its due — this is the documented same-frame window.
+            let exit = MouseEvent(
+                button: .none, phase: .exited,
+                x: position.x - oldRegion.localOriginX,
+                y: position.y - oldRegion.localOriginY)
+            _ = oldHandler(exit)
+        }
+        if let current, let handler = handlers[current.handlerID] {
+            let enter = MouseEvent(
+                button: .none, phase: .entered,
+                x: position.x - current.localOriginX,
+                y: position.y - current.localOriginY)
+            _ = handler(enter)
+        }
+        lastHoveredHandlerID = current?.handlerID
+        lastHoveredRegion = current
+        pendingHoverExit = nil
+    }
+
+    /// Whether two regions are the same CONTROL across a reshape: their
+    /// focusIDs when both have one, their rectangles otherwise.
+    private func isSameControl(_ a: HitTestRegion?, _ b: HitTestRegion) -> Bool {
+        guard let a else { return false }
+        if let fa = a.focusID, let fb = b.focusID { return fa == fb }
+        return a.offsetX == b.offsetX && a.offsetY == b.offsetY
+            && a.width == b.width && a.height == b.height
     }
 
     /// Registers a new handler and returns the id `.onMouseEvent`
@@ -785,12 +875,16 @@ extension MouseEventDispatcher {
     private func dispatchMotion(_ event: MouseEvent) -> Bool {
         let currentRegion = matchingRegions(at: event.x, y: event.y).first
         let currentID = currentRegion?.handlerID
+        // Real motion supersedes any reshape bookkeeping.
+        lastMotionPosition = (event.x, event.y)
+        pendingHoverExit = nil
 
         // Still inside the same region: some controls are not one target but
         // many — a scrollbar's arrows and thumb share one region, and the cell
         // under the pointer is what lifts — so the move is offered to the
         // handler, which answers whether it changed anything.
         if currentID == lastHoveredHandlerID {
+            lastHoveredRegion = currentRegion
             guard let currentID, let handler = handlers[currentID], let region = currentRegion
             else { return false }
             let moved = MouseEvent(
@@ -834,6 +928,7 @@ extension MouseEventDispatcher {
         }
 
         lastHoveredHandlerID = currentID
+        lastHoveredRegion = currentRegion
         return fired
     }
 
