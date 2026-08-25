@@ -118,3 +118,69 @@ struct DispatchSmallPrintTests {
         #expect(phases.isEmpty, "an uncaptured drag reached a handler: \(phases)")
     }
 }
+
+/// Regions describe in-flow cells, so every final clip trims them: the clamp
+/// at a container boundary and the scroll viewport's columns. A region kept
+/// for cells that were clipped away is a phantom click target sitting
+/// wherever later content lands.
+@MainActor
+@Suite("Regions are clipped with their cells")
+struct RegionClippingTests {
+
+    private func region(x: Int, y: Int, w: Int, h: Int) -> HitTestRegion {
+        HitTestRegion(
+            offsetX: x, offsetY: y, width: w, height: h,
+            handlerID: HitTestRegion.HandlerID(UInt64(x * 100 + y)))
+    }
+
+    @Test("clamped trims regions to the box and drops the clipped-away")
+    func clampedTrimsRegions() {
+        var buffer = FrameBuffer(lines: ["0123456789", "0123456789", "0123456789"])
+        buffer.hitTestRegions = [
+            region(x: 0, y: 0, w: 4, h: 1),  // wholly inside
+            region(x: 8, y: 0, w: 4, h: 1),  // straddles the right edge
+            region(x: 0, y: 2, w: 4, h: 1),  // on a clipped-away row
+        ]
+        let clamped = buffer.clamped(toWidth: 9, height: 2)
+
+        #expect(clamped.hitTestRegions.count == 2, "\(clamped.hitTestRegions)")
+        #expect(clamped.hitTestRegions[0].width == 4)
+        #expect(clamped.hitTestRegions[1].offsetX == 8)
+        #expect(clamped.hitTestRegions[1].width == 1, "trimmed to the box, not kept whole")
+    }
+
+    @Test("A horizontally scrolled region is clipped to the viewport's columns")
+    func horizontalWindowClipsRegions() {
+        var cache: RenderCache?
+        let context = makeRenderContext(width: 8, height: 4) { environment, tui in
+            environment.mouseEventDispatcher = tui.mouseEventDispatcher
+            environment.focusManager = FocusManager()
+            cache = tui.renderCache
+        }
+        let view = ScrollView([.horizontal]) {
+            HStack(spacing: 0) {
+                Button("aaaa") {}
+                Button("bbbb") {}
+                Button("cccc") {}
+            }
+        }
+        _ = renderToBuffer(view, context: context)
+        let handler = context.environment.focusManager?.activeSection?.focusables
+            .compactMap { $0 as? ScrollViewHandler }.first
+        #expect(handler != nil)
+        handler?.horizontal.scrollOffset = 5
+        cache?.clearAll()
+        let buffer = renderToBuffer(view, context: context)
+
+        for region in buffer.hitTestRegions {
+            #expect(region.offsetX >= 0, "phantom columns left of the viewport: \(region)")
+            #expect(
+                region.offsetX + region.width <= 8,
+                "phantom columns past the viewport: \(region)")
+        }
+        // The straddler keeps its true origin for local coordinates.
+        #expect(
+            buffer.hitTestRegions.contains { $0.leftClip > 0 },
+            "the clipped edge must be recorded, not forgotten")
+    }
+}

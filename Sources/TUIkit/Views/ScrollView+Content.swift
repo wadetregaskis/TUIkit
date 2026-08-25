@@ -223,10 +223,20 @@ extension _ScrollViewCore {
             guard bottomY > viewportTop, topY < viewportBottom else { return nil }
             let clippedTop = max(topY, viewportTop)
             let clippedBottom = min(bottomY, viewportBottom)
+            // The X axis clips like the Y axis: a region scrolled part-way
+            // off the left kept its full width at a negative offsetX, and
+            // one straddling the right kept columns past the viewport —
+            // phantom cells that, innermost-first, won clicks meant for
+            // whatever actually sat there (the vertical scrollbar included).
+            let leftX = region.offsetX + dx
+            let rightX = leftX + region.width
+            guard rightX > 0, leftX < viewportWidth else { return nil }
+            let clippedLeft = max(0, leftX)
+            let clippedRight = min(viewportWidth, rightX)
             var clipped = HitTestRegion(
-                offsetX: region.offsetX + dx,
+                offsetX: clippedLeft,
                 offsetY: clippedTop - scrollOffset,
-                width: region.width,
+                width: clippedRight - clippedLeft,
                 height: clippedBottom - clippedTop,
                 handlerID: region.handlerID,
                 // MUST be carried: reveal-on-focus finds its target by
@@ -245,6 +255,7 @@ extension _ScrollViewCore {
             // scroll offset — the poof puff drawn that far up the screen.
             // Accumulated, so nesting composes.
             clipped.topClip = region.topClip + (clippedTop - topY)
+            clipped.leftClip = region.leftClip + (clippedLeft - leftX)
             clipped.revealOutsetTop = region.revealOutsetTop
             clipped.revealOutsetBottom = region.revealOutsetBottom
             return clipped

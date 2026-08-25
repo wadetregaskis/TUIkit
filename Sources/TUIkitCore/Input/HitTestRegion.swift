@@ -92,6 +92,14 @@ public struct HitTestRegion: Sendable, Equatable {
     /// drawn at them landed that far up the screen.
     public var topClip: Int = 0
 
+    /// Columns clipped off this region's left edge by an ancestor's viewport —
+    /// a horizontal `ScrollView` the region has been scrolled left inside of.
+    /// The X half of ``topClip``, with the same one-field-cannot-be-both
+    /// reasoning: ``offsetX`` stays the clipped left edge, this records how
+    /// far left of it the region really starts, and ``localOriginX`` is what
+    /// turns an absolute column into a region-local one.
+    public var leftClip: Int = 0
+
     /// The absolute screen row this region's local coordinate space starts at:
     /// its (possibly clipped) top, moved back up past whatever an ancestor
     /// viewport cut away.
@@ -108,6 +116,10 @@ public struct HitTestRegion: Sendable, Equatable {
     /// a Table on a scrolled page reported clicks one row too high per clipped
     /// row, so a click on row 20 selected row 15.
     public var localOriginY: Int { offsetY - topClip }
+
+    /// The absolute screen column this region's local coordinate space starts
+    /// at. See ``localOriginY`` — same distinction, other axis.
+    public var localOriginX: Int { offsetX - leftClip }
 
     /// Creates a hit-test region.
     public init(

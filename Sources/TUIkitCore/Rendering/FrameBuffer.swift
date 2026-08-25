@@ -891,12 +891,29 @@ extension FrameBuffer {
             resultWidth = max(resultWidth, clippedLines[index].strippedLength)
         }
         var result = FrameBuffer(lines: clippedLines, width: resultWidth)
-        // Overlay layers and hit-test regions are free-floating and
-        // composited separately at the root — clamping the in-flow
-        // content must never discard them.
+        // Overlay layers are free-floating and composited separately at the
+        // root — clamping the in-flow content must never discard them. The
+        // old comment claimed the same for hit regions, but theirs describe
+        // IN-FLOW cells: a clamp at a container boundary is final, and a
+        // region kept for rows or columns that were clipped away is a
+        // phantom click target sitting wherever later siblings land. Trimmed
+        // to the box, dropped when nothing remains.
         result.overlays = overlays
         result.opacityRegions = opacityRegions
-        result.hitTestRegions = hitTestRegions
+        result.hitTestRegions = hitTestRegions.compactMap { region -> HitTestRegion? in
+            let width = min(region.offsetX + region.width, maxWidth) - max(0, region.offsetX)
+            let height = min(region.offsetY + region.height, maxHeight) - max(0, region.offsetY)
+            guard width > 0, height > 0 else { return nil }
+            var trimmed = HitTestRegion(
+                offsetX: region.offsetX, offsetY: region.offsetY,
+                width: width, height: height,
+                handlerID: region.handlerID, focusID: region.focusID)
+            trimmed.revealOutsetTop = region.revealOutsetTop
+            trimmed.revealOutsetBottom = region.revealOutsetBottom
+            trimmed.topClip = region.topClip
+            trimmed.leftClip = region.leftClip
+            return trimmed
+        }
         // Runs describe CELLS, so unlike the free-floating layers above they are
         // dropped when their cells are clipped away — otherwise a run scrolled
         // out of a viewport would keep repainting over whatever took its place.

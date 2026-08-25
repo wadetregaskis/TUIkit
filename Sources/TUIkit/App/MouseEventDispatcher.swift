@@ -564,7 +564,7 @@ extension MouseEventDispatcher {
         for region in matching {
             guard let handler = handlers[region.handlerID] else { continue }
             let localized = localize(
-                event, byOffsetX: region.offsetX, offsetY: region.localOriginY)
+                event, byOffsetX: region.localOriginX, offsetY: region.localOriginY)
             gestureHandedOff = false
             let consumed = handler(localized)
             if consumed {
@@ -579,7 +579,7 @@ extension MouseEventDispatcher {
                     } else {
                         pressedHandlers[event.button] = PressCapture(
                             handler: handler,
-                            regionOffsetX: region.offsetX,
+                            regionOffsetX: region.localOriginX,
                             regionOffsetY: region.localOriginY
                         )
                     }
@@ -720,7 +720,7 @@ extension MouseEventDispatcher {
             func synthesised(_ phase: MousePhase) -> MouseEvent {
                 MouseEvent(
                     button: event.button, phase: phase,
-                    x: x - region.offsetX, y: y - region.localOriginY,
+                    x: x - region.localOriginX, y: y - region.localOriginY,
                     shift: event.shift, ctrl: event.ctrl, meta: event.meta,
                     clickCount: event.clickCount)
             }
@@ -736,7 +736,7 @@ extension MouseEventDispatcher {
     /// translate an absolute drop point into its local space.
     func regionOffset(for id: HitTestRegion.HandlerID) -> (x: Int, y: Int)? {
         guard let region = regions.first(where: { $0.handlerID == id }) else { return nil }
-        return (region.offsetX, region.localOriginY)
+        return (region.localOriginX, region.localOriginY)
     }
 
     /// The full absolute rectangle of the region registered with `id`, or `nil`
@@ -795,7 +795,7 @@ extension MouseEventDispatcher {
             else { return false }
             let moved = MouseEvent(
                 button: .none, phase: .moved,
-                x: event.x - region.offsetX, y: event.y - region.localOriginY,
+                x: event.x - region.localOriginX, y: event.y - region.localOriginY,
                 shift: event.shift, ctrl: event.ctrl, meta: event.meta
             )
             return handler(moved)
@@ -826,7 +826,7 @@ extension MouseEventDispatcher {
         if let newID = currentID, let newHandler = handlers[newID], let region = currentRegion {
             let enter = MouseEvent(
                 button: .none, phase: .entered,
-                x: event.x - region.offsetX, y: event.y - region.localOriginY,
+                x: event.x - region.localOriginX, y: event.y - region.localOriginY,
                 shift: event.shift, ctrl: event.ctrl, meta: event.meta
             )
             _ = newHandler(enter)
