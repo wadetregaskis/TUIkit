@@ -77,9 +77,15 @@ struct ScrollContentWindow: Sendable, Hashable {
     /// are on the canvas but not on the screen. Reporting one as "the row you
     /// are looking at" would name a row nobody can see — which is exactly the
     /// row a `.top` seek deliberately steps past.
-    func sampleY(at unit: UnitPoint) -> Int {
+    ///
+    /// Each indicator is charged only when it actually SHOWS: the top one
+    /// when scrolled down, the bottom one when the caller says content
+    /// remains below. At the very bottom the last viewport line is readable
+    /// content — charging it anyway sampled one row too high, so a
+    /// bottom-anchored `.scrollPosition` never reported the final row.
+    func sampleY(at unit: UnitPoint, contentBelow: Bool) -> Int {
         let topPad = (edgeInset > 0 && offset > 0) ? 1 : 0
-        let bottomPad = edgeInset > 0 ? 1 : 0
+        let bottomPad = (edgeInset > 0 && contentBelow) ? 1 : 0
         let usable = max(1, viewportHeight - topPad - bottomPad)
         return offset + topPad + Int((Double(usable - 1) * unit.y).rounded(.down))
     }

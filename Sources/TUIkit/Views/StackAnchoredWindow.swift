@@ -508,7 +508,10 @@ extension _VStackCore {
         var memo: [String: Int] = [:]
         // Content-space y of the line whose row is reported back, and the row
         // found there (see ``ScrollContentWindow/reportsIDAt``).
-        let sampleY = window.sampleY(at: window.reportsIDAt ?? .top)
+        let sampleY = window.sampleY(
+            at: window.reportsIDAt ?? .top,
+            contentBelow: lastPlaced < frame.children.count - 1
+                || bottomY > window.offset + window.viewportHeight)
         var sampledOrdinal: Int?
         for (ordinal, y) in sorted {
             let rowHeight =

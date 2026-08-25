@@ -212,6 +212,34 @@ struct ScrollPositionTests {
         #expect((reported(anchor: .bottom) ?? 0) > 0)
     }
 
+    @Test("At the very bottom the LAST row is reported, not the one above it")
+    func bottomOfContentReportsTheFinalRow() {
+        // With text indicators the viewport's last line is an indicator only
+        // while content remains below. At the tail it is readable content —
+        // the sample must not step past the final row on account of an
+        // indicator that is not there.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        var position = ScrollPosition()
+        let binding = Binding(get: { position }, set: { position = $0 })
+        let view = ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(0..<Self.rowCount, id: \.self) { Text("row \($0)") }
+            }
+        }
+        .scrollPosition(binding, anchor: .bottom)
+        .scrollIndicatorStyle(.text)
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        position.scrollTo(edge: .bottom)
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        let landed = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(
+            landed.contains { $0.contains("row \(Self.rowCount - 1)") },
+            "precondition: the final row is on screen: \(landed)")
+        #expect(position.viewID(type: Int.self) == Self.rowCount - 1)
+    }
+
     // MARK: - The id: binding
 
     @Test("scrollPosition(id:) writes the id back")
