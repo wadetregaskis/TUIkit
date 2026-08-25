@@ -180,6 +180,12 @@ struct LocalizedStringKeyTests {
         #expect(LocalizedStringKey.substituting(["a"], into: "%@%@") == "a")
         // A trailing lone percent is emitted, not dropped.
         #expect(LocalizedStringKey.substituting(["a"], into: "%@ 100%") == "a 100%")
+        // A WIDTH pads the value and, crucially, still consumes its argument:
+        // the old scan rewound onto the digits, emitted %3d verbatim, and
+        // delivered the first argument to the SECOND placeholder.
+        #expect(LocalizedStringKey.substituting(["2", "10"], into: "Zeile %3d von %d") == "Zeile   2 von 10")
+        #expect(LocalizedStringKey.substituting(["ab"], into: "[%-4d]") == "[ab  ]")
+        #expect(LocalizedStringKey.substituting(["3.14"], into: "%.2f rad") == "3.14 rad")
     }
 
     // MARK: - Value semantics

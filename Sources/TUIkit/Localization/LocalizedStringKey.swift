@@ -175,18 +175,41 @@ public struct LocalizedStringKey: Equatable, Hashable, Sendable {
             // An explicit position: `%2$@` takes the second argument, which is
             // how a translation reorders them.
             var position: Int?
+            // A `-` before the digits is printf's left-align flag; with a
+            // width it changes which side the padding lands on.
+            var leftAligned = false
+            if cursor < template.endIndex, template[cursor] == "-" {
+                leftAligned = true
+                cursor = template.index(after: cursor)
+            }
             var digits = ""
             while cursor < template.endIndex, template[cursor].isNumber {
                 digits.append(template[cursor])
                 cursor = template.index(after: cursor)
             }
-            if !digits.isEmpty, cursor < template.endIndex, template[cursor] == "$" {
+            var width: Int?
+            if !digits.isEmpty, cursor < template.endIndex, template[cursor] == "$",
+                !leftAligned
+            {
                 position = Int(digits)
                 cursor = template.index(after: cursor)
             } else if !digits.isEmpty {
-                // Digits that were not a position are a width — `%3d`. Rewind
-                // and let the conversion scan see them.
-                cursor = template.index(index, offsetBy: 1)
+                // Digits that were not a position are a WIDTH — `%3d`. The
+                // cursor already sits past them; remember the width rather
+                // than rewinding onto digits the conversion scan cannot cross
+                // — which emitted `%3d` verbatim AND left the implicit
+                // argument cursor unadvanced, shifting every later argument
+                // into the wrong placeholder.
+                width = Int(digits)
+            }
+            // A precision (`%.2f`): parsed past so the conversion is still
+            // recognised; the argument arrives pre-formatted, so it is not
+            // applied.
+            if cursor < template.endIndex, template[cursor] == "." {
+                cursor = template.index(after: cursor)
+                while cursor < template.endIndex, template[cursor].isNumber {
+                    cursor = template.index(after: cursor)
+                }
             }
             // Length modifiers a translator may carry over from a C format.
             while cursor < template.endIndex, Self.isLengthModifier(template[cursor]) {
@@ -201,7 +224,12 @@ public struct LocalizedStringKey: Equatable, Hashable, Sendable {
             }
             let argumentIndex = position.map { $0 - 1 } ?? next
             if argumentIndex >= 0, argumentIndex < arguments.count {
-                result += arguments[argumentIndex]
+                var value = arguments[argumentIndex]
+                if let width, value.count < width {
+                    let pad = String(repeating: " ", count: width - value.count)
+                    value = leftAligned ? value + pad : pad + value
+                }
+                result += value
             }
             // A positional reference does not advance the implicit cursor —
             // that is what lets a translation use %1$@ twice.
