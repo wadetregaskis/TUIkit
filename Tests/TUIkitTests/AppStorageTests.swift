@@ -187,6 +187,30 @@ struct JSONFileStorageTests {
         #expect(profile == Profile(name: "x", age: 1, tags: ["t"]))
     }
 
+    @Test("Two instances on one file keep each other's keys")
+    func siblingInstancesMerge() {
+        // The flush used to rewrite the whole file from a cache loaded once
+        // at startup, so two instances of one app — two terminal tabs —
+        // silently clobbered each other: the second to write anything erased
+        // everything the first had saved since launch. A flush now merges
+        // only this instance's own dirty keys over what is on disk.
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tuikit-appstorage-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let first = JSONFileStorage(fileURL: url)
+        let second = JSONFileStorage(fileURL: url)  // loaded before first writes
+
+        first.setValue("from-first", forKey: "alpha")
+        first.synchronize()
+        second.setValue("from-second", forKey: "beta")
+        second.synchronize()
+
+        let reader = JSONFileStorage(fileURL: url)
+        #expect(reader.value(forKey: "alpha") == "from-first", "the sibling's key was clobbered")
+        #expect(reader.value(forKey: "beta") == "from-second")
+    }
+
     @Test("Concurrent writes race no reader: the flush snapshots under the lock")
     func concurrentWritesAreSafe() {
         // The old implementation's detached save iterated `cache` with NO

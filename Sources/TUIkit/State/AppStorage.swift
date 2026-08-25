@@ -108,6 +108,17 @@ public final class JSONFileStorage: StorageBackend, @unchecked Sendable {
     /// In-memory cache of stored values.
     private var cache: [String: Data] = [:]
 
+    /// The keys THIS instance has written or removed, guarded by `lock`.
+    ///
+    /// A flush merges these — and only these — over what is currently on
+    /// disk. Snapshotting the whole cache instead rewrote the entire file
+    /// from a copy loaded once at startup, so two instances of one app (two
+    /// terminal tabs) silently clobbered each other's saved settings: the
+    /// second to write anything erased everything the first had saved since
+    /// launch. Merging per key narrows a lost update to a key both actually
+    /// contested.
+    private var dirtyKeys: Set<String> = []
+
     /// Lock for thread safety. Guards `cache` and `savePending` — and nothing
     /// slow: disk writes snapshot under the lock and write outside it.
     private let lock = NSLock()
@@ -181,6 +192,7 @@ extension JSONFileStorage {
         do {
             let data = try JSONEncoder().encode(value)
             cache[key] = data
+            dirtyKeys.insert(key)
             saveToDiskAsync()
         } catch {
             StorageDiagnostics.report(
@@ -193,6 +205,7 @@ extension JSONFileStorage {
         defer { lock.unlock() }
 
         cache.removeValue(forKey: key)
+        dirtyKeys.insert(key)
         saveToDiskAsync()
     }
 
@@ -250,12 +263,22 @@ extension JSONFileStorage {
         lock.lock()
         savePending = false
         let snapshot = cache
+        let dirty = dirtyKeys
         lock.unlock()
 
-        // Convert Data values to base64 strings for JSON compatibility
+        // Start from what is on disk NOW — another instance may have written
+        // since this one loaded — and overlay only this instance's own
+        // changes. See `dirtyKeys`. A fresh read each flush rather than a
+        // kept file handle: flushes are rare (bursts coalesce), and the read
+        // is what makes a sibling's keys survive.
         var serializable: [String: String] = [:]
-        for (key, data) in snapshot {
-            serializable[key] = data.base64EncodedString()
+        if let data = try? Data(contentsOf: fileURL),
+            let onDisk = try? JSONSerialization.jsonObject(with: data) as? [String: String]
+        {
+            serializable = onDisk
+        }
+        for key in dirty {
+            serializable[key] = snapshot[key]?.base64EncodedString()
         }
 
         do {
