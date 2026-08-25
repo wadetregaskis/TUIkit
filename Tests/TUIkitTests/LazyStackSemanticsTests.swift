@@ -17,8 +17,15 @@ import Testing
 @MainActor
 @Suite("Lazy stack semantics vs SwiftUI")
 struct LazyStackSemanticsTests {
-    @Test("Overflow policy: VStack clips mid-child, LazyVStack stops at a child boundary")
+    @Test("Overflow policy: both stack kinds clip the last child at the cell")
     func overflowPolicies() {
+        // The lazy stack used to stop at the last WHOLE child instead, and its
+        // measure reported that row boundary — which read as a chosen natural
+        // size and ended measureNaturalExtent's ladder on its first rung,
+        // silently truncating scrollable content at ~the starting budget.
+        // Saturated content now reports and fills the limit in both kinds;
+        // laziness is about deferring off-limit children, not a different
+        // overflow picture.
         let tall = { (label: String) in
             VStack(spacing: 0) { Text("\(label)1"); Text("\(label)2"); Text("\(label)3") }
         }
@@ -30,10 +37,9 @@ struct LazyStackSemanticsTests {
         #expect(eager.height == 5, "eager clips at the cell: \(eager.lines.map(\.stripped))")
         #expect(eager.lines.last?.stripped.contains("b2") == true, "second child partially visible")
 
-        // Lazy: the second whole child would overflow, so the window ends at
-        // the first child's boundary.
         let lazy = renderToBuffer(LazyVStack(spacing: 0) { tall("a"); tall("b") }, context: context)
-        #expect(lazy.height == 3, "lazy stops at the child boundary: \(lazy.lines.map(\.stripped))")
+        #expect(lazy.height == 5, "lazy fills the limit too: \(lazy.lines.map(\.stripped))")
+        #expect(lazy.lines.last?.stripped.contains("b2") == true, "second child partially visible")
     }
 
     @Test("In a scroll-content context the full extent materialises (exact, not estimated)")

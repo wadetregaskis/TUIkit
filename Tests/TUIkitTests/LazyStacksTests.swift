@@ -494,9 +494,12 @@ struct LazyStackLazinessTests {
             stack, proposal: ProposedSize(width: 20, height: nil), context: context)
         #expect(log.renderCalls == 0, "measuring drew \(log.renderCalls) probes")
         #expect(log.measureCalls > 0, "…while genuinely measuring them")
-        // Append-while-fits: 8 + 1+8 = 17 fits, the third column (+1+8 = 26)
-        // does not — the width ends on a child boundary, as the render does.
-        #expect(size.width == 17, "windowed width: \(size.width)")
+        // Append-while-fits saturates: 8 + 1+8 = 17 fits, the third column
+        // (+1+8 = 26) does not — the stack reports the LIMIT (a boundary
+        // report a few cells under it read as a chosen size and ended the
+        // natural-extent ladder), and the render fills it with the third
+        // column clipped at the cell.
+        #expect(size.width == 20, "windowed width: \(size.width)")
         #expect(size.height == 1)
 
         // And the analytic measure agrees with the real render, truncated

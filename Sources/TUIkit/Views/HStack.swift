@@ -239,7 +239,17 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         var height = 1
         for (index, size) in sizes.enumerated() {
             let next = width + (index > 0 ? spacing : 0) + size.width
-            if next > widthLimit { break }
+            if next > widthLimit {
+                // Saturated: content extends past the limit. Report the LIMIT
+                // — see the identical break in _VStackCore.windowSizeThatFits:
+                // a column-boundary report a few cells under the budget ended
+                // measureNaturalExtent's ladder on its first rung, truncating
+                // horizontally-scrollable content at ~the starting budget.
+                // The partially-shown column's height still counts.
+                width = widthLimit
+                height = max(height, size.height)
+                break
+            }
             width = next
             height = max(height, size.height)
         }
@@ -399,7 +409,32 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 // see renderWindow in VStack.swift: rendering-to-check fired
                 // the first overflowing child's lifecycle every frame.
                 let measured = child.measure(proposal: .unspecified, context: context)
-                if currentWidth + spacingToApply + measured.width > availableWidth { break }
+                if currentWidth + spacingToApply + measured.width > availableWidth {
+                    // Saturated: the column does not fit whole. Render what
+                    // shows, clipped at the cell, so the row fills the limit
+                    // the measure reports — see the identical break in
+                    // VStack's renderWindow.
+                    let remaining = availableWidth - currentWidth - spacingToApply
+                    if remaining > 0 {
+                        let buffer = child.render(
+                            width: measured.width, height: context.availableHeight,
+                            context: context)
+                        let clipped = buffer.clamped(toWidth: remaining, height: buffer.height)
+                        maxHeight = max(maxHeight, clipped.height)
+                        collected.append((clipped, spacingToApply, child))
+                        currentWidth += spacingToApply + clipped.width
+                    } else if spacingToApply > 0 {
+                        // Only (part of) the spacing shows — account it,
+                        // render nothing. See the identical break in VStack.
+                        // As an explicit blank block: the assembler drops the
+                        // spacing of an EMPTY buffer.
+                        let spacingShown = min(spacingToApply, availableWidth - currentWidth)
+                        collected.append(
+                            (FrameBuffer(emptyWithWidth: spacingShown, height: 1), 0, nil))
+                        currentWidth += spacingShown
+                    }
+                    break
+                }
                 let buffer = child.render(
                     width: availableWidth, height: context.availableHeight, context: context)
                 if currentWidth + spacingToApply + buffer.width > availableWidth { break }

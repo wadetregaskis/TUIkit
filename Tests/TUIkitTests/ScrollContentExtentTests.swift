@@ -126,6 +126,22 @@ struct ScrollContentExtentTests {
         #expect(width == Self.tallRowCount, "horizontal extent is the content's, not the budget's")
     }
 
+    @Test("A row pitch that does not divide the budget does not end the ladder")
+    func rowBoundaryShortfallDoesNotEndTheLadder() {
+        // Rows of 3 lines against a starting budget of 4: the append-while-
+        // fits walk fits one row and used to report 3 — strictly under the
+        // budget, which reads as \"the content chose a size\" and stopped the
+        // ladder at ~one rung. The true extent is 30.
+        let view = LazyVStack(spacing: 0) {
+            ForEach(0..<10, id: \.self) { _ in Text("a\nb\nc") }
+        }
+        let size = measureNaturalExtent(
+            view, along: .vertical,
+            proposal: ProposedSize(width: 20, height: nil),
+            context: context(), startingBudget: 4)
+        #expect(size.height == 30, "truncated at the first budget's row boundary")
+    }
+
     @Test("Content that fills whatever it is offered ends the ladder instead of inflating it")
     func flexibleContentTerminatesTheLadder() {
         // A view that reports every budget it is handed would climb until the

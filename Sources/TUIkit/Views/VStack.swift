@@ -214,7 +214,24 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         var maxWidth = 0
         for slot in slots {
             let next = height + slot.spacingBefore + slot.height
-            if next > heightLimit { break }
+            if next > heightLimit {
+                // Saturated: content extends past the limit. Report the LIMIT
+                // — the eager stack's own min(total, proposal) convention —
+                // not the row boundary a few lines under it. A row-boundary
+                // report is indistinguishable from a chosen natural size, and
+                // it ended measureNaturalExtent's ladder on its first rung:
+                // whenever the row pitch did not divide the budget, scrollable
+                // content was silently truncated at ~the starting budget
+                // (thousands of lines that existed, rendered nowhere, and
+                // could not be scrolled to). The ladder still converges on the
+                // exact total: on a later rung the walk exhausts every row
+                // without breaking and reports the size the content CHOSE.
+                // The partially-shown row's width still counts — the render
+                // places its clipped buffer, so the column hugs it.
+                height = heightLimit
+                maxWidth = max(maxWidth, min(slot.width, widthLimit))
+                break
+            }
             height = next
             maxWidth = max(maxWidth, min(slot.width, widthLimit))
         }
@@ -433,6 +450,11 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 // onAppear and keeping its .task alive for an invisible row.
                 let measured = child.measure(proposal: .unspecified, context: context)
                 if currentHeight + spacingToApply + measured.height > availableHeight {
+                    appendSaturatedTail(
+                        child, measuredHeight: measured.height,
+                        spacingToApply: spacingToApply, currentHeight: currentHeight,
+                        availableHeight: availableHeight, into: &collected,
+                        context: context)
                     break
                 }
                 let buffer = child.render(
@@ -446,6 +468,34 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         }
 
         return assembleWindow(collected, fillsWidth: spacerCount > 0, context: context)
+    }
+
+    /// The saturated tail of the classic append-while-fits walk: the first
+    /// row that does not fit whole is rendered CLIPPED at the cell — the
+    /// eager stack's convention, and the one the measure reports
+    /// (`windowSizeThatFits` answers the LIMIT when it breaks there, so the
+    /// two agree to the line). The row is partially VISIBLE, so its lifecycle
+    /// firing is correct. When only (part of) the spacing shows, that space
+    /// is accounted as an explicit blank block — `appendVertically` drops the
+    /// spacing of an EMPTY buffer — and the row is NOT rendered: it would
+    /// show zero lines, and rendering it would fire its lifecycle for an
+    /// invisible row.
+    private func appendSaturatedTail(
+        _ child: ChildView, measuredHeight: Int, spacingToApply: Int, currentHeight: Int,
+        availableHeight: Int,
+        into collected: inout [(buffer: FrameBuffer, spacingBefore: Int, child: ChildView?)],
+        context: RenderContext
+    ) {
+        let remaining = availableHeight - currentHeight - spacingToApply
+        if remaining > 0 {
+            let buffer = child.render(
+                width: context.availableWidth, height: measuredHeight, context: context)
+            let clipped = buffer.clamped(toWidth: buffer.width, height: remaining)
+            collected.append((clipped, spacingToApply, child))
+        } else if spacingToApply > 0 {
+            let spacingShown = min(spacingToApply, availableHeight - currentHeight)
+            collected.append((FrameBuffer(emptyWithHeight: spacingShown), 0, nil))
+        }
     }
 
     /// `.window` PASS 2: align the collected children and stack them.
