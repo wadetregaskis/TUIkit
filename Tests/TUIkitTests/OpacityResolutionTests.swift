@@ -559,22 +559,58 @@ struct OpacityForeignRunTests {
         makeRenderContext(width: 24, height: 4).environment.palette
     }
 
-    @Test("A run inside a faded region is dropped, not left to replay unfaded")
-    func foreignRunsAreDropped() {
-        // The frames were coloured by a view that never saw the fade, so the
-        // render draws the faded picture and the next replay tick paints the
-        // unfaded frames back over it — a control that pops to full strength
-        // one tick after every render.
+    private func codes(_ color: Color) -> String {
+        ANSIRenderer.foregroundCodes(for: color).joined(separator: ";")
+    }
+
+    @Test("A run inside a faded region replays FADED, not dropped")
+    func foreignRunsAreFaded() {
+        // The frames were coloured by a view that never saw the fade — but
+        // dropping them froze every run-only animator under .opacity: a
+        // Spinner and an indeterminate ProgressView emit their run and
+        // request no fallback animation, so with the run gone nothing kept
+        // the clock alive and they sat motionless at one faded frame. The
+        // frames instead pass through the same blend the lines did, and the
+        // run replays faded.
         var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello", foreground: .green)])
+        let bright = ANSIRenderer.colorize("aaaaa", foreground: .rgb(0, 255, 0))
+        let dim = ANSIRenderer.colorize("bbbbb", foreground: .rgb(0, 120, 0))
         buffer.animatedCells = [
-            AnimatedCellRun(
-                offsetX: 0, offsetY: 0, width: 5, frames: ["aaaaa", "bbbbb"], clock: .cursor)
+            AnimatedCellRun(offsetX: 0, offsetY: 0, width: 5, frames: [bright, dim], clock: .cursor)
         ]
         buffer.opacityRegions = [
             OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 0.6)
         ]
         let resolved = buffer.resolvingOpacity(surface: .black, palette: palette())
-        #expect(resolved.animatedCells.isEmpty)
+
+        #expect(resolved.animatedCells.count == 1)
+        let faded = resolved.animatedCells.first
+        #expect(faded?.frames.count == 2)
+        #expect(faded?.frames.first?.stripped == "aaaaa")
+        let expected = Color.rgb(0, 255, 0).compositing(0.6, over: .black)
+        #expect(faded?.frames.first?.contains(codes(expected)) == true)
+        #expect(faded?.frames.first?.contains(codes(Color.rgb(0, 255, 0))) == false)
+        // The cadence is the producer's; fading the pictures must not touch it.
+        #expect(faded?.clock == .cursor)
+    }
+
+    @Test("A repeating fade still yields a foreign run — two clocks, one cell")
+    func aCyclingFadeStillDropsForeignRuns() {
+        // The fade's phases and the run's frames tick independently, and
+        // their product is not representable as one run. The run yields; its
+        // cells freeze at the frame the lines were drawn with, inside a fade
+        // that itself keeps animating.
+        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello", foreground: .green)])
+        buffer.animatedCells = [
+            AnimatedCellRun(
+                offsetX: 0, offsetY: 0, width: 5, frames: ["aaaaa", "bbbbb"], clock: .cursor)
+        ]
+        var region = OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 1)
+        region.cycle = OpacityCycle(phases: [1, 0.6], clock: .cursor)
+        buffer.opacityRegions = [region]
+        let resolved = buffer.resolvingOpacity(surface: .black, palette: palette())
+        // The fade's own runs replace it; the foreign run itself is gone.
+        #expect(!resolved.animatedCells.contains { $0.frames.contains { $0.stripped == "bbbbb" } })
     }
 
     @Test("A run beside the region is left alone")

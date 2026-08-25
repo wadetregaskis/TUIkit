@@ -155,18 +155,51 @@ extension FrameBuffer {
         // in place, the render would draw the faded picture and the very next
         // replay tick would paint the unfaded frames back over it.
         //
-        // So they go. A dropped run is a missed saving rather than a frozen
-        // animation: `noteServedByRuns` is the only thing that stops the loop
-        // rendering for an animation, and `.opacity` is its only caller — every
-        // other producer keeps asking for frames and simply pays for them. Same
-        // reasoning, and the same trade, as the runs `_ListCore` declines to
-        // carry out of a badged row.
-        result.animatedCells = result.animatedCells.filter { run in
-            !translucent.contains { region in
+        // So the frames pass through the SAME blend the lines did, and the run
+        // replays faded. Dropping the run instead — the first design — froze
+        // every run-only animator under `.opacity`: a `Spinner` and an
+        // indeterminate `ProgressView` emit their run and request no fallback
+        // animation, so with the run gone nothing kept the clock alive and
+        // they sat motionless at one faded frame.
+        //
+        // The one case that still yields is a run under a REPEATING fade: the
+        // fade's phases and the run's frames tick independently, and their
+        // product is not representable as one run. The run's cells freeze at
+        // the frame the lines were drawn with, inside a fade that itself
+        // keeps animating — a bounded compromise where the alternative was a
+        // full render per tick.
+        result.animatedCells = result.animatedCells.compactMap { run in
+            let covering = translucent.filter { region in
                 region.spans(row: run.offsetY)
                     && run.offsetX < region.offsetX + region.width
                     && region.offsetX < run.offsetX + run.width
             }
+            guard !covering.isEmpty else { return run }
+            guard covering.allSatisfy({ $0.cycle == nil }) else { return nil }
+            let destinationRow = run.offsetY + position.y
+            let behindLine =
+                destination.lines.indices.contains(destinationRow)
+                ? destination.lines[destinationRow] : ""
+            // Aligned into a pseudo-row so the frame's cells sit at the run's
+            // own columns, where the per-column alpha and the destination line
+            // expect them.
+            let prefix = String(repeating: " ", count: max(0, run.offsetX))
+            let fadedFrames = run.frames.map { frame in
+                Self.blendedSpan(
+                    source: prefix + frame,
+                    destination: behindLine,
+                    columns: run.offsetX..<(run.offsetX + run.width),
+                    destinationShift: position.x,
+                    alpha: { column in
+                        covering.first { $0.contains(column: column, row: run.offsetY) }?
+                            .opacity
+                    },
+                    surface: resolvedSurface,
+                    defaultForeground: resolvedForeground)
+            }
+            return AnimatedCellRun(
+                offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
+                frames: fadedFrames, frameDuration: run.frameDuration, clock: run.clock)
         }
         result.animatedCells += Self.cyclingRuns(
             of: translucent, over: lines, rebuilding: rebuild)
