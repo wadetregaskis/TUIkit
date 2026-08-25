@@ -19,6 +19,7 @@ extension Color {
     /// copy of these constants; `relativeLuminance` and ``oklab(red:green:blue:)``
     /// both decode through here, so the quantiser's metric and the contrast
     /// arithmetic cannot drift apart on what "linear" means.
+    @inlinable
     package static func linearChannel(_ value: UInt8) -> Double {
         let c = Double(value) / 255.0
         return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
@@ -28,6 +29,7 @@ extension Color {
     ///
     /// The inverse of ``linearChannel(_:)``, with rounding to the nearest
     /// representable byte rather than truncation.
+    @inlinable
     package static func encodedChannel(_ value: Double) -> UInt8 {
         let clamped = min(1, max(0, value))
         let encoded = clamped <= 0.0031308 ? clamped * 12.92 : 1.055 * pow(clamped, 1 / 2.4) - 0.055
