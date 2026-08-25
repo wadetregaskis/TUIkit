@@ -56,6 +56,47 @@ struct ForEachIdentityTests {
         return buffer.lines.map { $0.stripped }
     }
 
+    /// Rows from a spliced provider carry the provider's static tuple slot
+    /// in their identity, so sibling loops with the same content type and
+    /// overlapping id strings do not collide.
+    @Test("Sibling loops with overlapping ids stay distinct — buffers and state")
+    func siblingLoopsWithOverlappingIDsAreDistinct() {
+        func twoLoopFrame() -> [String] {
+            var environment = EnvironmentValues()
+            environment.focusManager = FocusManager()
+            environment.applyRuntimeServices(from: tuiContext)
+            let context = RenderContext(
+                availableWidth: 30, availableHeight: 10,
+                environment: environment, tuiContext: tuiContext)
+            tuiContext.lifecycle.beginRenderPass()
+            tuiContext.stateStorage.beginRenderPass()
+            tuiContext.renderCache.beginRenderPass()
+            let view = VStack {
+                ForEach(["a", "b"], id: \.self) { StampRow(label: "first-" + $0) }
+                ForEach(["a", "b"], id: \.self) { StampRow(label: "second-" + $0) }
+            }
+            _ = renderToBuffer(view, context: context)
+            let buffer = renderToBuffer(view, context: context)
+            tuiContext.stateStorage.endRenderPass()
+            tuiContext.renderCache.removeInactive()
+            return buffer.lines.map {
+                $0.stripped.trimmingCharacters(in: .whitespaces)
+            }
+        }
+
+        _ = twoLoopFrame()  // the onAppear stamps land next frame
+        let rows = twoLoopFrame()
+        // Both halves of the collision at once: the second loop's rows must
+        // render their OWN content (not be served the first loop's memoized
+        // buffers), and each row's @State stamp must be its own (not aliased
+        // through a shared identity).
+        #expect(
+            rows == [
+                "first-a:first-a", "first-b:first-b",
+                "second-a:second-a", "second-b:second-b",
+            ], "\(rows)")
+    }
+
     @Test("Reordering the data moves each row's @State with its element")
     func reorderMovesState() {
         // The onAppear stamp lands a frame after it fires; settle first.

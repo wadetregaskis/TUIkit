@@ -103,9 +103,11 @@ extension TupleView: Renderable, ChildInfoProvider {
 extension TupleView: ChildViewProvider {
     public func childViews(context: RenderContext) -> [ChildView] {
         var views: [ChildView] = []
+        var slot = 0
         repeat Self.appendChildViews(
             from: each children,
             into: &views,
+            slot: &slot,
             context: context
         )
         return views
@@ -114,17 +116,24 @@ extension TupleView: ChildViewProvider {
     /// Appends one or more `ChildView` entries for `child`. See
     /// the matching note on `appendChildInfos` — this exists for
     /// the same reason on the two-pass layout side.
+    ///
+    /// `slot` is the element's STATIC position in the tuple — one per pack
+    /// element regardless of how many children it flattens to — which is what
+    /// namespaces keyed rows spliced from sibling providers. See
+    /// ``ChildView/reindexed(to:providerSlot:)``.
     @MainActor
     private static func appendChildViews<C: View>(
         from child: C,
         into views: inout [ChildView],
+        slot: inout Int,
         context: RenderContext
     ) {
+        defer { slot += 1 }
         if let provider = child as? ChildViewProvider {
             // Rebase each flattened child's positional identity to its
-            // FLATTENED position — see ``ChildView/reindexed(to:)``.
+            // FLATTENED position — see ``ChildView/reindexed(to:providerSlot:)``.
             for entry in provider.childViews(context: context) {
-                views.append(entry.reindexed(to: views.count))
+                views.append(entry.reindexed(to: views.count, providerSlot: slot))
             }
         } else {
             views.append(ChildView(child, childIndex: views.count))

@@ -27,6 +27,21 @@ public struct ChildView {
     /// `ForEach` element's id) instead of `childIndex` — identity then follows
     /// the element across reorders, as SwiftUI's `ForEach` contract requires.
     private let identityKey: String?
+    /// The STATIC tuple slot of the provider this keyed child was spliced
+    /// from, or `nil` for a child that was never spliced (a lone `ForEach` as
+    /// a container's whole content) or is positionally identified.
+    ///
+    /// The identity namespace for sibling providers: two `ForEach` loops in
+    /// one container whose rows share a content type and overlapping id
+    /// strings would otherwise carry byte-identical identities — colliding in
+    /// `StateStorage` and cross-serving each other's memoized row buffers.
+    /// The slot is the provider's position in the enclosing `@ViewBuilder`
+    /// tuple, which is stable however many children its siblings flatten to
+    /// (an `if` occupies its slot whether or not it renders) — so reorders
+    /// WITHIN a loop still keep identity through the key, exactly as before.
+    /// Folded into the identity only, never into ``identityChildKey``, which
+    /// scroll seeking matches against the raw user id.
+    private let providerSlot: Int?
 
     /// Whether this child is a Spacer.
     public let isSpacer: Bool
@@ -74,6 +89,7 @@ public struct ChildView {
         self.identityType = nil
         self.childIndex = 0
         self.identityKey = nil
+        self.providerSlot = nil
     }
 
     /// Creates a child view wrapper with an explicit child index for identity propagation.
@@ -93,14 +109,16 @@ public struct ChildView {
         self.identityType = V.self
         self.childIndex = childIndex
         self.identityKey = nil
+        self.providerSlot = nil
     }
 
-    /// Full-field copy initializer backing ``reindexed(to:)``.
+    /// Full-field copy initializer backing ``reindexed(to:providerSlot:)``.
     private init(
         view: any View,
         identityType: Any.Type?,
         childIndex: Int,
         identityKey: String?,
+        providerSlot: Int?,
         isSpacer: Bool,
         spacerMinLength: Int?,
         zIndex: Double,
@@ -110,13 +128,15 @@ public struct ChildView {
         self.identityType = identityType
         self.childIndex = childIndex
         self.identityKey = identityKey
+        self.providerSlot = providerSlot
         self.isSpacer = isSpacer
         self.spacerMinLength = spacerMinLength
         self.zIndex = zIndex
         self.providesAlignmentGuide = providesAlignmentGuide
     }
 
-    /// A copy whose positional identity is rebased to `index`.
+    /// A copy whose positional identity is rebased to `index`, and whose
+    /// keyed identity is namespaced by the provider's static slot.
     ///
     /// When a provider's flattened children are spliced into an enclosing
     /// container's child list, their identity must reflect the FLATTENED
@@ -124,16 +144,31 @@ public struct ChildView {
     /// (two `Group`s, two `if` branches) would otherwise carry identical
     /// (type, inner-index) identities and collide in `StateStorage` (the
     /// second silently adopts the first's state and focus slots). Children
-    /// with a stable `identityKey` (`ForEach` rows) keep it and are returned
-    /// unchanged; a child with no identity type adopts its view's dynamic
-    /// type, matching what it would get as a direct tuple child.
-    func reindexed(to index: Int) -> Self {
-        guard identityKey == nil else { return self }
+    /// with a stable `identityKey` (`ForEach` rows) keep it — identity must
+    /// follow the element across reorders — but take the provider's slot as a
+    /// namespace, because two sibling `ForEach` loops with overlapping ids
+    /// are the same collision in keyed form (see ``providerSlot``). A child
+    /// with no identity type adopts its view's dynamic type, matching what it
+    /// would get as a direct tuple child.
+    func reindexed(to index: Int, providerSlot slot: Int) -> Self {
+        guard identityKey == nil else {
+            return Self(
+                view: view,
+                identityType: identityType,
+                childIndex: childIndex,
+                identityKey: identityKey,
+                providerSlot: slot,
+                isSpacer: isSpacer,
+                spacerMinLength: spacerMinLength,
+                zIndex: zIndex,
+                providesAlignmentGuide: providesAlignmentGuide)
+        }
         return Self(
             view: view,
             identityType: identityType ?? type(of: view),
             childIndex: index,
             identityKey: nil,
+            providerSlot: nil,
             isSpacer: isSpacer,
             spacerMinLength: spacerMinLength,
             zIndex: zIndex,
@@ -164,6 +199,7 @@ public struct ChildView {
         self.identityType = identityType
         self.childIndex = childIndex
         self.identityKey = nil
+        self.providerSlot = nil
     }
 
     /// Creates a child wrapper whose per-child identity is keyed by a stable
@@ -179,6 +215,7 @@ public struct ChildView {
         self.identityType = identityType
         self.childIndex = 0
         self.identityKey = key
+        self.providerSlot = nil
     }
 
     /// The wrapped child view itself, for containers that need to inspect the
@@ -221,7 +258,12 @@ public struct ChildView {
     private func childContext(_ context: RenderContext) -> RenderContext {
         guard let identityType else { return context }
         if let identityKey {
-            return context.withChildIdentity(erasedType: identityType, key: identityKey)
+            // The slot prefix is injective: the slot is the digits before the
+            // first "#", so no two (slot, key) pairs concatenate to one
+            // string. `identityChildKey` stays the raw user key — scroll
+            // seeking matches against it.
+            let namespaced = providerSlot.map { "\($0)#\(identityKey)" } ?? identityKey
+            return context.withChildIdentity(erasedType: identityType, key: namespaced)
         }
         return context.withChildIdentity(erasedType: identityType, index: childIndex)
     }
