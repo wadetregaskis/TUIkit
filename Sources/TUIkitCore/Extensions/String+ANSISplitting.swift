@@ -30,6 +30,70 @@ extension String {
         ansiAwarePrefixWithWidth(visibleCount: visibleCount).prefix
     }
 
+    /// Like ``ansiAwarePrefix(visibleCount:)``, but the caller's
+    /// already-computed ``strippedLength`` unlocks an O(excess) fast path for
+    /// the commonest clip in the framework: a line assembled one padding cell
+    /// wider than its slot (a list row's forced right-padding space meeting
+    /// the scrollbar column, a padded row meeting a container clamp). When the
+    /// excess is entirely trailing plain ASCII spaces, the answer is the
+    /// string minus those bytes — no escape-aware forward walk, no per-cell
+    /// append.
+    ///
+    /// Byte-identical to the walk by construction: the walk emits everything
+    /// before the cut cell (escape sequences included, since they precede the
+    /// cut character in the byte stream) and stops there, which for a cut
+    /// inside a trailing run of plain spaces is exactly the original minus its
+    /// last `excess` bytes. A space that is NOT a visible cell (an
+    /// intermediate byte of an unterminated escape) would break that
+    /// equivalence, so the result is verified by one (vectorised)
+    /// ``strippedLength`` re-scan and anything surprising falls back to the
+    /// exact walk.
+    ///
+    /// - Parameters:
+    ///   - visibleCount: The number of terminal cells to include.
+    ///   - knownVisibleWidth: This string's ``strippedLength``, which the
+    ///     caller computed to decide the clip was needed at all.
+    public func ansiAwarePrefix(visibleCount: Int, knownVisibleWidth: Int) -> String {
+        ansiAwarePrefixWithWidth(
+            visibleCount: visibleCount, knownVisibleWidth: knownVisibleWidth
+        ).prefix
+    }
+
+    /// Like ``ansiAwarePrefix(visibleCount:knownVisibleWidth:)`` but also
+    /// returns the visible cell width of the clipped result (see
+    /// ``ansiAwarePrefixWithWidth(visibleCount:)`` for why the pair is worth
+    /// having: it spares the caller a re-scan for right-padding arithmetic).
+    public func ansiAwarePrefixWithWidth(
+        visibleCount: Int, knownVisibleWidth: Int
+    ) -> (prefix: String, visibleWidth: Int) {
+        guard visibleCount > 0 else { return ("", 0) }
+        let excess = knownVisibleWidth - visibleCount
+        // Nothing to cut: the walk would emit the whole string unchanged.
+        guard excess > 0 else { return (self, knownVisibleWidth) }
+
+        let bytes = utf8
+        if excess <= bytes.count {
+            var tailIsPlainSpaces = true
+            var cutIndex = bytes.endIndex
+            for _ in 0..<excess {
+                bytes.formIndex(before: &cutIndex)
+                if bytes[cutIndex] != 0x20 {
+                    tailIsPlainSpaces = false
+                    break
+                }
+            }
+            if tailIsPlainSpaces {
+                // An ASCII space is always a full character, so `cutIndex` is
+                // a character boundary and the slice is valid.
+                let candidate = String(self[..<cutIndex])
+                if candidate.strippedLength == visibleCount {
+                    return (candidate, visibleCount)
+                }
+            }
+        }
+        return ansiAwarePrefixWithWidth(visibleCount: visibleCount)
+    }
+
     /// Like ``ansiAwarePrefix(visibleCount:)`` but also returns the visible cell
     /// width of the clipped result.
     ///

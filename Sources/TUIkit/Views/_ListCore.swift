@@ -1262,11 +1262,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // frames go through the same fit, or the run would claim more
             // cells than its line occupies and paint over the bar.
             func fitted(_ rowLine: String) -> String {
-                let cut =
-                    rowLine.strippedLength > contentRowWidth
-                    ? rowLine.ansiAwarePrefix(visibleCount: contentRowWidth)
-                    : rowLine
-                return cut + String(repeating: " ", count: max(0, contentRowWidth - cut.strippedLength))
+                let width = rowLine.strippedLength
+                guard width > contentRowWidth else {
+                    return rowLine + String(repeating: " ", count: contentRowWidth - width)
+                }
+                let (cut, cutWidth) = rowLine.ansiAwarePrefixWithWidth(
+                    visibleCount: contentRowWidth, knownVisibleWidth: width)
+                return cut + String(repeating: " ", count: max(0, contentRowWidth - cutWidth))
             }
             for (offset, rowLine) in styledLines.enumerated() {
                 lines.append(fitted(rowLine))

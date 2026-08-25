@@ -863,8 +863,10 @@ extension FrameBuffer {
         var changed = false
         for index in trimmed.indices {
             let keep = trimmed[index].visibleWidthBeforeTrailingBlanks()
-            guard keep < trimmed[index].strippedLength else { continue }
-            trimmed[index] = trimmed[index].ansiAwarePrefix(visibleCount: keep)
+            let lineWidth = trimmed[index].strippedLength
+            guard keep < lineWidth else { continue }
+            trimmed[index] = trimmed[index].ansiAwarePrefix(
+                visibleCount: keep, knownVisibleWidth: lineWidth)
             changed = true
         }
         guard changed else { return self }
@@ -885,10 +887,15 @@ extension FrameBuffer {
         var clippedLines = self.height > maxHeight ? Array(lines.prefix(maxHeight)) : lines
         var resultWidth = 0
         for index in clippedLines.indices {
-            if clippedLines[index].strippedLength > maxWidth {
-                clippedLines[index] = clippedLines[index].ansiAwarePrefix(visibleCount: maxWidth)
+            let lineWidth = clippedLines[index].strippedLength
+            if lineWidth > maxWidth {
+                let (clipped, clippedWidth) = clippedLines[index].ansiAwarePrefixWithWidth(
+                    visibleCount: maxWidth, knownVisibleWidth: lineWidth)
+                clippedLines[index] = clipped
+                resultWidth = max(resultWidth, clippedWidth)
+            } else {
+                resultWidth = max(resultWidth, lineWidth)
             }
-            resultWidth = max(resultWidth, clippedLines[index].strippedLength)
         }
         var result = FrameBuffer(lines: clippedLines, width: resultWidth)
         // Overlay layers are free-floating and composited separately at the
