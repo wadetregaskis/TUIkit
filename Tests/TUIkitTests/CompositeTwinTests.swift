@@ -84,3 +84,61 @@ struct CompositeTwinTests {
         #expect(copied.hitTestRegions == inPlace.hitTestRegions)
     }
 }
+
+@Suite("Compositing punches what the overlay covers")
+struct CompositePunchTests {
+
+    private func spinner(atX x: Int, y: Int = 0) -> AnimatedCellRun {
+        AnimatedCellRun(offsetX: x, offsetY: y, width: 3, frames: ["abc", "def"], clock: .cursor)
+    }
+
+    @Test("A run under the overlay's footprint is dropped, through both paths")
+    func coveredRunsAreDropped() {
+        // A run replays its cells over whatever is on screen: left in the
+        // buffer, a spinner under a freshly-opened popover repaints itself
+        // THROUGH the popup within one tick. The modal presenter cleared base
+        // runs by hand for exactly this; the compositors now cover every
+        // overlap — menus, popovers, toasts, ZStack siblings.
+        var base = FrameBuffer(lines: ["0123456789"])
+        base.animatedCells = [spinner(atX: 2)]
+        let popup = FrameBuffer(lines: ["XXXX"])
+
+        let copied = base.composited(with: popup, at: (x: 3, y: 0))
+        #expect(copied.animatedCells.isEmpty, "the copying path replayed a covered run")
+
+        var inPlace = base
+        inPlace.composite(with: popup, at: (x: 3, y: 0))
+        #expect(inPlace.animatedCells.isEmpty, "the in-place path replayed a covered run")
+    }
+
+    @Test("A run beside the footprint survives, and rows are respected")
+    func uncoveredRunsSurvive() {
+        var base = FrameBuffer(lines: ["0123456789", "0123456789"])
+        base.animatedCells = [spinner(atX: 0), spinner(atX: 0, y: 1)]
+        let popup = FrameBuffer(lines: ["XX"])
+
+        // Covers columns 4-5 of row 0: neither run overlaps it.
+        let beside = base.composited(with: popup, at: (x: 4, y: 0))
+        #expect(beside.animatedCells.count == 2)
+
+        // Covers columns 0-1 of row 1 only: the row-0 run survives.
+        let below = base.composited(with: popup, at: (x: 0, y: 1))
+        #expect(below.animatedCells.count == 1)
+        #expect(below.animatedCells.first?.offsetY == 0)
+    }
+
+    @Test("A pending opacity region is punched identically through both paths")
+    func regionPunchTwinsAgree() {
+        var base = FrameBuffer(lines: ["0123456789"])
+        base.opacityRegions = [
+            OpacityRegion(offsetX: 0, offsetY: 0, width: 10, height: 1, opacity: 0.5)
+        ]
+        let popup = FrameBuffer(lines: ["XXXX"])
+
+        let copied = base.composited(with: popup, at: (x: 3, y: 0))
+        var inPlace = base
+        inPlace.composite(with: popup, at: (x: 3, y: 0))
+        #expect(copied.opacityRegions == inPlace.opacityRegions)
+        #expect(copied.opacityRegions.count == 2)
+    }
+}

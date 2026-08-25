@@ -661,8 +661,17 @@ extension FrameBuffer {
         composited.hitTestRegions =
             hitTestRegions
             + overlay.shiftedHitTestRegions(byX: position.x, y: position.y)
+        // The base's runs are dropped where the overlay covers them, for the
+        // same reason its regions are punched below: a run replays its cells
+        // over whatever is on screen, and a spinner under a freshly-opened
+        // popup would repaint itself THROUGH the popup within one tick. The
+        // modal and alert presenters cleared base runs by hand for exactly
+        // this; every other overlap — popovers, menus, toasts, ZStack
+        // siblings — went uncovered. A partially covered run is dropped
+        // whole: half a spinner frozen beats half a spinner drawn over a
+        // menu, and slicing frames is machinery nothing yet needs.
         composited.animatedCells =
-            animatedCells
+            animatedCellsPunched(by: overlay, at: position)
             + overlay.shiftedAnimatedCells(byX: position.x, y: position.y)
         // BOTH sides. The result is built from a bare `Self(lines:)`, so the
         // DESTINATION's own regions are as easy to drop here as the overlay's
@@ -682,13 +691,12 @@ extension FrameBuffer {
         return composited
     }
 
-    /// This buffer's regions with the overlay's per-row footprint removed —
-    /// see the note at the assignment above. Rows of equal visible width are
-    /// banded, so a rectangular overlay costs one subtraction, not one per row.
-    private func opacityRegionsPunched(
-        by overlay: Self, at position: (x: Int, y: Int)
-    ) -> [OpacityRegion] {
-        guard !opacityRegions.isEmpty else { return [] }
+    /// The overlay's per-row visible footprint — the cells its composite
+    /// replaces — banded: consecutive rows of equal span collapse into one
+    /// entry, so a rectangular overlay is one band.
+    private func footprintBands(
+        of overlay: Self, at position: (x: Int, y: Int)
+    ) -> [(rows: Range<Int>, columns: Range<Int>)] {
         var bands: [(rows: Range<Int>, columns: Range<Int>)] = []
         for (index, line) in overlay.lines.enumerated() {
             // An empty line replaces nothing — the compositors skip it — so it
@@ -703,12 +711,40 @@ extension FrameBuffer {
                 bands.append((row..<(row + 1), columns))
             }
         }
+        return bands
+    }
+
+    /// This buffer's regions with the overlay's footprint removed — see the
+    /// note at the assignment above.
+    private func opacityRegionsPunched(
+        by overlay: Self, at position: (x: Int, y: Int)
+    ) -> [OpacityRegion] {
+        guard !opacityRegions.isEmpty else { return [] }
+        let bands = footprintBands(of: overlay, at: position)
         guard !bands.isEmpty else { return opacityRegions }
         var result = opacityRegions
         for band in bands {
             result = result.flatMap { $0.subtracting(columns: band.columns, rows: band.rows) }
         }
         return result
+    }
+
+    /// This buffer's runs with the ones the overlay covers dropped — see the
+    /// note at the assignment above. Dropped whole rather than sliced: half a
+    /// frozen spinner beats half a spinner drawn over a menu.
+    private func animatedCellsPunched(
+        by overlay: Self, at position: (x: Int, y: Int)
+    ) -> [AnimatedCellRun] {
+        guard !animatedCells.isEmpty else { return [] }
+        let bands = footprintBands(of: overlay, at: position)
+        guard !bands.isEmpty else { return animatedCells }
+        return animatedCells.filter { run in
+            !bands.contains { band in
+                band.rows.contains(run.offsetY)
+                    && run.offsetX < band.columns.upperBound
+                    && band.columns.lowerBound < run.offsetX + run.width
+            }
+        }
     }
 
     /// Composites `overlay` on top at `position`, **in place**, touching only
@@ -786,10 +822,12 @@ extension FrameBuffer {
         overlays.append(contentsOf: overlay.shiftedOverlays(byX: position.x, y: position.y))
         hitTestRegions.append(
             contentsOf: overlay.shiftedHitTestRegions(byX: position.x, y: position.y))
+        // Punched, then lifted — same reasoning as the copying twin above: the
+        // overlay replaced base cells that pending regions were claiming and
+        // runs were repainting.
+        animatedCells = animatedCellsPunched(by: overlay, at: position)
         animatedCells.append(
             contentsOf: overlay.shiftedAnimatedCells(byX: position.x, y: position.y))
-        // Punched, then lifted — same reasoning as the copying twin above: the
-        // overlay replaced base cells a pending region was claiming.
         opacityRegions = opacityRegionsPunched(by: overlay, at: position)
         opacityRegions.append(
             contentsOf: overlay.shiftedOpacityRegions(byX: position.x, y: position.y))
