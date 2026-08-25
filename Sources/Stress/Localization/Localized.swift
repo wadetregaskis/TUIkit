@@ -39,7 +39,13 @@ func L(_ key: String) -> String {
 func Lf(_ key: String, _ args: CustomStringConvertible...) -> String {
     var result = LocalizationService.shared.string(for: key)
     for (index, value) in args.enumerated() {
-        result = result.replacingOccurrences(of: "{\(index)}", with: value.description)
+        // `replacing(_:with:)`, not `replacingOccurrences`: the Foundation one
+        // bridges through NSString and hands back an NSString-BACKED result —
+        // and these headings are rebuilt and re-wrapped every frame, so the
+        // foreign string put `objc_msgSend` + NFC-normalised hashing inside
+        // the frame loop (visible in a scrollfollow Time Profile). The stdlib
+        // replacement is native and byte-identical.
+        result = result.replacing("{\(index)}", with: value.description)
     }
     return result
 }
