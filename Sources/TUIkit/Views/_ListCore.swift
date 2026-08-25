@@ -238,6 +238,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// `attachMouseHandlers`.
         var scrollbarColumn: Int?
         var scrollbarHeight = 0
+        /// How many columns a row's own content occupies, past the gutter —
+        /// the clip limit for anything positioned in the row's coordinates.
+        var rowContentWidth = 0
     }
 
     private typealias VisibleRowRange = (
@@ -375,6 +378,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 state: state,
                 paddingTop: style.rowPadding.top
             )
+            attachRowOpacity(
+                to: &buffer,
+                context: context,
+                state: state,
+                paddingTop: style.rowPadding.top
+            )
         }
         return buffer
     }
@@ -503,6 +512,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let animatedRuns: [AnimatedCellRun]
         var scrollbarColumn: Int?
         var scrollbarHeight = 0
+        var rowContentWidth = 0
         if wantsScrollbar {
             let bar = listScrollbarCells(
                 source: source,
@@ -528,6 +538,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // inset used for click mapping (see attachMouseHandlers).
             scrollbarColumn = 1 + style.rowPadding.leading + contentRowWidth
             scrollbarHeight = bar.count
+            rowContentWidth = max(0, contentRowWidth - 1)
         } else {
             (lines, visibleRowYRanges, animatedRuns) = composeRowLines(
                 handler: handler,
@@ -539,6 +550,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 style: style,
                 context: context
             )
+            rowContentWidth = max(0, rowWidth - 1)
         }
 
         return (
@@ -553,7 +565,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 dropInsertion: (source.allContent
                     ? content as? DynamicViewContentActions : nil)?.dropInsertionAction,
                 scrollbarColumn: scrollbarColumn,
-                scrollbarHeight: scrollbarHeight
+                scrollbarHeight: scrollbarHeight,
+                rowContentWidth: rowContentWidth
             )
         )
     }
@@ -1605,6 +1618,45 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             buffer.overlays.append(
                 contentsOf: visible.row.buffer.shiftedOverlays(
                     byX: rowContentX, y: topInset + position.yStart - clip))
+        }
+    }
+
+    /// Moves the rows' opacity regions into the list's coordinates.
+    ///
+    /// Unlike an overlay, a region names cells that are IN the list's own
+    /// picture, so it clips to the row's visible extent on both axes: a row
+    /// half-scrolled off the top must not fade the border above it, and a
+    /// region wider than the row must not reach the scrollbar. That is the
+    /// same reasoning that clips hit regions in ``ScrollView`` — and the
+    /// opposite of what the runs do, because a run carries a fixed picture
+    /// that a clip would misalign, while a rectangle survives being trimmed.
+    ///
+    /// The extra column matches the runs' `1 + offsetX`: every row line begins
+    /// with the selection gutter, which the row's own buffer knows nothing of.
+    private func attachRowOpacity(
+        to buffer: inout FrameBuffer,
+        context: RenderContext,
+        state: PopulatedRenderState,
+        paddingTop: Int
+    ) {
+        guard !context.isMeasuring else { return }
+        let style = context.environment.listStyle
+        let topInset = (style.showsBorder ? 1 : 0) + paddingTop
+        let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
+        for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
+            let clip = visible.index == state.origin.offset ? state.origin.topClip : 0
+            for region in visible.row.buffer.opacityRegions {
+                let top = max(region.offsetY, clip)
+                let bottom = min(region.offsetY + region.height, clip + position.height)
+                let right = min(region.offsetX + region.width, state.rowContentWidth)
+                guard bottom > top, right > region.offsetX else { continue }
+                var clipped = region
+                clipped.offsetY = top
+                clipped.height = bottom - top
+                clipped.width = right - region.offsetX
+                buffer.opacityRegions.append(
+                    clipped.shifted(byX: rowContentX, y: topInset + position.yStart - clip))
+            }
         }
     }
 

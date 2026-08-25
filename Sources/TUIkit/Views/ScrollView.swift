@@ -993,10 +993,28 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             return run.shifted(byX: dx, y: -scrollOffset)
         }
 
+        // Opacity regions clip like hit regions rather than being dropped like
+        // runs: a rectangle of faded cells that straddles the viewport edge is
+        // still faded for the part of it that shows, and keeping its full
+        // height would fade rows belonging to whatever sits outside the
+        // scroller.
+        let visibleOpacity = full.opacityRegions.compactMap { region -> OpacityRegion? in
+            let topY = region.offsetY
+            let bottomY = region.offsetY + region.height
+            guard bottomY > viewportTop, topY < viewportBottom else { return nil }
+            let clippedTop = max(topY, viewportTop)
+            let clippedBottom = min(bottomY, viewportBottom)
+            var clipped = region
+            clipped.offsetY = clippedTop
+            clipped.height = clippedBottom - clippedTop
+            return clipped.shifted(byX: dx, y: -scrollOffset)
+        }
+
         var result = FrameBuffer(lines: visibleLines, width: viewportWidth)
         result.overlays = visibleOverlays
         result.hitTestRegions = visibleRegions
         result.animatedCells = visibleRuns
+        result.opacityRegions = visibleOpacity
         return result
     }
 

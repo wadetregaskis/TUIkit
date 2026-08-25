@@ -27,6 +27,20 @@ import TUIkitCore
 
 @testable import TUIkit
 
+/// Emits a buffer carrying one ``OpacityRegion`` — the payload under test,
+/// with nothing else attached to it.
+private struct OpacityRegionProbe: View, Renderable {
+    var body: Never { fatalError("OpacityRegionProbe renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        var buffer = FrameBuffer(text: "x")
+        buffer.opacityRegions = [
+            OpacityRegion(offsetX: 0, offsetY: 0, width: 1, height: 1, opacity: 0.5)
+        ]
+        return buffer
+    }
+}
+
 @MainActor
 @Suite("Container payload propagation")
 struct ContainerPayloadAudit {
@@ -161,12 +175,39 @@ struct ContainerPayloadAudit {
     /// label's overlay stayed lost.
     private func inert() -> some View { Text("x") }
 
+    /// Something that leaves one ``OpacityRegion``.
+    ///
+    /// Stamped directly rather than written as `.opacity(0.5)`, because this
+    /// case is about PROPAGATION and `.opacity` does not emit a region yet —
+    /// it still fades at render time. When it changes over, this keeps
+    /// asserting the same thing, and the modifier's own behaviour is asserted
+    /// where it belongs.
+    private func faded() -> some View {
+        OpacityRegionProbe()
+    }
+
     @Test("Every container carries its children's animated runs")
     func containersCarryRuns() {
         for (what, wrap) in containers() {
             let base = render(wrap(AnyView(inert()))).animatedCells.count
             let found = render(wrap(AnyView(blinker()))).animatedCells.count
             #expect(found > base, "\(what) dropped the child's run (\(base) → \(found))")
+        }
+    }
+
+    /// The fourth payload, and it fails the same way the other three do: a
+    /// container that drops it renders a plausible page in which one view is
+    /// simply not translucent.
+    ///
+    /// It is checked as a COUNT rather than a picture because nothing consumes
+    /// the regions yet — this is the propagation half, and the blend that reads
+    /// them lands separately. See `Documentation/Opacity as composition.md`.
+    @Test("Every container carries its children's opacity regions")
+    func containersCarryOpacityRegions() {
+        for (what, wrap) in containers() {
+            let base = render(wrap(AnyView(inert()))).opacityRegions.count
+            let found = render(wrap(AnyView(faded()))).opacityRegions.count
+            #expect(found > base, "\(what) dropped the child's opacity (\(base) → \(found))")
         }
     }
 

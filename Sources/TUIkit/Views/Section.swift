@@ -232,11 +232,13 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
         var runs: [AnimatedCellRun] = []
         var overlays: [OverlayLayer] = []
         var regions: [HitTestRegion] = []
+        var faded: [OpacityRegion] = []
         func take(_ buffer: FrameBuffer) {
             let dy = lines.count
             runs += buffer.shiftedAnimatedCells(byX: 0, y: dy)
             overlays += buffer.shiftedOverlays(byX: 0, y: dy)
             regions += buffer.shiftedHitTestRegions(byX: 0, y: dy)
+            faded += buffer.shiftedOpacityRegions(byX: 0, y: dy)
             lines.append(contentsOf: buffer.lines)
         }
 
@@ -269,6 +271,10 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
         // as they do through `replacingLines`: neither holds a clock open, and
         // a measure buffer is discarded whole.
         if !context.isMeasuring { buffer.animatedCells = runs }
+        // Carries either way, with the overlays and regions rather than with
+        // the runs: it holds no clock open, and a translucent view inside a
+        // section is as translucent while being measured as while being drawn.
+        buffer.opacityRegions = faded
         return buffer
     }
 }
