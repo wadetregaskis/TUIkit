@@ -533,3 +533,12 @@ The rules, updated as each lands:
    from half-tinted to untouched. "The destination is UNTOUCHED below the
    threshold" (§6a) narrows to its foreground and character; exact untouched
    reveal still holds at 0, where the tint's weight is zero.
+
+4. **Matching characters cross-fade in parallel.** Where both sides hold the
+   same character there is no contest: the source's ink sits exactly where the
+   destination's does, so foreground blends toward foreground and background
+   toward background, continuously through every alpha with no threshold
+   anywhere. A colour change on unchanged text is exact. (This generalises the
+   space rule, which is the same statement for the character " ".) The one
+   thing that cannot blend is weight — bold is on or off — so a matched cell's
+   non-colour styling follows whichever side alpha favours.

@@ -36,8 +36,11 @@ extension View {
     ///   decision rather than a mix: **at or above `0.5` this view's character
     ///   is drawn, and below it the character behind shows instead** — colours
     ///   keep blending at every alpha; only the choice of character snaps.
-    ///   Text over text therefore swaps characters at the midpoint rather than
-    ///   dissolving through it — there is no way around that in a cell grid.
+    ///   Text over different text therefore swaps characters at the midpoint
+    ///   rather than dissolving through it — there is no way around that in a
+    ///   cell grid — though where the characters MATCH there is no contest and
+    ///   the cell cross-fades exactly, so a colour change on unchanged text
+    ///   never snaps.
     ///   Over anything blank there is no contest and nothing snaps: this
     ///   view's characters simply fade all the way out, and `opacity(0)`
     ///   genuinely reveals what is behind, rather than painting an

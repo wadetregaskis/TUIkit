@@ -21,6 +21,10 @@
 //    is behind it rather than painting a near-black smudge over it;
 //  * **a drawn source character blends both channels** — foreground AND
 //    background — toward the background colour of what is behind it;
+//  * **matching characters cross-fade in parallel**: where both sides hold the
+//    same character there is no contest, so foreground blends toward
+//    foreground and background toward background, continuously through every
+//    alpha — a colour change on unchanged text is exact;
 //  * **a source SPACE is not a glyph**: it composites its background — at
 //    EVERY alpha, because colours blend at any strength and only glyphs need
 //    the threshold — and keeps the destination's character. Without this,
@@ -359,6 +363,30 @@ extension FrameBuffer {
         // fading smoothly to nothing.
         if source.character == " " {
             return compositingField(of: source, onto: destination, alpha: alpha, behind: behind)
+        }
+        // Matching characters are not a contest at all: the source's ink sits
+        // exactly where the destination's does, so the channels blend in
+        // PARALLEL — foreground toward foreground, background toward
+        // background — and the cell cross-fades continuously through every
+        // alpha with no threshold anywhere. This is what makes a colour
+        // change on unchanged text exact: the same label fading between two
+        // colourings passes through every intermediate, rather than fading
+        // toward the field and popping at ½.
+        if let destination, destination.character == source.character {
+            var result = source
+            let foreground = (source.foreground ?? defaultForeground)
+                .opacity(alpha, over: destination.foreground ?? defaultForeground)
+            let background =
+                source.background.map { $0.opacity(alpha, over: behind) }
+                ?? destination.background
+            // Weight cannot blend: bold, underline and their kin are on or
+            // off, so the glyph's non-colour styling follows whichever side
+            // alpha favours.
+            let style = alpha >= 0.5 ? source.style : destination.style
+            result.foreground = foreground
+            result.background = background
+            result.style = style.settingForeground(foreground).settingBackground(background)
+            return result
         }
         // The threshold decides a CONTEST — two glyphs wanting one cell — and
         // only applies where there is one. Where the destination is blank, the

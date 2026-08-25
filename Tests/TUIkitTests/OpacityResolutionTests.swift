@@ -74,6 +74,46 @@ struct OpacityResolutionTests {
         #expect(!resolved.lines[0].contains(codes(.green)))
     }
 
+    @Test("Matching characters cross-fade in parallel, with no threshold")
+    func matchingGlyphsAreNoContest() {
+        // The source's ink sits exactly where the destination's does, so
+        // foreground blends toward foreground — not toward the field — and
+        // the character draws at EVERY alpha. A colour change on unchanged
+        // text is exact, never a midpoint snap.
+        let destination = FrameBuffer(lines: [
+            ANSIRenderer.colorize("hello", foreground: .rgb(255, 0, 0))
+        ])
+        let source = faded(
+            ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)), 0.3, width: 5)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        #expect(resolved.lines[0].stripped == "hello")
+        let expected = Color.rgb(0, 255, 0).opacity(0.3, over: .rgb(255, 0, 0))
+        #expect(resolved.lines[0].contains(codes(expected)))
+        #expect(!resolved.lines[0].contains(codes(.rgb(255, 0, 0))))
+        #expect(!resolved.lines[0].contains(codes(.rgb(0, 255, 0))))
+    }
+
+    @Test("A matched cell's weight follows whichever side alpha favours")
+    func matchedStyleSnapsAtTheMidpoint() {
+        // Colours blend; bold cannot. Below ½ the glyph wears the
+        // destination's styling, at or above it the source's.
+        let destination = FrameBuffer(lines: [
+            ANSIRenderer.colorize("hi", foreground: .rgb(255, 0, 0))
+        ])
+        let bold = ANSIRenderer.colorize("hi", foreground: .rgb(0, 255, 0), bold: true)
+
+        // Bold renders as parameter 1 inside the (reset-prefixed) escape.
+        let below = faded(bold, 0.3, width: 2).resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+        #expect(!below.lines[0].contains("[0;1;"))
+
+        let above = faded(bold, 0.7, width: 2).resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+        #expect(above.lines[0].contains("[0;1;"))
+    }
+
     @Test("A yielded glyph contest still composites the veil's background")
     func aContestedCellIsStillTinted() {
         // To the cell it lost, the source is a pane of background — the same
