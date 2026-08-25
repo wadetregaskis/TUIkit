@@ -570,3 +570,17 @@ The rules, updated as each lands:
    `SGRState.reversesVideo` / `paintsInkOnBlankCell`, whose codes are
    `visibleOnBlankCell` minus 7 — one vocabulary for "what is observable on a
    blank cell", used by both consumers.
+
+7. **"Behind" means the average colour a cell displays, estimated by ink
+   coverage.** A drawn glyph covers the whole destination cell — ink included —
+   so what it fades toward is the cell's field and its ink mixed by the ink's
+   fraction of the cell (`Character.inkCoverage`): exact by construction for
+   the geometric glyphs (blocks, halves, quadrants, eighths, shades, Braille —
+   precisely the characters used AS solid colour), an estimate everywhere else
+   (0.15 for text, 0.1 for box lines). One algorithm, varying confidence: an
+   unrecognised character gets the text-shaped estimate, not a different
+   blending cliff. The same number makes a yielded cell's veil honest — the
+   source's paint is its background with its ink mixed in, and a source with
+   ink but no background tints at alpha scaled by coverage. Emoji are a knowing
+   omission: colour bitmaps ignore the foreground colour, so no arithmetic can
+   fade them and the glyph threshold is the only lever a terminal offers.

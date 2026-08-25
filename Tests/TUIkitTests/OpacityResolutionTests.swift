@@ -65,13 +65,35 @@ struct OpacityResolutionTests {
         let resolved = source.resolvingOpacity(
             over: destination, surface: .black, palette: palette())
 
-        // Its character, its foreground AND its background: the source paints
-        // no background of its own, so there is nothing of it to see — a
-        // source WITH one would tint the field, and only the field.
+        // Its character and its foreground stand; the field carries only the
+        // whisper of the source's ink — no background of its own, so the tint
+        // is alpha scaled by the ink's coverage, all but invisible.
         #expect(resolved.lines[0].stripped == "world")
         #expect(resolved.lines[0].contains(codes(.red)))
-        #expect(resolved.lines[0].contains(backgroundCodes(.blue)))
         #expect(!resolved.lines[0].contains(codes(.green)))
+        let whisper = Color.green.compositing(0.2 * 0.15, over: .blue)
+        #expect(resolved.lines[0].contains(backgroundCodes(whisper)))
+    }
+
+    @Test("Text fades toward a block swatch's colour, not its background")
+    func aBlockSwatchCountsAsItsInk() {
+        // A full block's ink covers the whole cell, so the cell's average IS
+        // its foreground — the case that motivated coverage: a swatch drawn
+        // with █ behaves as a solid pane of its colour, exactly like one
+        // painted as background.
+        let destination = FrameBuffer(lines: [
+            ANSIRenderer.colorize("█████", foreground: .rgb(0, 0, 255))
+        ])
+        let source = faded(
+            ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)), 0.6, width: 5)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        #expect(resolved.lines[0].stripped == "hello")
+        let towardTheBlocks = Color.rgb(0, 255, 0).compositing(0.6, over: .rgb(0, 0, 255))
+        let towardTheSurface = Color.rgb(0, 255, 0).compositing(0.6, over: .rgb(0, 0, 0))
+        #expect(resolved.lines[0].contains(codes(towardTheBlocks)))
+        #expect(!resolved.lines[0].contains(codes(towardTheSurface)))
     }
 
     @Test("Matching characters cross-fade in parallel, with no threshold")
@@ -129,11 +151,13 @@ struct OpacityResolutionTests {
         let resolved = source.resolvingOpacity(
             over: destination, surface: .black, palette: palette())
 
-        // The text and its colour stand; the field carries the veil.
+        // The text and its colour stand; the field carries the veil — the
+        // source's background with its ink's coverage of foreground mixed in.
         #expect(resolved.lines[0].stripped == "world")
         #expect(resolved.lines[0].contains(codes(.red)))
         #expect(!resolved.lines[0].contains(codes(.green)))
-        let expected = Color.rgb(0, 0, 255).compositing(0.25, over: .rgb(255, 0, 0))
+        let pane = Color.green.compositing(0.15, over: .rgb(0, 0, 255))
+        let expected = pane.compositing(0.25, over: .rgb(255, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
         #expect(!resolved.lines[0].contains(backgroundCodes(.rgb(255, 0, 0))))
     }

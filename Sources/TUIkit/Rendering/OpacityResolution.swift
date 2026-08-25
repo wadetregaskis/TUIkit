@@ -20,7 +20,10 @@
 //    source contributes nothing at all, so `opacity(0)` genuinely reveals what
 //    is behind it rather than painting a near-black smudge over it;
 //  * **a drawn source character blends both channels** — foreground AND
-//    background — toward the background colour of what is behind it;
+//    background — toward the AVERAGE colour of what is behind it: the
+//    destination cell's field and its ink, mixed by the ink's estimated
+//    coverage (`Character.inkCoverage`). Over text the average is nearly all
+//    field; over a block-drawn swatch it is the swatch's colour;
 //  * **matching characters cross-fade in parallel**: where both sides hold the
 //    same character there is no contest, so foreground blends toward
 //    foreground and background toward background, continuously through every
@@ -318,22 +321,61 @@ extension FrameBuffer {
         return span
     }
 
-    /// The destination's cell with the source's background composited onto its
+    /// The destination's cell with the source's paint composited onto its
     /// field — the shared shape of every rule where the destination keeps its
     /// character: a space, and a glyph contest resolved in the destination's
     /// favour. The veil tints the surface under the text, never the text; a
-    /// source that paints no background of its own tints nothing at all.
+    /// source that paints nothing at all tints nothing at all.
+    ///
+    /// "Paint" is the source cell's average: its background, with its ink
+    /// mixed in by the ink's coverage — a yielded glyph does not stop being
+    /// light. A source with ink but no background contributes only the ink,
+    /// at `alpha` scaled by its coverage.
     private static func compositingField(
-        of source: RowCell, onto destination: RowCell?, alpha: Double, behind: Color
+        of source: RowCell, onto destination: RowCell?, alpha: Double, behind: Color,
+        defaultForeground: Color
     ) -> RowCell {
-        guard let fadedBackground = source.background.map({ $0.compositing(alpha, over: behind) })
-        else {
+        let coverage = source.character.inkCoverage
+        let paint: Color?
+        let weight: Double
+        if let background = source.background {
+            paint =
+                coverage > 0
+                ? (source.foreground ?? defaultForeground).compositing(coverage, over: background)
+                : background
+            weight = alpha
+        } else if coverage > 0 {
+            paint = source.foreground ?? defaultForeground
+            weight = alpha * coverage
+        } else {
+            paint = nil
+            weight = 0
+        }
+        guard let paint, weight > 0 else {
             return destination ?? RowCell(character: " ", style: SGRState())
         }
+        let faded = paint.compositing(weight, over: behind)
         var kept = destination ?? RowCell(character: " ", style: SGRState())
-        kept.background = fadedBackground
-        kept.style = kept.style.settingBackground(fadedBackground)
+        kept.background = faded
+        kept.style = kept.style.settingBackground(faded)
         return kept
+    }
+
+    /// The average colour a cell DISPLAYS — its ink and its field mixed by the
+    /// ink's coverage — which is what "behind" means to a glyph drawn over it.
+    ///
+    /// This is the difference between text fading over a `█`-drawn swatch
+    /// blending toward the swatch's colour (its FOREGROUND) and blending
+    /// toward whatever background happened to sit under the blocks. A missing
+    /// cell shows the surface.
+    private static func averageDisplay(
+        of cell: RowCell?, surface: Color, defaultForeground: Color
+    ) -> Color {
+        guard let cell else { return surface }
+        let field = cell.background ?? surface
+        let coverage = cell.character.inkCoverage
+        guard coverage > 0 else { return field }
+        return (cell.foreground ?? defaultForeground).compositing(coverage, over: field)
     }
 
     /// One cell's answer.
@@ -372,7 +414,9 @@ extension FrameBuffer {
         // space never reaches here as one — `cells` normalises it into a
         // solid fill, background and all.)
         if source.character == " ", !source.style.paintsInkOnBlankCell {
-            return compositingField(of: source, onto: destination, alpha: alpha, behind: behind)
+            return compositingField(
+                of: source, onto: destination, alpha: alpha, behind: behind,
+                defaultForeground: defaultForeground)
         }
         // Matching characters are not a contest at all: the source's ink sits
         // exactly where the destination's does, so the channels blend in
@@ -417,11 +461,20 @@ extension FrameBuffer {
         if alpha < 0.5, let destination,
             destination.character != " " || destination.style.paintsInkOnBlankCell
         {
-            return compositingField(of: source, onto: destination, alpha: alpha, behind: behind)
+            return compositingField(
+                of: source, onto: destination, alpha: alpha, behind: behind,
+                defaultForeground: defaultForeground)
         }
-        let fadedBackground = source.background.map { $0.compositing(alpha, over: behind) }
+        // A drawn glyph covers the WHOLE destination cell — ink included — so
+        // what it fades toward is the average colour that cell displays, not
+        // its bare field. Text thinning out over a block-drawn swatch moves
+        // toward the swatch's colour; over ordinary text the average is nearly
+        // all field and this reduces to what it always was.
+        let covered = averageDisplay(
+            of: destination, surface: surface, defaultForeground: defaultForeground)
+        let fadedBackground = source.background.map { $0.compositing(alpha, over: covered) }
         var result = source
-        let foreground = (source.foreground ?? defaultForeground).compositing(alpha, over: behind)
+        let foreground = (source.foreground ?? defaultForeground).compositing(alpha, over: covered)
         // Where neither side paints a background, the cell keeps naming none —
         // which is the surface, and is what it named before.
         let background = fadedBackground ?? destination?.background
