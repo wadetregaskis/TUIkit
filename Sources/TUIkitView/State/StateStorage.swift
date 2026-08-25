@@ -337,6 +337,7 @@ extension StateStorage {
             lastConditionalCase.removeValue(forKey: identity)
         }
         animations.endRenderPass()
+        departures.endRenderPass()
     }
 
     /// Removes all state for descendants of the given identity.

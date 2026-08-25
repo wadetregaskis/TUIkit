@@ -46,17 +46,20 @@ public final class DepartureStore: @unchecked Sendable {
         /// The number of rows it occupied.
         public let height: Int
 
-        /// How it leaves.
-        public let animation: Animation
+        /// The animation the transition itself names, if any — the only part
+        /// of the removal's timing knowable while the view is still present.
+        /// How the view actually leaves is resolved on the frame it goes:
+        /// this, or the transaction of the change that removed it.
+        public let explicitAnimation: Animation?
 
         /// Creates a departure record.
         public init(
-            width: Int, height: Int, animation: Animation,
+            width: Int, height: Int, explicitAnimation: Animation?,
             render: @escaping (Double) -> FrameBuffer
         ) {
             self.width = width
             self.height = height
-            self.animation = animation
+            self.explicitAnimation = explicitAnimation
             self.render = render
         }
     }
@@ -66,6 +69,10 @@ public final class DepartureStore: @unchecked Sendable {
         /// When the view stopped being rendered, or `nil` while it is still
         /// present.
         var leftAtNanos: Int64?
+        /// How the view is leaving — resolved on the frame it went, from
+        /// ``Departure/explicitAnimation`` or that frame's transaction. `nil`
+        /// while it is still present.
+        var animation: Animation?
         /// Whether the view re-declared itself this pass.
         var presentThisPass = false
     }
@@ -88,39 +95,43 @@ extension DepartureStore {
     /// for its tokens, and for the same reason: nothing else can report an
     /// absence.
     public func present(_ departure: Departure, at identity: ViewIdentity) {
-        entries[identity] = Entry(departure: departure, leftAtNanos: nil, presentThisPass: true)
-    }
-
-    /// The animation a record at `identity` was taken with, if there is one.
-    ///
-    /// For re-declaring a departure on a frame that carries no animation of its
-    /// own. A view only records a departure while something animated is in
-    /// force — that is what makes an un-animated removal snap rather than play
-    /// — but once it has one, the PICTURE it would play has to keep up with
-    /// the view: a transition swapped while the view is on screen belongs to
-    /// the next departure, not to the one that was current when it arrived.
-    public func recordedAnimation(at identity: ViewIdentity) -> Animation? {
-        entries[identity]?.departure.animation
+        entries[identity] = Entry(
+            departure: departure, leftAtNanos: nil, animation: nil, presentThisPass: true)
     }
 
     /// The picture to draw in the slot at `identity`, for a view that has gone.
     ///
-    /// Returns `nil` when nothing left from there, or when the removal has
+    /// Returns `nil` when nothing left from there, when the removal has
     /// finished — at which point the slot really is empty and the record is
-    /// dropped.
-    public func departing(at identity: ViewIdentity, nowNanos: Int64) -> FrameBuffer? {
+    /// dropped — or when nothing animates it: how a view leaves is decided by
+    /// the frame that removed it, so `frameAnimation` is that frame's
+    /// effective animation, and a removal with no explicit animation and none
+    /// on the frame simply snaps. The resolved answer is stored, because the
+    /// transaction applies to exactly one pass and the removal plays over
+    /// many.
+    public func departing(
+        at identity: ViewIdentity, nowNanos: Int64, frameAnimation: Animation?
+    ) -> FrameBuffer? {
         guard var entry = entries[identity], !entry.presentThisPass else { return nil }
+        guard
+            let animation = entry.animation
+                ?? entry.departure.explicitAnimation ?? frameAnimation
+        else {
+            entries.removeValue(forKey: identity)
+            return nil
+        }
         let left = entry.leftAtNanos ?? nowNanos
         entry.leftAtNanos = left
+        entry.animation = animation
         entries[identity] = entry
 
         let elapsed = Double(nowNanos - left) / 1_000_000_000
-        guard !entry.departure.animation.isFinished(at: elapsed) else {
+        guard !animation.isFinished(at: elapsed) else {
             entries.removeValue(forKey: identity)
             return nil
         }
         // Backwards: a removal runs the transition from present to absent.
-        return entry.departure.render(1 - entry.departure.animation.fraction(at: elapsed))
+        return entry.departure.render(1 - animation.fraction(at: elapsed))
     }
 
     /// The size a departing view is still holding open, or `nil` if none is.
@@ -137,10 +148,13 @@ extension DepartureStore {
     /// `leftAtNanos` is still `nil` — insisting on it collapsed the slot to
     /// nothing exactly when the transition needed it most, and the first frame
     /// of every departure was drawn into no rows.
-    public func departingSize(at identity: ViewIdentity, nowNanos: Int64)
-        -> (width: Int, height: Int)?
-    {
-        guard let entry = entries[identity], !isFinished(entry, at: nowNanos) else { return nil }
+    public func departingSize(
+        at identity: ViewIdentity, nowNanos: Int64, frameAnimation: Animation?
+    ) -> (width: Int, height: Int)? {
+        guard let entry = entries[identity],
+            entry.animation ?? entry.departure.explicitAnimation ?? frameAnimation != nil,
+            !isFinished(entry, at: nowNanos)
+        else { return nil }
         return (entry.departure.width, entry.departure.height)
     }
 
@@ -167,11 +181,19 @@ extension DepartureStore {
     /// has no departures at all, and this is asked once per `nil` optional per
     /// pass.
     public func hasDeparture(
-        directlyUnder parent: ViewIdentity, ofType type: Any.Type, nowNanos: Int64
+        directlyUnder parent: ViewIdentity, ofType type: Any.Type, nowNanos: Int64,
+        frameAnimation: Animation?
     ) -> Bool {
         guard !entries.isEmpty else { return false }
         let wanted = ObjectIdentifier(type)
         for (identity, entry) in entries where !isFinished(entry, at: nowNanos) {
+            // A slot exists only for a removal that will actually PLAY:
+            // already resolved, named by the transition, or animated by the
+            // frame doing the removing. An unanimated removal snaps, and its
+            // slot must close up on the same frame.
+            guard
+                entry.animation ?? entry.departure.explicitAnimation ?? frameAnimation != nil
+            else { continue }
             guard let leaf = identity.leafType, ObjectIdentifier(leaf) == wanted else { continue }
             if identity.parent == parent { return true }
         }
@@ -181,16 +203,17 @@ extension DepartureStore {
     /// Whether `entry`'s removal has played out. An entry that has not started
     /// leaving is never finished.
     private func isFinished(_ entry: Entry, at nowNanos: Int64) -> Bool {
-        guard let left = entry.leftAtNanos else { return false }
-        return entry.departure.animation.isFinished(at: Double(nowNanos - left) / 1_000_000_000)
+        guard let left = entry.leftAtNanos, let animation = entry.animation else { return false }
+        return animation.isFinished(at: Double(nowNanos - left) / 1_000_000_000)
     }
 
     /// Whether anything is still leaving — the run loop's question, asked once.
     public func hasDepartures(at nowNanos: Int64) -> Bool {
         entries.values.contains { entry in
-            guard let left = entry.leftAtNanos, !entry.presentThisPass else { return false }
-            return !entry.departure.animation.isFinished(
-                at: Double(nowNanos - left) / 1_000_000_000)
+            guard let left = entry.leftAtNanos, let animation = entry.animation,
+                !entry.presentThisPass
+            else { return false }
+            return !animation.isFinished(at: Double(nowNanos - left) / 1_000_000_000)
         }
     }
 
@@ -199,6 +222,26 @@ extension DepartureStore {
         for key in entries.keys {
             entries[key]?.presentThisPass = false
         }
+    }
+
+    /// Ends a pass: drops the entries of views that vanished without anything
+    /// starting their removal.
+    ///
+    /// The parting picture is recorded on EVERY frame a transitioning view
+    /// renders, so every such view holds an entry while it is present. When
+    /// one leaves, its slot host resolves the removal the same pass — playing
+    /// it or snapping it. An entry that is neither present nor departing by
+    /// the end of the pass belongs to a view that left with no host to ask (a
+    /// subtree removed whole, a `nil` that flattens to several children) and
+    /// would otherwise sit in the store forever.
+    public func endRenderPass() {
+        guard !entries.isEmpty else { return }
+        var stale: [ViewIdentity] = []
+        for (identity, entry) in entries
+        where !entry.presentThisPass && entry.leftAtNanos == nil {
+            stale.append(identity)
+        }
+        for identity in stale { entries.removeValue(forKey: identity) }
     }
 
     /// Drops everything.

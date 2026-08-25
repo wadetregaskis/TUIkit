@@ -111,10 +111,14 @@ struct TransitionTests {
             ).lines.map(\.stripped)
         }
 
+        // The arrival is animated too, so let it finish: a view removed
+        // mid-arrival departs from where its arrival had got, not from full
+        // presence.
         _ = draw(true, atMillis: 0)
-        #expect(draw(false, atMillis: 0).first == "XXXX")
-        #expect(draw(false, atMillis: 500).first == "  XX")
-        #expect(draw(false, atMillis: 1200).isEmpty)
+        _ = draw(true, atMillis: 1100)
+        #expect(draw(false, atMillis: 1100).first == "XXXX")
+        #expect(draw(false, atMillis: 1600).first == "  XX")
+        #expect(draw(false, atMillis: 2400).isEmpty)
     }
 
     /// A transition swapped while the view is ON SCREEN belongs to the next
@@ -209,14 +213,99 @@ struct TransitionTests {
             ).lines.map(\.stripped)
         }
 
+        // Arrive fully first, so the departure leaves from full presence.
         _ = draw(true, atMillis: 0)
-        _ = draw(false, atMillis: 0)
-        #expect(draw(false, atMillis: 400).first == "  XX")
+        _ = draw(true, atMillis: 1100)
+        _ = draw(false, atMillis: 1100)
+        #expect(draw(false, atMillis: 1500).first == "  XX")
         // Present again. Not "resumed from where it was leaving" — it arrives,
         // which is the same thing that happens to any view that appears.
-        #expect(draw(true, atMillis: 500).first == "    ")
-        #expect(draw(true, atMillis: 1000).first == "  XX")
-        #expect(draw(true, atMillis: 1500).first == "XXXX")
+        #expect(draw(true, atMillis: 1600).first == "    ")
+        #expect(draw(true, atMillis: 2100).first == "  XX")
+        #expect(draw(true, atMillis: 2600).first == "XXXX")
+    }
+
+    /// How a view leaves is decided by the change that REMOVES it — not by
+    /// whether any frame it happened to render under was animated.
+    @Test("A statically-appeared view still plays an animated removal")
+    func staticAppearanceAnimatedRemovalPlays() {
+        var context = makeRenderContext(width: 8, height: 4)
+        context.environment.canAnimate = true
+
+        func draw(_ showing: Bool, animated: Bool, atMillis millis: Int) -> [String] {
+            context.environment.frameNowNanos = Int64(millis) * 1_000_000
+            context.environment.transaction = Transaction(
+                animation: animated ? .linear(duration: 1) : nil)
+            let storage = context.environment.stateStorage!
+            storage.beginRenderPass()
+            defer { storage.endRenderPass() }
+            let content: Text? = showing ? Text("XXXX") : nil
+            return renderToBuffer(
+                content.map { $0.transition(.move(edge: .trailing)) }, context: context
+            ).lines.map(\.stripped)
+        }
+
+        // Appears with nothing animating, sits on a static screen…
+        _ = draw(true, animated: false, atMillis: 0)
+        _ = draw(true, animated: false, atMillis: 1000)
+        // …and is removed inside withAnimation: the removal must play. It
+        // used to snap — no frame the view rendered under was animated, so no
+        // departure was ever recorded, and the removal frame's transaction
+        // was never consulted.
+        #expect(draw(false, animated: true, atMillis: 2000).first == "XXXX")
+        #expect(draw(false, animated: true, atMillis: 2500).first == "  XX")
+        #expect(draw(false, animated: true, atMillis: 3200).isEmpty)
+    }
+
+    @Test("An unanimated removal snaps even when earlier frames were animated")
+    func unanimatedRemovalSnapsDespiteAnimatedHistory() {
+        var context = makeRenderContext(width: 8, height: 4)
+        context.environment.canAnimate = true
+
+        func draw(_ showing: Bool, animated: Bool, atMillis millis: Int) -> [String] {
+            context.environment.frameNowNanos = Int64(millis) * 1_000_000
+            context.environment.transaction = Transaction(
+                animation: animated ? .linear(duration: 1) : nil)
+            let storage = context.environment.stateStorage!
+            storage.beginRenderPass()
+            defer { storage.endRenderPass() }
+            let content: Text? = showing ? Text("XXXX") : nil
+            return renderToBuffer(
+                content.map { $0.transition(.move(edge: .trailing)) }, context: context
+            ).lines.map(\.stripped)
+        }
+
+        // Every frame the view renders under is animated (an app mid-flight)…
+        _ = draw(true, animated: true, atMillis: 0)
+        _ = draw(true, animated: true, atMillis: 1500)
+        // …and then a plain, unanimated state change removes it. That is a
+        // snap. It used to play whatever animation the record was carrying.
+        #expect(draw(false, animated: false, atMillis: 2000).isEmpty)
+    }
+
+    @Test("A view removed mid-arrival departs from where its arrival had got")
+    func midArrivalRemovalDepartsFromPartialPresence() {
+        var context = makeRenderContext(width: 8, height: 4)
+        context.environment.canAnimate = true
+        context.environment.transaction = Transaction(animation: .linear(duration: 1))
+
+        func draw(_ showing: Bool, atMillis millis: Int) -> [String] {
+            context.environment.frameNowNanos = Int64(millis) * 1_000_000
+            let storage = context.environment.stateStorage!
+            storage.beginRenderPass()
+            defer { storage.endRenderPass() }
+            let content: Text? = showing ? Text("XXXX") : nil
+            return renderToBuffer(
+                content.map { $0.transition(.move(edge: .trailing)) }, context: context
+            ).lines.map(\.stripped)
+        }
+
+        _ = draw(true, atMillis: 0)
+        // Halfway through sliding on…
+        #expect(draw(true, atMillis: 500).first == "  XX")
+        // …it is removed. The first departing frame must show the view where
+        // it WAS — half arrived — not popped to full presence.
+        #expect(draw(false, atMillis: 500).first == "  XX")
     }
 
     @Test("An unanimated removal is instant")

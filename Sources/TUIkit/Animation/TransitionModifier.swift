@@ -82,31 +82,11 @@ extension _TransitionView: Renderable {
             ?? (context.environment.canAnimate
                 ? context.environment.transaction.effectiveAnimation : nil)
 
-        // Leave the parting picture behind on every frame, so whatever holds
-        // this slot can play it out if the next frame does not contain us.
-        // Re-declared each frame because nothing else can report an absence —
-        // see `DepartureStore`.
-        //
-        // Falling back to the animation already on record, so "every frame"
-        // means every frame and not just the animated ones. A view arrives
-        // inside `withAnimation`, and everything after that — including
-        // choosing a different transition — is an ordinary state change with no
-        // animation in force. Skipping those frames left the store holding the
-        // removal that was current when the view arrived, so the panel went on
-        // fading out long after the picker had been moved to Slide, and only
-        // adopted it on the trip after next.
-        if let leaving = animation ?? transition.explicitAnimation
-            ?? storage.departures.recordedAnimation(at: context.identity)
-        {
-            let removal = transition.removal
-            storage.departures.present(
-                DepartureStore.Departure(
-                    width: buffer.width, height: buffer.lines.count, animation: leaving,
-                    render: { phase in
-                        removal.apply(to: buffer, phase: phase, context: context)
-                    }),
-                at: context.identity)
-        }
+        // The departure re-declaration and the parting picture are per-frame
+        // work no memo may skip: a cached buffer would starve the store of the
+        // re-declaration (pruning the entry, so the removal snaps) and would
+        // freeze the picture the removal plays.
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
 
         let key = AnimationStore.Key(
             identity: context.identity, owner: ObjectIdentifier(Self.self),
@@ -114,11 +94,33 @@ extension _TransitionView: Renderable {
         let phase = storage.animations.arrivalPhase(
             for: key, animation: animation,
             nowNanos: context.environment.frameNowNanos, isMeasuring: false)
-        guard phase < 1 else { return buffer }
 
-        // Arriving: the subtree's picture is a function of time, so a value
-        // memo must not cache it.
-        context.environment.volatileReadTracker?.recordRenderSideEffect()
+        // Leave the parting picture behind on EVERY frame, so whatever holds
+        // this slot can play it out if the next frame does not contain us.
+        // Re-declared each frame because nothing else can report an absence —
+        // see `DepartureStore` — and unconditionally, because how the view
+        // will leave cannot be known while it is present: that is decided by
+        // the transaction of the change that removes it, which the slot host
+        // hands to the store at removal time.
+        //
+        // The arrival phase is folded in. A view removed mid-insertion is
+        // only PART present, and a departure recorded from the raw content
+        // buffer started the removal from full presence — the first departing
+        // frame popped a 30%-arrived view to 100%. Scaling the removal's
+        // phase by how far the arrival had got keeps the picture continuous
+        // for the (symmetric) common case, and monotonic for every case.
+        let removal = transition.removal
+        let arrival = min(1, max(0, phase))
+        storage.departures.present(
+            DepartureStore.Departure(
+                width: buffer.width, height: buffer.lines.count,
+                explicitAnimation: transition.explicitAnimation,
+                render: { departurePhase in
+                    removal.apply(to: buffer, phase: departurePhase * arrival, context: context)
+                }),
+            at: context.identity)
+
+        guard phase < 1 else { return buffer }
         return transition.insertion.apply(to: buffer, phase: phase, context: context)
     }
 }

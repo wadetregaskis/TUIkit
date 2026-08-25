@@ -183,7 +183,9 @@ extension Optional: ChildViewProvider where Wrapped: View {
             guard let storage = context.stateStorage,
                 storage.departures.hasDeparture(
                     directlyUnder: context.identity, ofType: Wrapped.self,
-                    nowNanos: context.environment.frameNowNanos)
+                    nowNanos: context.environment.frameNowNanos,
+                    frameAnimation: context.environment.canAnimate
+                        ? context.environment.transaction.effectiveAnimation : nil)
             else { return [] }
             // `childIndex` is provisional: the enclosing container rebases it to
             // the flattened position, which is the same position the present
