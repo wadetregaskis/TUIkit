@@ -586,16 +586,16 @@ extension MouseEventDispatcher {
                 }
                 return true
             }
-            // Fall through for wheel events AND for the secondary (right)
-            // button: a control that doesn't handle a right-click lets it
-            // BUBBLE to an ancestor, exactly like the wheel bubbles past a
-            // Button/TextField to the surrounding scroller. This is what lets a
-            // `.contextMenu` on a container open when you right-click a child
-            // that has no context action of its own. A left click / drag /
-            // motion still stops at the first matching region.
-            if !event.button.isWheel, event.button != .right {
-                return false
-            }
+            // Fall through when the handler declined: `false` means "not
+            // mine" for every button, the way it always did for the wheel
+            // and the right button (which is what lets a `.contextMenu` on a
+            // container open when you right-click a child with no context
+            // action of its own). The left button used to STOP at the first
+            // matching region regardless — so a decline-everything wrapper
+            // region, `.onHover`'s, sat over its own content and made every
+            // hover-wrapped control unclickable. A region that wants to
+            // BLOCK what is beneath it consumes (returns true), as the
+            // dimmed backdrops do.
         }
         return false
     }

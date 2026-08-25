@@ -15,7 +15,7 @@ struct ContextMenuTests {
 
     // MARK: - Dispatch: right-clicks bubble to an ancestor (the core change)
 
-    @Test("A right-click bubbles past a non-consuming child; a left-click stops")
+    @Test("Right AND left clicks bubble past a non-consuming child")
     func rightClickBubbles() {
         let dispatcher = MouseEventDispatcher()
         var outerFired = false
@@ -32,10 +32,11 @@ struct ContextMenuTests {
         _ = dispatcher.dispatch(MouseEvent(button: .right, phase: .pressed, x: 5, y: 5))
         #expect(outerFired == true, "the right-click bubbled past the inner region")
 
-        // Left-click: inner returns false → STOPS at the first region (no bubble).
+        // Left-click: the same rule since the .onHover click-shield fix —
+        // `false` means "not mine" for every button; blocking is consuming.
         outerFired = false
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 5, y: 5))
-        #expect(outerFired == false, "a left click does not bubble")
+        #expect(outerFired == true, "a declined left click bubbles too")
     }
 
     // MARK: - Harness

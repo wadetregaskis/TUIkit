@@ -483,8 +483,13 @@ struct MouseEventDispatcherTests {
         #expect(outerSawWheel, "outer handler should receive the fall-through")
     }
 
-    @Test("Click does NOT fall through inner non-handler to outer")
-    func clickDoesNotFallThrough() {
+    @Test("A declined click falls through; a consumed one blocks")
+    func declinedClickFallsThrough() {
+        // `false` means "not mine" for every button — the left button used
+        // to stop at the first matching region regardless, which made a
+        // decline-everything wrapper region (`.onHover`'s) shield its own
+        // content from clicks. A region that wants to BLOCK what is beneath
+        // consumes, as the dimmed backdrops do.
         let dispatcher = MouseEventDispatcher()
         dispatcher.setActiveSupport(.standard)
         dispatcher.beginRenderPass()
@@ -498,6 +503,7 @@ struct MouseEventDispatcherTests {
             return false
         }
         let inner = dispatcher.register { _ in false }
+        let blocker = dispatcher.register { _ in true }
         dispatcher.setRegions([
             HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 10, handlerID: outer),
             HitTestRegion(offsetX: 2, offsetY: 2, width: 4, height: 4, handlerID: inner),
@@ -506,9 +512,17 @@ struct MouseEventDispatcherTests {
         let consumed = dispatcher.dispatch(
             MouseEvent(button: .left, phase: .pressed, x: 3, y: 3)
         )
+        #expect(consumed)
+        #expect(outerSawClick, "the inner region declined; the click is the outer's")
 
-        #expect(!consumed)
-        #expect(!outerSawClick, "click must stop at inner — no fall-through for non-wheel events")
+        // A consuming region blocks: the outer never hears about it.
+        outerSawClick = false
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 10, handlerID: outer),
+            HitTestRegion(offsetX: 2, offsetY: 2, width: 4, height: 4, handlerID: blocker),
+        ])
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: 3))
+        #expect(!outerSawClick, "a consuming region blocks what is beneath it")
     }
 
     @Test("Wheel falls through chain of non-handlers to deepest handler")
