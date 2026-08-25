@@ -133,7 +133,8 @@ extension NotificationHostModifier: Renderable {
             screenSize: (screenWidth, screenHeight)
         )
 
-        return fullscreenBuffer.composited(with: stackedBuffer, at: offset)
+        return fullscreenBuffer.compositedResolvingOpacity(
+            with: stackedBuffer, at: offset, palette: palette)
     }
 }
 

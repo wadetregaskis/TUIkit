@@ -72,6 +72,14 @@ public struct OpacityRegion: Equatable, Sendable {
     }
 
     /// Whether `(column, row)` is inside this region.
+    /// Whether `row` falls inside this region, at any column.
+    ///
+    /// The resolution walks rows and asks this first: a buffer of forty rows
+    /// with one faded row in it should cost one row's work, not forty.
+    public func spans(row: Int) -> Bool {
+        row >= offsetY && row < offsetY + height
+    }
+
     public func contains(column: Int, row: Int) -> Bool {
         column >= offsetX && column < offsetX + width
             && row >= offsetY && row < offsetY + height

@@ -899,6 +899,21 @@ extension RenderLoop {
             terminalHeight: terminalHeight, statusBarHeight: statusBarHeight,
             headerHeight: headerHeight)
 
+        // A region that reaches a root was never composited over anything, so
+        // what is behind it is the surface — and there are three surfaces, not
+        // one. `RenderBackgroundCodes` keeps them apart for exactly this
+        // reason: a faded item in the status bar fades toward the STATUS BAR's
+        // background, not the page's, and resolving all three against
+        // `palette.background` would be right only where the theme happens to
+        // paint them alike. Nothing here does anything until `.opacity` starts
+        // emitting regions; it is the sink being put in place first.
+        let palette = environment.palette
+        let buffer = buffer.resolvingOpacity(surface: palette.background, palette: palette)
+        let appHeaderBuffer = appHeaderBuffer?.resolvingOpacity(
+            surface: palette.appHeaderBackground, palette: palette)
+        let statusBarBuffer = statusBarBuffer?.resolvingOpacity(
+            surface: palette.statusBarBackground, palette: palette)
+
         let outputLines = diffWriter.buildOutputLines(
             buffer: buffer,
             terminalWidth: terminalWidth,

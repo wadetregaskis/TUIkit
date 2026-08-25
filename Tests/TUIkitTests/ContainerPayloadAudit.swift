@@ -213,15 +213,32 @@ struct ContainerPayloadAudit {
     /// container that drops it renders a plausible page in which one view is
     /// simply not translucent.
     ///
-    /// It is checked as a COUNT rather than a picture because nothing consumes
-    /// the regions yet — this is the propagation half, and the blend that reads
-    /// them lands separately. See `Documentation/Opacity as composition.md`.
+    /// Two containers legitimately answer `0`, and they are the two that
+    /// COMPOSITE: a `ZStack` and `.overlay` draw one buffer onto another, which
+    /// is the moment what is behind the faded layer is known — so they resolve
+    /// the region into cells and spend it rather than passing it up. That is
+    /// the payload arriving at its destination, not being dropped, and the
+    /// assertion for them is that the picture changed.
+    ///
+    /// Every other container is a carrier and must still hand it on.
     @Test("Every container carries its children's opacity regions")
     func containersCarryOpacityRegions() {
+        let sinks: Set<String> = ["ZStack", "overlay"]
         for (what, wrap) in containers() {
-            let base = render(wrap(AnyView(inert()))).opacityRegions.count
-            let found = render(wrap(AnyView(faded()))).opacityRegions.count
-            #expect(found > base, "\(what) dropped the child's opacity (\(base) → \(found))")
+            let plain = render(wrap(AnyView(inert())))
+            let translucent = render(wrap(AnyView(faded())))
+            if sinks.contains(what) {
+                #expect(
+                    translucent.opacityRegions.isEmpty,
+                    "\(what) composites, so it must spend the region rather than carry it")
+                #expect(
+                    translucent.lines != plain.lines,
+                    "\(what) spent the region without changing a cell")
+            } else {
+                let before = plain.opacityRegions.count
+                let after = translucent.opacityRegions.count
+                #expect(after > before, "\(what) dropped the child's opacity (\(before) → \(after))")
+            }
         }
     }
 

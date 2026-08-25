@@ -371,6 +371,64 @@ enum SGRColorRewrite {
         return "\u{1B}[" + rewritten.joined(separator: ";") + "m"
     }
 
+    /// Which colour an SGR parameter set, for ``readingColors(_:_:)``.
+    enum ColorSlot {
+        case foreground
+        case background
+        /// SGR 0 — both colours back to the terminal's default at once.
+        case reset
+    }
+
+    /// Reports every colour `sequence` names, in order, WITHOUT rewriting it.
+    ///
+    /// The reading half of ``rewriting(_:defaultForeground:defaultBackground:transform:)``,
+    /// sharing its tables rather than repeating them: the same 38/48 extended
+    /// forms, the same basic 30–37 / 90–97 ladder, the same 39/49 defaults.
+    /// A caller that has to know what a cell IS drawn in — opacity resolution,
+    /// which blends against what is behind the cell — needs the parse without
+    /// the rewrite.
+    ///
+    /// `nil` in the callback means the terminal's default, which is what 39 and
+    /// 49 select; the caller decides what that means for it.
+    static func readingColors(_ sequence: String, _ report: (ColorSlot, Color?) -> Void) {
+        guard sequence.hasPrefix("\u{1B}["), sequence.hasSuffix("m") else { return }
+        let body = sequence.dropFirst(2).dropLast()
+        let parameters = body.split(separator: ";", omittingEmptySubsequences: false).map(String.init)
+        var index = 0
+        while index < parameters.count {
+            // An empty parameter is 0 — `ESC[m` and `ESC[;m` are both resets —
+            // which is the same reading `rewritingSGR` takes.
+            let parameter = Int(parameters[index]) ?? 0
+            switch parameter {
+            case 0:
+                report(.reset, nil)
+            case 38, 48:
+                let (color, consumed) = Self.extendedColor(parameters, from: index)
+                // An unparseable extended form is left alone by the rewrite, so
+                // it is left unreported here: guessing at it would be worse than
+                // treating the cell as unchanged.
+                if let color { report(parameter == 38 ? .foreground : .background, color) }
+                index += consumed
+                continue
+            case 30...37, 90...97, 40...47, 100...107:
+                let isBackground = (40...47).contains(parameter) || (100...107).contains(parameter)
+                let isBright = parameter >= 90
+                let base = parameter - (isBright ? (isBackground ? 100 : 90) : (isBackground ? 40 : 30))
+                if base >= 0, base < Self.basicColors.count {
+                    let (standard, bright) = Self.basicColors[base]
+                    report(isBackground ? .background : .foreground, isBright ? bright : standard)
+                }
+            case 39:
+                report(.foreground, nil)
+            case 49:
+                report(.background, nil)
+            default:
+                break
+            }
+            index += 1
+        }
+    }
+
     /// The colour named by `38;5;n` / `38;2;r;g;b` (or the `48` background
     /// forms) at `index`, and how many parameters it spans.
     private static func extendedColor(

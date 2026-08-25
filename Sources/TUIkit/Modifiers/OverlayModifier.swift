@@ -81,7 +81,9 @@ extension OverlayModifier: Renderable {
             ?? alignment.vertical.childOffset(childHeight: overlayHeight, in: baseHeight)
 
         // Composite the overlay onto the base
-        return baseBuffer.composited(with: overlayBuffer, at: (x: horizontalOffset, y: verticalOffset))
+        return baseBuffer.compositedResolvingOpacity(
+            with: overlayBuffer, at: (x: horizontalOffset, y: verticalOffset),
+            palette: context.environment.palette)
     }
 }
 

@@ -451,6 +451,9 @@ struct _UserResizableCore<Content: View>: View, Renderable {
             glyph,
             foreground: tint.ensuringRenderedContrast(atLeast: 2.4, against: background),
             background: background)
+        // Plain `composited`: the overlay is one glyph this function just
+        // built, so it carries no opacity region to resolve. (The BASE may;
+        // resolution is a property of what is being drawn ON, not drawn on to.)
         buffer = buffer.composited(with: FrameBuffer(lines: [styled]), at: cell)
         if let run = animated?.run(offsetX: cell.x, offsetY: cell.y, draw: {
             ANSIRenderer.colorize(glyph, foreground: $0, background: background)

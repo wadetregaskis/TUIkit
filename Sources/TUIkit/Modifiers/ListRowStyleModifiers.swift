@@ -134,7 +134,8 @@ extension _ListRowColorView: Renderable {
             lines: (0..<foreground.height).map { _ in
                 ANSIRenderer.colorize(String(repeating: " ", count: width), background: color)
             })
-        filled = filled.composited(with: foreground, at: (x: 0, y: 0))
+        filled = filled.compositedResolvingOpacity(
+            with: foreground, at: (x: 0, y: 0), palette: context.environment.palette)
         filled.hitTestRegions = foreground.hitTestRegions
         filled.overlays = foreground.overlays
         return filled
@@ -179,7 +180,8 @@ extension _ListRowBackgroundView: Renderable {
         // hit-test regions and overlays are the ones that survive — a
         // background must not swallow a button in the row.
         var result = filled(backdrop, toWidth: width, height: foreground.height)
-        result = result.composited(with: foreground, at: (x: 0, y: 0))
+        result = result.compositedResolvingOpacity(
+            with: foreground, at: (x: 0, y: 0), palette: context.environment.palette)
         return result.replacingLines(result.lines).withRegions(of: foreground)
     }
 

@@ -66,7 +66,8 @@ extension FrameBuffer {
                         foreground: palette.foregroundTertiary, background: palette.overlayBackground)
                 }
                 let placed = layer.placed(maxWidth: maxWidth, maxHeight: maxHeight)
-                result = result.composited(with: placed.content, at: (x: placed.x, y: placed.y))
+                result = result.compositedResolvingOpacity(
+                    with: placed.content, at: (x: placed.x, y: placed.y), palette: palette)
             }
         }
         return result

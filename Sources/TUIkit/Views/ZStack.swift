@@ -128,7 +128,9 @@ private struct _ZStackCore<Content: View>: View, Renderable {
         // lives inside it. `ZStack {}` still yields a bare buffer — `reduce`
         // over no children returns the initial value.
         guard frameWidth > 0, frameHeight > 0 else {
-            return buffers.reduce(FrameBuffer()) { $0.composited(with: $1, at: (x: 0, y: 0)) }
+            return buffers.reduce(FrameBuffer()) {
+                $0.compositedResolvingOpacity(with: $1, at: (x: 0, y: 0), palette: context.environment.palette)
+            }
         }
 
         // Composite each child onto a blank frame at its alignment offset, in
@@ -151,7 +153,8 @@ private struct _ZStackCore<Content: View>: View, Renderable {
             let dy =
                 verticalRun?.offsets[index]
                 ?? alignment.vertical.childOffset(childHeight: buffer.height, in: frameHeight)
-            result = result.composited(with: buffer, at: (x: dx, y: dy))
+            result = result.compositedResolvingOpacity(
+                with: buffer, at: (x: dx, y: dy), palette: context.environment.palette)
         }
         return result
     }

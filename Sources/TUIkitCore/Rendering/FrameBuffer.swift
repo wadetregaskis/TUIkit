@@ -976,6 +976,23 @@ extension FrameBuffer {
             atColumn: column)
     }
 
+    /// `line` with `span` spliced over it starting at `column`, the line's own
+    /// styling restored where the span ends.
+    ///
+    /// The same surgery ``patchingAnimatedCells(in:with:atColumn:width:)``
+    /// performs, without the background re-statement — a caller that has
+    /// already decided every cell's colours (opacity resolution) wants its span
+    /// taken literally, while a pre-baked animation frame was coloured against
+    /// an assumed background and needs the real one restated around it.
+    public static func splicing(_ span: String, into line: String, atColumn column: Int) -> String {
+        let width = span.strippedLength
+        guard width > 0 else { return line }
+        return insertOverlay(
+            base: line.padToVisibleWidth(max(line.strippedLength, column + width)),
+            overlay: span,
+            atColumn: column)
+    }
+
     /// `frame` with `background` re-stated after every reset that has cells
     /// after it.
     ///
