@@ -28,7 +28,10 @@ reasoning is in those commits; the entries are gone from here rather than
 marked done, as this file's last section requires.
 
 Last reviewed: 2026-08-24 — every remaining entry re-checked against the code
-that day, and the counts re-measured rather than carried forward. Three left.
+that day, and the counts re-measured rather than carried forward. Three left,
+and two of them (§1, §2) are now a live question rather than a blocked one:
+task #511 has been answered and implemented, which changes what they are
+waiting for.
 
 **Each entry now ends in a recommendation.** They are recommendations, not
 decisions: the point of this file is that the call is not mine to make. But an
@@ -42,29 +45,56 @@ with an opinion you can disagree with.
 **The gap.** `Color.init(_:red:green:blue:opacity:)`,
 `init(hue:saturation:brightness:opacity:)`, `init(_:white:opacity:)`.
 
-**Why it needs a decision.** `Color.ColorValue` has no alpha channel, and
-`Color.opacity(_:)` currently blends toward BLACK. Shipping a construction-time
-`opacity:` now would either lie about the result or pre-commit the design that
-**task #511 ("Opacity: resolve at composite time, not render time")** exists to
-settle — and would reintroduce the opacity dim-blend bug class through a new
-public door.
+**Why it needed a decision.** `Color.ColorValue` has no alpha channel, and
+`Color.opacity(_:)` blends toward BLACK. Shipping a construction-time
+`opacity:` would either lie about the result or pre-commit the design that
+**task #511 ("Opacity: resolve at composite time, not render time")** existed
+to settle.
 
-**Blocked on:** task #511. Not a question that can be answered independently.
+**#511 is answered, as of 2026-08-24, and the answer is the second of the two
+that were on the table**: alpha lives on BUFFERS, as `OpacityRegion` — a
+rectangle of cells carried up the tree and resolved at the composite, where
+what is behind it is finally known. `View.opacity(_:)` ships on it. The whole
+design and its measurements are in
+[`Opacity as composition.md`](Opacity%20as%20composition.md).
 
-**What would unblock it, stated so the dependency is checkable.** #511 decides
-where alpha lives. Only two answers change this entry:
+**So this entry is no longer blocked; it is a smaller question with a new
+shape.** A region says a whole CELL is translucent — both its colours and, past
+the glyph threshold, its character. A colour carrying alpha is narrower than
+that: `Color.red.opacity(0.5)` as a foreground makes the INK translucent and
+says nothing about the cell's background, and `.clear` as a background means
+"paint nothing" while `.clear` as a foreground means "draw no glyph". Two
+things stand between the machinery that exists and that:
 
-1. **Alpha becomes a field of `Color.ColorValue`** — then `opacity:` is a real
-   parameter, these three initialisers are mechanical, and `Color.clear` (§4)
-   falls out for free as alpha 0.
-2. **Alpha stays a composite-time operation on BUFFERS, not on colours** — then
-   a colour cannot carry one, `opacity:` can never be honoured, and all three
-   initialisers plus §4 should be recorded in the parity map as
-   `notImplemented` with that as the `why`.
+1. **The region would need per-channel alpha.** A foreground α and a background
+   α rather than one number. The blend already treats the two channels
+   separately, so this part is a field and a branch — genuinely small.
+2. **There is no choke point that knows WHICH CELLS a colour painted.** A
+   region is emitted by a view about its own buffer; a colour is resolved deep
+   inside `ANSIRenderer.foregroundCodes(for:)`, which returns SGR parameters and
+   has no buffer to mark. Every view that draws text would have to emit the
+   region itself, or the renderer would have to emit a sentinel for a later pass
+   to find. That is the actual cost, and it is not small.
 
-**Recommendation: none, deliberately** — but note that The two entries below are one
-decision wearing two hats, and answering #511 answers both. They should be
-taken off this list together or not at all.
+**Options now.**
+
+(a) **Do it** — per-channel alpha on the region, plus whatever mechanism gets a
+    colour's alpha out to the buffer. Closes §1 and §2 properly.
+(b) **Record `notImplemented`** in the parity map, with the `why` above: alpha
+    is a property of a layer here, not of a colour, and a colour has no cells to
+    name.
+(c) **A narrow special case for `.clear` alone** — a `.clear` foreground is "emit
+    a space", which is a glyph substitution at the point the glyph is chosen and
+    needs no alpha anywhere. It closes §2 and leaves §1 open.
+
+**Recommendation: (b) for now, and revisit if `.clear` is asked for.** The
+initialisers are the least valuable half — `Color(red:green:blue:opacity:)` with
+a real alpha is a colour you cannot see the point of until you put it over
+something, which is what `.opacity(_:)` on the view already does better. (c) is
+cheap and self-contained if `.clear` turns out to matter.
+
+**Note that §1 and §2 are still one decision wearing two hats** and should be
+taken off this list together.
 
 ---
 
@@ -95,16 +125,18 @@ constant is itself a decision, but it means (b)'s `why` should say "no alpha
 channel, and the foreground case would need a glyph substitution rather than a
 colour" rather than the flat "not implementable".
 
-**DECIDED 2026-08-24 — (b), and (a) is ruled out rather than merely
-outranked.** Mapping `.clear` to something that is not clear is not an option
-at any price: the one thing a reader reaches for `.clear` to do is hide
-something, and `.default` renders it perfectly legibly. So this entry waits on
-#511, and moves with it — if alpha becomes a field of `ColorValue`, `.clear` is
-alpha 0 and falls out for free; if alpha stays a composite-time operation on
-buffers, this is recorded as `notImplemented` with the fuller `why` above.
+**DECIDED 2026-08-24 — (a) is ruled out rather than merely outranked.**
+Mapping `.clear` to something that is not clear is not an option at any price:
+the one thing a reader reaches for `.clear` to do is hide something, and
+`.default` renders it perfectly legibly.
 
-Not "pending" in the sense of undecided, then. The decision is made; what is
-outstanding is the fact it depends on.
+**And the fact it depended on has arrived.** #511 chose buffer-level alpha (see
+§1), so `.clear` does not fall out for free — a colour still has no alpha, and
+still has no cells to name. What is left is the choice in §1: record it
+`notImplemented`, or take §1's option (c), the narrow one — a `.clear`
+foreground is "emit a space", a glyph substitution at the point the glyph is
+chosen, which needs no alpha channel anywhere and is the only part of this
+anyone is likely to reach for.
 
 ---
 
