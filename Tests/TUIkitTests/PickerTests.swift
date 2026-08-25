@@ -440,6 +440,46 @@ struct PickerTests {
         #expect(context.environment.statusBar?.escapeLabelOverride == "close drop-down menu")
     }
 
+    @Test("An open drop-down holds the whole keyboard, not just ESC")
+    func openPickerGrabsTheKeyboard() {
+        // Without the grab, a lettered status-bar item or a page onKeyPress
+        // handler fired BEHIND the open menu — a section switch, quitting a
+        // sub-page — out from under the user's arrow-key browsing.
+        let context = createTestContext()
+        context.environment.statusBar?.escapeLabelOverride = nil
+        context.environment.statusBar?.itemActionsSuppressed = false
+        var choice = AnyHashable("a")
+        let binding = Binding<AnyHashable>(get: { choice }, set: { choice = $0 })
+        let entries: [_PickerEntry<AnyHashable>] = [
+            _PickerEntry.option(tag: AnyHashable("a"), label: AnyView(Text("Apple"))),
+            _PickerEntry.option(tag: AnyHashable("b"), label: AnyView(Text("Banana"))),
+        ]
+        let core = _PickerMenuCore(
+            entries: entries, selection: binding, focusID: "menu-picker", isDisabled: false)
+
+        _ = renderToBuffer(core, context: context)
+        #expect(context.environment.statusBar?.itemActionsSuppressed == false)
+        #expect(context.environment.keyEventDispatcher?.grabbingSectionID == nil)
+
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)
+        let dummySelection = Binding<AnyHashable>(get: { AnyHashable("") }, set: { _ in })
+        let box: StateBox<_PickerMenuHandler> = context.environment.stateStorage!.storage(
+            for: key,
+            default: _PickerMenuHandler(
+                focusID: "menu-picker", selection: dummySelection,
+                itemValues: [], canBeFocused: true))
+        box.value.isOpen = true
+        _ = renderToBuffer(core, context: context)
+        #expect(context.environment.statusBar?.itemActionsSuppressed == true)
+        #expect(context.environment.keyEventDispatcher?.grabbingSectionID != nil)
+
+        // And a suppressed bar fires nothing, whatever its items say.
+        let bar = StatusBarState()
+        bar.setItems([StatusBarItem(shortcut: "x", label: "boom") { Issue.record("fired") }])
+        bar.itemActionsSuppressed = true
+        #expect(bar.handleKeyEvent(KeyEvent(key: .character("x"))) == false)
+    }
+
     @Test("A closed picker leaves the existing ESC label override alone")
     func closedPickerDoesNotTouchEscapeLabelOverride() {
         // The override is owned by the render loop: it clears it at the

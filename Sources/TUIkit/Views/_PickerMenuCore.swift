@@ -215,6 +215,17 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         guard isOpen, !context.isMeasuring else { return }
         context.environment.statusBar?.escapeLabelOverride =
             MenuPresentationLabels.dropDown.close
+        // ESC alone is not a keyboard grab. While the drop-down is open,
+        // every other presented surface takes the whole keyboard; without
+        // the same claim here, a lettered status item or a page onKeyPress
+        // handler fired BEHIND the open menu — a section switch, quitting a
+        // sub-page — out from under the user's arrow-key browsing. The grab
+        // names a section no handler belongs to, which silences layer 2
+        // outright (the picker's own keys ride the focus system, layer 3),
+        // and the bar's item actions are suppressed for the frame.
+        context.environment.statusBar?.itemActionsSuppressed = true
+        context.environment.keyEventDispatcher?.grabInput(
+            sectionID: "picker-dropdown-\(context.identity.path)")
     }
 
     // MARK: - Mouse handler wiring

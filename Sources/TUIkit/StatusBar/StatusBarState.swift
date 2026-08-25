@@ -174,6 +174,16 @@ public final class StatusBarState: @unchecked Sendable {
     /// Meaningless while ``escapeLabelOverride`` is `nil`.
     public var escapeClaimGrabsInput = true
 
+    /// Whether item ACTIONS are suppressed for this frame — set, alongside
+    /// ``escapeLabelOverride``, by an open transient surface that does NOT
+    /// switch the active focus section (the Picker drop-down): the items on
+    /// the bar still describe the page BEHIND the surface, and firing them
+    /// under it is how typing a lettered shortcut over an open drop-down
+    /// navigated the page out from under it. Surfaces that switch sections
+    /// (modals, popovers) never need this — the section switch already swaps
+    /// the bar's items for their own. Reset every frame with the override.
+    public var itemActionsSuppressed = false
+
     /// What Return would do to whatever holds the focus right now, or `nil`
     /// when nothing has said.
     ///
@@ -354,6 +364,10 @@ extension StatusBarState {
     /// Handles a key event, checking if any current item matches.
     @discardableResult
     public func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        // An open sectionless surface holds the keyboard: nothing on the bar
+        // is its own, so nothing on the bar may fire. See
+        // ``itemActionsSuppressed``; ESC still works via the pre-route.
+        guard !itemActionsSuppressed else { return false }
         // While a modal surface (open Picker drop-down, etc.) has claimed
         // ESC via ``escapeLabelOverride``, leave that key to the focus
         // dispatch chain so the surface's own handler actually fires —

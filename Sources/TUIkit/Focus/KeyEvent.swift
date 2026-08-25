@@ -38,7 +38,7 @@ final class KeyEventDispatcher: @unchecked Sendable {
     /// answers `true` to Up/Down, so it swallowed the arrows meant for an open
     /// context menu while Tab (which goes through the focus system, and WAS
     /// captured) worked. Cleared with the handlers each render pass.
-    private var grabbingSectionID: String?
+    private(set) var grabbingSectionID: String?
 
     /// Creates a new key event dispatcher.
     init() {}

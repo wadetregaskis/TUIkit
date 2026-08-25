@@ -860,6 +860,7 @@ extension RenderLoop {
         // lightweight selection claim lowers it each frame it applies).
         statusBar.escapeLabelOverride = nil
         statusBar.escapeClaimGrabsInput = true
+        statusBar.itemActionsSuppressed = false
         // Same contract for the Return verb: published by whichever control
         // holds the focus this frame, so its absence has to be the default or a
         // control that lost the focus would leave its verb on the bar.
