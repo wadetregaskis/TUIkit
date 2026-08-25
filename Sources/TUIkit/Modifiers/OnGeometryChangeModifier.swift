@@ -75,12 +75,6 @@ extension View {
 
 // MARK: - Modifier
 
-/// StateStorage property indices for ``OnGeometryChangeModifier``.
-private enum StateIndex {
-    /// The last value `transform` produced.
-    static let lastValue = 0
-}
-
 /// Renders `content` unchanged and reports a value derived from the size it
 /// came out at.
 struct OnGeometryChangeModifier<Content: View, T: Equatable>: View {
@@ -110,8 +104,18 @@ extension OnGeometryChangeModifier: Renderable {
         // The view's OWN size — what its content actually came out at, not what
         // was offered. That is the whole difference from `GeometryReader`.
         let value = transform(GeometryProxy(width: buffer.width, height: buffer.height))
+        // Allocated, not fixed: the tracked-value dictionary is shared with
+        // onChange, onPreferenceChange and transaction(value:) at this same
+        // identity, and they claim indices from the per-identity counter. A
+        // fixed 0 here landed on the first sibling's slot; the per-frame
+        // overwrite read back as "no previous value" on their side, so a real
+        // change fired nothing. Allocation order is body order, which is the
+        // same every frame — the counter resets each pass. (The claim happens
+        // AFTER the content render above, so siblings inside the subtree
+        // claim first; that too is the same every frame.)
         let key = StateStorage.StateKey(
-            identity: context.identity, propertyIndex: StateIndex.lastValue)
+            identity: context.identity,
+            propertyIndex: storage.nextOnChangeIndex(for: context.identity))
         let previous: T? = storage.trackedValue(for: key)
         storage.setTrackedValue(value, for: key)
         // Manual tracked values are pruned unless the identity is marked — see

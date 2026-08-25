@@ -40,6 +40,27 @@ struct OnGeometryChangeTests {
         }
     }
 
+    @Test("It shares an identity with onChange without stealing its slot")
+    func coexistsWithOnChange() {
+        // onChange and its siblings allocate tracked-value indices from a
+        // per-identity counter; a FIXED index here landed on the first
+        // sibling's slot. The overwrite made onChange read a geometry value
+        // where it stored its own — a type mismatch reads as "no previous
+        // value", so a real change fired nothing, every frame.
+        let fixture = Fixture()
+        var changes = 0
+
+        func view(_ value: String) -> some View {
+            Text("x")
+                .onGeometryChange(for: Int.self) { $0.size.width } action: { _, _ in }
+                .onChange(of: value) { _, _ in changes += 1 }
+        }
+
+        fixture.frame(view("a"))
+        fixture.frame(view("b"))
+        #expect(changes == 1, "onChange missed a real change beside onGeometryChange")
+    }
+
     @Test("It reports the view's own size, not the space it was offered")
     func reportsTheViewsSize() {
         let fixture = Fixture()
