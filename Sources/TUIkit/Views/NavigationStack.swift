@@ -366,7 +366,12 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         // first, so a list clearing its selection still wins). The claim is the
         // lightweight kind: a pushed screen is not a modal, so the app's other
         // shortcuts keep working.
-        if !context.isMeasuring {
+        // Only when nothing else claimed ESC this frame: the content renders
+        // BEFORE the bar (the bar needs the title preference the content
+        // publishes), so an open menu, popover or drop-down inside it has
+        // already posted its own close label — and this write clobbered it,
+        // showing "⎋ go back" under an open menu whose ESC closes the menu.
+        if !context.isMeasuring, barContext.environment.statusBar?.escapeLabelOverride == nil {
             barContext.environment.statusBar?.escapeLabelOverride = "go back"
             barContext.environment.statusBar?.escapeClaimGrabsInput = false
             barContext.environment.keyEventDispatcher?.addHandler(
