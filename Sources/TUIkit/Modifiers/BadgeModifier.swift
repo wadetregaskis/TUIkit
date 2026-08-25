@@ -102,6 +102,20 @@ public func extractBadgeValue<V: View>(from view: V) -> BadgeValue? {
     (view as? any BadgeCarrying)?.carriedBadgeValue
 }
 
+/// Whether ``extractBadgeValue(from:)`` could ever answer for a view of
+/// `type` — a static property of the row TYPE, no instance needed.
+///
+/// For a caller that defers building its rows (`List`'s windowed extraction,
+/// where an unchanged row is served from the render cache without being
+/// built), this is what makes the badge peek free for the overwhelmingly
+/// common badge-less row: `extractBadgeValue` needs the BUILT view, and
+/// building one every frame just to hear "no badge" was the last per-row
+/// construction left on the hit path.
+@MainActor
+public func viewTypeCarriesBadge<V: View>(_ type: V.Type) -> Bool {
+    type is any BadgeCarrying.Type
+}
+
 // MARK: - Renderable
 
 extension BadgeModifier: Renderable {

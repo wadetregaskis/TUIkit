@@ -136,27 +136,35 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
         // Defer view construction, badge extraction, and rendering until the row
         // enters the visible window (see ``LazyListRowContent``).
         return LazyListRowContent(identity: rowContext.identity) { [content] in
-            let view = content(element)
-
-            // Extract badge if the view is wrapped in a BadgeModifier. Done on
-            // the bare view, before any memo wrapper, so the modifier is found.
-            let badge = extractBadgeValue(from: view)
-
             // When the element is Equatable, wrap the row in a value-memo keyed
             // by the element, so an unchanged row is served from the render cache
             // instead of re-rendered. The wrapper is Renderable (adds no child
             // identity), so the inner view keeps the same `rowContext` identity
             // it would have unwrapped — the memo is identity-transparent.
             // _MemoizedRow's own gate declines to cache interactive / volatile rows.
-            let buffer: FrameBuffer
             if let equatableElement = element as? any Equatable {
-                buffer = TUIkit.renderToBuffer(
-                    _MemoizedRow(element: AnyEquatableBox(equatableElement), content: view),
+                // The row view is NOT built here (see `ForEach.makeChild`, which
+                // learned this first): `_MemoizedRow` takes the element and the
+                // content closure and builds the row only if the memo misses —
+                // in steady state, it mostly does not, and building the view
+                // anyway priced every List frame in row views the next cache
+                // hit discarded. The badge is the one thing read off the BUILT
+                // view every frame, so rows whose static type cannot carry one
+                // — all but a `.badge(_:)`-outermost row — skip that build too.
+                let badge: BadgeValue? =
+                    viewTypeCarriesBadge(Content.self)
+                    ? extractBadgeValue(from: content(element)) : nil
+                let buffer = TUIkit.renderToBuffer(
+                    _MemoizedRow(
+                        element: AnyEquatableBox(equatableElement),
+                        source: element, build: content),
                     context: rowContext)
-            } else {
-                buffer = TUIkit.renderToBuffer(view, context: rowContext)
+                return (buffer, badge)
             }
-            return (buffer, badge)
+            // Non-equatable elements cannot memoize, so the view is built for
+            // the render regardless; the badge peek reuses it.
+            let view = content(element)
+            return (TUIkit.renderToBuffer(view, context: rowContext), extractBadgeValue(from: view))
         }
     }
 
