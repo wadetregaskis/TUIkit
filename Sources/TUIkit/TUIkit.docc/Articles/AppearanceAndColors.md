@@ -118,20 +118,26 @@ survives — a red heading at `0.4` still reads red rather than flattening to
 grey — and nesting multiplies, as in SwiftUI: `0.5` inside `0.5` shows at
 `0.25`.
 
-Colours compose exactly. **Characters cannot**: two characters cannot share
-one cell at half strength each, so alpha becomes a decision rather than a
-mix.
+Colours compose exactly, at every alpha. **Characters cannot**: two
+characters cannot share one cell at half strength each, so where two
+characters want the same cell, alpha becomes a decision rather than a mix.
 
-- **At or above `0.5`** the subtree's characters are drawn, in colours
-  blended toward what is behind them.
-- **Below `0.5`** nothing of the subtree is drawn at all, and what is behind
-  it shows through untouched — character, colour and all. So `opacity(0)`
+- **Over anything blank** there is no contest: the subtree's characters draw
+  at every alpha, in colours blended toward what is behind them, and simply
+  fade all the way out.
+- **Where a character sits underneath**, at or above `0.5` the subtree's
+  character draws; below `0.5` the character behind shows instead, keeping
+  its own foreground while its field carries the veil. So `opacity(0)`
   really does reveal what it covers, while still keeping its space and its
   clickable regions, which is what SwiftUI's `opacity(0)` does too.
+- **Matching characters never snap**: where both sides hold the same
+  character the cell cross-fades exactly, so a colour animation on unchanged
+  text is seamless.
 
-A cross-fade therefore swaps characters at the midpoint rather than
-dissolving through it. There is no way around that in a cell grid, and it is
-the one place this differs visibly from a graphical compositor.
+Text fading over *different* text therefore swaps characters at the midpoint
+rather than dissolving through it. There is no way around that in a cell
+grid, and it is the one place this differs visibly from a graphical
+compositor.
 
 Two more rules make fading a container behave the way you would expect:
 
