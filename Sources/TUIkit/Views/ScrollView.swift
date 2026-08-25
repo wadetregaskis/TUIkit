@@ -590,6 +590,9 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                     ? scrollIndicatorCycle(isFocused: isFocused, context: context) : nil,
                 locale: context.environment.locale
             )
+            attachIndicatorMouseHandlers(
+                to: &visibleBuffer, contentWidth: contentWidth,
+                handler: handler, context: context)
         }
         if wantsScrollbar {
             visibleBuffer = appendVerticalScrollbar(

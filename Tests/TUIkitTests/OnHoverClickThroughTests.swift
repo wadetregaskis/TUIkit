@@ -39,6 +39,82 @@ struct OnHoverClickThroughTests {
     }
 }
 
+/// The "N more above / below" lines are chrome painted OVER a content row:
+/// the cells change but the row's hit regions used to stay, so a click on the
+/// indicator pressed whatever control was scrolled exactly under it —
+/// invisible, and still clickable.
+@MainActor
+@Suite("Indicator line shield")
+struct IndicatorLineShieldTests {
+    @Test("A click on an 'N more' line pages instead of pressing the hidden row")
+    func indicatorClickPages() {
+        var pressed: Set<Int> = []
+        let tui = TUIContext()
+        let focusManager = FocusManager()
+        let view = ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<40, id: \.self) { i in
+                    Button("row \(i)") { pressed.insert(i) }
+                }
+            }
+        }
+        .scrollIndicatorStyle(.text)
+        .frame(height: 6)
+
+        func frame() -> FrameBuffer {
+            var env = EnvironmentValues()
+            env.applyRuntimeServices(from: tui)
+            env.mouseEventDispatcher = tui.mouseEventDispatcher
+            env.focusManager = focusManager
+            let context = RenderContext(
+                availableWidth: 24, availableHeight: 6, environment: env, tuiContext: tui)
+            tui.stateStorage.beginRenderPass()
+            focusManager.beginRenderPass()
+            let buffer = renderToBuffer(view, context: context)
+            focusManager.endRenderPass()
+            tui.stateStorage.endRenderPass()
+            return buffer
+        }
+
+        _ = frame()
+        let handler = focusManager.activeSection?.focusables
+            .compactMap { $0 as? ScrollViewHandler }.first
+        #expect(handler != nil)
+        handler?.scrollOffset = 10
+        let buffer = frame()
+        #expect(
+            buffer.lines.first?.stripped.contains("more") == true,
+            "precondition: the top indicator is drawn: \(buffer.lines.map(\.stripped))")
+
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setRegions(buffer.hitTestRegions)
+        let before = handler?.scrollOffset ?? -1
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: 0))
+        #expect(pressed.isEmpty, "the hidden row took the indicator's click: \(pressed)")
+        #expect(
+            (handler?.scrollOffset ?? -1) < before,
+            "the indicator click pages up: \(handler?.scrollOffset ?? -1) vs \(before)")
+
+        // And the bottom indicator pages down.
+        handler?.scrollOffset = 10
+        let buffer2 = frame()
+        dispatcher.setRegions(buffer2.hitTestRegions)
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: 5))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: 5))
+        #expect(pressed.isEmpty, "\(pressed)")
+        #expect((handler?.scrollOffset ?? -1) > 10, "pages down: \(handler?.scrollOffset ?? -1)")
+
+        // The wheel is NOT the shield's business: it falls through to the
+        // viewport handler and scrolls as it does everywhere else.
+        handler?.scrollOffset = 10
+        let buffer3 = frame()
+        dispatcher.setRegions(buffer3.hitTestRegions)
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .pressed, x: 3, y: 0))
+        #expect((handler?.scrollOffset ?? -1) < 10, "wheel over the indicator still scrolls")
+    }
+}
+
 /// The three small dispatch fixes from the second hunt, pinned together:
 /// taps fire on every Nth click, uncaptured drags are inert for every
 /// button, and an unchanged hover answers nothing.

@@ -48,6 +48,47 @@ extension _ScrollViewCore {
             state: handler, token: "scrollbar-repeat-\(context.identity.path)", context: context)
     }
 
+    /// Puts the ScrollView's own hit region over each "N more above / below"
+    /// line it drew, APPENDED so it wins the cells (the dispatcher's contract
+    /// is last-registered = innermost): the indicator overwrites a content
+    /// row's CELLS but used to leave that row's hit regions in place, so a
+    /// click on the chrome pressed whatever control was scrolled exactly
+    /// under it — invisible, and still clickable. The indicator is scroll
+    /// chrome, so its click PAGES in its direction, the same move the
+    /// scrollbar track answers with; the wheel is not consumed and falls
+    /// through to the viewport handler as everywhere else.
+    func attachIndicatorMouseHandlers(
+        to buffer: inout FrameBuffer, contentWidth: Int,
+        handler: ScrollViewHandler, context: RenderContext
+    ) {
+        guard !context.isMeasuring,
+              let mouseDispatcher = context.environment.mouseEventDispatcher,
+              !isDisabled
+        else { return }
+        let scroller = handler
+        func shield(paging delta: Int, atY y: Int) {
+            let handlerID = mouseDispatcher.register { event in
+                guard event.button == .left else { return false }
+                switch event.phase {
+                case .pressed:
+                    _ = scroller.userScrollFine(by: scroller.pageDelta(delta))
+                    return true
+                case .released:
+                    return true
+                default:
+                    return false
+                }
+            }
+            buffer.hitTestRegions.append(
+                HitTestRegion(
+                    offsetX: 0, offsetY: y, width: contentWidth, height: 1,
+                    handlerID: handlerID))
+        }
+        let page = scroller.pageDistance
+        if handler.hasContentAbove { shield(paging: -page, atY: 0) }
+        if handler.hasContentBelow { shield(paging: page, atY: buffer.height - 1) }
+    }
+
     /// Like ``attachScrollbarMouseHandler`` but for the bottom horizontal bar: a
     /// one-row hit region over the bar's track drives the *horizontal* axis (arrows
     /// step, track pages/jumps, thumb drags). The region spans `contentWidth` only,
