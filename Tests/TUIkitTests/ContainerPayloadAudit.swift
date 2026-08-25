@@ -157,6 +157,11 @@ struct ContainerPayloadAudit {
             }),
 
             ("Grid", { child in AnyView(Grid { GridRow { child } }) }),
+            // The Layout protocol's render composites every placed child
+            // through the IN-PLACE `composite(with:at:)` fast path — a
+            // different code path from every other container here, and one
+            // that must lift all four payloads just the same.
+            ("a custom Layout", { child in AnyView(AuditColumn()({ child })) }),
             ("LazyVStack", { child in AnyView(ScrollView { LazyVStack { child } }) }),
             ("DisclosureGroup", { child in
                 AnyView(DisclosureGroup("g", isExpanded: .constant(true)) { child })
@@ -338,6 +343,31 @@ struct ContainerPayloadAudit {
             #expect(
                 overlays.contains { $0.level == .modal && $0.centered && $0.dimsBackground },
                 "\(what) swallowed the modal's overlay (carried \(overlays.count))")
+        }
+    }
+}
+
+/// The smallest possible `Layout`: one column, children stacked in order.
+///
+/// Exists because the `Layout` protocol renders through the in-place
+/// `FrameBuffer.composite(with:at:)` — a code path no other container in the
+/// audit exercises, and one that dropped `opacityRegions` while lifting the
+/// other three payloads.
+private struct AuditColumn: Layout {
+    func sizeThatFits(proposal: ProposedSize, subviews: Subviews, cache: inout ()) -> ViewSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        return ViewSize(
+            width: sizes.map(\.width).max() ?? 0,
+            height: sizes.map(\.height).reduce(0, +))
+    }
+
+    func placeSubviews(
+        in bounds: CellRect, proposal: ProposedSize, subviews: Subviews, cache: inout ()
+    ) {
+        var y = bounds.y
+        for index in subviews.indices {
+            subviews[index].place(at: (x: bounds.x, y: y), proposal: .unspecified)
+            y += subviews[index].sizeThatFits(.unspecified).height
         }
     }
 }

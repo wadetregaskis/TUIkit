@@ -692,7 +692,7 @@ extension FrameBuffer {
         guard !overlay.isEmpty else {
             // No visible cells, but nested layers and hit regions still lift.
             guard !overlay.overlays.isEmpty || !overlay.hitTestRegions.isEmpty
-                || !overlay.animatedCells.isEmpty
+                || !overlay.animatedCells.isEmpty || !overlay.opacityRegions.isEmpty
             else { return }
             overlays.append(
                 contentsOf: overlay.shiftedOverlays(byX: position.x, y: position.y))
@@ -752,6 +752,8 @@ extension FrameBuffer {
             contentsOf: overlay.shiftedHitTestRegions(byX: position.x, y: position.y))
         animatedCells.append(
             contentsOf: overlay.shiftedAnimatedCells(byX: position.x, y: position.y))
+        opacityRegions.append(
+            contentsOf: overlay.shiftedOpacityRegions(byX: position.x, y: position.y))
     }
 
     /// Returns a copy of this buffer guaranteed to fit within the given bounds.
