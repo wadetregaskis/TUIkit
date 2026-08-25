@@ -63,9 +63,14 @@ func assertSnapshot(
     height: Int,
     of view: some View
 ) {
+    // `renderToScreen`, not `renderToBuffer`: a golden must record what the
+    // screen shows, and a faded subtree leaves its buffer carrying a region
+    // rather than faded cells. Recording the unresolved layer would make every
+    // golden of a `.opacity` view agree with itself forever while the app drew
+    // something else.
     assertSnapshot(
         name,
-        of: renderToBuffer(view, context: makeRenderContext(width: width, height: height)))
+        of: renderToScreen(view, context: makeRenderContext(width: width, height: height)))
 }
 
 /// Compares an ALREADY-RENDERED buffer to its golden.

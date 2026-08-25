@@ -133,3 +133,25 @@ extension RenderContext {
         return copy
     }
 }
+
+// MARK: - Finishing a frame the way the loop does
+
+/// Renders `view` and then resolves what the compositor would resolve — the
+/// picture a user would actually see.
+///
+/// `renderToBuffer` stops one step short of that on purpose: `.opacity` marks
+/// its subtree with an ``OpacityRegion`` and the blend happens where what is
+/// BEHIND the subtree is known, which is at a composite or at a root. A test
+/// that renders a faded view and inspects its lines is standing at neither, so
+/// without this it reads the unresolved layer and passes while the screen is
+/// something else. That is the "test passed while the app broke" shape, and it
+/// is why this helper exists rather than a note telling people to remember.
+///
+/// The surface is the content area's, which is where a page is drawn. A test
+/// about the status bar or the app header wants its own.
+@MainActor
+func renderToScreen(_ view: some View, context: RenderContext) -> FrameBuffer {
+    let palette = context.environment.palette
+    return renderToBuffer(view, context: context)
+        .resolvingOpacity(surface: palette.background, palette: palette)
+}

@@ -29,7 +29,7 @@ struct OpacityAnimationTests {
         /// cannot be fooled by two different opacities landing on one colour.
         func line(_ opacity: Double, atMillis: Int) -> String {
             context.environment.frameNowNanos = Int64(atMillis) * 1_000_000
-            let buffer = renderToBuffer(Text("ABC").opacity(opacity), context: context)
+            let buffer = renderToScreen(Text("ABC").opacity(opacity), context: context)
             return buffer.lines.first ?? ""
         }
     }
@@ -103,7 +103,12 @@ struct RepeatingOpacityTests {
             let storage = context.environment.stateStorage!
             storage.beginRenderPass()
             defer { storage.endRenderPass() }
-            return renderToBuffer(Text("ABC").opacity(opacity), context: context)
+            // Resolved, because the RUNS are the compositor's work now: a
+            // repeating fade cannot be coloured until what is behind it is
+            // known, so the modifier stamps the whole cycle and the resolution
+            // turns it into frames. `renderToBuffer` alone stops one step short
+            // and hands back the layer, regions pending.
+            return renderToScreen(Text("ABC").opacity(opacity), context: context)
         }
 
         /// How many animating values the store is tracking.

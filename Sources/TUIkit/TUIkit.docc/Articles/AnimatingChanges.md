@@ -118,6 +118,11 @@ produced** — which is exactly what `.opacity` does — the framework computes
 every point of the cycle up front and hands the run loop the finished frames.
 Nothing re-renders; the loop splices frames over the picture already on screen.
 
+For `.opacity` that computation happens at the COMPOSITE rather than at the
+view, because a phase cannot be coloured until what is behind the layer is
+known. The saving is the same: the content is rendered once, and the cycle
+costs one re-colouring of its finished lines per phase.
+
 Where the value changes what is *drawn* rather than how it is coloured, that
 shortcut is not available: rendering a subtree once per phase would multiply
 every one of its side effects — focus registration, hit-test regions,

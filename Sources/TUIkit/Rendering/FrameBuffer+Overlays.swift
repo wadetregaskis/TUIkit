@@ -27,7 +27,12 @@ extension FrameBuffer {
     public func compositingOverlays(
         maxWidth: Int, maxHeight: Int, palette: any Palette
     ) -> FrameBuffer {
-        var result = self
+        // The page's OWN opacity resolves first, before anything is drawn over
+        // it. This is the screen root, so nothing is behind the page but the
+        // surface — and if a region were still pending when a layer composited
+        // over it, the region would go on naming those cells and the LAYER's
+        // cells would be faded at the root instead of the page's.
+        var result = resolvingOpacity(surface: palette.background, palette: palette)
         // A small pass cap guards against a pathological layer that somehow keeps
         // re-emitting itself; 16 levels of nesting is far beyond real use.
         var passesRemaining = 16

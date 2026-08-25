@@ -13,12 +13,11 @@ import TUIkitView
 extension View {
     /// Sets the transparency of this view. Matches SwiftUI's `opacity(_:)`.
     ///
-    /// A terminal cell is opaque — it holds one character in one colour, and
-    /// there is no alpha channel to write. What there IS, is the colour itself:
-    /// so opacity blends every colour the subtree draws toward the background,
-    /// by `1 - opacity`. At `1` nothing changes; at `0` everything reaches the
-    /// background exactly and the subtree becomes invisible while still
-    /// occupying its space — which is what SwiftUI's `opacity(0)` does too.
+    /// A terminal cell is opaque — it holds one character in one foreground
+    /// colour on one background colour, and there is no alpha channel to write.
+    /// So this is real compositing done with the two things a cell does have:
+    /// the subtree renders to its own layer, and where that layer is drawn onto
+    /// what is behind it, each cell is resolved against the cell beneath.
     ///
     /// ```swift
     /// Text("Not yet available")
@@ -26,14 +25,26 @@ extension View {
     /// ```
     ///
     /// The blend preserves hue: a red heading at `0.5` stays recognisably red,
-    /// halfway to the background, rather than flattening to grey. Text with no
+    /// halfway to what it sits on, rather than flattening to grey. Text with no
     /// colour of its own blends from the palette's foreground, so a whole
-    /// subtree fades evenly whether or not its parts were styled.
+    /// subtree fades evenly whether or not its parts were styled. Nesting
+    /// multiplies, as in SwiftUI: `0.5` inside `0.5` shows at `0.25`.
     ///
-    /// > Note: This is a *blend*, not compositing. It cannot see what is behind
-    ///   the view — a terminal has no layers below the cell — so it blends
-    ///   toward the palette background rather than toward whatever the view
-    ///   happens to sit on. The two agree except over a non-background fill.
+    /// > Important: Colours compose exactly; **characters cannot**. Two
+    ///   characters cannot share one cell at half strength each, so alpha
+    ///   becomes a decision rather than a mix: **at or above `0.5` this view's
+    ///   character is drawn, and below it nothing of this view is drawn at
+    ///   all**. A cross-fade therefore swaps characters at the midpoint rather
+    ///   than dissolving through it — there is no way around that in a cell
+    ///   grid — and `opacity(0)` genuinely reveals what is behind, rather than
+    ///   painting an invisible-coloured rectangle over it.
+    ///
+    /// > Note: A space is not a character for this purpose. A faded view's
+    ///   blank cells composite their background and let what is behind them
+    ///   show through, so fading a `VStack` does not blank the rectangle it
+    ///   occupies. And what is behind keeps its own foreground colour: a
+    ///   translucent pane over text tints the surface under the text, not the
+    ///   text.
     ///
     /// Changed inside ``withAnimation(_:_:)``, it fades rather than jumps —
     /// this view is ``Animatable``, and opacity is what it interpolates:
@@ -45,13 +56,14 @@ extension View {
     /// ```
     ///
     /// - Parameter opacity: `0` (invisible) through `1` (unchanged).
-    /// - Returns: A view whose colours are blended toward the background.
+    /// - Returns: A view composited at that opacity over whatever it is drawn on.
     public func opacity(_ opacity: Double) -> some View {
         _OpacityView(content: self, opacity: opacity)
     }
 }
 
-/// Blends everything `content` draws toward the palette background.
+/// Marks everything `content` draws as translucent, for the compositor to
+/// resolve against what is behind it. See ``FrameBuffer/resolvingOpacity(over:at:surface:palette:)``.
 struct _OpacityView<Content: View>: View {
     let content: Content
     var opacity: Double
@@ -75,7 +87,7 @@ extension _OpacityView: Animatable {
 
 extension _OpacityView: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let buffer = TUIkit.renderToBuffer(content, context: context)
+        var buffer = TUIkit.renderToBuffer(content, context: context)
         // `isEmpty` asks about the LINES, and a subtree can draw nothing in
         // flow while drawing plenty in an overlay: `.offset` and `.position`
         // return a placeholder of zero-width lines and put the content in a
@@ -83,53 +95,33 @@ extension _OpacityView: Renderable {
         // .opacity(0.5)` a complete no-op — the fade never ran at all.
         guard !buffer.isEmpty || !buffer.overlays.isEmpty else { return buffer }
 
-        // Resolve first: a semantic colour makes `opacity(_:over:)` a silent
-        // no-op and makes `ANSIRenderer` trap outright.
-        let palette = context.environment.palette
-        let surface = palette.background.resolve(with: palette)
-        let defaultForeground = palette.foreground.resolve(with: palette)
+        // A repeating fade is stamped as the WHOLE cycle rather than as this
+        // frame's value, so the compositor can colour every phase once and hand
+        // the run loop the lot. Otherwise a fade that never ends costs a render
+        // pass for as long as the view is on screen.
+        let repeating = cycling(context)
+        let factor = min(max(repeating?.current ?? opacity, 0), 1)
+        // Fully opaque is the identity, and taking it means an untouched
+        // subtree cannot be changed by this code path at all.
+        guard factor < 1 || repeating != nil else { return buffer }
 
-        // Nothing is injected and nothing is appended: every run the renderer
-        // emits already names its own colour and ends in a reset, so rewriting
-        // the colours it named is enough to fade all of it. `OpacityTests`
-        // pins that precondition across the view surface.
-        func faded(by factor: Double) -> [String] {
-            let clamped = min(max(factor, 0), 1)
-            // Fully opaque is the identity, and taking it means an untouched
-            // subtree cannot be changed by this code path at all.
-            guard clamped < 1 else { return buffer.lines }
-            return buffer.lines.map { line in
-                OpacityFade.fading(
-                    line, by: clamped, over: surface, defaultForeground: defaultForeground)
-            }
-        }
-
-        if let cycling = cycling(
-            buffer, faded: faded, over: surface, defaultForeground: defaultForeground,
-            context: context)
-        {
-            return cycling
-        }
-        let factor = min(max(opacity, 0), 1)
-        guard factor < 1 else { return buffer }
-        var result = buffer.replacingLines(faded(by: factor))
-        result.overlays = Self.fadingOverlays(
-            buffer.overlays, by: factor, over: surface, defaultForeground: defaultForeground)
-        return result
+        buffer.opacityRegions = Self.fading(
+            buffer.opacityRegions, by: factor, cycle: repeating?.cycle,
+            wholeOf: buffer, appendingRectangle: !buffer.isEmpty)
+        // A layer is its own picture at its own place, so it gets the cycle
+        // too: the compositor bakes its phases where the layer lands.
+        buffer.overlays = Self.fadingOverlays(
+            buffer.overlays, by: factor, cycle: repeating?.cycle)
+        return buffer
     }
 
-    /// The whole fade, pre-rendered, when the opacity is on a repeating
-    /// animation — or `nil` when it is not (the ordinary, transient case).
+    /// The repeating fade this view is on, if it is on one — the values it
+    /// passes through, and the one this frame is drawn at.
     ///
-    /// A fade that never ends would otherwise cost a render pass for as long as
-    /// the view is on screen. It need not: `.opacity` renders its content ONCE
-    /// and then re-colours the finished lines, so every point of the cycle is a
-    /// re-colouring of the same buffer, and the run loop can replay them.
-    /// See ``AnimatedBufferCycle``.
-    private func cycling(
-        _ buffer: FrameBuffer, faded: (Double) -> [String], over surface: Color,
-        defaultForeground: Color, context: RenderContext
-    ) -> FrameBuffer? {
+    /// Declining leaves the ordinary path, which renders per frame. That is
+    /// correct, just not cheap, and is what a cycle too long to hold as frames
+    /// falls back to.
+    private func cycling(_ context: RenderContext) -> (cycle: OpacityCycle, current: Double)? {
         guard !context.isMeasuring, let storage = context.stateStorage else { return nil }
         let key = AnimationStore.Key(
             identity: context.identity, owner: ObjectIdentifier(Self.self))
@@ -137,95 +129,57 @@ extension _OpacityView: Renderable {
             let cycle: AnimationCycle<Double> = storage.animations.cycle(
                 for: key,
                 nowNanos: context.environment.frameNowNanos,
-                tick: context.environment.animationTick),
-            let runs = AnimatedBufferCycle.runs(phases: cycle.values.map(faded))
+                tick: context.environment.animationTick)
         else { return nil }
-
-        // An ANCHORED layer — an `.offset`/`.position` child, a popover — is
-        // part of what this subtree draws, so it has to breathe with the rest
-        // of it. Its runs are built in the LAYER's own coordinate space and
-        // attached to the layer's content, because that is the space a run on
-        // it is in; the compositor shifts them by wherever it places the layer
-        // (`FrameBuffer.composited` lifts an overlay's `animatedCells` exactly
-        // as it lifts its regions).
+        // Told now rather than after the bake: the bake happens at the
+        // compositor, frames later in the same pass and out of this view's
+        // reach, and a cycle still marked "needs rendering" wakes the loop
+        // every tick regardless of what the compositor went on to produce.
         //
-        // This used to decline the pre-rendered path outright when an anchored
-        // layer was present, and pay a render per frame for as long as the fade
-        // ran. That was the safe answer while the alternative was a layer
-        // frozen at one phase; it is not needed now that the layer can carry
-        // its own frames.
-        guard
-            let layers = Self.cyclingOverlays(
-                buffer.overlays, phases: cycle.values, current: cycle.current,
-                over: surface, defaultForeground: defaultForeground)
-        else { return nil }
-
-        // Nothing anywhere changes across the cycle — every row identical at
-        // every phase. Serving it costs nothing and stops the clock; declining
-        // would re-render forever for a fade nobody can see.
-        guard !runs.isEmpty || layers.carriesRuns else { return nil }
-
-        // Only now: a cycle that could not be turned into runs must keep being
-        // rendered for, or the fade freezes on whatever frame it stopped at.
+        // The compositor may still decline — phases that disagree about the
+        // shape of a row cannot be a run — in which case the fade freezes at
+        // the value drawn. That is the one thing this ordering costs, and it is
+        // bounded: `AnimatedBufferCycle` only declines on a width change, and a
+        // re-colouring cannot change a width.
         storage.animations.noteServedByRuns(key)
-
-        // Drawn at the CYCLE's current value, not at this frame's continuous
-        // one, so replaying the run at the tick just rendered is a no-op — the
-        // property every run has to have.
-        var result = buffer.replacingLines(faded(cycle.current))
-        result.animatedCells += runs
-        result.overlays = layers.overlays
-        return result
+        return (OpacityCycle(phases: cycle.values, clock: .cursor), cycle.current)
     }
 
-    /// `overlays` faded to `current` and carrying their own runs for the rest
-    /// of the cycle — or `nil` when any of them cannot be expressed as runs, in
-    /// which case the whole fade must stay on the per-frame path rather than
-    /// animate half of itself.
+    /// `regions` multiplied by `factor`, with this view's own rectangle after
+    /// them.
     ///
-    /// Screen-level layers are passed through untouched, exactly as
-    /// ``fadingOverlays(_:by:over:defaultForeground:)`` leaves them: a dialog
-    /// the subtree opened is not the subtree's drawing and does not fade with
-    /// it, cycling or not.
+    /// **Nesting multiplies**, as it does in SwiftUI: a `0.5` group inside a
+    /// `0.5` group shows at `0.25`. Doing it here rather than at the composite
+    /// is what makes that fall out — an inner region already carries the
+    /// product of everything inside it, so scaling by this view's factor is the
+    /// whole of the rule.
     ///
-    /// Recursive, because a layer's content can carry layers.
-    private static func cyclingOverlays(
-        _ overlays: [OverlayLayer], phases: [Double], current: Double, over surface: Color,
-        defaultForeground: Color
-    ) -> (overlays: [OverlayLayer], carriesRuns: Bool)? {
-        var result: [OverlayLayer] = []
-        var carriesRuns = false
-        result.reserveCapacity(overlays.count)
-        for layer in overlays {
-            guard !layer.isScreenLevel else {
-                result.append(layer)
-                continue
-            }
-            func fade(_ lines: [String], by factor: Double) -> [String] {
-                let clamped = min(max(factor, 0), 1)
-                guard clamped < 1 else { return lines }
-                return lines.map {
-                    OpacityFade.fading(
-                        $0, by: clamped, over: surface, defaultForeground: defaultForeground)
-                }
-            }
-            guard
-                let runs = AnimatedBufferCycle.runs(
-                    phases: phases.map { fade(layer.content.lines, by: $0) }),
-                let nested = cyclingOverlays(
-                    layer.content.overlays, phases: phases, current: current,
-                    over: surface, defaultForeground: defaultForeground)
-            else { return nil }
-
-            var faded = layer
-            faded.content = layer.content.replacingLines(
-                fade(layer.content.lines, by: current))
-            faded.content.animatedCells += runs
-            faded.content.overlays = nested.overlays
-            result.append(faded)
-            carriesRuns = carriesRuns || !runs.isEmpty || nested.carriesRuns
+    /// The order is load-bearing: the resolution takes the FIRST region
+    /// covering a cell, so the inner product has to come before the outer
+    /// rectangle that also covers it. See
+    /// ``FrameBuffer/resolvingOpacity(over:at:surface:palette:)``.
+    static func fading(
+        _ regions: [OpacityRegion], by factor: Double, cycle: OpacityCycle?,
+        wholeOf buffer: FrameBuffer, appendingRectangle: Bool
+    ) -> [OpacityRegion] {
+        var result = regions.map { region -> OpacityRegion in
+            var scaled = region
+            scaled.opacity *= factor
+            // An inner cycle scales with everything else about the inner
+            // region: a breathing badge inside a half-faded panel breathes
+            // between half the values it would alone.
+            scaled.cycle = region.cycle?.scaled(by: factor)
+            return scaled
         }
-        return (result, carriesRuns)
+        guard appendingRectangle else { return result }
+        // The whole of what this subtree drew. Ragged lines are not a problem:
+        // a rectangle claiming columns a line does not reach resolves to
+        // nothing there, because there is no source cell to blend.
+        result.append(
+            OpacityRegion(
+                offsetX: 0, offsetY: 0, width: buffer.width, height: buffer.lines.count,
+                opacity: factor, cycle: cycle))
+        return result
     }
 }
 
@@ -247,22 +201,22 @@ extension _OpacityView {
     ///   cannot reach it.
     ///
     /// Recursive, because a layer's own content can carry layers.
+    ///
+    /// A layer is marked rather than faded, for the same reason the lines are:
+    /// where it lands is where what is behind it is known, and `composited`
+    /// lifts an overlay's opacity regions along with the rest of its payload.
     static func fadingOverlays(
-        _ overlays: [OverlayLayer], by factor: Double, over surface: Color,
-        defaultForeground: Color
+        _ overlays: [OverlayLayer], by factor: Double, cycle: OpacityCycle? = nil
     ) -> [OverlayLayer] {
-        guard factor < 1 else { return overlays }
+        guard factor < 1 || cycle != nil else { return overlays }
         return overlays.map { layer in
             guard !layer.isScreenLevel else { return layer }
             var faded = layer
-            faded.content = layer.content.replacingLines(
-                layer.content.lines.map {
-                    OpacityFade.fading(
-                        $0, by: factor, over: surface, defaultForeground: defaultForeground)
-                })
+            faded.content.opacityRegions = fading(
+                layer.content.opacityRegions, by: factor, cycle: cycle,
+                wholeOf: layer.content, appendingRectangle: !layer.content.isEmpty)
             faded.content.overlays = fadingOverlays(
-                layer.content.overlays, by: factor, over: surface,
-                defaultForeground: defaultForeground)
+                layer.content.overlays, by: factor, cycle: cycle)
             return faded
         }
     }

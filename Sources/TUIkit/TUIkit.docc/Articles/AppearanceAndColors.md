@@ -110,17 +110,36 @@ VStack {
 .opacity(0.4)
 ```
 
-A cell has no alpha channel, so this is a *blend*, not compositing: every
-colour the subtree names is moved toward the palette background by
-`1 - opacity`. Hue survives — a red heading at `0.4` still reads red rather
-than flattening to grey — and at `0` the subtree reaches the background
-exactly and disappears while keeping its space and its clickable regions,
-which is what SwiftUI's `opacity(0)` does too.
+This is real compositing, done with the two things a cell has: the subtree
+renders to its own layer, and where that layer is drawn onto what is behind
+it, each cell is resolved against the cell beneath. So a view fading over a
+coloured panel moves toward the *panel's* colour, not the page's. Hue
+survives — a red heading at `0.4` still reads red rather than flattening to
+grey — and nesting multiplies, as in SwiftUI: `0.5` inside `0.5` shows at
+`0.25`.
 
-Because there is no layer below a cell, the blend goes toward the palette
-background rather than toward whatever the view is sitting on. The two agree
-everywhere except over a non-background fill: fading a view that sits on a
-coloured panel moves it toward the *page* colour, not the panel's.
+Colours compose exactly. **Characters cannot**: two characters cannot share
+one cell at half strength each, so alpha becomes a decision rather than a
+mix.
+
+- **At or above `0.5`** the subtree's characters are drawn, in colours
+  blended toward what is behind them.
+- **Below `0.5`** nothing of the subtree is drawn at all, and what is behind
+  it shows through untouched — character, colour and all. So `opacity(0)`
+  really does reveal what it covers, while still keeping its space and its
+  clickable regions, which is what SwiftUI's `opacity(0)` does too.
+
+A cross-fade therefore swaps characters at the midpoint rather than
+dissolving through it. There is no way around that in a cell grid, and it is
+the one place this differs visibly from a graphical compositor.
+
+Two more rules make fading a container behave the way you would expect:
+
+- **A space is not a character.** A faded view's blank cells composite their
+  background and let what is behind them show through, so fading a `VStack`
+  does not punch a rectangle of blanks through the page.
+- **What is behind keeps its own foreground.** A translucent pane over text
+  tints the surface under the text, not the text — which stays legible.
 
 ## Semantic Colors
 

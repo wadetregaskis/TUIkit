@@ -22,6 +22,9 @@ struct OpacityOverFloatedContentTests {
     /// else, so stripping the styling would strip the entire subject.
     private func screen(_ view: some View, width: Int = 30, height: Int = 6) -> String {
         let context = makeRenderContext(width: width, height: height)
+        // `compositingOverlays` is what the render loop runs at the screen
+        // root, and it resolves the page's own opacity on the way — so this
+        // reaches the same picture the app draws, layers and all.
         let buffer = renderToBuffer(view, context: context)
         return buffer.compositingOverlays(
             maxWidth: width, maxHeight: height, palette: context.environment.palette
@@ -103,18 +106,22 @@ struct OpacityOverFloatedContentTests {
             let storage = context.environment.stateStorage!
             storage.beginRenderPass()
             defer { storage.endRenderPass() }
+            // Not resolved: this asks about the LAYER, whose frames are baked
+            // where the layer lands — inside `compositingOverlays`, which is
+            // what `composited` returns rather than what the page keeps. So the
+            // test composites explicitly below and reads the layer from there.
             return renderToBuffer(Text("x").offset(x: 2).opacity(opacity), context: context)
         }
     }
 
     @Test("A repeating fade hands the offset child its own frames")
     func repeatingFadeAnimatesAnOffsetChild() {
-        // The pre-rendered cycle builds runs from the buffer's LINES, and an
-        // offset child has none — its content is in a layer. The modifier used
-        // to decline the whole path when a layer was present and pay a render
-        // per frame; now the layer carries its own frames, in its own
-        // coordinate space, which the compositor shifts by wherever it places
-        // the layer.
+        // An offset child has no LINES — its content is in a layer — and the
+        // modifier used to decline the pre-rendered path outright when one was
+        // present, paying a render per frame for as long as the fade ran. Now
+        // the layer carries the cycle as a region and the compositor bakes its
+        // phases where the layer lands, which is the first place what is behind
+        // the layer is known.
         let screen = Cycling()
         _ = screen.render(1, atTick: 0)
         let buffer = screen.render(0.2, atTick: 0)
@@ -124,13 +131,19 @@ struct OpacityOverFloatedContentTests {
             return
         }
         #expect(
-            !layer.content.animatedCells.isEmpty,
-            "the layer got no frames, so the fade would freeze it")
+            layer.content.opacityRegions.contains { $0.cycle != nil },
+            "the layer got no cycle, so the fade would freeze it")
+
+        // And composited — which is where the frames are made — the runs are on
+        // the screen, at the layer's placement.
+        let composed = buffer.compositingOverlays(
+            maxWidth: 20, maxHeight: 4, palette: screen.context.environment.palette)
+        #expect(!composed.animatedCells.isEmpty, "the cycle produced no frames")
         #expect(
-            layer.content.animatedCells.allSatisfy { $0.isAnimating },
+            composed.animatedCells.allSatisfy { $0.isAnimating },
             "a frame set that never changes is a still picture")
         #expect(
-            layer.content.animatedCells.allSatisfy { $0.frames.count == 16 },
+            composed.animatedCells.allSatisfy { $0.frames.count == 16 },
             "0.4s out and back is sixteen ticks of the replay clock")
     }
 

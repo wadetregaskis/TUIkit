@@ -36,13 +36,16 @@ public enum AnimatedBufferCycle {
     ///     way ``AnimatedCellRun/frames`` is — by `tick % count`. Every phase
     ///     must have the same number of lines, and each row must have the same
     ///     visible width in every phase.
+    ///   - offsetY: The buffer row `phases`' first row corresponds to. Non-zero
+    ///     when the phases cover a SLICE of a buffer — a faded rectangle inside
+    ///     a page — rather than a whole small buffer of the modifier's own.
     ///   - clock: The clock that advances them.
     /// - Returns: One run per changing row, or `nil` if the phases disagree
     ///   about the shape of the picture — a run cannot change a buffer's shape,
     ///   and emitting one anyway would shift the rest of the row sideways on
     ///   some ticks and not others.
     public static func runs(
-        phases: [[String]], clock: AnimationClock = .cursor
+        phases: [[String]], offsetY: Int = 0, clock: AnimationClock = .cursor
     ) -> [AnimatedCellRun]? {
         guard let first = phases.first, phases.count >= 2 else { return nil }
         guard phases.allSatisfy({ $0.count == first.count }) else { return nil }
@@ -59,7 +62,8 @@ public enum AnimatedBufferCycle {
             guard frames.allSatisfy({ $0.strippedLength == width }) else { return nil }
             runs.append(
                 AnimatedCellRun(
-                    offsetX: 0, offsetY: row, width: width, frames: frames, clock: clock))
+                    offsetX: 0, offsetY: offsetY + row, width: width, frames: frames,
+                    clock: clock))
         }
         return runs
     }

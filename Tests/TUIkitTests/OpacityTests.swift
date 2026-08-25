@@ -28,33 +28,56 @@ struct OpacityTests {
     @Test("Full opacity changes nothing at all")
     func opaqueIsTheIdentity() {
         let context = makeRenderContext(width: 24, height: 2)
-        let plain = renderToBuffer(Text("hello").foregroundStyle(.red), context: context)
-        let faded = renderToBuffer(
+        let plain = renderToScreen(Text("hello").foregroundStyle(.red), context: context)
+        let faded = renderToScreen(
             Text("hello").foregroundStyle(.red).opacity(1), context: context)
         // Byte-for-byte, not just visually: an opaque view must not pay for,
         // or be perturbed by, a rewrite it doesn't need.
         #expect(faded.lines == plain.lines)
     }
 
-    @Test("Zero opacity reaches the background exactly")
-    func transparentReachesTheBackground() {
+    @Test("Zero opacity draws nothing, and keeps its space")
+    func transparentDrawsNothing() {
         let context = makeRenderContext(width: 24, height: 2)
-        let faded = renderToBuffer(
+        let plain = renderToScreen(Text("hello").foregroundStyle(.red), context: context)
+        let faded = renderToScreen(
             Text("hello").foregroundStyle(.red).opacity(0), context: context)
-        let background = context.environment.palette.background
 
-        // The text is still there — opacity does not remove a view, it makes
-        // it invisible — but it is drawn in the background colour.
-        #expect(faded.lines[0].stripped.contains("hello"))
-        #expect(faded.lines[0].contains(codes(background)))
+        // Not "drawn in the background colour" — not drawn. That distinction is
+        // invisible over the plain page and is the whole point over anything
+        // else: a view faded to nothing must REVEAL what is behind it, and text
+        // painted in the background colour hides it just as well as text
+        // painted in any other.
+        #expect(faded.lines[0].stripped.trimmingCharacters(in: .whitespaces).isEmpty)
         #expect(!faded.lines[0].contains(codes(.red)))
+        // Opacity does not remove a view; it makes it invisible. The space is
+        // still claimed, so nothing around it moves.
+        #expect(faded.lines.count == plain.lines.count)
+        #expect(faded.width == plain.width)
+    }
+
+    @Test("What is behind a fully transparent view is untouched")
+    func transparentRevealsWhatIsBehind() {
+        let context = makeRenderContext(width: 24, height: 2)
+        let composed = renderToScreen(
+            ZStack {
+                Text("world").foregroundStyle(.blue)
+                Text("hello").foregroundStyle(.red).opacity(0)
+            },
+            context: context)
+
+        // The case the render-time fade got wrong, and the reason for all of
+        // this: it painted "hello" in a near-background colour ON TOP of the
+        // blue text, which is neither invisible nor revealing.
+        #expect(composed.lines[0].stripped.hasPrefix("world"))
+        #expect(composed.lines[0].contains(codes(.blue)))
     }
 
     @Test("A half-faded colour is between the colour and the background")
     func blendIsBetween() {
         let context = makeRenderContext(width: 24, height: 2)
         let background = context.environment.palette.background
-        let faded = renderToBuffer(
+        let faded = renderToScreen(
             Text("hello").foregroundStyle(.red).opacity(0.5), context: context)
 
         // Neither endpoint: this is the whole difference between a blend and
@@ -74,7 +97,7 @@ struct OpacityTests {
         #expect(codes(red) != codes(blue))
 
         let context = makeRenderContext(width: 24, height: 2)
-        let line = renderToBuffer(
+        let line = renderToScreen(
             HStack {
                 Text("r").foregroundStyle(Color.rgb(200, 20, 20))
                 Text("b").foregroundStyle(Color.rgb(20, 20, 200))
@@ -91,15 +114,18 @@ struct OpacityTests {
         // Without this, a subtree of plain Text would be completely unaffected
         // by .opacity — which is the failure a user would notice first.
         let context = makeRenderContext(width: 24, height: 2)
-        let plain = renderToBuffer(Text("hello"), context: context)
-        let faded = renderToBuffer(Text("hello").opacity(0.3), context: context)
+        let plain = renderToScreen(Text("hello"), context: context)
+        // Above the threshold, so the glyphs are still drawn and there is a
+        // colour to check. Below it the view is not drawn at all, which is a
+        // different property and is tested where it belongs.
+        let faded = renderToScreen(Text("hello").opacity(0.6), context: context)
         #expect(faded.lines[0] != plain.lines[0])
         #expect(faded.lines[0].stripped.contains("hello"))
 
         let palette = context.environment.palette
         #expect(
             faded.lines[0].contains(
-                codes(palette.foreground.opacity(0.3, over: palette.background))))
+                codes(palette.foreground.opacity(0.6, over: palette.background))))
     }
 
     @Test("Every colour form is understood")
@@ -110,7 +136,7 @@ struct OpacityTests {
         let context = makeRenderContext(width: 32, height: 2)
         let surface = context.environment.palette.background
         for color in [Color.red, .brightCyan, .palette(93), .rgb(10, 200, 40)] {
-            let faded = renderToBuffer(
+            let faded = renderToScreen(
                 Text("x").foregroundStyle(color).opacity(0.5), context: context)
             #expect(
                 faded.lines[0].contains(codes(color.opacity(0.5, over: surface))),
@@ -123,7 +149,7 @@ struct OpacityTests {
     func backgroundsFade() {
         let context = makeRenderContext(width: 24, height: 3)
         let surface = context.environment.palette.background
-        let faded = renderToBuffer(
+        let faded = renderToScreen(
             Text("hi").background(Color.blue).opacity(0.5), context: context)
         let expected = ANSIRenderer.backgroundCodes(for: Color.blue.opacity(0.5, over: surface))
             .joined(separator: ";")
@@ -135,7 +161,7 @@ struct OpacityTests {
         // Bold, underline and the rest have no colour to blend; rewriting or
         // dropping them would silently restyle the subtree.
         let context = makeRenderContext(width: 24, height: 2)
-        let faded = renderToBuffer(Text("hi").bold().underline().opacity(0.5), context: context)
+        let faded = renderToScreen(Text("hi").bold().underline().opacity(0.5), context: context)
         let sequences = faded.lines[0].ansiSegments().compactMap { segment -> String? in
             if case .ansi(let sequence, _) = segment { return sequence }
             return nil
@@ -147,8 +173,8 @@ struct OpacityTests {
     @Test("A faded view keeps its size and its hit regions")
     func layoutIsUnchanged() {
         let context = makeRenderContext(width: 40, height: 6)
-        let plain = renderToBuffer(Button("Press") {}, context: context)
-        let faded = renderToBuffer(Button("Press") {}.opacity(0.5), context: context)
+        let plain = renderToScreen(Button("Press") {}, context: context)
+        let faded = renderToScreen(Button("Press") {}.opacity(0.5), context: context)
 
         // SwiftUI's opacity(0) leaves the view in the layout and still
         // interactive; so does this.
@@ -164,26 +190,42 @@ struct OpacityTests {
     @Test("Out-of-range values clamp")
     func clamping() {
         let context = makeRenderContext(width: 24, height: 2)
-        let below = renderToBuffer(Text("hi").foregroundStyle(.red).opacity(-2), context: context)
-        let zero = renderToBuffer(Text("hi").foregroundStyle(.red).opacity(0), context: context)
+        let below = renderToScreen(Text("hi").foregroundStyle(.red).opacity(-2), context: context)
+        let zero = renderToScreen(Text("hi").foregroundStyle(.red).opacity(0), context: context)
         #expect(below.lines == zero.lines)
 
-        let above = renderToBuffer(Text("hi").foregroundStyle(.red).opacity(5), context: context)
-        let plain = renderToBuffer(Text("hi").foregroundStyle(.red), context: context)
+        let above = renderToScreen(Text("hi").foregroundStyle(.red).opacity(5), context: context)
+        let plain = renderToScreen(Text("hi").foregroundStyle(.red), context: context)
         #expect(above.lines == plain.lines)
     }
 
     @Test("Nested opacity compounds")
     func nesting() {
         let context = makeRenderContext(width: 24, height: 2)
-        let surface = context.environment.palette.background
-        let faded = renderToBuffer(
+        // Two stacked translucent layers, exactly as in SwiftUI: 0.8 through
+        // 0.75 is 0.6, and 0.6 is what the picture must be — not two blends
+        // applied in turn, which would round twice and, more importantly, would
+        // apply the glyph threshold twice.
+        let nested = renderToScreen(
+            Text("hi").foregroundStyle(.red).opacity(0.8).opacity(0.75), context: context)
+        // `0.8 * 0.75` rather than `0.6`: the two are not the same `Double`, and
+        // the blend truncates, so spelling the product out is the difference
+        // between comparing pictures and comparing rounding.
+        let once = renderToScreen(
+            Text("hi").foregroundStyle(.red).opacity(0.8 * 0.75), context: context)
+        #expect(nested.lines == once.lines)
+    }
+
+    @Test("The threshold applies to the PRODUCT, not to each fade")
+    func nestingCrossesTheThresholdOnce() {
+        let context = makeRenderContext(width: 24, height: 2)
+        // Half of a half is a quarter, which is below the threshold — so
+        // nothing is drawn, even though neither fade alone would have hidden
+        // anything. Applying the threshold per layer would draw this at full
+        // character strength, faded twice.
+        let faded = renderToScreen(
             Text("hi").foregroundStyle(.red).opacity(0.5).opacity(0.5), context: context)
-        // The inner fade lands first, then the outer fades what it produced —
-        // so the result is a quarter of the way from the background, as two
-        // stacked translucent layers would be.
-        let once = Color.red.opacity(0.5, over: surface)
-        #expect(faded.lines[0].contains(codes(once.opacity(0.5, over: surface))))
+        #expect(faded.lines[0].stripped.trimmingCharacters(in: .whitespaces).isEmpty)
     }
 
     @Test("Every rendered run names its own colour and ends reset")
@@ -222,16 +264,16 @@ struct OpacityTests {
             }
         }
 
-        audit("Text", renderToBuffer(Text("hi"), context: context))
-        audit("Divider", renderToBuffer(Divider(), context: context))
-        audit("Spacer", renderToBuffer(HStack { Text("a"); Spacer(); Text("b") }, context: context))
-        audit("Button", renderToBuffer(Button("Go") {}, context: context))
-        audit("ProgressView", renderToBuffer(ProgressView(value: 0.5), context: context))
-        audit("Slider", renderToBuffer(Slider(value: .constant(0.5), in: 0...1), context: context))
-        audit("Toggle", renderToBuffer(Toggle("t", isOn: .constant(true)), context: context))
-        audit("List", renderToBuffer(List { Text("a"); Text("b") }, context: context))
+        audit("Text", renderToScreen(Text("hi"), context: context))
+        audit("Divider", renderToScreen(Divider(), context: context))
+        audit("Spacer", renderToScreen(HStack { Text("a"); Spacer(); Text("b") }, context: context))
+        audit("Button", renderToScreen(Button("Go") {}, context: context))
+        audit("ProgressView", renderToScreen(ProgressView(value: 0.5), context: context))
+        audit("Slider", renderToScreen(Slider(value: .constant(0.5), in: 0...1), context: context))
+        audit("Toggle", renderToScreen(Toggle("t", isOn: .constant(true)), context: context))
+        audit("List", renderToScreen(List { Text("a"); Text("b") }, context: context))
         struct Row: Identifiable { let id: Int; let name: String }
-        audit("Table", renderToBuffer(
+        audit("Table", renderToScreen(
             Table(
                 [Row(id: 1, name: "one"), Row(id: 2, name: "two")],
                 selection: .constant(nil as Int?)
@@ -239,11 +281,11 @@ struct OpacityTests {
                 TableColumn("Name", value: \Row.name)
             },
             context: context))
-        audit("border", renderToBuffer(Text("x").padding().border(), context: context))
-        audit("Gauge", renderToBuffer(Gauge(value: 0.5) { Text("g") }, context: context))
-        audit("TextField", renderToBuffer(TextField("p", text: .constant("v")), context: context))
-        audit("background", renderToBuffer(Text("b").background(Color.blue), context: context))
-        audit("ZStack", renderToBuffer(ZStack { Text("under"); Text("over") }, context: context))
+        audit("border", renderToScreen(Text("x").padding().border(), context: context))
+        audit("Gauge", renderToScreen(Gauge(value: 0.5) { Text("g") }, context: context))
+        audit("TextField", renderToScreen(TextField("p", text: .constant("v")), context: context))
+        audit("background", renderToScreen(Text("b").background(Color.blue), context: context))
+        audit("ZStack", renderToScreen(ZStack { Text("under"); Text("over") }, context: context))
 
         #expect(bare.isEmpty, "views drew ink in no colour: \(Set(bare).sorted())")
         #expect(unterminated.isEmpty, "views left a colour active: \(Set(unterminated).sorted())")
@@ -315,7 +357,7 @@ struct OpacityTests {
         let context = makeRenderContext(width: 24, height: 2) { environment, _ in
             environment.palette = palette
         }
-        let faded = renderToBuffer(
+        let faded = renderToScreen(
             Text("hi").foregroundStyle(Color.rgb(200, 20, 20)).opacity(0.5), context: context)
 
         // The blend actually happened, against the RESOLVED background.
@@ -326,7 +368,7 @@ struct OpacityTests {
     @Test("An empty buffer survives")
     func emptyContent() {
         let context = makeRenderContext(width: 20, height: 2)
-        let faded = renderToBuffer(EmptyView().opacity(0.5), context: context)
+        let faded = renderToScreen(EmptyView().opacity(0.5), context: context)
         #expect(faded.lines.allSatisfy { $0.stripped.trimmingCharacters(in: .whitespaces).isEmpty })
     }
 }

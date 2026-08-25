@@ -1,6 +1,8 @@
 # Opacity as composition, not as a blend
 
-**Status: exploration, 2026-08-24. Nothing here is implemented.** Commissioned
+**Status: §9.5 steps 1–4 are implemented as of 2026-08-24; step 5's demo,
+stress scenario and A/B are outstanding, as is `Color`-level alpha (`.clear`
+and the `opacity:` initialisers).** Commissioned
 to answer two questions before any of it is built — does it add complexity or
 caveats, and does it cost performance — and to settle the two parity entries
 that depend on it (`Color.clear`, and every initialiser taking `opacity:`).
@@ -423,15 +425,41 @@ found by it.
 
 ### 9.5 Revised staging
 
-1. **Payload as regions**, carried and shifted, consumed by nothing —
-   including `==` (L7) and the `ContainerPayloadAudit` case. Behaviour-neutral.
-2. **L3 and L9**: convert the bare rebuilds, delete the dead `overlay(_:)`.
-   Behaviour-neutral, and it is what stops step 3 leaking.
-3. **The blend**, at the composite and at the three roots, with the ambient
-   surface plumbed (9.3). Still nothing sets a region, so still
-   behaviour-neutral.
-4. **`OpacityModifier` sets regions instead of fading.** The behaviour change,
-   and the frame where the fast path regresses to a render per frame — its own
-   commit, with `idle_cpu.py` before/after in the message.
-5. **Restore the fast path** (§6b), the Example demo, the stress scenario, the
-   A/B.
+1. ~~**Payload as regions**, carried and shifted, consumed by nothing —
+   including `==` (L7) and the `ContainerPayloadAudit` case.~~ **Done.**
+2. ~~**L3 and L9**: convert the bare rebuilds, delete the dead
+   `overlay(_:)`.~~ **Done** — five hand-assembly sites had three payloads of
+   four, and `FrameBuffer.overlay(_:)` is gone.
+3. ~~**The blend**, at the composite and at the three roots, with the ambient
+   surface plumbed (9.3).~~ **Done**, as
+   `FrameBuffer.resolvingOpacity(over:at:surface:palette:)`.
+4. ~~**`OpacityModifier` sets regions instead of fading.**~~ **Done**, and the
+   fast path moved with it rather than regressing: the modifier stamps the
+   whole `OpacityCycle` on the region and the RESOLUTION bakes its phases,
+   which is the "compute the phases at composite time" of §6b. Measured on the
+   Example's Animation page with `idle_cpu.py`, twelve Tabs and a click to
+   turn "Breathe" on — 512 B/s at 0.2–0.3% CPU before, **480 B/s at 0.2–0.3%
+   after**, against 214 B/s for the same page with the fade off. So the
+   never-ending fade still costs no render passes.
+5. **Outstanding**: the Example demo page with a slider and stacked layers,
+   the stress scenario, the A/B, and `Color`-level alpha (`.clear` and the
+   three `opacity:` initialisers — §8).
+
+### 9.6 What the implementation added to the design
+
+- **L8 was real and was closed by a helper, not a note.** The test support
+  gained `renderToScreen`, and `assertSnapshot` uses it: a golden recorded
+  from `renderToBuffer` would capture the unresolved layer and agree with
+  itself forever while the app drew something else.
+- **A cycling region must survive its own opaque phases.** The resolution
+  drops regions at α = 1 as the identity, which silently dropped every
+  repeating fade whose current phase happened to be full — usually its first
+  frame, so the fade never started.
+- **The compositor is told "served by runs" BEFORE it bakes**, not after. The
+  bake happens frames later in the same pass and out of the view's reach, and
+  a cycle still marked "needs rendering" wakes the loop every tick whatever
+  the compositor produced.
+- **The page's own regions resolve at the top of `compositingOverlays`**,
+  before any layer is drawn over it. Left pending, a region would go on naming
+  cells a layer had since replaced, and the LAYER's cells would be faded at
+  the root.

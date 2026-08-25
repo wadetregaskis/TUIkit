@@ -52,14 +52,36 @@ public struct OpacityRegion: Equatable, Sendable {
 
     /// How opaque, `0` through `1`. A region at `1` is the identity and should
     /// not be emitted at all.
+    ///
+    /// When ``cycle`` is present this is the phase the lines were DRAWN at —
+    /// `cycle.phases[step]` — not some other value the animation passes
+    /// through. The replay indexes the frames by tick and splices without
+    /// consulting the view, so a picture drawn at any other value would be
+    /// repainted on the very next tick.
     public var opacity: Double
 
-    public init(offsetX: Int, offsetY: Int, width: Int, height: Int, opacity: Double) {
+    /// The whole of a repeating fade, when this region is one.
+    ///
+    /// A fade that never ends would otherwise cost a render pass for as long
+    /// as the view is on screen. It need not: every phase is the same cells in
+    /// different colours, so whatever resolves this region can resolve it once
+    /// per phase and hand the run loop the lot as ``AnimatedCellRun``s.
+    ///
+    /// It has to travel with the region rather than be computed by the view,
+    /// because the phases cannot be coloured until what is BEHIND the region is
+    /// known — which is the same reason the region exists.
+    public var cycle: OpacityCycle?
+
+    public init(
+        offsetX: Int, offsetY: Int, width: Int, height: Int, opacity: Double,
+        cycle: OpacityCycle? = nil
+    ) {
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.width = width
         self.height = height
         self.opacity = min(max(opacity, 0), 1)
+        self.cycle = cycle
     }
 
     /// This region moved by `(x, y)` — what a combining operation applies when
@@ -71,7 +93,6 @@ public struct OpacityRegion: Equatable, Sendable {
         return copy
     }
 
-    /// Whether `(column, row)` is inside this region.
     /// Whether `row` falls inside this region, at any column.
     ///
     /// The resolution walks rows and asks this first: a buffer of forty rows
@@ -80,8 +101,32 @@ public struct OpacityRegion: Equatable, Sendable {
         row >= offsetY && row < offsetY + height
     }
 
+    /// Whether `(column, row)` is inside this region.
     public func contains(column: Int, row: Int) -> Bool {
         column >= offsetX && column < offsetX + width
             && row >= offsetY && row < offsetY + height
+    }
+}
+
+/// A repeating opacity animation, laid out as the values it passes through.
+///
+/// Indexed the way ``AnimatedCellRun/frames`` is — by `tick % count` — so the
+/// run built from it replays in step with every other run on the same clock.
+public struct OpacityCycle: Equatable, Sendable {
+    /// The opacity at each point of the cycle, in order.
+    public var phases: [Double]
+
+    /// The clock that advances them.
+    public var clock: AnimationClock
+
+    public init(phases: [Double], clock: AnimationClock) {
+        self.phases = phases
+        self.clock = clock
+    }
+
+    /// This cycle with every phase scaled — what nesting one fade inside
+    /// another does. See ``OpacityRegion``.
+    public func scaled(by factor: Double) -> Self {
+        Self(phases: phases.map { $0 * factor }, clock: clock)
     }
 }

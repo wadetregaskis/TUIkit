@@ -64,7 +64,12 @@ extension FrameBuffer {
         // A fully opaque region is the identity, and taking that here means an
         // untouched layer comes out byte-for-byte untouched rather than
         // round-tripping through the cell walk to arrive at the same picture.
-        let translucent = opacityRegions.filter { $0.opacity < 1 }
+        //
+        // Unless it is CYCLING, in which case opaque is merely where the fade
+        // happens to be this instant — usually its very first frame — and
+        // dropping it there would mean the fade never produced any frames at
+        // all and never ran.
+        let translucent = opacityRegions.filter { $0.opacity < 1 || $0.cycle != nil }
         guard !translucent.isEmpty else {
             var resolved = self
             resolved.opacityRegions = []
@@ -75,21 +80,28 @@ extension FrameBuffer {
         let resolvedSurface = surface.resolve(with: palette)
         let resolvedForeground = palette.foreground.resolve(with: palette)
 
-        var rewritten = lines
-        for row in rewritten.indices {
+        // One row at a time, and each row rebuilt by the SAME function whatever
+        // it is being rebuilt for — the current picture, or a phase of a
+        // repeating fade. That is what makes the pre-rendered cycle sound: the
+        // frame the loop splices at the tick just drawn is byte-identical to
+        // the line the render produced, because it came out of this call with
+        // the same argument.
+        func rebuild(_ row: Int, _ line: String, substituting: (OpacityRegion) -> Double?)
+            -> String?
+        {
             let covering = translucent.filter { $0.spans(row: row) }
-            guard !covering.isEmpty else { continue }
+            guard !covering.isEmpty else { return nil }
             let first = covering.map(\.offsetX).min() ?? 0
             let last = covering.map { $0.offsetX + $0.width }.max() ?? 0
             let start = max(0, first)
-            guard last > start else { continue }
+            guard last > start else { return nil }
 
             let destinationRow = row + position.y
             let behindLine =
                 destination.lines.indices.contains(destinationRow)
                 ? destination.lines[destinationRow] : ""
             let span = Self.blendedSpan(
-                source: rewritten[row],
+                source: line,
                 destination: behindLine,
                 columns: start..<last,
                 destinationShift: position.x,
@@ -98,7 +110,8 @@ extension FrameBuffer {
                     // — a nested `.opacity` stamps its own product before the
                     // outer one appends its rectangle — so the inner alpha is
                     // the one that applies to a cell both cover.
-                    covering.first { $0.contains(column: column, row: row) }?.opacity
+                    covering.first { $0.contains(column: column, row: row) }
+                        .flatMap(substituting)
                 },
                 surface: resolvedSurface,
                 defaultForeground: resolvedForeground)
@@ -111,13 +124,64 @@ extension FrameBuffer {
             // `FrameDiffWriter` matches where the rest of it is done, at the
             // builder rather than downstream. It also keeps the assertion
             // "the faded colour appears nowhere in this row" meaningful.
-            rewritten[row] = Self.splicing(span, into: rewritten[row], atColumn: start)
-                .collapsingAdjacentSGR()
+            return Self.splicing(span, into: line, atColumn: start).collapsingAdjacentSGR()
+        }
+
+        var rewritten = lines
+        for row in rewritten.indices {
+            if let rebuilt = rebuild(row, rewritten[row], substituting: { $0.opacity }) {
+                rewritten[row] = rebuilt
+            }
         }
 
         var result = replacingLines(rewritten)
         result.opacityRegions = []
+        result.animatedCells += Self.cyclingRuns(
+            of: translucent, over: lines, rebuilding: rebuild)
         return result
+    }
+
+    /// The runs that let a repeating fade replay instead of re-render.
+    ///
+    /// Each phase is the same rows rebuilt at a different alpha, against the
+    /// same destination — so the whole cycle costs one render of the content
+    /// plus N re-colourings of finished lines, and the loop then never asks the
+    /// view again. What made this hard to keep is that the colouring can only
+    /// happen once the destination is known, which is here and not at the
+    /// modifier; see `Documentation/Opacity as composition.md` §6b.
+    ///
+    /// A run covers the whole ROW rather than the region's columns, which is
+    /// what makes the frame the loop splices byte-identical to the line the
+    /// render drew rather than merely equivalent to it.
+    private static func cyclingRuns(
+        of regions: [OpacityRegion],
+        over lines: [String],
+        rebuilding rebuild: (Int, String, (OpacityRegion) -> Double?) -> String?
+    ) -> [AnimatedCellRun] {
+        var runs: [AnimatedCellRun] = []
+        for region in regions {
+            guard let cycle = region.cycle, cycle.phases.count >= 2 else { continue }
+            let rows = max(0, region.offsetY)..<min(lines.count, region.offsetY + region.height)
+            guard !rows.isEmpty else { continue }
+            var phases: [[String]] = []
+            phases.reserveCapacity(cycle.phases.count)
+            for phase in cycle.phases {
+                phases.append(
+                    rows.map { row in
+                        rebuild(row, lines[row], { $0 == region ? phase : $0.opacity })
+                            ?? lines[row]
+                    })
+            }
+            // `nil` where the phases disagree about the shape of the picture: a
+            // run cannot change a row's width, and one that tried would shift
+            // the rest of the row sideways on some ticks and not others.
+            guard
+                let built = AnimatedBufferCycle.runs(
+                    phases: phases, offsetY: rows.lowerBound, clock: cycle.clock)
+            else { continue }
+            runs += built
+        }
+        return runs
     }
 }
 
