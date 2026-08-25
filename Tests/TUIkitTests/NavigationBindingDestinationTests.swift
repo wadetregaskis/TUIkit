@@ -72,6 +72,47 @@ struct NavigationBindingDestinationTests {
         }
     }
 
+    @Test("Two stacked destinations keep separate screens and memories")
+    func stackedDestinationsAreIndependent() {
+        // Stacked modifiers render at ONE identity, so the identity path
+        // alone is not unique to an instance: a shared token let the outer
+        // modifier pop what the inner pushed every frame, and a shared
+        // didPush box meant Back was never reported — the outer wrote false
+        // before the inner read it, re-pushing forever.
+        let fixture = Fixture()
+        var showingB = false
+
+        func stacked() -> some View {
+            NavigationStack(path: Binding(get: { fixture.path }, set: { fixture.path = $0 })) {
+                Text("root")
+                    .navigationDestination(
+                        isPresented: Binding(
+                            get: { fixture.showing }, set: { fixture.showing = $0 })
+                    ) { Text("screen A") }
+                    .navigationDestination(
+                        isPresented: Binding(get: { showingB }, set: { showingB = $0 })
+                    ) { Text("screen B") }
+            }
+        }
+
+        fixture.frame(stacked)
+        fixture.showing = true
+        _ = fixture.frame(stacked)
+        // A second settled frame: the outer modifier must not pop A's screen
+        // or report A dismissed.
+        let lines = fixture.frame(stacked)
+        #expect(lines.contains { $0.contains("screen A") }, "\(lines)")
+        #expect(fixture.showing, "the outer modifier reported A popped")
+        #expect(!showingB)
+
+        // Both at once: each token owns its own screen; B pushed above A.
+        showingB = true
+        _ = fixture.frame(stacked)
+        let both = fixture.frame(stacked)
+        #expect(both.contains { $0.contains("screen B") }, "\(both)")
+        #expect(fixture.showing && showingB)
+    }
+
     @Test("Setting the flag pushes the screen; clearing it pops")
     func flagDrivesThePath() {
         let fixture = Fixture()

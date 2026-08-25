@@ -140,11 +140,23 @@ extension NavigationPresentationModifier: Renderable {
         // screen is not up" as a reason to push, forever. Same gotcha
         // `OnChangeModifier` and `RefreshableModifier` answer the same way.
         stateStorage.markActive(context.identity)
-        let token = AnyHashable(NavigationViewToken(id: context.identity.path))
+        // Two of these STACKED on one view render at the same identity, so
+        // the identity path alone is not unique to an instance: sharing one
+        // token made the outer modifier pop what the inner pushed (a
+        // pop+push per frame with one flag set), and sharing one didPush box
+        // meant Back could never be reported — the outer wrote false before
+        // the inner read it, re-pushing forever. The slot is drawn from the
+        // same per-identity render-order sequence the onChange family uses:
+        // reconcile runs once per render pass, in body order, which is the
+        // same every frame. The box steps DOWNWARD within navigation's
+        // reserved ten (see StateStorage.StateKey's table).
+        let slot = stateStorage.nextOnChangeIndex(for: context.identity)
+        let token = AnyHashable(NavigationViewToken(id: "\(context.identity.path)#\(slot)"))
         let path = coordinator.read()
         let onPath = path.contains(token)
         let didPush: StateBox<Bool> = stateStorage.storage(
-            for: StateStorage.StateKey(identity: context.identity, propertyIndex: StateIndex.didPush),
+            for: StateStorage.StateKey(
+                identity: context.identity, propertyIndex: StateIndex.didPush - slot),
             default: false)
 
         guard isPresented.wrappedValue else {
