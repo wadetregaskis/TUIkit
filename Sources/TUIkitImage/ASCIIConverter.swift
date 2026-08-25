@@ -647,6 +647,12 @@ extension ASCIIConverter {
             overrideAspectRatio
             ?? (Double(imageWidth) / Double(imageHeight))
 
+        // A degenerate ratio — a zero-sized image (0/0 is NaN, w/0 is
+        // infinite; both arrive as decode SUCCESSES) or a nonsense override —
+        // has no geometry to honour, and feeding it onward traps in `Int(_:)`
+        // at the first `.rounded()`. One cell is the answer for nothing.
+        guard sourceRatio.isFinite, sourceRatio > 0 else { return (width: 1, height: 1) }
+
         // correctedRatio accounts for terminal character aspect (tall cells).
         let correctedRatio = sourceRatio * terminalAspect
 

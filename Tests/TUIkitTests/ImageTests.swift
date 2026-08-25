@@ -142,6 +142,20 @@ struct RGBAImageTests {
 @Suite("ASCIIConverter Tests")
 struct ASCIIConverterTests {
 
+    @Test("A degenerate image sizes to one cell instead of trapping")
+    func targetSizeDegenerate() {
+        // 0/0 is NaN and w/0 is infinite; fed onward, the first
+        // Int(.rounded()) is a runtime trap. A zero-sized image can arrive as
+        // a decode SUCCESS, so the guard belongs here, not in the loader.
+        #expect(ASCIIConverter.targetSize(imageWidth: 0, imageHeight: 0, maxWidth: 40) == (1, 1))
+        #expect(ASCIIConverter.targetSize(imageWidth: 8, imageHeight: 0, maxWidth: 40) == (1, 1))
+        #expect(ASCIIConverter.targetSize(imageWidth: 0, imageHeight: 8, maxWidth: 40) == (1, 1))
+        #expect(
+            ASCIIConverter.targetSize(
+                imageWidth: 8, imageHeight: 8, maxWidth: 40, overrideAspectRatio: 0
+            ) == (1, 1))
+    }
+
     @Test("Target size calculation preserves aspect ratio")
     func targetSizeAspectRatio() {
         let size = ASCIIConverter.targetSize(
