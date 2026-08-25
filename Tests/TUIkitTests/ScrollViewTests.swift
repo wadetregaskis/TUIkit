@@ -659,3 +659,64 @@ struct ScrollViewContentStateTests {
                 "content @State persisted across renders inside the ScrollView, got \(sink.value)")
     }
 }
+
+/// Shift + vertical wheel over a two-axis ScrollView: the documented
+/// horizontal gesture, decided BEFORE the vertical capture gets a look — the
+/// vertical handler consumes .scrollUp/.scrollDown without reading the shift
+/// bit, so ordered after it the gesture was unreachable while the vertical
+/// axis could still move.
+@MainActor
+@Suite("Shift-wheel pans sideways")
+struct ShiftWheelHorizontalTests {
+
+    @Test("Shift+wheel pans horizontally even when vertical can scroll")
+    func shiftWheelIsHorizontal() {
+        let context = makeRenderContext(width: 12, height: 4) { environment, tui in
+            environment.mouseEventDispatcher = tui.mouseEventDispatcher
+        }
+        // Content both wider and taller than the viewport.
+        let view = ScrollView([.vertical, .horizontal]) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<12, id: \.self) { row in
+                    Text("row-\(row)-abcdefghijklmnopqrstuvwxyz")
+                }
+            }
+        }
+
+        let dispatcher = context.environment.mouseEventDispatcher!
+        let first = renderToBuffer(view, context: context)
+        dispatcher.setRegions(first.hitTestRegions)
+        _ = dispatcher.dispatch(
+            MouseEvent(button: .scrollDown, phase: .scrolled, x: 2, y: 2, shift: true))
+        let after = renderToBuffer(view, context: context)
+
+        // Panned right: row 0 is STILL the top line, its prefix scrolled out.
+        // A vertical scroll instead would put "row-1-…" on top, prefix intact.
+        let firstTop = first.lines.first?.stripped ?? ""
+        let afterTop = after.lines.first?.stripped ?? ""
+        #expect(firstTop.hasPrefix("row-0"), "\(firstTop)")
+        #expect(!afterTop.hasPrefix("row-"), "shift+wheel scrolled vertically instead: \(afterTop)")
+        #expect(afterTop.contains("0-abc"), "row 0 should remain on top, shifted: \(afterTop)")
+    }
+
+    @Test("An unshifted wheel still scrolls vertically")
+    func plainWheelIsVertical() {
+        let context = makeRenderContext(width: 12, height: 4) { environment, tui in
+            environment.mouseEventDispatcher = tui.mouseEventDispatcher
+        }
+        let view = ScrollView([.vertical, .horizontal]) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<12, id: \.self) { row in
+                    Text("row-\(row)-abcdefghijklmnopqrstuvwxyz")
+                }
+            }
+        }
+        let dispatcher = context.environment.mouseEventDispatcher!
+        let first = renderToBuffer(view, context: context)
+        dispatcher.setRegions(first.hitTestRegions)
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .scrolled, x: 2, y: 2))
+        let after = renderToBuffer(view, context: context)
+        #expect(after.lines != first.lines)
+        #expect(after.lines.contains { $0.stripped.hasPrefix("row-") })
+    }
+}

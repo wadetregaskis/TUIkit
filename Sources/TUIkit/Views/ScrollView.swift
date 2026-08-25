@@ -620,17 +620,27 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let captureFocusID = persistedFocusID
         let captureHorizontal = wantsHorizontal
         let mouseHandlerID = mouseDispatcher.register { event in
+            // Shift + vertical wheel IS the horizontal gesture, decided before
+            // the vertical capture gets a look: the vertical handler consumes
+            // .scrollUp/.scrollDown without ever reading the shift bit, so
+            // ordering this after it made the documented gesture unreachable
+            // whenever the vertical axis could still move — the user could
+            // only pan sideways by first riding the vertical axis to an edge.
+            // Rewritten onto the horizontal wheel path, not scrolled by hand,
+            // so the edge-chaining and no-op-not-consumed rules hold for it.
+            if captureHorizontal, event.shift,
+                event.button == .scrollUp || event.button == .scrollDown
+            {
+                let sideways = MouseEvent(
+                    button: event.button == .scrollUp ? .scrollLeft : .scrollRight,
+                    phase: event.phase, x: event.x, y: event.y,
+                    shift: event.shift, ctrl: event.ctrl, meta: event.meta,
+                    clickCount: event.clickCount)
+                return captureHandler.horizontal.handleHorizontalWheelEvent(sideways)
+            }
             if captureHandler.handleWheelEvent(event) { return true }
             if captureHorizontal {
                 if captureHandler.horizontal.handleHorizontalWheelEvent(event) { return true }
-                if event.shift, event.button == .scrollUp {
-                    captureHandler.horizontal.scroll(by: -ViewConstants.mouseWheelScrollLines)
-                    return true
-                }
-                if event.shift, event.button == .scrollDown {
-                    captureHandler.horizontal.scroll(by: ViewConstants.mouseWheelScrollLines)
-                    return true
-                }
             }
             if event.button == .left {
                 switch event.phase {
