@@ -304,7 +304,7 @@ public final class FocusManager: @unchecked Sendable {
     /// When `true`, the input handler should give the focused element
     /// priority for key events before dispatching to other layers.
     var hasTextInputFocus: Bool {
-        currentFocused is TextFieldHandler
+        currentFocused is any TextInputFocusHandler
     }
 }
 
