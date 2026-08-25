@@ -165,7 +165,18 @@ extension ForEach: ChildViewProvider {
         //
         // So it stays, and the memo it buys is worth far more than it costs:
         // building the row eagerly instead cost `fanout` 21% of its frame.
-        if !Content._providesAlignmentGuide, let equatableElement = element as? any Equatable {
+        // A row carrying z-index or spacer metadata is exempted for the same
+        // reason as an alignment guide: the memo wrapper is `Renderable` and
+        // opaque, reporting the DEFAULT witness (z-index 0, not-a-spacer), so
+        // a `.zIndex()` row lost its ordering in a `ZStack` and a `Spacer()`
+        // row lost its flexibility. Each witness is `false` for almost every
+        // row in almost every tree, so the memo is forfeited only for the few
+        // rows that cannot survive it — as with the guide.
+        let memoisable =
+            !Content._providesAlignmentGuide
+            && !Content._providesZIndex
+            && !Content._isSpacer
+        if memoisable, let equatableElement = element as? any Equatable {
             // The row view is NOT built here. `_MemoizedRow` takes the element
             // and this `ForEach`'s content closure and builds the row only if
             // the memo misses — which, in steady state, it mostly does not.

@@ -95,6 +95,23 @@ struct MemoizedRowGateTests {
         #expect(cache.isEmpty)
     }
 
+    @Test("A zIndex ForEach row keeps its ordering (not swallowed by the memo)")
+    func zIndexRowKeepsOrdering() {
+        let cache = RenderCache()
+        let context = makeContext(cache: cache, width: 10, height: 3)
+        // Later-declared rows carry LOWER z, so draw order alone would put
+        // "3" on top; the zIndex must flip it so "1" wins. The memo wrapper
+        // reported z 0 for all three, losing the ordering.
+        let view = ZStack {
+            ForEach([1, 2, 3], id: \.self) { n in
+                Text("\(n)").zIndex(Double(4 - n))
+            }
+        }
+        let buffer = renderToBuffer(view, context: context)
+        let top = buffer.lines.first?.stripped ?? ""
+        #expect(top.hasPrefix("1"), "zIndex ordering was lost: \(top)")
+    }
+
     @Test("ForEach rows in a stack are auto-memoized by element value")
     func stackForEachRowsAutoMemoized() {
         let cache = RenderCache()

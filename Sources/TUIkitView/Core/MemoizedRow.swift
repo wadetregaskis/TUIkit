@@ -259,7 +259,16 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
             : context
         let unsafeBefore = tracker.cacheUnsafeCount
         let size = measureChild(content, proposal: proposal, context: measureContext)
-        if tracker.cacheUnsafeCount == unsafeBefore {
+        // The uncomparable-environment clause its two siblings carry — the
+        // render-store's `isStorable` and `EquatableView.sizeThatFits` both
+        // refuse when a non-Equatable environment value is in force, because
+        // the `element` key cannot see it, so a change to that value could
+        // never invalidate a stored size. This half was missed when the
+        // buffer half was unified: a Form row under an injected uncomparable
+        // value measured once and served that size forever.
+        if tracker.cacheUnsafeCount == unsafeBefore,
+            !context.environment.hasUncomparableEnvironmentValue
+        {
             cache.storeSize(key: key, view: element, size: size)
         }
         return size
