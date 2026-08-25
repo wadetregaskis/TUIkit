@@ -207,22 +207,16 @@ extension View {
 
 /// The binding plus its anchor, carried to whichever ``ScrollView`` is inside.
 ///
-/// A reference box so the scroll view can also remember what it last reported
-/// through this binding — the comparison that keeps a render-time write-back
-/// from re-triggering itself every frame.
+/// The binding plus its anchor, and nothing else: this box is rebuilt with
+/// every body evaluation, so it can carry no memory. The freshness that keeps
+/// a standing target from re-applying every frame — which request token was
+/// acted on, which id was last written back — lives on the persistent
+/// ``ScrollViewHandler`` instead; kept here it reset every frame, and a
+/// standing `scrollTo` undid the user's scroll on the very next render.
 @MainActor
 final class ScrollPositionBinding {
     let binding: Binding<ScrollPosition>
     let anchor: UnitPoint
-
-    /// The last id written back, so an unchanged position writes nothing. A
-    /// render pass that wrote every frame would invalidate its own subtree
-    /// every frame, and the loop would never settle.
-    var lastReportedID: AnyHashable?
-
-    /// The last request token acted on, so a `scrollTo` is applied once rather
-    /// than on every frame until the position changes.
-    var lastAppliedToken: Int?
 
     init(_ binding: Binding<ScrollPosition>, anchor: UnitPoint?) {
         self.binding = binding

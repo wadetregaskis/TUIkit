@@ -287,7 +287,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // A `.scrollPosition` write is the same request a `scrollTo` makes; it
         // just arrives as state rather than as a call, so it rides the same
         // machinery rather than a second one beside it.
-        guard var seek = handler.pendingScrollTo ?? positionSeek(context: context) else {
+        guard var seek = handler.pendingScrollTo ?? positionSeek(handler: handler, context: context)
+        else {
             return nil
         }
         seek.topInset = edgeInset(drawsTextIndicators: drawsTextIndicators)
@@ -391,6 +392,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
             seek: pendingSeek, edgeInset: edgeInset(drawsTextIndicators: drawsTextIndicators(context)),
+            handler: handler,
             context: context, settledExtents: bars.settled)
         if !context.isMeasuring { handler.pendingScrollTo = nil }
         // A sliced reply (Stage 6): the buffer holds only the rendered band;
@@ -811,6 +813,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     func renderedContent(
         contentWidth: Int, viewportHeight: Int, horizontal: Bool,
         verticalScrollOffset: Int, seek: ScrollToRequest? = nil, edgeInset: Int = 0,
+        handler: ScrollViewHandler? = nil,
         context: RenderContext, settledExtents: (width: Int, height: Int)? = nil
     ) -> (
         buffer: FrameBuffer,
@@ -852,8 +855,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         measureContext.availableWidth = extents.width
         measureContext.availableHeight = extents.height
         let buffer = TUIkit.renderToBuffer(content, context: measureContext)
-        if let id = reply?.anchorID, !context.isMeasuring {
-            reportVisibleID(id, context: context)
+        if let id = reply?.anchorID, let handler, !context.isMeasuring {
+            reportVisibleID(id, handler: handler, context: context)
         }
         if let reply, let origin = reply.sliceOriginY, let total = reply.sliceTotalHeight {
             return (buffer, (origin, total, reply.sliceTotalIsEstimate), reply.seekResolvedOffset)

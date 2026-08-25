@@ -53,6 +53,17 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// viewportHeight)`.
     public var scrollOffset: Int = 0
 
+    /// The `.scrollPosition` freshness memory: the request token last acted
+    /// on, and the row id last written back. On the HANDLER — which persists
+    /// across frames — and not on the environment box that carries the
+    /// binding: that box is rebuilt with every body evaluation, and freshness
+    /// that resets every frame treats a standing target as a brand-new
+    /// request each render, undoing the user's scroll on the very next frame.
+    var lastAppliedPositionToken: Int?
+
+    /// See ``lastAppliedPositionToken``.
+    var lastReportedPositionID: AnyHashable?
+
     /// Grab point within the thumb during a scrollbar drag (``ScrollableOffsetState``).
     public var scrollbarDragGrab: Int?
 

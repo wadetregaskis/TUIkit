@@ -115,6 +115,35 @@ struct ScrollPositionTests {
         #expect(settled.contains { $0.contains("row 0") })
     }
 
+    @Test("A standing target does not undo the user's scroll")
+    func standingTargetDoesNotFight() {
+        // The binding's environment box is rebuilt with every body
+        // evaluation, so the freshness memory must live on the persistent
+        // handler. Kept on the box, every frame saw a "new" request and
+        // re-pinned the offset: the user could scroll away from a standing
+        // scrollTo(edge: .bottom) and be dragged straight back.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        var position = ScrollPosition()
+        let binding = Binding(get: { position }, set: { position = $0 })
+
+        renderFrame(list(position: binding), tuiContext: tuiContext, focusManager: focusManager)
+        position.scrollTo(edge: .bottom)
+        let bottom = renderFrame(list(position: binding), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(bottom.contains { $0.contains("row \(Self.rowCount - 1)") })
+
+        // The user scrolls back to the top; the target still sits in the
+        // binding, and must stay spent.
+        let handler = focusManager.activeSection?.focusables
+            .compactMap { $0 as? ScrollViewHandler }.first
+        #expect(handler != nil, "the ScrollView registered its handler")
+        handler?.scrollOffset = 0
+        tuiContext.renderCache.clearAll()
+        let after = renderFrame(list(position: binding), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(after.contains { $0.contains("row 0") }, "\(after)")
+        #expect(!after.contains { $0.contains("row \(Self.rowCount - 1)") })
+    }
+
     // MARK: - Reading
 
     @Test("The scroll view reports the row it is showing")

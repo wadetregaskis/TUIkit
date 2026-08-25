@@ -21,7 +21,7 @@ extension _ScrollViewCore {
     /// differing from what was last reported) is what distinguishes a fresh
     /// request from the same one still sitting in the binding. Without that,
     /// scrolling away by hand would be undone on the very next frame.
-    func positionSeek(context: RenderContext) -> ScrollToRequest? {
+    func positionSeek(handler: ScrollViewHandler, context: RenderContext) -> ScrollToRequest? {
         guard let box = context.environment.scrollPositionBinding else { return nil }
         let position = box.binding.wrappedValue
         guard let target = position.target else { return nil }
@@ -30,11 +30,11 @@ extension _ScrollViewCore {
         case .id(let value, let anchor):
             let isFresh =
                 position.requestToken == 0
-                ? box.lastReportedID != value
-                : box.lastAppliedToken != position.requestToken
+                ? handler.lastReportedPositionID != value
+                : handler.lastAppliedPositionToken != position.requestToken
             guard isFresh else { return nil }
-            box.lastAppliedToken = position.requestToken
-            box.lastReportedID = value
+            handler.lastAppliedPositionToken = position.requestToken
+            handler.lastReportedPositionID = value
             // The same stringification `ForEach` derives its keys with, so the
             // comparison in the seek paths is exact.
             return ScrollToRequest(key: identityKey(value.base), anchor: anchor)
@@ -51,11 +51,11 @@ extension _ScrollViewCore {
         guard let box = context.environment.scrollPositionBinding else { return }
         let position = box.binding.wrappedValue
         guard let target = position.target,
-            box.lastAppliedToken != position.requestToken, position.requestToken > 0
+            handler.lastAppliedPositionToken != position.requestToken, position.requestToken > 0
         else { return }
         switch target {
         case .edge(let edge):
-            box.lastAppliedToken = position.requestToken
+            handler.lastAppliedPositionToken = position.requestToken
             // Leading/trailing have no meaning on a vertical scroll; treating
             // them as top/bottom would be inventing behaviour, so they are
             // ignored rather than guessed at.
@@ -69,7 +69,7 @@ extension _ScrollViewCore {
             case .leading, .trailing: break
             }
         case .offset(let y):
-            box.lastAppliedToken = position.requestToken
+            handler.lastAppliedPositionToken = position.requestToken
             handler.scrollOffset = max(0, min(y, handler.maxOffset))
         case .id:
             break  // Handled by the key seek — see `positionSeek`.
@@ -81,11 +81,11 @@ extension _ScrollViewCore {
     /// Only when it CHANGED. A render pass that wrote its binding every frame
     /// would invalidate its own subtree every frame and never settle — the
     /// same discipline `onPreferenceChange` follows, and for the same reason.
-    func reportVisibleID(_ id: AnyHashable, context: RenderContext) {
+    func reportVisibleID(_ id: AnyHashable, handler: ScrollViewHandler, context: RenderContext) {
         guard let box = context.environment.scrollPositionBinding,
-            box.lastReportedID != id
+            handler.lastReportedPositionID != id
         else { return }
-        box.lastReportedID = id
+        handler.lastReportedPositionID = id
         var position = box.binding.wrappedValue
         position.reportVisible(id: id)
         box.binding.wrappedValue = position
