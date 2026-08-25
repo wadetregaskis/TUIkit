@@ -17,6 +17,45 @@ struct FormTests {
             .lines.map { $0.stripped }
     }
 
+    /// A row's displayed value tracks external state across frames — the
+    /// captured-data memo hole would freeze it at frame one.
+    private struct CounterForm: View {
+        let value: Int
+        var body: some View {
+            Form {
+                Section("Counts") {
+                    LabeledContent("Ticks", value: "\(value)")
+                }
+            }
+        }
+    }
+
+    @Test("A form row rebuilt from changed data is not served frozen")
+    func formRowNotFrozenByMemo() {
+        // Form composes its rows with ForEach(0..<count) reading captured
+        // arrays; the memo keyed on the Int index served the frame-one buffer
+        // for every later frame — the documented captured-data hole, inside a
+        // framework view.
+        let tui = TUIContext()
+        func frame(_ value: Int) -> [String] {
+            let context = makeRenderContext(width: 40, height: 12)
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            let ctx = RenderContext(
+                availableWidth: 40, availableHeight: 12,
+                environment: context.environment, tuiContext: tui)
+            let out = renderToBuffer(CounterForm(value: value), context: ctx)
+                .lines.map { $0.stripped }
+            tui.stateStorage.endRenderPass()
+            return out
+        }
+
+        _ = frame(1)
+        let second = frame(2)
+        #expect(second.contains { $0.contains("2") }, "the row froze at frame one: \(second)")
+        #expect(!second.contains { $0.contains("Ticks") && $0.contains("1") }, "\(second)")
+    }
+
     // MARK: - Columns (default)
 
     @Test("Columns form right-aligns labels to a shared pillar")

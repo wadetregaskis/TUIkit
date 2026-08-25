@@ -90,6 +90,26 @@ struct _FormSection {
 }
 
 /// A top-level form element: a bare row or a section of rows.
+/// A form row paired with its position, for iterating display-only rows
+/// without the `ForEach(0..<count)` captured-data memo trap.
+///
+/// `ForEach(0..<count) { view(rows[index]) }` keys its per-row value memo on
+/// the Int index while reading the row content from the captured array — so a
+/// changed row served the frozen buffer built at that index the first time
+/// (the documented hole `_MemoizedRow` warns framework views away from). This
+/// wrapper is deliberately NOT Equatable, so the memo declines to wrap the
+/// row at all: a Form rebuilds its rows from `content` every render pass, and
+/// display-only rows want exactly that. Identity is positional, stable across
+/// frames.
+private struct _IndexedFormRow<Value>: Identifiable {
+    let id: Int
+    let value: Value
+}
+
+private func _indexed<Value>(_ items: [Value]) -> [_IndexedFormRow<Value>] {
+    items.enumerated().map { _IndexedFormRow(id: $0.offset, value: $0.element) }
+}
+
 enum _FormElement {
     case row(_FormRow)
     case section(_FormSection)
@@ -329,8 +349,8 @@ private func columnsElementView(
         VStack(alignment: .leading, spacing: 0) {
             if !isFirst { Text("") }  // blank line between sections
             if let header = section.header { sectionHeaderView(header, pillar: pillar) }
-            ForEach(0..<section.rows.count) { index in
-                formRowView(section.rows[index], pillar: pillar, contentWidth: contentWidth)
+            ForEach(_indexed(section.rows)) { row in
+                formRowView(row.value, pillar: pillar, contentWidth: contentWidth)
             }
             if let footer = section.footer { footer }
         }
@@ -351,8 +371,8 @@ private func groupedElementView(_ element: _FormElement, pillar: Int, contentWid
         VStack(alignment: .leading, spacing: 0) {
             if let header = section.header { header.bold() }
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(0..<section.rows.count) { index in
-                    groupedRowView(section.rows[index], pillar: pillar)
+                ForEach(_indexed(section.rows)) { row in
+                    groupedRowView(row.value, pillar: pillar)
                 }
             }
             .frame(width: contentWidth, alignment: .leading)
@@ -417,13 +437,13 @@ private struct _FormLayout<Content: View>: View, Renderable, Layoutable {
         let contentWidth = contentWidth(of: elements, pillar: pillar, context: context)
 
         let composed = VStack(alignment: .leading, spacing: grouped ? 1 : 0) {
-            ForEach(0..<elements.count) { index in
+            ForEach(_indexed(elements)) { entry in
                 if grouped {
-                    groupedElementView(elements[index], pillar: pillar, contentWidth: contentWidth)
+                    groupedElementView(entry.value, pillar: pillar, contentWidth: contentWidth)
                 } else {
                     columnsElementView(
-                        elements[index], pillar: pillar, contentWidth: contentWidth,
-                        isFirst: index == 0)
+                        entry.value, pillar: pillar, contentWidth: contentWidth,
+                        isFirst: entry.id == 0)
                 }
             }
         }
