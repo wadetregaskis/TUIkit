@@ -97,6 +97,20 @@ public struct RenderContext {
     /// Views should skip side-effects like focus registration when this is true.
     public var isMeasuring: Bool = false
 
+    /// How many environment applications lie between the root and here.
+    ///
+    /// The disambiguator for `RenderCache.EnvironmentSlot`: two modifiers
+    /// injecting the SAME key path can share one identity (a `Renderable`
+    /// adds no child identity), and a slot keyed only on (identity, keyPath)
+    /// let the outer one answer for both — the inner one's changes were never
+    /// compared, so memoized subtrees below it served stale buffers. The
+    /// depth is structural, so it is the same on the measure and render walks
+    /// and stable across frames. Bumped by whoever injects an environment
+    /// value AND notes it (`EnvironmentModifier`,
+    /// `_AnimatableForegroundStyleView`); plain `setting()` writes do not
+    /// note, so they have no slot to disambiguate.
+    public var environmentApplicationDepth: Int = 0
+
     /// Creates a new RenderContext.
     ///
     /// - Parameters:

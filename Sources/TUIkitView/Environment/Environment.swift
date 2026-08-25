@@ -45,7 +45,8 @@ extension EnvironmentModifier: Renderable {
         let uncomparable = noteEnvironmentChange(context: context)
         var modifiedEnvironment = context.environment.setting(keyPath, to: value)
         if uncomparable { modifiedEnvironment.hasUncomparableEnvironmentValue = true }
-        let modifiedContext = context.withEnvironment(modifiedEnvironment)
+        var modifiedContext = context.withEnvironment(modifiedEnvironment)
+        modifiedContext.environmentApplicationDepth += 1
         return TUIkitView.renderToBuffer(content, context: modifiedContext)
     }
 }
@@ -81,7 +82,10 @@ extension EnvironmentModifier {
     ///   marks the environment it passes down.
     fileprivate func noteEnvironmentChange(context: RenderContext) -> Bool {
         guard let cache = context.renderCache else { return false }
-        switch cache.noteAppliedEnvironment(value, identity: context.identity, keyPath: keyPath) {
+        switch cache.noteAppliedEnvironment(
+            value, identity: context.identity, keyPath: keyPath,
+            depth: context.environmentApplicationDepth)
+        {
         case .changed:
             cache.clearAffected(by: context.identity)
         case .incomparable:
@@ -132,7 +136,8 @@ extension EnvironmentModifier: Layoutable {
         let uncomparable = noteEnvironmentChange(context: context)
         var modifiedEnvironment = context.environment.setting(keyPath, to: value)
         if uncomparable { modifiedEnvironment.hasUncomparableEnvironmentValue = true }
-        let modifiedContext = context.withEnvironment(modifiedEnvironment)
+        var modifiedContext = context.withEnvironment(modifiedEnvironment)
+        modifiedContext.environmentApplicationDepth += 1
         return measureChild(content, proposal: proposal, context: modifiedContext)
     }
 }

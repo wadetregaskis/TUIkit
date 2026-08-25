@@ -277,14 +277,20 @@ public final class RenderCache: @unchecked Sendable {
     /// One `.environment(keyPath, value)` application site in the tree.
     ///
     /// Keyed by key path as well as identity because nested environment
-    /// modifiers can share one identity.
+    /// modifiers can share one identity — and by application depth as well as
+    /// key path, because two modifiers injecting the SAME key path can too
+    /// (`.environment(\.x, a).environment(\.x, b)` with no identity node
+    /// between). On a shared slot only the first-visited modifier was ever
+    /// compared, so the inner one's changes went unseen.
     public struct EnvironmentSlot: Hashable {
         public let identity: ViewIdentity
         public let keyPath: AnyKeyPath
+        public let depth: Int
 
-        public init(identity: ViewIdentity, keyPath: AnyKeyPath) {
+        public init(identity: ViewIdentity, keyPath: AnyKeyPath, depth: Int) {
             self.identity = identity
             self.keyPath = keyPath
+            self.depth = depth
         }
     }
 
@@ -559,9 +565,10 @@ extension RenderCache {
     public func noteAppliedEnvironment(
         _ value: Any,
         identity: ViewIdentity,
-        keyPath: AnyKeyPath
+        keyPath: AnyKeyPath,
+        depth: Int
     ) -> EnvironmentChange {
-        let slot = EnvironmentSlot(identity: identity, keyPath: keyPath)
+        let slot = EnvironmentSlot(identity: identity, keyPath: keyPath, depth: depth)
         guard var previous = appliedEnvironment[slot] else {
             let comparable = value is any Equatable
             appliedEnvironment[slot] = AppliedEnvironment(

@@ -93,7 +93,8 @@ struct _AnimatableForegroundStyleView<Content: View>: View {
                 // warning on every build — the compiler cannot tell a meant
                 // Optional from a forgotten unwrap.
                 style as Any, identity: context.identity,
-                keyPath: \EnvironmentValues.foregroundStyle)
+                keyPath: \EnvironmentValues.foregroundStyle,
+                depth: context.environmentApplicationDepth)
         {
             cache.clearAffected(by: context.identity)
         }
@@ -101,6 +102,7 @@ struct _AnimatableForegroundStyleView<Content: View>: View {
         childContext.environment.foregroundStyle = style.map {
             ColorAnimation.resolving($0, owner: Self.self, context: context)
         }
+        childContext.environmentApplicationDepth += 1
         return childContext
     }
 }

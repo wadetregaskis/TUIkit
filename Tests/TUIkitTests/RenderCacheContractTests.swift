@@ -52,6 +52,27 @@ extension EnvironmentValues {
     }
 }
 
+private struct ComparableProbeKey: EnvironmentKey {
+    static let defaultValue = "-"
+}
+
+extension EnvironmentValues {
+    fileprivate var comparableProbe: String {
+        get { self[ComparableProbeKey.self] }
+        set { self[ComparableProbeKey.self] = newValue }
+    }
+}
+
+/// Renders whatever `comparableProbe` holds — and compares equal to any other
+/// instance, so a memo can only be broken by the environment digest.
+private struct ProbeEcho: View, Equatable {
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { true }
+
+    @Environment(\.comparableProbe) private var probe
+
+    var body: some View { Text(probe) }
+}
+
 // MARK: - Tests
 
 /// The two `EquatableView`/`RenderCache` contracts upstream fixed in PR #64
@@ -180,6 +201,33 @@ struct RenderCacheContractTests {
 
         #expect(served.lines == blueTruth.lines, "the new style must be rendered")
         #expect(served.lines != redTruth.lines, "not the buffer from the old one")
+    }
+
+    /// Two modifiers injecting the SAME key path share one identity (a
+    /// `Renderable` adds no child identity). With the slot keyed only on
+    /// (identity, keyPath), the outer one answered for both and the inner
+    /// one's changes were never compared.
+    @Test("A changed inner value is seen past an unchanged outer one, same key path")
+    func chainedSameKeyPathInnerChangeIsSeen() {
+        let shared = context()
+
+        // The INNER application (closest to the view) wins, so the leaf shows
+        // it; the OUTER stays constant so its comparison says "unchanged"
+        // every frame.
+        frame(
+            shared,
+            ProbeEcho().equatable()
+                .environment(\.comparableProbe, "aaa")
+                .environment(\.comparableProbe, "outer"))
+        let served = frame(
+            shared,
+            ProbeEcho().equatable()
+                .environment(\.comparableProbe, "bbb")
+                .environment(\.comparableProbe, "outer"))
+
+        #expect(
+            served.lines.first?.stripped == "bbb",
+            "the inner change was eaten by the outer slot: \(served.lines.map(\.stripped))")
     }
 
     @Test("An unchanged style still memoizes")
