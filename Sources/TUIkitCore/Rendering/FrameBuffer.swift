@@ -669,10 +669,46 @@ extension FrameBuffer {
         // — and dropping them un-fades a faded buffer the moment anything is
         // composited into it, which is what `_UserResizableCore` and `Grid` do
         // to their contents routinely.
+        //
+        // The destination's regions are PUNCHED first: they name cells of the
+        // base, and the overlay just replaced some of those cells. A claim
+        // left standing over the replaced footprint would fade the overlay's
+        // content at the root — content that was never under the fade, as in
+        // `.opacity(0.5).overlay { … }`, where the overlay applies to the
+        // already-faded view.
         composited.opacityRegions =
-            opacityRegions
+            opacityRegionsPunched(by: overlay, at: position)
             + overlay.shiftedOpacityRegions(byX: position.x, y: position.y)
         return composited
+    }
+
+    /// This buffer's regions with the overlay's per-row footprint removed —
+    /// see the note at the assignment above. Rows of equal visible width are
+    /// banded, so a rectangular overlay costs one subtraction, not one per row.
+    private func opacityRegionsPunched(
+        by overlay: Self, at position: (x: Int, y: Int)
+    ) -> [OpacityRegion] {
+        guard !opacityRegions.isEmpty else { return [] }
+        var bands: [(rows: Range<Int>, columns: Range<Int>)] = []
+        for (index, line) in overlay.lines.enumerated() {
+            // An empty line replaces nothing — the compositors skip it — so it
+            // punches nothing either.
+            let visible = line.strippedLength
+            guard visible > 0 else { continue }
+            let row = position.y + index
+            let columns = position.x..<(position.x + visible)
+            if let last = bands.last, last.rows.upperBound == row, last.columns == columns {
+                bands[bands.count - 1].rows = last.rows.lowerBound..<(row + 1)
+            } else {
+                bands.append((row..<(row + 1), columns))
+            }
+        }
+        guard !bands.isEmpty else { return opacityRegions }
+        var result = opacityRegions
+        for band in bands {
+            result = result.flatMap { $0.subtracting(columns: band.columns, rows: band.rows) }
+        }
+        return result
     }
 
     /// Composites `overlay` on top at `position`, **in place**, touching only
@@ -752,6 +788,9 @@ extension FrameBuffer {
             contentsOf: overlay.shiftedHitTestRegions(byX: position.x, y: position.y))
         animatedCells.append(
             contentsOf: overlay.shiftedAnimatedCells(byX: position.x, y: position.y))
+        // Punched, then lifted — same reasoning as the copying twin above: the
+        // overlay replaced base cells a pending region was claiming.
+        opacityRegions = opacityRegionsPunched(by: overlay, at: position)
         opacityRegions.append(
             contentsOf: overlay.shiftedOpacityRegions(byX: position.x, y: position.y))
     }

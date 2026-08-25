@@ -130,3 +130,51 @@ public struct OpacityCycle: Equatable, Sendable {
         Self(phases: phases.map { $0 * factor }, clock: clock)
     }
 }
+
+extension OpacityRegion {
+    /// This region with a rectangle removed — the 0 to 4 regions covering what
+    /// remains, each keeping this region's alpha and cycle.
+    ///
+    /// A region names cells of the buffer it rides on. When a composite
+    /// REPLACES some of those cells, the claim on them must go with them —
+    /// left in place it would fade whatever the new content put there, which
+    /// was never under the fade. Subtraction rather than any bookkeeping of
+    /// layers: the remainder is still just rectangles over cells that ARE the
+    /// faded view's.
+    public func subtracting(columns: Range<Int>, rows: Range<Int>) -> [OpacityRegion] {
+        let myRows = offsetY..<(offsetY + height)
+        let myColumns = offsetX..<(offsetX + width)
+        let hitRowStart = Swift.max(myRows.lowerBound, rows.lowerBound)
+        let hitRowEnd = Swift.min(myRows.upperBound, rows.upperBound)
+        let hitColumnStart = Swift.max(myColumns.lowerBound, columns.lowerBound)
+        let hitColumnEnd = Swift.min(myColumns.upperBound, columns.upperBound)
+        guard hitRowStart < hitRowEnd, hitColumnStart < hitColumnEnd else { return [self] }
+        let hitRows = hitRowStart..<hitRowEnd
+        let hitColumns = hitColumnStart..<hitColumnEnd
+
+        var pieces: [OpacityRegion] = []
+        func keep(x: Int, y: Int, width: Int, height: Int) {
+            guard width > 0, height > 0 else { return }
+            var piece = self
+            piece.offsetX = x
+            piece.offsetY = y
+            piece.width = width
+            piece.height = height
+            pieces.append(piece)
+        }
+        // Above and below the hole, full width; beside it, only its rows.
+        keep(
+            x: myColumns.lowerBound, y: myRows.lowerBound,
+            width: myColumns.count, height: hitRows.lowerBound - myRows.lowerBound)
+        keep(
+            x: myColumns.lowerBound, y: hitRows.upperBound,
+            width: myColumns.count, height: myRows.upperBound - hitRows.upperBound)
+        keep(
+            x: myColumns.lowerBound, y: hitRows.lowerBound,
+            width: hitColumns.lowerBound - myColumns.lowerBound, height: hitRows.count)
+        keep(
+            x: hitColumns.upperBound, y: hitRows.lowerBound,
+            width: myColumns.upperBound - hitColumns.upperBound, height: hitRows.count)
+        return pieces
+    }
+}

@@ -480,6 +480,59 @@ struct OpacityResolutionTests {
         #expect(resolved.lines[0].contains(codes(.red)))
     }
 
+    @Test("Compositing punches the covered footprint out of pending regions")
+    func compositingPunchesPendingRegions() {
+        // A pending region names cells of the BASE. When an overlay replaces
+        // some of those cells, the region must stop claiming them — or the
+        // root resolver fades content that was never under the fade.
+        var base = FrameBuffer(lines: [ANSIRenderer.colorize("abcdef", foreground: .red)])
+        base.opacityRegions = [
+            OpacityRegion(offsetX: 0, offsetY: 0, width: 6, height: 1, opacity: 0.5)
+        ]
+        let overlay = FrameBuffer(lines: [ANSIRenderer.colorize("XY", foreground: .green)])
+        let out = base.composited(with: overlay, at: (x: 2, y: 0))
+
+        let rects = out.opacityRegions
+            .map { [$0.offsetX, $0.offsetY, $0.width, $0.height] }
+            .sorted { ($0[0], $0[1]) < ($1[0], $1[1]) }
+        #expect(rects == [[0, 0, 2, 1], [4, 0, 2, 1]])
+        #expect(out.opacityRegions.allSatisfy { $0.opacity == 0.5 })
+    }
+
+    @Test("A sibling drawn on top of a faded view is not faded with it")
+    func aSiblingOnTopIsNotFaded() {
+        // ZStack draws later children on top: "hi" sits OVER the faded
+        // "hello", outside the fade's subtree, and must draw at full
+        // strength while the uncovered tail stays faded.
+        let context = makeRenderContext(width: 24, height: 2)
+        let background = context.environment.palette.background
+        let composed = renderToScreen(
+            ZStack(alignment: .leading) {
+                Text("hello").foregroundStyle(.rgb(200, 40, 40)).opacity(0.5)
+                Text("hi").foregroundStyle(.rgb(40, 200, 40))
+            },
+            context: context)
+
+        #expect(composed.lines[0].contains(codes(.rgb(40, 200, 40))))
+        #expect(!composed.lines[0].contains(codes(.rgb(40, 200, 40).compositing(0.5, over: background))))
+        #expect(composed.lines[0].contains(codes(.rgb(200, 40, 40).compositing(0.5, over: background))))
+    }
+
+    @Test("An overlay applied after opacity draws at full strength")
+    func anOverlayAfterOpacityIsNotFaded() {
+        // .opacity(0.5).overlay { … }: the overlay is applied to the
+        // already-faded view, as in SwiftUI, so its content is not faded.
+        let context = makeRenderContext(width: 24, height: 2)
+        let background = context.environment.palette.background
+        let composed = renderToScreen(
+            Text("Hello").foregroundStyle(.rgb(200, 40, 40)).opacity(0.5)
+                .overlay { Text("!").foregroundStyle(.rgb(40, 200, 40)) },
+            context: context)
+
+        #expect(composed.lines[0].contains(codes(.rgb(40, 200, 40))))
+        #expect(!composed.lines[0].contains(codes(.rgb(40, 200, 40).compositing(0.5, over: background))))
+    }
+
     @Test("A row no region covers is left exactly as it was")
     func untouchedRowsAreUntouched() {
         let first = ANSIRenderer.colorize("hello", foreground: .green)
