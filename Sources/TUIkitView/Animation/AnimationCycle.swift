@@ -64,6 +64,15 @@ public struct AnimationCycle<Value: VectorArithmetic>: Sendable where Value: Sen
         clock: AnimationClock = .cursor
     ) {
         guard let period = animation.cyclePeriod, period > 0 else { return nil }
+        // A DELAY breaks the pure periodicity this whole optimisation assumes:
+        // `fraction(at:)` pins to 0 for the first `effectiveDelay` seconds, so
+        // sampling one period from time zero folds the delay's zeros into the
+        // cycle and replays them forever — and a delay >= the period samples
+        // ALL zeros, building no runs while the caller has already marked the
+        // fade served, freezing it. A delayed repeat renders per frame
+        // instead (the caller falls back when this returns nil), which honours
+        // the delay correctly; the one-time delay is not worth a cycle anyway.
+        guard animation.effectiveDelay <= 0 else { return nil }
         let count = Int((period / clock.tickInterval).rounded())
         guard count >= 2, count <= Self.maximumTicks else { return nil }
 
