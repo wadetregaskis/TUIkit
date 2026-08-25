@@ -55,6 +55,29 @@ def drain():  # read child output so it never blocks on a full pipe
             break
 threading.Thread(target=drain, daemon=True).start()
 
+def keystrokes(data):
+    """`data` split into one escape sequence or one byte at a time.
+
+    An escape sequence has to travel whole — split across two writes it reaches
+    the parser as a stray ESC and then as text — so ESC runs to the final byte
+    of a CSI (`@` through `~`), or covers just the next byte for the two-byte
+    forms (ESC O P, Alt-key).
+    """
+    index = 0
+    while index < len(data):
+        if data[index] != 0x1B or index + 1 >= len(data):
+            yield data[index : index + 1]
+            index += 1
+            continue
+        end = index + 1
+        if data[end] in b"[O":
+            end += 1
+            while end < len(data) and not (0x40 <= data[end] <= 0x7E):
+                end += 1
+        yield data[index : end + 1]
+        index = end + 1
+
+
 def cputime_secs(p):
     out = __import__("subprocess").check_output(["ps", "-o", "cputime=", "-p", str(p)]).decode().strip()
     days = 0
@@ -68,7 +91,15 @@ def cputime_secs(p):
 try:
     time.sleep(settle)
     if keys:
-        os.write(master, keys.encode().decode("unicode_escape").encode("latin-1"))
+        # One keystroke at a time, with a beat between them. Written as a single
+        # burst they arrive in one read, and an app that renders per keystroke
+        # then coalesces the lot into one frame — which is fine for "press 0 to
+        # reach the spinners page" and wrong for anything whose later keys
+        # depend on what the earlier ones drew (a Tab walk, or a mouse click at
+        # a position that scrolling put there).
+        for stroke in keystrokes(keys.encode().decode("unicode_escape").encode("latin-1")):
+            os.write(master, stroke)
+            time.sleep(0.12)
         time.sleep(1.2)
     t0, b0 = cputime_secs(pid), received["bytes"]
     time.sleep(window)
