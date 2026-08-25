@@ -364,6 +364,43 @@ struct OpacityResolutionTests {
         #expect(resolved.lines[0].strippedLength == 6)
     }
 
+    @Test("A revealed wide character cannot swallow a narrow column")
+    func wideRevealDoesNotStompItsNeighbour() {
+        // Narrow text yielding to wide text underneath: each source column is
+        // its own decision, and a two-column 日 emitted from one of them would
+        // swallow the next column's answer. The stand-in is one column of the
+        // destination's field — half a glyph cannot be drawn.
+        let destination = FrameBuffer(lines: [
+            ANSIRenderer.colorize("日本語", foreground: .red)
+        ])
+        let source = faded(
+            ANSIRenderer.colorize("abcdef", foreground: .rgb(0, 255, 0)), 0.2, width: 6)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        // Columns 0/2/4 held wide starts (field stands in); 1/3/5 sat over
+        // continuations — nothing to reveal there, so the source draws, faded.
+        #expect(resolved.lines[0].stripped == " b d f")
+        #expect(resolved.lines[0].strippedLength == 6)
+    }
+
+    @Test("Aligned wide characters reveal whole")
+    func alignedWideRevealIsWhole() {
+        // Wide over wide: the source's continuation columns were already
+        // nobody's decision, so the revealed character keeps both its cells.
+        let destination = FrameBuffer(lines: [
+            ANSIRenderer.colorize("中文字", foreground: .red)
+        ])
+        let source = faded(
+            ANSIRenderer.colorize("日本語", foreground: .rgb(0, 255, 0)), 0.2, width: 6)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        #expect(resolved.lines[0].stripped == "中文字")
+        #expect(resolved.lines[0].strippedLength == 6)
+        #expect(resolved.lines[0].contains(codes(.red)))
+    }
+
     @Test("A row no region covers is left exactly as it was")
     func untouchedRowsAreUntouched() {
         let first = ANSIRenderer.colorize("hello", foreground: .green)

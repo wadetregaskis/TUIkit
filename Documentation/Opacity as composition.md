@@ -584,3 +584,15 @@ The rules, updated as each lands:
    ink but no background tints at alpha scaled by coverage. Emoji are a knowing
    omission: colour bitmaps ignore the foreground colour, so no arithmetic can
    fade them and the glyph threshold is the only lever a terminal offers.
+
+8. **A revealed wide character must own every column it claims.** The span
+   walk advances by what it emits, so a two-column 日 revealed by a one-column
+   decision would swallow the next source column's own answer — a cell the
+   region might not even cover. A destination character wider than the source
+   character over it is therefore revealed whole only when the footprints
+   match (wide over wide, aligned); anywhere else one column of the
+   destination's field stands in, because half a glyph cannot be drawn. Two
+   knowing approximations sit nearby: a region boundary slicing a wide SOURCE
+   character fades it by the alpha at its start column, and a destination wide
+   character whose start lies outside the resolved span reveals as its field —
+   the terminal cannot draw half of it either.

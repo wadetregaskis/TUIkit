@@ -70,9 +70,26 @@ extension FrameBuffer {
             let behindColumn = column + destinationShift
             let behind =
                 behindCells.indices.contains(behindColumn) ? behindCells[behindColumn] : nil
-            let blended = blend(
+            var blended = blend(
                 source: cell, destination: behind, alpha: alpha(column),
                 surface: surface, defaultForeground: defaultForeground)
+            // A revealed DESTINATION character can be wide, and the walk
+            // advances by what it emits: a two-column character from a
+            // one-column decision would swallow the next source column's own
+            // answer — a cell the region might not even cover. Emitting it
+            // whole is safe only when the source's character here has the
+            // same footprint (those continuation columns were already
+            // nobody's decision) and the footprint fits inside the span.
+            // Anywhere else one column of the destination's FIELD stands in:
+            // half a glyph cannot be drawn, and the field is what the cell
+            // shows wherever its glyph cannot be.
+            let width = max(1, blended.character.terminalWidth)
+            if width > 1, blended.character != cell.character,
+                width != max(1, cell.character.terminalWidth)
+                    || column + width > columns.upperBound
+            {
+                blended.character = " "
+            }
             span += blended.style.rendered(changingFrom: emitted)
             span.append(blended.character)
             emitted = blended.style
