@@ -28,6 +28,23 @@ final class RowEditRestrictions {
     /// Data offsets whose rows refused to be moved this frame.
     private(set) var moveDisabled: Set<Int> = []
 
+    /// The data offset of the row currently rendering, stamped by the List's
+    /// row materialisation just before each row renders — the only code that
+    /// knows it, since the modifier is written on the row's content and has no
+    /// idea where in the collection it sits.
+    ///
+    /// A field on this (per-List, per-frame) collector rather than an
+    /// environment value because the environment is a copy-on-write
+    /// dictionary: stamping a per-row Int into it copied the WHOLE dictionary
+    /// — every environment entry rehashed, reboxed and retained — once per
+    /// visible row per frame, which a windowed List pays for every row it
+    /// shows. Writing a property on the already-installed collector is free,
+    /// and rows render strictly one at a time, so the single slot cannot be
+    /// observed with a neighbour's value. A nested List installs its own
+    /// collector for its subtree, so the inner rows stamp the inner one and
+    /// the outer row's stamp stays good for the rest of its own render.
+    var currentRowIndex: Int?
+
     func disableDelete(row: Int) { deleteDisabled.insert(row) }
     func disableMove(row: Int) { moveDisabled.insert(row) }
 }
@@ -38,22 +55,10 @@ extension EnvironmentValues {
         get { self[RowEditRestrictionsKey.self] }
         set { self[RowEditRestrictionsKey.self] = newValue }
     }
-
-    /// The data offset of the row being built. Stamped by `ForEach`, which is
-    /// the only thing that knows it — the modifier is written on the row's
-    /// content and has no idea where in the collection it sits.
-    var listRowEditIndex: Int? {
-        get { self[RowEditIndexKey.self] }
-        set { self[RowEditIndexKey.self] = newValue }
-    }
 }
 
 private struct RowEditRestrictionsKey: EnvironmentKey {
     static let defaultValue: RowEditRestrictions? = nil
-}
-
-private struct RowEditIndexKey: EnvironmentKey {
-    static let defaultValue: Int? = nil
 }
 
 // MARK: - Modifiers
@@ -142,7 +147,7 @@ extension _RowEditRestrictionView: Renderable {
     private func report(_ context: RenderContext) {
         guard isDisabled, !context.isMeasuring,
             let restrictions = context.environment.listRowEditRestrictions,
-            let row = context.environment.listRowEditIndex
+            let row = restrictions.currentRowIndex
         else { return }
         context.environment.volatileReadTracker?.recordRenderSideEffect()
         switch restriction {

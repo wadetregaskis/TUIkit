@@ -125,17 +125,21 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
         // a `.draggable` drag, and that question is asked of rows whose content
         // has not been rendered. It costs nothing extra — a box is only built
         // for a row that is about to be shown, and every such row renders.
-        var rowContext = context.withChildIdentity(
+        let rowContext = context.withChildIdentity(
             erasedType: Content.self,
             key: identityKey(element[keyPath: idKeyPath]))
-        // Which row this is, for anything inside it that needs to name itself
-        // to the enclosing `List` — `deleteDisabled` / `moveDisabled`. The
-        // modifier is written on the row's CONTENT and has no idea where in the
-        // collection it sits; this is the only place that does.
-        rowContext.environment.listRowEditIndex = index
         // Defer view construction, badge extraction, and rendering until the row
         // enters the visible window (see ``LazyListRowContent``).
         return LazyListRowContent(identity: rowContext.identity) { [content] in
+            // Which row this is, for anything inside it that needs to name
+            // itself to the enclosing `List` — `deleteDisabled` /
+            // `moveDisabled`. Stamped on the (per-List, per-frame) collector
+            // rather than into the environment: an environment write is a
+            // copy of its whole storage dictionary, and it ran once per
+            // visible row per frame (see `RowEditRestrictions.currentRowIndex`
+            // for the full reasoning). Stamped INSIDE the thunk, immediately
+            // before the render that might report against it.
+            context.environment.listRowEditRestrictions?.currentRowIndex = index
             // When the element is Equatable, wrap the row in a value-memo keyed
             // by the element, so an unchanged row is served from the render cache
             // instead of re-rendered. The wrapper is Renderable (adds no child
