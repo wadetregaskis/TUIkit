@@ -714,6 +714,11 @@ extension _NavigationSplitViewCore {
         /// The mouse handler claiming drags on the divider, or `nil` when the
         /// split isn't resizable (or while measuring).
         let mouseHandlerID: HitTestRegion.HandlerID?
+        /// Whether the divider is interactive at all — `false` under
+        /// `.disabled()` or `.hidden()`, where the grip would advertise a
+        /// handle that does nothing. A measuring pass stays `true`: the grip
+        /// changes glyphs, never geometry, so measure parity holds either way.
+        var isInteractive = true
         /// The divider's focus identity, stamped onto its hit region so an
         /// enclosing ScrollView can scroll a focused divider into view.
         var focusID: String?
@@ -749,6 +754,18 @@ extension _NavigationSplitViewCore {
         // shared section, so focusing either divider made both look focused and
         // the section's cycling walked another split's handle.
         let sectionID = "nav-split-divider-\(index)-\(context.identity.path)"
+
+        // The same gates every interactive view honours, which this direct
+        // wiring bypassed: a `.disabled()` split's divider stayed a Tab stop
+        // and stayed draggable, and a `.hidden()` one kept a Tab stop with no
+        // picture for it to land on. Disabled views must not register with
+        // the focus system; a suppressed subtree registers nothing at all.
+        let isDisabled = !context.environment.isEnabled
+        let isInteractive = !isDisabled && !context.environment.isFocusSuppressed
+        guard isInteractive else {
+            return DividerRenderInfo(
+                isActive: false, isHovered: false, mouseHandlerID: nil, isInteractive: false)
+        }
         focusManager.registerSection(id: sectionID)
 
         // Persist one handler per divider so its drag anchor survives renders.
@@ -857,7 +874,7 @@ extension _NavigationSplitViewCore {
         cycle: SelectionEmphasisCycle
     ) -> FrameBuffer {
         let h = max(0, height)
-        guard resizable, h > 0 else {
+        guard resizable, info.isInteractive, h > 0 else {
             return FrameBuffer(lines: Array(repeating: " ", count: h))
         }
 

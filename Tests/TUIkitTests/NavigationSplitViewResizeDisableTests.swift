@@ -58,6 +58,42 @@ struct NavigationSplitViewResizeDisableTests {
         #expect(Set(dividerSections).count == 2, "…under distinct ids")
     }
 
+    @Test("A disabled split's divider is neither a Tab stop nor draggable")
+    func disabledSplitHasNoDividerSection() {
+        // Disabling is a statement about INTERACTION, and the divider is one:
+        // the direct wiring bypassed the isEnabled gate every other
+        // interactive view honours, so a .disabled() split still Tab-cycled
+        // to its handle and still resized by drag.
+        let context = resizeContext()
+        let fm = context.environment.focusManager!
+        let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+            .disabled(true)
+
+        let buffer = renderToBuffer(view, context: context)
+
+        #expect(
+            fm.sectionIDs.allSatisfy { !$0.hasPrefix("nav-split-divider") },
+            "a disabled divider must not register a focus section")
+        #expect(gripX(buffer) == nil, "and offers no grip affordance")
+    }
+
+    @Test("A hidden split's divider registers nothing")
+    func hiddenSplitHasNoDividerSection() {
+        // .hidden() keeps layout and suppresses focus: a Tab stop with no
+        // picture for it to land on is exactly what isFocusSuppressed exists
+        // to prevent.
+        let context = resizeContext()
+        let fm = context.environment.focusManager!
+        let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
+            .hidden()
+
+        _ = renderToBuffer(view, context: context)
+
+        #expect(
+            fm.sectionIDs.allSatisfy { !$0.hasPrefix("nav-split-divider") },
+            "a hidden divider must not register a focus section")
+    }
+
     @Test("A size-to-fit style is resizable: it keeps its handle and focus section")
     func sizeToFitIsResizable() {
         // Size-to-fit fits the columns to content, but a drag/keyboard resize
