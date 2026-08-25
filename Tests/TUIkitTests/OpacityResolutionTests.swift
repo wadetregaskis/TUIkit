@@ -138,6 +138,61 @@ struct OpacityResolutionTests {
         #expect(!resolved.lines[0].contains(backgroundCodes(.rgb(255, 0, 0))))
     }
 
+    @Test("A reversed space is a solid fill, and composites as one")
+    func aReversedSpaceIsAFill() {
+        // SGR 7 makes the foreground the colour the cell is painted: a
+        // reversed blue-foreground space displays as a blue block. Read as a
+        // blank it would vanish from the veil entirely; read as what it
+        // DISPLAYS it composites its fill like any other pane of background.
+        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .red)])
+        let reversedFill = "\u{1B}[7;38;2;0;0;255m     \u{1B}[0m"
+        let source = faded(reversedFill, 0.5, width: 5)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .rgb(0, 0, 0), palette: palette())
+
+        #expect(resolved.lines[0].stripped == "world")
+        #expect(resolved.lines[0].contains(codes(.red)))
+        let expected = Color.rgb(0, 0, 255).compositing(0.5, over: .rgb(0, 0, 0))
+        #expect(resolved.lines[0].contains(backgroundCodes(expected)))
+    }
+
+    @Test("The field behind a reversed cell is its foreground")
+    func aReversedDestinationShowsItsForeground() {
+        // The destination's ink is painted AS the field under reverse video,
+        // so the blend must fade toward the colour the viewer actually sees
+        // behind the source, not the one the escape calls \"background\".
+        let reversed = "\u{1B}[7;38;2;0;0;255;48;2;255;0;0m     \u{1B}[0m"
+        let destination = FrameBuffer(lines: [reversed])
+        let source = faded(
+            ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)), 0.6, width: 5)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        #expect(resolved.lines[0].stripped == "hello")
+        // Toward BLUE — the displayed field — not toward the stored red.
+        let expected = Color.rgb(0, 255, 0).compositing(0.6, over: .rgb(0, 0, 255))
+        #expect(resolved.lines[0].contains(codes(expected)))
+        #expect(!resolved.lines[0].contains(codes(.rgb(0, 255, 0).compositing(0.6, over: .rgb(255, 0, 0)))))
+    }
+
+    @Test("An underlined space has ink, and is something to reveal")
+    func anUnderlinedBlankIsInk() {
+        // Underline draws a pattern in the foreground colour with no glyph
+        // present — on either side of the blend. As the destination it is
+        // revealed below the threshold rather than treated as blank space.
+        let underlined = "\u{1B}[4;38;2;255;0;0m     \u{1B}[0m"
+        let destination = FrameBuffer(lines: [underlined])
+        let source = faded(
+            ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)), 0.3, width: 5)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        // The source's glyphs yield; the underline survives, un-tinted.
+        #expect(resolved.lines[0].stripped.trimmingCharacters(in: .whitespaces).isEmpty)
+        #expect(resolved.lines[0].contains(";4;"))
+        #expect(resolved.lines[0].contains(codes(.rgb(255, 0, 0))))
+    }
+
     @Test("Zero opacity is the same case, which is the bug being fixed")
     func zeroRevealsWhatIsBehind() {
         let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .red)])

@@ -556,3 +556,17 @@ The rules, updated as each lands:
    dissolve, which is the same operation against the palette background —
    now blends through `Color.compositing(_:over:)`: decode via the shared
    IEC 61966-2-1 helpers, mix, re-encode with rounding.
+
+6. **The blend reads the colours a cell DISPLAYS, not the ones it stores.**
+   Reverse video (SGR 7) makes the foreground the colour the cell is painted:
+   a reversed space is a solid fill, not a blank, and the field behind a
+   reversed cell is its foreground, not its background. The cell decomposition
+   normalises this — colours exchanged, the attribute dropped, the unstated
+   side resolving to the terminal's *other* default — so every rule downstream
+   sees what the viewer sees. And "space" everywhere above means NO INK, which
+   is more than the character: an underlined or struck-through blank draws a
+   pattern in its foreground colour, so it fades as a glyph and is revealed as
+   one. The definition is shared with `FrameDiffWriter` through
+   `SGRState.reversesVideo` / `paintsInkOnBlankCell`, whose codes are
+   `visibleOnBlankCell` minus 7 — one vocabulary for "what is observable on a
+   blank cell", used by both consumers.

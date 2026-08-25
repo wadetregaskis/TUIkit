@@ -248,6 +248,27 @@ public struct SGRState: Sendable, Equatable {
     /// The attributes that put ink on a cell holding nothing but a space.
     private static let visibleOnBlankCell: Set<Int> = [4, 5, 6, 7, 9]
 
+    /// Whether reverse video (SGR 7) is in force — the foreground is the
+    /// colour the cell is painted, and the background is the colour any ink
+    /// draws in.
+    ///
+    /// Exposed for the opacity blend, which reasons about the colours a cell
+    /// DISPLAYS: a reversed cell's field is its foreground, and a reversed
+    /// space is a solid fill, not a blank.
+    package var reversesVideo: Bool { attributes.contains(7) }
+
+    /// Whether this state draws a PATTERN of ink on a cell holding nothing but
+    /// a space — underline, blink and strikethrough all draw in the foreground
+    /// colour with no glyph present.
+    ///
+    /// Reverse (7) is deliberately not included: it draws no pattern, it swaps
+    /// which colour fills the cell, and is answered by ``reversesVideo``. The
+    /// remaining codes here are `visibleOnBlankCell` minus it, and the two
+    /// definitions must move together.
+    package var paintsInkOnBlankCell: Bool {
+        !attributes.isDisjoint(with: [4, 5, 6, 9])
+    }
+
     /// Just the BACKGROUND half of ``rendered`` — the escape that re-establishes
     /// this state's background colour and says nothing about anything else, or
     /// `""` when the background is the terminal's own.

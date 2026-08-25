@@ -280,9 +280,12 @@ extension FrameBuffer {
         surface: Color,
         defaultForeground: Color
     ) -> String {
-        let sourceCells = cells(in: source, through: columns.upperBound)
+        let sourceCells = cells(
+            in: source, through: columns.upperBound,
+            defaultForeground: defaultForeground, surface: surface)
         let behindCells = cells(
-            in: destination, through: columns.upperBound + destinationShift)
+            in: destination, through: columns.upperBound + destinationShift,
+            defaultForeground: defaultForeground, surface: surface)
 
         var span = ""
         var emitted = SGRState()
@@ -342,7 +345,8 @@ extension FrameBuffer {
         guard let alpha, alpha < 1 else { return source }
         // At zero the source contributes nothing at all, and the destination
         // is not merely approximated, it is UNTOUCHED: character, colours and
-        // attributes, byte for byte. Every blend below converges here as
+        // attributes — re-emitted through the span, so equivalent styling
+        // rather than identical bytes. Every blend below converges here as
         // alpha does, so this is a shortcut, not a discontinuity.
         guard alpha > 0 else {
             return destination ?? RowCell(character: " ", style: SGRState())
@@ -361,7 +365,13 @@ extension FrameBuffer {
         // share a cell, and a space is not a character contest. Gating this on
         // ½ made a translucent panel vanish whole at the midpoint instead of
         // fading smoothly to nothing.
-        if source.character == " " {
+        //
+        // "Space" means NO INK, which is more than the character: an
+        // underlined or struck-through space draws a pattern in its foreground
+        // colour, and falls through to the glyph rules below. (A REVERSED
+        // space never reaches here as one — `cells` normalises it into a
+        // solid fill, background and all.)
+        if source.character == " ", !source.style.paintsInkOnBlankCell {
             return compositingField(of: source, onto: destination, alpha: alpha, behind: behind)
         }
         // Matching characters are not a contest at all: the source's ink sits
@@ -401,7 +411,12 @@ extension FrameBuffer {
         // source IS a pane of background. Without this, a translucent panel
         // over text would tint every cell around a character and none holding
         // one, and read as a sieve rather than a veil.
-        if alpha < 0.5, let destination, destination.character != " " {
+        //
+        // "Has a character" is the same no-ink question as above, asked of the
+        // destination: an underlined blank underneath is something to reveal.
+        if alpha < 0.5, let destination,
+            destination.character != " " || destination.style.paintsInkOnBlankCell
+        {
             return compositingField(of: source, onto: destination, alpha: alpha, behind: behind)
         }
         let fadedBackground = source.background.map { $0.compositing(alpha, over: behind) }
@@ -421,7 +436,20 @@ extension FrameBuffer {
     /// `nil` where a wide character claims a column it did not start, and where
     /// the line ran out. Indexed by column so the two sides line up without
     /// either having to be walked twice.
-    private static func cells(in line: String, through width: Int) -> [RowCell?] {
+    ///
+    /// Cells are normalised to the colours they DISPLAY: reverse video (SGR 7)
+    /// swaps which colour fills the cell and which the ink draws in, so it is
+    /// folded in here — colours exchanged, the attribute dropped — and every
+    /// blend rule downstream sees the cell the viewer sees. Without this, a
+    /// reversed space read as a blank when it is a solid fill, and the field
+    /// behind a reversed cell read as its background when the viewer sees its
+    /// foreground. The defaults are parameters because the unstated side of a
+    /// reversed cell shows the terminal's OTHER default: ink from the default
+    /// background (`surface`), field from the default foreground.
+    private static func cells(
+        in line: String, through width: Int,
+        defaultForeground: Color, surface: Color
+    ) -> [RowCell?] {
         var result = [RowCell?](repeating: nil, count: max(0, width))
         guard width > 0, !line.isEmpty else { return result }
         var state = SGRState()
@@ -442,9 +470,17 @@ extension FrameBuffer {
                 }
             case .visible(let character):
                 guard column < width else { return result }
-                result[column] = RowCell(
+                var cell = RowCell(
                     character: character, style: state,
                     foreground: foreground, background: background)
+                if state.reversesVideo {
+                    var unreversed = state
+                    unreversed.apply("\u{1B}[27m")
+                    cell.style = unreversed
+                    cell.foreground = background ?? surface
+                    cell.background = foreground ?? defaultForeground
+                }
+                result[column] = cell
                 column += max(1, character.terminalWidth)
             }
         }
