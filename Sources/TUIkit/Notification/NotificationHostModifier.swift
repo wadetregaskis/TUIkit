@@ -133,8 +133,20 @@ extension NotificationHostModifier: Renderable {
             screenSize: (screenWidth, screenHeight)
         )
 
-        return fullscreenBuffer.compositedResolvingOpacity(
-            with: stackedBuffer, at: offset, palette: palette)
+        // As a LAYER at its declared level, not baked into the lines: a
+        // pending presentation overlay in the base (a sheet or alert
+        // presented anywhere inside the hosted content) composites at the
+        // root AFTER these lines, and its dimming pass buried a baked-in
+        // toast — stripped of its border colour, painted over by the centred
+        // dialog. `.notification` is the topmost level by declaration; now it
+        // actually composites there, fades intact (the stack's opacity
+        // regions resolve when the layer lands).
+        var result = fullscreenBuffer
+        result.overlays.append(
+            OverlayLayer(
+                offsetX: offset.x, offsetY: offset.y,
+                content: stackedBuffer, level: .notification))
+        return result
     }
 }
 

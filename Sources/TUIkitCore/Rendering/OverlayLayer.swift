@@ -9,18 +9,24 @@
 /// The semantic stacking level of an ``OverlayLayer``.
 ///
 /// Layers composite onto the root buffer in ascending level order: a
-/// `.popover` draws beneath an `.alert`, which draws beneath a `.modal`,
+/// `.popover` draws beneath a `.modal`, which draws beneath an `.alert`,
 /// which draws beneath a `.notification`. Within a single level,
 /// ``OverlayLayer/zIndex`` breaks ties.
+///
+/// An alert sits ABOVE a sheet deliberately, whichever presented first: an
+/// alert is the topmost interruption in every windowing convention, and with
+/// the old ordering an alert presented while a sibling sheet was up composited
+/// beneath it — owning the keyboard while the sheet's dimming pass buried it,
+/// an invisible dialog holding the app.
 public enum OverlayLevel: Int, Sendable, Comparable, CaseIterable {
     /// A lightweight popover anchored to a control (e.g. a `Picker` drop-down).
     case popover
 
-    /// A modal alert.
-    case alert
-
     /// A modal sheet or dialog.
     case modal
+
+    /// A modal alert.
+    case alert
 
     /// A transient notification or toast.
     case notification

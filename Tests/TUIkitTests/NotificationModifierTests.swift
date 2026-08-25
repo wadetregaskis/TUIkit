@@ -203,9 +203,14 @@ struct NotificationTests {
             width: 40
         )
 
+        // The toast is a LAYER at .notification — the topmost level — not
+        // baked into the lines: baked in, a modal's dimming pass at the root
+        // buried it. The text shows once the root composites.
         let buffer = renderToBuffer(view, context: context.withEnvironment(env))
-        let joined = buffer.lines.joined()
-        #expect(joined.contains("Alert!"))
+        #expect(buffer.overlays.contains { $0.level == .notification })
+        let screen = buffer.compositingOverlays(
+            maxWidth: 40, maxHeight: 24, palette: context.environment.palette)
+        #expect(screen.lines.joined().contains("Alert!"))
     }
 
     @Test(".notificationHost() modifier compiles and renders correctly")
@@ -219,8 +224,9 @@ struct NotificationTests {
         let view = Text("Content").notificationHost()
 
         let buffer = renderToBuffer(view, context: context.withEnvironment(env))
-        let joined = buffer.lines.joined()
-        #expect(joined.contains("Done!"))
+        let screen = buffer.compositingOverlays(
+            maxWidth: 40, maxHeight: 24, palette: context.environment.palette)
+        #expect(screen.lines.joined().contains("Done!"))
     }
 
     @Test("Multiple notifications stack vertically")
@@ -235,10 +241,61 @@ struct NotificationTests {
         let view = Text("Base").notificationHost()
 
         let buffer = renderToBuffer(view, context: context.withEnvironment(env))
-        let joined = buffer.lines.joined()
+        let screen = buffer.compositingOverlays(
+            maxWidth: 80, maxHeight: 24, palette: context.environment.palette)
+        let joined = screen.lines.joined()
         #expect(joined.contains("First"))
         #expect(joined.contains("Second"))
-        // Both notifications should be in the buffer, stacked.
-        #expect(buffer.height > 3)
+        // Both notifications should be on screen, stacked.
+        #expect(screen.height > 3)
+    }
+}
+
+/// The stacking the levels declare, proven at the root composite.
+@MainActor
+@Suite("Overlay level stacking")
+struct OverlayLevelStackingTests {
+
+    private func screen(_ overlays: [OverlayLayer]) -> String {
+        var base = FrameBuffer(lines: Array(repeating: String(repeating: " ", count: 30), count: 9))
+        base.overlays = overlays
+        let context = makeRenderContext(width: 30, height: 9)
+        return base.compositingOverlays(
+            maxWidth: 30, maxHeight: 9, palette: context.environment.palette
+        ).lines.joined()
+    }
+
+    @Test("An alert composites above a sheet, whichever presented first")
+    func alertAboveSheet() {
+        // An alert is the topmost interruption in every windowing
+        // convention. With the old ordering (.alert below .modal) an alert
+        // presented beside a sheet drew UNDER it — owning the keyboard while
+        // the sheet's dimming pass buried it: an invisible dialog holding
+        // the app.
+        let sheet = OverlayLayer(
+            offsetX: 0, offsetY: 0, content: FrameBuffer(text: "SHEET-FACE"),
+            level: .modal, centered: true, dimsBackground: true)
+        let alert = OverlayLayer(
+            offsetX: 0, offsetY: 0, content: FrameBuffer(text: "ALERT-FACE"),
+            level: .alert, centered: true, dimsBackground: true)
+
+        for layers in [[sheet, alert], [alert, sheet]] {
+            let joined = screen(layers)
+            #expect(joined.contains("ALERT-FACE"), "\(joined)")
+            #expect(!joined.contains("SHEET-FACE"), "the alert must cover the sheet")
+        }
+    }
+
+    @Test("A toast composites above a modal")
+    func toastAboveModal() {
+        let modal = OverlayLayer(
+            offsetX: 0, offsetY: 0, content: FrameBuffer(text: "DIALOG"),
+            level: .modal, centered: true, dimsBackground: true)
+        let toast = OverlayLayer(
+            offsetX: 20, offsetY: 0, content: FrameBuffer(text: "TOAST-TEXT"),
+            level: .notification)
+        let joined = screen([toast, modal])
+        #expect(joined.contains("TOAST-TEXT"), "the toast must survive the modal's dimming pass")
+        #expect(joined.contains("DIALOG"))
     }
 }
