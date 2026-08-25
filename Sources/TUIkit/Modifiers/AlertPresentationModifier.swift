@@ -187,6 +187,12 @@ extension AlertPresentationModifier: Renderable {
             }
         }
 
+        // The drag-offset handler below is a MANUAL box at this identity, and
+        // nothing else hydrates it — endRenderPass would prune it every frame,
+        // resetting a dragged dialog to centre on the next render. Same gotcha
+        // NavigationPresentationModifier documents, answered the same way.
+        context.stateStorage?.markActive(context.identity)
+
         // Render the page beneath as an inert backdrop, isolated from the live
         // focus / key / state systems (`isolatedForBackground`). The alert section
         // is already active, so a background control rendered into the real focus

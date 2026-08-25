@@ -170,8 +170,29 @@ extension ModalPresentationModifier: Renderable {
                 }
                 context.environment.statusBar?.registerSectionItems(
                     sectionID: sectionID, items: [dismissItem], composition: .merge)
+                // The same dismissal as a layer-2 key handler, the way the
+                // alert and popover presenters register theirs. The item alone
+                // was unreachable from a pushed NavigationStack screen: its bar
+                // claims the ESC label ("go back") every frame, and the status
+                // bar skips EVERY escape item while a claim stands — so ESC
+                // could not dismiss a sheet presented from a pushed screen.
+                // The handler rides the modal's own grabbed section, so it
+                // runs precisely while the modal holds the keyboard.
+                context.environment.keyEventDispatcher!.addHandler(
+                    sectionID: sectionID
+                ) { event in
+                    guard event.key == .escape else { return false }
+                    isPresented.wrappedValue = false
+                    return true
+                }
             }
         }
+
+        // The drag-offset handler is a MANUAL box at this identity, and
+        // nothing else hydrates it — endRenderPass would prune it every
+        // frame, resetting a dragged dialog to centre on the next render.
+        // Same gotcha NavigationPresentationModifier documents.
+        context.stateStorage?.markActive(context.identity)
 
         // Render the page beneath as an inert backdrop, isolated from the live
         // focus / key / state systems (`isolatedForBackground`). The modal section
