@@ -522,3 +522,14 @@ The rules, updated as each lands:
    the midpoint of a fade for no one's benefit. The ½ decision now fires only
    where the destination has a character of its own, which is the case §6a's
    argument was actually about.
+
+3. **A yielded glyph contest still composites the veil's background.** To the
+   cell it lost, the source is a pane of background — exactly what it is to a
+   space — so the destination keeps its character and its foreground, and its
+   field carries the veil at the region's alpha. Without this a translucent
+   panel over text tinted every blank cell and skipped every character-holding
+   one, reading as a sieve rather than a veil; it also shrinks the visible step
+   at the ½ crossing to the glyph swap alone, since the field no longer jumps
+   from half-tinted to untouched. "The destination is UNTOUCHED below the
+   threshold" (§6a) narrows to its foreground and character; exact untouched
+   reveal still holds at 0, where the tint's weight is zero.

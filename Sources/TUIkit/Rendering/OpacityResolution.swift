@@ -15,7 +15,8 @@
 //    is one**: over a blank destination cell the source's character draws at
 //    any alpha, fading continuously toward what is behind it; where the
 //    destination has a character of its own, at or above ½ the source's
-//    character is drawn and below ½ the destination keeps its own. At 0 the
+//    character is drawn and below ½ the destination keeps its own — under the
+//    same field composite a space gets, so the veil tints evenly. At 0 the
 //    source contributes nothing at all, so `opacity(0)` genuinely reveals what
 //    is behind it rather than painting a near-black smudge over it;
 //  * **a drawn source character blends both channels** — foreground AND
@@ -310,6 +311,24 @@ extension FrameBuffer {
         return span
     }
 
+    /// The destination's cell with the source's background composited onto its
+    /// field — the shared shape of every rule where the destination keeps its
+    /// character: a space, and a glyph contest resolved in the destination's
+    /// favour. The veil tints the surface under the text, never the text; a
+    /// source that paints no background of its own tints nothing at all.
+    private static func compositingField(
+        of source: RowCell, onto destination: RowCell?, alpha: Double, behind: Color
+    ) -> RowCell {
+        guard let fadedBackground = source.background.map({ $0.opacity(alpha, over: behind) })
+        else {
+            return destination ?? RowCell(character: " ", style: SGRState())
+        }
+        var kept = destination ?? RowCell(character: " ", style: SGRState())
+        kept.background = fadedBackground
+        kept.style = kept.style.settingBackground(fadedBackground)
+        return kept
+    }
+
     /// One cell's answer.
     private static func blend(
         source: RowCell, destination: RowCell?, alpha: Double?,
@@ -339,14 +358,7 @@ extension FrameBuffer {
         // ½ made a translucent panel vanish whole at the midpoint instead of
         // fading smoothly to nothing.
         if source.character == " " {
-            let fadedBackground = source.background.map { $0.opacity(alpha, over: behind) }
-            guard let fadedBackground else {
-                return destination ?? RowCell(character: " ", style: SGRState())
-            }
-            var kept = destination ?? RowCell(character: " ", style: SGRState())
-            kept.background = fadedBackground
-            kept.style = kept.style.settingBackground(fadedBackground)
-            return kept
+            return compositingField(of: source, onto: destination, alpha: alpha, behind: behind)
         }
         // The threshold decides a CONTEST — two glyphs wanting one cell — and
         // only applies where there is one. Where the destination is blank, the
@@ -356,9 +368,13 @@ extension FrameBuffer {
         // there was never anything to reveal underneath it.
         //
         // Where the destination DOES have a character, below ½ the source's
-        // glyph is not drawn and the destination keeps its own.
+        // glyph is not drawn and the destination keeps its own — under the
+        // same field composite a space gets, because to the yielded cell the
+        // source IS a pane of background. Without this, a translucent panel
+        // over text would tint every cell around a character and none holding
+        // one, and read as a sieve rather than a veil.
         if alpha < 0.5, let destination, destination.character != " " {
-            return destination
+            return compositingField(of: source, onto: destination, alpha: alpha, behind: behind)
         }
         let fadedBackground = source.background.map { $0.opacity(alpha, over: behind) }
         var result = source

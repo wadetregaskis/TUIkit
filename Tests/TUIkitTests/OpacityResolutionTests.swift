@@ -65,12 +65,37 @@ struct OpacityResolutionTests {
         let resolved = source.resolvingOpacity(
             over: destination, surface: .black, palette: palette())
 
-        // Its character, its foreground AND its background — the source is not
-        // there at all, so there is nothing of it to see.
+        // Its character, its foreground AND its background: the source paints
+        // no background of its own, so there is nothing of it to see — a
+        // source WITH one would tint the field, and only the field.
         #expect(resolved.lines[0].stripped == "world")
         #expect(resolved.lines[0].contains(codes(.red)))
         #expect(resolved.lines[0].contains(backgroundCodes(.blue)))
         #expect(!resolved.lines[0].contains(codes(.green)))
+    }
+
+    @Test("A yielded glyph contest still composites the veil's background")
+    func aContestedCellIsStillTinted() {
+        // To the cell it lost, the source is a pane of background — the same
+        // rule a space follows. Without this a translucent panel over text
+        // would tint every blank cell and skip every character-holding one,
+        // and read as a sieve rather than a veil.
+        let destination = FrameBuffer(lines: [
+            ANSIRenderer.colorize("world", foreground: .red, background: .rgb(255, 0, 0))
+        ])
+        let source = faded(
+            ANSIRenderer.colorize("hello", foreground: .green, background: .rgb(0, 0, 255)),
+            0.25, width: 5)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        // The text and its colour stand; the field carries the veil.
+        #expect(resolved.lines[0].stripped == "world")
+        #expect(resolved.lines[0].contains(codes(.red)))
+        #expect(!resolved.lines[0].contains(codes(.green)))
+        let expected = Color.rgb(0, 0, 255).opacity(0.25, over: .rgb(255, 0, 0))
+        #expect(resolved.lines[0].contains(backgroundCodes(expected)))
+        #expect(!resolved.lines[0].contains(backgroundCodes(.rgb(255, 0, 0))))
     }
 
     @Test("Zero opacity is the same case, which is the bug being fixed")
