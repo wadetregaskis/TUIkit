@@ -901,7 +901,7 @@ extension FrameBuffer {
         // dropped when their cells are clipped away — otherwise a run scrolled
         // out of a viewport would keep repainting over whatever took its place.
         result.animatedCells = animatedCells.filter {
-            $0.offsetY < maxHeight && $0.offsetX + $0.width <= maxWidth
+            $0.fits(columns: maxWidth, rows: maxHeight)
         }
         return result
     }

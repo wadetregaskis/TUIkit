@@ -267,3 +267,18 @@ public struct AnimatedCellRun: Sendable, Equatable {
         return copy
     }
 }
+
+extension AnimatedCellRun {
+    /// Whether every cell of this run lies inside a `columns` × `rows` canvas.
+    ///
+    /// A run even partly outside must not be replayed onto it: patching a
+    /// frame past the canvas edge pads the row out to the run's extent, and a
+    /// row wider than the terminal wraps and smears the row below — which the
+    /// diff writer, believing that row untouched, never repairs. `clamped`
+    /// applies this at every interior clip; the render loop applies it to the
+    /// screen itself, whose content (a wide unwrapped row, say) can exceed
+    /// the terminal without ever having been clamped.
+    package func fits(columns: Int, rows: Int) -> Bool {
+        offsetY >= 0 && offsetY < rows && offsetX >= 0 && offsetX + width <= columns
+    }
+}

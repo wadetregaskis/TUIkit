@@ -947,10 +947,19 @@ extension RenderLoop {
         // Keep what an animation tick would need to patch: the lines actually on
         // screen, the runs composited into absolute positions, and the geometry
         // the diff was written with. Only runs that ANIMATE are kept — a
-        // one-frame run is a still picture the render above already drew.
+        // one-frame run is a still picture the render above already drew — and
+        // only runs wholly ON SCREEN: content can exceed the terminal (a wide
+        // unwrapped row, say — buildOutputLines clips the LINES to the
+        // terminal but nothing clipped the runs), and a run patched past the
+        // edge pads its row wider than the terminal, which wraps and smears
+        // the row below. Every interior clip already enforces this via
+        // `clamped`; see AnimatedCellRun.fits.
         replayable = ReplayableFrame(
             contentLines: outputLines,
-            runs: buffer.animatedCells.filter(\.isAnimating),
+            runs: buffer.animatedCells.filter { run in
+                run.isAnimating
+                    && run.fits(columns: terminalWidth, rows: outputLines.count)
+            },
             terminalWidth: terminalWidth,
             startRow: 1 + headerHeight,
             backgroundCode: backgroundCodes.content)

@@ -457,3 +457,23 @@ struct CellSpanDiffTests {
         }
     }
 }
+
+/// `AnimatedCellRun.fits(columns:rows:)` — the geometry guard every replay
+/// surface applies before agreeing to patch a run into itself.
+@Suite("Animated run geometry")
+struct AnimatedRunFitsTests {
+
+    private func run(x: Int, y: Int, width: Int) -> AnimatedCellRun {
+        AnimatedCellRun(offsetX: x, offsetY: y, width: width, frames: ["a", "b"], clock: .cursor)
+    }
+
+    @Test("Wholly inside fits; touching the edge fits; past it does not")
+    func edges() {
+        #expect(run(x: 0, y: 0, width: 10).fits(columns: 10, rows: 1))
+        #expect(run(x: 7, y: 0, width: 3).fits(columns: 10, rows: 1))
+        #expect(!run(x: 8, y: 0, width: 3).fits(columns: 10, rows: 1))
+        #expect(!run(x: -1, y: 0, width: 3).fits(columns: 10, rows: 1))
+        #expect(!run(x: 0, y: 1, width: 3).fits(columns: 10, rows: 1))
+        #expect(!run(x: 0, y: -1, width: 3).fits(columns: 10, rows: 1))
+    }
+}
