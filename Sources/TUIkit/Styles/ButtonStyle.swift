@@ -578,7 +578,14 @@ private struct _ButtonStyleBody: View, Renderable {
                 BorderRenderer.focusIndicatorPrefix(
                     isFocused: indicating, emphasis: $0, palette: palette)
             }
-            let body = TUIkit.renderToBuffer(labelView.foregroundStyle(labelFg), context: context)
+            // Under a child identity: the plain path renders the caller's
+            // label directly (the standard path's HStack pushes one
+            // implicitly), and at the core's identity a composite label's
+            // @State landed on the focusID/isHovered slots — 778699f5's
+            // collision class, missed here.
+            let body = TUIkit.renderToBuffer(
+                labelView.foregroundStyle(labelFg),
+                context: context.withChildIdentity(erasedType: type(of: labelView), index: 0))
             var buffer = FrameBuffer(
                 lines: body.lines.map { prefixes[cycle.step % prefixes.count] + $0 })
             guard !context.isMeasuring else { return buffer }

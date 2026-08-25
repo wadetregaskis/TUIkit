@@ -98,6 +98,20 @@ struct InfrastructureStateCollisionTests {
             ".userResizable() clobbered the wrapped view's @State")
     }
 
+    @Test("ProgressView's label")
+    func progressViewLabel() {
+        expectStateSurvives(
+            ProgressView { StatefulProbe() },
+            "ProgressView clobbered its composite label's @State")
+    }
+
+    @Test("A plain-style Button's label")
+    func plainButtonLabel() {
+        expectStateSurvives(
+            Button(action: {}, label: { StatefulProbe() }).buttonStyle(.plain),
+            "the plain button style clobbered its composite label's @State")
+    }
+
     @Test("Toggle's label")
     func toggleLabel() {
         expectStateSurvives(

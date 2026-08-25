@@ -454,16 +454,25 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         // `currentValueLabel` states the value the bar is showing, which is the
         // control's content rather than a name for it. With both gone the line
         // is blank and `visibleLabelLine` drops it, so the bar moves up.
+        // Each label under its OWN child identity: they are caller-supplied
+        // @ViewBuilder content, and rendered at the core's identity a
+        // composite label's first @State landed on the core's cycle-cache
+        // slot — and the two labels landed on each other. The collision class
+        // 778699f5 closed; these two sites were missed instances.
         if let labelView = label, !(labelView is EmptyView),
             !context.environment.controlLabelsAreHidden {
-            labelBuffer = TUIkit.renderToBuffer(labelView, context: context)
+            labelBuffer = TUIkit.renderToBuffer(
+                labelView,
+                context: context.withChildIdentity(erasedType: type(of: labelView), index: 0))
         } else {
             labelBuffer = FrameBuffer()
         }
 
         let valueBuffer: FrameBuffer
         if let valueView = currentValueLabel, !(valueView is EmptyView) {
-            valueBuffer = TUIkit.renderToBuffer(valueView, context: context)
+            valueBuffer = TUIkit.renderToBuffer(
+                valueView,
+                context: context.withChildIdentity(erasedType: type(of: valueView), index: 1))
         } else {
             valueBuffer = FrameBuffer()
         }
