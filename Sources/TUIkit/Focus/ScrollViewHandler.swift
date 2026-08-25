@@ -38,6 +38,24 @@
 ///   boundary.
 public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
 
+    /// The offset the reveal's last snap SETTLED on, or `nil` when no reveal
+    /// pursuit is in flight.
+    ///
+    /// The reveal's convergence memory: a focus jump to a far-off row scrolls
+    /// to the row's grafted region, whose position is an ESTIMATE — ordinal
+    /// distance times the running pitch average — so the hop can land short.
+    /// Focus being unchanged, nothing used to re-check, and the viewport
+    /// parked one band away from the row it was sent to. While this matches
+    /// `scrollOffset` (nobody else has scrolled — a wheel peek clears it, so
+    /// peek mode still wins) and the target's region is still outside the
+    /// visible band, the snap keeps pursuing; a hop that no longer moves ends
+    /// it. See `snapViewportToFocusedControl` / `settleRevealPursuit`.
+    ///
+    /// Lives here rather than in a `StateStorage` box because this class is
+    /// already in hand every frame: the box lookup it replaced was a
+    /// measurable slice of the smallest scenarios' frames.
+    var revealPursuitOffset: Int?
+
     /// The unique focus identifier for this scroll view.
     public let focusID: String
 

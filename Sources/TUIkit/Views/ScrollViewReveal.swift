@@ -107,21 +107,17 @@ extension _ScrollViewCore {
         let focusJustChanged = currentFocusedID != lastFocusedBox.value.value
         let interactionJustFired = currentInteractionGen != lastInteractionBox.value.value
 
-        // The pursuit (see `RevealPursuitBox`): a snap toward an off-band row
+        // The pursuit (see ``ScrollViewHandler/revealPursuitOffset``): a snap toward an off-band row
         // scrolls to an ESTIMATED position and can land short, and with focus
         // unchanged nothing used to re-check — the viewport parked one band
         // away. Pursue while the last snap's own write is still the offset
         // (any other writer — a wheel peek, a scrollTo — wins and ends it)
         // and the target remains outside the visible band.
-        let pursuitKey = StateStorage.StateKey(
-            identity: context.identity, propertyIndex: StateIndex.revealPursuit)
-        let pursuitBox: StateBox<RevealPursuitBox> = stateStorage.storage(
-            for: pursuitKey, default: RevealPursuitBox())
-        let pursuing = pursuitBox.value.value == handler.scrollOffset
-        if pursuitBox.value.value != nil, !pursuing {
-            pursuitBox.value.value = nil
+        let pursuing = handler.revealPursuitOffset == handler.scrollOffset
+        if handler.revealPursuitOffset != nil, !pursuing {
+            handler.revealPursuitOffset = nil
         }
-        if suppressed { pursuitBox.value.value = nil }
+        if suppressed { handler.revealPursuitOffset = nil }
 
         let shouldSnap =
             focusJustChanged || interactionJustFired || viewportJustChanged || pursuing
@@ -252,18 +248,20 @@ extension _ScrollViewCore {
     /// Called after ``coverSnappedViewport``, the tail re-glue, and a final
     /// clamp — everything that legitimately adjusts the offset within the
     /// frame — so that next frame's "did anyone else scroll?" comparison sees
-    /// the number that will actually still be there. See
-    /// ``RevealPursuitBox``.
+    /// the number that will actually still be there. See ``ScrollViewHandler/revealPursuitOffset``.
     func settleRevealPursuit(armed: Bool, handler: ScrollViewHandler, context: RenderContext) {
-        guard !context.isMeasuring, let stateStorage = context.stateStorage else { return }
+        guard !context.isMeasuring else { return }
+        guard armed else {
+            // The overwhelmingly common frame: no pursuit, nothing to record.
+            // Touch nothing — the extra unconditional clamp this used to do
+            // showed up as ~1% of megalist's frame.
+            if handler.revealPursuitOffset != nil { handler.revealPursuitOffset = nil }
+            return
+        }
         // The clamp against the coverage-refined content height is part of
         // what this frame's offset really is.
         handler.clampScrollOffset()
-        let key = StateStorage.StateKey(
-            identity: context.identity, propertyIndex: StateIndex.revealPursuit)
-        let box: StateBox<RevealPursuitBox> = stateStorage.storage(
-            for: key, default: RevealPursuitBox())
-        box.value.value = armed ? handler.scrollOffset : nil
+        handler.revealPursuitOffset = handler.scrollOffset
     }
 
     /// Re-renders the content at the (post-snap) scroll offset when the
