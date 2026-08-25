@@ -1987,8 +1987,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         // to know from here on: every event after this one is
                         // answered by whichever list is on screen under that
                         // focus identity, not by the one this closure captured.
-                        dragSession?.beginReorder(
-                            focusID: captureFocusID, handler: captureHandler)
+                        captureHandler.armReorderSession(
+                            dragSession, focusID: captureFocusID)
                         // Focus follows the gesture, so the keyboard reaches
                         // this list for the length of it — that is what lets the
                         // navigators scroll a list that was not focused before

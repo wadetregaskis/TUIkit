@@ -2629,8 +2629,8 @@ where Value.ID: Hashable {
                         captureHandler.beginReorder(grabbing: index)
                         // Which control the gesture belongs to is the session's
                         // to know from here on — see the twin in `_ListCore`.
-                        dragSession?.beginReorder(
-                            focusID: captureFocusID, handler: captureHandler)
+                        captureHandler.armReorderSession(
+                            dragSession, focusID: captureFocusID)
                         // Focus follows the gesture, so the keyboard reaches
                         // this list for the length of it — that is what lets the
                         // navigators scroll a list that was not focused before

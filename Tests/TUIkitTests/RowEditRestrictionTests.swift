@@ -158,6 +158,111 @@ struct RowEditRestrictionTests {
         #expect(handler.isReordering)
     }
 
+    private func reorderableList(_ fixture: Fixture) -> some View {
+        List(selection: .constant(Int?.none)) {
+            ForEach(fixture.rows) { row in
+                Text(row.name).moveDisabled(row.locked)
+            }
+            .onMove { source, destination in
+                fixture.rows.move(fromOffsets: source, toOffset: destination)
+            }
+        }
+        .frame(height: 8)
+    }
+
+    @Test("Keyboard move chords leave a pinned row where it is")
+    func keyboardMoveRefused() {
+        // The doc promise: "a keyboard row-move leaves it where it is". The
+        // chords went straight to onMove without consulting the restriction —
+        // a mouse drag on the same row correctly refused.
+        let fixture = Fixture([
+            Row(id: 0, name: "a", locked: false),
+            Row(id: 1, name: "pinned", locked: true),
+            Row(id: 2, name: "c", locked: false),
+        ])
+        fixture.render(reorderableList(fixture))
+        guard let handler = fixture.handler else {
+            Issue.record("no handler")
+            return
+        }
+        handler.focusedIndex = 1
+
+        #expect(handler.nudgeFocusedRow(by: 1) == false)
+        #expect(handler.moveFocusedRow(to: 0) == false)
+        #expect(fixture.rows.map(\.name) == ["a", "pinned", "c"], "the pinned row travelled")
+    }
+
+    @Test("Pick-up on a pinned row does not latch keyboard-move mode")
+    func pickUpRefusedCleanly() {
+        // The grab declines, but the mode used to latch anyway: arrows were
+        // swallowed as held-row no-ops with nothing in hand and no visible
+        // mode, until Enter/Escape happened to be pressed.
+        let fixture = Fixture([
+            Row(id: 0, name: "a", locked: false),
+            Row(id: 1, name: "pinned", locked: true),
+        ])
+        fixture.render(reorderableList(fixture))
+        guard let handler = fixture.handler else {
+            Issue.record("no handler")
+            return
+        }
+        handler.focusedIndex = 1
+
+        #expect(handler.beginKeyboardMove() == false, "a refused pick-up falls through")
+        #expect(!handler.isKeyboardMove, "no mode without a row in hand")
+    }
+
+    @Test("A mouse grab ends a keyboard move's mode")
+    func mousePressClearsKeyboardMove() {
+        let fixture = Fixture([
+            Row(id: 0, name: "a", locked: false),
+            Row(id: 1, name: "b", locked: false),
+            Row(id: 2, name: "c", locked: false),
+        ])
+        fixture.render(reorderableList(fixture))
+        guard let handler = fixture.handler else {
+            Issue.record("no handler")
+            return
+        }
+        handler.focusedIndex = 0
+        _ = handler.beginKeyboardMove()
+        #expect(handler.isKeyboardMove)
+
+        // The click path's grab replaces the reorder; the mode must go with
+        // it, or every navigation key is swallowed doing nothing.
+        handler.beginReorder(grabbing: 2)
+        #expect(!handler.isKeyboardMove)
+    }
+
+    @Test("A multi-row hold leaves pinned selection members behind")
+    func heldRowsExcludePinned() {
+        let fixture = Fixture([
+            Row(id: 0, name: "a", locked: false),
+            Row(id: 1, name: "pinned", locked: true),
+            Row(id: 2, name: "c", locked: false),
+        ])
+        var selection: Set<Int> = [0, 1, 2]
+        fixture.render(
+            List(selection: Binding(get: { selection }, set: { selection = $0 })) {
+                ForEach(fixture.rows) { row in
+                    Text(row.name).moveDisabled(row.locked)
+                }
+                .onMove { source, destination in
+                    fixture.rows.move(fromOffsets: source, toOffset: destination)
+                }
+            }
+            .frame(height: 8))
+        guard let handler = fixture.handler else {
+            Issue.record("no handler")
+            return
+        }
+
+        // Grab an unlocked, selected row: the selection comes along — minus
+        // the row the app said does not travel.
+        handler.beginReorder(grabbing: 0)
+        #expect(handler.reorder?.held == IndexSet([0, 2]), "\(String(describing: handler.reorder?.held))")
+    }
+
     /// `moveDisabled` says this row does not travel, not that its position is
     /// fixed — SwiftUI's meaning, and the one that keeps a pinned row from
     /// freezing the rows around it.

@@ -184,6 +184,12 @@ extension ItemListHandler {
             return true
         }
         beginReorder(grabbing: focusedIndex)
+        // The grab declines for a `.moveDisabled()` row. Latching the mode
+        // anyway swallowed every navigation key as a held-row no-op — with
+        // nothing in hand and no visible mode — until Enter or Escape
+        // happened to be pressed. A refused pick-up falls through instead,
+        // like the chord in a list that is not reorderable at all.
+        guard reorder != nil else { return false }
         // A keyboard move is a move from the first keystroke: there is no
         // "moved far enough to not be a click" question to answer.
         reorder?.active = true
@@ -370,7 +376,13 @@ extension ItemListHandler {
     /// the Home/End of reordering.
     @discardableResult
     func moveFocusedRow(to destination: Int) -> Bool {
-        guard onMove != nil, itemCount > 1 else { return false }
+        guard onMove != nil, itemCount > 1,
+            // `.moveDisabled()` on the row: a refused row leaves the chord
+            // alone entirely, falling through exactly as in a list that is
+            // not reorderable at all — the same reasoning, and the same
+            // FALSE, as `deleteFocusedRow`'s guard.
+            !moveDisabledRows.contains(clampedRowIndex(focusedIndex))
+        else { return false }
         let from = clampedRowIndex(focusedIndex)
         let target = min(max(0, destination), itemCount - 1)
         guard target != from else { return false }
@@ -381,7 +393,10 @@ extension ItemListHandler {
 
     @discardableResult
     func nudgeFocusedRow(by delta: Int) -> Bool {
-        guard onMove != nil, itemCount > 0 else { return false }
+        guard onMove != nil, itemCount > 0,
+            // See `moveFocusedRow(to:)` — the same refusal, the same FALSE.
+            !moveDisabledRows.contains(clampedRowIndex(focusedIndex))
+        else { return false }
         let target = min(max(0, focusedIndex + delta), itemCount - 1)
         guard target != focusedIndex else { return true }
         focusedIndex = clampedRowIndex(move(from: focusedIndex, to: target))
@@ -850,12 +865,27 @@ extension ItemListHandler {
         // floating preview and nothing to release. The focus still moves,
         // because a press is also a click and clicking a locked row should
         // select it like any other.
+        // A fresh grab of any kind ends the previous mode: a mouse press
+        // during a keyboard move replaced the reorder but left the mode
+        // latched, and every navigation key after the click was swallowed
+        // doing nothing. (The keyboard pick-up re-raises it after this.)
+        isKeyboardMove = false
         guard !moveDisabledRows.contains(offset) else {
             focusedIndex = offset
             return
         }
         reorder = RowReorder(grabbedOffset: offset, held: heldRows(grabbing: offset), active: false)
         focusedIndex = offset
+    }
+
+    /// Arms `session` for this grab — only when the grab actually began: a
+    /// `.moveDisabled()` row declines it, and arming the session anyway let
+    /// an empty-handed drag auto-scroll the list from its edges. One helper
+    /// rather than a guard in each press path, so the `List`/`Table` twins
+    /// cannot drift on it.
+    func armReorderSession(_ session: DragAndDropSession?, focusID: String) {
+        guard reorder != nil else { return }
+        session?.beginReorder(focusID: focusID, handler: self)
     }
 
     /// The rows a gesture starting at `offset` picks up: the whole selection
@@ -869,7 +899,12 @@ extension ItemListHandler {
         guard selectionMode == .multi, isSelected(at: offset) else {
             return IndexSet(integer: offset)
         }
+        // Minus the rows the app said do not travel: the restriction was
+        // enforced for the grabbed row alone, and a selection containing a
+        // pinned row carried it to the drop. The grabbed offset itself has
+        // already passed the check in `beginReorder`.
         let selected = IndexSet((0..<itemCount).filter { isSelected(at: $0) })
+            .subtracting(IndexSet(moveDisabledRows))
         return selected.contains(offset) ? selected : IndexSet(integer: offset)
     }
 
