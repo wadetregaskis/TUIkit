@@ -174,7 +174,12 @@ extension View {
             case .pressed:
                 return true  // claim so the release routes back to us
             case .released:
-                if event.clickCount == max(1, count) {
+                // Every Nth click, AppKit's rule — an exact match fired
+                // count:1 only on the FIRST of a rapid burst (the
+                // dispatcher's count is cumulative within the multi-click
+                // window, so a burst stamps 1, 2, 3, …) and count:2 only on
+                // the second, never the fourth.
+                if event.clickCount.isMultiple(of: max(1, count)) {
                     action()
                 }
                 return true

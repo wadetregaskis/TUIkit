@@ -633,8 +633,13 @@ extension MouseEventDispatcher {
         // The hand-off is PEEKED, not consumed: a menu-opening press hands the
         // gesture to the menu, which must still see the drags AND the release
         // that follows them.
-        if event.phase == .dragged, event.button == .left {
-            return handedOffPresses.contains(.left) ? nil : false
+        // Every button, not only the left: an uncaptured right/middle drag
+        // fell through this guard and was hit-tested LIVE, delivered to
+        // whatever the pointer crossed — a TextField's .dragged arm assumes
+        // its press was claimed and moved its own cursor for a gesture that
+        // never touched it.
+        if event.phase == .dragged {
+            return handedOffPresses.contains(event.button) ? nil : false
         }
 
         guard event.phase == .released, event.button == .left else { return nil }

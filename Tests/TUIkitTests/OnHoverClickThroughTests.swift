@@ -38,3 +38,83 @@ struct OnHoverClickThroughTests {
         _ = hovered
     }
 }
+
+/// The three small dispatch fixes from the second hunt, pinned together:
+/// taps fire on every Nth click, uncaptured drags are inert for every
+/// button, and an unchanged hover answers nothing.
+@MainActor
+@Suite("Dispatch small print")
+struct DispatchSmallPrintTests {
+
+    @Test("onTapGesture(count: 1) fires on every click of a rapid burst")
+    func rapidTapsAllFire() {
+        var taps = 0
+        let context = makeRenderContext(width: 20, height: 4) { environment, tui in
+            environment.mouseEventDispatcher = tui.mouseEventDispatcher
+        }
+        let view = Text("target").onTapGesture(count: 1) { taps += 1 }
+        let buffer = renderToBuffer(view, context: context)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        // Three quick clicks at one cell: the dispatcher stamps 1, 2, 3 —
+        // an exact ==1 match dropped every release after the first.
+        for _ in 0..<3 {
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: 0))
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: 0))
+        }
+        #expect(taps == 3, "a rapid burst dropped clicks: \(taps)")
+    }
+
+    @Test("Motion inside an already-lit tab answers nothing")
+    func unchangedTabHoverIsQuiet() {
+        // The tab's hover handler consumed every .moved even when the box
+        // already held that tab — and a consumed event is a render request,
+        // so a cursor travelling inside a tab re-rendered the app once per
+        // motion drain.
+        let context = makeRenderContext(width: 40, height: 8) { environment, tui in
+            environment.mouseEventDispatcher = tui.mouseEventDispatcher
+            environment.focusManager = FocusManager()
+        }
+        let view = TabView(selection: .constant(0)) {
+            Tab("Alpha", value: 0) { Text("a") }
+            Tab("Beta", value: 1) { Text("b") }
+        }
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.full)
+        let buffer = renderToBuffer(view, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+        guard let tab = buffer.hitTestRegions.first else {
+            Issue.record("no tab region")
+            return
+        }
+
+        let first = dispatcher.dispatch(
+            MouseEvent(button: .none, phase: .moved, x: tab.offsetX, y: tab.offsetY))
+        let second = dispatcher.dispatch(
+            MouseEvent(button: .none, phase: .moved, x: tab.offsetX + 1, y: tab.offsetY))
+        #expect(first, "the first motion lights the tab")
+        #expect(!second, "an unchanged hover must not request a render")
+    }
+
+    @Test("An uncaptured right-button drag is inert, like the left's")
+    func uncapturedRightDragIsInert() {
+        let dispatcher = MouseEventDispatcher()
+        dispatcher.setActiveSupport(.full)
+        dispatcher.beginRenderPass()
+        var phases: [MousePhase] = []
+        let id = dispatcher.register { event in
+            phases.append(event.phase)
+            return true
+        }
+        dispatcher.setRegions([
+            HitTestRegion(offsetX: 0, offsetY: 0, width: 10, height: 2, handlerID: id)
+        ])
+
+        // No press was captured (nothing consumed one); the drag must not be
+        // hit-tested live into a handler that never saw a press.
+        _ = dispatcher.dispatch(MouseEvent(button: .right, phase: .dragged, x: 3, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .middle, phase: .dragged, x: 3, y: 0))
+        #expect(phases.isEmpty, "an uncaptured drag reached a handler: \(phases)")
+    }
+}
