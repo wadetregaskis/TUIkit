@@ -576,6 +576,10 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         let top = min(window.offset, max(0, walkedTotal - window.viewportHeight))
         let bottom = top + window.viewportHeight
 
+        reportExactWalkSample(
+            slots: slots, window: window, top: top, walkedTotal: walkedTotal,
+            context: childContext)
+
         // The enumerate visitor's row set (§5d/§6a): the rows meeting the
         // viewport, plus one margin row past each edge (so a directional
         // focus move can step just beyond the window — the ring only holds
@@ -667,6 +671,30 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             result.appendVertically(slot, spacing: 0)
         }
         return result
+    }
+
+    /// Reports the row the viewport shows at the report anchor — exact here,
+    /// the slots carry every row's true y. This path never sampled at all, so
+    /// `.scrollPosition` read-back went silent for exactly the content its
+    /// own doc example shows: a variable-height lazy stack under the
+    /// anchored threshold. The collection is resolved only when someone is
+    /// actually listening; for a lone `ForEach` it is the lazy form whose
+    /// ids come straight from the data.
+    private func reportExactWalkSample(
+        slots: [RowSlot], window: ScrollContentWindow, top: Int, walkedTotal: Int,
+        context childContext: RenderContext
+    ) {
+        guard let unit = window.reportsIDAt, let reply = window.reply, !slots.isEmpty
+        else { return }
+        var sampling = window
+        sampling.offset = top
+        let line = sampling.sampleY(
+            at: unit, contentBelow: top + window.viewportHeight < walkedTotal)
+        // The first row whose bottom lies past the sampled line (a line in an
+        // inter-row gap belongs to the row below it), clamped to the last row.
+        let ordinal = slots.firstIndex { line < $0.y + $0.height } ?? (slots.count - 1)
+        let ids = resolveChildViewCollection(from: content, context: childContext)
+        reply.anchorID = ids.anyID(at: ordinal)
     }
 
     /// The slot index of the row whose subtree a focus ID addresses, when the

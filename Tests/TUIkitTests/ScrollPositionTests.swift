@@ -240,6 +240,40 @@ struct ScrollPositionTests {
         #expect(position.viewID(type: Int.self) == Self.rowCount - 1)
     }
 
+    @Test("Variable-height content reports the visible row too (the exact-walk path)")
+    func variableHeightContentReportsVisibleID() {
+        // Heights 1/2/3 repeating falsify the uniform hypothesis, sending
+        // every frame after the first down the exact viewport-window walk —
+        // which never sampled a row at all, so the binding went silent for
+        // precisely the composition ScrollPosition's own doc example shows.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        var position = ScrollPosition()
+        let binding = Binding(get: { position }, set: { position = $0 })
+        let view = ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(0..<30, id: \.self) { index in
+                    Text(
+                        Array(repeating: "row \(index)", count: 1 + index % 3)
+                            .joined(separator: "\n"))
+                }
+            }
+        }
+        .scrollPosition(binding)
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(position.viewID(type: Int.self) == 0)
+
+        position.scrollTo(id: 15, anchor: .top)
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        let landed = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(
+            landed.contains { $0.contains("row 15") },
+            "precondition: the target row is on screen: \(landed)")
+        #expect(position.viewID(type: Int.self) == 15)
+    }
+
     // MARK: - The id: binding
 
     @Test("scrollPosition(id:) writes the id back")
