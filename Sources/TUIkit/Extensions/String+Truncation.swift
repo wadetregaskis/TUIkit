@@ -13,7 +13,7 @@ import TUIkitCore
 /// Mirrors SwiftUI's `Text.TruncationMode`. The truncation point is always
 /// marked with a single-cell ellipsis (`…`) so a shortened string is
 /// visibly distinct from one that simply ends where it does.
-public enum TruncationMode: Sendable, Equatable {
+public enum TruncationMode: Sendable, Hashable {
     /// Keep the start of the string; drop the end: `"Documentat…"`.
     case tail
 

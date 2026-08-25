@@ -80,11 +80,24 @@ enum TextWrapping {
         let width: Int
     }
 
+    /// The identity of a fit: the wrap's inputs plus the fold/truncation ones.
+    private struct FitKey: Hashable {
+        let text: String
+        let width: Int
+        let maxLines: Int?
+        let mode: TruncationMode
+        let atWordBoundary: Bool
+    }
+
     private static let cacheLimit = 4096
     private static var cache: [WrapKey: Wrapped] = [:]
+    private static var fitCache: [FitKey: Wrapped] = [:]
 
-    /// Clears the wrap memo. For tests that want to measure a cold wrap.
-    static func clearWrapCache() { cache.removeAll() }
+    /// Clears the wrap and fit memos. For tests that want to measure cold.
+    static func clearWrapCache() {
+        cache.removeAll()
+        fitCache.removeAll()
+    }
 
     private static func uncachedWrapMeasured(_ text: String, width: Int) -> Wrapped {
         let paragraphs = text.split(
@@ -143,6 +156,44 @@ enum TextWrapping {
         maxLines: Int?,
         mode: TruncationMode = .tail,
         atWordBoundary: Bool = false
+    ) -> Wrapped {
+        // Memoized like `wrapMeasured`, and for the same purity reason — but
+        // this one is NOT redundant with that memo: the maxLines fold and the
+        // per-line truncation run AFTER the wrap lookup, so a line-limited
+        // cell paid `foldRemainder` (a character-by-character re-walk of the
+        // source, ending in a regex) on every call even when the wrap itself
+        // was a hit. A multi-line Table asks this for every visible cell and
+        // for every cell the scrollbar's extent estimator samples, every
+        // frame: on table-multiline, `fit` was 50.8% of the frame inclusive
+        // and `foldRemainder` alone 19.4%.
+        //
+        // Only the line-LIMITED call is worth the key: without `maxLines` the
+        // fold cannot run and the post-wrap work is one width check per line,
+        // which costs less than hashing the text a second time — memoizing
+        // unconditionally measured scrollfollow +1.2% and modifiers +1.1%
+        // for no fold ever saved, against table-multiline −60% from exactly
+        // the limited calls this key admits.
+        guard maxLines != nil else {
+            return uncachedFitMeasured(
+                text, width: width, maxLines: nil, mode: mode, atWordBoundary: atWordBoundary)
+        }
+        let key = FitKey(
+            text: text, width: width, maxLines: maxLines, mode: mode,
+            atWordBoundary: atWordBoundary)
+        if let hit = fitCache[key] { return hit }
+        let result = uncachedFitMeasured(
+            text, width: width, maxLines: maxLines, mode: mode, atWordBoundary: atWordBoundary)
+        if fitCache.count >= cacheLimit { fitCache.removeAll(keepingCapacity: true) }
+        fitCache[key] = result
+        return result
+    }
+
+    private static func uncachedFitMeasured(
+        _ text: String,
+        width: Int,
+        maxLines: Int?,
+        mode: TruncationMode,
+        atWordBoundary: Bool
     ) -> Wrapped {
         let wrapped = wrapMeasured(text, width: width)
         var lines = wrapped.lines
