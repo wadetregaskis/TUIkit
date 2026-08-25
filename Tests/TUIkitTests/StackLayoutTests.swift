@@ -68,6 +68,59 @@ struct StackLayoutTests {
         #expect(tight[0].hasPrefix("abcd"), "\(tight)")
     }
 
+    @Test("A Spacer inside a VStackLayout pushes its siblings apart")
+    func verticalSpacerDistributes() {
+        // The stacks-as-values proposed the WHOLE extent to every subview and
+        // never distributed: a Spacer measured at the full proposal collapsed
+        // (or filled), and later siblings were pushed past the viewport.
+        let drawn = lines(
+            VStackLayout(spacing: 0) {
+                Text(verbatim: "top")
+                Spacer()
+                Text(verbatim: "bottom")
+            },
+            width: 12, height: 6)
+        #expect(drawn.count == 6, "a flexible child fills the proposal: \(drawn)")
+        #expect(drawn.first?.contains("top") == true, "\(drawn)")
+        #expect(drawn.last?.contains("bottom") == true, "\(drawn)")
+    }
+
+    @Test("A Spacer inside an HStackLayout pushes its siblings apart")
+    func horizontalSpacerDistributes() {
+        let drawn = lines(
+            HStackLayout {
+                Text(verbatim: "L")
+                Spacer()
+                Text(verbatim: "R")
+            },
+            width: 12, height: 3)
+        let row = renderToBuffer(
+            HStackLayout {
+                Text(verbatim: "L")
+                Spacer()
+                Text(verbatim: "R")
+            },
+            context: makeBareRenderContext(width: 12, height: 3)
+        ).lines.first?.stripped ?? ""
+        #expect(drawn.first?.hasPrefix("L") == true, "\(drawn)")
+        #expect(row.hasSuffix("R"), "the spacer absorbs the middle: \(row.debugDescription)")
+        #expect(row.strippedLength == 12, "\(row.debugDescription)")
+    }
+
+    @Test("A greedy child does not push its siblings off the stack")
+    func greedyChildLeavesRoomForSiblings() {
+        // A GeometryReader fills what it is offered; offered the WHOLE extent
+        // it consumed all six rows and the footer landed past the viewport.
+        let drawn = lines(
+            VStackLayout(spacing: 0) {
+                GeometryReader { _ in Text(verbatim: "body") }
+                Text(verbatim: "footer")
+            },
+            width: 12, height: 6)
+        #expect(drawn.count <= 6, "the stack must not report more than it was offered: \(drawn)")
+        #expect(drawn.contains { $0.contains("footer") }, "the footer was pushed off: \(drawn)")
+    }
+
     @Test("VStackLayout aligns across its width")
     func verticalAlignment() {
         let trailing = lines(
