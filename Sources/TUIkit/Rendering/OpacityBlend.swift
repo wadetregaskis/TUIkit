@@ -57,14 +57,24 @@ extension FrameBuffer {
         var span = ""
         var emitted = SGRState()
         var column = columns.lowerBound
+        var lastSourceCell: RowCell?
         while column < columns.upperBound {
-            guard let cell = sourceCells[column] else {
-                // A continuation column of a wide source character: the
-                // character was emitted at its start column and claims this one
-                // too, so nothing is due here.
-                column += 1
-                continue
-            }
+            // A nil column is the continuation of a wide source character —
+            // but the walk advances by what it EMITS, so reaching one means
+            // the character did NOT claim it: the glyph yielded its contest
+            // (or the region is at zero) and a narrow replacement took only
+            // its start column. The continuation must then yield on its own —
+            // skipping it left the span a column short per yielded character,
+            // and the splice then replaced too few columns and let unfaded
+            // source glyphs through. It yields as a space wearing the
+            // character's own styling, so the blend's ordinary rules apply.
+            let cell =
+                sourceCells[column]
+                ?? RowCell(
+                    character: " ", style: lastSourceCell?.style ?? SGRState(),
+                    foreground: lastSourceCell?.foreground,
+                    background: lastSourceCell?.background)
+            if sourceCells[column] != nil { lastSourceCell = cell }
             // Bounds-checked rather than trusted: a negative shift is legal —
             // `composited` accepts one — and would index before the start.
             let behindColumn = column + destinationShift

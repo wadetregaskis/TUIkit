@@ -384,6 +384,41 @@ struct OpacityResolutionTests {
         #expect(resolved.lines[0].strippedLength == 6)
     }
 
+    @Test("A wide character that yields releases BOTH its columns")
+    func wideYieldRevealsEveryColumn() {
+        // The walk skips a wide character's continuation column on the
+        // assumption the character was emitted and claims it. When the wide
+        // character LOSES the contest, the narrow destination glyph emitted in
+        // its place claims one column — the continuation must then yield on
+        // its own, not vanish. Skipping it left the span short, so the splice
+        // replaced too few columns and the row kept unfaded source glyphs.
+        let destination = FrameBuffer(lines: [
+            ANSIRenderer.colorize("abcdef", foreground: .red)
+        ])
+        let source = faded(
+            ANSIRenderer.colorize("日本語", foreground: .rgb(0, 255, 0)), 0.2, width: 6)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        #expect(resolved.lines[0].stripped == "abcdef")
+        #expect(resolved.lines[0].strippedLength == 6)
+        #expect(resolved.lines[0].contains(codes(.red)))
+    }
+
+    @Test("Zero opacity reveals through a wide source exactly")
+    func wideSourceAtZeroRevealsExactly() {
+        let destination = FrameBuffer(lines: [
+            ANSIRenderer.colorize("abcdef", foreground: .red)
+        ])
+        let source = faded(
+            ANSIRenderer.colorize("日本語", foreground: .rgb(0, 255, 0)), 0, width: 6)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        #expect(resolved.lines[0].stripped == "abcdef")
+        #expect(resolved.lines[0].strippedLength == 6)
+    }
+
     @Test("Aligned wide characters reveal whole")
     func alignedWideRevealIsWhole() {
         // Wide over wide: the source's continuation columns were already
