@@ -53,6 +53,11 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// viewportHeight)`.
     public var scrollOffset: Int = 0
 
+    /// One line per edge when the "N more" text indicators are what occupies
+    /// the viewport's first and last line, `0` under a bar or hidden
+    /// indicators. Published by the render, consumed by ``pageDistance``.
+    var textIndicatorInset = 0
+
     /// The `.scrollPosition` freshness memory: the request token last acted
     /// on, and the row id last written back. On the HANDLER — which persists
     /// across frames — and not on the environment box that carries the
@@ -63,6 +68,15 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
 
     /// See ``lastAppliedPositionToken``.
     var lastReportedPositionID: AnyHashable?
+
+    /// One screenful of READABLE lines (``ScrollableOffsetState``
+    /// requirement). Under the text indicators the viewport's first and last
+    /// line are chrome — "▲ N more" / "▼ N more" — so the protocol's
+    /// full-height default skipped the two content lines hidden beneath them
+    /// at every boundary: two lines of the document never shown at any point
+    /// while paging through it. Where only one indicator happens to show,
+    /// this overlaps by a line instead, which is the safe direction.
+    public var pageDistance: Int { max(1, viewportHeight - 2 * textIndicatorInset) }
 
     /// Grab point within the thumb during a scrollbar drag (``ScrollableOffsetState``).
     public var scrollbarDragGrab: Int?

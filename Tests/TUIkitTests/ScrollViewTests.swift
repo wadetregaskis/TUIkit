@@ -61,6 +61,8 @@ struct ScrollViewHandlerTests {
 
     @Test("PageDown scrolls by one viewport")
     func pageDownScrollsByViewport() {
+        // No indicator inset here: under a bar (or hidden indicators) every
+        // viewport line is readable and a page is the full height.
         let handler = ScrollViewHandler(focusID: "sv")
         handler.contentHeight = 100
         handler.viewportHeight = 20
@@ -68,6 +70,24 @@ struct ScrollViewHandlerTests {
         let consumed = handler.handleKeyEvent(KeyEvent(key: .pageDown))
         #expect(consumed)
         #expect(handler.scrollOffset == 20)
+    }
+
+    @Test("Under text indicators a page is the readable lines, skipping none")
+    func pageUnderTextIndicatorsSkipsNothing() {
+        // The viewport's first and last line are "N more" chrome, so a
+        // full-height jump skipped the two content lines hidden beneath them
+        // at every boundary — lines of the document never shown at any point.
+        let handler = ScrollViewHandler(focusID: "sv")
+        handler.contentHeight = 100
+        handler.viewportHeight = 20
+        handler.textIndicatorInset = 1
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .pageDown))
+        #expect(handler.scrollOffset == 18)
+        // From offset 18 the old bottom-most readable line (17 + 1 = row 18)
+        // is the new top-most readable one: no skip, no double-show beyond it.
+        _ = handler.handleKeyEvent(KeyEvent(key: .pageUp))
+        #expect(handler.scrollOffset == 0)
     }
 
     @Test("PageUp scrolls back by one viewport")

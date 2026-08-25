@@ -358,7 +358,9 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let wantsHorizontalBar = bars.horizontal
         let contentWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
         let contentViewportHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
+        let textIndicators = drawsTextIndicators(context)
         handler.viewportHeight = contentViewportHeight
+        handler.textIndicatorInset = edgeInset(drawsTextIndicators: textIndicators)
         // §1.5: how far past its edges this view may be pushed. Re-resolved every
         // frame because a `.viewport`-relative allowance moves with the terminal,
         // and an existing excursion is pulled back inside a shrunken one.
@@ -387,13 +389,12 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         if !context.isMeasuring { handler.hasOpened = true }
 
         let pendingSeek = consumedSeek(
-            handler: handler, drawsTextIndicators: drawsTextIndicators(context), context: context)
+            handler: handler, drawsTextIndicators: textIndicators, context: context)
         var (fullBuffer, contentSlice, seekOffset) = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
-            seek: pendingSeek, edgeInset: edgeInset(drawsTextIndicators: drawsTextIndicators(context)),
-            handler: handler,
-            context: context, settledExtents: bars.settled)
+            seek: pendingSeek, edgeInset: edgeInset(drawsTextIndicators: textIndicators),
+            handler: handler, context: context, settledExtents: bars.settled)
         if !context.isMeasuring { handler.pendingScrollTo = nil }
         // A sliced reply (Stage 6): the buffer holds only the rendered band;
         // the content height comes from the metadata (estimated suffixes and
