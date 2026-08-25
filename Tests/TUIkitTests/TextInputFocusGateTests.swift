@@ -4,6 +4,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -30,6 +31,13 @@ struct TextInputFocusGateTests {
         manager.register(editor)
         manager.focus(id: "editor")
         #expect(manager.hasTextInputFocus, "TextEditor's typing is stealable without the gate")
+
+        let picker = DatePickerHandler(
+            focusID: "date", selection: .constant(Date(timeIntervalSince1970: 0)),
+            model: DateFieldModel(calendar: .current, components: [.date], range: nil))
+        manager.register(picker)
+        manager.focus(id: "date")
+        #expect(manager.hasTextInputFocus, "typed digits are the date picker's content")
     }
 
     @Test("With nothing focused, nothing is gated")
