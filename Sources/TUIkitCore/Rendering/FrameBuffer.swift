@@ -584,33 +584,6 @@ extension FrameBuffer {
         }
     }
 
-    /// Layers another buffer on top of this one (ZStack behavior).
-    ///
-    /// Non-empty characters in the overlay replace characters in the base.
-    /// For simplicity, this just overlays line by line.
-    ///
-    /// - Parameter overlay: The buffer to overlay on top.
-    public mutating func overlay(_ overlay: Self) {
-        let maxHeight = max(height, overlay.height)
-        var result: [String] = []
-        for row in 0..<maxHeight {
-            if row < overlay.lines.count && !overlay.lines[row].isEmpty {
-                result.append(overlay.lines[row])
-            } else if row < lines.count {
-                result.append(lines[row])
-            } else {
-                result.append("")
-            }
-        }
-        lines = result
-        // The overlay is placed flush at (0, 0), so its layers + hit-test
-        // regions need no shift.
-        overlays.append(contentsOf: overlay.overlays)
-        hitTestRegions.append(contentsOf: overlay.hitTestRegions)
-        animatedCells.append(contentsOf: overlay.animatedCells)
-        opacityRegions.append(contentsOf: overlay.opacityRegions)
-    }
-
     /// Creates a new buffer with another buffer composited on top at the specified position.
     ///
     /// Compositing is OPAQUE per cell: every cell of the overlay replaces the
@@ -1058,7 +1031,7 @@ extension FrameBuffer {
     /// current ``lines``, and invalidates ``lineWidths``.
     ///
     /// Called automatically by the `didSet` observer on ``lines``. A direct
-    /// mutation of `lines` (external assignment, ``overlay(_:)``) changes the
+    /// mutation of `lines` (external assignment) changes the
     /// line content, so any previously-carried per-line widths no longer match;
     /// the single-pass `measure` does not produce the full per-line array, so
     /// they are dropped to `nil` (measure on demand) rather than left stale.

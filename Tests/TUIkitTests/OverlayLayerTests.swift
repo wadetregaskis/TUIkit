@@ -86,17 +86,6 @@ struct OverlayLayerPropagationTests {
         #expect(left.overlays[0].offsetX == 6)
     }
 
-    @Test("overlay() carries layers without shifting them")
-    func overlayCarriesLayers() {
-        var base = FrameBuffer(lines: ["AAA"])
-        let top = layeredBuffer(["BBB"], overlayAt: (3, 4))
-        base.overlay(top)
-
-        #expect(base.overlays.count == 1)
-        #expect(base.overlays[0].offsetX == 3)
-        #expect(base.overlays[0].offsetY == 4)
-    }
-
     @Test("clamped preserves overlay layers while truncating content")
     func clampedPreservesOverlays() {
         let buffer = layeredBuffer(["AAAAAAAA"], overlayAt: (0, 5))
