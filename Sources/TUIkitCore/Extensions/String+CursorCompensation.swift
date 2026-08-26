@@ -220,12 +220,18 @@ extension String {
                 // Over-advancer followed by content — strip the
                 // Fitzpatrick scalar so Terminal.app doesn't apply the
                 // row-wide LEFT shift.
+                //
+                // Built into a local rather than appended straight to
+                // `result`, because whether this cluster needs the erase is
+                // not known until its base has been seen — and the erase has
+                // to come BEFORE the glyph.
+                var stripped = String.UnicodeScalarView()
                 var baseScalar: Unicode.Scalar?
                 var keptVS16 = false
                 for scalar in c.unicodeScalars where !(0x1F3FB...0x1F3FF).contains(scalar.value) {
                     if baseScalar == nil { baseScalar = scalar }
                     if scalar.value == 0xFE0F { keptVS16 = true }
-                    result.unicodeScalars.append(scalar)
+                    stripped.append(scalar)
                 }
                 // Text-default emoji bases (☝ U+261D, ✌ U+270C, 🖐 U+1F590…)
                 // render bare as a 1-cell text glyph in Terminal.app — so
@@ -240,9 +246,23 @@ extension String {
                    base.properties.isEmoji && !base.properties.isEmojiPresentation
                 {
                     if !keptVS16 {
-                        result.unicodeScalars.append(Unicode.Scalar(0xFE0F)!)
+                        stripped.append(Unicode.Scalar(0xFE0F)!)
                     }
+                    // Restoring VS-16 has turned this cluster into exactly the
+                    // under-advancer the branch above handles: painted two
+                    // cells, cursor moved one. So it needs the same erase —
+                    // without it the cell the cursor skips keeps the
+                    // terminal's default background and a coloured row reads
+                    // as a comb. Measured on Terminal.app 455.1 / macOS
+                    // 15.7.9, six ☝🏽 on a blue run: with CUF alone a white
+                    // cell follows every hand; with the erase first the run is
+                    // unbroken. Advance is 2 either way, so this changes what
+                    // is painted and not where the cursor lands.
+                    result += "\u{1B}[\(claimed)X"
+                    result.unicodeScalars.append(contentsOf: stripped)
                     result += "\u{1B}[1C"
+                } else {
+                    result.unicodeScalars.append(contentsOf: stripped)
                 }
             } else {
                 // Normal char, or an over-advancer at the very end of

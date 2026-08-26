@@ -1161,6 +1161,37 @@ cluster (`📁`), and plain ASCII each put the character AFTER them in the same
 column. The layout arithmetic is exact; what remains is only how Apple's font
 paints a narrow glyph inside the two cells it owns.
 
+#### The skin-tone path needed the same erase — FIXED 2026-08-26
+
+The erase above was added to the branch that handles under-advancing clusters.
+Terminal.app's walk has a *second* branch, for the clusters that OVER-advance:
+a Fitzpatrick cluster on a text-default base (`☝🏽`) has its modifier stripped
+and `U+FE0F` restored, so that the base still paints the two cells the layout
+claimed. That restoration turns the cluster into a VS-16 pictograph — which is
+to say, into exactly the paint-2/advance-1 case the first branch exists for —
+and it was emitting `CUF` with no `ECH`.
+
+**Measured** (Terminal.app 455.1 / macOS 15.7.9, 2026-08-26, six `☝🏽` on a
+blue run, `DECDWL` so a one-cell hole is unmistakable in a capture):
+
+| output | advance per cluster | the cells the glyph covers |
+|---|---|---|
+| `☝️` + `CUF(1)` (what shipped) | 2 | a white cell after every hand |
+| `ECH(2)` + `☝️` + `CUF(1)` | 2 | unbroken blue |
+
+Same defect, same remedy, same advance — the erase was simply missing from one
+of the two places that produce an under-advancing glyph. The affected clusters
+are the nine text-default emoji-modifier bases, five tones each: `☝ ⛹ ✌ ✍ 🏋
+🏌 🕴 🕵 🖐`. Emoji-default bases (`✊🏻`) are unaffected: they are stripped bare
+to a glyph that already advances as far as it paints, so there is nothing for an
+erase to fix, and the walk must not emit one for them.
+
+Found by sweeping `TerminalQuirks` — the open switch set the
+`TerminalClientQuirks` app exports — against the hand-written per-host model
+and diffing the emitted bytes over 46,073 clusters. The two are independent
+encodings of the same measurements, so anywhere they disagree, one of them is
+wrong; this was the only disagreement Apple Terminal had.
+
 #### …and on a FULL-WIDTH row, which is the case an app actually draws
 
 The report that prompted the section above had a second half — the row also

@@ -308,6 +308,37 @@ struct WithTerminalAppCursorCompensationTests {
                 "Visible width must be preserved")
     }
 
+    @Test("A VS-16-restored skin-tone cluster is erased under, like any under-advancer")
+    func textDefaultSkinToneErasesUnderTheGlyph() {
+        // Promoting the base to VS-16 turns the cluster into exactly the
+        // paint-2/advance-1 case the under-advance branch handles, so it needs
+        // the same ECH: without it the cell the cursor skips keeps the
+        // terminal's default background and a coloured row reads as a comb.
+        // Measured on Terminal.app 455.1 / macOS 15.7.9 — six ☝🏽 on a blue
+        // run showed a white cell after every hand until the erase was added,
+        // and the advance was 2 per cluster either way.
+        //
+        // Every text-default modifier base takes this path: ☝ ⛹ ✌ ✍ 🏋 🏌
+        // 🕴 🕵 🖐, five tones each.
+        for base in ["☝", "⛹", "✌", "✍", "🏋", "🏌", "🕴", "🕵", "🖐"] {
+            for tone in ["\u{1F3FB}", "\u{1F3FD}", "\u{1F3FF}"] {
+                let result = "a\(base)\(tone)b".withTerminalAppCursorCompensation()
+                #expect(result.contains("\u{1B}[2X\(base)\u{FE0F}\u{1B}[1C"),
+                        "\(base)\(tone) must be erased under, then drawn, then stepped past")
+            }
+        }
+    }
+
+    @Test("An emoji-default skin-tone base is stripped bare and NOT erased under")
+    func emojiDefaultSkinToneDoesNotErase() {
+        // ✊ needs no VS-16 promotion, so it stays a 2-cell/2-advance glyph and
+        // there is nothing for an erase to fix. Guards the erase from spreading
+        // to the branch that does not need it.
+        let result = "a✊🏻b".withTerminalAppCursorCompensation()
+        #expect(!result.contains("\u{1B}[2X"),
+                "no erase for a cluster that advances as far as it paints")
+    }
+
     @Test("Emoji-default base + skin-tone + content: simple strip, no VS-16")
     func emojiDefaultSkinToneStripsCleanly() {
         // ✊ (U+270A) is `isEmojiPresentation` — bare base is already 2
