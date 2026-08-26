@@ -67,7 +67,7 @@ and both reached for "unavailable anywhere means gone".
 
 ## Fixed in this pass
 
-Eleven defects were clear enough to fix outright. Each has a failing-test
+Twelve defects were clear enough to fix outright. Each has a failing-test
 repro, and each fix was **mutation-tested** — the change reverted, to prove the
 new test actually fails without it.
 
@@ -84,6 +84,7 @@ new test actually fails without it.
 | `34c09bcb` | **A literal `%` immediately before an interpolation ate the following argument** in a localization key. |
 | `2eca551b` | `Text.Case` and `Text.TruncationMode` were not spellable — both types exist, top-level, so the symbol diff saw nothing missing. |
 | `eb623b89` | SwiftUI's parameterless `focusSection()` did not compile; the identifier now derives from the view's identity path. |
+| `291b8754` | **An ancestor's `.disabled(true)` did not reach `List`, `Table` or `ScrollView`.** None of the three read `\.isEnabled`, and each type's concrete `disabled(_:)` overload wins overload resolution — so their own call worked and hid that an ancestor's did nothing. Root cause 3 below, now closed. |
 
 ## Root causes worth deciding once
 
@@ -116,7 +117,7 @@ resolved child in the same modifier. Note the one exception to get right:
 `onDelete`/`onMove` are declared on `DynamicViewContent`, not `View`, and must
 keep applying to the collection.
 
-**3. `\.isEnabled` has no readers in the big containers.** `List`, `_ListCore`,
+**3. `\.isEnabled` has no readers in the big containers — FIXED (`291b8754`), kept here for the shape.** `List`, `_ListCore`,
 `Table` and `ScrollView` never consult it, and each type's concrete
 `disabled(_:) -> Self` overload wins overload resolution over the `View`
 extension — so `List { … }.disabled(true)` never even builds a
