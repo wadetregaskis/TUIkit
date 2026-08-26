@@ -544,6 +544,70 @@ extension Terminal {
         return added
     }
 
+    /// Asks the terminal to identify itself, and returns the
+    /// `TERM_PROGRAM`-style name of the host if its answers name one.
+    ///
+    /// The startup half of ``TerminalIdentityQuery`` — see there for what is
+    /// asked and why it is safe to ask it. This half is the I/O: one write, then
+    /// read until the DSR fence comes back or `timeout` elapses.
+    ///
+    /// Called only when the environment named no host (see
+    /// ``TerminalHost/hostProgram(environment:)``), which is why the cost is
+    /// acceptable: locally there is nothing to ask, and the case that pays for
+    /// the round trip is the one that is currently rendering incorrectly.
+    ///
+    /// Bytes that are not replies to the exchange — a keystroke typed during
+    /// startup — are put into the input buffer rather than dropped. The window
+    /// is one round trip, but "we ate your first keypress" is not a bug worth
+    /// having.
+    ///
+    /// - Parameter timeout: how long to wait for the fence. Only reached by a
+    ///   terminal that answers no DSR at all, since the read returns as soon as
+    ///   the fence lands; a generous value therefore costs nothing in practice
+    ///   and buys tolerance of a slow link.
+    /// - Returns: the host's name, or `nil` — which is both the common answer
+    ///   and the safe one.
+    func identifyHostFromDeviceAttributes(timeout: Double = 0.5) -> String? {
+        // A pipe has no opinion about who it is, and raw mode is what stops the
+        // replies being line-buffered and echoed back at the user.
+        guard isatty(STDIN_FILENO) == 1, isRawMode else { return nil }
+
+        writeImmediate(TerminalIdentityQuery.request)
+
+        var collected: [UInt8] = []
+        var chunk = [UInt8](repeating: 0, count: 512)
+        let deadline = Date().addingTimeInterval(timeout)
+        var identity = TerminalIdentity()
+        while !identity.sawFence {
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { break }
+            var descriptor = pollfd(
+                fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
+            guard poll(&descriptor, 1, Int32(remaining * 1000)) > 0 else { break }
+            let read = chunk.withUnsafeMutableBufferPointer { readSource($0) }
+            guard read > 0 else { break }
+            collected.append(contentsOf: chunk[0..<read])
+            identity = TerminalIdentityQuery.parse(collected)
+        }
+
+        // Whatever was typed during the round trip belongs to the input parser.
+        if !identity.unconsumed.isEmpty { enqueue(input: identity.unconsumed) }
+        return TerminalHost.nameFromDeviceAttributes(identity)
+    }
+
+    /// Appends bytes to the pending-input buffer as though they had just been
+    /// read from stdin.
+    ///
+    /// For handing back bytes another reader took but does not own — see
+    /// ``identifyHostFromDeviceAttributes(timeout:)``. Appends rather than
+    /// prepends because the only caller runs before the loop starts, when the
+    /// buffer is empty and these ARE the oldest bytes.
+    private func enqueue(input bytes: [UInt8]) {
+        input.append(addingCount: bytes.count) { (span: inout OutputSpan<UInt8>) in
+            for byte in bytes { span.append(byte) }
+        }
+    }
+
     /// The bracketed-paste start marker (`ESC [ 2 0 0 ~`).
     private static let pasteStart: [UInt8] = [
         0x1B, 0x5B, 0x32, 0x30, 0x30, 0x7E,

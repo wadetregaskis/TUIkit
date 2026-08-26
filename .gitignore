@@ -58,3 +58,4 @@ papers/
 # Terminal-probe default outputs (Tools/TerminalProbes — run from anywhere)
 mouse_probe*.log
 advance_probe*.json
+identity_probe*.json

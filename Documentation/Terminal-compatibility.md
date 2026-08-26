@@ -123,14 +123,57 @@ Precedence is `TUIKIT_TERM_PROGRAM` → `TERM_PROGRAM` → `LC_TERMINAL`: the
 explicit answer first, the local answer next, and the forwarded one last
 because it can arrive stale from a hop further back.
 
-**Open: automatic identification over ssh.** Device Attributes (DA1
-`ESC[c`, DA2 `ESC[>c`) are answered by terminals that answer no XTVERSION,
-and cross a hop like any other escape. If Apple Terminal's replies are
-distinctive enough not to collide with the other hosts, they identify it
-remotely with one round trip and no user configuration. Measure with
-`identity_probe.py` in each terminal before relying on this — an
-identification that false-positives would apply a compensation to a host
-that does not need it, which is worse than the status quo.
+### Asking the terminal — Device Attributes (measured 2026-08-26)
+
+Device Attributes are answered by terminals that answer no XTVERSION, and
+cross an ssh hop like any other escape. Measured with `identity_probe.py`
+through ssh (Apple Terminal 455.1 / macOS 15.7); Ghostty's and Warp's DA
+strings were read out of their shipped binaries, and iTerm2's DA2 format
+string (`ESC[>%d;%d;0c`) likewise.
+
+| Query | Apple Terminal | Ghostty | Warp | iTerm2 |
+|---|---|---|---|---|
+| XTVERSION | *silent* | answers | answers | answers |
+| DA1 `ESC[c` | `ESC[?1;2c` | `ESC[?62;22c` | `ESC[?62c` | `ESC[?62;…c` |
+| DA2 `ESC[>c` | `ESC[>1;95;0c` | `ESC[>1;10;0c` | — | `ESC[>…;…;0c` |
+| DA3 `ESC[=c` | `ESC[?1;2c` (!) | — | — | — |
+
+Apple Terminal answers DA3 with a **DA1 reply** — it ignores the `=` and
+treats `ESC[=c` as `ESC[c`. Noted as a curiosity; nothing depends on it.
+
+⚠️ **Do not send DCS queries at startup.** XTGETTCAP (`ESC P + q … ESC \`)
+is not safe: Apple Terminal does not parse DCS and *prints the payload* —
+measured, it left a literal `+q544e` on the screen. Every query TUIkit sends
+is a CSI sequence, which even a terminal implementing none of them consumes
+correctly, because CSI parsing is generic (parameter bytes, then a final
+byte).
+
+**The fingerprint TUIkit ships** (`TerminalHost.nameFromDeviceAttributes`)
+names Apple Terminal, and nothing else, by requiring all three of:
+
+- **XTVERSION silence** — excludes the three hosts above, and kitty,
+  WezTerm, foot and contour besides.
+- **DA1 exactly `ESC[?1;2c`** — "VT100 with the Advanced Video Option", a
+  1978 feature set. Modern emulators report VT220 or later (`?62`, `?63`,
+  `?64`) because applications gate features on it, so this clause does most
+  of the work.
+- **DA2 matching `ESC[>1;…;0c`** — excludes the multiplexers, which are the
+  real collision risk for the DA1 clause: GNU screen also reports VT100+AVO
+  but identifies as terminal type 83 (`'S'`), and xterm as 41. tmux never
+  reaches here (`$TMUX` answers first), but screen is not detected at all,
+  and compensating inside a multiplexer would corrupt its grid.
+
+The firmware field is deliberately not pinned to the measured `95`: it is a
+version number by definition, and matching it exactly would mean a macOS
+update silently switching the compensation back off.
+
+The exchange is one write and one round trip, sent only when the environment
+named no host, and fenced with a DSR request so a query nobody implements
+costs nothing. `Tools/Smoke/identity_smoke.py` runs a real binary under a PTY
+impersonating each terminal and asserts the compensation appears for Apple
+Terminal and for nobody else — the wiring guard, since `TerminalHost`'s
+detectors are `static let` and freeze on first read, so the query must run
+before the render loop is built.
 
 ---
 

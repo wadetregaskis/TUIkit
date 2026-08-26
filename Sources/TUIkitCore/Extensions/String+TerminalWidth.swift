@@ -1062,13 +1062,13 @@ extension String {
     /// (documented as sanitising user input against escape injection) let it
     /// through, and the wrapper measured 4 cells for a sequence the terminal
     /// paints in 0 — border and column misalignment.
-    static func isCSIBodyByte(_ value: UInt32) -> Bool {
+    public static func isCSIBodyByte(_ value: UInt32) -> Bool {
         (0x20...0x3F).contains(value)
     }
 
     /// Whether `value` terminates a CSI sequence (ECMA-48 final bytes
     /// `0x40...0x7E` — the letters plus `@[\]^_\`{|}~`).
-    static func isCSIFinalByte(_ value: UInt32) -> Bool {
+    public static func isCSIFinalByte(_ value: UInt32) -> Bool {
         (0x40...0x7E).contains(value)
     }
 

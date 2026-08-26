@@ -167,16 +167,6 @@ extension AppRunner {
         // `synthesizeKeyEvent` doc-comment for why this is a
         // closure threaded through the context.
         tuiContext.synthesizeKeyEvent = { _ = inputHandler.handle($0) }
-        let renderer = RenderLoop(
-            app: app,
-            terminal: terminal,
-            statusBar: statusBar,
-            appHeader: appHeader,
-            focusManager: focusManager,
-            paletteManager: paletteManager,
-            appearanceManager: appearanceManager,
-            tuiContext: tuiContext
-        )
         let cursorTimer = CursorTimer(renderNotifier: appState)
         // Coalesces the periodic re-render requests of every animating view
         // (Spinner, indeterminate ProgressView, …) into the fewest distinct render
@@ -200,6 +190,36 @@ extension AppRunner {
         terminal.enterAlternateScreen()
         terminal.hideCursor()
         terminal.enableRawMode()
+
+        // If nothing in the environment named the host, ask the terminal
+        // itself — which is the only question that survives an ssh hop, where
+        // `TERM_PROGRAM` does not (see TerminalHost.hostProgram). One write and
+        // one round trip, and only in the case that is otherwise rendering
+        // incorrectly: an Apple Terminal reached over ssh, painting every VS-16
+        // emoji, lone regional indicator and SF Symbol two cells wide while
+        // advancing one.
+        //
+        // BEFORE the render loop below, and deliberately: TerminalHost's
+        // detectors are `static let`, so each freezes on first read, and the
+        // loop's FrameDiffWriter reads all of them as its init defaults. Under
+        // tmux there is nothing to ask — the pane's grid is tmux's, not the
+        // client's, and `$TMUX` has already answered.
+        if !TerminalHost.hostIsNamedByEnvironment, !TerminalHost.isTmux,
+            let discovered = terminal.identifyHostFromDeviceAttributes()
+        {
+            TerminalHost.seedDiscoveredHost(discovered)
+        }
+
+        let renderer = RenderLoop(
+            app: app,
+            terminal: terminal,
+            statusBar: statusBar,
+            appHeader: appHeader,
+            focusManager: focusManager,
+            paletteManager: paletteManager,
+            appearanceManager: appearanceManager,
+            tuiContext: tuiContext
+        )
 
         // Under tmux, have it PUSH a SIGWINCH at us whenever a client attaches,
         // detaches, or changes session — the only events that can change which

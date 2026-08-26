@@ -116,6 +116,15 @@ enum TerminalHost {
         return forwardedTerminalNames[forwarded]
     }
 
+    /// Whether anything in the process environment names the host terminal.
+    ///
+    /// `false` is the ssh case, and the cue to ask the terminal itself rather
+    /// than give up on it — see
+    /// ``Terminal/identifyHostFromDeviceAttributes(timeout:)``.
+    static var hostIsNamedByEnvironment: Bool {
+        hostProgram(environment: ProcessInfo.processInfo.environment) != nil
+    }
+
     /// `LC_TERMINAL` values, mapped into the `TERM_PROGRAM` vocabulary the
     /// detectors speak — the variable has its own spelling ("iTerm2", not
     /// "iTerm.app").
