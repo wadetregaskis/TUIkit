@@ -75,7 +75,18 @@ public struct StyleAttributes: Sendable, Hashable {
     public var underline: Bool?
     public var strikethrough: Bool?
     public var dim: Bool?
-    public var textCase: TextCase?
+
+    /// The case transform, as a THIRD state: `nil` is "nothing was said",
+    /// `.some(nil)` is "cleared here", `.some(.some(c))` is `c`.
+    ///
+    /// SwiftUI's `textCase(_:)` writes an environment value of type
+    /// `Text.Case?`, so passing `nil` overrides an ancestor's transform rather
+    /// than declining to speak. A single Optional cannot tell those apart, and
+    /// collapsing them made `.textCase(nil)` a silent no-op — an inherited
+    /// `.uppercase` could not be escaped from anywhere in the subtree. Same
+    /// shape as `Font??` on ``TextStyle`` and `UnitPoint??` on the scroll
+    /// anchor, and for the same reason.
+    public var textCase: TextCase??
 
     public init(
         foreground: Color? = nil,
@@ -85,7 +96,7 @@ public struct StyleAttributes: Sendable, Hashable {
         underline: Bool? = nil,
         strikethrough: Bool? = nil,
         dim: Bool? = nil,
-        textCase: TextCase? = nil
+        textCase: TextCase?? = nil
     ) {
         self.foreground = foreground
         self.background = background
@@ -96,6 +107,12 @@ public struct StyleAttributes: Sendable, Hashable {
         self.dim = dim
         self.textCase = textCase
     }
+
+    /// The case transform to actually apply.
+    ///
+    /// Flattens ``textCase``'s third state: both "cleared here" and "nobody
+    /// said" mean no transform, and only the merge needs to tell them apart.
+    public var effectiveTextCase: TextCase? { textCase.flatMap { $0 } }
 
     /// Whether no attribute is set (every field is `nil`).
     public var isEmpty: Bool {

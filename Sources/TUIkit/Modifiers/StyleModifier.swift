@@ -89,14 +89,25 @@ extension View {
     }
 
     /// Sets the font weight for all text in this view's subtree. On a terminal,
-    /// weight maps to bold / normal / faint (see ``FontWeight``). `nil` leaves
-    /// the inherited weight unchanged.
+    /// weight maps to bold / normal / faint (see ``FontWeight``).
+    ///
+    /// `nil` removes the effect of any weight set further out, as SwiftUI
+    /// documents: "Providing `nil` removes the effect of any font weight
+    /// modifier applied higher in the view hierarchy." It resolves to
+    /// ``FontWeight/regular``, which states not-bold and not-faint rather than
+    /// saying nothing — and saying nothing is what it used to do, leaving an
+    /// inherited `.bold()` in place with no way to escape it. A `Text`'s own
+    /// weight still wins, being closer.
     public func fontWeight(_ weight: FontWeight?) -> some View {
-        style(.text, weight?.styleAttributes ?? StyleAttributes())
+        style(.text, (weight ?? .regular).styleAttributes)
     }
 
     /// Applies a case transform to all text in this view's subtree.
+    ///
+    /// `nil` clears one set further out rather than declining to speak, which
+    /// is what SwiftUI's `Text.Case?` environment value means. See
+    /// ``StyleAttributes/textCase``.
     public func textCase(_ textCase: TextCase?) -> some View {
-        style(.text, StyleAttributes(textCase: textCase))
+        style(.text, StyleAttributes(textCase: .some(textCase)))
     }
 }

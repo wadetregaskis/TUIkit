@@ -655,7 +655,7 @@ extension Text: Renderable, Layoutable {
         // FI), and a measure of the untransformed text would reserve the wrong
         // number of cells for it.
         let font = resolvedFont(stating: style.font, context: context)
-        let textCase = cascadedAttributes(context: context, font: font).textCase
+        let textCase = cascadedAttributes(context: context, font: font).effectiveTextCase
         let wrapped = TextWrapping.wrapMeasured(
             Self.displayString(content, textCase: textCase, context: context), width: maxWidth)
 
@@ -701,7 +701,7 @@ extension Text: Renderable, Layoutable {
         let font = resolvedFont(stating: style.font, context: context)
         let cascaded = cascadedAttributes(context: context, font: font)
         var effectiveStyle = applyingCascadedEmphasis(to: style, cascaded, context: context)
-        let effectiveCase = cascaded.textCase
+        let effectiveCase = cascaded.effectiveTextCase
 
         // Foreground precedence: an explicit *concrete* colour on this Text wins;
         // an explicit *semantic* colour (a palette-role reference) may be remapped
