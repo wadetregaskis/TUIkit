@@ -565,12 +565,13 @@ extension Terminal {
     ///   terminal that answers no DSR at all, since the read returns as soon as
     ///   the fence lands; a generous value therefore costs nothing in practice
     ///   and buys tolerance of a slow link.
-    /// - Returns: the host's name, or `nil` — which is both the common answer
-    ///   and the safe one.
-    func identifyHostFromDeviceAttributes(timeout: Double = 0.5) -> String? {
+    /// - Returns: what the terminal answered, and the host's name if those
+    ///   answers name one — `nil` being both the common answer and the safe
+    ///   one.
+    func queryIdentity(timeout: Double = 0.5) -> (TerminalIdentity, String?) {
         // A pipe has no opinion about who it is, and raw mode is what stops the
         // replies being line-buffered and echoed back at the user.
-        guard isatty(STDIN_FILENO) == 1, isRawMode else { return nil }
+        guard isatty(STDIN_FILENO) == 1, isRawMode else { return (TerminalIdentity(), nil) }
 
         writeImmediate(TerminalIdentityQuery.request)
 
@@ -592,7 +593,7 @@ extension Terminal {
 
         // Whatever was typed during the round trip belongs to the input parser.
         if !identity.unconsumed.isEmpty { enqueue(input: identity.unconsumed) }
-        return TerminalHost.nameFromDeviceAttributes(identity)
+        return (identity, TerminalHost.nameFromDeviceAttributes(identity))
     }
 
     /// Appends bytes to the pending-input buffer as though they had just been

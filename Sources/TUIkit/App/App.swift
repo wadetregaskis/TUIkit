@@ -204,10 +204,8 @@ extension AppRunner {
         // loop's FrameDiffWriter reads all of them as its init defaults. Under
         // tmux there is nothing to ask — the pane's grid is tmux's, not the
         // client's, and `$TMUX` has already answered.
-        if !TerminalHost.hostIsNamedByEnvironment, !TerminalHost.isTmux,
-            let discovered = terminal.identifyHostFromDeviceAttributes()
-        {
-            TerminalHost.seedDiscoveredHost(discovered)
+        if !TerminalHost.hostIsNamedByEnvironment, !TerminalHost.isTmux {
+            TerminalHost.identify(using: terminal)
         }
 
         let renderer = RenderLoop(

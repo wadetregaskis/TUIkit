@@ -255,6 +255,34 @@ extension TerminalHost {
 
 extension TerminalHost {
 
+    /// What the startup Device Attributes exchange asked and was told, kept for
+    /// the diagnostic surface (``TerminalClient/current``).
+    ///
+    /// `nil` when the exchange never ran — the environment already named the
+    /// host, or we are in a tmux pane, or there is no terminal at all. Nothing
+    /// in rendering reads this; the answer itself travels through the
+    /// environment (see ``seedDiscoveredHost(_:)``), which is what keeps a
+    /// single source of truth for "which terminal is this".
+    @MainActor static var startupIdentity: TerminalIdentity?
+
+    /// Runs the identity exchange, records it, and seeds whatever it named.
+    ///
+    /// The one entry point, so that the recording and the seeding cannot drift
+    /// apart: a diagnostic that reported a different host from the one actually
+    /// being compensated for would be worse than no diagnostic.
+    ///
+    /// - Parameter terminal: the terminal to ask — it owns stdin, the termios
+    ///   state the replies depend on, and the input buffer any stray keystrokes
+    ///   have to be handed back to.
+    /// - Returns: the name discovered, or `nil`.
+    @MainActor @discardableResult
+    static func identify(using terminal: Terminal) -> String? {
+        let (identity, name) = terminal.queryIdentity()
+        startupIdentity = identity
+        if let name { seedDiscoveredHost(name) }
+        return name
+    }
+
     /// Records a host discovered at runtime, so every existing reader of
     /// ``isAppleTerminal`` and friends sees it.
     ///
@@ -265,12 +293,9 @@ extension TerminalHost {
     ///
     /// - Important: the detectors are `static let`, so each freezes on first
     ///   read. This must therefore run **before** anything reads one, which in
-    ///   practice means first thing in `TUIkitApp.run()`, before the render
-    ///   loop (and its `FrameDiffWriter`) is constructed. `TerminalHostSeedingTests`
-    ///   pins the mechanism itself: if a platform ever cached the environment
-    ///   snapshot, the seed would silently stop working and every emoji row
-    ///   would shift a cell — so the test asserts the detectors actually change
-    ///   their answer, rather than trusting that they would.
+    ///   practice means before the render loop (and its `FrameDiffWriter`) is
+    ///   constructed. `Tools/Smoke/identity_smoke.py` is what holds that
+    ///   ordering: nothing in the type system can.
     ///
     /// - Parameter name: a `TERM_PROGRAM`-style name, as
     ///   ``nameFromDeviceAttributes(_:)`` returns.

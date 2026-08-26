@@ -420,8 +420,18 @@ extension String {
     /// rewrite content (stripping mid-line skin tones), which this cannot
     /// express. ANSI escape sequences are copied through untouched.
     ///
-    /// - Parameter advance: The host's cursor advance for a character.
-    private func withCursorForwardCompensation(
+    /// - Parameters:
+    ///   - erasingUnderGlyph: Emit `ECH` for the glyph's claimed cells before
+    ///     drawing it, so those cells take the background in force. Only
+    ///     Terminal.app was measured to need it — with CUF alone, eight
+    ///     under-advancing glyphs on a coloured run leave every second cell at
+    ///     the terminal's default and the row reads as a comb — and every other
+    ///     measured host already paints every cell a wide glyph covers. It is a
+    ///     parameter rather than an assumption because an unmeasured terminal
+    ///     might go either way, and that is a thing worth being able to try.
+    ///   - advance: The host's cursor advance for a character.
+    func withCursorForwardCompensation(
+        erasingUnderGlyph: Bool = false,
         advance: (Character) -> Int
     ) -> String {
         // Fast path: every quirk cluster is non-ASCII (same reasoning and
@@ -442,9 +452,18 @@ extension String {
                 continue
             }
 
-            result.append(c)
             let claimed = c.terminalWidth
             let actual = advance(c)
+            if claimed > actual, erasingUnderGlyph {
+                // ECH (CSI n X) paints n cells from the cursor in the current
+                // background WITHOUT moving it, so the glyph then draws over
+                // them. It writes no visible characters, which is why
+                // `strippedLength` still counts the row correctly — spaces and
+                // a backtrack would work on screen and inflate every width
+                // measured afterwards.
+                result += "\u{1B}[\(claimed)X"
+            }
+            result.append(c)
             if claimed > actual {
                 result += "\u{1B}[\(claimed - actual)C"
             }

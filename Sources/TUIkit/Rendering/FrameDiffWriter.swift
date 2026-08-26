@@ -102,6 +102,14 @@ final class FrameDiffWriter {
     /// this writer before the next frame is built.
     var tmuxSkinToneBasePlane: String.SkinToneBasePlane = .all
 
+    /// The model the caches were last built under, so a change of it can be
+    /// noticed. `TerminalClient.simulated` and `.simulatedQuirks` can change
+    /// between frames, and a row whose BYTES happen not to change would
+    /// otherwise keep the compensation of the model it was built under — which
+    /// is precisely the half-repainted screen the simulation exists to
+    /// demonstrate away.
+    private var appliedModel: RenderingModel?
+
     /// The previous frame's content lines (terminal-ready strings with ANSI codes).
     private var previousContentLines: [String] = []
 
@@ -257,6 +265,7 @@ extension FrameDiffWriter {
         bgCode: String,
         reset: String
     ) -> [String] {
+        invalidateIfProgramChanged()
         let eraseLine = "\u{1B}[2K"
         let emptyLine = bgCode + eraseLine + reset
 
@@ -301,6 +310,7 @@ extension FrameDiffWriter {
         reset: String,
         reusingFor region: OutputRegion
     ) -> [String] {
+        invalidateIfProgramChanged()
         let eraseLine = "\u{1B}[2K"
         let emptyLine = bgCode + eraseLine + reset
         let params = LineParams(width: terminalWidth, bgCode: bgCode, reset: reset)
@@ -424,12 +434,18 @@ extension FrameDiffWriter {
 
     /// `text` with this host's cursor-advance divergences compensated for.
     ///
-    /// The one place the per-host model is chosen, because there is more than
-    /// one caller and they have to agree: `buildLine` compensates a whole row
-    /// on its way to the screen, and the animation replay compensates the frame
-    /// it splices into a row already there. A frame that skipped this reached
-    /// Terminal.app bare — the row painted correctly once and then shifted a
-    /// cell left on every tick of its pulse, which is exactly what an
+    /// This writer's flags, resolved to a ``TerminalClient/Program`` and handed
+    /// to ``TerminalClient/compensating(_:for:followedByContent:tmuxSkinTones:)``,
+    /// which holds the actual table — one copy, shared with the public API,
+    /// because two copies of it would drift and the symptom of the drift is a
+    /// row that looks right until something on it changes.
+    ///
+    /// Everything this writer emits goes through here, because there is more
+    /// than one caller and they have to agree: `buildLine` compensates a whole
+    /// row on its way to the screen, and the animation replay compensates the
+    /// frame it splices into a row already there. A frame that skipped this
+    /// reached Terminal.app bare — the row painted correctly once and then
+    /// shifted a cell left on every tick of its pulse, which is exactly what an
     /// uncompensated emission looks like.
     ///
     /// - Parameters:
@@ -441,29 +457,63 @@ extension FrameDiffWriter {
     ///     fragment cannot see past its own end. `false`, the whole-row answer,
     ///     is the default.
     func compensatingCursorAdvance(_ text: String, followedByContent: Bool = false) -> String {
+        switch model {
+        case .custom(let quirks):
+            return text.withCursorCompensation(for: quirks)
+        case .program(let program):
+            return TerminalClient.compensating(
+                text, for: program, followedByContent: followedByContent,
+                tmuxSkinTones: tmuxSkinToneBasePlane)
+        }
+    }
+
+    /// Which set of workarounds this writer is applying — a measured host's, or
+    /// a hand-built one being explored.
+    enum RenderingModel: Equatable {
+        /// A terminal TUIkit has measured.
+        case program(TerminalClient.Program)
+        /// A set of switches somebody is trying out against an unmeasured one.
+        case custom(TerminalQuirks)
+    }
+
+    /// The model in force. Hand-built quirks outrank a simulated program, which
+    /// outranks what was detected: each is a more specific answer than the one
+    /// below it, and only the last is ever true of a shipping app.
+    private var model: RenderingModel {
+        if let quirks = TerminalClient.simulatedQuirks { return .custom(quirks) }
+        if let simulated = TerminalClient.simulated { return .program(simulated) }
+        return .program(detectedProgram)
+    }
+
+    /// Which terminal's model this writer is built for.
+    ///
+    /// tmux first, and that is not merely defensive: a pane started from a tmux
+    /// older than 3.2 can carry `$TMUX` (→ `isTmux`) and the outer terminal's
+    /// `TERM_PROGRAM` at once. The initialiser already zeroes the native flags
+    /// when `isTmux`, so this ordering agrees with it rather than depending on
+    /// it.
+    /// Drops every cache if the model changed since the last frame.
+    private func invalidateIfProgramChanged() {
+        let current = model
+        guard appliedModel != current else { return }
+        appliedModel = current
+        invalidate()
+    }
+
+    /// The program this writer was BUILT for, before any simulation.
+    private var detectedProgram: TerminalClient.Program {
         if isTmux {
-            // FIRST: tmux is a compositor, so ITS grid is what our output
-            // lands in — the outer terminal's quirks apply to tmux's output,
-            // not ours, and its model must win even if a native host's
-            // variable somehow survived into the pane.
-            //
-            // `.bmpOnly`, NOT the blanket strip iTerm2/Warp take: tmux joins
-            // an SMP-based skin-tone cluster (👍🏽 👩🏽‍🚀) into exactly the 2
-            // cells we claim, and only over-advances on a BMP base (✊🏻 ☝🏽).
-            // Stripping the ones it gets right would throw away skin tones
-            // the user asked for and the attached client renders perfectly.
-            return text.withSkinToneFallback(basePlane: tmuxSkinToneBasePlane)
-                .withTmuxCursorCompensation()
+            .tmux
         } else if isAppleTerminal {
-            return text.withTerminalAppCursorCompensation(followedByContent: followedByContent)
+            .appleTerminal
         } else if isITerm2 {
-            return text.withSkinToneFallback().withITerm2CursorCompensation()
+            .iTerm2
         } else if isGhostty {
-            return text.withGhosttyCursorCompensation()
+            .ghostty
         } else if isWarp {
-            return text.withSkinToneFallback().withWarpCursorCompensation()
+            .warp
         } else {
-            return text
+            .unidentified
         }
     }
 
