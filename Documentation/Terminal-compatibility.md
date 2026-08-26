@@ -24,7 +24,7 @@ for the one-screen comparison.
 
 ## Methodology
 
-Three reproducible probes live in `Tools/TerminalProbes/`; run them INSIDE
+Reproducible probes live in `Tools/TerminalProbes/`; run them INSIDE
 the terminal under test:
 
 - `advance_probe.py` — measures the **cursor advance** of a battery of
@@ -47,10 +47,90 @@ the terminal under test:
 - `mouse_probe.py` — enables SGR mouse reporting (1000/1002/1006) in raw
   mode and appends every input byte sequence to `$PROBE_OUT`, for
   capturing exactly what a terminal sends per gesture.
+- `identity_probe.py` — asks the terminal **who it is** over escape
+  sequences (DA1, DA2, DA3, XTVERSION, XTGETTCAP) rather than trusting the
+  environment, and dumps the identifying variables alongside. Each query is
+  fenced with a DSR request, which every terminal answers, so a query that
+  goes unanswered reports `<silent>` instead of hanging. This is the only
+  identification that survives an ssh hop — see the next section.
 
 "Advance" below = cells the cursor moves; "paints" = cells with ink.
 TUIkit's shared layout width (`Character.terminalWidth`) claims 2 for all
 the emoji-class clusters below unless noted.
+
+---
+
+## Identifying the host terminal
+
+Every per-terminal model in this document is only as good as the answer to
+"which terminal is this?". That question has a clean answer locally and a
+poor one over ssh, and the gap is a real, shipped rendering bug rather than
+a theoretical one.
+
+**`TERM_PROGRAM` does not cross an ssh hop.** It is not an `LC_*` variable,
+and OpenSSH forwards only `LANG` and `LC_*` by default (measured:
+`/etc/ssh/ssh_config.d/100-macos.conf` sends `LANG LC_*`). The complete
+environment of an `ssh` session into macOS from Apple Terminal, captured
+2026-08-26, contains nothing that names the terminal:
+
+```
+LANG=en_AU.UTF-8            TERM=xterm-256color
+SSH_CLIENT=…  SSH_CONNECTION=…  SSH_TTY=/dev/ttys008
+SHELL=/bin/zsh  USER=…  HOME=…  PATH=…  TMPDIR=…  SHLVL=1  PWD=…
+```
+
+No `TERM_PROGRAM`, no `LC_TERMINAL`, no `TERM_SESSION_ID`; `TERM` is the
+generic `xterm-256color` that dozens of terminals report.
+
+**What that costs.** An unidentified host gets no cursor-advance
+compensation, and that default is correct and must stay: absent explicit
+evidence otherwise, a terminal is assumed to render correctly. Every
+compensation here is a workaround for a measured *defect*, so applying one
+blindly would penalise a well-behaved terminal that simply isn't
+special-cased — breaking a row that was fine. The bug is upstream of that
+choice. Apple Terminal is not an unknown terminal; it is the most heavily
+measured host in this document, and it was landing in the unknown bucket
+purely because of the transport. Unnamed, it renders (measured on the
+`Example` main menu):
+
+| Cluster class | Symptom with no compensation |
+|---|---|
+| VS-16 pictographs (🛡️ ✏️ ❤️) | paints 2, advances 1 — row pulled 1 cell left per emoji |
+| Lone regional indicators (U+1F1E6…) | same 2/1 under-advance |
+| SF Symbols (Plane-16 PUA) | same 2/1 — three adjacent symbols sit 1 cell apart, not 2 |
+| Fitzpatrick clusters (🤙🏽) | modifier never stripped: over-advances, stranding 2 unpainted cells at the right edge |
+
+**The signals, and how far each reaches.**
+
+| Signal | Names | Crosses ssh | Notes |
+|---|---|---|---|
+| `TERM_PROGRAM` | all four hosts + tmux | ✗ | authoritative when present |
+| `LC_TERMINAL` | iTerm2 only | ✓ | set by iTerm2's shell integration; `LC_*` is forwarded |
+| XTVERSION (`ESC[>0q`) | iTerm2, Ghostty, Warp | ✓ | **Apple Terminal answers nothing** |
+| Process-ancestry walk | local apps | ✗ | over ssh the parent is `sshd` |
+| `TUIKIT_TERM_PROGRAM` | anything | ✓ | explicit override, same vocabulary as `TERM_PROGRAM` |
+
+The one host that most needs naming is the one no remote-capable signal
+reaches: Apple Terminal sets no forwarded variable and answers no XTVERSION.
+Hence `TUIKIT_TERM_PROGRAM`, which a remote shell profile or an ssh
+`SendEnv`/`AcceptEnv` pair can set:
+
+```sh
+export TUIKIT_TERM_PROGRAM=Apple_Terminal
+```
+
+Precedence is `TUIKIT_TERM_PROGRAM` → `TERM_PROGRAM` → `LC_TERMINAL`: the
+explicit answer first, the local answer next, and the forwarded one last
+because it can arrive stale from a hop further back.
+
+**Open: automatic identification over ssh.** Device Attributes (DA1
+`ESC[c`, DA2 `ESC[>c`) are answered by terminals that answer no XTVERSION,
+and cross a hop like any other escape. If Apple Terminal's replies are
+distinctive enough not to collide with the other hosts, they identify it
+remotely with one round trip and no user configuration. Measure with
+`identity_probe.py` in each terminal before relying on this — an
+identification that false-positives would apply a compensation to a host
+that does not need it, which is worse than the status quo.
 
 ---
 

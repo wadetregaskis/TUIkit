@@ -71,8 +71,63 @@ enum TerminalHost {
     /// advances these correctly with no help.
     static var supportsEmojiChrome: Bool { isAppleTerminal || isITerm2 || isGhostty || isWarp }
 
-    /// `true` for macOS Terminal.app (`TERM_PROGRAM == "Apple_Terminal"`),
-    /// wherever that variable is set in the process environment.
+    /// The `TERM_PROGRAM`-style name of the host terminal, from whichever
+    /// signal in the environment carries it.
+    ///
+    /// `TERM_PROGRAM` is the variable every terminal sets and none of them
+    /// forwards: it is not an `LC_*` variable, and OpenSSH sends only `LANG`
+    /// and `LC_*` by default (measured: `/etc/ssh/ssh_config.d/100-macos.conf`
+    /// sends `LANG LC_*`). A TUIkit app reached over ssh therefore sees no
+    /// `TERM_PROGRAM` at all.
+    ///
+    /// Compensating nothing is the RIGHT answer for a terminal we cannot name,
+    /// and stays so: absent explicit evidence otherwise a terminal is assumed
+    /// to render correctly, because every compensation here works around a
+    /// measured *defect* and applying one blindly would penalise a well-behaved
+    /// terminal that simply isn't special-cased. The bug is upstream of that
+    /// choice: Terminal.app is not an unknown terminal — it is the most heavily
+    /// measured host this repo has — and it was landing in the unknown bucket
+    /// for no better reason than the transport. Unnamed, it renders every row carrying a VS-16 emoji,
+    /// a lone regional indicator or an SF Symbol one cell left per cluster, and
+    /// keeps the skin-tone modifiers whose over-advance strands two cells at the
+    /// right edge.
+    ///
+    /// Three signals, in precedence order:
+    ///
+    /// 1. **`TUIKIT_TERM_PROGRAM`** — an explicit answer from the user, in the
+    ///    same vocabulary as `TERM_PROGRAM` (`Apple_Terminal`, `iTerm.app`,
+    ///    `ghostty`, `WarpTerminal`, `tmux`). First because it is the only
+    ///    signal that can name a host the other two cannot, and because
+    ///    someone who has said which terminal they are in should not be
+    ///    argued with.
+    /// 2. **`TERM_PROGRAM`** — the local answer, authoritative when present.
+    /// 3. **`LC_TERMINAL`** — iTerm2's shell integration sets it, and ssh's
+    ///    `LC_*` rule carries it across a hop (measured; see
+    ///    `Documentation/Terminal-compatibility.md`). Consulted last so a
+    ///    local `TERM_PROGRAM` always beats a value forwarded from elsewhere.
+    ///
+    /// - Returns: the host's name, or `nil` when nothing in the environment
+    ///   names it — which stays a real possibility, and is why this is an
+    ///   Optional rather than a defaulted string.
+    static func hostProgram(environment: [String: String]) -> String? {
+        if let forced = environment["TUIKIT_TERM_PROGRAM"], !forced.isEmpty { return forced }
+        if let native = environment["TERM_PROGRAM"], !native.isEmpty { return native }
+        guard let forwarded = environment["LC_TERMINAL"], !forwarded.isEmpty else { return nil }
+        return forwardedTerminalNames[forwarded]
+    }
+
+    /// `LC_TERMINAL` values, mapped into the `TERM_PROGRAM` vocabulary the
+    /// detectors speak — the variable has its own spelling ("iTerm2", not
+    /// "iTerm.app").
+    ///
+    /// Only terminals measured to set it appear. An unrecognised value names a
+    /// terminal whose advance model is unmeasured, and inventing a host model
+    /// for it would produce exactly the class of misrendering this whole file
+    /// exists to prevent.
+    private static let forwardedTerminalNames = ["iTerm2": "iTerm.app"]
+
+    /// `true` for macOS Terminal.app (`Apple_Terminal`), by whichever signal
+    /// ``hostProgram(environment:)`` found it.
     ///
     /// Pure over the environment argument — like the other native detectors
     /// (``detectITerm2(environment:)`` and friends) — so tests exercise both
@@ -81,41 +136,38 @@ enum TerminalHost {
     /// off macOS lives on ``isAppleTerminal``, which gates this to macOS; the
     /// raw check itself stays a plain environment predicate.
     static func detectAppleTerminal(environment: [String: String]) -> Bool {
-        environment["TERM_PROGRAM"] == "Apple_Terminal"
+        hostProgram(environment: environment) == "Apple_Terminal"
     }
 
-    /// `true` for iTerm2 (`TERM_PROGRAM == "iTerm.app"`), wherever iTerm2 sets
-    /// that variable in the process environment — locally on macOS.
+    /// `true` for iTerm2 (`iTerm.app`), by whichever signal
+    /// ``hostProgram(environment:)`` found it.
     ///
-    /// NOT across an ssh hop: `TERM_PROGRAM` is not an `LC_*` variable, and
-    /// OpenSSH forwards only `LANG` and `LC_*` by default (measured:
-    /// `/etc/ssh/ssh_config.d/100-macos.conf` sends `LANG LC_*`), so a shell on
-    /// the far side sees no `TERM_PROGRAM` and this returns false there. iTerm2's
-    /// shell integration does forward `LC_TERMINAL=iTerm2` — which ssh's `LC_*`
-    /// rule carries — but that is a different variable this does not consult; a
-    /// remote process is treated as an unknown terminal, conservatively.
+    /// Across an ssh hop this rests on `LC_TERMINAL`, which iTerm2's shell
+    /// integration sets and ssh's `LC_*` rule forwards — so an iTerm2 reached
+    /// remotely is identified only when that integration is installed. Without
+    /// it, `TUIKIT_TERM_PROGRAM` is the answer.
     static func detectITerm2(environment: [String: String]) -> Bool {
-        environment["TERM_PROGRAM"] == "iTerm.app"
+        hostProgram(environment: environment) == "iTerm.app"
     }
 
-    /// `true` for Ghostty (`TERM_PROGRAM == "ghostty"`), on any platform —
-    /// Ghostty runs on macOS and Linux and sets the variable on both.
+    /// `true` for Ghostty (`ghostty`), on any platform — Ghostty runs on macOS
+    /// and Linux and sets `TERM_PROGRAM` on both.
     ///
     /// Ghostty also ships its own terminfo and sets `TERM=xterm-ghostty`, but
     /// `TERM` is not the discriminator: it is routinely overridden to
     /// `xterm-256color` for compatibility with hosts lacking the entry, while
     /// `TERM_PROGRAM` survives.
     static func detectGhostty(environment: [String: String]) -> Bool {
-        environment["TERM_PROGRAM"] == "ghostty"
+        hostProgram(environment: environment) == "ghostty"
     }
 
-    /// `true` for Warp (`TERM_PROGRAM == "WarpTerminal"`), on any platform.
+    /// `true` for Warp (`WarpTerminal`), on any platform.
     ///
-    /// Warp reports `TERM=xterm-256color`, so again only `TERM_PROGRAM`
+    /// Warp reports `TERM=xterm-256color`, so again only the program name
     /// identifies it. (`WARP_TERMINAL_SESSION_UUID` and friends are also
     /// present, but `TERM_PROGRAM` is the stable, documented signal.)
     static func detectWarp(environment: [String: String]) -> Bool {
-        environment["TERM_PROGRAM"] == "WarpTerminal"
+        hostProgram(environment: environment) == "WarpTerminal"
     }
 
     /// `true` when running inside tmux, on any platform.
@@ -134,7 +186,7 @@ enum TerminalHost {
     /// different width table that this model does not describe.
     static func detectTmux(environment: [String: String]) -> Bool {
         if let socket = environment["TMUX"], !socket.isEmpty { return true }
-        return environment["TERM_PROGRAM"] == "tmux"
+        return hostProgram(environment: environment) == "tmux"
     }
 
     // MARK: - tmux client identification
