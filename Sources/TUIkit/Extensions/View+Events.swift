@@ -637,9 +637,13 @@ extension View {
     /// }
     /// ```
     ///
-    /// - Parameter id: A unique identifier for this section.
+    /// - Parameter id: A unique identifier for this section. Omit it to derive
+    ///   one from the view's identity path, which is what SwiftUI's
+    ///   parameterless `focusSection()` compiles to; name it when something
+    ///   else has to refer to the section, such as
+    ///   ``FocusManager/isActiveSection(_:)``.
     /// - Returns: A view that registers a focus section during rendering.
-    public func focusSection(_ id: String) -> some View {
-        FocusSectionModifier(content: self, sectionID: id)
+    public func focusSection(_ id: String? = nil) -> some View {
+        FocusSectionModifier(content: self, declaredSectionID: id)
     }
 }

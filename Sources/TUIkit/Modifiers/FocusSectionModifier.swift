@@ -29,8 +29,16 @@ struct FocusSectionModifier<Content: View>: View {
     /// The content view rendered within this section.
     let content: Content
 
-    /// The unique identifier for this focus section.
-    let sectionID: String
+    /// The caller's identifier for this focus section, or `nil` to derive one.
+    ///
+    /// SwiftUI's `focusSection()` takes no identifier — a section there is just
+    /// "these focusables form a cohort". TUIkit needs a name for one, because a
+    /// section is also what the status bar scopes its items to and what
+    /// ``FocusManager`` cycles between. Deriving it from the view's identity
+    /// path, exactly as default focus IDs are derived, lets the SwiftUI
+    /// spelling compile and mean the right thing without a name that could
+    /// collide.
+    let declaredSectionID: String?
 
     var body: Never {
         fatalError("FocusSectionModifier renders via Renderable")
@@ -42,6 +50,7 @@ struct FocusSectionModifier<Content: View>: View {
 extension FocusSectionModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let focusManager = context.environment.focusManager
+        let sectionID = declaredSectionID ?? "section-\(context.identity.path)"
 
         // Register the section with the focus manager (idempotent, skip during measurement).
         if !context.isMeasuring {
