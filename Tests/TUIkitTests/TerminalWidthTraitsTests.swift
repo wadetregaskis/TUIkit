@@ -20,7 +20,7 @@ struct TerminalWidthTraitsTests {
     private static let warp = TerminalWidthTraits(
         decomposesZWJSequences: true, skinTone: .detached)
     private static let apple = TerminalWidthTraits(
-        decomposesZWJSequences: false, skinTone: .detached)
+        decomposesZWJSequences: true, skinTone: .detached)
     private static let iTerm = TerminalWidthTraits(
         decomposesZWJSequences: false, skinTone: .detachedOnBMPBases)
 
@@ -65,6 +65,60 @@ struct TerminalWidthTraitsTests {
             #expect(Character("👍🏽").terminalWidth == 2, "SMP base merges")
             #expect(Character("✊🏻").terminalWidth == 4, "BMP base detaches")
             #expect(Character("☝🏽").terminalWidth == 3, "1-cell BMP base")
+        }
+    }
+
+    /// Apple Terminal PAINTS a ZWJ cluster composed into about two cells but
+    /// RESERVES the decomposed width — a row budgeted at 2 wraps, measured by
+    /// the row number changing. So the claim is the reserved width and the
+    /// glyph sits at the left of the space it owns.
+    @Test(
+        "Apple Terminal reserves the decomposed width even though it composes the glyph",
+        arguments: [
+            ("👩‍🚀", 5), ("🧑‍🌾", 5), ("👨‍👩‍👧", 8), ("👨‍👩‍👧‍👦", 11), ("👩🏽‍🚀", 7),
+        ] as [(String, Int)])
+    func appleReservesDecomposedWidth(text: String, expected: Int) {
+        #expect(TerminalClient.widthTraits(of: .appleTerminal).decomposesZWJSequences)
+        TerminalWidthTraits.withTraits(Self.apple) {
+            #expect(Character(text).terminalWidth == expected)
+        }
+    }
+
+    /// Where the claim and the host's own advance differ, the EXISTING
+    /// compensation closes the gap — the same trade already accepted for a
+    /// Ghostty SF Symbol that paints narrower than the layout allocated.
+    ///
+    /// ❤️‍🔥 and 🏳️‍🌈 lead with a VS-16 segment, which Apple Terminal
+    /// under-advances, so they advance 4 against a claim of 5.
+    @Test(
+        "A VS-16-leading ZWJ over-claims by one and the CUF closes it",
+        arguments: ["❤️‍🔥", "🏳️‍🌈"])
+    func vs16LeadingZWJIsCompensated(text: String) {
+        TerminalWidthTraits.withTraits(Self.apple) {
+            let character = Character(text)
+            #expect(character.terminalWidth == 5, "claim")
+            #expect(character.terminalAppCursorAdvance == 4, "measured advance")
+            let out = TerminalClient.compensating(
+                text, for: .appleTerminal, followedByContent: true)
+            #expect(out.contains("\u{1B}[1C"), "one CUF to reach the claimed end")
+        }
+    }
+
+    /// Every advance the models report is a measurement from a real terminal.
+    @Test(
+        "The per-host advance models match what the terminals actually do",
+        arguments: [
+            ("👩‍🚀", 5, 5), ("👨‍👩‍👧‍👦", 11, 11), ("👩🏽‍🚀", 7, 7),
+            ("❤️‍🔥", 4, 5), ("🏳️‍🌈", 4, 5),
+            ("👍🏽", 4, 4), ("👍", 2, 2), ("中", 2, 2),
+        ] as [(String, Int, Int)])
+    func advanceModelsMatchMeasurement(text: String, apple: Int, warp: Int) {
+        let character = Character(text)
+        TerminalWidthTraits.withTraits(Self.apple) {
+            #expect(character.terminalAppCursorAdvance == apple, "Apple Terminal")
+        }
+        TerminalWidthTraits.withTraits(Self.warp) {
+            #expect(character.warpCursorAdvance == warp, "Warp")
         }
     }
 

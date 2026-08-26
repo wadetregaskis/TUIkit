@@ -239,6 +239,40 @@ extension Character {
         return detachedSkinToneWidth(scalars, traits: traits)
     }
 
+    /// The cursor advance a host makes over a decomposed ZWJ cluster: the sum of
+    /// what it advances over each ZWJ-separated segment, plus one per joiner.
+    ///
+    /// The same shape as the CLAIM rule in ``decomposedWidth(_:traits:)``, but
+    /// measured with the host's own per-segment advance instead of the claim —
+    /// which is where the two can differ. On Apple Terminal a VS-16 segment
+    /// under-advances (❤️ moves the cursor 1 while claiming 2), so ❤️‍🔥
+    /// advances 4 where the claim is 5. Reporting that honestly is what lets
+    /// the existing CUF close the gap, exactly as it does for a Ghostty SF
+    /// Symbol that paints narrower than the layout allocated.
+    ///
+    /// `nil` when this cluster is not a decomposed ZWJ sequence.
+    static func summedZWJAdvance(
+        _ character: Character, segmentAdvance: (Character) -> Int
+    ) -> Int? {
+        guard TerminalWidthTraits.current.decomposesZWJSequences else { return nil }
+        let scalars = character.unicodeScalars
+        guard scalars.contains(where: { $0.value == 0x200D }) else { return nil }
+        var total = 0
+        var joiners = 0
+        var segment = String.UnicodeScalarView()
+        for scalar in scalars {
+            if scalar.value == 0x200D {
+                joiners += 1
+                total += segmentAdvance(Character(String(segment)))
+                segment = String.UnicodeScalarView()
+            } else {
+                segment.append(scalar)
+            }
+        }
+        total += segmentAdvance(Character(String(segment)))
+        return total + joiners
+    }
+
     /// The cells a Fitzpatrick cluster occupies where the host draws the
     /// modifier as a swatch beside the base rather than merging it in.
     ///
@@ -400,6 +434,11 @@ extension Character {
     /// to push the cursor to the visually-correct column. See
     /// ``String/withTerminalAppCursorCompensation()``.
     public var terminalAppCursorAdvance: Int {
+        // A decomposed ZWJ cluster first: its advance is the sum of its
+        // segments', which for this host includes their VS-16 under-advance.
+        if let summed = Self.summedZWJAdvance(self, segmentAdvance: { $0.terminalAppCursorAdvance }) {
+            return summed
+        }
         let scalars = unicodeScalars
 
         // A *lone* regional indicator (e.g. U+1F1E6 on its own — the emoji
@@ -574,6 +613,9 @@ extension Character {
     ///   primary screen advances VS-16 by 1, the alternate by 2); the model
     ///   uses the alternate screen, where TUIkit apps run.
     public var warpCursorAdvance: Int {
+        if let summed = Self.summedZWJAdvance(self, segmentAdvance: { $0.warpCursorAdvance }) {
+            return summed
+        }
         if isLoneRegionalIndicator || isBarePictographUnderAdvancer {
             return 1
         }

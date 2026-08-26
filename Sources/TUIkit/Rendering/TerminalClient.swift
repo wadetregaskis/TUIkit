@@ -244,9 +244,12 @@ public struct TerminalClient: Sendable, Equatable {
     public static func widthTraits(of program: Program) -> TerminalWidthTraits {
         switch program {
         case .appleTerminal:
-            // Composes ZWJ into 2 cells (its DSR report says otherwise and is
-            // wrong); draws a skin-tone modifier as a swatch beside the base.
-            TerminalWidthTraits(decomposesZWJSequences: false, skinTone: .detached)
+            // Reserves the decomposed width for a ZWJ sequence even though it
+            // PAINTS the cluster composed into about two cells: a row budgeted
+            // at 2 wraps, measured by the row number changing. So the claim has
+            // to be the reserved width, and the glyph simply sits at the left
+            // of the space it owns.
+            TerminalWidthTraits(decomposesZWJSequences: true, skinTone: .detached)
         case .iTerm2:
             TerminalWidthTraits(decomposesZWJSequences: false, skinTone: .detachedOnBMPBases)
         case .ghostty:

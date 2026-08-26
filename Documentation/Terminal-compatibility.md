@@ -1499,7 +1499,7 @@ where it should, text wraps around it, and every scalar survives.
 
 | host | ZWJ sequences | skin-tone clusters |
 |---|---|---|
-| Apple Terminal 455.1 | composed, 2 | base + swatch |
+| Apple Terminal 455.1 | **decomposed reservation** (painted composed) | base + swatch |
 | iTerm2 3.6.11 | composed, 2 | base + swatch on a **BMP** base only |
 | Ghostty 1.3.1 | composed, 2 | merged, 2 |
 | Warp 2026.07 | **decomposed** | base + swatch |
@@ -1521,12 +1521,36 @@ compensation machinery simply stops firing: no CUF, no ECH, no rewrite, and the
 Fitzpatrick strip no longer triggers because the over-advance it existed to
 prevent is no longer an over-advance.
 
-**Verified on the terminals.** Rows drawn as the framework now emits them, with
-the border at the new claim: **9/9 land exactly on Warp**, including the whole
-family at 11 and the full rainbow flag at 5. On Apple Terminal the skin tones
-render *with their tone* and their borders land; its three ZWJ rows report a
-DSR mismatch and paint correctly, which is the cursor-report lie documented
-below, not a geometry failure.
+**Verified on the terminals, by the test that cannot be misread.** A row is
+budgeted at the claim and filled; if the cursor's ROW number changes, the
+budget was too small and the line wrapped.
+
+| cluster | old claim | at the old claim | new claim | at the new claim |
+|---|---|---|---|---|
+| 👍🏽 (Apple) | 2 | **wraps** | 4 | fits |
+| 👩‍🚀 (Apple) | 2 | **wraps** | 5 | fits |
+| 👨‍👩‍👧‍👦 (Apple) | 2 | **wraps** | 11 | fits |
+| 👩‍🚀 (Warp) | 2 | **wraps** | 5 | fits |
+| 👨‍👩‍👧‍👦 (Warp) | 2 | **wraps** | 11 | fits |
+| 👍, 中 (controls) | 2 | fits | 2 | fits |
+
+So the widened claim does not introduce the ragged right edge that drove the
+Fitzpatrick strip — **it removes its cause**. A kept modifier at a 2-cell claim
+over-runs the line; at a 4-cell claim it fits exactly and the tone survives.
+
+Also checked, on both hosts: full-width rows in normal AND inverted (selection)
+video end exactly on the last column — 10/10 on Warp including the 11-cell
+family, and every widened case on Apple Terminal. And mid-row, a two-colour
+probe (background before the cluster, a different one after) shows **no
+unpainted cell** between them: the "swatch" of a detached skin tone is ink, so
+every cell the cluster owns is painted.
+
+**Where the claim over-reserves, the existing CUF closes it.** ❤️‍🔥 and 🏳️‍🌈
+lead with a VS-16 segment, which Apple Terminal under-advances, so they advance
+4 against a claim of 5. The per-host advance model reports 4, the compensation
+emits `CUF(1)`, and the cluster lands exactly on the claim — measured. This is
+the same trade already accepted for a Ghostty SF Symbol that paints narrower
+than the layout allocated.
 
 **Cost.** Measured with `Tools/Profiling/ab_bench.py` over six scenarios
 (`megalist`, `kitchensink`, `textwall`, `deep`, `dashboard`, `table`): all six
@@ -1557,25 +1581,43 @@ where the `X` lands *on screen*. A cluster that occupies more cells than
 claimed pushes the `X` right; one that occupies fewer pulls it left. Paint,
 not report.
 
-| host | composes a ZWJ cluster? | painted cells | DSR says | rows shear? |
+> **CORRECTED 2026-08-26 (same day).** The row below originally read
+> "Terminal.app … rows shear? **no**", on the strength of an alignment card
+> read by eye. That was wrong, and the error was mine: a row budgeted at a
+> 2-cell claim **wraps** on Terminal.app, measured by the cursor's ROW number
+> changing — a state the terminal enters, not a number it reports. What is
+> true is narrower and is kept below: Terminal.app *paints* the cluster
+> composed into about two cells while *reserving* five. The glyph looks right
+> and the row still over-runs. The primary/alternate difference I blamed does
+> not exist here either: both buffers give 5 / 8 / 11.
+
+| host | composes a ZWJ cluster? | painted cells | reserved | rows shear at a 2-cell claim? |
 |---|---|---|---|---|
-| Terminal.app 455.1 | yes, one glyph | **2** | 5 / 8 / 11 | **no** |
+| Terminal.app 455.1 | yes, one glyph | **2** | 5 / 8 / 11 | **yes — wraps** |
 | iTerm2 3.6.11 | yes | 2 | 2 | no |
 | Ghostty 1.3.1 | yes | 2 | 2 | no |
 | tmux 3.7b | yes (own grid) | 2 | 2 | no |
-| Warp 2026.07 | **no — draws the components** | **4–11** | 4–11 | **yes** |
+| Warp 2026.07 | **no — draws the components** | **4–11** | 4–11 | **yes — wraps** |
 
 On Terminal.app the astronaut, the four-person family, the England tag flag,
 👍 and 中 all put their `X` in the **same column**, though DSR claimed 21, 39,
 30, 12 and 12 for those rows. The composed glyph is two cells and printing
 resumes two cells along; only the *report* runs ahead.
 
-**So the defect is Warp's, not Terminal.app's.** Warp does not compose ZWJ at
-all: 👩‍🚀 draws as 👩 then 🚀, 👨‍👩‍👧‍👦 as four separate people. There paint
-and advance agree with each other and disagree with TUIkit's claim of 2, so
-every row carrying a ZWJ emoji really does shift right. Warp composes tag
-sequence flags correctly (🏴󠁧󠁢󠁥󠁮󠁧󠁿 lands with the controls), so that class is fine
-everywhere.
+**Both hosts are affected, in different ways.** Warp does not compose ZWJ at
+all — 👩‍🚀 draws as 👩 then 🚀 — so paint and reservation agree with each
+other and disagree with a 2-cell claim. Terminal.app composes the glyph but
+reserves the same decomposed width, so it looks right and still over-runs. On
+both, a row budgeted at 2 wraps; on both, budgeting the reserved width fixes
+it. Warp composes tag-sequence flags correctly (🏴󠁧󠁢󠁥󠁮󠁧󠁿 lands with the controls),
+so that class is fine everywhere.
+
+**The lesson, again.** The paint card was the right instrument for the
+*previous* question (does 🀀 paint one cell or two) and the wrong one for this
+one. Neither a cursor report nor a glyph's appearance answers "how much room
+does this cluster consume". The instrument that does is a row budgeted at the
+claim: if the cursor's ROW changes, the budget was too small. That is a state
+change, and it cannot be misread.
 
 **Still unhandled, and now correctly scoped.** A Warp ZWJ cluster cannot be
 fixed with `CUF`: paint equals advance, so there is no gap to close. The
