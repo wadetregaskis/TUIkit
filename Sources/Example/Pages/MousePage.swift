@@ -294,12 +294,17 @@ struct MousePage: View {
                     // meta bit and swallows ⌥; Apple Terminal strips ⌘ and
                     // forwards ⌥. iTerm2 also keeps right-clicks for its own
                     // context menu by default.
-                    switch ProcessInfo.processInfo.environment["TERM_PROGRAM"] {
-                    case "iTerm.app":
+                    // Asked of TerminalClient, not of TERM_PROGRAM: the
+                    // variable is only ONE of the signals that names a host,
+                    // and it is the one an ssh hop drops — so reading it
+                    // directly made this note disagree with the renderer
+                    // whenever the terminal was identified any other way.
+                    switch TerminalClient.current.program {
+                    case .iTerm2:
                         Text("page.mouse.iTerm2RightClickNote")
                             .foregroundStyle(.palette.foregroundTertiary)
                             .dim()
-                    case "Apple_Terminal":
+                    case .appleTerminal:
                         Text("page.mouse.appleTerminalModifierNote")
                             .foregroundStyle(.palette.foregroundTertiary)
                             .dim()
