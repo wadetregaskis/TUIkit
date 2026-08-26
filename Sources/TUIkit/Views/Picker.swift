@@ -61,12 +61,44 @@ extension TupleView: PickerOptionProvider {
 }
 
 extension ForEach: PickerOptionProvider {
+    /// One option per element, tagged by the element's own id when the row
+    /// does not tag itself.
+    ///
+    /// SwiftUI: "``ForEach`` automatically assigns a tag to the selection
+    /// views using each option's `id`. This is possible because `Flavor`
+    /// conforms to the `Identifiable` protocol." Without that, Apple's own
+    /// first worked example of iterating a picker —
+    ///
+    /// ```swift
+    /// Picker("Flavor", selection: $selected) {
+    ///     ForEach(Flavor.allCases) { Text($0.rawValue.capitalized) }
+    /// }
+    /// ```
+    ///
+    /// — drew its label and offered NOTHING to select, because a plain `Text`
+    /// is not a ``PickerOptionProvider`` and the element's id was never
+    /// consulted. An explicit `.tag(_:)` still wins, which is why a row that
+    /// provides options of its own is asked first and taken at its word —
+    /// including when it provides none, as `EmptyView` does.
+    ///
+    /// The synthesised tag is `includeOptional: true`, matching what
+    /// `.tag(_:)` does by default: `resolvedEntries` casts it INTO the
+    /// selection's type, so an id of the wrong type still declines to match
+    /// and the picker shows blank — SwiftUI's behaviour for an unmatched
+    /// selection — rather than binding the wrong row.
     func pickerOptions() -> [_RawPickerOption] {
         data.flatMap { element -> [_RawPickerOption] in
-            if let provider = content(element) as? PickerOptionProvider {
-                return provider.pickerOptions()
+            let row = content(element)
+            if let provider = row as? PickerOptionProvider {
+                let options = provider.pickerOptions()
+                if !options.isEmpty { return options }
             }
-            return []
+            return [
+                .option(
+                    tagValue: AnyHashable(element[keyPath: idKeyPath]),
+                    includeOptional: true,
+                    label: AnyView(row))
+            ]
         }
     }
 }
