@@ -101,6 +101,32 @@ struct ScrollExtentPrecisionTests {
         #expect(heights.asked.count < count / 100)
     }
 
+    @Test("A cached mean spares the sample: only visible rows are asked")
+    func cachedMeanSkipsSampling() {
+        let heights = Heights(varyingHeights(10_000))
+        let first = ScrollExtentEstimator.lineMetrics(
+            visible: 100..<110, count: 10_000, topClip: 0,
+            precision: .approximate, height: heights.height)
+        #expect(first.mean != nil, "the estimate path must hand its mean back")
+        let askedAfterFirst = heights.asked.count
+
+        // A different window, same collection: with the mean handed back, the
+        // second frame may ask about its VISIBLE rows and nothing else.
+        let second = ScrollExtentEstimator.lineMetrics(
+            visible: 200..<210, count: 10_000, topClip: 0,
+            precision: .approximate, cachedMean: first.mean, height: heights.height)
+        #expect(heights.asked.count == askedAfterFirst + 10,
+            "off-screen rows were sampled despite the cached mean")
+        #expect(second.mean == first.mean, "the mean is carried, not re-derived")
+
+        // And it must not have bent the answer: a fresh estimate from the same
+        // sample-stable collection reads the same extent.
+        let fresh = ScrollExtentEstimator.lineMetrics(
+            visible: 200..<210, count: 10_000, topClip: 0,
+            precision: .approximate, height: heights.height)
+        #expect(second.extent == fresh.extent && second.offset == fresh.offset)
+    }
+
     @Test("The sample does not shift as the view scrolls")
     func estimateIsStableAcrossScrollPositions() {
         let count = 4000

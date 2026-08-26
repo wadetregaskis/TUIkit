@@ -1175,7 +1175,8 @@ where Value.ID: Hashable {
             showsScrollbar
             ? multiLineScrollbarCells(
                 window: window, contentHeight: contentHeight,
-                height: heightOf, context: context, palette: palette)
+                height: heightOf, handler: handler, columnWidths: columnWidths,
+                context: context, palette: palette)
             : []
         let composed = composeMultiLineRows(
             window: window, handler: handler, tableHasFocus: tableHasFocus,
@@ -1224,12 +1225,30 @@ where Value.ID: Hashable {
         window: (range: Range<Int>, showAbove: Bool, showBelow: Bool, topClip: Int),
         contentHeight: Int,
         height: (Int) -> Int,
+        handler: ItemListHandler<Value.ID>,
+        columnWidths: [Int],
         context: RenderContext,
         palette: any Palette
     ) -> [String] {
+        // Everything that shapes a row's wrapped height, so a stale mean
+        // cannot outlive the layout that produced it (see `extentMeanCache`).
+        var hasher = Hasher()
+        hasher.combine(data.count)
+        hasher.combine(context.environment.scrollExtentPrecision)
+        for (column, width) in zip(columns, columnWidths) {
+            hasher.combine(width)
+            hasher.combine(column.lineLimit)
+        }
+        let signature = hasher.finalize()
+        let cachedMean =
+            handler.extentMeanCache.flatMap { $0.signature == signature ? $0.mean : nil }
         let metrics = ScrollExtentEstimator.lineMetrics(
             visible: window.range, count: data.count, topClip: window.topClip,
-            precision: context.environment.scrollExtentPrecision, height: height)
+            precision: context.environment.scrollExtentPrecision,
+            cachedMean: cachedMean, height: height)
+        if !context.isMeasuring, let mean = metrics.mean {
+            handler.extentMeanCache = (signature: signature, mean: mean)
+        }
         return ScrollbarRenderer.verticalScrollbar(
             height: contentHeight, extent: metrics.extent, viewport: contentHeight,
             offset: metrics.offset,

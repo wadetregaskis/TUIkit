@@ -36,7 +36,7 @@
 /// Table(logEntries) { ... }
 ///     .scrollExtentPrecision(.exact)
 /// ```
-public enum ScrollExtentPrecision: Sendable, Equatable, CaseIterable {
+public enum ScrollExtentPrecision: Sendable, Hashable, CaseIterable {
     /// Measure the visible rows; estimate the rest from a sample. The default.
     case approximate
 
@@ -125,20 +125,36 @@ enum ScrollExtentEstimator {
     ///   - height: the height in lines of the row at an index. Called once per
     ///     visible row always, and for every other row only under
     ///     ``ScrollExtentPrecision/exact`` (or below its row limit).
+    /// - Parameters:
+    ///   - cachedMean: a mean this estimator previously RETURNED for the same
+    ///     inputs, when the caller still holds one. The sample is the same 64
+    ///     indices every frame for a given row count (see
+    ///     ``ScrollExtentPrecision/sampleCount``), yet deriving it costs a
+    ///     height — for a Table, a cell-string build and a fit per column; for
+    ///     a List, MATERIALISING the row — per sampled off-screen row, per
+    ///     frame. The caller keys its stash on whatever shapes the heights
+    ///     (row count, column widths and limits, available width, precision)
+    ///     and hands the mean back while the key holds, so steady-state frames
+    ///     sample nothing. Data edits under an unchanged key can go stale —
+    ///     accepted, because the mean only bends the MIDDLE of the thumb's
+    ///     travel (both ends are pinned by construction, the property the type
+    ///     doc calls out) and the estimate was already approximate.
     static func lineMetrics(
         visible: Range<Int>,
         count: Int,
         topClip: Int,
         precision: ScrollExtentPrecision,
+        cachedMean: Double? = nil,
         height: (Int) -> Int
-    ) -> (extent: Int, offset: Int) {
-        guard count > 0 else { return (extent: 0, offset: 0) }
+    ) -> (extent: Int, offset: Int, mean: Double?) {
+        guard count > 0 else { return (extent: 0, offset: 0, mean: nil) }
         let clamped = visible.clamped(to: 0..<count)
         var linesVisible = 0
         for index in clamped { linesVisible += height(index) }
 
         let linesAbove: Int
         let linesBelow: Int
+        var meanUsed: Double?
         if precision == .exact || count <= ScrollExtentPrecision.exactRowLimit {
             var above = 0
             for index in 0..<clamped.lowerBound { above += height(index) }
@@ -148,14 +164,16 @@ enum ScrollExtentEstimator {
         } else {
             // One mean, applied to both sides, so the two ends of the estimate
             // are drawn from the same sample and stay mutually consistent.
-            let mean = meanRowHeight(count: count, height: height)
+            let mean = cachedMean ?? meanRowHeight(count: count, height: height)
+            meanUsed = mean
             linesAbove = Int((Double(clamped.lowerBound) * mean).rounded())
             linesBelow = Int((Double(count - clamped.upperBound) * mean).rounded())
         }
 
         return (
             extent: linesAbove + linesVisible + linesBelow,
-            offset: linesAbove + topClip
+            offset: linesAbove + topClip,
+            mean: meanUsed
         )
     }
 

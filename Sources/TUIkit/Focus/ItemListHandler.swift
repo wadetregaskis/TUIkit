@@ -109,6 +109,14 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// moves one. See ``View/shiftStepMultiplier(_:)``.
     var shiftStepMultiplier: Int = 5
 
+    /// The scrollbar extent estimator's mean row height, carried across frames
+    /// while `signature` — a hash of everything that shapes row heights (row
+    /// count, widths/limits, precision) — holds. See the `cachedMean` parameter
+    /// of ``ScrollExtentEstimator/lineMetrics`` for the contract; the sample it
+    /// spares is the same 64 rows every frame, each of which costs a wrap (a
+    /// Table) or a row materialisation (a List) to ask.
+    var extentMeanCache: (signature: Int, mean: Double)?
+
     /// The chord → action map this list's keys dispatch through, resolved from
     /// `environment.rowShortcuts` during render (see ``RowShortcuts``). Captured
     /// rather than read live: a key event arrives between renders, with no

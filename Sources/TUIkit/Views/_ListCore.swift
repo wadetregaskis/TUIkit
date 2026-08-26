@@ -519,6 +519,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 origin: origin,
                 visibleRows: visibleRows,
                 contentHeight: targetContentHeight,
+                handler: handler,
                 context: context,
                 palette: palette
             )
@@ -1150,6 +1151,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         origin: WindowOrigin,
         visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)],
         contentHeight: Int,
+        handler: ItemListHandler<SelectionValue>,
         context: RenderContext,
         palette: any Palette
     ) -> [String] {
@@ -1178,10 +1180,25 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let visible =
                 (dataRows.first?.index ?? origin.offset)
                 ..< ((dataRows.last?.index).map { $0 + 1 } ?? origin.offset)
+            // Everything that shapes an off-screen row's rendered height, so a
+            // stale mean cannot outlive the layout that produced it (see
+            // `extentMeanCache`). Content edits under an unchanged signature
+            // are the documented estimate trade.
+            var hasher = Hasher()
+            hasher.combine(source.count)
+            hasher.combine(context.availableWidth)
+            hasher.combine(context.environment.scrollExtentPrecision)
+            let signature = hasher.finalize()
+            let cachedMean =
+                handler.extentMeanCache.flatMap { $0.signature == signature ? $0.mean : nil }
             let metrics = ScrollExtentEstimator.lineMetrics(
                 visible: visible, count: source.count, topClip: origin.topClip,
                 precision: context.environment.scrollExtentPrecision,
+                cachedMean: cachedMean,
                 height: { onScreen[$0] ?? source.row(at: $0).buffer.height })
+            if !context.isMeasuring, let mean = metrics.mean {
+                handler.extentMeanCache = (signature: signature, mean: mean)
+            }
             (extentLines, offsetLines) = (metrics.extent, metrics.offset)
         }
 
