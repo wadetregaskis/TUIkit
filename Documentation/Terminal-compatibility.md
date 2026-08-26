@@ -153,9 +153,46 @@ treats `ESC[=c` as `ESC[c`. Noted as a curiosity; nothing depends on it.
 ⚠️ **Do not send DCS queries at startup.** XTGETTCAP (`ESC P + q … ESC \`)
 is not safe: Apple Terminal does not parse DCS and *prints the payload* —
 measured, it left a literal `+q544e` on the screen. Every query TUIkit sends
-is a CSI sequence, which even a terminal implementing none of them consumes
-correctly, because CSI parsing is generic (parameter bytes, then a final
-byte).
+is a CSI sequence, and every one it sends today is consumed correctly even by
+a terminal implementing none of them — but **not because CSI parsing is
+generic**, which was the reason recorded here until 2026-08-26 and is false.
+
+**Measured 2026-08-26, Terminal.app 455.1.** Sending `CSI ? 9999 <byte> p`
+for each of the sixteen ECMA-48 intermediate bytes `0x20…0x2F`, and reading
+the cursor column before and after to see whether the parser emitted text:
+
+| shape | Terminal.app | iTerm2 | Ghostty | Warp |
+|---|---|---|---|---|
+| all 16 intermediates, with `?` | **leaks the final byte** | clean | clean | clean |
+| any intermediate, no `?` | clean | clean | clean | clean |
+| `?`, no intermediate | clean | clean | clean | clean |
+| neither | clean | clean | clean | clean |
+
+So the rule is narrower and sharper than "CSI is safe", and narrower than the
+"any intermediate byte is unsafe" version reported elsewhere:
+
+> Terminal.app leaks a CSI's final byte **if and only if the sequence carries
+> both a `?` private-parameter marker and an intermediate byte.** Either one
+> alone is consumed correctly.
+
+Verified against all four combinations with two different intermediates
+(`SP`, `$`) and two different final bytes (`p`, `z`) — eight sequences, and
+the `?`-plus-intermediate quadrant is exactly the leaking one.
+
+What follows for TUIkit:
+
+- The four queries it sends — `CSI c`, `CSI > c`, `CSI > 0 q`, `CSI 6 n` —
+  have no `?` and no intermediate, and all four were re-confirmed clean on
+  Terminal.app on 2026-08-26. `TerminalIdentityQueryTests` now pins this so a
+  future addition cannot quietly break it.
+- **`CSI ? Ps $ p` — DECRQM in its DEC-private form — is exactly the unsafe
+  shape**, and it is how modes 2026 (synchronised output) and 2027 (grapheme
+  clustering) are negotiated. Sending one blind puts a `p` on the user's
+  screen; measured here, twice, for both modes.
+- The ANSI form `CSI Ps $ p` (no `?`) is clean, so ANSI-mode DECRQM is
+  available on Terminal.app even though DEC-private DECRQM is not.
+- Apple Terminal answers no DECRQM at all — both mode queries were silent —
+  so there is nothing to gain by sending one there in any case.
 
 **The fingerprint TUIkit ships** (`TerminalHost.nameFromDeviceAttributes`)
 names Apple Terminal, and nothing else, by requiring all three of:

@@ -173,4 +173,46 @@ struct TerminalIdentityQueryTests {
         defer { unsetenv(key) }
         #expect(ProcessInfo.processInfo.environment[key] == "Apple_Terminal")
     }
+
+    /// Apple Terminal's CSI parser leaks a sequence's final byte onto the
+    /// screen when the sequence carries BOTH a `?` private-parameter marker
+    /// and an ECMA-48 intermediate byte (0x20…0x2F) — measured 2026-08-26 on
+    /// 455.1 across all sixteen intermediates, with either half alone
+    /// consumed correctly. See `Documentation/Terminal-compatibility.md`.
+    ///
+    /// The startup query runs before anything is on screen and its whole
+    /// point is to be harmless to a terminal that answers none of it, so a
+    /// leak here is a stray glyph in the user's shell. `CSI ? Ps $ p` —
+    /// DECRQM, the way modes 2026 and 2027 are negotiated — is exactly the
+    /// forbidden shape, which is the addition this guards against.
+    @Test("No query carries both a private marker and an intermediate byte")
+    func requestAvoidsAppleTerminalsCSILeak() {
+        var offending: [String] = []
+        let scalars = Array(TerminalIdentityQuery.request.unicodeScalars)
+        var index = 0
+        while index < scalars.count {
+            guard scalars[index].value == 0x1B, index + 1 < scalars.count,
+                scalars[index + 1] == "["
+            else {
+                index += 1
+                continue
+            }
+            var cursor = index + 2
+            var isPrivate = false
+            var hasIntermediate = false
+            while cursor < scalars.count {
+                let value = scalars[cursor].value
+                if (0x3C...0x3F).contains(value) { isPrivate = true }
+                if (0x20...0x2F).contains(value) { hasIntermediate = true }
+                if (0x40...0x7E).contains(value) { break }
+                cursor += 1
+            }
+            if isPrivate && hasIntermediate {
+                offending.append(String(String.UnicodeScalarView(scalars[index...min(cursor, scalars.count - 1)])))
+            }
+            index = cursor + 1
+        }
+        #expect(offending.isEmpty,
+                "these leak their final byte on Apple Terminal: \(offending)")
+    }
 }
