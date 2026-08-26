@@ -999,14 +999,6 @@
       "how": "typealias Body = Never (inferred)",
       "why": "Extraction artifact, not a real gap: TUIkit's Text declares `public var body: Never { fatalError(\"Text is a primitive view and renders directly\") }` at Sources/TUIkit/Views/Text.swift:116-118, so Body is inferred as Never exactly as in SwiftUI. It is absent from the symbolgraph o"
     },
-    "Text.Case": {
-      "how": "TextCase (top-level)",
-      "why": "Sources/TUIkit/Styling/StyleAttributes.swift:11-15 — `public enum TextCase { case uppercase; case lowercase }`, whose doc comment says 'mirroring SwiftUI's Text.Case'. Spelled top-level rather than nested; consumed by View.textCase(_:) (Sources/TUIkit/Modifiers/StyleModifier.swif"
-    },
-    "Text.TruncationMode": {
-      "how": "TruncationMode (top-level)",
-      "why": "Sources/TUIkit/Extensions/String+Truncation.swift:16-27 declares `public enum TruncationMode { case tail, head, middle }` — the same three cases, top-level instead of nested. Applied by Text.truncationMode(_:) (Sources/TUIkit/Views/Text.swift:212) and the cascading View.truncatio"
-    },
     "TintShapeStyle": {
       "how": "View.tint(_:) / \\.tint",
       "why": "Sources/TUIkit/Modifiers/TintModifier.swift:57-64 declares the cascading \\.tint environment key and View.tint(_:); the tint is resolved against the base palette and REPLACES the subtree's accent role (TintModifier.swift:38-43), which is what .tint means for controls."

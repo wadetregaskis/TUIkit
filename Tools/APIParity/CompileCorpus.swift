@@ -100,3 +100,23 @@ private struct ClosureAndGenericShapes: View {
         .frame(maxWidth: .infinity, alignment: .leadingFirstTextBaseline)
     }
 }
+
+// MARK: - Nested type names SwiftUI source spells out
+
+/// SwiftUI nests these under `Text`, and its own documentation writes them that
+/// way. Both are top-level types here, so the nested spellings only compile
+/// because of the typealiases on ``Text`` — which is precisely the kind of
+/// difference `api_parity.py` cannot see, both names being present somewhere.
+@MainActor
+private struct NestedTypeSpellings: View {
+    private let mode: Text.TruncationMode = .middle
+    private let casing: Text.Case = .uppercase
+    private let weight: Font.Weight = .bold
+
+    var body: some View {
+        Text("text.body")
+            .truncationMode(mode)
+            .textCase(casing)
+            .fontWeight(weight)
+    }
+}

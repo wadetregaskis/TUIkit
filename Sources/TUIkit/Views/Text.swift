@@ -23,6 +23,20 @@ import Foundation
 ///     .foregroundStyle(.red)
 /// ```
 public struct Text: View, Equatable {
+    /// A capitalisation transform — mirrors SwiftUI's `Text.Case`.
+    ///
+    /// The same type as the top-level ``TextCase``, under SwiftUI's spelling,
+    /// so `.textCase(Text.Case.uppercase)` compiles as written. Same shape and
+    /// same reason as ``Font/Weight``.
+    public typealias Case = TextCase
+
+    /// Where text is elided when it does not fit — mirrors SwiftUI's
+    /// `Text.TruncationMode`.
+    ///
+    /// The same type as the top-level ``TruncationMode``, under SwiftUI's
+    /// spelling.
+    public typealias TruncationMode = TUIkit.TruncationMode
+
     /// The text to display.
     let content: String
 
