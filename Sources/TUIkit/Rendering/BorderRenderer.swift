@@ -369,13 +369,47 @@ extension BorderRenderer {
         // safe even when it exceeds `innerWidth`: the truncate branch clips to
         // `innerWidth` regardless, and a uniform run clips identically.
         let width = knownWidth ?? content.strippedLength
+        // The unstyled case — every bordered line in a tree that sets no row
+        // background, which is nearly all of them — is assembled in ONE
+        // reserved buffer: wall, content, the pad run, reset, wall. The
+        // `+`-chain it replaces allocated an intermediate String per link
+        // (and `String(repeating:)` a sixth for the padding), and this runs
+        // per content line per container per frame — O(depth²) down a nested
+        // spine, where it was the single hottest string site: 13.3% of a
+        // `deep` frame in `String.+` alone, over an allocation profile with
+        // `_allocateStringStorage` at 13.9%.
+        if backgroundColor == nil {
+            let pad = width < innerWidth ? innerWidth - width : 0
+            var line = ""
+            if width > innerWidth {
+                // A wide char straddling the clip column is excluded, leaving
+                // the prefix up to a cell short — pad the shortfall so the
+                // right border stays aligned (same pattern as _ListCore's row
+                // clipping). Rare enough to keep the simple spelling.
+                let clipped = content.ansiAwarePrefix(
+                    visibleCount: innerWidth, knownVisibleWidth: width
+                ).padToVisibleWidth(innerWidth)
+                line.reserveCapacity(
+                    vertical.utf8.count * 2 + clipped.utf8.count + ANSIRenderer.reset.utf8.count)
+                line += vertical
+                line += clipped
+            } else {
+                line.reserveCapacity(
+                    vertical.utf8.count * 2 + content.utf8.count + pad
+                        + ANSIRenderer.reset.utf8.count)
+                line += vertical
+                line += content
+                if pad > 0 { line += asciiSpaces(pad) }
+            }
+            line += ANSIRenderer.reset
+            line += vertical
+            return line
+        }
         let fittedLine: String
         if width > innerWidth {
-            // A wide char straddling the clip column is excluded, leaving the
-            // prefix up to a cell short — pad the shortfall so the right border
-            // stays aligned (same pattern as _ListCore's row clipping).
-            fittedLine = content.ansiAwarePrefix(visibleCount: innerWidth)
-                .padToVisibleWidth(innerWidth)
+            fittedLine = content.ansiAwarePrefix(
+                visibleCount: innerWidth, knownVisibleWidth: width
+            ).padToVisibleWidth(innerWidth)
         } else if width == innerWidth {
             fittedLine = content
         } else {
