@@ -1,8 +1,11 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ANSIRendererFullTests.swift
 //
+//  Comprehensive tests for ANSIRenderer: style rendering, color codes,
+//  cursor control, screen control, and convenience methods.
+//
 //  Created by LAYERED.work
-//  License: MIT  cursor control, screen control, and convenience methods.
+//  License: MIT
 //
 
 import Testing

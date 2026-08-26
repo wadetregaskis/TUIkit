@@ -1,8 +1,11 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FrameDiffWriter.swift
 //
+//  Converts FrameBuffers to terminal-ready output lines and writes
+//  only the lines that changed since the previous frame.
+//
 //  Created by LAYERED.work
-//  License: MIT  only the lines that changed since the previous frame.
+//  License: MIT
 //
 
 import Foundation

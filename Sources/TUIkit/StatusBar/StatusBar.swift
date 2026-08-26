@@ -1,8 +1,11 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StatusBar.swift
 //
+//  A status bar that displays keyboard shortcuts and context-sensitive actions.
+//  Always rendered at the bottom of the terminal, never dimmed by overlays.
+//
 //  Created by LAYERED.work
-//  License: MIT  Always rendered at the bottom of the terminal, never dimmed by overlays.
+//  License: MIT
 //
 
 // MARK: - StatusBar View

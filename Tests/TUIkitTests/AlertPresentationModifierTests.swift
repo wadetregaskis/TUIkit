@@ -1,8 +1,11 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  AlertPresentationModifierTests.swift
 //
+//  Tests for AlertPresentationModifier: binding-controlled presentation,
+//  dimming, centering, and alert rendering.
+//
 //  Created by LAYERED.work
-//  License: MIT  dimming, centering, and alert rendering.
+//  License: MIT
 //
 
 import Testing

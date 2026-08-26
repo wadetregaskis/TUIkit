@@ -1,8 +1,11 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  Preferences.swift
 //
+//  Preferences system for bottom-up data flow (child → parent).
+//  Similar to SwiftUI's PreferenceKey system.
+//
 //  Created by LAYERED.work
-//  License: MIT  Similar to SwiftUI's PreferenceKey system.
+//  License: MIT
 //
 
 import TUIkitCore

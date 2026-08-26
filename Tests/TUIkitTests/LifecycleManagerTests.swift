@@ -1,8 +1,11 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  LifecycleManagerTests.swift
 //
+//  Tests for LifecycleManager: appear tracking, disappear callbacks,
+//  render pass management, and async task lifecycle.
+//
 //  Created by LAYERED.work
-//  License: MIT  render pass management, and async task lifecycle.
+//  License: MIT
 //
 
 import Testing

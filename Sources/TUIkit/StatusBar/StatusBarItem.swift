@@ -1,8 +1,11 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StatusBarItem.swift
 //
+//  Status bar supporting types: items, protocol, builder, order, alignment,
+//  style, shortcut symbols, and system items.
+//
 //  Created by LAYERED.work
-//  License: MIT  style, shortcut symbols, and system items.
+//  License: MIT
 //
 
 // MARK: - Status Bar Alignment

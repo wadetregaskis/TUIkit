@@ -1,8 +1,11 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  Theme.swift
 //
+//  Palette protocol, default implementations, environment integration,
+//  and palette registry.
+//
 //  Created by LAYERED.work
-//  License: MIT  and palette registry.
+//  License: MIT
 //
 
 // MARK: - Palette Protocol

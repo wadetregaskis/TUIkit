@@ -1,8 +1,11 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TUIContext.swift
 //
+//  Central dependency container replacing scattered singletons.
+//  Owned by AppRunner and threaded through RenderContext.
+//
 //  Created by LAYERED.work
-//  License: MIT  Owned by AppRunner and threaded through RenderContext.
+//  License: MIT
 //
 
 import Foundation
