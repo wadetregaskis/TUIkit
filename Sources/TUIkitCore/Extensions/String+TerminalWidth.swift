@@ -162,8 +162,20 @@ extension Character {
             !Self.isWidthNeutralExtraScalar(scalar.value)
         }
         if hasWidthAddingExtras {
-            // True multi-character sequence (ZWJ, flags, keycaps, skin tones)
-            return 2
+            // True multi-character sequence (ZWJ, flags, keycaps, skin tones).
+            // Two cells on a host that composes them, which is the default and
+            // was once the only answer. A host that draws the components
+            // separately gets the width it actually uses, so that the layout
+            // can allocate it rather than the cluster being substituted down to
+            // something that fits — see ``TerminalWidthTraits``.
+            //
+            // Two cells on a host that composes, which is the default. The
+            // widening case is an out-of-line call so that THIS function's
+            // inlinable body barely grows: `terminalWidth` is inlined into the
+            // width scanners, and this repo has twice measured a phantom
+            // regression from a hot function growing past an inlining
+            // threshold on a path that never executes.
+            return Self.hostWidenedWidth(scalars) ?? 2
         }
         // Base + variation selector(s).  If the selector is U+FE0F and
         // the base can be rendered as emoji, the cluster is 2 cells.
@@ -172,6 +184,83 @@ extension Character {
             return 2
         }
         return first.loneTerminalWidth
+    }
+
+    /// The cells this cluster occupies if the host widens it, or `nil` — which
+    /// is the answer for every host that composes, and so the common one.
+    ///
+    /// Out of line deliberately: see the call site.
+    @inline(never)
+    static func hostWidenedWidth(_ scalars: String.UnicodeScalarView) -> Int? {
+        // Only a joiner or a Fitzpatrick modifier can make a host widen a
+        // cluster, and testing two scalar ranges is cheaper than reading the
+        // traits, which is a task-local lookup rather than a plain load. Flags,
+        // keycaps and RI pairs answer nil without paying for a question whose
+        // answer cannot affect them.
+        let mayWiden = scalars.contains { scalar in
+            scalar.value == 0x200D || (0x1F3FB...0x1F3FF).contains(scalar.value)
+        }
+        guard mayWiden else { return nil }
+        let traits = TerminalWidthTraits.current
+        guard traits != .composing else { return nil }
+        return decomposedWidth(scalars, traits: traits)
+    }
+
+    /// The cells a composed cluster occupies on a host that does NOT compose
+    /// it, or `nil` if these traits leave this cluster alone.
+    ///
+    /// Only reached for multi-scalar clusters on a non-composing host, so the
+    /// allocations here are off every hot path.
+    static func decomposedWidth(
+        _ scalars: String.UnicodeScalarView, traits: TerminalWidthTraits
+    ) -> Int? {
+        if traits.decomposesZWJSequences, scalars.contains(where: { $0.value == 0x200D }) {
+            // Sum of the ZWJ-separated segments plus one cell per joiner: the
+            // joiner itself takes a column. Measured on Warp, where this
+            // predicts every case exactly — 👩‍🚀 = 2+1+2 = 5, 👨‍👩‍👧‍👦 =
+            // 2+1+2+1+2+1+2 = 11, 👩🏽‍🚀 = 4+1+2 = 7 (the skin-toned segment
+            // resolving through this same function, which is why the two rules
+            // compose instead of duplicating each other).
+            var total = 0
+            var joiners = 0
+            var segment = String.UnicodeScalarView()
+            for scalar in scalars {
+                if scalar.value == 0x200D {
+                    joiners += 1
+                    total += Character(String(segment)).terminalWidth
+                    segment = String.UnicodeScalarView()
+                } else {
+                    segment.append(scalar)
+                }
+            }
+            total += Character(String(segment)).terminalWidth
+            return total + joiners
+        }
+        return detachedSkinToneWidth(scalars, traits: traits)
+    }
+
+    /// The cells a Fitzpatrick cluster occupies where the host draws the
+    /// modifier as a swatch beside the base rather than merging it in.
+    ///
+    /// The base's own width **plus two** for the swatch, which is what every
+    /// measurement shows: 👍🏽 and ✊🏻 at 4 (2-cell bases), ☝🏽 at 3 (a 1-cell
+    /// text-presentation base) and ☝️🏽 at 4 (the same base promoted to 2 cells
+    /// by its selector). Taking the base's width from the cluster-minus-modifier
+    /// rather than from the first scalar is what gets that last case right.
+    static func detachedSkinToneWidth(
+        _ scalars: String.UnicodeScalarView, traits: TerminalWidthTraits
+    ) -> Int? {
+        guard traits.skinTone != .merged,
+            let first = scalars.first,
+            scalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) })
+        else { return nil }
+        // iTerm2 and tmux merge an SMP base and detach only a BMP one.
+        if traits.skinTone == .detachedOnBMPBases, first.value > 0xFFFF { return nil }
+        var base = String.UnicodeScalarView()
+        for scalar in scalars where !(0x1F3FB...0x1F3FF).contains(scalar.value) {
+            base.append(scalar)
+        }
+        return Character(String(base)).terminalWidth + 2
     }
 }
 

@@ -215,6 +215,10 @@ extension AppRunner {
         // protects is frozen into `FrameDiffWriter` at construction.
         terminal.pinGraphemeClusteringIfNeeded()
 
+        // The host's width traits, published before anything measures a view:
+        // the claim follows the host now, so layout must see it from frame one.
+        TerminalClient.applyWidthTraits()
+
         let renderer = RenderLoop(
             app: app,
             terminal: terminal,

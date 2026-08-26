@@ -267,6 +267,13 @@ public final class RenderCache: @unchecked Sendable {
     /// engaged and did not pay (this memo shipped inert once already).
     public private(set) var measureMemoTotals: (hits: Int, misses: Int) = (0, 0)
 
+    /// The width-traits generation this cache's contents were measured under.
+    ///
+    /// The claim is part of what a measurement means, so memos taken under one
+    /// host's traits are wrong under another's. See
+    /// ``TUIkitCore/TerminalWidthTraits/generation`` and ``beginRenderPass()``.
+    private var measuredUnderWidthGeneration = TerminalWidthTraits.generation
+
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
@@ -634,6 +641,15 @@ extension RenderCache {
     /// clearing the active identity set, and snapshotting the current stats for
     /// per-frame delta calculation.
     public func beginRenderPass() {
+        // The claim moved — a different host is being rendered as — so every
+        // memoized size was measured against a width that no longer applies.
+        // Checked once per pass rather than per lookup: this is cold except in
+        // the diagnostic app that switches hosts at runtime.
+        if measuredUnderWidthGeneration != TerminalWidthTraits.generation {
+            measuredUnderWidthGeneration = TerminalWidthTraits.generation
+            clearAll()
+        }
+
         // Snapshot stats *before* the drain so the deferred clears it applies
         // count toward this frame's delta (they are the first thing this frame
         // does). Then apply invalidations enqueued — possibly off the main actor

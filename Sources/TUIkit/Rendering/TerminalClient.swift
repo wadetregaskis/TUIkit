@@ -194,7 +194,17 @@ public struct TerminalClient: Sendable, Equatable {
     /// TerminalClient.simulated = .appleTerminal   // see Apple Terminal's workarounds
     /// TerminalClient.simulated = nil              // back to what was detected
     /// ```
-    @MainActor public static var simulated: Program?
+    @MainActor public static var simulated: Program? {
+        didSet {
+            // The claim follows the host, so simulating a different one changes
+            // how wide clusters measure — and every memoized measurement taken
+            // under the old claim is now wrong. Republishing the traits and
+            // dropping those memos is what makes the picker honest rather than
+            // half-applied.
+            guard simulated != oldValue else { return }
+            applyWidthTraits()
+        }
+    }
 
     /// Render with this hand-built set of workarounds, whatever was detected.
     ///
@@ -216,6 +226,50 @@ public struct TerminalClient: Sendable, Equatable {
         var client = current
         client.program = simulated
         return client
+    }
+
+    // MARK: - Width traits
+
+    /// How wide this program draws the clusters TUIkit used to substitute away.
+    ///
+    /// The claim follows the host so that the layout can allocate what a
+    /// cluster really occupies, instead of the cluster being cut down to fit a
+    /// claim — see ``TUIkitCore/TerminalWidthTraits`` for why that trade was
+    /// worth reversing.
+    ///
+    /// Measured on the alternate screen, 2026-08-26. Every entry is a
+    /// self-consistent host behaviour, meaning paint equals advance, so a
+    /// matching claim needs no compensation at all: the CUF machinery simply
+    /// stops firing for these classes.
+    public static func widthTraits(of program: Program) -> TerminalWidthTraits {
+        switch program {
+        case .appleTerminal:
+            // Composes ZWJ into 2 cells (its DSR report says otherwise and is
+            // wrong); draws a skin-tone modifier as a swatch beside the base.
+            TerminalWidthTraits(decomposesZWJSequences: false, skinTone: .detached)
+        case .iTerm2:
+            TerminalWidthTraits(decomposesZWJSequences: false, skinTone: .detachedOnBMPBases)
+        case .ghostty:
+            // The one host that composes everything.
+            .composing
+        case .warp:
+            TerminalWidthTraits(decomposesZWJSequences: true, skinTone: .detached)
+        case .tmux:
+            TerminalWidthTraits(decomposesZWJSequences: false, skinTone: .detachedOnBMPBases)
+        case .unidentified:
+            // A terminal with no measurements is assumed to compose, for the
+            // same reason it is assumed to render correctly.
+            .composing
+        }
+    }
+
+    /// Publishes the identified host's width traits process-wide.
+    ///
+    /// Called once at startup, before the render loop is built, because
+    /// `FrameDiffWriter` and every layout pass read the claim.
+    @MainActor
+    public static func applyWidthTraits() {
+        TerminalWidthTraits.current = widthTraits(of: effective.program)
     }
 
     // MARK: - The models
@@ -241,6 +295,27 @@ public struct TerminalClient: Sendable, Equatable {
         case .tmux: cluster.tmuxCursorAdvance
         case .unidentified: cluster.terminalWidth
         }
+    }
+
+    /// Strips Fitzpatrick modifiers only when the layout's claim cannot hold
+    /// them.
+    ///
+    /// The strip exists because a detached modifier over-advances past a 2-cell
+    /// claim and drags the rest of the row left. Once
+    /// ``TUIkitCore/TerminalWidthTraits`` gives the cluster the cells it really
+    /// occupies, there is nothing to over-advance past and the modifier can
+    /// stay — which matters, because stripping it is not a rendering compromise
+    /// but a change to what the user wrote.
+    ///
+    /// So the question is about the CLAIM in force, not about the program: a
+    /// caller who reaches ``compensating(_:for:followedByContent:tmuxSkinTones:)``
+    /// without startup having published the host's traits still gets the old,
+    /// safe behaviour.
+    private static func strippingSkinTonesIfUnclaimed(
+        _ text: String, basePlane: String.SkinToneBasePlane = .all
+    ) -> String {
+        TerminalWidthTraits.current.skinTone == .merged
+            ? text.withSkinToneFallback(basePlane: basePlane) : text
     }
 
     /// `text` with `program`'s cursor-advance divergences compensated for.
@@ -274,12 +349,12 @@ public struct TerminalClient: Sendable, Equatable {
             // FIRST, because tmux is a compositor: ITS grid is what our output
             // lands in, so the outer terminal's quirks apply to tmux's output,
             // not ours.
-            return text.withSkinToneFallback(basePlane: tmuxSkinTones)
+            return strippingSkinTonesIfUnclaimed(text, basePlane: tmuxSkinTones)
                 .withTmuxCursorCompensation()
         case .appleTerminal:
             return text.withTerminalAppCursorCompensation(followedByContent: followedByContent)
         case .iTerm2:
-            return text.withSkinToneFallback().withITerm2CursorCompensation()
+            return strippingSkinTonesIfUnclaimed(text).withITerm2CursorCompensation()
         case .ghostty:
             // Ghostty needs no skin-tone strip — it is the only measured
             // terminal that merges Fitzpatrick clusters into the two cells the
@@ -289,7 +364,7 @@ public struct TerminalClient: Sendable, Equatable {
         case .warp:
             // Warp draws skin tones as base + swatch exactly like iTerm2, then
             // needs a CUF for its lone-regional-indicator under-advance.
-            return text.withSkinToneFallback().withWarpCursorCompensation()
+            return strippingSkinTonesIfUnclaimed(text).withWarpCursorCompensation()
         case .unidentified:
             return text
         }

@@ -409,9 +409,11 @@ before the render loop is built.
 - **Fitzpatrick skin tones:** the cluster renders as ONE merged,
   skin-toned glyph (paints 2) but **advances 4** (emoji-presentation
   bases: 👍🏽 ✊🏻) or **3** (text-presentation bases: ☝🏽; also ☝️🏽
-  with VS-16) — "Bug B". Mid-line the modifier scalar is stripped
-  (generic-yellow fallback) because the over-advance provokes a row-wide
-  left shift no escape sequence recovers from; at end-of-line it is kept.
+  with VS-16) — "Bug B". **Since 2026-08-26 the claim is 4 (or 3) to match**,
+  so there is no over-advance and the modifier is KEPT — see *The claim follows
+  the host now*. The strip remains only for a caller that has not published the
+  host's traits, where the claim is still 2 and the over-advance would provoke
+  a row-wide left shift no escape sequence recovers from.
 - **Flag pairs** (🇺🇸): paints 2, **advances 2** — no compensation.
   (An earlier TUIkit model said advance 1; measured 2 on 455.1.)
 - **Lone regional indicator** (🇦): paints 2, **advances 1** → CUF(1).
@@ -1472,6 +1474,74 @@ weight — it existed only to return 1 for scalars the claim had wrongly put at
 **SF Symbols PUA** is a third claim-vs-advance mismatch (no terminal advances
 2) but is already handled: Apple/iTerm2 genuinely paint 2, so the claim is
 right and the CUF is correct; only Ghostty paints 1 and takes the blank cell.
+
+### The claim follows the host now — 2026-08-26
+
+For most of this document's life the **claim** — how many cells TUIkit's layout
+reserves for a cluster — was host-independent, on the reasoning that it must
+cover the widest painter so content is never overwritten, with narrower painters
+taking a blank cell rather than a shear. That holds when the spread is one cell
+(an SF Symbol: 2 on Apple Terminal, 1 on Ghostty). It does not hold when the
+spread is nine, which is what 👨‍👩‍👧‍👦 costs on a host that does not compose
+ZWJ sequences.
+
+Where the claim could not stretch, TUIkit **substituted**: stripped the
+Fitzpatrick modifier, so 👍🏽 reached the screen as 👍. That kept every row
+aligned and changed what the user wrote. Taken to its conclusion the same
+remedy turns 🏳️‍🌈 into 🏳️ — a pride flag into a white flag, which is not a
+rendering compromise but a different message.
+
+So the claim follows the host, and the layout accommodates the true width. A
+cluster Warp draws across eleven cells is allocated eleven: the border lands
+where it should, text wraps around it, and every scalar survives.
+
+**The two rules, measured on the alternate screen.**
+
+| host | ZWJ sequences | skin-tone clusters |
+|---|---|---|
+| Apple Terminal 455.1 | composed, 2 | base + swatch |
+| iTerm2 3.6.11 | composed, 2 | base + swatch on a **BMP** base only |
+| Ghostty 1.3.1 | composed, 2 | merged, 2 |
+| Warp 2026.07 | **decomposed** | base + swatch |
+| tmux 3.7b | composed, 2 | base + swatch on a **BMP** base only |
+
+- **Decomposed ZWJ** is the sum of the ZWJ-separated segments **plus one cell
+  per joiner** — the joiner takes a column. That predicts every measured case:
+  👩‍🚀 = 2+1+2 = 5, 👨‍👩‍👧‍👦 = 11, and 👩🏽‍🚀 = 4+1+2 = 7, the last of which
+  resolves its first segment through the skin-tone rule, so the two compose
+  rather than duplicating each other.
+- **A detached skin tone** is the base's width **plus two** for the swatch:
+  👍🏽 and ✊🏻 at 4, ☝🏽 at 3 (a 1-cell text-presentation base), and ☝️🏽 at 4 —
+  which is why the base width is taken from the cluster-minus-modifier rather
+  than from the first scalar.
+
+**Claim equals advance for every one of these**, because they are all cases
+where the host is self-consistent — it advances as far as it paints. So the
+compensation machinery simply stops firing: no CUF, no ECH, no rewrite, and the
+Fitzpatrick strip no longer triggers because the over-advance it existed to
+prevent is no longer an over-advance.
+
+**Verified on the terminals.** Rows drawn as the framework now emits them, with
+the border at the new claim: **9/9 land exactly on Warp**, including the whole
+family at 11 and the full rainbow flag at 5. On Apple Terminal the skin tones
+render *with their tone* and their borders land; its three ZWJ rows report a
+DSR mismatch and paint correctly, which is the cursor-report lie documented
+below, not a geometry failure.
+
+**Cost.** Measured with `Tools/Profiling/ab_bench.py` over six scenarios
+(`megalist`, `kitchensink`, `textwall`, `deep`, `dashboard`, `table`): all six
+indistinguishable, −0.5% to +0.0%. The first attempt showed `megalist` at
++1.3%, which turned out to be an inlining artifact — the widening path is now
+`@inline(never)` so `terminalWidth`'s inlinable body barely grows, and the
+regression disappeared. A null A/B (the same binary against itself) confirmed
+the harness resolves ~1% on that scenario, so the effect was real and so is its
+absence.
+
+**What this does NOT cover.** Only the two classes TUIkit was substituting —
+the ones that can change a message. Classes that merely misalign are unchanged
+and still limitations: Warp's keycaps and 〰️ at 3 cells against a claim of 2,
+and its tag-sequence flags at 3. Each needs its own measured rule, and none of
+them alters what the user said.
 
 ### ZWJ: where DSR lies, and where the defect actually is — measured 2026-08-26
 
