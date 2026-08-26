@@ -14,14 +14,18 @@ import Foundation
 ///
 /// ## Rendering
 ///
-/// `ForEach` has **no standalone rendering capability**. It declares
-/// `body: Never` but does *not* conform to `Renderable`. On its own,
-/// it would produce an empty ``FrameBuffer``.
+/// Inside a container, `ForEach` is transparent: `resolveChildViews` asks it
+/// for one ``ChildView`` per element, and the stack lays those out as its own
+/// siblings, so a `ForEach` in a `VStack` is indistinguishable from writing
+/// the rows out by hand.
 ///
-/// In practice, `ForEach` is always used inside a `@ViewBuilder` block
-/// (e.g. within `VStack` or `HStack`). The builder's `buildArray`
-/// method flattens it into a ``ViewArray``, which *is* `Renderable`.
-/// This is the same pattern SwiftUI uses.
+/// Used as an entire `body` — which is how Apple's own `ForEach`
+/// documentation writes it — it stacks its elements vertically itself, via
+/// its ``Renderable`` conformance. That case is NOT reached through a
+/// container, because `body` is a `@ViewBuilder` block and `buildBlock` of a
+/// single element returns it unchanged; before the conformance existed the
+/// renderer fell through to its empty-buffer branch and such a view drew
+/// nothing at all.
 ///
 /// # Example with Identifiable
 ///
@@ -91,13 +95,65 @@ public struct ForEach<Data: RandomAccessCollection, ID: Hashable, Content: View>
         self.content = content
     }
 
-    /// Never called — `ForEach` is flattened into a ``ViewArray`` by
-    /// `@ViewBuilder.buildArray` before rendering occurs.
+    /// Never called — a container resolves `ForEach` into its elements, and a
+    /// `ForEach` drawn on its own goes through ``renderToBuffer(context:)``.
     ///
     /// - Important: Accessing this property directly will crash at runtime.
-    ///   Always use `ForEach` inside a `@ViewBuilder` closure (e.g., `VStack`, `HStack`).
     public var body: Never {
-        fatalError("ForEach has no standalone rendering; use inside a @ViewBuilder block")
+        fatalError("ForEach renders via Renderable, or is resolved into child views")
+    }
+}
+
+// MARK: - ForEach rendered on its own
+
+extension ForEach: Renderable, Layoutable {
+    /// Stacks the elements vertically, for the case where nothing above has
+    /// resolved them into siblings of their own.
+    ///
+    /// A container asks ``childViews(context:)`` first
+    /// (``resolveChildViews(from:context:)`` tries `ChildViewProvider` before
+    /// anything else), so this path is not how a `ForEach` inside a stack
+    /// draws. It is how one draws when it is a view's ENTIRE body —
+    ///
+    /// ```swift
+    /// var body: some View {
+    ///     ForEach(items) { Text($0.name) }
+    /// }
+    /// ```
+    ///
+    /// — which is the shape Apple's own `ForEach` documentation uses, and
+    /// which drew nothing at all here: `body` is a `@ViewBuilder` block, and
+    /// `buildBlock` of a single element returns it unchanged, so no container
+    /// ever saw it and the renderer fell through to its empty-buffer branch.
+    /// The same hole swallowed `ForEach { … }.foregroundStyle(.red)`, a
+    /// modifier being opaque to child resolution.
+    ///
+    /// Vertical is the right default for the same reason `TupleView` stacks
+    /// that way: it is what an un-laid-out run of sibling views means here,
+    /// and it is what SwiftUI's documented example produces.
+    public func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let width = context.availableWidth
+        return FrameBuffer(
+            verticallyStacking: childViews(context: context).map { child in
+                let size = child.measure(
+                    proposal: ProposedSize(width: width, height: nil), context: context)
+                return child.render(width: width, height: size.height, context: context)
+            })
+    }
+
+    public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        var width = 0
+        var height = 0
+        var widthFlexible = false
+        for child in childViews(context: context) {
+            let size = child.measure(proposal: proposal, context: context)
+            width = max(width, size.width)
+            height += size.height
+            widthFlexible = widthFlexible || size.isWidthFlexible
+        }
+        return ViewSize(
+            width: width, height: height,
+            isWidthFlexible: widthFlexible, isHeightFlexible: false)
     }
 }
 
@@ -108,11 +164,10 @@ extension ForEach: ChildViewProvider {
     /// can lay each iteration out as its own sibling.
     ///
     /// Without this conformance ``resolveChildViews(from:context:)`` falls
-    /// back to wrapping the whole ForEach as a single child, then asks the
-    /// universal render pipeline to draw it — and `body: Never` plus no
-    /// `Renderable` conformance means the renderer reaches its silent
-    /// "no rendering path" branch and returns an empty buffer. With this
-    /// conformance the elements re-appear as expected.
+    /// back to wrapping the whole ForEach as a single child, which would draw
+    /// through ``renderToBuffer(context:)`` — correct content, but stacked
+    /// vertically whatever the surrounding container wanted. This is what
+    /// makes a `ForEach` in an `HStack` a row.
     ///
     /// Each child's identity is keyed by its element's `id` (via
     /// ``ViewIdentity/child(erasedType:key:)``), stable across passes AND
