@@ -9,9 +9,13 @@ when unset), the visual/aspect probes print to the terminal.
   grapheme-cluster battery + terminal-relevant environment dump (JSON).
   `PROBE_ALT=1` measures on the ALTERNATE screen (the app's buffer) —
   iTerm2 advances some clusters differently there.
-- `visual_card.py` — static `|<cluster>|X` alignment card with a column
+- `visual_card.py` — static `|<c>|<c>|<c>|X` alignment card with a column
   ruler, for screenshot inspection of PAINTED width (which DSR can't see),
-  merged-vs-split clusters, seams, and swatches.
+  merged-vs-split clusters, seams, and swatches. **This is the authority when
+  it disagrees with `advance_probe.py`**: DSR is a cursor *report*, and on
+  Terminal.app the report and the paint come apart for ZWJ sequences (DSR 5,
+  8, 11; painted 2, rows do not shear). Treat a DSR advance that contradicts
+  the claim as a hypothesis and confirm it here before compensating.
 - `background_probe.py` — does the cell an under-advancing cluster's `CUF`
   skipped keep the background in force? Draws each compensation strategy as a
   RUN of clusters, so a one-cell hole reads as stripes on a screenshot, and

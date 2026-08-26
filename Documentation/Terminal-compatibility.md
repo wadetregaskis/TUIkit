@@ -40,7 +40,7 @@ the terminal under test:
   is also sensitive to write boundaries on the primary screen: a VS-16
   selector flushed ~100 ms after its base retro-colours the glyph without
   advancing the cursor.
-- `visual_card.py` — prints a static `|<cluster>|X` alignment card with a
+- `visual_card.py` — prints a static `|<c>|<c>|<c>|X` alignment card with a
   column ruler; screenshot + zoom shows **painted width** (which DSR
   cannot see) and glyph appearance: merged vs split clusters, seams,
   swatches, cell coverage.
@@ -325,10 +325,12 @@ before the render loop is built.
   (An earlier TUIkit model said advance 1; measured 2 on 455.1.)
 - **Lone regional indicator** (🇦): paints 2, **advances 1** → CUF(1).
 - **Keycaps** (1️⃣ #️⃣, with or without VS-16): advance 2 ✓.
-- **ZWJ sequences:** badly over-advance — 👩‍🚀 advances **5**,
-  ❤️‍🔥 **4**, 👩🏽‍🚀 **7**. UNHANDLED (no compensation model); TUIkit
-  chrome never emits ZWJ, but user content containing ZWJ sequences will
-  shear rows here. Known limitation.
+- **ZWJ sequences:** DSR reports a wild over-advance — 👩‍🚀 **5**,
+  ❤️‍🔥 **4**, 👩🏽‍🚀 **7** — but **the glyphs paint 2 cells and rows do
+  NOT shear**. Terminal.app's cursor report and its paint position disagree
+  here; the claim of 2 is correct and no compensation is wanted. See
+  *ZWJ: where DSR lies* below — this bullet said the opposite until
+  2026-08-26.
 - **SF Symbols (Plane-16 PUA, U+100000+):** paints 2, **advances 1** →
   CUF(1). BMP PUA (e.g. U+E0B0 powerline): advances 1, width 1 ✓.
 - **Emoji-repertoire chrome with VS-15** (⬛︎ ⬜︎ + U+FE0E): renders as a
@@ -436,9 +438,9 @@ non-default setup.
   (both screen modes) → CUF(1) via `withITerm2CursorCompensation()`.
 - **SF Symbols (Plane-16 PUA):** paints 2 (monochrome, SGR-tintable),
   **advances 1** → CUF(1). Same under-advance as Terminal.app.
-- **ZWJ sequences:** advance 2 ✓ (unlike Terminal.app) — EXCEPT
-  VS-16-leading ones (❤️‍🔥) which advance 1 on the alternate screen;
-  unhandled (ZWJ is unhandled on both hosts).
+- **ZWJ sequences:** advance 2 ✓ and paint 2 ✓ — confirmed by the paint
+  card, not only by DSR. EXCEPT VS-16-leading ones (❤️‍🔥 🏳️‍🌈) which
+  advance 1 on the alternate screen; unhandled.
 - **Emoji chrome with VS-15** (⬛︎ ⬜︎ + U+FE0E): monochrome, tintable,
   2 cells, no shear — on the `supportsEmojiChrome` allowlist, so
   `ToggleCharacterSet.automatic` = `.emoji` here too.
@@ -634,9 +636,15 @@ and the *composed* classes wrong.
 - **OVER-advancers, unhandled** (no escape can pull a cursor back to a
   column the glyph has already painted over):
   keycaps 1️⃣ #️⃣ *️⃣ advance **3**; 〰️ 〽️ advance **3**; ZWJ 👩‍🚀
-  advances **5**, ❤️‍🔥 **5**, 👩🏽‍🚀 **7**. ZWJ is equally unhandled on
-  Terminal.app (5/4/7), so this is the established limitation, not a new
-  one — but keycaps and 〰️ are Warp-specific and DO shear rows.
+  advances **5**, ❤️‍🔥 **5**, 👩🏽‍🚀 **7**.
+
+  ⚠️ **Warp's ZWJ over-advance is the real one, and it is Warp's alone.**
+  Warp does not compose ZWJ sequences — it draws the components, 👩 then 🚀 —
+  so paint and advance agree with each other and disagree with the claim, and
+  rows genuinely shift right. This was recorded as "equally unhandled on
+  Terminal.app (5/4/7)"; it is not. Terminal.app composes the cluster into 2
+  cells and only its DSR report runs ahead, so its rows do not shear. See
+  *ZWJ: where DSR lies*. Keycaps and 〰️ remain Warp-specific and DO shear.
 - ⚠️ **Warp disagrees with itself across screen buffers** — more than any
   other terminal measured. Primary advances VS-16 by 1, alternate by 2;
   keycaps 1 vs 3; ZWJ 4/3/6 vs 5/5/7. The models use the **alternate**
@@ -1299,7 +1307,7 @@ to `terminalWidth` and reported 2, contradicting its own probe data. Model
 == claim ⇒ no CUF ⇒ the row sheared one cell left.
 
 **Both halves measured 2026-07-14** — advance by DSR (`advance_probe.py`),
-paint by eye (`Tools/TerminalProbes/visual_card.py`, a `|<glyph>|X` row: if the closing pipe
+paint by eye (`Tools/TerminalProbes/visual_card.py`, a `|<c>|<c>|<c>|X` row: if the closing pipe
 survives the glyph painted 1):
 
 | Class | Example | `isEmojiPresentation` | Claim | Advance | Paint (Apple) |
@@ -1373,6 +1381,71 @@ weight — it existed only to return 1 for scalars the claim had wrongly put at
 **SF Symbols PUA** is a third claim-vs-advance mismatch (no terminal advances
 2) but is already handled: Apple/iTerm2 genuinely paint 2, so the claim is
 right and the CUF is correct; only Ghostty paints 1 and takes the blank cell.
+
+### ZWJ: where DSR lies, and where the defect actually is — measured 2026-08-26
+
+Every advance number in this document comes from DSR (`ESC[6n`), and for ZWJ
+sequences on Terminal.app **DSR is not telling the truth**. This was recorded
+for a year as "Terminal.app badly over-advances ZWJ, rows will shear here,
+known limitation". Rows do not shear. The measurement was right and the
+conclusion drawn from it was wrong.
+
+**The probe that settles it** draws three copies of a cluster separated by
+pipes and terminated by an `X` — `|<c>|<c>|<c>|X` — on every host, and asks
+where the `X` lands *on screen*. A cluster that occupies more cells than
+claimed pushes the `X` right; one that occupies fewer pulls it left. Paint,
+not report.
+
+| host | composes a ZWJ cluster? | painted cells | DSR says | rows shear? |
+|---|---|---|---|---|
+| Terminal.app 455.1 | yes, one glyph | **2** | 5 / 8 / 11 | **no** |
+| iTerm2 3.6.11 | yes | 2 | 2 | no |
+| Ghostty 1.3.1 | yes | 2 | 2 | no |
+| tmux 3.7b | yes (own grid) | 2 | 2 | no |
+| Warp 2026.07 | **no — draws the components** | **4–11** | 4–11 | **yes** |
+
+On Terminal.app the astronaut, the four-person family, the England tag flag,
+👍 and 中 all put their `X` in the **same column**, though DSR claimed 21, 39,
+30, 12 and 12 for those rows. The composed glyph is two cells and printing
+resumes two cells along; only the *report* runs ahead.
+
+**So the defect is Warp's, not Terminal.app's.** Warp does not compose ZWJ at
+all: 👩‍🚀 draws as 👩 then 🚀, 👨‍👩‍👧‍👦 as four separate people. There paint
+and advance agree with each other and disagree with TUIkit's claim of 2, so
+every row carrying a ZWJ emoji really does shift right. Warp composes tag
+sequence flags correctly (🏴󠁧󠁢󠁥󠁮󠁧󠁿 lands with the controls), so that class is fine
+everywhere.
+
+**Still unhandled, and now correctly scoped.** A Warp ZWJ cluster cannot be
+fixed with `CUF`: paint equals advance, so there is no gap to close. The
+remedies are a host-dependent width claim — which the whole model is built to
+avoid, since a claim must be host-independent — or a skin-tone-style
+substitution down to the first component. Neither is obviously worth it for a
+class TUIkit's own chrome never emits, so it stays documented rather than
+fixed. What has changed is that the cost is now known: it is one host, not
+two, and it is Warp.
+
+**Methodology, which this changes.** `Tools/TerminalProbes/advance_probe.py`
+measures with DSR and is the source of every number in the advance table.
+Those numbers are still correct *as cursor reports*, and for every class in
+this document other than ZWJ they also match the paint. ZWJ is the one place
+they come apart, so:
+
+> A DSR advance that disagrees with the claim is a *hypothesis* about
+> rendering, not a finding. Confirm it by drawing — `|<c>|<c>|<c>|X` and look
+> at the column — before compensating for it.
+
+The same discipline had already caught one error in the other direction: the
+in-block non-emoji row above (🀀 🁠 🂡) was assumed to paint 2 and under-advance
+until a paint test showed it painting 1, which turned a proposed `CUF` into a
+width fix. Two classes, two wrong conclusions from advance alone, in opposite
+directions.
+
+**A residual, genuinely broken:** VS-16-leading ZWJ (❤️‍🔥 ⛓️‍💥 🏳️‍🌈) on
+Terminal.app *does* misbehave visibly — in the same probe its separating pipes
+were overpainted and the `X` landed left of the others. It is the one ZWJ
+sub-class where Terminal.app's report and its paint agree that something is
+wrong. Small, and unhandled as before, but real — unlike the rest of the class.
 
 ## Keyboard modifiers on key events
 
