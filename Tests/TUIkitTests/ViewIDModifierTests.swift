@@ -19,7 +19,10 @@ import Testing
 /// the @State was freshly bound (shows the new seed) or reused (shows the old).
 private struct SeededState: View {
     let seed: String
-    @State private var text: String
+    // Internal rather than `private`: this fixture exists so the test can read
+    // back the value the framework hydrated into it, which is the behaviour
+    // under test. `private` is file-scoped and the assertions live outside.
+    @State var text: String  // swiftlint:disable:this private_swiftui_state
 
     init(seed: String) {
         self.seed = seed

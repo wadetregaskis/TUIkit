@@ -16,9 +16,9 @@ import TUIkit
 /// - Focus navigation with arrow keys
 /// - Live state changes demonstrating `@State` persistence across re-renders
 struct RadioButtonPage: View {
-    @State var colorChoice: String = "blue"
-    @State var sizeChoice: String = "medium"
-    @State var layoutChoice: String = "vertical"
+    @State private var colorChoice: String = "blue"
+    @State private var sizeChoice: String = "medium"
+    @State private var layoutChoice: String = "vertical"
 
     // The five sections, each named once and placed by whichever arrangement
     // fits. Extracted rather than duplicated per arrangement: `ViewThatFits`

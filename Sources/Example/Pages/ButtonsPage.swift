@@ -17,8 +17,8 @@ import TUIkit
 /// - Focus navigation with Tab
 /// - Live click counter demonstrating `@State` persistence across re-renders
 struct ButtonsPage: View {
-    @State var clickCount: Int = 0
-    @State var tintToggle: Bool = true
+    @State private var clickCount: Int = 0
+    @State private var tintToggle: Bool = true
 
     /// Read so the demo's tint can be chosen against the palette in force, and
     /// re-chosen when the theme changes.

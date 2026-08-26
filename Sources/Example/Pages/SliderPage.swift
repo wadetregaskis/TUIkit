@@ -14,10 +14,10 @@ import TUIkit
 /// - Keyboard controls
 /// - Live value display
 struct SliderPage: View {
-    @State var volume: Double = 0.5
-    @State var brightness: Double = 75
-    @State var rating: Double = 3
-    @State var precision: Double = 0.5
+    @State private var volume: Double = 0.5
+    @State private var brightness: Double = 75
+    @State private var rating: Double = 3
+    @State private var precision: Double = 0.5
 
     var body: some View {
         ScrollView {

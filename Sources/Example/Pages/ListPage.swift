@@ -62,17 +62,17 @@ private struct FileItem: Identifiable {
 /// - Unfocused selection visibility (`.automatic` vs `.hidden`)
 /// - Scroll indicators
 struct ListPage: View {
-    @State var singleSelection: String?
-    @State var multiSelection: Set<String> = []
-    @State var transientSelection: String?
-    @State var multiLineSelection: String?
-    @State var treeSelection: String?
-    @State var multiLineByLine = true
+    @State private var singleSelection: String?
+    @State private var multiSelection: Set<String> = []
+    @State private var transientSelection: String?
+    @State private var multiLineSelection: String?
+    @State private var treeSelection: String?
+    @State private var multiLineByLine = true
     /// Whether the multi-line demo's list has a selection at all — see the
     /// toggle's comment.
-    @State var multiLineSelectable = true
-    @State var multiLineFollowMargin = FollowMarginChoice.none.rawValue
-    @State var browserURL: URL = FileBrowser.seedDirectory()
+    @State private var multiLineSelectable = true
+    @State private var multiLineFollowMargin = FollowMarginChoice.none.rawValue
+    @State private var browserURL: URL = FileBrowser.seedDirectory()
     @State private var searchQuery = ""
     @State private var editableItems = [
         "🍎 Apple", "🍌 Banana", "🍒 Cherry", "🍇 Grape", "🍑 Peach", "🍋 Lemon",

@@ -71,7 +71,7 @@ struct StateLifecycleRerenderTests {
     func arrayAppendInOnAppearRenders() {
         let ctx = makeContext()
         struct ContentView: View {
-            @State var log: [String] = []
+            @State private var log: [String] = []
             var body: some View {
                 VStack {
                     Text("LOG[\(log.joined(separator: ","))]")
@@ -99,7 +99,7 @@ struct StateLifecycleRerenderTests {
     func multipleAppendsInOnAppearRender() {
         let ctx = makeContext(width: 50)
         struct ContentView: View {
-            @State var log: [String] = []
+            @State private var log: [String] = []
             var body: some View {
                 VStack {
                     Text("N=\(log.count) LOG[\(log.joined(separator: ","))]")
@@ -129,7 +129,7 @@ struct StateLifecycleRerenderTests {
     func arrayAppendInTaskRenders() async {
         let ctx = makeContext()
         struct ContentView: View {
-            @State var log: [String] = []
+            @State private var log: [String] = []
             var body: some View {
                 VStack {
                     Text("LOG[\(log.joined(separator: ","))]")
@@ -154,14 +154,14 @@ struct StateLifecycleRerenderTests {
     @Test("array append and scalar increment both flag needsRender from .onAppear")
     func arrayAndScalarBothFlagNeedsRender() {
         struct ArrayView: View {
-            @State var log: [String] = []
+            @State private var log: [String] = []
             var body: some View {
                 Text("LOG[\(log.joined(separator: ","))]")
                     .onAppear { log.append("x") }
             }
         }
         struct IntView: View {
-            @State var count = 0
+            @State private var count = 0
             var body: some View {
                 Text("COUNT=\(count)")
                     .onAppear { count += 1 }
@@ -192,7 +192,7 @@ struct StateLifecycleRerenderTests {
     func arrayDrivingForEachGrowsOnAppend() {
         let ctx = makeContext(width: 30, height: 16)
         struct ContentView: View {
-            @State var log: [String] = []
+            @State private var log: [String] = []
             var body: some View {
                 VStack(alignment: .leading) {
                     Text("count=\(log.count)")

@@ -8,22 +8,22 @@ import TUIkit
 
 /// Toggle demo page.
 struct TogglePage: View {
-    @State var notificationsEnabled: Bool = false
-    @State var darkModeEnabled: Bool = true
-    @State var showHiddenFiles: Bool = false
+    @State private var notificationsEnabled: Bool = false
+    @State private var darkModeEnabled: Bool = true
+    @State private var showHiddenFiles: Bool = false
 
     // Distinct state for the "themeable label" demo so toggling those rows
     // doesn't alias (and visibly flip) the "Dark Mode" / "Show Hidden Files"
     // toggles above.
-    @State var styledLabelA: Bool = true
-    @State var styledLabelB: Bool = false
+    @State private var styledLabelA: Bool = true
+    @State private var styledLabelB: Bool = false
 
     // Toggle whose label carries explanatory subtext.
-    @State var pushNotifications: Bool = true
+    @State private var pushNotifications: Bool = true
 
     // Shared by the three "Toggle style" rows so they flip together — flipping any
     // one shows every style in the same on/off state for a side-by-side compare.
-    @State var styleDemoOn: Bool = true
+    @State private var styleDemoOn: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {

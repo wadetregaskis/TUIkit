@@ -90,7 +90,7 @@ struct LifecycleModifierTests {
     func taskMutatingStateUpdatesRender() async {
         let ctx = makeContext()
         struct ContentView: View {
-            @State var taskHasRun = false
+            @State private var taskHasRun = false
             var body: some View {
                 VStack {
                     Text(".task has \(taskHasRun ? "indeed" : "not") run")

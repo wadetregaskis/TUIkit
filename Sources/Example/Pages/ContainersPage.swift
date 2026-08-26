@@ -101,7 +101,7 @@ struct SettingsAndAlignmentRow: View, Equatable {
 ///   owns (so the button beside it moves the same state), and a nested one
 ///   that owns its own
 struct ContainersPage: View {
-    @State var showDetails: Bool = false
+    @State private var showDetails: Bool = false
 
     /// The app-wide appearance, which is what decides every border's style.
     /// Cycled here by `b` / `B` — this being the page whose whole subject is

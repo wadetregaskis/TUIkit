@@ -229,12 +229,10 @@ public final class LocalizationService: @unchecked Sendable {
 
         do {
             let data = try Data(contentsOf: url)
-            let dict =
-                try JSONSerialization.jsonObject(
-                    with: data,
-                    options: .fragmentsAllowed
-                ) as? [String: String]
-            return dict
+            return try JSONSerialization.jsonObject(
+                with: data,
+                options: .fragmentsAllowed
+            ) as? [String: String]
         } catch {
             return nil
         }

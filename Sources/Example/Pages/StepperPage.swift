@@ -15,11 +15,11 @@ import TUIkit
 /// - Custom callbacks
 /// - Keyboard controls
 struct StepperPage: View {
-    @State var quantity: Int = 1
-    @State var rating: Int = 3
-    @State var volume: Int = 50
-    @State var colorIndex: Int = 0
-    @State var bigValue: Int = 0
+    @State private var quantity: Int = 1
+    @State private var rating: Int = 3
+    @State private var volume: Int = 50
+    @State private var colorIndex: Int = 0
+    @State private var bigValue: Int = 0
 
     var colors: [String] {
         [L("page.stepper.colorRed"), L("page.stepper.colorGreen"), L("page.stepper.colorBlue"),

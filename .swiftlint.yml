@@ -47,6 +47,7 @@ opt_in_rules:
   - contains_over_filter_is_empty
   - contains_over_first_not_nil
   - contains_over_range_nil_comparison
+  - direct_return
   - empty_collection_literal
   - empty_count
   - empty_string
@@ -70,6 +71,7 @@ opt_in_rules:
   - prefer_self_in_static_references
   - prefer_self_type_over_type_of_self
   - prefer_zero_over_explicit_init
+  - private_swiftui_state
   - reduce_into
   - redundant_nil_coalescing
   - redundant_type_annotation

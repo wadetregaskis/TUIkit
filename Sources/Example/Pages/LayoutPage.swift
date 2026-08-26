@@ -144,10 +144,19 @@ struct LayoutPage: View {
     /// One control for all five, because the point being made is the same in
     /// each: the top layer owns the cells it lands on and nothing shows
     /// through, so what changes as it slides is only WHICH cells those are.
-    @State var zstackTravel = 0.0
+    ///
+    /// - Note: internal rather than `private`, and it cannot be otherwise: the
+    ///   demo that reads it is an `extension LayoutPage` in
+    ///   `LayoutZStackDemos.swift`, and Swift's `private` is file-scoped. A
+    ///   stored property cannot live in an extension, so the only alternative
+    ///   is merging two files that were split on purpose.
+    @State var zstackTravel = 0.0  // swiftlint:disable:this private_swiftui_state
 
     /// Whether the travel sweeps back and forth on its own.
-    @State var zstackAnimates = false
+    ///
+    /// - Note: internal for the reason ``zstackTravel`` gives — the demo that
+    ///   reads it lives in another file.
+    @State var zstackAnimates = false  // swiftlint:disable:this private_swiftui_state
 
     /// Which axes the resize demo offers, driven by the toggles beside it.
     @State private var resizableWidth = true

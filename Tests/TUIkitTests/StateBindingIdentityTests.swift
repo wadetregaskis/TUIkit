@@ -49,8 +49,11 @@ struct StateBindingIdentityTests {
     /// two String @State properties, used as `text:` bindings on two
     /// distinct TextFields inside HStacks.
     private struct TwoFieldPage: View {
-        @State var demoText: String = ""
-        @State var searchQuery: String = ""
+        // Internal rather than `private`: this fixture exists so the test can read
+        // back the value the framework hydrated into it, which is the behaviour
+        // under test. `private` is file-scoped and the assertions live outside.
+        @State var demoText: String = ""  // swiftlint:disable:this private_swiftui_state
+        @State var searchQuery: String = ""  // swiftlint:disable:this private_swiftui_state
 
         var body: some View {
             VStack(alignment: .leading, spacing: 1) {
@@ -77,9 +80,12 @@ struct StateBindingIdentityTests {
     /// handle empty children intermixed with mouse-region-emitting
     /// siblings.
     private struct TwoFieldPageWithOptional: View {
-        @State var demoText: String = ""
-        @State var searchQuery: String = ""
-        @State var submittedValue: String = ""
+        // Internal rather than `private`: this fixture exists so the test can read
+        // back the value the framework hydrated into it, which is the behaviour
+        // under test. `private` is file-scoped and the assertions live outside.
+        @State var demoText: String = ""  // swiftlint:disable:this private_swiftui_state
+        @State var searchQuery: String = ""  // swiftlint:disable:this private_swiftui_state
+        @State private var submittedValue: String = ""
 
         var body: some View {
             VStack(alignment: .leading, spacing: 1) {
@@ -229,13 +235,16 @@ struct StateBindingIdentityTests {
     /// section wrappers — anything that a flat-stack repro would
     /// fail to exercise.
     private struct DemoShapedPage: View {
-        @State var demoText: String = ""
-        @State var searchQuery: String = ""
-        @State var disabledText: String = "Cannot edit"
-        @State var submittedValue: String = ""
-        @State var cursorShapeIndex: Int = 0
-        @State var cursorAnimationIndex: Int = 0
-        @State var cursorSpeedIndex: Int = 1
+        // Internal rather than `private`: this fixture exists so the test can read
+        // back the value the framework hydrated into it, which is the behaviour
+        // under test. `private` is file-scoped and the assertions live outside.
+        @State var demoText: String = ""  // swiftlint:disable:this private_swiftui_state
+        @State var searchQuery: String = ""  // swiftlint:disable:this private_swiftui_state
+        @State private var disabledText: String = "Cannot edit"
+        @State private var submittedValue: String = ""
+        @State private var cursorShapeIndex: Int = 0
+        @State private var cursorAnimationIndex: Int = 0
+        @State private var cursorSpeedIndex: Int = 1
 
         var body: some View {
             VStack(alignment: .leading, spacing: 1) {
@@ -377,7 +386,10 @@ struct StateBindingIdentityTests {
     // MARK: - Click-to-position caret
 
     private struct SingleFieldPage: View {
-        @State var text = "hello"
+        // Internal rather than `private`: this fixture exists so the test can read
+        // back the value the framework hydrated into it, which is the behaviour
+        // under test. `private` is file-scoped and the assertions live outside.
+        @State var text = "hello"  // swiftlint:disable:this private_swiftui_state
         var body: some View {
             TextField("Label", text: $text)
         }

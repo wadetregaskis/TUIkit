@@ -12,10 +12,10 @@ import TUIkit
 /// Enter the image is downloaded and rendered. Status bar items allow
 /// cycling through character set, color mode, and dithering settings.
 struct ImageURLPage: View {
-    @State var imageURL: String = ""
-    @State var activeURL: String = ""
-    @State var settings = ImageDemoSettings()
-    @State var zoom: Double = 1.0
+    @State private var imageURL: String = ""
+    @State private var activeURL: String = ""
+    @State private var settings = ImageDemoSettings()
+    @State private var zoom: Double = 1.0
 
     var body: some View {
         ImageDemoLayout(settings: $settings) {

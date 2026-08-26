@@ -147,9 +147,9 @@ private enum OverlayDemo: Int, CaseIterable {
 /// with dimmed background content.
 struct OverlaysPage: View {
     @FocusState private var focusedDemo: OverlayDemo?
-    @State var showOverlay: Bool = false
-    @State var authUsername: String = ""
-    @State var authPassword: String = ""
+    @State private var showOverlay: Bool = false
+    @State private var authUsername: String = ""
+    @State private var authPassword: String = ""
     @State private var showConfirm = false
     @State private var confirmChoice = "—"
     @State private var showPopover = false

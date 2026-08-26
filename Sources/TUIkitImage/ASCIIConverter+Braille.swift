@@ -63,10 +63,7 @@ extension ASCIIConverter {
         // value, was 128 * 1000 = 128_000.)
         let scaledThreshold = Int(monoThreshold * 1000)
 
-        var lines = [String]()
-        lines.reserveCapacity(height)
-
-        let result = image.pixels.withUnsafeBufferPointer { buffer -> [String] in
+        return image.pixels.withUnsafeBufferPointer { buffer -> [String] in
             var lines = [String]()
             lines.reserveCapacity(height)
 
@@ -148,7 +145,5 @@ extension ASCIIConverter {
 
             return lines
         }
-
-        return result
     }
 }

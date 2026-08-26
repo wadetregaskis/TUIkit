@@ -12,8 +12,8 @@ import TUIkit
 /// Displays a bundled demo image and provides status bar items to
 /// cycle through character set, color mode, and dithering settings.
 struct ImageFilePage: View {
-    @State var settings = ImageDemoSettings()
-    @State var zoom: Double = 1.0
+    @State private var settings = ImageDemoSettings()
+    @State private var zoom: Double = 1.0
 
     var body: some View {
         // The image lives in a two-axis ScrollView fitted to the viewport: at zoom 1

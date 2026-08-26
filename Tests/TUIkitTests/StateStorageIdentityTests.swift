@@ -241,7 +241,7 @@ struct StateStorageIdentityTests {
 /// A view that initializes @State to 0 then immediately sets it to 42.
 /// On reconstruction, the state should still be 42 (not reset to 0).
 private struct CounterView: View {
-    @State var countValue = 0
+    @State private var countValue = 0
 
     var body: some View {
         if countValue == 0 {
@@ -263,7 +263,10 @@ private struct ParentWithTwoCounters: View {
 }
 
 private struct CounterA: View {
-    @State var value = 0
+    // Internal rather than `private`: this fixture exists so the test can read
+    // back the value the framework hydrated into it, which is the behaviour
+    // under test. `private` is file-scoped and the assertions live outside.
+    @State var value = 0  // swiftlint:disable:this private_swiftui_state
 
     var body: some View {
         if value == 0 { value = 10 }
@@ -272,7 +275,10 @@ private struct CounterA: View {
 }
 
 private struct CounterB: View {
-    @State var value = 0
+    // Internal rather than `private`: this fixture exists so the test can read
+    // back the value the framework hydrated into it, which is the behaviour
+    // under test. `private` is file-scoped and the assertions live outside.
+    @State var value = 0  // swiftlint:disable:this private_swiftui_state
 
     var body: some View {
         if value == 0 { value = 20 }
@@ -282,13 +288,19 @@ private struct CounterB: View {
 
 /// A view with a single `@State` (default 42), for render-time binding tests.
 private struct OneStateView: View {
-    @State var value = 42
+    // Internal rather than `private`: this fixture exists so the test can read
+    // back the value the framework hydrated into it, which is the behaviour
+    // under test. `private` is file-scoped and the assertions live outside.
+    @State var value = 42  // swiftlint:disable:this private_swiftui_state
     var body: some View { Text("\(value)") }
 }
 
 /// A view with two `@State` properties, for distinct-slot tests.
 private struct TwoStateView: View {
-    @State var number = 10
-    @State var text = "hello"
+    // Internal rather than `private`: this fixture exists so the test can read
+    // back the value the framework hydrated into it, which is the behaviour
+    // under test. `private` is file-scoped and the assertions live outside.
+    @State var number = 10  // swiftlint:disable:this private_swiftui_state
+    @State var text = "hello"  // swiftlint:disable:this private_swiftui_state
     var body: some View { Text("\(number):\(text)") }
 }

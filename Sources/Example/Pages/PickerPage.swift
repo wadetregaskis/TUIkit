@@ -15,10 +15,10 @@ import TUIkit
 /// - Inline style with `ForEach`-generated options
 /// - Live state changes demonstrating `@State` persistence across re-renders
 struct PickerPage: View {
-    @State var fruit: String = "apple"
-    @State var size: String = "medium"
-    @State var priority: Int = 2
-    @State var number: Int = 1
+    @State private var fruit: String = "apple"
+    @State private var size: String = "medium"
+    @State private var priority: Int = 2
+    @State private var number: Int = 1
     @State private var date = Date()
 
     /// Pickers that open a menu.

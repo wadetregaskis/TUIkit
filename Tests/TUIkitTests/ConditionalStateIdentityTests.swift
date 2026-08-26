@@ -16,12 +16,18 @@ import Testing
 @testable import TUIkit
 
 private struct StatefulA: View {
-    @State var text: String = "A"
+    // Internal rather than `private`: this fixture exists so the test can read
+    // back the value the framework hydrated into it, which is the behaviour
+    // under test. `private` is file-scoped and the assertions live outside.
+    @State var text: String = "A"  // swiftlint:disable:this private_swiftui_state
     var body: some View { Text("A=\(text)") }
 }
 
 private struct StatefulB: View {
-    @State var text: String = "B"
+    // Internal rather than `private`: this fixture exists so the test can read
+    // back the value the framework hydrated into it, which is the behaviour
+    // under test. `private` is file-scoped and the assertions live outside.
+    @State var text: String = "B"  // swiftlint:disable:this private_swiftui_state
     var body: some View { Text("B=\(text)") }
 }
 

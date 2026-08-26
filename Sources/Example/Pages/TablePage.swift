@@ -164,29 +164,29 @@ private struct Track: Identifiable, Sendable {
 /// - Keyboard navigation
 /// - Scroll indicators
 struct TablePage: View {
-    @State var singleSelection: String?
-    @State var multiSelection: Set<String> = []
-    @State var ratioSelection: String?
-    @State var notesSelection: Int?
-    @State var fixedHeightByLine = true
-    @State var fixedHeightFollowMargin = FollowMarginChoice.none.rawValue
+    @State private var singleSelection: String?
+    @State private var multiSelection: Set<String> = []
+    @State private var ratioSelection: String?
+    @State private var notesSelection: Int?
+    @State private var fixedHeightByLine = true
+    @State private var fixedHeightFollowMargin = FollowMarginChoice.none.rawValue
     /// Which overflow affordance the "Fixed height" table shows. The two are
     /// alternatives, not layers: a bar spends a column and the "N more
     /// above/below" lines spend a viewport line, so a view draws one or the
     /// other and one toggle picks. That is what `.scrollIndicatorStyle` is —
     /// WHICH indicator, kept separate from `.scrollIndicators`, which is
     /// WHETHER one is shown at all (both are automatic here).
-    @State var fixedHeightScrollbar = true
-    @State var browserURL: URL = FileBrowser.seedDirectory()
-    @State var liveSelection: Int?
+    @State private var fixedHeightScrollbar = true
+    @State private var browserURL: URL = FileBrowser.seedDirectory()
+    @State private var liveSelection: Int?
     /// Whether the big notes table has a row cursor. See the toggle's note.
-    @State var notesSelectable = true
+    @State private var notesSelectable = true
     /// Drives the animated-cells table: bumped by a `.task` loop (250 ms).
-    @State var liveTick: Int = 0
+    @State private var liveTick: Int = 0
     /// The reorder demo's selection is a SET, so several rows can travel
     /// together — grab any one of them and they all move.
-    @State var playlistSelection: Set<String> = []
-    @State var reorderFeedback = ReorderFeedbackChoice.live.rawValue
+    @State private var playlistSelection: Set<String> = []
+    @State private var reorderFeedback = ReorderFeedbackChoice.live.rawValue
     /// The reorderable table's rows — `@State`, because `onMove` writes to them.
     @State fileprivate var playlist = Track.playlist
     /// The sortable table's rows. The table publishes the order it was asked
@@ -194,7 +194,7 @@ struct TablePage: View {
     /// is SwiftUI's division of labour too.
     @State fileprivate var sortedTracks = Track.playlist
     @State fileprivate var trackSort = [KeyPathComparator(\Track.title, order: .forward)]
-    @State var sortSelection: String?
+    @State private var sortSelection: String?
 
     /// The 300-row notes table, with or without a selection binding — two
     /// different `Table` initializers, so this is a branch rather than an

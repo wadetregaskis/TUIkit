@@ -21,30 +21,30 @@ import TUIkit
 /// exotic interactions where you wire mouse events into your own
 /// views.
 struct MousePage: View {
-    @State var tapCount: Int = 0
-    @State var lastTapAt: String = "—"
-    @State var scrollDeltaY: Int = 0
-    @State var scrollDeltaX: Int = 0
-    @State var dragPhase: String = L("page.mouse.phaseIdle")
-    @State var dragX: Int = 0
-    @State var dragY: Int = 0
-    @State var dragDeltaX: Int = 0
-    @State var dragDeltaY: Int = 0
-    @State var rightClicks: Int = 0
-    @State var lastModifier: String = "—"
-    @State var isHovering: Bool = false
-    @State var scrollTicks: Int = 0
-    @State var fruits: [String] = ["🍎 Apple", "🍐 Pear", "🍇 Grapes"]
-    @State var basket: [String] = []
-    @State var basketTargeted: Bool = false
-    @State var shelfTargeted: Bool = false
-    @State var lastScrollDirection: String = "—"
+    @State private var tapCount: Int = 0
+    @State private var lastTapAt: String = "—"
+    @State private var scrollDeltaY: Int = 0
+    @State private var scrollDeltaX: Int = 0
+    @State private var dragPhase: String = L("page.mouse.phaseIdle")
+    @State private var dragX: Int = 0
+    @State private var dragY: Int = 0
+    @State private var dragDeltaX: Int = 0
+    @State private var dragDeltaY: Int = 0
+    @State private var rightClicks: Int = 0
+    @State private var lastModifier: String = "—"
+    @State private var isHovering: Bool = false
+    @State private var scrollTicks: Int = 0
+    @State private var fruits: [String] = ["🍎 Apple", "🍐 Pear", "🍇 Grapes"]
+    @State private var basket: [String] = []
+    @State private var basketTargeted: Bool = false
+    @State private var shelfTargeted: Bool = false
+    @State private var lastScrollDirection: String = "—"
 
     /// In-flight "poof" removal animations (fruit dragged out of the basket
     /// and dropped in the void), each at its drop point in the drag-and-drop
     /// section's coordinate space.
-    @State var poofs: [PoofPuff] = []
-    @State var poofGeneration: Int = 0
+    @State private var poofs: [PoofPuff] = []
+    @State private var poofGeneration: Int = 0
     @AppStorage("mouseDemo.poofStyle") var poofStyleRaw: Int = 0
 
     /// A fruit dragged OUT of the basket — a distinct payload type, so the

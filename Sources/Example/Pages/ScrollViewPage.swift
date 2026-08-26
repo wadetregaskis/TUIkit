@@ -25,24 +25,24 @@ import TUIkit
 ///      how to suppress the indicator chrome without disabling
 ///      scrolling.
 struct ScrollViewPage: View {
-    @State var searchText: String = ""
-    @State var counter: Int = 0
-    @State var sliderValue: Double = 50
+    @State private var searchText: String = ""
+    @State private var counter: Int = 0
+    @State private var sliderValue: Double = 50
 
     // Live scrollbar settings for the configurable demo below.
-    @State var barVisibility: ScrollIndicatorVisibility = .visible
+    @State private var barVisibility: ScrollIndicatorVisibility = .visible
     /// WHICH indicator, as opposed to whether — the other half of the pair
     /// (#555). Picking the text form leaves the visibility picker above it
     /// still meaningful: `.hidden` then draws neither.
-    @State var indicatorStyle: ScrollIndicatorStyle = .scrollbar
-    @State var barArrows: ScrollbarArrows = .single
-    @State var barProportional: Bool = true
-    @State var barClickBehavior: ScrollbarClickBehavior = .page
-    @State var revealFollowMargin = FollowMarginChoice.none.rawValue
+    @State private var indicatorStyle: ScrollIndicatorStyle = .scrollbar
+    @State private var barArrows: ScrollbarArrows = .single
+    @State private var barProportional: Bool = true
+    @State private var barClickBehavior: ScrollbarClickBehavior = .page
+    @State private var revealFollowMargin = FollowMarginChoice.none.rawValue
     /// `.scrollDisabled` — the chrome stays, the gestures stop.
-    @State var scrollPinned: Bool = false
+    @State private var scrollPinned: Bool = false
     /// `.scrollOverscroll` — how far past its edges the view may be pushed.
-    @State var overscroll: OverscrollChoice = .off
+    @State private var overscroll: OverscrollChoice = .off
 
     /// The overscroll allowances `.scrollOverscroll` offers, as one choice
     /// rather than an on/off plus a which-kind modifier: they are three points

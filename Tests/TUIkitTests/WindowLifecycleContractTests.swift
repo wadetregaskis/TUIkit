@@ -139,7 +139,10 @@ private final class ValueBox: @unchecked Sendable {
 
 private struct StatefulProbeRow: View {
     let box: ValueBox
-    @State private var value = 0
+    // Internal rather than `private`: this fixture exists so the test can read
+    // back the value the framework hydrated into it, which is the behaviour
+    // under test. `private` is file-scoped and the assertions live outside.
+    @State var value = 0  // swiftlint:disable:this private_swiftui_state
 
     var body: some View {
         box.observedValues.append(value)
