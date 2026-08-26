@@ -62,6 +62,7 @@ public final class StateStorage: @unchecked Sendable {
     /// | -30… | `NavigationPresentationModifier` |
     /// | -40… | `_UserResizableCore` |
     /// | -50… | `_ToggleCore` |
+    /// | -60… | `TaskModifier` |
     ///
     /// Taking a new range: claim the next free ten here, in this table.
     /// (Leaf `Renderable` views whose slots can never share an identity with

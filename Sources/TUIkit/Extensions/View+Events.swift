@@ -438,7 +438,7 @@ extension View {
             content: self,
             task: action,
             priority: priority,
-            idToken: nil
+            id: nil
         )
     }
 
@@ -474,7 +474,7 @@ extension View {
             content: self,
             task: action,
             priority: priority,
-            idToken: "\(id)"
+            id: AnyEquatableBox(id)
         )
     }
 }

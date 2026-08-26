@@ -115,13 +115,24 @@ struct TaskModifier<Content: View>: View {
     /// Task priority.
     let priority: TaskPriority
 
-    /// The textual form of a `.task(id:)` identifier, folded into the lifecycle
-    /// token so the task restarts whenever it changes; `nil` for a plain
-    /// `.task`. A changed token means the old token is no longer recorded this
-    /// frame, so it "disappears" (cancelling the previous task) while the new
-    /// token appears fresh and starts the new task — the same appear/disappear
+    /// A `.task(id:)` identifier, or `nil` for a plain `.task`.
+    ///
+    /// Type-erased through ``AnyEquatableBox`` so the comparison is the `==`
+    /// SwiftUI documents — "the modifier tests whether a new value for the
+    /// `id` parameter equals the previous value". It used to be the id's
+    /// `String(describing:)` folded into the lifecycle token, which is a
+    /// different relation in both directions: two UNEQUAL instances of an
+    /// `Equatable` class describe identically, so swapping them never
+    /// restarted the task (Apple's own worked example is exactly that), and
+    /// two EQUAL structs whose description includes a field `==` ignores
+    /// describe differently, so an in-flight task was cancelled and restarted
+    /// for a change SwiftUI treats as a non-event.
+    ///
+    /// A changed id means the old token is no longer recorded this frame, so
+    /// it "disappears" (cancelling the previous task) while the new token
+    /// appears fresh and starts the new one — the same appear/disappear
     /// machinery that drives `.onAppear` / `.onDisappear`.
-    let idToken: String?
+    let id: AnyEquatableBox?
 
     var body: Never {
         fatalError("TaskModifier renders via Renderable")
@@ -137,7 +148,7 @@ extension TaskModifier: Renderable {
             context.environment.volatileReadTracker?.recordRenderSideEffect()
             let lifecycle = context.environment.lifecycle!
             var token = lifecycleToken("task", context)
-            if let idToken { token += "-\(idToken)" }
+            if let id { token += "-gen\(generation(for: id, context: context))" }
 
             // Start the task only on the first appearance for this identity.
             let isFirstAppear = !lifecycle.hasAppeared(token: token)
@@ -152,6 +163,32 @@ extension TaskModifier: Renderable {
             }
         }
         return TUIkit.renderToBuffer(content, context: context)
+    }
+
+    /// A counter that advances every time `id` stops being `==` to the value
+    /// this identity last saw.
+    ///
+    /// The lifecycle machinery keys on a token and a token is a string, so the
+    /// id's identity *as a value* has to become one somehow. A counter does it
+    /// without ever rendering the value: the id itself is persisted beside it
+    /// and compared with `==`, which is the whole point.
+    ///
+    /// A reserved NEGATIVE slot, because this modifier persists state at the
+    /// same identity as the content it renders — index 0 belongs to that
+    /// content's first `@State`. See ``StateStorage/StateKey``.
+    private func generation(for id: AnyEquatableBox, context: RenderContext) -> Int {
+        guard let stateStorage = context.stateStorage else { return 0 }
+        let box: StateBox<TaskIDGeneration> = stateStorage.storage(
+            for: StateStorage.StateKey(
+                identity: context.identity, propertyIndex: TaskStateIndex.idGeneration),
+            default: TaskIDGeneration(id: id, generation: 0))
+        if box.value.id != id {
+            box.value = TaskIDGeneration(id: id, generation: box.value.generation + 1)
+        }
+        // The box must survive the per-frame StateStorage GC, or the generation
+        // resets to 0 every render and a task restarts forever.
+        stateStorage.markActive(context.identity)
+        return box.value.generation
     }
 }
 
@@ -180,4 +217,18 @@ extension TaskModifier: Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureChild(content, proposal: proposal, context: context)
     }
+}
+
+/// The `.task(id:)` value an identity last saw, and how many times it has
+/// changed since.
+private struct TaskIDGeneration {
+    let id: AnyEquatableBox
+    let generation: Int
+}
+
+/// StateStorage property indices for ``TaskModifier``. A free enum because the
+/// modifier is generic (which can't hold static stored properties).
+private enum TaskStateIndex {
+    /// Range -60, claimed in ``StateStorage/StateKey``'s table.
+    static let idGeneration = -60
 }
