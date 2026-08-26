@@ -47,6 +47,17 @@ public struct ChildView {
     /// 96→112 stride step), and this struct is built and copied per child per
     /// pass — the growth alone cost the all-invalidating `churn` scenario
     /// ~16% of its frame. The `Int32` packs into existing padding: 97 again.
+    ///
+    /// - Note: The struct measures **105 bytes / 112 stride** today, not the
+    ///   97 above — later fields have re-crossed the boundary. Shrinking it
+    ///   back was tried on 2026-08-25 and **measured as nothing**: the only
+    ///   way down is to shrink `childIndex` and `spacerMinLength` to `Int32`
+    ///   too (a pure field REORDER measures 108/112, i.e. no help at all),
+    ///   and those conversions cost per access what the smaller copy saves —
+    ///   88 bytes/stride read `churn` +4.3% against a same-binary null test
+    ///   of +3.7% on that scenario, with every other scenario flat. So the
+    ///   number above is history, not a lever: do not re-derive it without a
+    ///   clean-built A/B on both sides (§40.2 of the performance profile).
     private let providerSlot: Int32
 
     /// Whether this child is a Spacer.

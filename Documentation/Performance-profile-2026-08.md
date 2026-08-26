@@ -3018,3 +3018,81 @@ machine's floor. **The stale-build rule extends to internal types**: adding a
 stored property to a same-module class still earned a clean rebuild before its
 bench binary was trusted. And the section above: **neuter the mechanism to
 test attribution**.
+
+## 41. Two string sites, and a struct that would not shrink (2026-08-25, later)
+
+A second pass over the post-§40 profile, with fresh traces of the six
+most expensive scenarios. Two commits shipped; one experiment reverted, and
+the reverted one is the interesting half.
+
+**The bordered line (deep −10.1% [−10.6, −9.9]).**
+`BorderRenderer.contentLine` assembled every bordered content line as
+`vertical + styledContent + ANSIRenderer.reset + vertical`, over a
+`content + String(repeating:)` pad: a five-link `+` chain, each link
+allocating. It runs per content line per container per frame, and down a
+nested spine each level re-borders the lines below it, so the count is
+O(depth²). On `deep` that was `String.+` at 14.2% of the frame (13.3% of it
+under `_ContainerViewCore.renderToBuffer`, which the helper inlines into),
+over `_allocateStringStorage` 13.9% and `_swift_allocObject_` 15.2%. The
+unstyled case — nearly every line — now reserves the exact byte count once
+and appends the five pieces. Byte-identical by construction.
+
+**The shared spaces run (anyview −11.4% [−12.7, −9.6]).** `asciiSpaces(n)`
+exists to hand out padding with no allocation, and it did — but produced the
+slice with `run.prefix(n)`, and `Collection.prefix` advances an index n
+places, which on a `String` is a GRAPHEME walk: one Unicode break query per
+space, per call. The allocation was gone; the scan replacing it was not. It
+is the most-called helper on the render path, and it showed as
+`String.index(_:offsetBy:limitedBy:)` under `Collection.prefix` at 2.9% of a
+`deep` frame, purely to re-derive an offset into a run of spaces that never
+changes. Every index into the run is now computed once into a table, so the
+slice is a subscript.
+
+Cumulative for the two, clean build against clean build: `anyview` −12.0%,
+`deep` −11.8%, `tables-scroll` −4.5%, `framedcolumns` −2.9%, `preferences`
+−2.6%, `textwall`/`table` −2.2%, `table-multiline` −1.9%, `scrollfollow`
+−1.8%, `customlayout` −1.4%, `megalist` −1.2%, `tables-vstack` −0.9%.
+Nothing slower.
+
+### 41.1 The struct that would not shrink, and a benchmark that lied
+
+`ChildView` is built and copied per child per pass, and its own comment
+records a stride step (96→112) that once cost `churn` ~16%. It measures
+**105 bytes / 112 stride** today, so shrinking it looked like free money:
+`childIndex` `Int`→`Int32` and `spacerMinLength` `Int?`→`Int32`-with-sentinel
+took it to 88/88, a 21% cut in per-child copy bytes.
+
+It measured **`churn` +10.4%**, everything else flat. A smaller struct with
+the same job should not be slower, and that suspicion is what unpicked it:
+
+1. **The A/B compared build states, not code.** The baseline binary was an
+   incremental build; the variant came after a `swift package clean`. This
+   project's own rule says never to trust incremental output across a
+   stored-property layout change — and the proof arrived unprompted, when a
+   later incremental binary **SIGSEGV'd** on `customlayout` mid-sweep, the
+   documented signature of a mixed-layout build. Rebuilt clean on both
+   sides, the same change read **+4.3%**, not +10.4%.
+2. **The floor was higher than assumed.** A null test — the clean binary
+   against *itself*, 24 reps — read `churn` +0.5% [−0.9, **+3.7**] and
+   flagged `fanout` +2.0% as "slower". On a box this busy the tool can
+   produce a false slower verdict at exactly the size being chased, so
+   +4.3% is barely outside its own noise.
+3. **The change was never "smaller, otherwise identical".** Shrinking
+   required turning a stored property into a computed one (a branch and a
+   conversion on every read) and `Int`→`Int32` (conversions at every
+   construction and every `childContext`). `churn` rebuilds every
+   `ChildView` every frame, so that is a coherent mechanism for a small
+   real cost. And the genuinely behaviour-identical version — a pure field
+   REORDER — measures **108/112**: no shrink at all. There is no free
+   variant of this change to test.
+
+Dropped, with the reason corrected: not "smaller is slower", but "the only
+available way to make it smaller pays per access what it saves per copy,
+and the net is somewhere between nothing and a small loss".
+
+Three rules came out of it, all cheap to follow: **clean-build both sides
+whenever a stored-property layout changes**; **run the null test on the
+specific scenario making the claim, at the same rep count**, because the
+floor is per-scenario and per-day; and **check the change is actually the
+one being described** — this one had two accessors' worth of new work
+hiding inside "just make it smaller".
