@@ -118,9 +118,14 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             // renderToBuffer fills `availableWidth` in that case (a width-flexible
             // child rendered at the full width makes maxChildWidth == available).
             // Spacers here are vertical, so they don't make the column
-            // width-flexible. (Was hard-coded `false`, which under-reported the
-            // column to its parent and mis-drove width distribution.)
-            if size.isWidthFlexible {
+            // width-flexible — SwiftUI: a Spacer "expands along the major axis
+            // of its containing stack layout", which for a column is the
+            // vertical one. `Spacer` has no axis input and reports BOTH axes
+            // flexible, so the exclusion has to happen here; `_HStackCore`
+            // makes the mirror one by handling spacers in a branch of their
+            // own. (Was hard-coded `false`, which under-reported the column to
+            // its parent and mis-drove width distribution.)
+            if !child.isSpacer, size.isWidthFlexible {
                 hasFlexibleWidth = true
             }
         }
@@ -197,7 +202,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         for slot in slots {
             if slot.child.isSpacer {
                 hasSpacer = true
-                widthFlexible = true
+                // Vertical only, as in the eager path above.
                 heightFlexible = true
             }
             if slot.size.isWidthFlexible { widthFlexible = true }
