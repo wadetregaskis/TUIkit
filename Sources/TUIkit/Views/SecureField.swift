@@ -36,7 +36,18 @@
 /// | Home / Ctrl+A | Move cursor to start |
 /// | End / Ctrl+E | Move cursor to end |
 /// | Option+Ctrl+A | Select all |
+/// | Ctrl+C / Ctrl+X | Nothing — see below |
+/// | Ctrl+V | Paste at cursor |
 /// | Enter | Trigger onSubmit action |
+///
+/// ## The contents never leave the field
+///
+/// Cut and copy are refused, as they are in SwiftUI ("prevents anyone from
+/// cutting or copying the field's contents") and in AppKit's
+/// `NSSecureTextField`. Masking alone would not achieve that: the bullets are
+/// drawn at render time and the field holds the real string, so a copy would
+/// have handed the password to `pbcopy`. Paste still works — the promise is
+/// one-directional, and pasting in is how a password manager fills the field.
 ///
 /// # Basic Example
 ///
@@ -324,6 +335,8 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         // Keep handler in sync with current values
         handler.text = text
         handler.canBeFocused = !isDisabled
+        // The one place secure fields diverge from plain ones: no extraction.
+        handler.isSecure = true
         // Compose the per-field closure with any cascading `.onSubmit(of:)` that
         // matches this field's role (see TextField for the rationale; stays nil
         // when empty so Return can fall through).

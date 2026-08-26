@@ -18,9 +18,10 @@ extension TextFieldHandler {
 
     /// Copies the selected text to the system clipboard.
     ///
-    /// Uses `pbcopy` on macOS. Does nothing if no text is selected.
+    /// Uses `pbcopy` on macOS. Does nothing if no text is selected, and
+    /// nothing at all in a ``SecureField`` — see ``TextFieldHandler/isSecure``.
     func copySelection() {
-        guard let range = selectionRange else { return }
+        guard !isSecure, let range = selectionRange else { return }
 
         let current = text.wrappedValue
         let startIndex = current.index(current.startIndex, offsetBy: range.lowerBound)
@@ -32,9 +33,14 @@ extension TextFieldHandler {
 
     /// Cuts the selected text to the system clipboard.
     ///
-    /// Uses `pbcopy` on macOS. Does nothing if no text is selected.
+    /// Uses `pbcopy` on macOS. Does nothing if no text is selected, and
+    /// nothing at all in a ``SecureField`` — the cut is refused outright
+    /// rather than degraded to a delete, because that is what SwiftUI and
+    /// `NSSecureTextField` both do, and a Cut that silently became a Delete
+    /// would destroy the field's contents while looking like it had copied
+    /// them. See ``TextFieldHandler/isSecure``.
     func cutSelection() {
-        guard let range = selectionRange else { return }
+        guard !isSecure, let range = selectionRange else { return }
 
         let current = text.wrappedValue
         let startIndex = current.index(current.startIndex, offsetBy: range.lowerBound)
@@ -94,16 +100,41 @@ extension TextFieldHandler {
 
 // MARK: - Clipboard Helpers
 
+/// The clipboard a text field reads and writes.
+///
+/// Two closures rather than a direct ``SystemClipboard`` call, held per
+/// handler, so a test can observe what a field *would* have put on the
+/// pasteboard without touching the real one. `SecureField` is why: its
+/// contract is that nothing is copied at all, and asserting that against the
+/// live pasteboard means racing every other test in the process over one
+/// shared global — a race that fails in the direction which looks like
+/// success, since a test whose sentinel was clobbered skips instead of
+/// failing. It also keeps the suite from writing to the developer's
+/// pasteboard as a side effect of running.
+struct ClipboardAccess: Sendable {
+    /// Puts `text` on the clipboard.
+    var write: @Sendable (String) -> Void
+
+    /// Reads the clipboard, or `nil` when there is nothing to read.
+    var read: @Sendable () -> String?
+
+    /// The real thing. `SystemClipboard` owns the child I/O and its hardening
+    /// (non-blocking, deadline-bounded pipes) — see its doc comment for the
+    /// failure modes that motivated it.
+    static let system = Self(
+        write: { SystemClipboard.copy($0) },
+        read: { SystemClipboard.paste() }
+    )
+}
+
 extension TextFieldHandler {
-    /// Copies text to the system clipboard. `SystemClipboard` owns the child
-    /// I/O and its hardening (non-blocking, deadline-bounded pipes) — see its
-    /// doc comment for the failure modes that motivated it.
+    /// Copies text to the clipboard.
     fileprivate func copyToClipboard(_ text: String) {
-        SystemClipboard.copy(text)
+        clipboard.write(text)
     }
 
-    /// Pastes text from the system clipboard, or `nil` when unavailable.
+    /// Pastes text from the clipboard, or `nil` when unavailable.
     fileprivate func pasteFromClipboard() -> String? {
-        SystemClipboard.paste()
+        clipboard.read()
     }
 }

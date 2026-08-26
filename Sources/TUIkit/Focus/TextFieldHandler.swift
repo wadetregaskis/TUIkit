@@ -63,6 +63,24 @@ final class TextFieldHandler: Focusable {
     /// Whether this element can currently receive focus.
     var canBeFocused: Bool
 
+    /// Whether the field masks its contents, i.e. is a ``SecureField``.
+    ///
+    /// `SecureField` reuses this handler because the key handling really is
+    /// identical — except here. SwiftUI's `SecureField` documents that it
+    /// "prevents anyone from cutting or copying the field's contents", which
+    /// is also what AppKit's `NSSecureTextField` does, so ``copySelection()``
+    /// and ``cutSelection()`` refuse while this is set. Masking alone does
+    /// not do it: the bullets are drawn at render time and the handler holds
+    /// the real string, so a copy would have put the password on the system
+    /// pasteboard. Pasting IN stays allowed — the promise is one-directional.
+    /// Synced by the field's render pass.
+    var isSecure: Bool = false
+
+    /// The clipboard this field reads and writes. Injectable so a test can
+    /// see what would have been copied without a real pasteboard — see
+    /// ``ClipboardAccess`` for why that is not a convenience.
+    var clipboard: ClipboardAccess = .system
+
     /// The cursor position (character index where next input will be inserted).
     var cursorPosition: Int
 
