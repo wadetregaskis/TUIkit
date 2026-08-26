@@ -208,6 +208,13 @@ extension AppRunner {
             TerminalHost.identify(using: terminal)
         }
 
+        // AFTER identification, because the question is only safe to ask a host
+        // known to answer it: DECRQM's `CSI ? Ps $ p` is the one CSI shape
+        // Apple Terminal prints instead of consuming. Before the render loop,
+        // for the same reason identification is — the advance model this
+        // protects is frozen into `FrameDiffWriter` at construction.
+        terminal.pinGraphemeClusteringIfNeeded()
+
         let renderer = RenderLoop(
             app: app,
             terminal: terminal,

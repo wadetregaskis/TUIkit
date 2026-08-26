@@ -168,6 +168,50 @@ names nothing, and a user can set it to anything. An `LC_TERMINAL` naming a
 terminal with no model here falls through to `TERM` rather than blocking it:
 it did not name *this* host, so it has nothing to outrank.
 
+### Ghostty's model is conditional on mode 2027 — measured 2026-08-26
+
+Every Ghostty number in this document was measured with DEC mode 2027
+(grapheme clustering) **set**, which is Ghostty's default. Nothing checked
+that, and the mode is not a constant.
+
+Resetting it moves six of eleven probed classes:
+
+| cluster | 2027 set | 2027 reset |
+|---|---|---|
+| 🖥️ VS-16 pictograph | 2 | **1** |
+| ⬛︎ VS-15 chrome | 1 | **2** |
+| 🇺🇸 flag pair | 2 | **4** |
+| 👍🏽 skin tone | 2 | **4** |
+| 👩‍🚀 ZWJ | 2 | **4** |
+| 1️⃣ keycap | 2 | **1** |
+| 🖥 bare pictograph · SF Symbol · 🇦 lone RI · 中 · 👍 | unchanged | unchanged |
+
+In the reset state TUIkit's Ghostty compensation is wrong **in both
+directions**: it emits no `CUF` for a VS-16 cluster that now under-advances,
+and it emits one for a VS-15 glyph that no longer does. Skin tones, which
+Ghostty is the only measured host not to need stripped, over-advance to 4 and
+strand two cells.
+
+**And the mode outlives the process.** Measured by resetting it in one program
+and reading it back from a separate one launched afterwards: `DECRQM` answered
+`ESC[?2027;2$y` and the whole reset-column behaviour was still in force. So
+any program that resets mode 2027 and exits without restoring it leaves every
+later Ghostty session in a state this document mis-describes — this is not a
+hypothetical about user configuration, it is two escape sequences.
+
+**What TUIkit does.** After identification, and only when the host is Ghostty,
+it asks `DECRQM` and — if the answer is "supported, and off" — sets the mode
+and restores it on exit. Silence, "not recognised" (`0`) and "permanently
+reset" (`4`) all leave the terminal alone, per the governing rule.
+
+The gating is not incidental. `DECRQM` is `CSI ? Ps $ p`: a private-parameter
+marker *and* an intermediate byte, which is exactly the shape Apple Terminal
+prints instead of consuming (see the CSI rule above). Asking blind would put a
+stray `p` on the user's shell. `Tools/Smoke/mode_pin_smoke.py` pins both
+halves — asked only of Ghostty, set only when off, reset only if set — and
+both were mutation-checked: removing the host gate makes the unidentified case
+fail, and pinning unconditionally makes the three already-fine cases fail.
+
 ### Asking the terminal — Device Attributes (measured 2026-08-26)
 
 Device Attributes are answered by terminals that answer no XTVERSION, and

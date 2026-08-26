@@ -216,3 +216,68 @@ struct TerminalIdentityQueryTests {
                 "these leak their final byte on Apple Terminal: \(offending)")
     }
 }
+
+@Suite("Terminal mode query")
+struct TerminalModeQueryTests {
+
+    @Test("A DECRPM reply is read back as its state")
+    func parsesEveryReplyValue() {
+        for (value, expected) in [
+            (0, TerminalModeQuery.State.notRecognised), (1, .set), (2, .reset),
+            (3, .permanentlySet), (4, .permanentlyReset),
+        ] {
+            let reply = Array("\u{1B}[?2027;\(value)$y".utf8)
+            #expect(TerminalModeQuery.parse(reply, mode: 2027) == expected)
+        }
+    }
+
+    @Test("Silence is nil, not a state")
+    func silenceIsNotAnAnswer() {
+        // A terminal with no DECRQM answers the fence and nothing else, and
+        // that must read as "it did not say" rather than as any mode value —
+        // the difference between leaving the terminal alone and reconfiguring
+        // it on no evidence.
+        #expect(TerminalModeQuery.parse(Array("\u{1B}[1;1R".utf8), mode: 2027) == nil)
+        #expect(TerminalModeQuery.parse([], mode: 2027) == nil)
+    }
+
+    @Test("A reply about a different mode is not mistaken for this one")
+    func otherModesAreIgnored() {
+        let reply = Array("\u{1B}[?2026;1$y\u{1B}[1;1R".utf8)
+        #expect(TerminalModeQuery.parse(reply, mode: 2027) == nil)
+        #expect(TerminalModeQuery.parse(reply, mode: 2026) == .set)
+    }
+
+    @Test("Only a supported-and-off mode is worth setting")
+    func onlyResetNeedsSetting() {
+        #expect(TerminalModeQuery.State.reset.needsSetting)
+        #expect(!TerminalModeQuery.State.set.needsSetting)
+        #expect(!TerminalModeQuery.State.permanentlySet.needsSetting)
+        // The two that mean "asking will achieve nothing".
+        #expect(!TerminalModeQuery.State.notRecognised.isSupported)
+        #expect(!TerminalModeQuery.State.permanentlyReset.isSupported)
+        #expect(!TerminalModeQuery.State.notRecognised.needsSetting)
+        #expect(!TerminalModeQuery.State.permanentlyReset.needsSetting)
+    }
+
+    @Test("The query is fenced, and carries no shape Apple Terminal would print")
+    func requestIsFencedAndShaped() {
+        let request = TerminalModeQuery.request(mode: 2027)
+        #expect(request.hasSuffix("\u{1B}[6n"), "must be fenced by DSR")
+        #expect(request.hasPrefix("\u{1B}[?2027$p"))
+        // It DOES carry the unsafe shape — private marker plus intermediate —
+        // which is exactly why `pinGraphemeClusteringIfNeeded()` sends it only
+        // to a host measured to consume it. Pinned here so the hazard stays
+        // visible next to the thing that has it.
+        #expect(request.contains("$"), "DECRQM's intermediate byte")
+        #expect(request.contains("?"), "DECRQM's private marker")
+    }
+
+    @Test("The fence is recognised, and only the fence")
+    func fenceDetection() {
+        #expect(TerminalModeQuery.sawFence(Array("\u{1B}[24;80R".utf8)))
+        #expect(!TerminalModeQuery.sawFence(Array("\u{1B}[?2027;1$y".utf8)))
+        #expect(TerminalModeQuery.sawFence(Array("\u{1B}[?2027;1$y\u{1B}[1;1R".utf8)))
+        #expect(!TerminalModeQuery.sawFence([]))
+    }
+}

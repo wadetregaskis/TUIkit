@@ -50,7 +50,19 @@ import Foundation
 @MainActor
 final class Terminal: TerminalProtocol {
     /// Whether raw mode is active.
-    private var isRawMode = false
+    /// Readable across the module so the mode-negotiation extension in
+    /// `TerminalModeQuery.swift` can refuse to query a terminal that is not in
+    /// raw mode; still only writable here.
+    private(set) var isRawMode = false
+
+    /// Whether this process turned DEC mode 2027 (grapheme clustering) on and
+    /// therefore owes the terminal a reset on the way out.
+    ///
+    /// Lives here rather than beside the code that sets it because an
+    /// extension cannot hold stored state; ``pinGraphemeClusteringIfNeeded()``
+    /// in `TerminalModeQuery.swift` is its only writer, and
+    /// ``disableRawMode()`` its only reader.
+    var pinnedGraphemeClustering = false
 
     /// The mouse tracking mode last sent to the terminal.
     ///
@@ -337,6 +349,14 @@ extension Terminal {
 
         // Disable bracketed paste mode before restoring terminal state.
         writeImmediate("\u{1B}[?2004l")
+
+        // Put grapheme clustering back only if we turned it on: the mode
+        // outlives the process, so leaving it changed would hand the next
+        // program a terminal we reconfigured.
+        if pinnedGraphemeClustering {
+            writeImmediate("\u{1B}[?\(TerminalModeQuery.graphemeClustering)l")
+            pinnedGraphemeClustering = false
+        }
 
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original)
         isRawMode = false
@@ -1234,7 +1254,10 @@ extension Terminal {
     }
 
     /// Writes a string directly to `STDOUT_FILENO` without buffering.
-    fileprivate func writeImmediate(_ string: String) {
+    /// Internal rather than fileprivate only so ``pinGraphemeClusteringIfNeeded()``
+    /// can reach it from `TerminalModeQuery.swift`. Still nobody's business
+    /// outside this type: it bypasses the output buffer.
+    func writeImmediate(_ string: String) {
         // Safe: UTF8 string is valid UInt8 sequence; rebinding preserves memory layout.
         string.utf8CString.withUnsafeBufferPointer { buffer in
             let count = buffer.count - 1

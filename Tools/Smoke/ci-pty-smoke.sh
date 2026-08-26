@@ -64,6 +64,17 @@ cd "$REPO"
 walk Example "$EXAMPLE_ITEMS"
 walk Stress  "$STRESS_ITEMS"
 
+# Two checks on the terminal handshake, both cheap (a couple of seconds each)
+# and both guarding ORDERING that no type can enforce: the host must be
+# identified, and mode 2027 negotiated, before RenderLoop is built, because its
+# FrameDiffWriter freezes the advance model at construction. A unit test cannot
+# see that; only a live run can. They ran nowhere until now.
+echo "── identity: detection reaches the compensation ──"
+"$VENV/bin/python" "$HERE/identity_smoke.py" "$REPO/$BUILD_DIR/Example"
+
+echo "── mode 2027: pinned when needed, and only then ──"
+"$VENV/bin/python" "$HERE/mode_pin_smoke.py" "$REPO/$BUILD_DIR/Example"
+
 # A different class of check, and the only one that needs TWO processes: does a
 # setting written in one launch come back in the next? The framework's storage
 # layer has unit tests; what they cannot say is whether an app's own keys
