@@ -179,6 +179,197 @@
         "View.keyframeAnimator(initialValue:trigger:content:keyframes:)"
       ],
       "why": "Declarative animation SEQUENCES — content described at each phase, with the framework moving between them. The shape is right for a terminal and the machinery to serve it cheaply is not: pre-rendering a subtree once per phase means running that subtree's render side effects once per phase too (focus registration, hit-test regions, onAppear, preference writes), and suppressing those changes what several views draw. Documented in `Documentation/Animating your own view efficiently.md` §5.3. `View.transition(_:)` and `AnimatedCellRun` cover the cases this would, from the two ends."
+    },
+    {
+      "match": [
+        "NSHostingView*",
+        "NSHostingController*",
+        "NSHostingScene*",
+        "NSHostingSizingOptions*",
+        "NSViewRepresentable*",
+        "NSViewControllerRepresentable*",
+        "NSGestureRecognizerRepresentable*",
+        "NSGestureRecognizerRepresentableCoordinateSpaceConverter*",
+        "NSApplicationDelegateAdaptor*",
+        "*.makeNSView*",
+        "*.updateNSView*",
+        "*.makeNSViewController*",
+        "*.updateNSViewController*",
+        "*.dismantleNSView*",
+        "*.sizeThatFits(_:nsView:context:)"
+      ],
+      "why": "Wrapping an AppKit view, view controller, gesture recogniser or app delegate inside SwiftUI. There is no AppKit on a character grid, and TUIkit must also build on Linux, where none of these types exist. The escape hatch a terminal offers instead is `Renderable` — a view that assembles its own cells — not a bridge to a second view system."
+    },
+    {
+      "match": [
+        "Shader*",
+        "View.colorEffect*",
+        "View.layerEffect*",
+        "View.distortionEffect*",
+        "View.glassEffect*",
+        "Glass*",
+        "DefaultGlassEffectShape*",
+        "*.glassEffect*",
+        "View.allowedDynamicRange*",
+        "EnvironmentValues.allowedDynamicRange",
+        "Image.DynamicRange*",
+        "VisualEffect.blur*",
+        "VisualEffect.brightness*",
+        "VisualEffect.colorEffect*",
+        "VisualEffect.contrast*",
+        "VisualEffect.distortionEffect*",
+        "VisualEffect.grayscale*",
+        "VisualEffect.hueRotation*",
+        "VisualEffect.layerEffect*",
+        "VisualEffect.saturation*",
+        "VisualEffect.blendMode*"
+      ],
+      "why": "Per-pixel shading: Metal shader functions, colour/layer/distortion effects, glass materials, blend modes and dynamic range. Every one of them addresses a sample. A terminal cell has one foreground colour, one background colour and a glyph, with no subpixel to shade. `View.opacity` is the one filter that survives, and it survives by resolving at composite time against whatever is behind it (see Documentation/Opacity as composition.md) rather than by blending pixels."
+    },
+    {
+      "match": [
+        "SpatialEvent*",
+        "*ImmersiveSpace*",
+        "ImmersionStyle*",
+        "ProgressiveImmersionStyle*",
+        "SurroundingsEffect*",
+        "*.worldTracking*",
+        "WorldTracking*",
+        "Compositor*",
+        "*.remoteDeviceIdentifier"
+      ],
+      "why": "visionOS: three-dimensional spatial events, immersive spaces, world tracking, the compositor and RealityKit content. A terminal is a flat grid of cells with no depth, no head pose and no hands."
+    },
+    {
+      "match": [
+        "*Pencil*",
+        "*.onPencil*"
+      ],
+      "why": "Apple Pencil hover, squeeze and double-tap. Hardware a terminal cannot see: its input is bytes arriving on a file descriptor."
+    },
+    {
+      "match": [
+        "*.touchBar*",
+        "TouchBar*"
+      ],
+      "why": "The Touch Bar — a strip of pixels on a keyboard Apple no longer ships. No terminal has one to draw into."
+    },
+    {
+      "match": [
+        "Window*",
+        "*.window*",
+        "MenuBarExtra*",
+        "OpenWindowAction*",
+        "DismissWindowAction*",
+        "FrameResize*",
+        "*.presentedWindow*",
+        "*.handlesExternalEvents*",
+        "*.allowsWindowActivationEvents*",
+        "EnvironmentValues.openWindow",
+        "EnvironmentValues.dismissWindow",
+        "EnvironmentValues.openSettings",
+        "EnvironmentValues.supportsMultipleWindows",
+        "AlertScene*",
+        "DisplayProxy*",
+        "*.defaultPosition*",
+        "*.defaultSize*",
+        "*.defaultLaunchBehavior*",
+        "*.restorationBehavior*"
+      ],
+      "why": "Windows and the desktop window server: opening, sizing, positioning, restoring, minimising, full-screen and resize behaviour, multiple windows, the menu-bar extra, the Settings scene and an alert that is itself a scene. A TUI app owns exactly one surface — the terminal it was launched in — whose size the user's terminal emulator decides and announces by SIGWINCH. There is nothing for the application to open, place, or dismiss."
+    },
+    {
+      "match": [
+        "DocumentGroup*",
+        "*FileDocument*",
+        "DocumentConfiguration*",
+        "EnvironmentValues.documentConfiguration",
+        "EnvironmentValues.newDocument",
+        "EnvironmentValues.openDocument",
+        "NewDocumentAction*",
+        "OpenDocumentAction*",
+        "View.fileImporter*",
+        "View.fileExporter*",
+        "View.fileMover*",
+        "View.fileDialog*",
+        "FileDialog*",
+        "View.exportableToServices*",
+        "View.importableFromServices*",
+        "View.exportsItemProviders*",
+        "View.importsItemProviders*",
+        "View.navigationDocument*"
+      ],
+      "why": "The document architecture and the system file panels: DocumentGroup, FileDocument, the importer/exporter/mover sheets and the Services menu. Each presents an AppKit panel backed by file coordination and UTType, and TUIkit has no window to present one in. An app that needs a file picker draws it from `List` and the file system."
+    },
+    {
+      "match": [
+        "PointerStyle*",
+        "View.pointerStyle*",
+        "View.pointerVisibility*"
+      ],
+      "why": "The mouse cursor's SHAPE. A terminal emulator owns its own pointer and its own cursor image; an application is told where a click landed and nothing more. No terminal protocol lets an app ask for a resize cursor over a divider."
+    },
+    {
+      "match": [
+        "*WritingTools*",
+        "*.writingToolsBehavior*",
+        "View.findNavigator*",
+        "View.findDisabled*",
+        "View.replaceDisabled*",
+        "*.findContext",
+        "FindContext*"
+      ],
+      "why": "Writing Tools and the find/replace bar are macOS text-system UI that AppKit presents over an NSTextView. TUIkit's `TextEditor` is a cursor over a String; an app that wants find draws it."
+    },
+    {
+      "match": [
+        "DragSession*",
+        "DropSession*",
+        "DragConfiguration*",
+        "DropConfiguration*",
+        "DragDropPreviewsFormation*",
+        "View.dragContainer*",
+        "View.dragPreviewsFormation*",
+        "View.dropPreviewsFormation*",
+        "View.onDragSessionUpdated*",
+        "View.onDropSessionUpdated*",
+        "View.draggable(containerItemID:containerNamespace:)",
+        "View.draggable(_:containerNamespace:_:)",
+        "View.draggable(_:id:containerNamespace:_:)",
+        "View.draggable(_:id:item:containerNamespace:)",
+        "View.draggable(_:item:containerNamespace:)",
+        "*.dragConfiguration*",
+        "*.dropConfiguration*"
+      ],
+      "why": "The macOS 26 drag-session API: sessions, containers, formations and multi-item previews, with per-operation policies negotiated between processes. TUIkit's drag and drop lives inside one terminal process — `draggable(_:)`, `dropDestination(for:action:isTargeted:)` and ForEach's row reordering. What this rule excuses is the cross-process session machinery, which would need a pasteboard server and a drag image something has to composite."
+    },
+    {
+      "match": [
+        "Commands*",
+        "CommandGroup*",
+        "CommandMenu*",
+        "CommandsBuilder*",
+        "*.commands*",
+        "*.commandsRemoved*",
+        "*.commandsReplaced*",
+        "View.onCommand*"
+      ],
+      "why": "The menu-bar command system — CommandMenu, CommandGroup and their placements — plus `onCommand`'s responder-chain selectors. A terminal has no menu bar. SwiftUI-compatibility.md §2.6 records the substitute: TUIkit's chrome is a status bar of shortcut hints built from `StatusBarItem`, whose identity IS the shortcut it announces."
+    },
+    {
+      "match": [
+        "Widget*",
+        "*WidgetConfiguration*"
+      ],
+      "why": "WidgetKit configurations and control widgets. They are built by a separate extension process that the system renders into the Home Screen and Control Centre. A terminal app is not one."
+    },
+    {
+      "match": [
+        "ShareLink*",
+        "SharePreview*",
+        "*.exportsItemProviders*"
+      ],
+      "why": "ShareLink and its previews present the system share sheet, which enumerates other applications' share extensions. Outside a windowed OS session there is no such registry to enumerate."
     }
   ],
   "renamed": {

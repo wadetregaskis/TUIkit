@@ -43,6 +43,15 @@ naive diff:
    example this note was written around — SwiftUI deprecated it in favour of
    `foregroundStyle` — and it no longer illustrates it, because TUIkit has since
    dropped it for `foregroundStyle` too. The rule outlived the example.
+
+   **But "unavailable" is per-platform, and this comparison is not.** Judging it
+   from any domain deleted `Slider`, `Stepper`, `Table` and `Gauge` — all
+   unavailable on *tvOS*, all ordinary macOS API — along with every member they
+   own: 2,177 live macOS symbols, 180 of them `View` modifiers. Worse, it was
+   one-sided, because TUIkit annotates no platform unavailability at all, so the
+   rule only ever subtracted from SwiftUI and turned real gaps into silence.
+   Availability is now read on macOS alone; deprecation still counts wherever it
+   is spelled.
 4. **A symbol graph is only reproducible against its toolchain.** The report and
    the baseline are stamped with the compiler version for that reason.
 

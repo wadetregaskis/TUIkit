@@ -17,7 +17,9 @@ Everything the comparison rests on is derived, never asserted:
     written against. Those are one declaration each and are dropped.
   * Deprecated and unavailable symbols are dropped from both sides. Keeping
     them charges TUIkit with gaps for surface SwiftUI is itself retiring, and
-    reports anything either side still has as absent from BOTH.
+    reports anything either side still has as absent from BOTH. Availability
+    is judged on macOS alone: `Slider` is unavailable on tvOS and that says
+    nothing about whether a terminal can draw one.
 
 What is left is a real difference, and every real difference is either
 explained by `parity-map.json` or reported. The map is the curated half — a
@@ -201,9 +203,25 @@ def omittable(wanted, labels, defaulted):
     return index == len(wanted)
 
 
-def unavailable(symbol):
-    """Deprecated, obsoleted or unavailable — the source-compatibility tail."""
+def unavailable(symbol, platform="macOS"):
+    """Deprecated, obsoleted or unavailable — the source-compatibility tail.
+
+    Judged on ONE platform, because "unavailable" is per-platform and this
+    comparison is not. `Slider`, `Stepper`, `Table` and `Gauge` are all
+    unconditionally unavailable on tvOS while being perfectly ordinary macOS
+    API, so a rule that dropped a symbol unavailable ANYWHERE deleted them —
+    and every member they own — from SwiftUI's side of the diff. That hid
+    2,177 live macOS symbols, 180 of them `View` modifiers.
+
+    It is not symmetric, either: TUIkit annotates no platform unavailability,
+    so the rule only ever subtracted from SwiftUI, turning real gaps into
+    silence. Deprecation and obsoletion still count from any domain-less
+    (`@available(*, deprecated)`) entry, which is how both sides spell it.
+    """
     for entry in symbol.get("availability") or []:
+        domain = entry.get("domain")
+        if domain not in (None, "*", platform):
+            continue
         if entry.get("isUnconditionallyUnavailable"):
             return True
         if entry.get("isUnconditionallyDeprecated") or "deprecated" in entry:
