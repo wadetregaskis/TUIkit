@@ -167,6 +167,13 @@ public final class JSONFileStorage: StorageBackend, @unchecked Sendable {
 // MARK: - Public API
 
 extension JSONFileStorage {
+    /// The value stored for `key`, decoded from the in-memory cache, or `nil`
+    /// when absent or undecodable.
+    ///
+    /// Served from the cache the file was loaded into at init, never from
+    /// disk, because this is read on the render path. A decode failure is
+    /// silent for the reason the whole family shares: falling back to the
+    /// caller's default is ``AppStorage``'s defined behaviour, not an error.
     public func value<T: Codable>(forKey key: String) -> T? {
         lock.lock()
         defer { lock.unlock() }
@@ -185,6 +192,13 @@ extension JSONFileStorage {
         }
     }
 
+    /// Stores `value` for `key` and schedules a write.
+    ///
+    /// The cache is updated synchronously — a read straight after a write sees
+    /// the new value — while the file is written on a serial queue, so a
+    /// per-keystroke setting does not put file I/O in the frame. Encode
+    /// failures report through ``StorageDiagnostics``; see
+    /// ``synchronize()`` for the flush that makes a pending write durable.
     public func setValue<T: Codable>(_ value: T, forKey key: String) {
         lock.lock()
         defer { lock.unlock() }
@@ -200,6 +214,8 @@ extension JSONFileStorage {
         }
     }
 
+    /// Removes any value stored for `key`, scheduling the write as
+    /// ``setValue(_:forKey:)`` does.
     public func removeValue(forKey key: String) {
         lock.lock()
         defer { lock.unlock() }
@@ -209,6 +225,10 @@ extension JSONFileStorage {
         saveToDiskAsync()
     }
 
+    /// Blocks until everything written so far is on disk.
+    ///
+    /// Call before exiting: writes are otherwise queued, and a terminal app
+    /// can be killed by a signal between frames.
     public func synchronize() {
         // A plain sync hop onto the serial save queue: any already-queued
         // asynchronous save runs first, then this flush writes whatever the

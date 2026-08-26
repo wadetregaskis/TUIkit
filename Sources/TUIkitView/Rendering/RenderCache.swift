@@ -476,6 +476,25 @@ extension RenderCache {
             && !context.environment.hasUncomparableEnvironmentValue
     }
 
+    /// The memoized measurement for `key`, or `nil` when there is none or the
+    /// view value has changed.
+    ///
+    /// The measure-side counterpart to ``lookup(identity:view:contextWidth:contextHeight:)``.
+    /// Both the key and the value are checked: `key` covers the identity and
+    /// the proposal, and `view` — compared with `==` against the snapshot
+    /// taken when the size was stored — covers the content, so a row whose
+    /// data changed re-measures even though it sits at the same identity under
+    /// the same proposal.
+    ///
+    /// Unlike the buffer cache this is safe to populate from a measure pass:
+    /// entries are keyed by proposal, so a measure cannot overwrite what a
+    /// render stored (see ``store(identity:view:buffer:contextWidth:contextHeight:)``,
+    /// which must not be called while measuring).
+    ///
+    /// - Parameters:
+    ///   - key: Identity plus the proposal the size was measured under.
+    ///   - view: The current view value, compared against the stored snapshot.
+    /// - Returns: The cached size, or `nil` on a miss.
     public func lookupSize<V: Equatable>(key: SizeKey, view: V) -> ViewSize? {
         guard let entry = sizeEntries[key], let old = entry.viewSnapshot as? V, old == view else {
             stats.misses += 1

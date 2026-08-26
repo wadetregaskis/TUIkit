@@ -98,6 +98,20 @@ public struct ChildView {
         V._providesZIndex ? ((view as? ZIndexProviding)?.zIndexValue ?? 0) : 0
     }
 
+    /// Wraps `view` as a child that descends under its parent's identity.
+    ///
+    /// The transparent form: no identity component of its own, so the view
+    /// keeps whatever identity the parent already established. Use it for a
+    /// container's single content view, where there are no siblings to tell
+    /// apart. A child that has siblings needs ``init(_:childIndex:)`` (or
+    /// ``init(_:identityType:key:)`` for `ForEach` rows) so each gets a
+    /// distinct identity and its own `@State`.
+    ///
+    /// The layout witnesses — spacer, z-index, alignment guide — are read
+    /// once here from the static `View` witnesses rather than by casting on
+    /// every layout pass.
+    ///
+    /// - Parameter view: The child view to wrap.
     public init<V: View>(_ view: V) {
         (self.isSpacer, self.spacerMinLength) = Self.spacerInfo(of: view)
         self.zIndex = Self.zIndexInfo(of: view)

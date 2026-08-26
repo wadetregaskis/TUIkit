@@ -105,6 +105,24 @@ extension Character {
         }
     }
 
+    /// How many terminal cells this grapheme cluster occupies: 0, 1 or 2.
+    ///
+    /// The single most important measurement in the framework — every layout,
+    /// truncation and pad decision is counted in cells, and a `Character` is
+    /// not one cell (see ``String/strippedLength``, which sums this across a
+    /// line). Wide East Asian characters and most emoji take two; combining
+    /// marks and zero-width joiners take none; the rest take one.
+    ///
+    /// A cluster of a single scalar — nearly all terminal text — is answered
+    /// directly by ``Unicode/Scalar/loneTerminalWidth``. Multi-scalar clusters
+    /// (emoji sequences, flags, keycaps, skin-tone modifiers) are resolved by
+    /// inspecting the sequence, because their width is a property of the whole
+    /// cluster rather than of any one scalar in it.
+    ///
+    /// - Note: This is what the terminal *reserves*, which is not always what
+    ///   a given terminal *advances* the cursor by — see
+    ///   `Documentation/Terminal-compatibility.md` for the emulators that
+    ///   disagree and how ``FrameDiffWriter`` compensates.
     public var terminalWidth: Int {
         let scalars = unicodeScalars
         guard let first = scalars.first else { return 0 }

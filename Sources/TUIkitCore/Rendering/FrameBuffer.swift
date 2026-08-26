@@ -875,6 +875,27 @@ extension FrameBuffer {
         return copy
     }
 
+    /// A copy cut to fit `width` × `height` cells, or `self` when it already
+    /// does.
+    ///
+    /// The boundary every container enforces on content that came back larger
+    /// than the space it was given. Rows past `height` are dropped whole;
+    /// lines longer than `width` are cut with
+    /// ``String/ansiAwarePrefix(visibleCount:knownVisibleWidth:)``, so
+    /// the cut counts terminal cells rather than characters, never splits a
+    /// wide glyph, and keeps the styling that was in force.
+    ///
+    /// Hit-test regions are trimmed to the surviving box and dropped when
+    /// nothing of them remains — a clamp at a container edge is final, and a
+    /// region kept for cells that were cut away would be a phantom click
+    /// target wherever the next sibling lands. Overlay layers are *kept*
+    /// regardless: they float free of the flow and are composited at the root
+    /// (see ``overlays``).
+    ///
+    /// - Parameters:
+    ///   - width: Maximum width in terminal cells. Negative values clamp to 0.
+    ///   - height: Maximum height in lines. Negative values clamp to 0.
+    /// - Returns: The clamped buffer.
     public func clamped(toWidth width: Int, height: Int) -> FrameBuffer {
         let maxWidth = max(0, width)
         let maxHeight = max(0, height)
@@ -1028,6 +1049,20 @@ extension FrameBuffer {
         return opacityRegions.map { $0.shifted(byX: dx, y: dy) }
     }
 
+    /// This buffer's ``hitTestRegions``, each moved by `(dx, dy)`.
+    ///
+    /// The sibling of ``shiftedOverlays(byX:y:)`` and
+    /// ``shiftedAnimatedCells(byX:y:)``, and load-bearing for the same reason:
+    /// a region records where a control is *clickable*, in this buffer's
+    /// coordinates. Any operation that places these cells somewhere else —
+    /// padding, bordering, stacking, windowing — must carry the regions by the
+    /// same offset, or the control keeps taking clicks at the position it used
+    /// to occupy while drawing somewhere new.
+    ///
+    /// - Parameters:
+    ///   - dx: Cells to move right; negative moves left.
+    ///   - dy: Lines to move down; negative moves up.
+    /// - Returns: The shifted regions, or the originals when the offset is zero.
     public func shiftedHitTestRegions(byX dx: Int, y dy: Int) -> [HitTestRegion] {
         guard !hitTestRegions.isEmpty else { return [] }
         guard dx != 0 || dy != 0 else { return hitTestRegions }

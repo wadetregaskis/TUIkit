@@ -44,6 +44,22 @@ public struct Placement {
     /// The child's extent along the container's vertical axis.
     public let height: Int
 
+    /// Records where a container placed one child.
+    ///
+    /// Built by a container as it lays out, and read by the reveal machinery
+    /// to answer "where on screen did this identity end up?" without
+    /// re-running the layout. All coordinates are container-relative and
+    /// exclude inter-child spacing; see ``x`` for why vertical stacks report
+    /// `0` for it.
+    ///
+    /// - Parameters:
+    ///   - child: The child that was placed.
+    ///   - identity: That child's resolved identity, so a later lookup can
+    ///     match it without rebuilding the subtree.
+    ///   - x: Container-relative horizontal origin.
+    ///   - y: Container-relative vertical origin.
+    ///   - width: The child's horizontal extent.
+    ///   - height: The child's vertical extent.
     public init(child: ChildView, identity: ViewIdentity, x: Int, y: Int, width: Int, height: Int) {
         self.child = child
         self.identity = identity

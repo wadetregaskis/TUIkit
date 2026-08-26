@@ -321,6 +321,16 @@ extension Animation {
 // MARK: - Description
 
 extension Animation {
+    /// A source-shaped description of this animation, e.g.
+    /// `"easeInOut(duration: 0.3).repeatCount(3, autoreverses: true)"`.
+    ///
+    /// Written to read like the call that would build the same value, so a
+    /// logged or `#expect`-printed animation says what it is rather than
+    /// dumping its stored curve. The curve names follow the factories that
+    /// produce them (``Animation/easeInOut(duration:)``,
+    /// ``Animation/spring(duration:bounce:)``,
+    /// ``Animation/timingCurve(_:_:_:_:duration:)``), and any repeat or delay
+    /// is appended in modifier order, so the string round-trips by eye.
     public var description: String {
         var text: String
         switch curve {

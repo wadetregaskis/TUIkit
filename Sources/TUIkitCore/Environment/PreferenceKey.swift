@@ -47,8 +47,18 @@ public protocol PreferenceKey {
     static func reduce(value: inout Value, nextValue: () -> Value)
 }
 
-// Default implementation: use the last value
 extension PreferenceKey {
+    /// Combines two values for the same key by keeping the later one.
+    ///
+    /// The default the protocol's own documentation describes: when several
+    /// children set the same preference, the last one up the tree wins. A key
+    /// that needs to accumulate instead — summing heights, unioning a set —
+    /// overrides this; one that names a single winner (the usual case) does
+    /// not have to write anything.
+    ///
+    /// - Parameters:
+    ///   - value: The accumulated value so far, replaced in place.
+    ///   - nextValue: Produces the next child's value. Called once.
     public static func reduce(value: inout Value, nextValue: () -> Value) {
         value = nextValue()
     }

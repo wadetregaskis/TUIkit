@@ -266,6 +266,11 @@ public final class ScrollAxis: ScrollableOffsetState {
     /// …and it therefore declares no edge either.
     public var declaredEdgeAnchor: ScrollAnchor<AnyHashable>? { nil }
 
+    /// A fresh axis: parked at offset 0, with no measurements yet.
+    ///
+    /// Every extent here is filled in by the owning ``ScrollView`` as it
+    /// renders — a newly-made axis reports content that fits, so nothing
+    /// scrolls and no bar is drawn until the first real measurement arrives.
     public init() {}
 }
 
@@ -294,6 +299,11 @@ public struct WheelEdgeHold {
     /// Monotonic clock, injectable for tests.
     var nowNanos: () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }
 
+    /// A hold that has not yet seen a blocked tick, with the default grace.
+    ///
+    /// The owning view overwrites the grace period from
+    /// ``View/scrollChainingDelay(_:)`` on every frame, so this initial value
+    /// only governs a scroller rendered before any environment reaches it.
     public init() {}
 }
 
@@ -400,6 +410,18 @@ extension ScrollableOffsetState {
         return rebased.signum() == delta.signum() ? rebased : delta
     }
 
+    /// Moves the viewport by `delta` lines, clamped to the scrollable range.
+    ///
+    /// Positive scrolls toward the end, negative toward the start. The clamp
+    /// is applied at the *destination*, so a page-sized step lands exactly on
+    /// the last screenful rather than stopping short of it — see
+    /// ``pageDelta(_:)``, which relies on that to keep Page Down working one
+    /// row from the top.
+    ///
+    /// Does nothing when there is nothing to scroll: a zero delta, an unmeasured
+    /// viewport, or content that fits.
+    ///
+    /// - Parameter delta: Lines to move by.
     public func scroll(by delta: Int) {
         guard delta != 0,
               viewportHeight > 0,

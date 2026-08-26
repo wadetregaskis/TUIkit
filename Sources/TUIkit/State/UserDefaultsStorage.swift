@@ -30,6 +30,16 @@ import Foundation
     // MARK: - Public API
 
     extension UserDefaultsStorage {
+        /// The value stored for `key`, JSON-decoded, or `nil` when absent or
+        /// undecodable.
+        ///
+        /// A decode failure is deliberately silent: reading a key whose stored
+        /// shape no longer matches `T` — a type that gained a field between
+        /// releases — falls back to the caller's default, which is
+        /// ``AppStorage``'s defined behaviour rather than an error condition.
+        /// This runs on the render path, so it also must not report per frame.
+        /// Write failures, which are genuinely lossy, DO report (see
+        /// ``setValue(_:forKey:)``).
         public func value<T: Codable>(forKey key: String) -> T? {
             guard let data = defaults.data(forKey: key) else { return nil }
 
@@ -43,6 +53,11 @@ import Foundation
             }
         }
 
+        /// Stores `value` for `key`, JSON-encoded.
+        ///
+        /// An encode failure is reported through ``StorageDiagnostics``,
+        /// unlike the read path: a value that cannot be written is data the
+        /// user expected to keep, so it is worth surfacing.
         public func setValue<T: Codable>(_ value: T, forKey key: String) {
             do {
                 let data = try JSONEncoder().encode(value)
@@ -53,10 +68,17 @@ import Foundation
             }
         }
 
+        /// Removes any value stored for `key`. A key that was never set is
+        /// not an error.
         public func removeValue(forKey key: String) {
             defaults.removeObject(forKey: key)
         }
 
+        /// Asks `UserDefaults` to flush pending writes.
+        ///
+        /// Rarely needed — the system persists on its own schedule — but a
+        /// terminal app can be killed by a signal between frames, so the app
+        /// lifecycle calls it at shutdown.
         public func synchronize() {
             defaults.synchronize()
         }
@@ -94,18 +116,23 @@ import Foundation
     // MARK: - Public API
 
     extension UserDefaultsStorage {
+        /// The value stored for `key`, from the JSON file standing in for
+        /// `UserDefaults` on this platform.
         public func value<T: Codable>(forKey key: String) -> T? {
             storage.value(forKey: key)
         }
 
+        /// Stores `value` for `key` in the backing file.
         public func setValue<T: Codable>(_ value: T, forKey key: String) {
             storage.setValue(value, forKey: key)
         }
 
+        /// Removes any value stored for `key`.
         public func removeValue(forKey key: String) {
             storage.removeValue(forKey: key)
         }
 
+        /// Flushes pending writes to the backing file.
         public func synchronize() {
             storage.synchronize()
         }

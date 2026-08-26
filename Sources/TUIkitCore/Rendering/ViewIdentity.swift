@@ -297,6 +297,24 @@ extension ViewIdentity {
         return ViewIdentity(node: parentNode)
     }
 
+    /// Whether `descendant` sits anywhere below this identity in the view
+    /// tree — at any depth, not merely as a direct child (``parent``).
+    ///
+    /// The containment test the windowing containers rely on: a `ScrollView`
+    /// or `List` that has rendered only part of its content asks it to decide
+    /// whether a `@State` box or a cache entry belongs to a subtree it is
+    /// still responsible for, and so must survive the pass's prune (see
+    /// `StateStorage.retainSubtree(_:)`).
+    ///
+    /// Structural chains are compared step by step, so a name that merely
+    /// *starts with* another's text is not mistaken for a descendant.
+    /// Raw-rooted identities (``init(path:)``) carry their path as opaque
+    /// string data with no structure to climb, so those fall back to a
+    /// prefix comparison that respects the path's `/` and `#` boundaries.
+    ///
+    /// - Parameter descendant: The identity to test for containment.
+    /// - Returns: `true` when `descendant` is below this one. An identity is
+    ///   **not** its own ancestor.
     public func isAncestor(of descendant: ViewIdentity) -> Bool {
         // Raw-rooted identities carry their path as opaque string data; only the
         // string-prefix comparison can see their component boundaries.

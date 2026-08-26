@@ -107,23 +107,61 @@ public protocol Palette: Cyclable {
 
 // MARK: - Default Palette Implementation
 
+/// Defaults for every optional role on ``Palette``.
+///
+/// A conforming palette states the handful of colours it actually cares about
+/// — ``Palette/background``, ``Palette/foreground``, ``Palette/accent`` — and
+/// inherits the rest from here. The defaults are deliberately *collapsing*
+/// rather than invented: each falls back to a colour the palette has already
+/// named, so a two-colour palette renders coherently (everything simply reads
+/// as foreground-on-background) instead of picking tones that clash with it.
+/// The framework never assumes a role is distinct; it only assumes it exists.
 extension Palette {
     // MARK: - Background Defaults
 
+    /// The status bar's surface. Defaults to ``appHeaderBackground``, so the
+    /// two bars that frame the screen match without a palette naming both.
     public var statusBarBackground: Color { appHeaderBackground }
+
+    /// The app header's surface. Defaults to the page ``background``, which
+    /// makes the header read as part of the page rather than as a separate
+    /// band; a palette that wants a distinct chrome tone overrides it.
     public var appHeaderBackground: Color { background }
+
+    /// The surface behind modal content — dialogs, alerts, popovers, menus.
+    /// Defaults to the page ``background`` so an overlay is legible on any
+    /// palette; the separation from the page comes from its border and its
+    /// backdrop, not from a different fill.
     public var overlayBackground: Color { background }
 
     // MARK: - Foreground Defaults
 
+    /// Text of secondary importance — captions, supporting detail. Defaults
+    /// to full ``foreground``: a palette that has not named a dimmer tone gets
+    /// readable text rather than a guess at one.
     public var foregroundSecondary: Color { foreground }
+
+    /// Text of tertiary importance — placeholders, disabled labels, scrollbar
+    /// tracks. Defaults to ``foreground`` for the reason
+    /// ``foregroundSecondary`` does.
     public var foregroundTertiary: Color { foreground }
+
+    /// The faintest text tier — inactive track fill, the quietest chrome.
+    /// Defaults to ``foregroundTertiary``, so a palette that names three tiers
+    /// gets a sensible fourth for free.
     public var foregroundQuaternary: Color { foregroundTertiary }
 
     // MARK: - UI Element Defaults
 
+    /// The wash behind a focused control. Defaults to the tertiary foreground
+    /// at 30% *composited over* the background rather than made translucent —
+    /// terminals have no alpha, so the blend has to be resolved to a concrete
+    /// cell colour (see ``Color/opacity(_:over:)``, and
+    /// `Documentation/Terminal-compatibility.md` on the 256-colour cube).
     public var focusBackground: Color { foregroundTertiary.opacity(0.3, over: background) }
 
+    /// The text caret's colour. Defaults to ``accent``, so the caret is the
+    /// same hue as the rest of the palette's active-element cues.
     public var cursorColor: Color { accent }
 
     /// The default well: the palette's stated chrome tone when it is a *well's*

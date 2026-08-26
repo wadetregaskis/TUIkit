@@ -106,22 +106,37 @@ public struct RadioButtonItem<Value: Hashable> {
 /// - `for`...`in` loops
 @resultBuilder
 public enum RadioButtonGroupBuilder<Value: Hashable> {
+    /// Collects the items written directly in the group's body.
+    ///
+    /// The builder's entry point: every `RadioButtonGroup { … }` produces one
+    /// call to this, with the block's items as its arguments.
     public static func buildBlock(_ items: RadioButtonItem<Value>...) -> [RadioButtonItem<Value>] {
         Array(items)
     }
 
+    /// Supplies the empty list for an `if` with no `else` that did not run.
+    ///
+    /// What makes `if showAdvanced { RadioButtonItem(…) }` legal: the absent
+    /// branch contributes no items rather than failing to type-check.
     public static func buildOptional(_ items: [RadioButtonItem<Value>]?) -> [RadioButtonItem<Value>] {
         items ?? []
     }
 
+    /// Takes the `if` branch of an `if`/`else`.
+    ///
+    /// Paired with ``buildEither(second:)``; both arms of a conditional
+    /// already produce the same type here, so neither erases anything.
     public static func buildEither(first items: [RadioButtonItem<Value>]) -> [RadioButtonItem<Value>] {
         items
     }
 
+    /// Takes the `else` branch of an `if`/`else`. See ``buildEither(first:)``.
     public static func buildEither(second items: [RadioButtonItem<Value>]) -> [RadioButtonItem<Value>] {
         items
     }
 
+    /// Flattens the per-iteration groups a `for`…`in` loop produces into one
+    /// list, so a loop over a data array reads as the items it generates.
     public static func buildArray(_ itemGroups: [[RadioButtonItem<Value>]]) -> [RadioButtonItem<Value>] {
         itemGroups.flatMap { $0 }
     }

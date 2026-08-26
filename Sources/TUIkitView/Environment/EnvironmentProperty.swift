@@ -140,6 +140,16 @@ final class EnvironmentBox {
 /// Existential over the wrapper's `Value` so the renderer can populate every
 /// `@Environment` on a view without knowing each one's type.
 public protocol EnvironmentResolvable {
+    /// Hands this property wrapper the environment to read from.
+    ///
+    /// Called by the renderer on every `@Environment` it finds on a view,
+    /// immediately before the view's `body` runs, so a wrapper answers from
+    /// the values in force at *its* position in the tree. Outside a render
+    /// pass a wrapper has no environment and reads its default — which is why
+    /// an event closure must capture what it needs at render time rather than
+    /// reaching for `@Environment` when the event arrives.
+    ///
+    /// - Parameter environment: The values in force where the view sits.
     func resolveEnvironment(_ environment: EnvironmentValues)
 }
 

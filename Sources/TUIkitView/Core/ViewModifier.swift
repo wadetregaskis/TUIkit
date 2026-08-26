@@ -73,6 +73,16 @@ public protocol ViewModifier {
 }
 
 extension ViewModifier {
+    /// Passes the context through unchanged.
+    ///
+    /// The default, and the right answer for any modifier that only rewrites
+    /// the buffer its content produced. Override it when the modifier changes
+    /// the space the content is being offered — padding and borders reduce
+    /// `availableWidth`/`availableHeight` here so a flexible child fills the
+    /// interior rather than the whole box and then overflows it.
+    ///
+    /// - Parameter context: The context this modifier was reached with.
+    /// - Returns: The context its content should render under.
     public func adjustContext(_ context: RenderContext) -> RenderContext {
         context
     }
