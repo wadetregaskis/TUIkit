@@ -23,7 +23,7 @@ extension _ScrollViewCore {
     ) {
         guard !context.isMeasuring,
               let mouseDispatcher = context.environment.mouseEventDispatcher,
-              !isDisabled
+              !isDisabled(in: context)
         else { return }
         // The bar's arrows and thumb answer the pointer, which needs motion.
         mouseDispatcher.requestFeature(.motion)
@@ -63,7 +63,7 @@ extension _ScrollViewCore {
     ) {
         guard !context.isMeasuring,
               let mouseDispatcher = context.environment.mouseEventDispatcher,
-              !isDisabled
+              !isDisabled(in: context)
         else { return }
         let scroller = handler
         func shield(paging delta: Int, atY y: Int) {
@@ -100,7 +100,7 @@ extension _ScrollViewCore {
     ) {
         guard !context.isMeasuring,
               let mouseDispatcher = context.environment.mouseEventDispatcher,
-              !isDisabled
+              !isDisabled(in: context)
         else { return }
         mouseDispatcher.requestFeature(.motion)
         let barHandler = ScrollbarRenderer.horizontalMouseHandler(

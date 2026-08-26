@@ -257,11 +257,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             for: handlerKey,
             default: ScrollViewHandler(
                 focusID: persistedFocusID,
-                canBeFocused: !isDisabled
+                canBeFocused: !isDisabled(in: context)
             )
         )
         let handler = handlerBox.value
-        handler.canBeFocused = !isDisabled
+        handler.canBeFocused = !isDisabled(in: context)
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
         // Captured at render so a USER scroll can release a bound anchor to
         // `.window` at event time (the environment is out of reach there).
@@ -467,7 +467,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // view drops out of the Tab ring for the same reason a non-overflowing
         // one does: a stop that can do nothing is only an obstacle.
         handler.canBeFocused =
-            !isDisabled && handler.isScrollEnabled
+            !isDisabled(in: context) && handler.isScrollEnabled
             && (hasVerticalOverflow || hasHorizontalOverflow)
 
         // Register so the dispatchKeyEvent → handler chain is wired up; the
@@ -610,7 +610,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     ) {
         guard !context.isMeasuring,
               let mouseDispatcher = context.environment.mouseEventDispatcher,
-              !isDisabled
+              !isDisabled(in: context)
         else { return }
         let captureHandler = handler
         let focusManager = context.environment.focusManager
@@ -801,5 +801,19 @@ extension EnvironmentValues {
     var scrollContentWindow: ScrollContentWindow? {
         get { self[ScrollContentWindowKey.self] }
         set { self[ScrollContentWindowKey.self] = newValue }
+    }
+}
+
+// MARK: - Disabled state
+
+extension _ScrollViewCore {
+    /// Whether this scroll view is disabled, counting an ancestor's
+    /// `.disabled(true)`.
+    ///
+    /// The third of the three containers that read neither `\.isEnabled` nor
+    /// anything derived from it — see ``_ListCore/isDisabled(in:)`` for why
+    /// their own concrete `disabled(_:)` overload hid it.
+    func isDisabled(in context: RenderContext) -> Bool {
+        isDisabled || !context.environment.isEnabled
     }
 }

@@ -1050,7 +1050,7 @@ where Value.ID: Hashable {
             for: handlerKey,
             default: ItemListHandler(
                 focusID: persistedFocusID, itemCount: data.count, viewportHeight: 1,
-                selectionMode: selectionMode, canBeFocused: !isDisabled))
+                selectionMode: selectionMode, canBeFocused: !isDisabled(in: context)))
         let handler = handlerBox.value
         handler.itemCount = data.count
         // As on the single-line path: a hovering drag's landing slot is a line
@@ -1066,7 +1066,7 @@ where Value.ID: Hashable {
         // charges for the slot twice — see the twin at the single-line path,
         // which passes `contentHeight` for the same reason.
         handler.contentHeight = contentHeight
-        handler.canBeFocused = !isDisabled
+        handler.canBeFocused = !isDisabled(in: context)
         handler.primaryAction = primaryAction
         handler.onMove = moveAction
         // BEFORE the rows are composed — see the List's twin call site.
@@ -1688,7 +1688,7 @@ where Value.ID: Hashable {
         handler.drawsScrollIndicators =
             overflowing && drawsTextIndicators(showsScrollbar, context)
         handler.viewportHeight = provisionalViewport
-        handler.canBeFocused = !isDisabled
+        handler.canBeFocused = !isDisabled(in: context)
         handler.primaryAction = primaryAction
         handler.onMove = moveAction
         // BEFORE the rows are composed — see the List's twin call site.
@@ -2400,7 +2400,7 @@ where Value.ID: Hashable {
         context: RenderContext,
         state: PopulatedRenderState
     ) {
-        guard !isDisabled, !context.isMeasuring,
+        guard !isDisabled(in: context), !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
         let focusManager = context.environment.focusManager
@@ -3193,5 +3193,22 @@ private struct _TableSizeStub: View, Renderable, Layoutable {
         FrameBuffer(
             lines: Array(
                 repeating: String(repeating: " ", count: width), count: height))
+    }
+}
+
+// MARK: - Disabled state
+
+extension _TableCore {
+    /// Whether this table is disabled, counting an ancestor's
+    /// `.disabled(true)`.
+    ///
+    /// The same hole `_ListCore` had, for the same reason: `Table`'s concrete
+    /// `disabled(_:) -> Self` overload wins overload resolution, so
+    /// `Table(…).disabled(true)` sets ``isDisabled`` directly — but
+    /// `VStack { Table(…) }.disabled(true)` publishes `\.isEnabled` and
+    /// nothing here read it, so the table stayed focusable, selectable and
+    /// sortable inside a disabled subtree. See ``_ListCore/isDisabled(in:)``.
+    func isDisabled(in context: RenderContext) -> Bool {
+        isDisabled || !context.environment.isEnabled
     }
 }

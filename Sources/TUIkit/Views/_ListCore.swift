@@ -752,7 +752,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 // anything decides on.
                 viewportHeight: contentHeight,
                 selectionMode: selectionMode,
-                canBeFocused: !isDisabled
+                canBeFocused: !isDisabled(in: context)
             )
         )
         let handler = handlerBox.value
@@ -791,7 +791,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // is why this is the resolved answer rather than `!showsScrollbar`.
         handler.drawsScrollIndicators = indicators.text
         handler.viewportHeight = provisionalViewport
-        handler.canBeFocused = !isDisabled
+        handler.canBeFocused = !isDisabled(in: context)
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
@@ -1438,7 +1438,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         state: PopulatedRenderState,
         paddingTop: Int
     ) {
-        guard !isDisabled, !context.isMeasuring,
+        guard !isDisabled(in: context), !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
         let focusManager = context.environment.focusManager
@@ -2768,5 +2768,29 @@ struct _ListContentView: View, Renderable {
         // pass that produced no frame.
         if !context.isMeasuring { buffer.animatedCells = runs }
         return buffer
+    }
+}
+
+// MARK: - Disabled state
+
+extension _ListCore {
+    /// Whether this list is disabled, counting an ancestor's `.disabled(true)`.
+    ///
+    /// `List` has a concrete `disabled(_:) -> Self` overload, which wins
+    /// overload resolution over `View.disabled(_:)` — so `List { … }
+    /// .disabled(true)` sets ``isDisabled`` and never builds a
+    /// `DisabledModifier`. That is fine on its own; what it hid is the OTHER
+    /// direction. `VStack { List { … } }.disabled(true)` does build one, and
+    /// nothing here read the `\.isEnabled` it publishes, so the list stayed
+    /// focusable, scrollable and clickable inside a disabled subtree.
+    ///
+    /// SwiftUI: "The higher views in a view hierarchy can override the value
+    /// you set on this view." Every other control in the framework already
+    /// combines the two this way — `Button`, `TextField`, `_ToggleCore`,
+    /// `Slider`, `Stepper`, `RadioButton`, `DatePicker`, `SecureField`,
+    /// `TextEditor` and `_PickerMenuCore` all read
+    /// `self.isDisabled || !context.environment.isEnabled`.
+    func isDisabled(in context: RenderContext) -> Bool {
+        isDisabled || !context.environment.isEnabled
     }
 }
