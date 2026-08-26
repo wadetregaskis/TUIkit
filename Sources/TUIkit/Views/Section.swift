@@ -376,7 +376,9 @@ extension Section: ListRowExtractor {
         if let provider = content as? ChildViewProvider {
             var rows: [ListRow<RowID>] = []
             for child in provider.childViews(context: context) where !child.isSpacer {
-                guard let indexID = rows.count as? RowID else { continue }
+                // `nil` when an index cannot be cast into the selection type:
+                // the row draws and is simply not selectable. See `ListRow.id`.
+                let indexID = rows.count as? RowID
                 let badge = extractBadgeValue(from: child.wrappedView)
                 let buffer = child.render(
                     width: context.availableWidth, height: context.availableHeight,
@@ -389,9 +391,7 @@ extension Section: ListRowExtractor {
         // Fallback: render content as a single row, carrying its badge.
         let badge = extractBadgeValue(from: content)
         let buffer = TUIkit.renderToBuffer(content, context: context)
-        if let indexID = 0 as? RowID {
-            return [ListRow(id: indexID, buffer: buffer, badge: badge)]
-        }
-        return []
+        guard !buffer.lines.isEmpty else { return [] }
+        return [ListRow(id: 0 as? RowID, buffer: buffer, badge: badge)]
     }
 }

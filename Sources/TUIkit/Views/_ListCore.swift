@@ -2191,7 +2191,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if let extractor = content as? ListRowExtractor {
             let rows: [ListRow<SelectionValue>] = extractor.extractListRows(context: context)
             return .eager(
-                rows.map { SelectableListRow(type: .content(id: $0.id), content: $0.content) })
+                rows.map {
+                    SelectableListRow(
+                        type: $0.id.map { .content(id: $0) } ?? .unselectable, content: $0.content)
+                })
         }
 
         // ChildViewProvider (TupleView with multiple children). The *view*
@@ -2206,14 +2209,21 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // (`List { Text("Notifications").badge(5) }`).
         let badge = extractBadgeValue(from: content)
         let buffer = TUIkit.renderToBuffer(content, context: context)
-        if let zeroID = 0 as? SelectionValue {
-            return .eager([
-                SelectableListRow(
-                    type: .content(id: zeroID),
-                    content: LazyListRowContent(buffer: buffer, badge: badge))
-            ])
-        }
-        return .eager([])
+        // An `EmptyView` is not a row. This used to fall out of the id cast
+        // failing, which meant it depended on the SELECTION type: a list of
+        // `EmptyView` was empty with a `String?` selection and a blank row
+        // with an `Int?` one.
+        guard !buffer.lines.isEmpty else { return .eager([]) }
+        // A static row's only possible id is its index, which cannot be
+        // expressed when the selection is a String, a UUID or a Set of
+        // either. It is still a row: it draws, it just cannot be selected —
+        // SwiftUI's own treatment of a row carrying no `tag(_:)`. This used
+        // to return NO rows, so such a list rendered as the empty placeholder.
+        return .eager([
+            SelectableListRow(
+                type: (0 as? SelectionValue).map { .content(id: $0) } ?? .unselectable,
+                content: LazyListRowContent(buffer: buffer, badge: badge))
+        ])
     }
 
     /// Extracts one row per flattened child (TupleView content), each carrying
@@ -2225,14 +2235,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var result: [SelectableListRow<SelectionValue>] = []
 
         for child in provider.childViews(context: context) where !child.isSpacer {
-            guard let indexID = result.count as? SelectionValue else { continue }
+            // See `extractRows`: an index-identified row is unselectable rather
+            // than absent when the selection type cannot hold an index. The
+            // count advances only over rows that took an id, so the ids stay
+            // 0, 1, 2 … for the Int case they exist for.
+            let type: ListRowType<SelectionValue> =
+                (result.count as? SelectionValue).map { .content(id: $0) } ?? .unselectable
             let badge = extractBadgeValue(from: child.wrappedView)
             let buffer = child.render(
                 width: context.availableWidth, height: context.availableHeight, context: context)
-            result.append(
-                SelectableListRow(
-                    type: .content(id: indexID),
-                    content: LazyListRowContent(buffer: buffer, badge: badge)))
+            result.append(SelectableListRow(type: type, content: LazyListRowContent(buffer: buffer, badge: badge)))
         }
 
         return result
@@ -2256,14 +2268,20 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let contentRows: [ListRow<SelectionValue>] = extractor.extractListRows(context: context)
             for row in contentRows {
                 // Thread the lazy box through — don't force `.buffer` / `.badge`.
-                rows.append(SelectableListRow(type: .content(id: row.id), content: row.content))
+                rows.append(
+                    SelectableListRow(
+                        type: row.id.map { .content(id: $0) } ?? .unselectable,
+                        content: row.content))
             }
         } else {
             // Fallback: render content as single row (if Section content is not ForEach)
             // Use the content buffer from SectionInfo
             // Note: This row is still selectable but uses index-based ID
-            if !info.contentBuffer.lines.isEmpty, let indexID = 0 as? SelectionValue {
-                rows.append(SelectableListRow(type: .content(id: indexID), buffer: info.contentBuffer))
+            if !info.contentBuffer.lines.isEmpty {
+                rows.append(
+                    SelectableListRow(
+                        type: (0 as? SelectionValue).map { .content(id: $0) } ?? .unselectable,
+                        buffer: info.contentBuffer))
             }
         }
 
@@ -2611,7 +2629,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         palette: any Palette
     ) -> RowBackground {
         switch rowType {
-        case .header, .footer:
+        case .header, .footer, .unselectable:
             return .none
 
         case .content:

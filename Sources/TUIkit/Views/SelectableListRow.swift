@@ -26,6 +26,20 @@ public enum ListRowType<SelectionValue: Hashable & Sendable>: Sendable, Equatabl
     ///
     /// Footers render with dimmed styling and never participate in selection or focus.
     case footer
+
+    /// A content row the selection cannot name (non-selectable, non-focusable).
+    ///
+    /// A static row — `List(selection:) { Text("alpha") }` — has no identity of
+    /// its own, so the only id it can be given is its index. That works when
+    /// the selection is an `Int`, and cannot be expressed at all when it is a
+    /// `String`, a `UUID` or a `Set` of either. Such a row is drawn like
+    /// ordinary content and simply left out of selection, which is what
+    /// SwiftUI does with a row carrying no `tag(_:)`.
+    ///
+    /// It exists because the alternative was worse: the extraction used to
+    /// `continue` past a row whose index would not cast, so a whole list of
+    /// static rows silently rendered as the empty placeholder.
+    case unselectable
 }
 
 // MARK: - Lazy Row Content
@@ -179,7 +193,8 @@ public struct SelectableListRow<SelectionValue: Hashable & Sendable>: Sendable {
 
     /// The row ID if this is a content row, otherwise nil.
     ///
-    /// Only content rows have an ID. Headers and footers always return nil.
+    /// Only content rows have an ID. Headers, footers and unselectable rows
+    /// always return nil.
     public var id: SelectionValue? {
         if case .content(let id) = type {
             return id

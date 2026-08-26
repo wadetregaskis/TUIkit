@@ -15,8 +15,15 @@
 /// `id` is resolved eagerly, but the view is built and rendered only when the
 /// row is actually shown.
 struct ListRow<ID: Hashable> {
-    /// The unique identifier for this row.
-    let id: ID
+    /// The identifier the selection knows this row by, or `nil` when it has
+    /// none it can express.
+    ///
+    /// A static row's only possible id is its index, and an index cannot be
+    /// cast into a `String`, a `UUID` or a `Set` of either. Such a row draws
+    /// and simply does not participate in selection — SwiftUI's treatment of a
+    /// row carrying no `tag(_:)`. It used to be DROPPED, which made a whole
+    /// list of static rows render as the empty placeholder.
+    let id: ID?
 
     /// The lazily-rendered buffer + badge for this row.
     let content: LazyListRowContent
@@ -31,13 +38,13 @@ struct ListRow<ID: Hashable> {
     @MainActor var height: Int { content.buffer.height }
 
     /// Creates a row whose content is rendered on demand.
-    init(id: ID, content: LazyListRowContent) {
+    init(id: ID?, content: LazyListRowContent) {
         self.id = id
         self.content = content
     }
 
     /// Creates a row from an already-rendered buffer (fallback / chrome paths).
-    init(id: ID, buffer: FrameBuffer, badge: BadgeValue?) {
+    init(id: ID?, buffer: FrameBuffer, badge: BadgeValue?) {
         self.id = id
         self.content = LazyListRowContent(buffer: buffer, badge: badge)
     }
