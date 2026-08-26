@@ -34,7 +34,7 @@ struct TerminalHostIdentificationTests {
         "SHELL": "/bin/zsh",
     ]
 
-    @Test("An ssh session names no terminal, and TERM is not a substitute")
+    @Test("An ssh session from a generic-TERM terminal names nothing")
     func sshSessionNamesNothing() {
         let env = Self.sshSession
         #expect(TerminalHost.hostProgram(environment: env) == nil)
@@ -91,6 +91,51 @@ struct TerminalHostIdentificationTests {
         let env = ["TERM_PROGRAM": "ghostty", "LC_TERMINAL": "iTerm2"]
         #expect(TerminalHost.detectGhostty(environment: env))
         #expect(!TerminalHost.detectITerm2(environment: env))
+    }
+
+    @Test("A distinctive TERM names its terminal across an ssh hop")
+    func distinctiveTermtypeNamesItsTerminal() {
+        // Ghostty is the one host of the four measured that names itself in
+        // TERM, and TERM is the one variable ssh carries (RFC 4254 pty-req).
+        // Before this, Ghostty over ssh was unidentified — TERM_PROGRAM gone,
+        // no LC_TERMINAL, and the DA fingerprint names only Apple Terminal —
+        // so its VS-15 chrome and SF Symbols went uncompensated.
+        var env = Self.sshSession
+        env["TERM"] = "xterm-ghostty"
+        #expect(TerminalHost.hostProgram(environment: env) == "ghostty")
+        #expect(TerminalHost.detectGhostty(environment: env))
+        #expect(!TerminalHost.detectAppleTerminal(environment: env))
+        #expect(!TerminalHost.detectITerm2(environment: env))
+        #expect(!TerminalHost.detectWarp(environment: env))
+    }
+
+    @Test(
+        "A termtype shared by several terminals names none of them",
+        arguments: ["xterm-256color", "xterm", "screen-256color", "tmux-256color", "vt100"])
+    func genericTermtypeNamesNothing(termtype: String) {
+        // Three of the four measured hosts report xterm-256color, so it names
+        // nothing; the multiplexer termtypes are the ones a naive table would
+        // most easily get wrong, and $TMUX answers for those anyway.
+        var env = Self.sshSession
+        env["TERM"] = termtype
+        #expect(TerminalHost.hostProgram(environment: env) == nil)
+    }
+
+    @Test("A local TERM_PROGRAM beats a TERM that disagrees with it")
+    func termProgramOutranksTermtype() {
+        let env = ["TERM_PROGRAM": "Apple_Terminal", "TERM": "xterm-ghostty"]
+        #expect(TerminalHost.hostProgram(environment: env) == "Apple_Terminal")
+        #expect(!TerminalHost.detectGhostty(environment: env))
+    }
+
+    @Test("An unrecognised LC_TERMINAL falls through to TERM rather than blocking it")
+    func unrecognisedForwardedNameDoesNotBlockTermtype() {
+        // LC_TERMINAL naming a terminal with no model here has nothing for
+        // TERM to beat, so it must not shadow a TERM that does name one.
+        var env = Self.sshSession
+        env["LC_TERMINAL"] = "SomeUnmeasuredTerminal"
+        env["TERM"] = "xterm-ghostty"
+        #expect(TerminalHost.hostProgram(environment: env) == "ghostty")
     }
 
     @Test("An unmeasured LC_TERMINAL names nothing rather than guessing")

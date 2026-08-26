@@ -79,6 +79,11 @@ public struct TerminalClient: Sendable, Equatable {
         /// `LC_TERMINAL`, set by iTerm2's shell integration. Does survive an
         /// ssh hop, because `LC_*` is forwarded.
         case forwardedLocale
+        /// `TERM` named the terminal. Survives ssh — the termtype travels in
+        /// the `pty-req` (RFC 4254 §6.2) — but only a few terminals set a
+        /// value that names exactly one of them; most report a generic
+        /// `xterm-256color` that names nothing.
+        case termType
         /// The terminal answered a Device Attributes query saying so. Survives
         /// any number of hops — the question goes to the terminal itself.
         case deviceAttributes
@@ -146,8 +151,15 @@ public struct TerminalClient: Sendable, Equatable {
                 .explicitOverride
             } else if environment["TERM_PROGRAM"]?.isEmpty == false {
                 .termProgram
-            } else if environment["LC_TERMINAL"]?.isEmpty == false {
+            } else if let forwarded = environment["LC_TERMINAL"], !forwarded.isEmpty,
+                TerminalHost.hostProgram(environment: ["LC_TERMINAL": forwarded]) != nil
+            {
+                // Recognised only: an LC_TERMINAL naming a terminal with no
+                // model here did not name THIS host, and the resolver falls
+                // through past it to TERM, so this must too.
                 .forwardedLocale
+            } else if program != .unidentified, environment["TERM"]?.isEmpty == false {
+                .termType
             } else {
                 .none
             }

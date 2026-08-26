@@ -96,7 +96,7 @@ struct IdentificationView: View {
         EnvironmentSignal(variable: "LC_TERMINAL", reach: "iTerm2 only; ssh forwards LC_*"),
         EnvironmentSignal(variable: "TMUX", reach: "a tmux pane"),
         EnvironmentSignal(variable: "SSH_TTY", reach: "(not an identity — context)"),
-        EnvironmentSignal(variable: "TERM", reach: "(not an identity — capabilities)"),
+        EnvironmentSignal(variable: "TERM", reach: "names a few terminals; survives ssh"),
     ]
 
     // MARK: - Device Attributes
@@ -183,6 +183,7 @@ struct IdentificationView: View {
         case .explicitOverride: "TUIKIT_TERM_PROGRAM (explicit override)"
         case .termProgram: "TERM_PROGRAM (set locally by the terminal)"
         case .forwardedLocale: "LC_TERMINAL (forwarded across ssh)"
+        case .termType: "TERM (the termtype, which ssh carries in its pty-req)"
         case .deviceAttributes: "its answer to a Device Attributes query"
         case .tmuxSession: "$TMUX — a tmux pane composites our output"
         case .none: "nothing"

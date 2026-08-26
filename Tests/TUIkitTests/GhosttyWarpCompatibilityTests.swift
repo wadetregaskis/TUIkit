@@ -39,14 +39,29 @@ struct GhosttyWarpCompatibilityTests {
         }
     }
 
-    @Test("Ghostty is identified by TERM_PROGRAM, not its xterm-ghostty TERM")
-    func ghosttyTermIsNotTheSignal() {
-        // TERM is routinely overridden to xterm-256color for compatibility
-        // with hosts lacking Ghostty's terminfo; TERM_PROGRAM survives.
+    @Test("TERM_PROGRAM outranks TERM, and xterm-ghostty names Ghostty on its own")
+    func ghosttyTermtypeIsAWeakerSignalThanTermProgram() {
+        // TERM is routinely overridden to xterm-256color for compatibility with
+        // hosts lacking Ghostty's terminfo, so it must never outrank
+        // TERM_PROGRAM. That is the load-bearing half and it is unchanged.
         let overridden = ["TERM": "xterm-256color", "TERM_PROGRAM": "ghostty"]
         #expect(TerminalHost.detectGhostty(environment: overridden))
-        // And TERM alone must never trigger it.
-        #expect(!TerminalHost.detectGhostty(environment: ["TERM": "xterm-ghostty"]))
+
+        // TERM alone DOES name Ghostty now (changed 2026-08-26). This test
+        // previously asserted the opposite, on the strength of the downgrade
+        // risk above — but that risk is a false NEGATIVE (TERM says
+        // xterm-256color when the host is Ghostty), which this cannot cause.
+        // The case it was blocking is a real false negative of its own:
+        // Ghostty over ssh, where TERM_PROGRAM is gone, there is no
+        // LC_TERMINAL, and the DA fingerprint names only Apple Terminal — so
+        // Ghostty went unidentified and its VS-15 chrome and SF Symbols
+        // sheared. Measured 2026-08-26: Ghostty is the only one of the four
+        // hosts that names itself in TERM.
+        #expect(TerminalHost.detectGhostty(environment: ["TERM": "xterm-ghostty"]))
+
+        // The generic termtype still names nothing — three of the four
+        // measured hosts report it.
+        #expect(!TerminalHost.detectGhostty(environment: ["TERM": "xterm-256color"]))
     }
 
     // MARK: - Measured advance models

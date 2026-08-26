@@ -107,8 +107,14 @@ enum TerminalHost {
     /// 2. **`TERM_PROGRAM`** — the local answer, authoritative when present.
     /// 3. **`LC_TERMINAL`** — iTerm2's shell integration sets it, and ssh's
     ///    `LC_*` rule carries it across a hop (measured; see
-    ///    `Documentation/Terminal-compatibility.md`). Consulted last so a
-    ///    local `TERM_PROGRAM` always beats a value forwarded from elsewhere.
+    ///    `Documentation/Terminal-compatibility.md`). Consulted after
+    ///    `TERM_PROGRAM` so a local answer always beats a forwarded one.
+    /// 4. **`TERM`** — the termtype, which ssh carries in its `pty-req`
+    ///    (RFC 4254 §6.2) and which therefore survives every hop that kills
+    ///    `TERM_PROGRAM`. Last because it is the weakest: most terminals set
+    ///    a generic value that names nothing, and a user can set it to
+    ///    anything. Only termtypes measured to name exactly one terminal are
+    ///    in the table.
     ///
     /// - Returns: the host's name, or `nil` when nothing in the environment
     ///   names it — which stays a real possibility, and is why this is an
@@ -116,8 +122,16 @@ enum TerminalHost {
     static func hostProgram(environment: [String: String]) -> String? {
         if let forced = environment["TUIKIT_TERM_PROGRAM"], !forced.isEmpty { return forced }
         if let native = environment["TERM_PROGRAM"], !native.isEmpty { return native }
-        guard let forwarded = environment["LC_TERMINAL"], !forwarded.isEmpty else { return nil }
-        return forwardedTerminalNames[forwarded]
+        if let forwarded = environment["LC_TERMINAL"], !forwarded.isEmpty,
+            let name = forwardedTerminalNames[forwarded]
+        {
+            return name
+        }
+        // An unrecognised LC_TERMINAL falls through rather than answering nil:
+        // it names a terminal with no model here, so there is nothing for it to
+        // beat, and TERM may still name one there is.
+        guard let termtype = environment["TERM"], !termtype.isEmpty else { return nil }
+        return termtypeTerminalNames[termtype]
     }
 
     /// Whether anything in the process environment names the host terminal.
@@ -138,6 +152,39 @@ enum TerminalHost {
     /// for it would produce exactly the class of misrendering this whole file
     /// exists to prevent.
     private static let forwardedTerminalNames = ["iTerm2": "iTerm.app"]
+
+    /// `TERM` values that name exactly one terminal, mapped into the
+    /// `TERM_PROGRAM` vocabulary.
+    ///
+    /// This is the only environment signal that survives ssh for a terminal
+    /// without shell integration: `TERM` travels in ssh's `pty-req`
+    /// (RFC 4254 §6.2), which is why the remote shell has one at all. Measured
+    /// 2026-08-26 on the four hosts here — Ghostty is the only one that names
+    /// itself:
+    ///
+    /// | terminal | `TERM` |
+    /// |---|---|
+    /// | Ghostty 1.3.1 | `xterm-ghostty` |
+    /// | Apple Terminal 455.1 | `xterm-256color` |
+    /// | iTerm2 3.6.11 | `xterm-256color` |
+    /// | Warp 2026.07 | `xterm-256color` |
+    ///
+    /// So this closes exactly one gap, and a real one: before it, Ghostty over
+    /// ssh was unidentified — `TERM_PROGRAM` gone, no `LC_TERMINAL`, and the
+    /// Device Attributes fingerprint names only Apple Terminal — so its VS-15
+    /// chrome glyphs and SF Symbols went uncompensated and every toggle row
+    /// sheared.
+    ///
+    /// Generic termtypes are deliberately absent: `xterm-256color` is three of
+    /// the four terminals above and countless others, so it names nothing.
+    /// Multiplexers rewrite `TERM` to their own (`tmux-256color`,
+    /// `screen-256color`), which is why neither appears here and why `$TMUX`
+    /// is consulted first regardless.
+    ///
+    /// Adding a row means measuring that terminal, exactly as the
+    /// ``forwardedTerminalNames`` table requires: a name with no advance model
+    /// behind it buys nothing, and a wrong one misrenders.
+    private static let termtypeTerminalNames = ["xterm-ghostty": "ghostty"]
 
     /// `true` for macOS Terminal.app (`Apple_Terminal`), by whichever signal
     /// ``hostProgram(environment:)`` found it.

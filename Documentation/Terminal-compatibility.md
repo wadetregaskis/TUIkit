@@ -115,9 +115,41 @@ purely because of the transport. Unnamed, it renders (measured on the
 |---|---|---|---|
 | `TERM_PROGRAM` | all four hosts + tmux | ✗ | authoritative when present |
 | `LC_TERMINAL` | iTerm2 only | ✓ | set by iTerm2's shell integration; `LC_*` is forwarded |
+| `TERM` | **Ghostty only** | ✓ | the termtype travels in ssh's `pty-req` (RFC 4254 §6.2) |
 | XTVERSION (`ESC[>0q`) | iTerm2, Ghostty, Warp | ✓ | **Apple Terminal answers nothing** |
 | Process-ancestry walk | local apps | ✗ | over ssh the parent is `sshd` |
 | `TUIKIT_TERM_PROGRAM` | anything | ✓ | explicit override, same vocabulary as `TERM_PROGRAM` |
+
+**`TERM` as an identity — added 2026-08-26.** Measured across the four hosts,
+only one names itself:
+
+| terminal | `TERM` |
+|---|---|
+| Ghostty 1.3.1 | `xterm-ghostty` |
+| Apple Terminal 455.1 | `xterm-256color` |
+| iTerm2 3.6.11 | `xterm-256color` |
+| Warp 2026.07 | `xterm-256color` |
+
+So it closes exactly one gap, and a real one: **Ghostty over ssh was
+unidentified.** `TERM_PROGRAM` is gone, Ghostty sets no `LC_TERMINAL`, and the
+Device Attributes fingerprint names only Apple Terminal — so its VS-15 chrome
+glyphs (⬛︎ ⬜︎, which every Toggle draws) and its SF Symbols went
+uncompensated and those rows sheared. Verified end-to-end by running
+`TerminalClientQuirks` in Ghostty with the environment scrubbed to what an ssh
+hop leaves: identified as Ghostty, compensating.
+
+Generic termtypes are excluded — `xterm-256color` is three of the four hosts
+above — as are the multiplexer termtypes (`tmux-256color`, `screen-256color`),
+which name the multiplexer rather than the terminal and are answered by
+`$TMUX` first anyway. A test pins both exclusions.
+
+A note on the risk that kept this out until now: `TERM` is routinely
+*downgraded* to `xterm-256color` when sshing to a host without Ghostty's
+terminfo entry (this Mac has ncurses 6.0.20150808 and no `xterm-ghostty`
+entry, so that is the common case, not the exotic one). That is a false
+NEGATIVE — it makes `TERM` name nothing — and cannot be caused by consulting
+it. `TERM_PROGRAM` still outranks it, so a downgraded `TERM` beside a local
+`TERM_PROGRAM` is unaffected.
 
 The one host that most needs naming is the one no remote-capable signal
 reaches: Apple Terminal sets no forwarded variable and answers no XTVERSION.
@@ -128,9 +160,13 @@ Hence `TUIKIT_TERM_PROGRAM`, which a remote shell profile or an ssh
 export TUIKIT_TERM_PROGRAM=Apple_Terminal
 ```
 
-Precedence is `TUIKIT_TERM_PROGRAM` → `TERM_PROGRAM` → `LC_TERMINAL`: the
-explicit answer first, the local answer next, and the forwarded one last
-because it can arrive stale from a hop further back.
+Precedence is `TUIKIT_TERM_PROGRAM` → `TERM_PROGRAM` → `LC_TERMINAL` →
+`TERM`: the explicit answer first, the local answer next, the forwarded one
+after that because it can arrive stale from a hop further back, and the
+termtype last because it is the weakest — most terminals set a value that
+names nothing, and a user can set it to anything. An `LC_TERMINAL` naming a
+terminal with no model here falls through to `TERM` rather than blocking it:
+it did not name *this* host, so it has nothing to outrank.
 
 ### Asking the terminal — Device Attributes (measured 2026-08-26)
 

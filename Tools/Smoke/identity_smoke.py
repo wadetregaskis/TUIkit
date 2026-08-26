@@ -52,6 +52,24 @@ HOSTS = {
     "silent": ({}, False),
 }
 
+# NOT covered here, deliberately: Ghostty identified by TERM=xterm-ghostty.
+#
+# This harness's oracle is "did a CUF appear after the header glyph", and
+# Example's first screen contains nothing Ghostty compensates — checked by
+# scanning that screen for any character whose ghosttyCursorAdvance differs
+# from its terminalWidth, and finding none. Its header emoji is a VS-16
+# cluster, which Ghostty advances correctly, so an identified Ghostty and an
+# unidentified terminal emit byte-identical output there and a case for it
+# would pass whether or not the signal worked.
+#
+# The termtype path is covered by TerminalHostIdentificationTests (resolver and
+# detectors) and was verified end-to-end in a real Ghostty with the environment
+# scrubbed to what an ssh hop leaves. It also does not need this harness's
+# specific guarantee: what makes the DA path fragile is ordering — the
+# detectors are `static let` and freeze on first read, so the query must run
+# before RenderLoop is built — and TERM is read from the environment at the
+# same moment as TERM_PROGRAM, with no query involved.
+
 STRIPPED = (
     "TERM_PROGRAM", "TERM_PROGRAM_VERSION", "LC_TERMINAL", "LC_TERMINAL_VERSION",
     "TMUX", "TMUX_PANE", "TUIKIT_TERM_PROGRAM",
