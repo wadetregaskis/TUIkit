@@ -55,6 +55,7 @@ opt_in_rules:
   - explicit_init
   - fallthrough
   - fatal_error_message
+  - file_header
   - first_where
   - flatmap_over_map_reduce
   - identical_operands
@@ -93,6 +94,26 @@ opt_in_rules:
   - yoda_condition
 
 # Rule Configuration
+# Every file opens with the same six-line banner, and this is what keeps it
+# that way. The pattern pins four things and deliberately no more:
+#
+#   1. the banner, byte for byte — so `TUIKit`, a hyphen for the em dash, or a
+#      dropped 🖥️ (or its variation selector) all fail;
+#   2. line 2 is the file's OWN name, via SwiftLint's SWIFTLINT_CURRENT_FILENAME
+#      token — this already caught two headers wearing another file's name;
+#   3. an attribution line that is not Xcode's `Created by X on 1/1/25.`
+#      boilerplate — any real name passes, so a new contributor needs no config
+#      change;
+#   4. `License: MIT`.
+#
+# It does NOT anchor the END of the header: SwiftLint's header region runs to
+# the first declaration, so requiring the licence to be last reports 222 files
+# whose description sits after it. `\r?\n` rather than `\n` because the
+# Windows port is in progress and a CRLF working tree would otherwise fail
+# every file with a message that explains nothing.
+file_header:
+  required_pattern: '\A//  🖥️ TUIkit — Terminal UI Kit for Swift\r?\n//  SWIFTLINT_CURRENT_FILENAME\r?\n//\r?\n(?:(?!//  License:)//[^\n]*\r?\n)*?//  Created by (?![^\n]* on \d)[^\n]+\r?\n//  License: MIT$'
+
 line_length:
   warning: 160
   error: 200

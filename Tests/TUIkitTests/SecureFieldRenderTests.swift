@@ -7,6 +7,9 @@
 //  states that matter visually: default, empty, prompt, focused vs
 //  unfocused, disabled, narrow truncation, wide, and multi-field
 //  composition.
+//
+//  Created by Wade Tregaskis
+//  License: MIT
 
 import Testing
 

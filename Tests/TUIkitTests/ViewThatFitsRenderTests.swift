@@ -5,6 +5,8 @@
 //  candidate against unbounded space and renders the first whose ideal
 //  size fits the available space along the configured axes, falling back
 //  to the last candidate when none fit.
+//
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import Testing

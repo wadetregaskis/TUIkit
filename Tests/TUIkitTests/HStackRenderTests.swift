@@ -2,6 +2,8 @@
 //  HStackRenderTests.swift
 //
 //  Buffer-level render audit for HStack.
+//
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import Testing

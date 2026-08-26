@@ -4,6 +4,8 @@
 //  Buffer-level render audit for Group. Group imposes no layout of its
 //  own: it must be transparent, flattening its children into the
 //  surrounding container.
+//
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import Testing

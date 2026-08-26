@@ -6,7 +6,6 @@
 //
 //  Created by LAYERED.work
 //  License: MIT
-//
 
 // MARK: - Status Bar Alignment
 

@@ -5,6 +5,8 @@
 //  both axes (fills its viewport) and windows into a taller content
 //  buffer, overwriting the top / bottom rows with "N more lines above / below"
 //  indicators when content extends past the viewport.
+//
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import Testing

@@ -1,6 +1,7 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StackGuardFloorTests.swift
 //
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import Foundation

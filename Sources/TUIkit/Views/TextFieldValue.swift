@@ -26,6 +26,7 @@
 //  place rather than being a spelling of something already easy.
 //
 //  Created by Wade Tregaskis
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import Foundation

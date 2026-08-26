@@ -7,8 +7,6 @@
 //
 //  Created by LAYERED.work
 //  License: MIT
-//  with a single, reusable implementation.
-//
 
 // MARK: - Cyclable Protocol
 

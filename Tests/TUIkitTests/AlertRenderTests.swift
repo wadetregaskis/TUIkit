@@ -2,6 +2,8 @@
 //  AlertRenderTests.swift
 //
 //  Buffer-level rendering tests for Alert.
+//
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import Testing

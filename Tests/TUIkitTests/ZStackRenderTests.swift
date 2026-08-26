@@ -9,6 +9,8 @@
 //  full-width or coloured-fill child owns its cells — but a *narrower* child
 //  only paints its own cells, leaving the larger layer beneath it visible
 //  around the edges. Alignment positions each child within the frame.
+//
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import Testing

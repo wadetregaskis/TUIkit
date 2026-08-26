@@ -39,6 +39,7 @@
 //    prettily in a GUI and illegibly in a cell grid.
 //
 //  Created by Wade Tregaskis
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import TUIkitCore

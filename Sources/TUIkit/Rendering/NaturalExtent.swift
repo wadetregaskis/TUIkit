@@ -2,6 +2,8 @@
 //  NaturalExtent.swift
 //
 //  Measuring how big a view WANTS to be, with no ceiling.
+//
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import TUIkitCore

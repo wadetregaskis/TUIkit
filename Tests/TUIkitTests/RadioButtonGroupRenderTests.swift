@@ -2,6 +2,8 @@
 //  RadioButtonGroupRenderTests.swift
 //
 //  Buffer-level rendering tests for RadioButtonGroup.
+//
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import Testing

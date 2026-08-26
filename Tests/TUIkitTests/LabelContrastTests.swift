@@ -25,6 +25,7 @@
 //  of the sixteen.
 //
 //  Created by Wade Tregaskis
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import Testing

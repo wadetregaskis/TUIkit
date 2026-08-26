@@ -25,6 +25,7 @@
 //  Tools/APIParity/parity-map.json.
 //
 //  Created by Wade Tregaskis
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import TUIkitCore

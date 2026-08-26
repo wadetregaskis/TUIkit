@@ -17,6 +17,7 @@
 //  rendered at. A designation is, in effect, a seek re-issued every frame.
 //
 //  Created by Wade Tregaskis
+//  License: MIT
 
 import TUIkitCore
 

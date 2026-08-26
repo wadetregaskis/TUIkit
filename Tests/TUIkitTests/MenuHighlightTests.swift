@@ -1,5 +1,5 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
-//  Self.swift
+//  MenuHighlightTests.swift
 //
 //  The walk that a pop-up `Menu`, a `.contextMenu`, a `Picker`'s drop-down and
 //  a combo box's suggestions menu all share.

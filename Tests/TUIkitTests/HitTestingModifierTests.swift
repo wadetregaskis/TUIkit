@@ -1,5 +1,5 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
-//  VisibilityModifierTests.swift
+//  HitTestingModifierTests.swift
 //
 //  `allowsHitTesting(_:)` — taking the mouse away from a view without taking
 //  its drawing or its space.

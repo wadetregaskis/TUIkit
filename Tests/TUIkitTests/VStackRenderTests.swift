@@ -2,6 +2,8 @@
 //  VStackRenderTests.swift
 //
 //  Buffer-level render audit for VStack.
+//
+//  Created by Wade Tregaskis
 //  License: MIT
 
 import Testing
