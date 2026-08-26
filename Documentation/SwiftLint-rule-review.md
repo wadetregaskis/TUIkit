@@ -100,6 +100,16 @@ a moment when someone is touching that file anyway.
 
 ## Part 2 — every optional rule not enabled (109)
 
+### `file_header` — enabled, and it was never doing anything
+
+The rule checks **nothing** until it is given a `required_pattern`, so its
+"zero violations" meant "inert", not "clean". It is now configured (see
+`.swiftlint.yml` for the pattern and what it deliberately does not pin), and
+enabling it found 21 real defects: two headers naming a *different* file,
+18 with no `Created by`, and one with no licence line. Verified adversarially
+against ten hand-built bad headers — it flags nine and accepts only the valid
+one.
+
 ### Enabled by this review — zero violations, genuinely applicable (9)
 
 | Rule | Verdict |
@@ -124,7 +134,6 @@ ratchets: they cost nothing today and stop the drift tomorrow.
 | `missing_docs` | 41 | **Recommended.** This is a public-API framework that documents heavily; 41 undocumented public declarations (Theme 8, UserDefaultsStorage 8, RadioButton 5, AppStorage 4) are gaps, not style. Fix, then it ratchets. |
 | `direct_return` | 2 | `let x = …; return x` → `return …`. Genuinely clearer, but two sites is thin justification for a standing rule. Your call. |
 | `multiline_parameters_brackets` | 3 | Cosmetic, and swift-format already owns wrapping. Marginal. |
-| `file_header` | 43 | **Recommended with care.** Currently inert (it does nothing without a configured pattern), so its "zero" is misleading. 43 files lack the banner — and configuring it would surface that the banner is spelled `TUIKit` in 892 files and `TUIkit` in 165, against a product actually named **TUIkit**. Worth fixing; it is a ~900-file mechanical sweep, so it deserves its own commit and a decision from you. |
 
 ### Decline — conflicts with a project rule or another tool (7)
 
@@ -205,10 +214,9 @@ because the build-log requirement makes them slow and fragile.
 Three exceptions retired, one latent bug fixed (the bare `fatalError()`), and
 137 lines of config removed — with the remaining exceptions now carrying
 measured justifications instead of assertions. Of 109 optional rules, **9 were
-enabled** (all verified at zero violations first), **two are worth a deliberate
-follow-up** — `missing_docs` (41 undocumented public declarations in a public
-API framework) and `file_header` (43 files missing the banner, and a product
-name misspelled `TUIKit` in 892 of them) — and the rest decline for reasons
+enabled** (all verified at zero violations first), both follow-ups have since been
+taken — `missing_docs` (41 public declarations documented) and `file_header`
+(configured, 21 defects fixed) — and the rest decline for reasons
 that are now written down rather than rediscovered.
 
 The linter now enforces 50 opt-in rules on top of the defaults, at 0
