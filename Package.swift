@@ -98,6 +98,11 @@ let package = Package(
         // interactively, or headless (`--bench`/`--selfcheck`) as a no-PTY
         // profiling instrument (see Sources/Stress/README.md).
         .executableTarget(
+            name: "TerminalClientQuirks",
+            dependencies: ["TUIkit"],
+            exclude: ["README.md"]  // documentation, not a bundled resource
+        ),
+        .executableTarget(
             name: "Stress",
             dependencies: ["TUIkit"],
             exclude: ["README.md"]  // documentation, not a bundled resource

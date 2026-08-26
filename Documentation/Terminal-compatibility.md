@@ -54,6 +54,15 @@ the terminal under test:
   goes unanswered reports `<silent>` instead of hanging. This is the only
   identification that survives an ssh hop — see the next section.
 
+The `TerminalClientQuirks` app (`swift run TerminalClientQuirks`) is the
+interactive counterpart to these probes: it shows which terminal was
+detected and by which signal, the advance model in force, and an alignment
+strip that fails visibly on any cluster the host handles differently from
+TUIkit. Its **Custom** screen decomposes the workarounds into one switch per
+cluster class, so an unmeasured terminal can be characterised by experiment
+and exported as a `TerminalQuirks(...)` literal — see
+`Sources/TerminalClientQuirks/README.md`.
+
 "Advance" below = cells the cursor moves; "paints" = cells with ink.
 TUIkit's shared layout width (`Character.terminalWidth`) claims 2 for all
 the emoji-class clusters below unless noted.
