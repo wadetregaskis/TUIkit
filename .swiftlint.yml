@@ -62,20 +62,29 @@ opt_in_rules:
   - joined_default_parameter
   - last_where
   - legacy_multiple
+  - lower_acl_than_parent
   - modifier_order
+  - non_overridable_class_declaration
   - operator_usage_whitespace
+  - optional_enum_case_matching
   - prefer_self_in_static_references
   - prefer_self_type_over_type_of_self
   - prefer_zero_over_explicit_init
+  - reduce_into
   - redundant_nil_coalescing
   - redundant_type_annotation
   - return_value_from_void_function
   - self_binding
   - shorthand_optional_binding
   - sorted_first_last
+  - sorted_imports
+  - static_operator
   - toggle_bool
+  - unavailable_function
+  - unhandled_throwing_task
   - unneeded_parentheses_in_closure_argument
   - unowned_variable_capture
+  - untyped_error_in_catch
   - vertical_whitespace_closing_braces
   - weak_delegate
   - yoda_condition

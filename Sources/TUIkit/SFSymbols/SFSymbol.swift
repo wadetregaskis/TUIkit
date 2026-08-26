@@ -5,8 +5,8 @@
 //  License: MIT
 
 #if canImport(CoreText)
-    import CoreText
     import CoreGraphics
+    import CoreText
     import Foundation
 #endif
 
