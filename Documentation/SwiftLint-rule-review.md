@@ -57,11 +57,46 @@ generated files waive only `line_length`/`file_length` while leaving every
 other rule enforced, which is stricter than adding the directory to
 `excluded:` — so that stays as it is too.
 
-**One standing observation, not acted on:** `Table.swift` (3,197 lines) and
-`_ListCore.swift` (2,754) suppress `file_length` outright, against a project
-convention of ~500. Both are split candidates in the mould of the
-`ItemListHandler` / `ContainerViewCore` / `ScrollView+Content` splits already
-done.
+### The two `file_length` suppressions, evaluated
+
+`Table.swift` (3,197 lines) and `_ListCore.swift` (2,754) suppress
+`file_length` outright, against a project convention of ~500, so they were
+examined as split candidates in the mould of the `ItemListHandler` /
+`ContainerViewCore` / `ScrollView+Content` splits already done.
+
+**Conclusion: do not split them.** Swift's `private` is file-scoped, so moving
+any part of one of these cores into a second file widens everything the two
+halves share. Measured:
+
+| | `_TableCore` | `_ListCore` | `_ScrollViewCore` (the precedent that *was* split) |
+|---|---|---|---|
+| explicitly `private` members | 43 | 41 | 9 |
+| members crossing the seam | see below | — | ~4–8 |
+
+The ScrollView split worked because its seams are genuinely separable
+concerns — content extents, scrollbars, reveal, anchor — so only a handful of
+members had to become module-visible. These two have no such seam: their
+sections are sequential stages of one pipeline (window → compose → clip →
+publish bands) reading the same stored state. Probing the most
+self-contained-looking candidate, the ~450-line mouse-wiring section of
+`_TableCore`, it still reaches **9 private helpers and 6 stored properties**,
+several of them (`floatCarriedRows`, `previewRow`,
+`registerRowDropDestination`) belonging to the reorder and render paths.
+
+So the cost of a split is converting most of ~43 intricate,
+deliberately-private helpers into module-visible surface, in the two files
+whose invariants are hardest to hold (measure/render parity, windowing,
+mouse-region mapping). That is a real loss of the compiler-enforced guarantee
+that only this file can call them — paid for a line count. `Table.swift`'s own
+header already recorded this judgement before the review; it is now measured
+rather than asserted.
+
+The one genuinely cheap move available is lifting the public `Table` API
+(~360 lines) away from `_TableCore` into a sibling `TableCore.swift`, matching
+`List`/`_ListCore` and `ContainerView`/`ContainerViewCore`. It costs one
+access level on an already-underscored type — but it leaves a 2,800-line core
+still suppressed, so it buys consistency rather than a smaller file. Left for
+a moment when someone is touching that file anyway.
 
 ## Part 2 — every optional rule not enabled (109)
 
