@@ -16,17 +16,21 @@ import Foundation
 /// multi-cell glyphs where adjacent FULL BLOCK cells show seams (see
 /// ``ToggleCharacterSet/automatic``).
 enum TerminalHost {
-    /// Whether the host terminal is macOS Terminal.app, detected once from
-    /// the process environment. Compile-time `false` off macOS, where
-    /// Terminal.app cannot run — so a spurious `TERM_PROGRAM=Apple_Terminal`
-    /// exported on another platform is never mistaken for the real thing.
-    static let isAppleTerminal: Bool = {
-        #if os(macOS)
-        return detectAppleTerminal(environment: ProcessInfo.processInfo.environment)
-        #else
-        return false
-        #endif
-    }()
+    /// Whether the host terminal is macOS Terminal.app, detected once from the
+    /// process environment.
+    ///
+    /// Not gated on the platform, and that is the point: **the terminal and the
+    /// process need not be on the same machine.** An earlier model returned a
+    /// compile-time `false` off macOS on the grounds that "Terminal.app cannot
+    /// run there", which is true of the app and false of the question — over
+    /// ssh, a Mac running Terminal.app routinely hosts a process on Linux, and
+    /// the cursor-advance quirks being compensated for belong to the terminal
+    /// painting the glyphs, not to the kernel the app runs on. Gating here
+    /// would have made the whole ssh identification path — the environment
+    /// signals and the Device Attributes query alike — do its work and throw
+    /// the answer away on exactly the systems people ssh into most.
+    static let isAppleTerminal: Bool =
+        detectAppleTerminal(environment: ProcessInfo.processInfo.environment)
 
     /// Whether the host terminal is iTerm2, detected once from the process
     /// environment.
@@ -141,9 +145,7 @@ enum TerminalHost {
     /// Pure over the environment argument — like the other native detectors
     /// (``detectITerm2(environment:)`` and friends) — so tests exercise both
     /// answers deterministically regardless of which terminal, or platform,
-    /// runs them. The real-host guarantee that Terminal.app cannot be running
-    /// off macOS lives on ``isAppleTerminal``, which gates this to macOS; the
-    /// raw check itself stays a plain environment predicate.
+    /// runs them.
     static func detectAppleTerminal(environment: [String: String]) -> Bool {
         hostProgram(environment: environment) == "Apple_Terminal"
     }

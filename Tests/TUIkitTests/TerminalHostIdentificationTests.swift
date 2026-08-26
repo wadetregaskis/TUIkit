@@ -4,6 +4,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -113,6 +114,25 @@ struct TerminalHostIdentificationTests {
         #expect(TerminalHost.detectTmux(environment: ["TMUX": "/tmp/tmux-501/default,1,0"]))
         #expect(TerminalHost.detectTmux(environment: ["TUIKIT_TERM_PROGRAM": "tmux"]))
         #expect(!TerminalHost.detectTmux(environment: Self.sshSession))
+    }
+
+    @Test("Apple Terminal is recognised whatever platform the app runs on")
+    func notGatedOnThePlatform() {
+        // The terminal and the process need not be on the same machine: over
+        // ssh a Mac running Terminal.app routinely hosts a process on Linux,
+        // and the advance quirks belong to the terminal painting the glyphs,
+        // not to the kernel the app runs on. A platform gate here would make
+        // the whole ssh identification path do its work and discard the answer
+        // on exactly the systems people ssh into most.
+        var env = Self.sshSession
+        env["TUIKIT_TERM_PROGRAM"] = "Apple_Terminal"
+        #expect(TerminalHost.detectAppleTerminal(environment: env))
+        // …and the process-wide answer agrees with the predicate, on whichever
+        // platform is running this test.
+        #expect(
+            TerminalHost.isAppleTerminal
+                == TerminalHost.detectAppleTerminal(
+                    environment: ProcessInfo.processInfo.environment))
     }
 
     // MARK: - Environment to bytes
