@@ -24,6 +24,17 @@ for the one-screen comparison.
 
 ## Methodology
 
+Every probe result is written with a provenance stamp (`probe_stamp.py`) and
+the curated ones are committed under `Tools/TerminalProbes/data/`, one file per
+terminal, version and screen buffer. The stamp records the two conditions this
+document has twice been bitten by leaving out — **which screen buffer**, and
+**whether DEC mode 2027 was set** — because a number without them cannot be
+re-read later and either trusted or discarded. See `data/README.md`.
+
+Records are produced by running a probe, never by editing a file: that is the
+only mechanism that keeps "contributing a measurement" and "making one" the
+same act.
+
 Reproducible probes live in `Tools/TerminalProbes/`; run them INSIDE
 the terminal under test:
 

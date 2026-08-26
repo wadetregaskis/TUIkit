@@ -1,0 +1,272 @@
+{
+ "advances": {
+  "alarm": {
+   "advance": 2,
+   "cluster": "U+23F0"
+  },
+  "ascii_a": {
+   "advance": 1,
+   "cluster": "U+0061"
+  },
+  "bare_gear": {
+   "advance": 1,
+   "cluster": "U+2699"
+  },
+  "bare_heart": {
+   "advance": 1,
+   "cluster": "U+2764"
+  },
+  "bare_pencil": {
+   "advance": 1,
+   "cluster": "U+270F"
+  },
+  "bare_point_up": {
+   "advance": 1,
+   "cluster": "U+261D"
+  },
+  "bare_screen": {
+   "advance": 1,
+   "cluster": "U+1F5A5"
+  },
+  "bare_smp_cityscape": {
+   "advance": 1,
+   "cluster": "U+1F3D9"
+  },
+  "bare_smp_film": {
+   "advance": 1,
+   "cluster": "U+1F39E"
+  },
+  "bare_smp_joystick": {
+   "advance": 1,
+   "cluster": "U+1F579"
+  },
+  "bare_smp_shield": {
+   "advance": 1,
+   "cluster": "U+1F6E1"
+  },
+  "bare_smp_spider": {
+   "advance": 1,
+   "cluster": "U+1F577"
+  },
+  "box_h": {
+   "advance": 1,
+   "cluster": "U+2500"
+  },
+  "braille": {
+   "advance": 1,
+   "cluster": "U+28FF"
+  },
+  "cjk": {
+   "advance": 2,
+   "cluster": "U+4E2D"
+  },
+  "domino": {
+   "advance": 1,
+   "cluster": "U+1F060"
+  },
+  "emoji_fist": {
+   "advance": 2,
+   "cluster": "U+270A"
+  },
+  "emoji_thumbs": {
+   "advance": 2,
+   "cluster": "U+1F44D"
+  },
+  "ffwd": {
+   "advance": 2,
+   "cluster": "U+23E9"
+  },
+  "flag_us": {
+   "advance": 2,
+   "cluster": "U+1F1FA U+1F1F8"
+  },
+  "fullblock2": {
+   "advance": 2,
+   "cluster": "U+2588 U+2588"
+  },
+  "halfpair": {
+   "advance": 2,
+   "cluster": "U+2590 U+258C"
+  },
+  "hourglass": {
+   "advance": 2,
+   "cluster": "U+231B"
+  },
+  "keycap_0": {
+   "advance": 3,
+   "cluster": "U+0030 U+FE0F U+20E3"
+  },
+  "keycap_1": {
+   "advance": 3,
+   "cluster": "U+0031 U+FE0F U+20E3"
+  },
+  "keycap_bare": {
+   "advance": 1,
+   "cluster": "U+0031 U+20E3"
+  },
+  "keycap_hash": {
+   "advance": 3,
+   "cluster": "U+0023 U+FE0F U+20E3"
+  },
+  "keycap_star": {
+   "advance": 3,
+   "cluster": "U+002A U+FE0F U+20E3"
+  },
+  "lone_ri": {
+   "advance": 1,
+   "cluster": "U+1F1E6"
+  },
+  "nfd_e": {
+   "advance": 1,
+   "cluster": "U+0065 U+0301"
+  },
+  "playing_card": {
+   "advance": 1,
+   "cluster": "U+1F0A1"
+  },
+  "powerline": {
+   "advance": 1,
+   "cluster": "U+E0B0"
+  },
+  "pua_bmp_sf": {
+   "advance": 1,
+   "cluster": "U+102446"
+  },
+  "pua_lower": {
+   "advance": 1,
+   "cluster": "U+101867"
+  },
+  "sf_pua": {
+   "advance": 1,
+   "cluster": "U+100038"
+  },
+  "shade_med": {
+   "advance": 1,
+   "cluster": "U+2592"
+  },
+  "skin_fist": {
+   "advance": 4,
+   "cluster": "U+270A U+1F3FB"
+  },
+  "skin_point_up": {
+   "advance": 3,
+   "cluster": "U+261D U+1F3FD"
+  },
+  "skin_point_vs16": {
+   "advance": 4,
+   "cluster": "U+261D U+FE0F U+1F3FD"
+  },
+  "skin_standalone": {
+   "advance": 2,
+   "cluster": "U+1F3FD"
+  },
+  "skin_thumbs": {
+   "advance": 4,
+   "cluster": "U+1F44D U+1F3FD"
+  },
+  "sq_filled": {
+   "advance": 1,
+   "cluster": "U+25A0"
+  },
+  "vs15_bigsquare": {
+   "advance": 2,
+   "cluster": "U+2B1B U+FE0E"
+  },
+  "vs15_whitesquare": {
+   "advance": 2,
+   "cluster": "U+2B1C U+FE0E"
+  },
+  "vs16_check": {
+   "advance": 2,
+   "cluster": "U+2714 U+FE0F"
+  },
+  "vs16_gear": {
+   "advance": 2,
+   "cluster": "U+2699 U+FE0F"
+  },
+  "vs16_hammer_pick": {
+   "advance": 2,
+   "cluster": "U+2692 U+FE0F"
+  },
+  "vs16_heart": {
+   "advance": 2,
+   "cluster": "U+2764 U+FE0F"
+  },
+  "vs16_part_alt": {
+   "advance": 3,
+   "cluster": "U+303D U+FE0F"
+  },
+  "vs16_pencil": {
+   "advance": 2,
+   "cluster": "U+270F U+FE0F"
+  },
+  "vs16_phone": {
+   "advance": 2,
+   "cluster": "U+260E U+FE0F"
+  },
+  "vs16_scissors": {
+   "advance": 2,
+   "cluster": "U+2702 U+FE0F"
+  },
+  "vs16_screen": {
+   "advance": 2,
+   "cluster": "U+1F5A5 U+FE0F"
+  },
+  "vs16_shield": {
+   "advance": 2,
+   "cluster": "U+1F6E1 U+FE0F"
+  },
+  "vs16_smp_joystick": {
+   "advance": 2,
+   "cluster": "U+1F579 U+FE0F"
+  },
+  "vs16_smp_shield": {
+   "advance": 2,
+   "cluster": "U+1F6E1 U+FE0F"
+  },
+  "vs16_umbrella": {
+   "advance": 2,
+   "cluster": "U+2602 U+FE0F"
+  },
+  "vs16_warning": {
+   "advance": 2,
+   "cluster": "U+26A0 U+FE0F"
+  },
+  "vs16_wavydash": {
+   "advance": 3,
+   "cluster": "U+3030 U+FE0F"
+  },
+  "watch": {
+   "advance": 2,
+   "cluster": "U+231A"
+  },
+  "zwj_astronaut": {
+   "advance": 5,
+   "cluster": "U+1F469 U+200D U+1F680"
+  },
+  "zwj_heart_fire": {
+   "advance": 5,
+   "cluster": "U+2764 U+FE0F U+200D U+1F525"
+  },
+  "zwj_skin": {
+   "advance": 7,
+   "cluster": "U+1F469 U+1F3FD U+200D U+1F680"
+  }
+ },
+ "stamp": {
+  "env": {
+   "COLORTERM": "truecolor",
+   "TERM": "xterm-256color",
+   "TERM_PROGRAM": "WarpTerminal",
+   "TERM_PROGRAM_VERSION": "v0.2026.07.08.17.54.stable_02",
+   "__CFBundleIdentifier": "dev.warp.Warp-Stable"
+  },
+  "machine": "arm64",
+  "measured": "2026-08-26T13:53:14-07:00",
+  "method": "DSR cursor report \u2014 confirm any disagreement with visual_card.py",
+  "mode_2027_grapheme_clustering": null,
+  "os": "macOS 15.7.9",
+  "probe": "advance_probe.py",
+  "screen": "alternate"
+ }
+}

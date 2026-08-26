@@ -9,6 +9,14 @@ when unset), the visual/aspect probes print to the terminal.
   grapheme-cluster battery + terminal-relevant environment dump (JSON).
   `PROBE_ALT=1` measures on the ALTERNATE screen (the app's buffer) —
   iTerm2 advances some clusters differently there.
+- `probe_stamp.py` — not a probe: the shared provenance stamp every probe
+  result carries (date, OS, terminal version, screen buffer, and DEC mode 2027,
+  the two conditions this project has been bitten by not recording). It asks
+  DECRQM for mode 2027 — and skips it on Apple Terminal, where that query's
+  final byte prints to the screen and would move the cursor out from under the
+  measurements that follow.
+- `data/` — the committed measurement records, one per (terminal, version,
+  screen). Written by a probe, never by hand. See `data/README.md`.
 - `visual_card.py` — static `|<c>|<c>|<c>|X` alignment card with a column
   ruler, for screenshot inspection of PAINTED width (which DSR can't see),
   merged-vs-split clusters, seams, and swatches. **This is the authority when

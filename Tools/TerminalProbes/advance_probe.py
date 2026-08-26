@@ -5,6 +5,8 @@ Writes JSON to $PROBE_OUT (default: ./advance_probe.json). Run INSIDE the
 terminal under test."""
 import json, os, sys, termios, tty
 
+import probe_stamp
+
 BATTERY = {
     # ASCII / controls
     "ascii_a": "a",
@@ -114,6 +116,9 @@ def main():
         tty.setraw(fd)
         if use_alt:
             os.write(1, b"\x1b[?1049h\x1b[2J\x1b[H")
+        # Before the battery: the stamp asks DECRQM, and a reply arriving mid
+        # battery would be read as part of a cursor report.
+        provenance = probe_stamp.stamp(fd, "advance_probe.py", use_alt)
         for name, cluster in BATTERY.items():
             os.write(1, b"\r\x1b[2K")           # column 1, clear line
             start = cursor_col(fd)
@@ -129,15 +134,7 @@ def main():
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
-    env_keys = [
-        "TERM", "TERM_PROGRAM", "TERM_PROGRAM_VERSION", "COLORTERM",
-        "TERM_SESSION_ID", "ITERM_SESSION_ID", "ITERM_PROFILE",
-        "LC_TERMINAL", "LC_TERMINAL_VERSION", "TMUX", "TMUX_PANE",
-        "COLORFGBG", "TERMINFO_DIRS", "__CFBundleIdentifier",
-    ]
-    env = {k: os.environ.get(k) for k in env_keys if os.environ.get(k) is not None}
-    env["_PROBE_SCREEN"] = "alternate" if use_alt else "primary"
     with open(out_path, "w") as f:
-        json.dump({"env": env, "advances": results}, f, indent=1, sort_keys=True)
+        json.dump({"stamp": provenance, "advances": results}, f, indent=1, sort_keys=True)
 
 main()
