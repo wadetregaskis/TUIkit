@@ -61,6 +61,12 @@ medium keeps for free is honoured; a request it silently discards is not.
 > `NavigationSplitView`), `onChange(of:perform:)`, the old
 > `ScrollView(_:showsIndicators:content:)` initializer.
 
+**This file is about vocabulary; behaviour is audited separately.**
+[SwiftUI-semantic-audit-2026-08.md](SwiftUI-semantic-audit-2026-08.md) compares
+what each shared API *means* against Apple's own doc comments, family by family.
+Several rows below are contradicted by it — a ✓ here has never implied that the
+semantics were checked, and now there is a place where they were.
+
 ---
 
 ## The guiding principle: measurement vs. data
