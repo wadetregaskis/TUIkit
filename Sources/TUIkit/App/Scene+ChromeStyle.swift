@@ -67,7 +67,7 @@ extension Scene {
 
 /// Framework-internal scene wrapper recording the chrome styles for the frame.
 /// `RenderLoop` reads it via ``RootChromeStyleProvidingScene``.
-internal struct _ChromeStyleScene<Content: Scene>: Scene {  // swiftlint:disable:this type_name
+internal struct _ChromeStyleScene<Content: Scene>: Scene {
     let content: Content
     let appHeaderStyle: ChromeStyle?
     let statusBarStyle: ChromeStyle?

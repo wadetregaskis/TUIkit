@@ -153,7 +153,7 @@ struct EnvironmentModifierTests {
 
 /// A view with real body that reads an environment value.
 private struct EnvironmentReaderView: View, Renderable {
-    var body: Never { fatalError() }
+    var body: Never { fatalError("EnvironmentReaderView renders via Renderable") }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let value = context.environment.testString

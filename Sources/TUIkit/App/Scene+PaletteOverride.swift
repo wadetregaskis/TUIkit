@@ -90,7 +90,7 @@ extension Scene {
 /// its content. `RenderLoop` reads it via ``RootPaletteOverrideProvidingScene``
 /// and installs it into the environment for the whole frame, so it reaches the
 /// content view tree and the out-of-tree surfaces alike.
-internal struct _PaletteScene<Content: Scene>: Scene {  // swiftlint:disable:this type_name
+internal struct _PaletteScene<Content: Scene>: Scene {
     let content: Content
     let palette: any Palette
 }

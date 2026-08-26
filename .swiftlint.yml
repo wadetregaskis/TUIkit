@@ -11,21 +11,32 @@ excluded:
 
 # Rules
 disabled_rules:
-  # We use fatalError() intentionally in body properties for Renderable views
-  - fatal_error_message
-  # Nesting is acceptable for enums inside structs (e.g. Appearance.ID, GeneratedPalette.Hue)
-  - nesting
-  # BorderStyle.none follows SwiftUI convention (e.g. Font.Weight.none)
-  - discouraged_none_name
-  # swift-format adds trailing commas (multiElementCollectionTrailingCommas: true)
+  # Both of these conflict with swift-format, which formats this project
+  # (.swift-format sets multiElementCollectionTrailingCommas: true and
+  # lineBreakBeforeEachArgument: true). Enabling either makes the two tools
+  # rewrite each other's output on every save — measured at 450 and 161
+  # sites respectively.
   - trailing_comma
-  # swift-format places opening braces on new lines for wrapped signatures
   - opening_brace
   # A type's length isn't a meaningful quality signal here: cohesive
   # internal render cores (e.g. _ListCore) are clearer kept whole than
-  # split across files purely to satisfy a line ceiling.
+  # split across files purely to satisfy a line ceiling. `file_length`
+  # (below) already bounds the same thing at the granularity this project
+  # actually splits on, and it is enforced.
   - type_body_length
 
+# Two levels of type nesting, not the default one: SwiftUI parity puts an
+# enum inside a nested struct in several public types (OpenURLAction.Result
+# .Disposition, TimelineView.Context.Cadence), and matching those signatures
+# is non-negotiable. Three levels still warns, so the rule keeps its teeth —
+# it was previously disabled outright.
+nesting:
+  type_level: 2
+
+# NOT opted in, deliberately: `discouraged_none_name` flags 14 sites, all of
+# them public `.none` API this framework mirrors from SwiftUI (BorderStyle,
+# SymbolVariants, ScrollOverscroll, Scrollbar, TextCursorStyle, …). Renaming
+# them would break the SwiftUI-parity rule, which outranks the lint.
 opt_in_rules:
   - array_init
   - closure_end_indentation
@@ -42,6 +53,7 @@ opt_in_rules:
   - enum_case_associated_values_count
   - explicit_init
   - fallthrough
+  - fatal_error_message
   - first_where
   - flatmap_over_map_reduce
   - identical_operands
@@ -159,131 +171,16 @@ type_name:
   max_length:
     warning: 50
     error: 60
+  # `_`-prefixed types are this project's SwiftUI-style convention for
+  # internal cores and modifier-created helpers (_ListCore, _ZIndexView,
+  # _MemoizedRow, …). SwiftLint already permits the underscore on PRIVATE
+  # declarations; these are internal or public-but-underscored, so they used
+  # to need enumerating — ~90 entries, each with a comment restating what the
+  # type's own doc already said, and four types whose authors reached for an
+  # inline `swiftlint:disable:this type_name` instead, which the list could
+  # not see. One symbol allowance replaces all of it and makes the policy
+  # uniform. Length limits still apply.
+  allowed_symbols: ["_"]
   excluded:
+    # Two characters, so below `min_length`; the conventional Swift spelling.
     - ID
-    # Internal _Core views follow SwiftUI pattern (e.g. _AlertCore, _DialogCore).
-    # Private _Core views (Card's _CardCore, Table's _TableCore) need no entry —
-    # SwiftLint already permits a leading underscore on private declarations.
-    - _AlertCore
-    - _DialogCore
-    - _PanelCore
-    - _ListCore
-    - _ListContentView
-    - _ImageCore
-    - _ToggleCore
-    # The user-resizable pair: the core is generic over its content and the
-    # handler is shared with it, so neither can be file-private.
-    - _UserResizableCore
-    - _UserResizeHandler
-    # Shared by VStack/LazyVStack and HStack/LazyHStack (one core, two overflow
-    # policies), so these cores are internal rather than file-private.
-    - _VStackCore
-    - _HStackCore
-    # Internal so its reveal-snap extension can live in ScrollViewReveal.swift.
-    - _ScrollViewCore
-    # Internal so its strip-drawing extension can live in TabViewStrip.swift.
-    - _TabViewCore
-    # Internal _-prefixed helper views and value types created by view
-    # modifiers, following the same SwiftUI convention.
-    - _TaggedView
-    - _ZIndexView
-    - _AlignmentGuideView
-    - _LayoutValueView
-    # Drives a custom `Layout`; internal-but-public because `callAsFunction`
-    # returns it opaquely.
-    - _LayoutCore
-    - _GridCore
-    - _PresentationDetentsView
-    - _InteractiveDismissView
-    - _ListRowInsetsView
-    - _RowEditRestrictionView
-    - _ValueScopedTransactionView
-    - _ListRowBackgroundView
-    - _ListRowColorView
-    - _OpacityView
-    # Publishes an animation to its subtree; internal so `View.animation(_:value:)`
-    # can return it opaquely.
-    - _AnimationValueModifier
-    # Publishes a foreground style that can fade; internal so
-    # `View.foregroundStyle(_:)` can return it opaquely.
-    - _AnimatableForegroundStyleView
-    # Applies a transition to its content; internal so `View.transition(_:)`
-    # can return it opaquely.
-    - _TransitionView
-    # Rewrites its content's colours; internal so `.brightness(_:)` and its
-    # siblings can return it opaquely.
-    - _ColorEffectView
-    # One node's row in an `OutlineGroup`. Public-but-underscored because the
-    # outline hands its rows to its container as `ChildView`s, which key each
-    # one by this type.
-    - _OutlineRow
-    # The icon half of Label(_:systemImage:). Public-but-underscored because it
-    # appears in Label's generic signature; it exists so the symbol NAME is
-    # resolved to a glyph at render time, where .symbolVariant is visible.
-    - _SymbolIcon
-    # @FocusState modifier helpers created by .focused / .defaultFocus.
-    - _FocusedModifier
-    - _DefaultFocusModifier
-    # The value-editing half of TextField(_:value:format:) — the bridge that
-    # erases the format style's type, and the view that owns the draft string.
-    # Internal (not private) because TextField's body is in TextField.swift and
-    # both live in TextFieldValue.swift beside the initializers that build them.
-    - _FieldValueFormatting
-    - _FormattedFieldBody
-    # The drawing half of ContainerView. Internal (not private) because the two
-    # outgrew one file: the public view stayed in ContainerView.swift and its
-    # core moved to ContainerViewCore.swift.
-    - _ContainerViewCore
-    # Applied by ContextMenuModifier so a menu's Buttons render as menu rows;
-    # internal (not private) because the style and the modifier that applies it
-    # live in different files.
-    - _MenuItemButtonStyle
-    # Applied by NavigationStack so a breadcrumb renders as a word in a trail
-    # rather than as a button; internal (not private) for the same reason —
-    # the style has its own file, the bar that applies it another.
-    - _NavigationCrumbButtonStyle
-    # The two built-in MenuStyle bodies, one per file; internal because the
-    # styles that return them live in MenuStyle.swift.
-    - _InlineMenuCore
-    - _MenuPopupCore
-    - _PickerEntry
-    - _PickerMenuCore
-    - _PickerMenuHandler
-    - _RawPickerOption
-    # Input-suggestions (combo box) infrastructure: the entry model, and the
-    # public wrapper view created by `.textInputCompletion(_:)` (public so the
-    # modifier's `some View` can name it, `_`-prefixed as SwiftUI does).
-    - _TextSuggestionEntry
-    - _TextCompletionView
-    # Internal Form row/section model value types.
-    - _FormRow
-    - _FormRowKind
-    - _FormSection
-    - _FormElement
-    # Carries a per-row .formRowAlignment(_:) override into the form.
-    - _FormRowAlignmentModifier
-    - _MemoizedRow
-    - _SplitDividerHandler
-    - _DialogDragHandler
-    # The swatch button style shared by ColorPicker and the gradient editor's
-    # stop chips, and its pulse-reading cells; the gradient strip's
-    # live-reorder drag handle (own file, so internal rather than
-    # file-private), plus the shared drag-handle plumbing it and
-    # DraggableModifier both use.
-    - _ColorSwatchButtonStyle
-    - _ColorSwatchCells
-    - _StopChipDragHandle
-    - _DragHandle
-    # Shared treatment for controls' own label views: the disabled-dimming
-    # helper, and the inline label every control whose label sits to the LEFT
-    # on the same line uses (Stepper, Slider, Picker) — internal rather than
-    # private to any one of them.
-    - _ControlLabel
-    - _CollapsingLabel
-    - _RawTab
-    - _Color256GridCore
-    - _Palette256Editor
-    - _SwatchGridCore
-    - _NamedSwatchGrid
-    # The colour panel's dialog-free body, shared with GradientEditorPanel.
-    - _ColorPickerBody

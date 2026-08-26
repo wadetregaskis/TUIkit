@@ -38,7 +38,7 @@ extension Scene {
 
 /// Framework-internal scene wrapper that records a ``MouseSupport``
 /// configuration on its content.
-internal struct _MouseSupportScene<Content: Scene>: Scene {  // swiftlint:disable:this type_name
+internal struct _MouseSupportScene<Content: Scene>: Scene {
     let content: Content
     let support: MouseSupport
 }
