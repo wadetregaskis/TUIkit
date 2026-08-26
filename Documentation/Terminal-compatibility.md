@@ -1255,8 +1255,8 @@ all four terminals (Apple/iTerm2 under-advance it and the CUF fixes it;
 Ghostty/Warp advance it natively). **This section is the BARE form**, no
 variation selector: a different grapheme cluster.
 
-`terminalWidth` ends with a blanket `0x1F000...0x1FBFF → 2` rule, so a bare
-🖥 claims 2. Advance is 1 on **every** terminal, and no model said so — a
+`terminalWidth` ended with a blanket `0x1F000...0x1FBFF → 2` rule (narrowed
+2026-08-26 — see below), so a bare 🖥 claims 2. Advance is 1 on **every** terminal, and no model said so — a
 single scalar cannot trip `isVS16UnderAdvancer`, so each model fell through
 to `terminalWidth` and reported 2, contradicting its own probe data. Model
 == claim ⇒ no CUF ⇒ the row sheared one cell left.
@@ -1270,7 +1270,7 @@ survives the glyph painted 1):
 | BMP text-presentation | ✏ ❤ ☝ ☂ ✔ ☎ | false | 1 ✓ | 1 | 1 ✓ |
 | SMP text-presentation | 🖥 🛡 🕹 🕷 🎞 🏙 | false | 2 | 1 | **2** |
 | SMP emoji-presentation | 👍 🀄 | true | 2 ✓ | 2 | 2 ✓ |
-| In-block non-emoji | 🁠 🂡 | false | **2** ✗ | 1 | **1** |
+| In-block non-emoji | 🁠 🂡 🬀 🜀 | false | 1 ✓ | 1 | 1 ✓ |
 
 The paint row is what decides the fix, and it overturned the first guess.
 The claim of **2 is correct** for the SMP pictographs: macOS has no text
@@ -1286,15 +1286,52 @@ a blank cell instead of a shear — the same trade already accepted for its SF
 Symbols, and the right one, since a host-independent claim must cover the
 widest painter.
 
-**Still open — the in-block non-emoji row.** 🁠 🂡 (dominoes, playing cards)
-claim 2 but paint 1 and advance 1 *everywhere*, so for them the claim really
-is wrong and 1 is right; they shear today. Fixing that means narrowing the
-blanket rule, which is riskier than it looks: the same range holds
-U+1F200–1F2FF (Enclosed Ideographic Supplement, 🈁 🈚), which IS East Asian
-Wide and mostly NOT emoji — so gating the rule on `isEmoji` would wrongly
-drop those to 1. Any narrowing must be range-precise (Mahjong/Dominoes/Cards
-are U+1F000–1F0FF) and re-measured, and it moves golden snapshots. Reach is
-negligible: playing-card and domino codepoints in TUI content.
+**The in-block non-emoji row — FIXED 2026-08-26.** These claim 1 now. The
+row above stood open on the reasoning that narrowing the blanket rule was
+risky, because the same range holds U+1F200–1F2FF (Enclosed Ideographic
+Supplement, 🈁 🈚) which IS East Asian Wide and mostly NOT emoji, so gating on
+`isEmoji` alone would wrongly drop those to 1. That hazard is real and the
+measurement resolves it exactly.
+
+**Measured 2026-08-26** over **all 1361 assigned non-emoji scalars** in
+U+1F000–1FBFF, by DSR on Terminal.app 455.1 and Ghostty 1.3.1 — two terminals
+that disagree about almost everything else and agree here on every single
+scalar:
+
+| | count |
+|---|---|
+| advance 1 | 1312 |
+| advance 2 | 49 |
+| host disagreements | **0** |
+
+and all 49 wide ones are U+1F200–U+1F2FF, with no narrow scalar inside that
+block and no wide one outside it. So the split is a clean range boundary,
+which is what makes the narrowing safe:
+
+```
+0x1F200...0x1F2FF                    → 2   (Enclosed Ideographic Supplement)
+0x1F000...0x1FBFF, isEmoji           → 2   (Apple Color Emoji fallback paints 2)
+0x1F000...0x1FBFF, otherwise         → 1
+```
+
+The earlier note also **understated the reach**: it read as dominoes and
+playing cards only (U+1F000–1F0FF). The affected set is 1312 scalars across
+47 runs, and includes the Enclosed Alphanumeric Supplement (🅲), ornamental
+dingbats (🙐), alchemical symbols (🜀), Supplemental Arrows-C (🠀), chess
+(🨀) and — the most damaging — **Symbols for Legacy Computing** (U+1FB00–1FBF9,
+🬀), which are block graphics, siblings of the U+2500–259F chrome the width
+model already fast-paths to 1 cell. A framework that draws with block
+graphics was claiming two cells for a quarter of them.
+
+Verified end-to-end on all five hosts: rows of mahjong, dominoes, cards,
+legacy-computing, alchemical, chess, Supplemental-Arrows-C, Enclosed
+Ideographic and a mixed ASCII/CJK/emoji row were emitted through each host's
+real compensation path and DSR-measured — **claimed width == measured advance
+in all 50 checks**. It moved no golden snapshots.
+
+With the claim corrected, `tmuxCursorAdvance`'s broader rule became dead
+weight — it existed only to return 1 for scalars the claim had wrongly put at
+2 — and now consults `isBarePictographUnderAdvancer` like the other four.
 
 **SF Symbols PUA** is a third claim-vs-advance mismatch (no terminal advances
 2) but is already handled: Apple/iTerm2 genuinely paint 2, so the claim is

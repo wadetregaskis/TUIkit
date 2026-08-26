@@ -170,3 +170,61 @@ struct StrippedLengthFastPathTests {
         #expect("no escapes".stripped == "no escapes")
     }
 }
+
+// MARK: - Pictographic-plane width
+
+@Suite("Pictographic-plane width")
+struct PictographicPlaneWidthTests {
+
+    /// Only two things in U+1F000…U+1FBFF are two cells wide: an emoji, which
+    /// macOS font fallback paints from Apple Color Emoji, and the Enclosed
+    /// Ideographic Supplement, which is genuinely East Asian Wide.
+    ///
+    /// The rule claimed 2 for the WHOLE range until 2026-08-26, so mahjong,
+    /// dominoes, playing cards, alchemical symbols, chess, arrows, ornamental
+    /// dingbats, the Enclosed Alphanumeric Supplement and Symbols for Legacy
+    /// Computing all reserved a cell they never painted, and every row
+    /// containing one sheared. Measured over all 1361 assigned non-emoji
+    /// scalars in the range on Terminal.app 455.1 and Ghostty 1.3.1, which
+    /// agreed on every one: 1312 advance 1, and the 49 that advance 2 are
+    /// exactly U+1F200…U+1F2FF.
+    @Test("Non-emoji pictographic scalars are one cell, wide ideographs two")
+    func nonEmojiPictographsAreNarrow() {
+        for value in UInt32(0x1F000)...UInt32(0x1FBFF) {
+            guard let scalar = Unicode.Scalar(value),
+                scalar.properties.generalCategory != .unassigned
+            else { continue }
+            let properties = scalar.properties
+            let isWideIdeographic = (0x1F200...0x1F2FF).contains(value)
+            let isEmoji = properties.isEmoji || properties.isEmojiPresentation
+            let expected = isWideIdeographic || isEmoji ? 2 : 1
+            #expect(
+                scalar.loneTerminalWidth == expected,
+                "U+\(String(value, radix: 16, uppercase: true)) \(scalar)")
+        }
+    }
+
+    /// Spot checks in the vocabulary the measurements were taken in, so a
+    /// regression names the block it broke rather than a bare codepoint.
+    @Test(
+        "The blocks that were claimed wide and are not",
+        arguments: [
+            ("\u{1F000}", 1, "🀀 mahjong"),
+            ("\u{1F060}", 1, "🁠 domino"),
+            ("\u{1F0A1}", 1, "🂡 playing card"),
+            ("\u{1F172}", 1, "🅲 Enclosed Alphanumeric Supplement"),
+            ("\u{1F650}", 1, "🙐 ornamental dingbat"),
+            ("\u{1F700}", 1, "🜀 alchemical"),
+            ("\u{1F800}", 1, "🠀 Supplemental Arrows-C"),
+            ("\u{1FA00}", 1, "🨀 chess"),
+            ("\u{1FB00}", 1, "🬀 Symbols for Legacy Computing"),
+            ("\u{1F200}", 2, "🈀 Enclosed Ideographic Supplement — genuinely wide"),
+            ("\u{1F004}", 2, "🀄 the one mahjong tile that IS an emoji"),
+            ("\u{1F0CF}", 2, "🃏 the one playing card that IS an emoji"),
+            ("\u{1F5A5}", 2, "🖥 bare pictograph — Emoji=Yes, painted by fallback"),
+            ("\u{1F44D}", 2, "👍 emoji presentation"),
+        ] as [(String, Int, String)])
+    func blockSpotChecks(text: String, expected: Int, what: String) {
+        #expect(Character(text).terminalWidth == expected, "\(what)")
+    }
+}

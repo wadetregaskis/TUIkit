@@ -248,7 +248,32 @@ extension Unicode.Scalar {
         if (0xFE30...0xFE6F).contains(scalarValue) { return 2 }  // CJK compatibility forms, small forms
         if (0xFF01...0xFF60).contains(scalarValue) { return 2 }  // fullwidth forms
         if (0xFFE0...0xFFE6).contains(scalarValue) { return 2 }  // fullwidth signs
-        if (0x1F000...0x1FBFF).contains(scalarValue) { return 2 }  // emoji and symbols (Mahjong, Dominos, Playing Cards, Emoji, etc.)
+        // Enclosed Ideographic Supplement — 🈀 🈐 🈛 🈰 🈻 🉠. Genuinely East
+        // Asian Wide, and the ONLY non-emoji block in the pictographic planes
+        // that is: measured 2 on all five hosts.
+        if (0x1F200...0x1F2FF).contains(scalarValue) { return 2 }
+
+        // The rest of the pictographic planes. Two cells only if this scalar
+        // is an emoji, because that is what makes macOS font fallback reach
+        // Apple Color Emoji and paint a double-width glyph — the bare
+        // pictographs 🖥 🛡 🕹 (`Emoji=Yes, Emoji_Presentation=No`, the
+        // `isEmojiPresentation` check above having already taken the rest).
+        //
+        // Everything else here is a one-cell symbol, and claiming 2 for it
+        // sheared every row that contained one: mahjong 🀀, dominoes 🁠,
+        // playing cards 🂡, Enclosed Alphanumeric Supplement 🅲, ornamental
+        // dingbats 🙐, alchemical 🜀, Supplemental Arrows-C 🠀, chess 🨀, and
+        // Symbols for Legacy Computing 🬀 — the last of which are block
+        // graphics, siblings of the U+2500…U+259F fast path above, and were
+        // the most damaging to claim wide.
+        //
+        // Measured 2026-08-26 over all 1361 assigned non-emoji scalars in the
+        // range, on Terminal.app 455.1 and Ghostty 1.3.1: the two agree on
+        // every one, 1312 advance 1 and 49 advance 2, and all 49 are the
+        // Enclosed Ideographic Supplement handled above. Paint width checked
+        // separately by drawing ten of each uncompensated — a paint-2 glyph
+        // overlaps its neighbour and mangles the row, and these do not.
+        if (0x1F000...0x1FBFF).contains(scalarValue) { return properties.isEmoji ? 2 : 1 }
         if (0x20000...0x2FA1F).contains(scalarValue) { return 2 }  // CJK unified extensions B-F, compatibility supplement
         if (0x30000...0x3134F).contains(scalarValue) { return 2 }  // CJK unified extension G
 
@@ -507,14 +532,14 @@ extension Character {
         if scalars.count == 1, let only = scalars.first {
             // Plane-16 PUA — SF Symbols.
             if (0x100000...0x10FFFD).contains(only.value) { return 1 }
-            // Any lone SMP pictograph that is not emoji-presentation, whether or
-            // not Unicode calls it an emoji (dominoes and cards are not).
-            if (0x1F000...0x1FBFF).contains(only.value),
-                !only.properties.isEmojiPresentation
-            {
-                return 1
-            }
         }
+        // Bare pictographs. This rule used to be broader — any lone
+        // non-emoji-presentation SMP pictograph, dominoes and cards included —
+        // because ``terminalWidth`` claimed 2 for those and something had to
+        // make up the difference. The claim was the defect: they paint and
+        // advance 1 on every host. With it corrected, the set that still needs
+        // a CUF here is exactly the set the predicate names.
+        if isBarePictographUnderAdvancer { return 1 }
         if isLoneRegionalIndicator { return 1 }
         return terminalWidth
     }
@@ -529,17 +554,19 @@ extension Character {
     /// which is handled by ``isVS16UnderAdvancer``. This predicate is for the
     /// selector-less form only, which is a different grapheme cluster.
     ///
-    /// ``terminalWidth`` claims 2 for these, via its closing
-    /// `0x1F000…0x1FBFF` range rule — and that claim is CORRECT: macOS font
+    /// ``terminalWidth`` claims 2 for these, via the `isEmoji` arm of its
+    /// closing `0x1F000…0x1FBFF` rule — and that claim is CORRECT: macOS font
     /// fallback has no text glyph for them, so it reaches Apple Color Emoji
-    /// and paints 2 cells. Measured 2026-07-14 with `paintcard.py`: on Apple
+    /// and paints 2 cells. The `Emoji=Yes` requirement is what carries that
+    /// reasoning: a scalar in the same planes that is NOT an emoji gets no
+    /// such fallback, paints one cell, and is claimed one. Measured 2026-07-14 with `paintcard.py`: on Apple
     /// Terminal the glyph overwrites the closing `|` of a `|<glyph>|X`
     /// probe row, exactly as a VS-16 cluster does, while the BMP members of
     /// the same Unicode class (✏ ❤ ☝ — correctly claimed 1) leave it intact.
     ///
     /// But **every** terminal measured advances the cursor by only 1
-    /// (Apple 455.1, iTerm2 3.6.11, Ghostty 1.3.1, Warp 2026.07.08 — all
-    /// four agree). Without this predicate the per-host models fall through
+    /// (Apple 455.1, iTerm2 3.6.11, Ghostty 1.3.1, Warp 2026.07.08, tmux 3.7b
+    /// — all five agree). Without this predicate the per-host models fall through
     /// to ``terminalWidth`` and report 2, contradicting the measurement, so
     /// no CUF is emitted and the rest of the row shears one cell left.
     ///

@@ -76,8 +76,6 @@ struct TmuxCompatibilityTests {
             ("\u{1F577}", "bare 🕷"),
             ("\u{1F39E}", "bare 🎞"),
             ("\u{1F3D9}", "bare 🏙"),
-            ("\u{1F060}", "🁠 domino — Emoji=NO, so not a 'bare pictograph'"),
-            ("\u{1F0A1}", "🂡 playing card — Emoji=NO"),
             ("\u{1F1E6}", "lone regional indicator"),
         ] as [(String, String)])
     func underAdvancers(text: String, what: String) {
@@ -103,6 +101,17 @@ struct TmuxCompatibilityTests {
             ("█", 1, "block"),
             ("─", 1, "box drawing"),
             ("\u{2592}", 1, "shade"),
+            // Non-emoji scalars in the pictographic planes are ONE cell, and
+            // TUIkit claimed 2 for them until 2026-08-26. They were listed as
+            // tmux under-advancers on the strength of that claim; measurement
+            // says every host paints and advances them 1, so the claim was the
+            // defect and there is nothing here for tmux to get wrong.
+            ("\u{1F000}", 1, "🀀 mahjong — Emoji=NO"),
+            ("\u{1F060}", 1, "🁠 domino — Emoji=NO"),
+            ("\u{1F0A1}", 1, "🂡 playing card — Emoji=NO"),
+            ("\u{1FB00}", 1, "🬀 legacy computing block graphic — Emoji=NO"),
+            ("\u{1F700}", 1, "🜀 alchemical — Emoji=NO"),
+            ("\u{1F200}", 2, "🈀 Enclosed Ideographic Supplement — genuinely wide"),
         ] as [(String, Int, String)])
     func agreements(text: String, expected: Int, what: String) {
         let character = Character(text)
