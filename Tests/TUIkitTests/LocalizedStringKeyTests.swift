@@ -156,13 +156,31 @@ struct LocalizedStringKeyTests {
 
     @Test("A stray percent survives alongside a real placeholder")
     func percentBesideAPlaceholder() {
-        // Here scanning IS running, so the `%` before a space has to be
-        // recognised as not-a-conversion and emitted rather than swallowing
-        // the character after it.
+        // Here scanning IS running, so the `%` has to reach the output rather
+        // than swallowing the character after it. The KEY carries it escaped,
+        // because the key is printf-shaped and `%%` is how that alphabet
+        // spells one percent — which is also what a translator writes in a
+        // strings file, and what `substituting` has always accepted.
         let service = isolatedService()
         let key: LocalizedStringKey = "\(50)% of the way"
-        #expect(key.key == "%@% of the way")
+        #expect(key.key == "%@%% of the way")
         #expect(key.resolved(with: service) == "50% of the way")
+    }
+
+    @Test("A percent immediately before an interpolation keeps both")
+    func percentImmediatelyBeforeAPlaceholder() {
+        // The case the escaping exists for. Unescaped, the literal `%` and the
+        // following `%@` fused into `%%` + a stray `@`, so the second argument
+        // was dropped and an `@` appeared where it should have been.
+        let service = isolatedService()
+        let key: LocalizedStringKey = "Save \(5)%\("now")"
+        #expect(key.key == "Save %@%%%@")
+        #expect(key.resolved(with: service) == "Save 5%now")
+
+        // And a literal percent with no interpolation at all is untouched,
+        // since nothing scans a key that has no arguments.
+        let bare: LocalizedStringKey = "100% done"
+        #expect(bare.resolved(with: service) == "100% done")
     }
 
     @Test("Percent escapes and C conversions a translator might write")

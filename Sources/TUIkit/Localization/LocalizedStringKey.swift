@@ -262,7 +262,16 @@ extension LocalizedStringKey: ExpressibleByStringInterpolation {
         }
 
         public mutating func appendLiteral(_ literal: String) {
-            key += literal
+            // A literal `%` has to be escaped, because the key it lands in is
+            // printf-shaped: the interpolations around it are `%@`, and
+            // `substituting(_:into:)` reads `%%` as one percent. Written
+            // through unescaped, `"Save \(n)%\(unit)"` built the key
+            // `%@%%@` — whose `%%` is an escaped percent and whose trailing
+            // `@` is a stray literal — so the SECOND argument was silently
+            // dropped and an `@` appeared in its place. The neighbouring
+            // `"\(n)% done"` was fine, which is what kept this hidden: only a
+            // percent immediately before an interpolation collides.
+            key += literal.contains("%") ? literal.replacingOccurrences(of: "%", with: "%%") : literal
         }
 
         /// Interpolates any value, as `String(describing:)` would render it.
