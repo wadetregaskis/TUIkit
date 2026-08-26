@@ -2904,3 +2904,117 @@ caller this was, is deleted. One deliberate behaviour change comes with it: a
 block caret punches its character out in the editor's own field surface rather
 than the page background, which is what the field does and what the shared
 code says.
+
+## 40. The row pipeline's paper cuts, and the harness's own foreign string (2026-08-25)
+
+A wide pass with fresh Time Profiler traces of ten scenario shapes. Six
+commits shipped and one experiment reverted; every shipped change is
+byte-identical by bench checksum, and every number below is a paired
+`ab_bench.py` A/B (12 reps, CPU-per-frame) measured for that change alone, in
+commit order, on clean builds.
+
+**The trailing-padding clip (megalist −44.4% [−45.1, −43.9], kitchensink
+−20.7%).** The List's scrollbar compose assembles every visible row line one
+cell wider than its slot — `renderPlainLine`'s guaranteed right-padding space
+meets the bar column that takes the cell back — and `fitted()` re-cut every
+line with the escape-aware forward walk, per line, per frame, to remove the
+one trailing space the assembly had just added. On megalist that walk was
+21.9% of the frame inclusive and 48.6% of self time sat in the tiny
+allocator's region detach/reattach/madvise churn, largely those string
+rebuilds. `ansiAwarePrefix(visibleCount:knownVisibleWidth:)` now drops the
+excess bytes when they are entirely trailing plain spaces — O(excess), a
+vectorised re-scan guarding the equivalence (an escape's intermediate space
+byte cannot slip through), the exact walk as fallback. Also wired into
+`FrameBuffer.clamped` and `trimmingTrailingBlankCells`, the other two shapes
+that clip assembled-over-wide lines.
+
+**The harness's own foreign string (scrollfollow −11.7%, dashboard −9.0%,
+churn −5.9%, ten more scenarios −0.7% to −3.7%).** The Stress harness's
+`Lf()` substituted its placeholders with `replacingOccurrences`, which
+returns an NSString-backed string — and every scenario rebuilds its heading
+through it every frame, so the wrap memo hashed a foreign string through NFC
+normalisation per lookup and character walks detoured through `objc_msgSend`
+(6.3% of a scrollfollow frame matched the foreign machinery). The stdlib's
+`replacing(_:with:)` is native. Same class as the textwall synthesis fix (4f67aea1),
+and the same moral: that much of every earlier bench was measuring
+Foundation's bridging, not the framework. (The framework's own localization
+tables were checked with an `isContiguousUTF8` probe: already native on
+current Foundation, whose JSONSerialization decodes to native Swift
+strings.)
+
+**Rows built for nobody (kitchensink −6.2% [−6.8, −5.9]).** The windowed
+List's row thunk ran `content(element)` — the app's row builder — for every
+visible row on every frame, then `_MemoizedRow` served the cached buffer and
+discarded the view: §38's defect, one layer down. The thunk now uses the
+deferred `_MemoizedRow` form, with one new piece — the badge peek needs a
+BUILT view, so `viewTypeCarriesBadge(_:)` answers from the row's static type
+(only a `.badge(_:)`-outermost row can carry one) and badge-less rows skip
+the build entirely. kitchensink's rows are built inline in the ForEach
+closure, which is exactly the shape that paid; megalist's rows are a
+two-field struct whose cost lives in `body`, so its gain was small (−0.8%).
+`ListRowBuildDeferralTests` pins a warm frame to zero builder invocations.
+
+**The per-row environment write (megalist −2.4%, kitchensink −2.5%,
+dashboard −1.2%).** Stamping `listRowEditIndex` into the environment copied
+the whole copy-on-write `[ObjectIdentifier: Any]` storage — every entry
+rehashed, reboxed, retained — once per visible row per frame, to record one
+Int. The index now rides the `RowEditRestrictions` collector the environment
+already carries once per List per frame; rows render strictly one at a time,
+so the single slot cannot be observed with a neighbour's value.
+
+**The fit memo (table-multiline −60.2% [−60.4, −60.0]; 1720 → 683 µs/frame).**
+`fitMeasured` memoized its wrap and re-ran everything after it on every call:
+the maxLines fold — `foldRemainder`, a character-by-character re-walk of the
+source ending in a `replacingOccurrences` regex — plus the per-line
+truncation. A multi-line Table asks it for every visible cell AND for every
+cell the scrollbar's extent estimator samples, every frame: `fit` was 50.8% of
+the frame, `foldRemainder` alone 19.4%. The fit now has its own memo beside
+the wrap's, consulted only for line-LIMITED calls — without `maxLines` the
+fold cannot run, and memoizing those anyway measured +1% on scenarios that
+never fold.
+
+**The estimator's sample (table-multiline −29.8% [−30.3, −29.4]; 711 → 499
+µs/frame, on top of the fit memo).** The same trace showed the scrollbar's
+extent estimator still asking 64 sample rows for their heights every frame, to
+re-derive a mean that cannot change while the layout holds — and asking costs
+a wrap per column (Table) or a full row materialisation (List). The mean is
+now stashed on the `ItemListHandler` against a signature of everything that
+shapes a row height, and re-derived only when that misses.
+
+### 40.1 The experiment that did not ship, and what it cost to learn
+
+A scrollbar's cells are also a pure function of their inputs, and a steady bar
+rebuilds an identical ~40-cell string set every frame — 7.7% of a megalist
+frame. Memoizing it looked like the same move as the two above, and the first
+sweep was encouraging (megalist −3.4%, preferences −7.4%, anyview −5.5%,
+modifiers −5.1%) with one ugly outlier: **scrollfollow +12.2%**. A scrolling
+bar's key changes every frame, so every frame was a guaranteed miss plus a
+store, flushing the cache on a cycle. Admission control — store only on the
+second consecutive miss of the same key — fixed scrollfollow exactly (−0.1%,
+indistinguishable) and kept every other number.
+
+Except `fanout`, which read +4.4%, +7.4% and +11.1% across three sweeps
+against a ±6% null floor. The memo's own work is a dictionary probe against a
+12-field key: ~0.002% of a 5 ms frame. It cannot move that scenario 11%, so
+either the number was noise or the mechanism was indirect. The decisive test
+was to build the same code storing nothing at all: **fanout still read +11.5%,
+and preferences still read −7.1%, anyview −4.9%.** The wins and the loss alike
+survived the cache being inert — so none of them were the memo. Splitting one
+function into a cached wrapper and an uncached implementation had changed
+inlining, and *that* moved every one of those numbers.
+
+The change was reverted. Two lessons worth more than the commit would have
+been: **a plausible mechanism plus a matching measurement is still not
+attribution** — the ±5% "wins" on scenarios that barely draw a scrollbar were
+the tell, and they read as corroboration until they were tested; and **the
+cheapest way to test attribution is to neuter the mechanism, not to re-run the
+benchmark.** A memo that stores nothing should measure as nothing.
+
+Disciplines this pass leaned on. **Attribution sweeps**: each change was
+measured at its own boundary, on clean builds, after a joint sweep proved
+un-attributable — and after a busy-box sweep flagged three ±1% "slower"
+verdicts that a null test (the binary against itself) reproduced as the
+machine's floor. **The stale-build rule extends to internal types**: adding a
+stored property to a same-module class still earned a clean rebuild before its
+bench binary was trusted. And the section above: **neuter the mechanism to
+test attribution**.
