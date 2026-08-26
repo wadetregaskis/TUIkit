@@ -688,6 +688,27 @@ private enum ASCIISpaces {
 
     /// `count` ASCII spaces. Immutable after initialization.
     static let run = String(repeating: " ", count: count)
+
+    /// `run`'s index at every offset, `0...count`, computed once.
+    ///
+    /// `run.prefix(n)` looks free and is not: `Collection.prefix` advances an
+    /// index n places, and `String`'s index advancement is a GRAPHEME walk —
+    /// one break query per space, per call. Padding a line is the most common
+    /// operation in the framework, so that walk showed up as
+    /// `String.index(_:offsetBy:limitedBy:)` under `Collection.prefix` at
+    /// 2.9% of a `deep` frame, entirely to re-derive an offset into a run of
+    /// spaces that never changes. The table makes the slice O(1).
+    static let indices: [String.Index] = {
+        var result: [String.Index] = []
+        result.reserveCapacity(count + 1)
+        var index = run.startIndex
+        for _ in 0..<count {
+            result.append(index)
+            index = run.index(after: index)
+        }
+        result.append(index)  // == run.endIndex
+        return result
+    }()
 }
 
 /// Returns `count` ASCII spaces (`U+0020`) as a borrowed `Substring`, allocating
@@ -706,7 +727,7 @@ private enum ASCIISpaces {
 public func asciiSpaces(_ count: Int) -> Substring {
     guard count > 0 else { return "" }
     if count <= ASCIISpaces.count {
-        return ASCIISpaces.run.prefix(count)
+        return ASCIISpaces.run[..<ASCIISpaces.indices[count]]
     }
     // Wider than a full terminal row — vanishingly rare. Build it once here; the
     // caller still appends a Substring, keeping the call site uniform.
