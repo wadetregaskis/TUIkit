@@ -54,10 +54,11 @@ public struct Spacer: View, Equatable {
 
 /// A visual separator between views.
 ///
-/// `Divider` creates a horizontal or vertical line,
-/// depending on the surrounding container. It draws in the palette's border
-/// colour by default — a separator is chrome, not content — and honours
-/// ``View/foregroundStyle(_:)`` when one is set.
+/// `Divider` draws across the *minor* axis of the stack containing it, as
+/// SwiftUI's does: a horizontal rule in a column, a vertical one in a row,
+/// and horizontal anywhere that is not a stack. It draws in the palette's
+/// border colour by default — a separator is chrome, not content — and
+/// honours ``View/foregroundStyle(_:)`` when one is set.
 ///
 /// # Example
 ///
@@ -71,17 +72,34 @@ public struct Spacer: View, Equatable {
 /// // Section 1
 /// // ─────────────
 /// // Section 2
+///
+/// HStack {
+///     Text("left")
+///     Divider()
+///     Text("right")
+/// }
+/// // Result:
+/// // left │ right
 /// ```
 public struct Divider: View, Equatable {
-    /// The character used for the line.
-    var character: Character
+    /// The character used for the line, or `nil` to pick one from the axis of
+    /// the enclosing stack.
+    var character: Character?
 
-    /// Creates a divider with the default character (─).
+    /// Creates a divider.
+    ///
+    /// It draws across the *minor* axis of the stack containing it, as
+    /// SwiftUI's does: a horizontal `─` rule in a `VStack` (and anywhere that
+    /// is not a stack), a vertical `│` one in an `HStack`.
     public init() {
-        self.character = "─"
+        self.character = nil
     }
 
     /// Creates a divider with a custom character.
+    ///
+    /// The character is used whichever way the divider ends up drawing, since
+    /// the caller has named a specific glyph; only ``init()`` picks one from
+    /// the axis.
     ///
     /// - Parameter character: The character for the separator line.
     public init(character: Character) {
@@ -124,19 +142,39 @@ extension Spacer: Renderable, Layoutable {
 // MARK: - Divider Rendering
 
 extension Divider: Renderable, Layoutable {
+    /// Whether this divider is a vertical rule, i.e. sits in a row.
+    ///
+    /// SwiftUI: "When contained in a stack, the divider extends across the
+    /// minor axis of the stack, or horizontally when not in a stack." The
+    /// minor axis of an `HStack` is the vertical one.
+    private func isVertical(in context: RenderContext) -> Bool {
+        context.environment.containerAxis == .horizontal
+    }
+
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        // Divider has height 1 and expands to fill width
-        ViewSize.flexibleWidth(minWidth: 1, height: 1)
+        // One cell across, flexible along the stack's minor axis so it spans
+        // the row or column. In a row it must NOT be width-flexible: a
+        // width-flexible child absorbs the row's whole slack, which pushed
+        // the divider's siblings to the two ends.
+        isVertical(in: context)
+            ? ViewSize.flexibleHeight(width: 1, minHeight: 1)
+            : ViewSize.flexibleWidth(minWidth: 1, height: 1)
     }
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let line = String(repeating: character, count: context.availableWidth)
+        let vertical = isVertical(in: context)
+        let glyph = character ?? (vertical ? "│" : "─")
         // A separator is chrome, not content: it defaults to the palette's
         // muted border colour (matching SwiftUI's grey rule and the rules
         // containers draw), rather than shouting in the body-text colour. A
         // `.foregroundStyle(_:)` on or above it takes precedence.
         let palette = context.environment.palette
         let color = (context.environment.foregroundStyle ?? palette.border).resolve(with: palette)
+        if vertical {
+            let cell = ANSIRenderer.colorize(String(glyph), foreground: color)
+            return FrameBuffer(lines: Array(repeating: cell, count: max(1, context.availableHeight)))
+        }
+        let line = String(repeating: glyph, count: context.availableWidth)
         return FrameBuffer(text: ANSIRenderer.colorize(line, foreground: color))
     }
 }

@@ -81,6 +81,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
     /// Measures the VStack without rendering.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let context = context.publishingContainerAxis(.vertical)
         switch overflow {
         case .clip: return clipSizeThatFits(proposal: proposal, context: context)
         case .window: return windowSizeThatFits(proposal: proposal, context: context)
@@ -241,6 +242,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let context = context.publishingContainerAxis(.vertical)
         switch overflow {
         case .clip: return renderClip(context: context)
         case .window: return renderWindow(context: context)
