@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MultiSelectionClickTests.swift
 //
 //  macOS mouse-selection semantics for Set-bound Lists/Tables: a plain click

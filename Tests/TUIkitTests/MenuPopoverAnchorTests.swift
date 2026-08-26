@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MenuPopoverAnchorTests.swift
 //
 //  Where a pop-up `Menu` goes when there is no room below it.

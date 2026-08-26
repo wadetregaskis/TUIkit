@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  NaturalExtent.swift
 //
 //  Measuring how big a view WANTS to be, with no ceiling.

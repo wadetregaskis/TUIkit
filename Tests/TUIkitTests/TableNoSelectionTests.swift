@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TableNoSelectionTests.swift
 //
 //  `Table(_:columns:)` — SwiftUI's selection-free table.

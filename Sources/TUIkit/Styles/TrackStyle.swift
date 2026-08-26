@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TrackStyle.swift
 //
 //  Created by LAYERED.work
@@ -8,7 +8,7 @@
 
 /// The visual style of a track-based control like ProgressView or Slider.
 ///
-/// TUIKit provides five built-in styles using different Unicode characters:
+/// TUIkit provides five built-in styles using different Unicode characters:
 ///
 /// ```
 /// bar:       ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌────────────────

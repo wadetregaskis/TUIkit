@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ControlSizeSweepTests.swift
 //
 //  Renders every public control across a sweep of pathological sizes (down

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FrameBufferCompositeInPlaceTests.swift
 //
 //  `composite(with:at:)` writes rows through the backing store rather than

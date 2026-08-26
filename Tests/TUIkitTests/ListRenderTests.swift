@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListRenderTests.swift
 //
 //  Buffer-level render audit for `List`. Each case renders the view to a

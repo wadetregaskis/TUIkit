@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ClientCapabilityRefresherTests.swift
 //
 //  The async, coalesced re-probe that keeps the emoji-chrome answer current

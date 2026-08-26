@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  NavigationCoordinator.swift
 //
 //  The rendezvous between a NavigationStack, the links inside it, and the

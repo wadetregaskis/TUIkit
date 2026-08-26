@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  LazyChildViewsTests.swift
 //
 //  Stage 4 of "Locating things without drawing them" (§10): a huge ForEach

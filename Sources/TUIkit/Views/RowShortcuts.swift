@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RowShortcuts.swift
 //
 //  The customisable keyboard bindings of a `List` / `Table` — one table, since

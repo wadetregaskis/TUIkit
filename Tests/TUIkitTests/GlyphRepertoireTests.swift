@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  GlyphRepertoireTests.swift
 //
 //  The fundamental charsets and the ideal-subset selection behind their

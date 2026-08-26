@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MenuPressTrackingTests.swift
 //
 //  Press-and-hold menu tracking, the gesture every Mac menu answers: the menu

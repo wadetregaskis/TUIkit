@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TabViewSizeCacheTests.swift
 //
 //  A TabView sizes its panel to the tallest and widest of ALL its tabs, so that

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ControlInlineLabelTests.swift
 //
 //  Slider and Picker draw their label to the LEFT, on the same line, and

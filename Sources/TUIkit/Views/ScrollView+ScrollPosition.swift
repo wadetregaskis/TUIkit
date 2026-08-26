@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollView+ScrollPosition.swift
 //
 //  The `.scrollPosition` half of _ScrollViewCore: turning a bound ScrollPosition

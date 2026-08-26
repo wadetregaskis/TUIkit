@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListRowDropDestinationTests.swift
 //
 //  `ForEach.dropDestination(for:action:)` — a drop that lands BETWEEN rows

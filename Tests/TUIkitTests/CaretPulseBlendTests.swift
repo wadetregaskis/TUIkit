@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  CaretPulseBlendTests.swift
 //
 //  A pulsing caret dims toward the field it sits in, not toward black.

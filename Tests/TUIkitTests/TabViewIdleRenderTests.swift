@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TabViewIdleRenderTests.swift
 //
 //  A settled TabView must not ask for another frame. Its per-width size memo

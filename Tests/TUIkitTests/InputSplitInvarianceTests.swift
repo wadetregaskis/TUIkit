@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  InputSplitInvarianceTests.swift
 //
 //  Property test over the terminal input parser: every escape sequence,

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollAnchorPositionTests.swift
 //
 //  `.anchorPosition(_:)` — the bound anchor override. The load-bearing rule is

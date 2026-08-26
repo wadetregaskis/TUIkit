@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  IdleClockReadTests.swift
 //
 //  The render loop is demand-driven: an animation clock keeps ticking only

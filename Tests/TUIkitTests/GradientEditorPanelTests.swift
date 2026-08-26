@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  GradientEditorPanelTests.swift
 //
 //  The gradient editor's pure stop-list mutations (duplicate / remove / move,

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  WindowLifecycleContractTests.swift
 //
 //  The lifecycle contract for rows entering and leaving a windowed stack's

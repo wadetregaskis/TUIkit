@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollDisabledTests.swift
 //
 //  `.scrollDisabled(_:)` — §1.2 of the scroll-anchoring spec, "whether the

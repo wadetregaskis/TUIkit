@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  GroupRenderTests.swift
 //
 //  Buffer-level render audit for Group. Group imposes no layout of its

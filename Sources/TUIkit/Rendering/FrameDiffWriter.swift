@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FrameDiffWriter.swift
 //
 //  Created by LAYERED.work
@@ -11,7 +11,7 @@ import Foundation
 
 /// Compares rendered frames and writes only changed lines to the terminal.
 ///
-/// `FrameDiffWriter` is the core of TUIKit's render optimization. Instead
+/// `FrameDiffWriter` is the core of TUIkit's render optimization. Instead
 /// of rewriting every terminal line on every frame, it stores the previous
 /// frame's output and only writes lines that actually differ.
 ///

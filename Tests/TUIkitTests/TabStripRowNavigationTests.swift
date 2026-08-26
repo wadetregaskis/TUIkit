@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TabStripRowNavigationTests.swift
 //
 //  Up/down navigation across the rows of a wrapped tab strip.

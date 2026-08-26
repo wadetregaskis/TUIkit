@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DynamicFocusIDTests.swift
 //
 //  `.focusID(_:)` names a control for everything that addresses controls by

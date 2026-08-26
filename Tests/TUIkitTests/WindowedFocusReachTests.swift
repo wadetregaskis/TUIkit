@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  WindowedFocusReachTests.swift
 //
 //  Stage 1 acceptance of "Locating things without drawing them" (§1, §5d):

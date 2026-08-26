@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  GradientStopsCodec.swift
 //
 //  Gradient stops ⇄ comma-separated hex, for persisting an editable gradient

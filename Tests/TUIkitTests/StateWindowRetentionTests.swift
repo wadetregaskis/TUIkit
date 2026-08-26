@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StateWindowRetentionTests.swift
 //
 //  §5h of "Locating things without drawing them": a row that leaves a

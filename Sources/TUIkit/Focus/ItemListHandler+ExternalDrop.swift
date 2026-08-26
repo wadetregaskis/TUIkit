@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ItemListHandler+ExternalDrop.swift
 //
 //  Where a drag from ANOTHER view would land in this list, and how that answer

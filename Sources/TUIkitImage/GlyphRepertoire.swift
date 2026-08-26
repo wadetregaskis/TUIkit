@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  GlyphRepertoire.swift
 //
 //  The fundamental glyph charsets behind the image renderers, derived from

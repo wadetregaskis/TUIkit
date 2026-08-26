@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DragAndDropSession+Reorder.swift
 //
 //  Row reordering, resolved the way `.draggable` drops already were: against

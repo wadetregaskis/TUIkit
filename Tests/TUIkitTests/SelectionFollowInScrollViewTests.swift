@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  SelectionFollowInScrollViewTests.swift
 //
 //  An enclosing ScrollView must follow a List/Table's keyboard CURSOR, not

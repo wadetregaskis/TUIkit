@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  Binding+Optional.swift
 //
 //  Handing a `Binding` to an optional to a control that wants a non-optional

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ShiftStepMultiplier.swift
 //
 //  Created by Wade Tregaskis

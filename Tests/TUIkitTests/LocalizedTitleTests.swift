@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  LocalizedTitleTests.swift
 //
 //  "A string literal is a lookup key" applied to every control that takes a

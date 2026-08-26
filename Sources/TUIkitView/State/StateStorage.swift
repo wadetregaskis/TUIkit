@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StateStorage.swift
 //
 //  Created by LAYERED.work
@@ -10,7 +10,7 @@ import TUIkitCore
 
 /// Persistent store for `@State` values, indexed by `ViewIdentity`.
 ///
-/// `StateStorage` is the backbone of TUIKit's state persistence across render
+/// `StateStorage` is the backbone of TUIkit's state persistence across render
 /// passes. It maps each `@State` property to a stable key derived from the
 /// view's structural position in the tree (`ViewIdentity`) and the property's
 /// declaration order within that view.

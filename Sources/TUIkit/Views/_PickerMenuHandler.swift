@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  _PickerMenuHandler.swift
 //
 //  The focus and keyboard half of a menu-style `Picker`, split from the

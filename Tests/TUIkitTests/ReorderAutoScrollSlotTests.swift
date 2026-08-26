@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ReorderAutoScrollSlotTests.swift
 //
 //  Where a row-reorder LANDS while drag auto-scroll is running under a

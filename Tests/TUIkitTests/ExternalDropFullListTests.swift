@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ExternalDropFullListTests.swift
 //
 //  An incoming drop onto a list whose rows exactly fill it — where opening a

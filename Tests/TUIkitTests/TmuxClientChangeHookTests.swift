@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TmuxClientChangeHookTests.swift
 //
 //  Pins the tmux hook registration that makes client-change detection PUSH

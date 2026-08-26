@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ItemListHandler+Reorder.swift
 //
 //  The drag-to-reorder state machine for `List` and `Table` rows, shared by

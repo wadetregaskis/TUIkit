@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  LayoutPlacingTests.swift
 //
 //  Stage 1 of "Locating things without drawing them": a stack answers

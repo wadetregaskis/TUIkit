@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  PointerHoverAuditTests.swift
 //
 //  The three clickable things that had no answer to the pointer at all: a

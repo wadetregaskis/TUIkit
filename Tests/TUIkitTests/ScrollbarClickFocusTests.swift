@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollbarClickFocusTests.swift
 //
 //  Operating a scrollbar with the mouse focuses the scrollable it belongs to.

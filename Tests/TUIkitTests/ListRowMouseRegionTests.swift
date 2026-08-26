@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListRowMouseRegionTests.swift
 //
 //  List rows render into standalone (per-frame memoised) buffers, so the

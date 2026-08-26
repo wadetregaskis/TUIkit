@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  SectionScrollFallthroughTests.swift
 //
 //  Page/Home/End keys the focused element didn't consume scroll the

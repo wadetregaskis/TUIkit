@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  PublishedTests.swift
 //
 //  `withObservationTracking` fires its `onChange` exactly when a TRACKED

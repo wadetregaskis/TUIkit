@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  Color+Contrast.swift
 //
 //  WCAG contrast measurement and a hue-preserving readability floor.

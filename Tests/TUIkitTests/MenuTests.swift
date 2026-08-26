@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MenuTests.swift
 //
 //  `Menu` in both styles: `.automatic` (a collapsed label that opens a

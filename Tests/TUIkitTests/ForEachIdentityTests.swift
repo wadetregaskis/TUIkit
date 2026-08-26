@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ForEachIdentityTests.swift
 //
 //  Regression tests for GitHub-class bug: ForEach row identity must follow

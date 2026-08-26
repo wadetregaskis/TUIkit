@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  NavigationSplitViewSizingTests.swift
 //
 //  Regression coverage for the "Size to Fit (from left)" column mode, split out

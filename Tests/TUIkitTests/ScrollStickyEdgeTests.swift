@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollStickyEdgeTests.swift
 //
 //  §1.3's sticky edges: "deliberately pushing PAST the top or bottom re-engages

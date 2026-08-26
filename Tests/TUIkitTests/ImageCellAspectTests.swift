@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ImageCellAspectTests.swift
 //
 //  End-to-end coverage of `.imageCellAspect(_:)` — the modifier → environment →

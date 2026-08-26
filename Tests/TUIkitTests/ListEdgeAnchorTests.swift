@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListEdgeAnchorTests.swift
 //
 //  `Documentation/Scroll-anchoring.md` §1.1 Bottom — follow-the-log — for

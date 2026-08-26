@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ItemListHandler+Anchor.swift
 //
 //  How `List` and `Table` honour `Documentation/Scroll-anchoring.md` §1.1 —

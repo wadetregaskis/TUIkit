@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DialogPreferredWidthTests.swift
 //
 //  A dialog prefers a comfortable reading width, and spends more of the screen

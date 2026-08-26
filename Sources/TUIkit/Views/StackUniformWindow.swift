@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StackUniformWindow.swift
 //
 //  The uniform-extent fast path of "Locating things without drawing them"

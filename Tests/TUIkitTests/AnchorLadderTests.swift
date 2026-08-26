@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  AnchorLadderTests.swift
 //
 //  §5f of "Locating things without drawing them": the anchor names a ROW.

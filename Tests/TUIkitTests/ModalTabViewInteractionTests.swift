@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ModalTabViewInteractionTests.swift
 //
 //  A TabView hosted inside a `.modal` dialog (the ColorPicker's layout) must

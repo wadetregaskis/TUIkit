@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  AnchoredRevealTests.swift
 //
 //  Reveal-on-focus through the REAL ScrollView for VARIABLE-height content —

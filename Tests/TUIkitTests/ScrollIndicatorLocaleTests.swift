@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollIndicatorLocaleTests.swift
 //
 //  Numbers rendered into scroll chrome ("N more above/below") must be

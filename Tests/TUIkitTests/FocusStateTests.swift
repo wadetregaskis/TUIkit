@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FocusStateTests.swift
 //
 //  The SwiftUI-shaped declarative focus API: `@FocusState`, `.focused(_:)`,

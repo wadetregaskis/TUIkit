@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  GlyphRampQuantisationTests.swift
 //
 //  Regression tests for the luminance → density-ramp mapping. The converter

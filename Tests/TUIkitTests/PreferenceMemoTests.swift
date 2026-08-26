@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  PreferenceMemoTests.swift
 //
 //  Regression tests for preferences interacting with the render memos and

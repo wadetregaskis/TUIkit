@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DropdownOptionMenu.swift
 //
 //  The layer above ``DropdownMenu``'s rows: a menu of OPTIONS.

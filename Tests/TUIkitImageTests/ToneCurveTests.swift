@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ToneCurveTests.swift
 //
 //  What a tone curve does to a COLOUR image — the question a greyscale test

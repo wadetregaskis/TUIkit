@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListReorderResumeTests.swift
 //
 //  A reorder that leaves its page mid-gesture and comes back. What makes this

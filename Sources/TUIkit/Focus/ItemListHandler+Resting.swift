@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ItemListHandler+Resting.swift
 //
 //  Where a `List` / `Table` viewport is allowed to come to rest.

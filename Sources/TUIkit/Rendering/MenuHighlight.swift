@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MenuHighlight.swift
 //
 //  Which row of an open menu is highlighted, and every gesture that moves it.

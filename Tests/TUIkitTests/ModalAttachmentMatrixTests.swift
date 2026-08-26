@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ModalAttachmentMatrixTests.swift
 //
 //  The `.modal` presentation contract, probed across ATTACHMENT POINTS: a

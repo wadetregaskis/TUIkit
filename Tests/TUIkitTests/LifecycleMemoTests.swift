@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  LifecycleMemoTests.swift
 //
 //  Regression tests for the lifecycle modifiers interacting with the render

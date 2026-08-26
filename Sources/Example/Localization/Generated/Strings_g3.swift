@@ -1,5 +1,5 @@
 // swiftlint:disable file_length line_length
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  Strings_g3.swift
 //
 //  Created by LAYERED.work

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RenderCache.swift
 //
 //  Created by LAYERED.work
@@ -11,7 +11,7 @@ import TUIkitCore
 
 /// Caches rendered ``FrameBuffer`` results for views that opt into subtree memoization.
 ///
-/// `RenderCache` is Phase 5 of TUIKit's render pipeline optimization. It stores
+/// `RenderCache` is Phase 5 of TUIkit's render pipeline optimization. It stores
 /// the output of ``EquatableView`` instances keyed by their `ViewIdentity`,
 /// allowing unchanged subtrees to skip rendering entirely.
 ///

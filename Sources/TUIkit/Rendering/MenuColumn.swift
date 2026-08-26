@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MenuColumn.swift
 //
 //  The seam between a menu's CONTENT model and its CONTROL model.

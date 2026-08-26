@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DrawnOriginIndicatorTests.swift
 //
 //  The "N more rows above/below" indicators count from the offset the rows

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollViewRenderTests.swift
 //
 //  Buffer-level render audit for ScrollView. A ScrollView is greedy on

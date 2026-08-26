@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RevealFocusedContainerGeneralTests.swift
 //
 //  The container-reveal rule generalized past Table/List (4e00168d): EVERY

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MenuColumnRenderTests.swift
 //
 //  The fixed target for the menu-engine merge.

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  LazyStackWindowingTests.swift
 //
 //  A LazyVStack that is the direct content of a vertical ScrollView windows to

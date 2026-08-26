@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DialogBodyStateIdentityTests.swift
 //
 //  A dialog's body keeps its @State when the body grows past — or shrinks

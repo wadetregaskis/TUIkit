@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RevealDirectionalityTests.swift
 //
 //  The untested halves of reveal-on-focus: the BACKWARD walk (every

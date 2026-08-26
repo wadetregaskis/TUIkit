@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MouseDispatchEdgeTests.swift
 //
 //  Edge-case sweep over MouseEventDispatcher: half-open region boundaries

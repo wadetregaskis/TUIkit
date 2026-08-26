@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RevealFocusedContainerTests.swift
 //
 //  Reveal-on-focus when the focused control is a CONTAINER (Table, List)

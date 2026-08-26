@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollViewClippedHitRegionTests.swift
 //
 //  A ScrollView's viewport is as final a clip for a hit-test region as it is

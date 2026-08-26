@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DragNavigatorTests.swift
 //
 //  The navigators pressed while something is in hand. They must move the view

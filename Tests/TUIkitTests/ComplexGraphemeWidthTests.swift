@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ComplexGraphemeWidthTests.swift
 //
 //  Terminal-cell width of complex grapheme clusters — the corpus the

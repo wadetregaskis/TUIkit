@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RowShortcutsTests.swift
 //
 //  The customisable key bindings of a `List` / `Table`: what a `ShortcutSet`

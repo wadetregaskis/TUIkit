@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ShapeEdgeOrientationTests.swift
 //
 //  The shape-aware renderer detects a strong directional edge in each cell

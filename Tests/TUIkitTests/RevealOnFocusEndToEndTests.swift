@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RevealOnFocusEndToEndTests.swift
 //
 //  The user-visible payoff of Stage 1 + Stage 0, driven through the REAL

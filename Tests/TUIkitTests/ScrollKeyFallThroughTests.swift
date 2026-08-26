@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollKeyFallThroughTests.swift
 //
 //  Page Up/Down and Home/End that the focused control does not consume scroll

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListReorderMultiRowTests.swift
 //
 //  Reordering SEVERAL rows at once: grabbing any row of a multi-selection takes

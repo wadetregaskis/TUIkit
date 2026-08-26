@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ItemListHandler+Keys.swift
 //
 //  The list handler's keyboard half: what each chord does to the cursor, the

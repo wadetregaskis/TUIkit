@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListRowTrailingContentTests.swift
 //
 //  Regression tests for GitHub issue #5: a trailing view at the end of an

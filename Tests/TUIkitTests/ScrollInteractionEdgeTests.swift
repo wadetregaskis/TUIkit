@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollInteractionEdgeTests.swift
 //
 //  Edge interactions between programmatic scrolls, the reveal snap, and

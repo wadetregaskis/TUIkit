@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StderrSuppressionTests.swift
 //
 //  The stderr redirection around CoreGraphics' first-rasterization IOKit probe

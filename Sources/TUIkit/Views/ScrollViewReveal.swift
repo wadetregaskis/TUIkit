@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollViewReveal.swift
 //
 //  Reveal-on-focus for ``_ScrollViewCore``: when focus moves (or the focused

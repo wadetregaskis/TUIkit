@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FocusEdgeCaseTests.swift
 //
 //  Minimized regressions from the focus storm (FocusStormTests):

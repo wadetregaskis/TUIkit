@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ActivationLabelTests.swift
 //
 //  What the status bar's Return entry says, which is whatever the focused

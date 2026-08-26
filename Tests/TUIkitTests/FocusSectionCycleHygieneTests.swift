@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FocusSectionCycleHygieneTests.swift
 //
 //  A Tab cycle over explicit .focusSection groups plus a page-level

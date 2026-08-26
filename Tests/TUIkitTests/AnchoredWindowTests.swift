@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  AnchoredWindowTests.swift
 //
 //  §5e/§6a of "Locating things without drawing them", for VARIABLE-height

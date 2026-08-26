@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  GhosttyWarpCompatibilityTests.swift
 //
 //  Pins the Ghostty and Warp advance models + output paths against the

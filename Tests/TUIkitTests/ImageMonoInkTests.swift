@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ImageMonoInkTests.swift
 //
 //  What `.mono` draws with inside an app that paints its own page.

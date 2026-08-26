@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  Alert+Presets.swift
 //
 //  The four styled alerts — warning, error, info, success — split out of

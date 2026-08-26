@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TabViewWideTitleTests.swift
 //
 //  A tab strip laid out in CELLS, not Characters.

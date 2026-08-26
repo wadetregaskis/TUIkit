@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrolledClickLocalizationTests.swift
 //
 //  A control scrolled partly off the top of an enclosing ScrollView keeps its

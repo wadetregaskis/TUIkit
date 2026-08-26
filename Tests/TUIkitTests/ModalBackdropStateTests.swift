@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ModalBackdropStateTests.swift
 //
 //  What a presented modal does to the page BENEATH it. Like

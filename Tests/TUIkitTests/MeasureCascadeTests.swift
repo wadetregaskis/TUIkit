@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MeasureCascadeTests.swift
 //
 //  Regression guards for GitHub issue #7 ("Immense CPU resource consumption"):

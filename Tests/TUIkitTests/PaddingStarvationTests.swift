@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  PaddingStarvationTests.swift
 //
 //  Padding is decoration, and decoration loses to the thing it decorates.

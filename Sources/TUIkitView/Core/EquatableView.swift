@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  EquatableView.swift
 //
 //  Created by LAYERED.work
@@ -10,7 +10,7 @@ import TUIkitCore
 
 /// A wrapper that enables subtree memoization for views conforming to `Equatable`.
 ///
-/// When TUIKit renders an `EquatableView`, it compares the current content with
+/// When TUIkit renders an `EquatableView`, it compares the current content with
 /// the previously cached value. If the content is unchanged **and** the available
 /// size hasn't changed, the cached ``FrameBuffer`` is returned immediately —
 /// skipping the entire subtree rendering.

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  NavigationSplitViewResizeDisableTests.swift
 //
 //  A split view is resizable by default — including under a size-to-fit style,

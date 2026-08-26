@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  EmptyRowViewFocusTests.swift
 //
 //  Empty is a state, not an absence: a List or Table with no rows is still on

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  SlicedWindowTests.swift
 //
 //  Stage 6 of "Locating things without drawing them": renderedContent draws

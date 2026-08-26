@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MultiSelectionStormTests.swift
 //
 //  A seeded storm over the multi-selection keyboard/mouse model: random key

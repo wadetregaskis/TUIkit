@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TextEditorCaretRunTests.swift
 //
 //  A TextEditor's caret and its scrollbar both used to be drawn from the LIVE

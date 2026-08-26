@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  NavigationDestinationModifier.swift
 //
 //  Created by Wade Tregaskis

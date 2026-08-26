@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ConditionalFlatteningTests.swift
 //
 //  `if` / `if-else` content flattens into the enclosing stack (SwiftUI

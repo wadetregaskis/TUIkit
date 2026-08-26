@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  LazyStackSemanticsTests.swift
 //
 //  Pins the documented lazy-stack semantics and their deviations from

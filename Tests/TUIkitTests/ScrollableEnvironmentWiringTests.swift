@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollableEnvironmentWiringTests.swift
 //
 //  Every scrollable row view captures the same environment into its handler at

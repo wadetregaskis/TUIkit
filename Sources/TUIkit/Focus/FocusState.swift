@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FocusState.swift
 //
 //  SwiftUI-shaped declarative focus: the `@FocusState` property wrapper plus

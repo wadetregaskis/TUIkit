@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  VolatileReadTrackerTests.swift
 //
 //  Pins the tracker's two-counter design: `reads` drives the run loop's

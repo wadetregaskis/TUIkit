@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  OnChangeMemoTests.swift
 //
 //  Regression tests for onChange(of:) interacting with the render memos and

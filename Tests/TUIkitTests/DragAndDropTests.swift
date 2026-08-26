@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DragAndDropTests.swift
 //
 //  `.draggable` / `.dropDestination`: press-drag-release delivers the

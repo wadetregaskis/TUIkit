@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ASCIIRendererPerformanceTests.swift
 //
 //  A cost guard, not a benchmark. Both converters walk every source pixel, and

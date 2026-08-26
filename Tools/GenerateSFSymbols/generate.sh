@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  🖥️ TUIKit — Terminal UI Kit for Swift
+#  🖥️ TUIkit — Terminal UI Kit for Swift
 #  generate.sh
 #
 #  Created by LAYERED.work

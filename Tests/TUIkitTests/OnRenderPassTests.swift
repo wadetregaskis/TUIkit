@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  OnRenderPassTests.swift
 //
 //  `.onRenderPass(_:)` — the instrumentation hook reporting a view's

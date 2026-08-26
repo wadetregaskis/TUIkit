@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  BugClassSiblingTests.swift
 //
 //  Regression pins for UNTESTED SIBLINGS of previously-fixed bug classes,

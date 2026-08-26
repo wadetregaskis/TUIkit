@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollRevealTests.swift
 //
 //  Pins the plumbing that reveal-on-focus depends on. `ScrollView` locates the

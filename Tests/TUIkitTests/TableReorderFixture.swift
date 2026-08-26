@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TableReorderFixture.swift
 //
 //  A real `Table` with `onMove`, rendered and driven through the real mouse

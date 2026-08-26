@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  UnpairedReleaseTests.swift
 //
 //  A click is a press AND a release on the same control. A release whose press

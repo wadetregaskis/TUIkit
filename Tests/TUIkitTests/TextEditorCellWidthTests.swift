@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TextEditorCellWidthTests.swift
 //
 //  TextEditor's display model must be measured in terminal CELLS, not

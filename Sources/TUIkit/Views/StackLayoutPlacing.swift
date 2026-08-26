@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StackLayoutPlacing.swift
 //
 //  _VStackCore's LayoutPlacing conformance ("Locating things without drawing

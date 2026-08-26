@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  KeyboardShortcutTests.swift
 //
 //  `.keyboardShortcut(.defaultAction / .cancelAction)` — the default button

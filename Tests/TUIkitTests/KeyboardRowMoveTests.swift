@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  KeyboardRowMoveTests.swift
 //
 //  Reordering rows without a mouse: Ctrl-R picks the focused row up, the

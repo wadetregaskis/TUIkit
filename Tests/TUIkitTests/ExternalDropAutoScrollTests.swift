@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ExternalDropAutoScrollTests.swift
 //
 //  Where a drag from ANOTHER view lands while the receiving list is

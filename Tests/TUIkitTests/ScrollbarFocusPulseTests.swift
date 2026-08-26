@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollbarFocusPulseTests.swift
 //
 //  A scrollbar that doubles as its container's focus indicator must PULSE

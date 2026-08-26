@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TmuxCompatibilityTests.swift
 //
 //  Pins tmux 3.7b's DSR-measured cursor advance against TUIkit's width claims,

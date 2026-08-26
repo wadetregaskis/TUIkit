@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  LazyMeasureProbeTests.swift
 //
 //  The measure-laziness contract for a windowed LazyVStack in a ScrollView:

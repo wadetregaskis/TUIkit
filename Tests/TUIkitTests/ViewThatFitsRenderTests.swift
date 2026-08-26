@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ViewThatFitsRenderTests.swift
 //
 //  Buffer-level render audit for ViewThatFits. It measures each

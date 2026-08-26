@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  WideCharBoundarySweepTests.swift
 //
 //  Property sweep over the width-math seams where a double-width character

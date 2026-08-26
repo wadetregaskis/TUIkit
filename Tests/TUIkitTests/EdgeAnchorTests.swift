@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  EdgeAnchorTests.swift
 //
 //  `Documentation/Scroll-anchoring.md` §1.1's two POSITIONAL modes: Top ("the

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TrackStyleEditor.swift
 //
 //  An interactive TrackConfiguration builder shared by the ProgressView and

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  AnimationReplayTests.swift
 //
 //  The rule that keeps the cheap animation path safe: a clock may be advanced

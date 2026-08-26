@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StackAnchoredWindow.swift
 //
 //  The variable-height anchor walk of "Locating things without drawing

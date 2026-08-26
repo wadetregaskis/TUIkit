@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DialogMeasuresRenderedTreeTests.swift
 //
 //  A dialog must be sized from the tree it actually renders.

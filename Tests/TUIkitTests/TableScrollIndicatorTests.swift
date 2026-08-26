@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TableScrollIndicatorTests.swift
 //
 //  A "▲ N more" indicator spends a content line to report that content is

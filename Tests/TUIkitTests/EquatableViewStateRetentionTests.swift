@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  EquatableViewStateRetentionTests.swift
 //
 //  A cache hit skips rendering the subtree — but the subtree's `@State` must

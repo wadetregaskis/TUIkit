@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollGeometryUnitTests.swift
 //
 //  Unit pins for the pure functions the windowed pipeline leans on: the

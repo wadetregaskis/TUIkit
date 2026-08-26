@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ModalContentHeightTests.swift
 //
 //  A presented modal/alert is built against the CONTENT AREA (screen minus app

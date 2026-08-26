@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DialogImplicitScrollTests.swift
 //
 //  Oversized dialogs (modal / alert content taller than the visible area) are

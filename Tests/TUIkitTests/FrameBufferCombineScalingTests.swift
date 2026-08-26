@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FrameBufferCombineScalingTests.swift
 //
 //  A stack appends its children into one accumulating buffer. When the combine

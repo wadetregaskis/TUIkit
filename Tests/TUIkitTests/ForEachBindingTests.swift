@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ForEachBindingTests.swift
 //
 //  `ForEach($items) { $item in … }` — a row of editable controls needs a

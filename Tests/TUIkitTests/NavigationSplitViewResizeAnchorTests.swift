@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  NavigationSplitViewResizeAnchorTests.swift
 //
 //  A resize — by drag or by arrow key — must step from the width the column is

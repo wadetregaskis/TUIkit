@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FocusLifecycleCallbackTests.swift
 //
 //  `onFocusReceived` / `onFocusLost` are the contract a control's transient

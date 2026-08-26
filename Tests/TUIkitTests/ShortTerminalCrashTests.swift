@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ShortTerminalCrashTests.swift
 //
 //  The app's content area is `terminalHeight - statusBarHeight - appHeaderHeight`

@@ -1,5 +1,5 @@
 // swiftlint:disable line_length
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  Strings_g10.swift
 //
 //  Created by Wade Tregaskis

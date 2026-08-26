@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListTableOverscrollTests.swift
 //
 //  §1.5 overscroll on the ROW-based scrollables.

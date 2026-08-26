@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DragAndDropSession.swift
 //
 //  The shared state behind ``View/draggable(_:)`` and

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollPosition.swift
 //
 //  The bindable half of programmatic scrolling: where a ScrollView is, and

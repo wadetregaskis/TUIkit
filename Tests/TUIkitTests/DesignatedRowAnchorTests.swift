@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DesignatedRowAnchorTests.swift
 //
 //  `.anchorPosition(.row(id))` designates a SPECIFIC row as the anchor, and the

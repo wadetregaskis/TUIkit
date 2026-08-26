@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TableRenderTests.swift
 //
 //  Buffer-level render audit for `Table`. Each case renders the view to a

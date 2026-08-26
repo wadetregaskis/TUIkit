@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TableAnalyticMeasureTests.swift
 //
 //  Table's single-line measure path is analytic (O(columns), no row

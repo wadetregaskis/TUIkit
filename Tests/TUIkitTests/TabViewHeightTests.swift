@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TabViewHeightTests.swift
 //
 //  The bordered TabView's height contract: the panel fits the height it is

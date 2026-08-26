@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StackDesignatedAnchor.swift
 //
 //  `.anchorPosition(.row(id))` names a row and asks the viewport to HOLD it:

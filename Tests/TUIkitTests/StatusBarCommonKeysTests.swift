@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StatusBarCommonKeysTests.swift
 //
 //  Return and Escape in the status bar: WHETHER they are there is the app's

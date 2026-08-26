@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  AutoScrollHotMarginTests.swift
 //
 //  A drag hovering the MIDDLE of a scrollable must not auto-scroll it.

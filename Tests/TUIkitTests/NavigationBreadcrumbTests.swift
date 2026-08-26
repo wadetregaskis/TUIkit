@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  NavigationBreadcrumbTests.swift
 //
 //  The bar shows where you are AND how to get back, which at depth is a trail

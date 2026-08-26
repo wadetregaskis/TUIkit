@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  AlertRenderTests.swift
 //
 //  Buffer-level rendering tests for Alert.

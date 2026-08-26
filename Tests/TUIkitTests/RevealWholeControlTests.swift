@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RevealWholeControlTests.swift
 //
 //  Arriving AT a control reveals the control; moving WITHIN one reveals only

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DefaultScrollAnchorTests.swift
 //
 //  defaultScrollAnchor(.bottom) — §5c edge affinity, §6c "follow the log":

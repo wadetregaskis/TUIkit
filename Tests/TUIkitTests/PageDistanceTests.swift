@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  PageDistanceTests.swift
 //
 //  What one Page Down moves: a screenful, no overlap. The row that was one

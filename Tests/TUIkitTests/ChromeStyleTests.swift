@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ChromeStyleTests.swift
 //
 //  The app header and the status bar are drawn by two different renderers, out

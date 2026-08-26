@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollView+Anchor.swift
 //
 //  How a `ScrollView` honours the EDGE anchor modes of

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ReorderOutsideBoundsTests.swift
 //
 //  Where a reorder drag can and cannot land: the rows, and nothing else. A

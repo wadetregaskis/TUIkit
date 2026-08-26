@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollbarPulseSeparationTests.swift
 //
 //  A focused scrollbar's thumb stays readable against its track at EVERY point

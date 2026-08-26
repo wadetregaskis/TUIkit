@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ClampedOverlayHitRegionTests.swift
 //
 //  A too-tall overlay (modal, drop-down) is clamped to the content area at

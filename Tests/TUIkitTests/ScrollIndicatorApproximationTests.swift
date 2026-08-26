@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollIndicatorApproximationTests.swift
 //
 //  "N more lines above/below" honesty: on the anchored (variable-height) windowed

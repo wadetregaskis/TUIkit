@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListRowStyleModifiers.swift
 //
 //  The two list-row modifiers that mean something in a grid of cells:

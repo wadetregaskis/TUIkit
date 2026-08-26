@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RenderLoop.swift
 //
 //  Manages the rendering pipeline: scene rendering, environment

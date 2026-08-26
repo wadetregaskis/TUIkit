@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  AlertDismissalTests.swift
 //
 //  How a presented `.alert` / `.confirmationDialog` gets CLOSED — the two

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ImageRenderingControls.swift
 //
 //  The image demos' control pane: every rendering knob, as a column beside the

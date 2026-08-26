@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListReorderDragTests.swift
 //
 //  Mouse drag-to-reorder for an editable `List { ForEach(...).onMove }`: a

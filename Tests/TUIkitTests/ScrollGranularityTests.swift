@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollGranularityTests.swift
 //
 //  `.scrollGranularity(_:)` — line-centric scrolling (the default) steps the

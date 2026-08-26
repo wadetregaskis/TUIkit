@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollbarModifierWiringTests.swift
 //
 //  The public scrollbar option modifiers — .scrollbarArrows(_:),

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TableSortOrderTests.swift
 //
 //  Clicking a Table's column header re-sorts it — SwiftUI's behaviour, driven

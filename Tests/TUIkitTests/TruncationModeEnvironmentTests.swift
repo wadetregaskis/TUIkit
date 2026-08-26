@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TruncationModeEnvironmentTests.swift
 //
 //  Created by Wade Tregaskis

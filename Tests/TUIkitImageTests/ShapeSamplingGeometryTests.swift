@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ShapeSamplingGeometryTests.swift
 //
 //  Pins the shape-sampling geometry shared by the runtime renderer and the

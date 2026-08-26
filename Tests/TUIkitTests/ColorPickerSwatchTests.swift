@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ColorPickerSwatchTests.swift
 //
 //  The swatch is the picker's other half: SwiftUI's opens the platform colour

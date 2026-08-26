@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollContentExtentTests.swift
 //
 //  A ScrollView's scrollable extent has NO ceiling.

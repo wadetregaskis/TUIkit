@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollContentWindow.swift
 //
 //  The ScrollView ↔ windowed-stack handshake: the visible slice travels

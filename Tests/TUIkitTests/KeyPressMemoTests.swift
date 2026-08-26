@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  KeyPressMemoTests.swift
 //
 //  Regression tests for onKeyPress interacting with the render memos and

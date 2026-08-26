@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RowReorderDrag.swift
 //
 //  The vocabulary a drag-to-reorder gesture needs outside the state machine in

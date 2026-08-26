@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListMultiLineScrollTests.swift
 //
 //  A List/Table that draws a scrollbar reserves NO "N more rows above/below" text

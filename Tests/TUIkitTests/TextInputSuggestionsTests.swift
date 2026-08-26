@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TextInputSuggestionsTests.swift
 //
 //  The combo-box surface: `.textInputSuggestions` menus on TextField

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  PaletteSurfaceTests.swift
 //
 //  A "subtle lift above the background" that collapses to the background is not

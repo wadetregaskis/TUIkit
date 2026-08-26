@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TableColumnBuilderTests.swift
 //
 //  A column list is a result builder, so it has to accept the control flow one

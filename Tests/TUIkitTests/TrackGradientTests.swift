@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TrackGradientTests.swift
 //
 //  Gradient colour support across the track family: `.threeSegment`'s

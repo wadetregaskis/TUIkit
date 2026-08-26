@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListReorderFixture.swift
 //
 //  The shared harness for the List reorder suites: a live `List` with an

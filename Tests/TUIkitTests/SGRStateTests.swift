@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  SGRStateTests.swift
 //
 //  `SGRState` replaces "concatenate every escape and let the terminal sort it

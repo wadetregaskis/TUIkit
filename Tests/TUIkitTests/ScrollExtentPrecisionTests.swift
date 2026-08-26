@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollExtentPrecisionTests.swift
 //
 //  A List/Table whose rows span multiple lines meters its scrollbar in LINES,

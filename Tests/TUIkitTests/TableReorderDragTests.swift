@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TableReorderDragTests.swift
 //
 //  Mouse drag-to-reorder for a `Table.onMove` — the same gesture, state machine

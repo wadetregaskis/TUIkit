@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  Self.swift
 //
 //  The walk that a pop-up `Menu`, a `.contextMenu`, a `Picker`'s drop-down and

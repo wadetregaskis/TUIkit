@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  View+Presentation.swift
 //
 //  Created by LAYERED.work
@@ -38,9 +38,9 @@ extension View {
     ///     to present the alert.
     ///   - actions: A ViewBuilder returning the alert action buttons.
     ///   - message: A ViewBuilder returning the alert message content.
-    ///   - borderStyle: Custom border style for the alert (TUIKit extension, default: nil).
-    ///   - borderColor: Custom border color (TUIKit extension, default: nil).
-    ///   - titleColor: Custom title text color (TUIKit extension, default: nil).
+    ///   - borderStyle: Custom border style for the alert (TUIkit extension, default: nil).
+    ///   - borderColor: Custom border color (TUIkit extension, default: nil).
+    ///   - titleColor: Custom title text color (TUIkit extension, default: nil).
     /// - Returns: A view that presents an alert conditionally.
     public func alert<Actions: View, Message: View>(
         _ titleKey: LocalizedStringKey,
@@ -65,9 +65,9 @@ extension View {
     ///     to present the alert.
     ///   - actions: A ViewBuilder returning the alert action buttons.
     ///   - message: A ViewBuilder returning the alert message content.
-    ///   - borderStyle: Custom border style for the alert (TUIKit extension, default: nil).
-    ///   - borderColor: Custom border color (TUIKit extension, default: nil).
-    ///   - titleColor: Custom title text color (TUIKit extension, default: nil).
+    ///   - borderStyle: Custom border style for the alert (TUIkit extension, default: nil).
+    ///   - borderColor: Custom border color (TUIkit extension, default: nil).
+    ///   - titleColor: Custom title text color (TUIkit extension, default: nil).
     /// - Returns: A view that presents an alert conditionally.
     @_disfavoredOverload
     public func alert<Actions: View, Message: View>(

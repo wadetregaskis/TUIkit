@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TrackPatternTests.swift
 //
 //  Cyclic multi-character fill/unfilled patterns for the configured track

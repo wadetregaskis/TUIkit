@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  OffsetModifier.swift
 //
 //  `.offset(x:y:)` — draw a view displaced from its natural position,

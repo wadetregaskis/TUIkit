@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  AnimatedCellRunTests.swift
 //
 //  A run is a claim about particular CELLS, so it has to travel with them

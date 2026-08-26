@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StackFocusReach.swift
 //
 //  Ring continuation past non-focusable rows for the windowed stack paths.

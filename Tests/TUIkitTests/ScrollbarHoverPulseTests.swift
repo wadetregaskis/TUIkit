@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollbarHoverPulseTests.swift
 //
 //  A focused scrollbar breathes through the run loop, and the cell under the

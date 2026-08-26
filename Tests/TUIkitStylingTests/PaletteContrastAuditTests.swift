@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  PaletteContrastAuditTests.swift
 //
 //  Readability floor for every shipped palette: the semantic colour pairs a

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  PickerPopupEdgeTests.swift
 //
 //  A Picker sitting on the LAST visible row of a ScrollView viewport must

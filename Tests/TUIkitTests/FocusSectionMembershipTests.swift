@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FocusSectionMembershipTests.swift
 //
 //  Section membership is a property of WHERE a control renders (the

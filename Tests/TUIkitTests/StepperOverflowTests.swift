@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StepperOverflowTests.swift
 //
 //  Regression tests for GitHub-class bug: a bounded integer Stepper whose

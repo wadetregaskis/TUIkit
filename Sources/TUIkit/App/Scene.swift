@@ -1,22 +1,22 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  Scene.swift
 //
 //  Created by LAYERED.work
 //  License: MIT
 
-/// The base protocol for scenes in TUIKit.
+/// The base protocol for scenes in TUIkit.
 ///
 /// A scene represents a distinct region of the app's user interface,
-/// analogous to SwiftUI's `Scene` protocol. In TUIKit, scenes define
+/// analogous to SwiftUI's `Scene` protocol. In TUIkit, scenes define
 /// the top-level structure of your terminal application.
 ///
 /// ## Overview
 ///
-/// Scenes sit between the ``App`` and ``View`` layers in TUIKit's
+/// Scenes sit between the ``App`` and ``View`` layers in TUIkit's
 /// architecture. While views define the content, scenes define how
 /// that content is organized at the application level.
 ///
-/// Currently, TUIKit provides one scene type:
+/// Currently, TUIkit provides one scene type:
 /// - ``WindowGroup``: Displays content in the terminal window
 ///
 /// ## Conforming to Scene
@@ -89,7 +89,7 @@ public struct WindowGroup<Content: View>: Scene {
 /// ```
 ///
 /// The `@SceneBuilder` attribute transforms this closure into a scene that
-/// TUIKit can render. Currently, `SceneBuilder` supports a single scene
+/// TUIkit can render. Currently, `SceneBuilder` supports a single scene
 /// in the body, which is typically a ``WindowGroup``.
 @MainActor
 @resultBuilder

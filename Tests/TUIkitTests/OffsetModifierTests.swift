@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  OffsetModifierTests.swift
 //
 //  `.offset` displaces the DRAWING and leaves the layout alone — SwiftUI's

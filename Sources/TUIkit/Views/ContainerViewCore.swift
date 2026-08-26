@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ContainerViewCore.swift
 //
 //  The procedural half of ``ContainerView``: the `Renderable` + `Layoutable`

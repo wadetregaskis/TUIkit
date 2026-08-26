@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollContentWindowEqualityTests.swift
 //
 //  `ScrollContentWindow` carries a per-render reply mailbox. Synthesised

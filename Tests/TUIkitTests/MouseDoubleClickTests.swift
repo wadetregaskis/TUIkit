@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MouseDoubleClickTests.swift
 //
 //  MouseEventDispatcher synthesises MouseEvent.clickCount by timing successive

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  String+ANSISplitting.swift
 //
 //  Splitting a styled line at a visible-cell boundary, and recovering the SGR

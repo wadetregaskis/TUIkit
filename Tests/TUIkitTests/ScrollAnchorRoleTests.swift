@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollAnchorRoleTests.swift
 //
 //  `defaultScrollAnchor(_:for:)` — the two questions the unlabelled modifier

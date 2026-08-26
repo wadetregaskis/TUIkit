@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  LabeledContentTests.swift
 //
 //  `LabeledContent` OUTSIDE a Form, where it lays itself out. (Inside one the

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollView+Scrollbars.swift
 //
 //  The ScrollView's two scrollbars: attaching their mouse handlers (arrows,

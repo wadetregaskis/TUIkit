@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FocusManagerSubtreeJump.swift
 //
 //  Where a jump within one subtree's own focus stops can land. The jump itself

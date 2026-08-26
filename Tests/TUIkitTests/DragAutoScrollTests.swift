@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DragAutoScrollTests.swift
 //
 //  Drag auto-scroll (macOS `NSView.autoscroll`): while a drag is in flight and

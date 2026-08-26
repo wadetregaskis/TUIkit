@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  WindowedCompositionTests.swift
 //
 //  Compositions of the Stage-6 windowed pipeline with its neighbours —

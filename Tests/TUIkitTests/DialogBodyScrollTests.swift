@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  DialogBodyScrollTests.swift
 //
 //  A `Dialog` too tall for the terminal scrolls its BODY, with the title and

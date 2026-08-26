@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TableRowAnchorHoldTests.swift
 //
 //  The SIBLING of `ListRowAnchorHoldTests`. `Table` scrolls through the same

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  AsciiRampSizingTests.swift
 //
 //  The ASCII charset's configurable size: the full repertoire uses a long,

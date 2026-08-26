@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FocusStormTests.swift
 //
 //  A deterministic registration-churn storm over the focus system: each

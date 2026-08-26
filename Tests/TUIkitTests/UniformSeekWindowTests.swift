@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  UniformSeekWindowTests.swift
 //
 //  §5i/§6e of "Locating things without drawing them": a windowed lazy stack

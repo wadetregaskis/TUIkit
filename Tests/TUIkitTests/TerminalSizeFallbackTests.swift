@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TerminalSizeFallbackTests.swift
 //
 //  `Terminal.getSize()` falls back to the `COLUMNS` / `LINES` environment

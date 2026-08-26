@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListStackDistributionTests.swift
 //
 //  Regression tests for GitHub issue #6: multiple Lists without explicit

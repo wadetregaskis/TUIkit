@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  LayoutZStackDemos.swift
 //
 //  The Layout System page's ZStack section: five bands making one claim from

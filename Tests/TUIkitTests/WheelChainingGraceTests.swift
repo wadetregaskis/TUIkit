@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  WheelChainingGraceTests.swift
 //
 //  The wheel-chaining grace period: a nested scroller that hits its edge

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FileBrowser.swift
 //
 //  A small real-filesystem model shared by the List and Table file-browser

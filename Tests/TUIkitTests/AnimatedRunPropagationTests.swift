@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  AnimatedRunPropagationTests.swift
 //
 //  A run only earns its keep if it reaches the FINAL composited buffer. The run

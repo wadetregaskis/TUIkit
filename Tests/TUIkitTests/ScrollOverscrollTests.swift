@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollOverscrollTests.swift
 //
 //  §1.5 of the scroll-anchoring spec: how far past an edge a scrollable may be

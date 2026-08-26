@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MenuPopover.swift
 //
 //  The floating menu presentation shared by `.contextMenu` and a pop-up `Menu`.

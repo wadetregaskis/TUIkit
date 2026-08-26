@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RowActivationTests.swift
 //
 //  `.onRowActivate(_:)` on List and Table: Return/Enter on the focused row

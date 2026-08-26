@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MenuPresentationLabels.swift
 //
 //  What the status bar's Return and Escape items say over a menu.

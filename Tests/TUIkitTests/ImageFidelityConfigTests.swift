@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ImageFidelityConfigTests.swift
 //
 //  The configurable image-fidelity surface: the fundamental charsets under

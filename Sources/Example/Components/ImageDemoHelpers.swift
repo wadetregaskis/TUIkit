@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ImageDemoHelpers.swift
 //
 //  What the image demos' knobs MEAN — which ones a given configuration

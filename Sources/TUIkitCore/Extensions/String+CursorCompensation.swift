@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  String+CursorCompensation.swift
 //
 //  Terminal-specific cursor-advance workarounds for the output path: some

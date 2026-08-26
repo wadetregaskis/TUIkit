@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  PromptWhileFocusedTests.swift
 //
 //  A field's prompt stays visible while the field is FOCUSED and still empty —

@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MultilineTextAlignmentTests.swift
 //
 //  Tests for SwiftUI-parity `.multilineTextAlignment(_:)`: the lines of a

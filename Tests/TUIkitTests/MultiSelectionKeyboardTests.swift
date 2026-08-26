@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  MultiSelectionKeyboardTests.swift
 //
 //  The macOS keyboard-selection model for Set-bound Lists/Tables, adapted to

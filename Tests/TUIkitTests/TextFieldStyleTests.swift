@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TextFieldStyleTests.swift
 //
 //  `.textFieldStyle(.automatic)` vs `.plain` — the two things a terminal can

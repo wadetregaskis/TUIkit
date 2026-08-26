@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ItemListHandler+Selection.swift
 //
 //  `List`/`Table` selection: the macOS model (plain click = sole selection,

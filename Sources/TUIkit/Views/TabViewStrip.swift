@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TabViewStrip.swift
 //
 //  How a TabView draws its strip of tabs: the compact chips, the folder-tab

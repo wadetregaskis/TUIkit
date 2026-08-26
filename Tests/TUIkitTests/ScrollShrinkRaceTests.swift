@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollShrinkRaceTests.swift
 //
 //  A scroller's persistent `scrollOffset` outlives the data it was clamped

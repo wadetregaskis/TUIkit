@@ -1,4 +1,4 @@
-//  🖥️ TUIKit — Terminal UI Kit for Swift
+//  🖥️ TUIkit — Terminal UI Kit for Swift
 //  FocusIndicatorAnimationTests.swift
 //
 //  Every control that breathes while focused is being converted from "read the
