@@ -101,3 +101,19 @@ Both clusters and expectations come from `data/width-corpus.json`, shared with
 the Swift tests so a measurement always answers a question something asks.
 `TerminalLedgerConformanceTests` is where the records are checked against the
 models.
+
+## `border_probe.py` — did any row shear, end to end?
+
+The per-cluster probes say what a terminal does to one cluster in isolation.
+This says whether the whole pipeline put the right edge where it belongs on a
+screen full of real content: it finds the rightmost inked column of every
+scanline and asks whether they agree.
+
+```sh
+screencapture -x /tmp/app.png
+python3 border_probe.py /tmp/app.png
+```
+
+It crops to the app's own painted background first, so the desktop and other
+windows cannot contribute an edge, and exits 1 on any outlier — so it can gate a
+smoke run rather than only inform one.
