@@ -5,84 +5,80 @@
 //  License: MIT
 
 import Foundation
+import Testing
+
+@testable import TUIkitCore
 
 // MARK: - The shared width corpus
 
-/// The curated list of grapheme clusters every width question in this project
-/// is asked about — `Tools/TerminalProbes/data/width-corpus.json`.
+/// The tests' view of ``TerminalWidthCorpus`` — the Swift twin of
+/// `Tools/TerminalProbes/data/width-corpus.json`, which the Python probes
+/// measure on real terminals.
 ///
-/// It lives in a file rather than in Swift because the Python probes measure
-/// the same list on the real terminals, and the whole value of a measurement is
-/// that it answers the question a test is going to ask. Two hand-kept lists
-/// drift, and the drift is invisible: the probe reports on a cluster no test
-/// checks, and the test checks a cluster nothing measured.
-///
-/// A hand-picked battery only contains what somebody already thought to doubt,
-/// so the classes here are deliberately wider than the known defects — ASCII,
-/// CJK and plain emoji are in it precisely because nothing is supposed to
-/// happen to them.
+/// The two copies are pinned identical by ``WidthCorpusParityTests`` below, so
+/// "the probes measured it" and "the tests assert on it" can never quietly be
+/// about different lists.
 enum WidthCorpus {
 
-    struct Entry: Decodable, CustomStringConvertible, Sendable {
-        /// Stable key, and the name the probe records its measurement under.
+    typealias Entry = TerminalWidthCorpus.Entry
+
+    static var clusters: [Entry] { TerminalWidthCorpus.all }
+
+    static func clusters(in category: String) -> [Entry] {
+        TerminalWidthCorpus.entries(in: category)
+    }
+}
+
+// MARK: - Parity with the JSON the probes measure
+
+/// The corpus exists twice — JSON for the Python probes, Swift for everything
+/// else — and this is the pin that keeps "twice" from becoming "two".
+@Suite("Width corpus parity")
+struct WidthCorpusParityTests {
+
+    private struct JSONEntry: Decodable {
         let id: String
-        /// The defect class this exemplifies — `vs16_pictograph`, `zwj`,
-        /// `skin_tone_bmp_narrow`. Terminals are wrong by class, not by
-        /// character.
         let `class`: String
-        /// The cluster, spelled for review.
         let text: String
-        /// The same cluster as `U+XXXX` scalars. Authoritative: `text` is a
-        /// convenience that ``load()`` checks against this, because an emoji
-        /// pasted into a JSON file is exactly the kind of thing that silently
-        /// loses a variation selector.
         let scalars: [String]
-
-        var description: String { "\(id) (\(`class`))" }
-
-        /// The cluster as one `Character`, which is what every width and
-        /// advance model takes.
-        var character: Character { Character(text) }
     }
 
     private struct Document: Decodable {
-        let version: Int
-        let clusters: [Entry]
+        let clusters: [JSONEntry]
     }
 
-    /// Every entry, loaded once.
-    static let clusters: [Entry] = load()
-
-    /// Entries of one class.
-    static func clusters(in klass: String) -> [Entry] {
-        clusters.filter { $0.class == klass }
-    }
-
-    private static func load() -> [Entry] {
-        let url =
-            URL(fileURLWithPath: #filePath)
+    @Test("The Swift corpus and the probes' JSON are the same list")
+    func swiftMatchesJSON() throws {
+        let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // TestHelpers/
             .deletingLastPathComponent()  // TUIkitTests/
             .deletingLastPathComponent()  // Tests/
             .deletingLastPathComponent()  // repository root
             .appendingPathComponent("Tools/TerminalProbes/data/width-corpus.json")
-        guard let data = try? Data(contentsOf: url),
-            let document = try? JSONDecoder().decode(Document.self, from: data)
-        else {
-            fatalError("Cannot read the width corpus at \(url.path)")
-        }
-        for entry in document.clusters {
-            let spelled = entry.scalars.map { scalar -> Unicode.Scalar in
+        let document = try JSONDecoder().decode(Document.self, from: Data(contentsOf: url))
+
+        try #require(document.clusters.count == TerminalWidthCorpus.all.count)
+        for (json, swift) in zip(document.clusters, TerminalWidthCorpus.all) {
+            #expect(json.id == swift.id)
+            #expect(json.class == swift.category)
+            #expect(json.text == swift.text, "\(json.id): text differs")
+            let spelled = json.scalars.map { scalar -> Unicode.Scalar in
                 guard scalar.hasPrefix("U+"),
                     let value = UInt32(scalar.dropFirst(2), radix: 16),
                     let unicode = Unicode.Scalar(value)
-                else { fatalError("\(entry.id): malformed scalar \(scalar)") }
+                else { fatalError("\(json.id): malformed scalar \(scalar)") }
                 return unicode
             }
-            guard String(String.UnicodeScalarView(spelled)) == entry.text else {
-                fatalError("\(entry.id): `text` and `scalars` disagree")
-            }
+            #expect(String(String.UnicodeScalarView(spelled)) == swift.text,
+                    "\(json.id): scalars and text disagree")
         }
-        return document.clusters
+    }
+
+    @Test("Every category carries a note for the Quirks app")
+    func everyCategoryHasANote() {
+        for category in Set(TerminalWidthCorpus.all.map(\.category)) {
+            #expect(TerminalWidthCorpus.categoryNotes[category] != nil,
+                    "\(category) has no note")
+        }
     }
 }

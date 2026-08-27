@@ -79,6 +79,15 @@ struct CustomClientView: View {
             toggle("Flag pairs  🇺🇸", \.flagPairs)
             toggle("Keycap sequences  1\u{FE0F}\u{20E3}", \.keycapSequences)
             toggle("SF Symbols (Plane-16 PUA)", \.planeSixteenPUA)
+            Text("Internal column runs past the composed glyph").bold()
+            Text("Turn one on if rows carrying that class wrap early — blank default-background cells at the row's right edge.")
+                .foregroundStyle(.palette.foregroundSecondary)
+            toggle("ZWJ sequences  👩\u{200D}🚀 👨\u{200D}👩\u{200D}👧\u{200D}👦", \.zwjSequences)
+            toggle("Tag-sequence flags  🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}", \.tagFlags)
+            Text("Next character paints inside the glyph").bold()
+            Text("Turn this on if the character after a flag, keycap or ❤️\u{200D}🔥-style sequence overlaps its last cell.")
+                .foregroundStyle(.palette.foregroundSecondary)
+            toggle("Nudge paint-short composites  🇺🇸 1\u{FE0F}\u{20E3} ❤️\u{200D}🔥", \.paintShortComposites)
             Text("Background under a compensated glyph").bold()
             Text("Turn this on if compensated glyphs sit on the terminal's own background instead of the app's — a coloured row that reads as a comb.")
                 .foregroundStyle(.palette.foregroundSecondary)
@@ -102,13 +111,13 @@ struct CustomClientView: View {
 
     // MARK: - Skin tones
 
-    /// Separate from the switches above because the defect is the opposite
-    /// shape: the cursor ends up PAST the glyph, and no forward move undoes
-    /// that — the only workaround is to not send the modifier.
+    /// Separate from the switches above because the treatments differ in kind,
+    /// not just degree: strips change what the user wrote, the pull-back keeps
+    /// it and squares the internal column with `CUB`.
     private var skinTones: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Skin-tone clusters  🤙🏽 ✊🏻").bold()
-            Text("Over-advance instead: the fix is to drop the modifier, not to move the cursor.")
+            Text("These over-advance the internal column; pick how this terminal needs them handled.")
                 .foregroundStyle(.palette.foregroundSecondary)
             ForEach(TerminalQuirks.SkinTones.allCases, id: \.self) { option in
                 Button {
@@ -131,9 +140,10 @@ struct CustomClientView: View {
 
     private func describe(_ option: TerminalQuirks.SkinTones) -> String {
         switch option {
-        case .keep: "Keep them — the terminal joins the cluster correctly (Ghostty does)"
-        case .stripAll: "Strip every one (iTerm2, Warp, Apple Terminal)"
+        case .keep: "Keep them — the terminal joins the cluster correctly (Ghostty)"
+        case .stripAll: "Strip every one (a claim that cannot hold the detached pair)"
         case .stripBMPBases: "Strip only BMP-based ones — ✊🏻 but not 👍🏽 (tmux)"
+        case .pullBack: "Keep them, pull the internal column back with CUB (Apple Terminal)"
         }
     }
 

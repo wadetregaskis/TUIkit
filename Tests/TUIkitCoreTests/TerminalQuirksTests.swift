@@ -157,3 +157,100 @@ struct TerminalQuirksTests {
         #expect(out.hasSuffix("\u{1B}[0m"))
     }
 }
+
+// MARK: - Every corpus cluster under every mechanism
+
+/// The permutation coverage: representative quirk sets — every real host's
+/// shape, each new mechanism alone, everything at once — crossed with the
+/// full width corpus.
+///
+/// Two properties hold for every combination, and they are the two that
+/// briefly-shipped defects have violated:
+///
+/// - **Conservation**: the emission's internal advance, summed under the same
+///   quirk model that produced it, equals the cells its visible content
+///   claims. An emission that sums high wraps full-width rows (white cells at
+///   the row's end); one that sums low shears.
+/// - **Content preservation**: unless a strip was explicitly selected, every
+///   scalar the user wrote survives into the emission.
+@Suite("Quirk permutations over the corpus")
+struct QuirkPermutationTests {
+
+    /// Every quirk-set shape worth holding the properties over: the measured
+    /// hosts, each mechanism in isolation, and the kitchen sink.
+    static let sets: [(String, TerminalQuirks)] = [
+        ("none", TerminalQuirks()),
+        ("apple", TerminalQuirks(
+            vs16Pictographs: true, barePictographs: true,
+            loneRegionalIndicators: true, planeSixteenPUA: true,
+            zwjSequences: true, tagFlags: true, paintShortComposites: true,
+            skinTones: .pullBack, erasesUnderGlyphs: true)),
+        ("iterm2", TerminalQuirks(
+            vs16Pictographs: true, keycapSequences: true, planeSixteenPUA: true,
+            skinTones: .stripAll)),
+        ("ghostty", TerminalQuirks(vs15ChromeGlyphs: true, planeSixteenPUA: true)),
+        ("warp", TerminalQuirks(
+            loneRegionalIndicators: true, planeSixteenPUA: true,
+            skinTones: .stripAll)),
+        ("tmux", TerminalQuirks(
+            loneRegionalIndicators: true, planeSixteenPUA: true,
+            skinTones: .stripBMPBases)),
+        ("zwj-alone", TerminalQuirks(zwjSequences: true)),
+        ("tagflags-alone", TerminalQuirks(tagFlags: true)),
+        ("nudge-alone", TerminalQuirks(paintShortComposites: true)),
+        ("pullback-alone", TerminalQuirks(skinTones: .pullBack)),
+        ("everything", TerminalQuirks(
+            vs16Pictographs: true, barePictographs: true, vs15ChromeGlyphs: true,
+            loneRegionalIndicators: true, flagPairs: true, keycapSequences: true,
+            planeSixteenPUA: true, zwjSequences: true, tagFlags: true,
+            paintShortComposites: true, skinTones: .pullBack,
+            erasesUnderGlyphs: true)),
+    ]
+
+    @Test("Every emission conserves its quirk model's internal column",
+          arguments: sets, TerminalWidthCorpus.all)
+    func conserves(set: (String, TerminalQuirks), entry: TerminalWidthCorpus.Entry) {
+        let (name, quirks) = set
+        let emission = entry.text.withCursorCompensation(for: quirks)
+        let advance = emission.cursorAdvance { quirks.cursorAdvance(of: $0) }
+        #expect(
+            advance == emission.strippedLength,
+            """
+            \(entry) under '\(name)': emission sums to \(advance) against \
+            \(emission.strippedLength) visible cells — a full-width row \
+            \(advance > emission.strippedLength ? "wraps" : "shears").
+            """)
+    }
+
+    @Test("Every scalar survives unless a strip was selected",
+          arguments: sets, TerminalWidthCorpus.all)
+    func preservesContent(set: (String, TerminalQuirks), entry: TerminalWidthCorpus.Entry) {
+        let (name, quirks) = set
+        guard quirks.skinTones == .keep || quirks.skinTones == .pullBack else { return }
+        let emission = entry.text.withCursorCompensation(for: quirks)
+        let emitted = Set(emission.unicodeScalars.map(\.value))
+        for scalar in entry.text.unicodeScalars {
+            #expect(
+                emitted.contains(scalar.value),
+                "\(entry) under '\(name)': U+\(String(scalar.value, radix: 16, uppercase: true)) was dropped")
+        }
+    }
+
+    /// The mirror pin: the Apple-shaped switch set must reproduce the REAL
+    /// Apple Terminal walk exactly — model for model and emission for
+    /// emission — because the app exists so somebody can dial in a measured
+    /// host's behaviour and see precisely what TUIkit would do.
+    @Test("The Apple-shaped set reproduces the real Apple walk",
+          arguments: TerminalWidthCorpus.all)
+    func appleShapeMatchesTheRealWalk(entry: TerminalWidthCorpus.Entry) {
+        let apple = Self.sets.first { $0.0 == "apple" }!.1
+        #expect(
+            apple.cursorAdvance(of: entry.character)
+                == entry.character.terminalAppCursorAdvance,
+            "\(entry): hand-built model diverges from the measured one")
+        #expect(
+            entry.text.withCursorCompensation(for: apple)
+                == entry.text.withTerminalAppCursorCompensation(),
+            "\(entry): hand-built emission diverges from the real walk")
+    }
+}
