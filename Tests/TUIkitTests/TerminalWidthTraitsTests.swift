@@ -217,6 +217,75 @@ struct TerminalWidthTraitsTests {
         }
         #expect(Character("👩‍🚀").terminalWidth == 2, "the pin must not have escaped")
     }
+
+    // MARK: - The right edge
+
+    /// The mechanism behind the original defect: a wide cluster written with
+    /// fewer columns left than it needs is not split — Apple Terminal pushes
+    /// the whole glyph to the next line and strands the remaining columns
+    /// unpainted, which is the blank cell at the end of the row. (Warp instead
+    /// runs the cursor past the right margin.) Measured on both.
+    ///
+    /// So the framework must never place one there. Truncation stops BEFORE
+    /// adding a cluster that would exceed the budget, and it measures with
+    /// `Character.terminalWidth` — now host-aware, so it respects the widened
+    /// claim without being told about it. Swept over every target width, for
+    /// every host, so a boundary cannot hide.
+    @Test(
+        "Truncation never exceeds the budget, at any width, on any host",
+        arguments: [
+            TerminalClient.Program.appleTerminal, .iTerm2, .ghostty, .warp, .tmux,
+        ])
+    func truncationNeverOverflows(program: TerminalClient.Program) {
+        let rows = [
+            "│ 👍🏽 ✊🏻 ☝🏽 │", "│ 👩‍🚀 👨‍👩‍👧‍👦 │", "│ ❤️‍🔥 🏳️‍🌈 │",
+            "abc 👍🏽 def", "👨‍👩‍👧‍👦", "👍🏽",
+        ]
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: program)) {
+            for row in rows {
+                for budget in 0...(row.strippedLength + 2) {
+                    let cut = row.ansiAwarePrefix(visibleCount: budget)
+                    #expect(
+                        cut.strippedLength <= budget,
+                        "\(program): \(row.debugDescription) cut to \(budget) measured \(cut.strippedLength)")
+                    // A prefix in whole clusters — never a cluster halved.
+                    #expect(
+                        row.hasPrefix(cut),
+                        "\(program): truncation split a cluster in \(row.debugDescription)")
+                }
+            }
+        }
+    }
+
+    /// Truncate-then-pad — what a renderer does to fit a row to the terminal —
+    /// must land on the width EXACTLY, whatever widened clusters the row holds.
+    ///
+    /// This is the arithmetic behind "the border lands in the right place", and
+    /// both failure directions are real defects seen on a terminal: a row that
+    /// measures short strands unpainted cells at the right edge, and one that
+    /// measures long wraps the line.
+    ///
+    /// Swept from 1 to well past the content width so the boundary where a
+    /// widened cluster stops fitting is crossed for every host.
+    @Test(
+        "Truncate-then-pad lands on the width exactly, at every width",
+        arguments: [
+            TerminalClient.Program.appleTerminal, .iTerm2, .ghostty, .warp, .tmux,
+        ])
+    func fittingARowLandsExactly(program: TerminalClient.Program) {
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: program)) {
+            for content in ["👍🏽", "👩‍🚀", "👨‍👩‍👧‍👦", "❤️‍🔥", "✊🏻", "x"] {
+                let row = "│ " + content + " │"
+                for target in 1...(row.strippedLength + 4) {
+                    let fitted = row.ansiAwarePrefix(visibleCount: target)
+                        .padToVisibleWidth(target)
+                    #expect(
+                        fitted.strippedLength == target,
+                        "\(program): \(content) fitted to \(target) measured \(fitted.strippedLength)")
+                }
+            }
+        }
+    }
 }
 
 /// These mutate the PROCESS-wide traits, which every other suite's width

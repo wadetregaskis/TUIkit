@@ -1523,6 +1523,16 @@ the whole modifier-base set is measured tmux keeps the old behaviour and the
 modifier is stripped: a claim that is wrong in **both** directions misaligns
 rows, whereas the strip at least aligns them.
 
+**A tmux rendering defect, distinct from all of this.** While checking the
+Example emoji page under tmux, both the BMP skin-tone row and the ZWJ row came
+out visually scrambled — brackets displaced, adjacent clusters merged. That is
+**not** a width miscount and not TUIkit's: drawing the identical row with no
+TUIkit involved, `[c] [c] [c] …` written straight to a tmux pane, reproduces it
+exactly, and the arithmetic is right to the cell (measured 29, expected 29).
+tmux's cursor accounting says 2 per cluster and its painting does not match.
+The BMP row is broken identically on `main`, so it predates the width work. It
+is a tmux bug to report, not a TUIkit one to fix.
+
 **How it was caught** is the point. The unit tests passed, the geometry probes
 passed, and the defect appeared only when the Example emoji page was rendered
 under tmux on a real terminal: the Fitzpatrick row came out SHORT, leaving

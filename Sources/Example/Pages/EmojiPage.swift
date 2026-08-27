@@ -77,6 +77,15 @@ struct EmojiPage: View {
                                description: "page.emoji.bugBMPSkinToneDesc",
                                clusters: ["☝🏻", "✌🏼", "✍🏽", "⛹🏾", "✊🏿"])
 
+                    // ZWJ: one composed glyph on most hosts, separate
+                    // components on Warp — and on BOTH Apple Terminal and Warp
+                    // the cluster reserves the sum of its parts, so a row
+                    // budgeted at 2 cells wraps. The class TUIkit widened the
+                    // claim for; without a row here the page could not show it.
+                    BugCaseRow(label: "page.emoji.bugZWJLabel",
+                               description: "page.emoji.bugZWJDesc",
+                               clusters: ["👩‍🚀", "👨‍👩‍👧‍👦", "❤️‍🔥", "🏳️‍🌈", "🏴‍☠️", "👩🏽‍🚀"])
+
                     BugCaseRow(label: "page.emoji.bugTerminalWidthLabel",
                                description: "page.emoji.bugTerminalWidthDesc",
                                clusters: ["⌚", "⌛", "⏩", "⏪", "⏫", "⏬", "⏰", "⏳"])
