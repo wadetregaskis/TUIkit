@@ -56,7 +56,7 @@ final class ViewRenderer {
     /// whose cursor advance disagrees with a glyph's painted width disagrees
     /// however the bytes were produced, so a snapshot containing `⚙️` on
     /// Terminal.app puts the rest of its line one cell to the left without it.
-    /// See ``FrameDiffWriter/compensatingCursorAdvance(_:followedByContent:)``
+    /// See ``FrameDiffWriter/compensatingCursorAdvance(_:)``
     /// and `Documentation/Terminal-compatibility.md`.
     private let writer: FrameDiffWriter
 

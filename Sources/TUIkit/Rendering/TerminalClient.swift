@@ -329,7 +329,7 @@ public struct TerminalClient: Sendable, Equatable {
     /// but a change to what the user wrote.
     ///
     /// So the question is about the CLAIM in force, not about the program: a
-    /// caller who reaches ``compensating(_:for:followedByContent:tmuxSkinTones:)``
+    /// caller who reaches ``compensating(_:for:tmuxSkinTones:)``
     /// without startup having published the host's traits still gets the old,
     /// safe behaviour.
     private static func strippingSkinTonesIfUnclaimed(
@@ -350,11 +350,6 @@ public struct TerminalClient: Sendable, Equatable {
     /// - Parameters:
     ///   - text: a whole row, or a fragment of one.
     ///   - program: the terminal that will paint it.
-    ///   - followedByContent: whether visible cells follow `text` on the same
-    ///     row. Only Apple Terminal's model asks: it keeps a skin-tone
-    ///     cluster's modifier when nothing follows it (the over-advance then
-    ///     has nothing to shove out of place) and strips it when something
-    ///     does — and a fragment cannot see past its own end.
     ///   - tmuxSkinTones: which skin-tone bases to strip under tmux. tmux joins
     ///     an SMP-based cluster (👍🏽) into exactly the two cells we claim and
     ///     only over-advances on a BMP base (✊🏻), so the answer depends on
@@ -362,7 +357,6 @@ public struct TerminalClient: Sendable, Equatable {
     public static func compensating(
         _ text: String,
         for program: Program,
-        followedByContent: Bool = false,
         tmuxSkinTones: String.SkinToneBasePlane = .all
     ) -> String {
         switch program {
@@ -373,7 +367,7 @@ public struct TerminalClient: Sendable, Equatable {
             return strippingSkinTonesIfUnclaimed(text, basePlane: tmuxSkinTones)
                 .withTmuxCursorCompensation()
         case .appleTerminal:
-            return text.withTerminalAppCursorCompensation(followedByContent: followedByContent)
+            return text.withTerminalAppCursorCompensation()
         case .iTerm2:
             return strippingSkinTonesIfUnclaimed(text).withITerm2CursorCompensation()
         case .ghostty:

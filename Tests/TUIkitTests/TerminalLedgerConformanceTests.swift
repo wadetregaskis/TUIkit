@@ -26,26 +26,28 @@ import Testing
 ///
 /// ## What the numbers mean
 ///
-/// Each record holds three per-cluster measurements, and confusing them is how
-/// this project has arrived at wrong conclusions in both directions:
+/// Each record holds several per-cluster measurements, and confusing them is
+/// how this project has arrived at wrong conclusions in every direction it has
+/// so far managed:
 ///
-/// - **`advance`** — what DSR reports. It is the terminal's own bookkeeping and
-///   it is *not* where the glyph goes: Apple Terminal reports 4 for 🤙🏽 and
-///   draws the next character two cells along.
+/// - **`advance`** — the INTERNAL column, what DSR reports. It governs when a
+///   row WRAPS, so a walk that leaves it past the claim makes every full-width
+///   row carrying the cluster wrap and show default-background cells at its
+///   right edge. This is what ``TerminalClient/cursorAdvance(of:on:)`` returns,
+///   and what the conservation suite sums. (A briefly-shipped model returned
+///   `landing` from it instead; conservation then verified paint and was blind
+///   to the wrap.)
 /// - **`landing`** — measured from pixels. Where the next character is actually
-///   drawn, and therefore the only number a layout can be built on. This is
-///   what ``TerminalClient/cursorAdvance(of:on:)`` must return.
-/// - **`ink`** — measured from pixels. How many cells the glyph covers. Recorded
-///   but **not asserted on**: the reading is a coverage threshold over an
-///   antialiased glyph and it is not yet reliable — it puts 👍🏼 at five cells
-///   and 👩‍🚀 at six on a host where both compose into about two. An
-///   untrustworthy measurement is worse to assert on than no measurement, so it
-///   stays in the record as a diagnostic until the reading is sound.
-///
-/// `reserve` (the wrap threshold) is recorded too but not asserted here: it
-/// tracks the terminal's internal column, which the compensation cannot move
-/// without disturbing the paint position, and is handled by disabling
-/// auto-wrap rather than by a model.
+///   painted. On iTerm2, Ghostty and Warp it equals `advance` for every corpus
+///   cluster; on Apple Terminal it diverges on 25, and the walk closes the gap
+///   per class with measured move sequences (`CUB`, or `CUB`+`CUF` for the
+///   classes that paint short of the claim even after the pull-back).
+/// - **`ink`** — measured from pixels; how many cells the glyph covers.
+///   Recorded but **not asserted on**: the reading is a coverage threshold over
+///   an antialiased glyph and is not yet reliable.
+/// - **`reserve`** — the wrap threshold of the raw cluster, which tracks
+///   `advance`; the edge-of-row guard in `ansiAwarePrefixForTerminalApp` exists
+///   because the wrap can fire mid-cluster, before any compensation runs.
 @Suite("Terminal ledger conformance")
 struct TerminalLedgerConformanceTests {
 
@@ -123,7 +125,7 @@ struct TerminalLedgerConformanceTests {
     ///   text-presentation base promoted by VS-16 and then given a modifier.
     ///   One cluster, two hosts, two different answers (4 and 3), and no other
     ///   cluster in its class to generalise from.
-    /// The model reports a different cell from the one the terminal paints in.
+    /// The model reports a different value than the terminal was measured to.
     static let knownAdvanceDivergences: Set<String> = [
         "warp/vs16_wavy_dash", "warp/vs16_part_alt",
         "warp/vs16_congrat", "warp/vs16_secret",
@@ -146,9 +148,9 @@ struct TerminalLedgerConformanceTests {
 
     // MARK: - The assertions
 
-    @Test("Each host's advance model reports where the next character PAINTS",
+    @Test("Each host's advance model reports the measured INTERNAL column",
           arguments: ledgers)
-    func modelsMatchLanding(ledger: Ledger) {
+    func modelsMatchInternalAdvance(ledger: Ledger) {
         TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: ledger.program)) {
             for (id, measurement) in ledger.measurements.sorted(by: { $0.key < $1.key }) {
                 guard let entry = Self.corpus[id] else {
@@ -162,14 +164,43 @@ struct TerminalLedgerConformanceTests {
                     isIntermittent: false
                 ) {
                     #expect(
-                        modelled == measurement.landing,
+                        modelled == measurement.advance,
                         """
                         \(ledger)/\(id) (\(measurement.class)): the model says \
-                        \(modelled), the terminal paints the next character at \
-                        \(measurement.landing). DSR reported \(measurement.advance).
+                        \(modelled), DSR measured \(measurement.advance). \
+                        (Paint lands at \(measurement.landing).)
                         """)
                 } when: {
                     Self.knownAdvanceDivergences.contains("\(ledger)/\(id)")
+                }
+            }
+        }
+    }
+
+    /// The other half of the Apple Terminal contract: every cluster whose PAINT
+    /// was measured to land short of the claim — after the internal pull-back —
+    /// must carry the extra back-one-forward-one nudge, and no other cluster
+    /// may. The measured landings are the records'; the nudge policy is
+    /// ``Swift/Character/terminalAppPaintsShortOfClaim``.
+    @Test("Apple Terminal's paint-short set matches the measured landings")
+    func appleTerminalPaintShortSetMatchesMeasurement() {
+        guard let ledger = Self.ledgers.first(where: { $0.program == .appleTerminal }) else {
+            Issue.record("no Apple Terminal ledger")
+            return
+        }
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: .appleTerminal)) {
+            for (id, measurement) in ledger.measurements.sorted(by: { $0.key < $1.key }) {
+                guard let entry = Self.corpus[id] else { continue }
+                // Only one direction is mechanically checkable: everything in
+                // the nudge set must have been measured to land short of the
+                // claim. (The converse does not hold — skin tones land short
+                // raw too, but the plain pull-back was measured to snap their
+                // paint to the claim, so they are deliberately not in the set.)
+                let claim = entry.character.terminalWidth
+                if entry.character.terminalAppPaintsShortOfClaim {
+                    #expect(
+                        measurement.landing < claim,
+                        "\(id) carries the paint nudge but lands at \(measurement.landing) of \(claim)")
                 }
             }
         }

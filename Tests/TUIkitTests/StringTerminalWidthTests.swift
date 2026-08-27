@@ -136,33 +136,33 @@ struct CharacterTerminalAppCursorAdvanceTests {
 
     @Test("Skin-tone emoji on emoji-default base: cursor over-advances by 4 in Terminal.app")
     func skinToneEmojiCursorAdvance() {
-        // 🤙🏽 composes into 2 cells and Terminal.app draws the next character
-        // right after them. DSR says 4 — and DSR is not where the glyph goes:
-        // measured with `Tools/TerminalProbes/landing_probe.py` on 2026-08-26,
-        // the marker after this cluster paints in column 3. Modelling the 4
-        // put the enclosing border two cells to the left of where it belonged.
+        // 🤙🏽 composes into 2 cells while Terminal.app's INTERNAL column — the
+        // one DSR reports, and the one that decides when the row WRAPS — moves
+        // 4. This property is the internal column: a model that returned the
+        // paint position (2) here made the conservation test blind to internal
+        // drift, and every full-width row carrying a skin tone wrapped, leaving
+        // default-white cells at its right edge. The walk pulls the column back
+        // with CUB(2) instead — see `withTerminalAppCursorCompensation`.
         let ch = Character("🤙🏽")
         #expect(ch.terminalWidth == 2, "Renders 2 cells")
-        #expect(ch.terminalAppCursorAdvance == 2, "The next character paints at 2")
+        #expect(ch.terminalAppCursorAdvance == 4, "Internal column moves 4")
     }
 
     @Test("Skin-tone emoji on text-default base: cursor over-advances by 3 (Bug B variant)")
     func textDefaultSkinToneCursorAdvance() {
-        // ☝ (U+261D) is `isEmoji && !isEmojiPresentation`, and that property —
-        // not the plane, not the DSR reading — is what decides where the next
-        // character paints: one cell for a text-presentation base, two for an
-        // emoji-presentation one. Measured on 2026-08-26 with
-        // `Tools/TerminalProbes/landing_probe.py`; DSR reports 3 and 4 for
-        // these and the glyph is nowhere near either.
+        // ☝ (U+261D) is `isEmoji && !isEmojiPresentation` — a 1-cell bare
+        // glyph — so the internal over-advance lands at 3 where an
+        // emoji-presentation base lands at 4. (Where the next character PAINTS
+        // is a different number again — 1 and 2 respectively — and the walk
+        // reconciles both; this property is the internal column.)
         for s in ["☝🏻", "✌🏼", "✍🏽", "⛹🏾"] {
             let ch = Character(s)
             #expect(ch.terminalWidth == 2, "\(s) renders 2 cells")
-            #expect(ch.terminalAppCursorAdvance == 1, "\(s): the next character paints at 1")
+            #expect(ch.terminalAppCursorAdvance == 3, "\(s): internal column moves 3")
         }
-        // ✊ (U+270A) is `isEmojiPresentation` — same plane as the others, and
-        // it lands at 2 rather than 1 for exactly that reason.
+        // ✊ (U+270A) is `isEmojiPresentation` — a 2-cell bare glyph — so 4.
         let fist = Character("✊🏿")
-        #expect(fist.terminalAppCursorAdvance == 2, "✊🏿: the next character paints at 2")
+        #expect(fist.terminalAppCursorAdvance == 4, "✊🏿: internal column moves 4")
     }
 
     @Test("VS-16 on an East Asian Wide base: cursor advance is the full 2 (no compensation)")
@@ -209,8 +209,8 @@ struct CharacterTerminalAppCursorAdvanceTests {
             let ch = Character(flag)
             #expect(ch.terminalWidth == 2, "\(flag) paints 2 cells")
             #expect(
-                ch.terminalAppCursorAdvance == 1,
-                "\(flag): the next character paints at 1, whatever DSR says")
+                ch.terminalAppCursorAdvance == 2,
+                "\(flag): internal matches the claim; the paint shortfall is the walk's business")
         }
     }
 
@@ -258,78 +258,66 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(result.strippedLength == s.strippedLength, "Visible width preserved")
     }
 
-    @Test("Flag emoji followed by content: CUF(1), because the next cell is painted over it")
-    func flagFollowedByContentEmitsCUF() {
-        // 🇺🇸 paints 2 cells and Terminal.app draws the next character in the
-        // SECOND of them — measured 2026-08-26 with `landing_probe.py`. DSR
-        // reports 2, which is why this test previously asserted the opposite:
-        // the pair looked like the one class that needed nothing.
+    @Test("Flag emoji followed by content: CUB(1)+CUF(1) — paint nudged, internal unchanged")
+    func flagFollowedByContentNudgesPaint() {
+        // 🇺🇸's internal column matches the claim (2) but the next character
+        // PAINTS in the flag's second cell. A plain CUF fixed the paint and
+        // pushed the internal column to 3 — one wrapped full-width row per
+        // flag. CUB(1)+CUF(1) is net zero internally and one paint cell
+        // forward; both measured (`replay_wrap`, Terminal.app 455.1).
         let s = "from 🇺🇸 today"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result.contains("\u{1B}[1C"), "flag pair needs its cell back: |\(result)|")
+        #expect(result.contains("\u{1B}[1D\u{1B}[1C"), "|\(result)|")
         #expect(result.strippedLength == s.strippedLength, "and the row still measures the same")
         // A LONE indicator still under-advances and still gets its CUF.
         let lone = "at \u{1F1E6} end".withTerminalAppCursorCompensation()
         #expect(lone.contains("\u{1B}[1C"), "|\(lone)|")
     }
 
-    @Test("Skin-tone emoji followed by content: the modifier is KEPT")
+    @Test("Skin-tone emoji followed by content: kept, and the internal column pulled back")
     func skinToneFollowedByContentKeepsModifier() {
-        // This used to strip the Fitzpatrick scalar, on the reasoning that no
-        // escape could recover both the modifier and the layout. That was true
-        // of a model built on DSR, which said the cluster advanced 4 against a
-        // claim of 2. It does not: the glyph composes into the two cells
-        // claimed and the next character is painted right after them, so there
-        // is nothing to recover from and nothing to strip.
-        //
-        // Which matters beyond tidiness. Stripping is not a rendering
-        // compromise but a change to what the user wrote — 👍🏽 becomes 👍, and
-        // by the same rule 🏳️‍🌈 would become a white flag.
+        // The strip used to keep Terminal.app's internal column in sync with
+        // the claim by deleting what the user wrote; emitting the cluster
+        // verbatim (one interim model) kept the content but let the internal
+        // column drift +2, and every full-width row carrying one wrapped —
+        // default-white cells at the row's right edge. CUB(2) after the
+        // cluster does both jobs: measured, the internal column returns to the
+        // claim AND the paint position snaps with it, so 👍🏽 stays 👍🏽 and
+        // the row still ends where the layout said.
         let s = "Call 🤙🏽 now"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result == s, "nothing to compensate, nothing to strip: |\(result)|")
+        #expect(result == "Call 🤙🏽\u{1B}[2D now", "|\(result)|")
         #expect(result.unicodeScalars.contains(Unicode.Scalar(0x1F3FD)!),
                 "the Fitzpatrick scalar the user wrote reaches the screen")
     }
 
-    @Test("Text-default base + skin-tone + content: the cluster is kept, CUF(1) emitted")
+    @Test("Text-default base + skin-tone + content: kept whole, CUB(1) after")
     func textDefaultSkinToneKeepsModifierAndWidth() {
-        // ☝🏻 (U+261D + U+1F3FB) is 2 cells wide as a cluster, but the bare
-        // base ☝ (U+261D) is only 1 cell — a 1-cell text glyph in Terminal.app.
-        // If we just stripped the Fitzpatrick we'd shrink the cluster from
-        // 2 cells → 1, dropping every later character one cell to the left.
-        // The fix appends U+FE0F (VS-16) so the base still renders as a
-        // 2-cell coloured emoji, plus CUF(1) to compensate for VS-16's
-        // under-advance.
+        // ☝🏻's internal column moves 3 against a claim of 2. CUB(1) pulls it
+        // back, and the paint position — measured, and NOT the linear guess —
+        // snaps to the claim with it, so nothing is stripped, promoted or
+        // erased. (An interim VS-16-promotion scheme existed to keep a
+        // STRIPPED base at 2 cells; with the cluster kept whole there is
+        // nothing to promote.)
         let s = "go ☝🏻 now"
         let result = s.withTerminalAppCursorCompensation()
         #expect(result.unicodeScalars.contains(Unicode.Scalar(0x1F3FB)!),
                 "the Fitzpatrick scalar is kept — it is what the user wrote")
-        #expect(result.contains("\u{1B}[1C"),
-                "and the cell the glyph does not reach is stepped past")
-        // The visible width must be unchanged from the original (2 cells
-        // per cluster) — that's the whole point of the VS-16 promotion.
+        #expect(result.contains("☝🏻\u{1B}[1D"),
+                "internal pulled back to the claim: |\(result)|")
         #expect(result.strippedLength == s.strippedLength,
                 "Visible width must be preserved")
     }
 
-    @Test("A VS-16-restored skin-tone cluster is erased under, like any under-advancer")
-    func textDefaultSkinToneErasesUnderTheGlyph() {
-        // Promoting the base to VS-16 turns the cluster into exactly the
-        // paint-2/advance-1 case the under-advance branch handles, so it needs
-        // the same ECH: without it the cell the cursor skips keeps the
-        // terminal's default background and a coloured row reads as a comb.
-        // Measured on Terminal.app 455.1 / macOS 15.7.9 — six ☝🏽 on a blue
-        // run showed a white cell after every hand until the erase was added,
-        // and the advance was 2 per cluster either way.
-        //
-        // Every text-default modifier base takes this path: ☝ ⛹ ✌ ✍ 🏋 🏌
-        // 🕴 🕵 🖐, five tones each.
+    @Test("Every text-default modifier base gets the same pull-back")
+    func textDefaultSkinTonePullsBackTheInternalColumn() {
+        // ☝ ⛹ ✌ ✍ 🏋 🏌 🕴 🕵 🖐, five tones each — all 1-cell bare bases whose
+        // skin-tone cluster moves the internal column 3 against a claim of 2.
         for base in ["☝", "⛹", "✌", "✍", "🏋", "🏌", "🕴", "🕵", "🖐"] {
             for tone in ["\u{1F3FB}", "\u{1F3FD}", "\u{1F3FF}"] {
                 let result = "a\(base)\(tone)b".withTerminalAppCursorCompensation()
-                #expect(result.contains("\u{1B}[2X\(base)\(tone)\u{1B}[1C"),
-                        "\(base)\(tone) erased under, drawn WHOLE, stepped past")
+                #expect(result.contains("\(base)\(tone)\u{1B}[1D"),
+                        "\(base)\(tone) kept whole, internal pulled back 1")
             }
         }
     }
@@ -344,43 +332,44 @@ struct WithTerminalAppCursorCompensationTests {
                 "no erase for a cluster that advances as far as it paints")
     }
 
-    @Test("Emoji-default base + skin-tone + content: kept whole, and nothing to compensate")
-    func emojiDefaultSkinTonePassesThrough() {
-        // ✊ (U+270A) is `isEmojiPresentation`, so the composed cluster is drawn
-        // in the two cells claimed for it and the next character is painted
-        // right after — nothing to erase, step past, or strip.
+    @Test("Emoji-default base + skin-tone + content: kept whole, CUB(2) after")
+    func emojiDefaultSkinToneKeptWithPullBack() {
+        // ✊🏿 composes into its two claimed cells while the internal column
+        // moves 4. CUB(2) squares both counters; the scalars are untouched.
         let s = "raise ✊🏿 high"
         let result = s.withTerminalAppCursorCompensation()
         #expect(!result.unicodeScalars.contains(Unicode.Scalar(0xFE0F)!),
                 "no VS-16 is inserted")
         #expect(result.unicodeScalars.contains(Unicode.Scalar(0x1F3FF)!),
                 "the Fitzpatrick scalar is kept")
-        #expect(!result.contains("\u{1B}[1C"),
-                "and no cursor move is needed")
+        #expect(result.contains("✊🏿\u{1B}[2D"),
+                "internal pulled back to the claim: |\(result)|")
         #expect(result.strippedLength == s.strippedLength,
                 "Visible width must be preserved")
     }
 
-    @Test("Text-default base with both VS-16 and Fitzpatrick: no double VS-16")
-    func textDefaultSkinToneNoDoubleVS16() {
-        // ☝️🏻 (U+261D + U+FE0F + U+1F3FB) already has VS-16 in the cluster.
-        // After stripping the Fitzpatrick we have U+261D + U+FE0F; the fix
-        // must NOT append another U+FE0F.
+    @Test("A cluster already carrying VS-16 plus Fitzpatrick keeps both")
+    func textDefaultSkinToneKeepsExistingVS16() {
+        // ☝️🏻 (U+261D + U+FE0F + U+1F3FB): everything the user wrote reaches
+        // the screen — no scalar added, none removed.
         let s = "go \u{261D}\u{FE0F}\u{1F3FB} now"
         let result = s.withTerminalAppCursorCompensation()
         let vs16Count = result.unicodeScalars.filter { $0.value == 0xFE0F }.count
-        #expect(vs16Count == 1, "Exactly one VS-16, not two (got \(vs16Count))")
-        #expect(result.contains("\u{1B}[1C"), "CUF still emitted for the under-advance")
+        #expect(vs16Count == 1, "Exactly one VS-16 — the user's (got \(vs16Count))")
+        #expect(result.unicodeScalars.contains(Unicode.Scalar(0x1F3FB)!),
+                "the Fitzpatrick scalar is kept")
     }
 
-    @Test("Skin-tone emoji at end of input: modifier preserved")
+    @Test("Skin-tone emoji at end of input: modifier preserved, and still pulled back")
     func skinToneAtEndPreservesModifier() {
-        // No content after the cluster — the over-advance happens after
-        // the row is otherwise written, so the row-wide shift bug has
-        // nothing to push.  Keep the modifier.
+        // The pull-back is NOT position-dependent: the animation replay
+        // compensates fragments of a row, so "at the end of the input" is not
+        // "at the end of the row", and an uncorrected internal column would
+        // poison whatever the row writes next. CUB after the final cluster on
+        // a real row is harmless — there is nothing left to write.
         let s = "Call 🤙🏽"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result == s, "Modifier preserved when cluster is last visible content")
+        #expect(result == "Call 🤙🏽\u{1B}[2D", "|\(result)|")
         #expect(result.stripped.contains("🤙🏽"), "Fitzpatrick scalar kept")
     }
 
@@ -433,18 +422,17 @@ struct AnsiAwarePrefixForTerminalAppTests {
         #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 100) == s)
     }
 
-    @Test("Skin-tone emoji at the right edge is kept — it fits where it is drawn")
-    func skinToneAtEdgeKept() {
-        // This used to substitute two spaces, because the cluster's DSR advance
-        // of 4 would run past the right edge and Terminal.app would wrap the
-        // glyph to the next row. The glyph is painted in the two cells claimed
-        // for it, so at a budget of 10 it fits exactly and the tone survives.
-        //
-        // The terminal's own cursor does still run past the edge — `reserve` in
-        // `Tools/TerminalProbes/data/apple-terminal-*-landing.json` is 4 — which
-        // is a wrapping question, not a substitution one.
+    @Test("Skin-tone emoji at the right edge: replaced — the reserve wraps mid-cluster")
+    func skinToneAtEdgeReplaced() {
+        // The cluster RESERVES its internal advance (4) even though it paints
+        // 2: written into the last two columns, the terminal wraps while the
+        // cluster's own scalars are still being processed, before any
+        // compensation can pull the column back. No measured escape prevents
+        // that, so the edge slot — and only the edge slot — falls back to
+        // spaces. (An interim build kept the cluster here on the strength of
+        // its paint width alone; the wrap is governed by the reserve.)
         let s = "12345678🤙🏽"
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == s)
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678  ")
     }
 
     @Test("Mid-line skin-tone emoji is preserved (over-advance fits)")

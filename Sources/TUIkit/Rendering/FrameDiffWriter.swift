@@ -435,7 +435,7 @@ extension FrameDiffWriter {
     /// `text` with this host's cursor-advance divergences compensated for.
     ///
     /// This writer's flags, resolved to a ``TerminalClient/Program`` and handed
-    /// to ``TerminalClient/compensating(_:for:followedByContent:tmuxSkinTones:)``,
+    /// to ``TerminalClient/compensating(_:for:tmuxSkinTones:)``,
     /// which holds the actual table — one copy, shared with the public API,
     /// because two copies of it would drift and the symptom of the drift is a
     /// row that looks right until something on it changes.
@@ -450,19 +450,13 @@ extension FrameDiffWriter {
     ///
     /// - Parameters:
     ///   - text: A whole row, or a fragment of one.
-    ///   - followedByContent: Whether visible cells follow `text` on the same
-    ///     row. Only Terminal.app's model asks: it keeps a skin-tone cluster's
-    ///     modifier when nothing follows it (the over-advance then has nothing
-    ///     to shove out of place) and strips it when something does — and a
-    ///     fragment cannot see past its own end. `false`, the whole-row answer,
-    ///     is the default.
-    func compensatingCursorAdvance(_ text: String, followedByContent: Bool = false) -> String {
+    func compensatingCursorAdvance(_ text: String) -> String {
         switch model {
         case .custom(let quirks):
             return text.withCursorCompensation(for: quirks)
         case .program(let program):
             return TerminalClient.compensating(
-                text, for: program, followedByContent: followedByContent,
+                text, for: program,
                 tmuxSkinTones: tmuxSkinToneBasePlane)
         }
     }
@@ -548,8 +542,7 @@ extension FrameDiffWriter {
     ) -> String {
         FrameBuffer.patchingAnimatedCells(
             in: line,
-            with: compensatingCursorAdvance(
-                frame, followedByContent: column + width < terminalWidth),
+            with: compensatingCursorAdvance(frame),
             atColumn: column, width: width)
     }
 

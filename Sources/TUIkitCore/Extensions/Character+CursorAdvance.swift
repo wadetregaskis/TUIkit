@@ -19,36 +19,51 @@
 // MARK: - Terminal.app Cursor-Advance Quirks
 
 extension Character {
-    /// The number of columns Terminal.app actually advances the text cursor
-    /// by when this character is printed, which may differ from
-    /// ``terminalWidth`` (the number of visual cells the character occupies).
+    /// The number of columns Terminal.app's INTERNAL cursor moves when this
+    /// character is printed — the DSR column, which is NOT always where the
+    /// glyph or the next character is painted.
     ///
-    /// Terminal.app has a cluster of bugs around emoji presentation where
-    /// certain grapheme clusters render visually at one width but advance
-    /// the cursor by a different (smaller) amount. The classic examples are
-    /// emoji with the U+FE0F emoji presentation selector whose base scalar
-    /// lies in the 0x1F000–0x1FBFF pictographic block (e.g. 🖥️ = U+1F5A5 +
-    /// U+FE0F): the glyph paints 2 cells wide but the cursor only advances
-    /// by 1, so subsequent characters overlap the right half of the emoji.
+    /// ## Two counters, and which one this is
     ///
-    /// When ``terminalWidth`` and ``terminalAppCursorAdvance`` disagree,
-    /// callers can emit a CUF (cursor forward) escape after the character
-    /// to push the cursor to the visually-correct column. See
-    /// ``String/withTerminalAppCursorCompensation()``.
+    /// Apple Terminal keeps two columns per row and they can disagree by nine:
+    ///
+    /// - **internal** (this property; DSR-measured): the terminal's own
+    ///   bookkeeping. It decides **when the row wraps** and how far a write is
+    ///   accepted before the terminal moves to the next row. A row whose
+    ///   internal total exceeds the width wraps early, and the cells the wrap
+    ///   abandoned keep the terminal's DEFAULT background — the
+    ///   white-cells-at-the-end-of-the-row defect.
+    /// - **paint** (``terminalAppPaintsShortOfClaim`` and the walk's per-class
+    ///   table): where glyphs actually land. 🤙🏽 advances the internal column
+    ///   4 while composing into 2 cells and painting the next character at 2.
+    ///
+    /// Compensation must end each cluster with BOTH counters at the claimed
+    /// width. A briefly-shipped model returned paint from this property; the
+    /// conservation test then verified paint and was blind to internal drift,
+    /// and every full-width row carrying a skin tone wrapped. Everything here
+    /// is the DSR measurement, and the walk closes the paint gap separately.
     public var terminalAppCursorAdvance: Int {
-        // A composed cluster — ZWJ sequence or Fitzpatrick — first, because on
-        // this host DSR is not where the glyph goes. See
-        // ``composedPaintAdvance``.
-        if let composed = Self.composedPaintAdvance(self) {
-            return composed
+        // A ZWJ cluster first: its INTERNAL advance is the sum of its
+        // segments', including their VS-16 under-advance — DSR-measured to
+        // predict every corpus case exactly (👩‍🚀 2+1+2 = 5, 👨‍👩‍👧‍👦 11,
+        // ❤️‍🔥 1+1+2 = 4, 👩🏽‍🚀 4+1+2 = 7). Unconditional, NOT gated on
+        // ``TerminalWidthTraits``: the claim for this host is the composed
+        // width, but the internal column decomposes regardless.
+        if let summed = Self.summedInternalZWJAdvance(self, segmentAdvance: {
+            $0.terminalAppCursorAdvance
+        }) {
+            return summed
         }
         let scalars = unicodeScalars
 
-        // Flag pairs and keycaps: DSR says 2, the next character is painted at
-        // 1. Measured 2026-08-26 with `landing_probe.py`; the earlier model
-        // took DSR's word and the closing bracket after a flag landed on it.
-        if TerminalQuirks.isFlagPair(self) || scalars.contains(where: { $0.value == 0x20E3 }) {
-            return 1
+        // A tag-sequence flag — 🏴 followed by U+E00xx tag scalars (🏴󠁧󠁢󠁳󠁣󠁴󠁿):
+        // the glyph composes into 2 cells while the internal column advances 2
+        // plus one per tag scalar (Scotland = 2 + 6 = 8, DSR-measured). The
+        // generic pull-back squares it: the move sweep measured CUB(6) landing
+        // the next character's paint exactly at the claim.
+        let tagCount = scalars.count { (0xE0020...0xE007F).contains($0.value) }
+        if tagCount > 0, let first = scalars.first, first.properties.isEmoji {
+            return 2 + tagCount
         }
 
         // A *lone* regional indicator (e.g. U+1F1E6 on its own — the emoji
@@ -94,12 +109,11 @@ extension Character {
         }
 
         // Flag emoji — a pair of regional-indicator scalars
-        // (U+1F1E6…U+1F1FF), e.g. 🇺🇸 = U+1F1FA + U+1F1F8: paints 2 cells
-        // AND advances 2 (measured by DSR on Terminal.app 455.1 /
-        // macOS 15.7) — matching `terminalWidth`, so no compensation.
-        // A LONE regional indicator still under-advances (see above);
-        // an earlier model treated the pair like the lone case and the
-        // injected CUF pushed everything after a flag one cell right.
+        // (U+1F1E6…U+1F1FF): the INTERNAL advance is 2, matching the claim, so
+        // the row never wraps because of one. (The PAINT of what follows lands
+        // at 1 — the flag's second cell — which the walk nudges separately; an
+        // earlier model returned that 1 from here and the injected CUF pushed
+        // the internal column to 3, wrapping every full-width row with a flag.)
         if scalars.count == 2,
             (0x1F1E6...0x1F1FF).contains(first.value),
             let second = scalars.dropFirst().first,
@@ -124,58 +138,82 @@ extension Character {
         return terminalWidth
     }
 
-    /// Where Apple Terminal paints the character AFTER a composed cluster — a
-    /// ZWJ sequence or a Fitzpatrick one — or `nil` if this is neither.
+    /// The INTERNAL cursor advance Apple Terminal makes over a ZWJ cluster:
+    /// the sum of its segments' advances plus one column per joiner, or `nil`
+    /// for a cluster with no joiner.
     ///
-    /// ## Why this does not use DSR
-    ///
-    /// Apple Terminal keeps two different numbers for a row: the column its
-    /// cursor *reports*, and the column it *draws* at. For these clusters they
-    /// disagree, permanently and by a lot — DSR says 4 for 🤙🏽 and 11 for
-    /// 👨‍👩‍👧‍👦 while the glyph composes into two cells and the next character
-    /// is drawn two cells along. The divergence is not local either: on a row
-    /// carrying 🤙🏽, an absolute `CUP` to column 50 paints at column 48, so
-    /// every later cell on the row inherits the whole accumulated error and an
-    /// enclosing border lands two cells to the left.
-    ///
-    /// Every model here used to answer DSR, and a claim built on DSR is a claim
-    /// nothing paints at. Measured on 2026-08-26 with
-    /// `Tools/TerminalProbes/landing_probe.py`, which prints a cluster, lets the
-    /// terminal put a marker wherever it thinks the cursor is, and reads the
-    /// marker's column out of a screenshot. Twenty-five of sixty-nine corpus
-    /// clusters disagree on this host; none do on iTerm2, Ghostty or Warp.
-    ///
-    /// ## The rule
-    ///
-    /// Two cells, unless the cluster's base has no emoji presentation of its
-    /// own — ☝ ✌ ✍ ⛹ bare, and the VS-16-carrying ❤️ 🏳️ ⛓️ at the head of a
-    /// ZWJ sequence — in which case one. That single line predicts every
-    /// measured case, including the ones that look like they should differ:
-    /// 🏴‍☠️ is 2 because 🏴 has emoji presentation, 🏳️‍🌈 is 1 because 🏳 does
-    /// not, and the two look identical in a table of flags.
-    ///
-    /// The layout claims two cells for all of them (Apple Terminal is
-    /// ``TerminalWidthTraits/composing``), so the existing `CUF` closes the
-    /// remaining cell where there is one. Nothing is stripped: a forward move
-    /// is all this needs, and the Fitzpatrick modifier the user wrote reaches
-    /// the screen.
-    static func composedPaintAdvance(_ character: Character) -> Int? {
+    /// The same arithmetic as ``Swift/String/summedZWJAdvance(_:segmentAdvance:)``
+    /// but NOT gated on ``TerminalWidthTraits``: that gate exists for hosts
+    /// whose *claim* is widened to the decomposed width (Warp), and Apple
+    /// Terminal is not one — its claim is the composed two cells while its
+    /// internal column decomposes regardless. Gating this on the traits made
+    /// the internal model silently revert to the claim when the widening was
+    /// (correctly) turned off for this host.
+    static func summedInternalZWJAdvance(
+        _ character: Character, segmentAdvance: (Character) -> Int
+    ) -> Int? {
         let scalars = character.unicodeScalars
-        guard let first = scalars.first else { return nil }
-        // The BASE has to be one this can happen to, not merely a cluster that
-        // contains a joiner or a modifier somewhere. A Fitzpatrick scalar is
-        // Grapheme_Extend, so `\u{1B}[31m` followed by a lone 🏻 segments as the
-        // single cluster `m🏻` — and answering for that as though it were a
-        // skin-toned emoji reports 1 for a two-cell cluster, which is how an
-        // earlier version of this broke a lone modifier written after a colour
-        // change.
-        let isComposedZWJ =
-            scalars.contains { $0.value == 0x200D } && first.properties.isEmoji
-        let isSkinToned =
-            scalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
-            && first.properties.isEmojiModifierBase
-        guard isComposedZWJ || isSkinToned else { return nil }
-        return first.properties.isEmojiPresentation ? 2 : 1
+        guard scalars.contains(where: { $0.value == 0x200D }),
+            let first = scalars.first, first.properties.isEmoji
+        else { return nil }
+        var total = 0
+        var joiners = 0
+        var segment = String.UnicodeScalarView()
+        for scalar in scalars {
+            if scalar.value == 0x200D {
+                joiners += 1
+                total += segmentAdvance(Character(String(segment)))
+                segment = String.UnicodeScalarView()
+            } else {
+                segment.append(scalar)
+            }
+        }
+        total += segmentAdvance(Character(String(segment)))
+        return total + joiners
+    }
+
+    /// `true` when, after this cluster's internal column has been pulled back
+    /// to the claim with `CUB`, the next character still PAINTS one cell short
+    /// of it — so the walk must go back one further and step forward.
+    ///
+    /// ## The two counters, and what was measured
+    ///
+    /// Apple Terminal's internal column (DSR — ``terminalAppCursorAdvance``)
+    /// and its paint position diverge on composed clusters, and compensation
+    /// must end with both at the claimed width: internal, or a full-width row
+    /// wraps and its abandoned tail shows the terminal's default background;
+    /// paint, or everything after the cluster shears. Measured with
+    /// `landing_probe.py` and the move sweep (2026-08-26/27, Terminal.app
+    /// 455.1, alternate screen), `CUB(internal − claim)` after the cluster
+    /// brings BOTH counters to the claim for skin tones and emoji-led ZWJ
+    /// sequences — the paint response to `CUB` is not linear, it *snaps* to
+    /// the internal column:
+    ///
+    /// | cluster | internal | paint after cluster | after `CUB(int−2)` |
+    /// |---|---|---|---|
+    /// | 🤙🏽 ✊🏻 | 4 | 2 | internal 2, paint 2 |
+    /// | ☝🏻 ✌🏼 | 3 | 1 | internal 2, paint 2 |
+    /// | 👩‍🚀 👨‍👩‍👧‍👦 | 5, 11 | 2 | internal 2, paint 2 |
+    ///
+    /// Three classes are the exception — after the pull-back the next
+    /// character still paints at 1, so they need `CUB(int−claim+1)` then
+    /// `CUF(1)` (same net internal, one more paint cell):
+    ///
+    /// - a ZWJ sequence whose FIRST segment has no emoji presentation of its
+    ///   own (❤️‍🔥, 🏳️‍🌈, ⛓️‍💥 — which is why 🏴‍☠️ behaves differently
+    ///   from 🏳️‍🌈 despite looking like the same kind of thing),
+    /// - flag pairs (internal already equals the claim; paint lands at 1),
+    /// - keycap sequences (likewise).
+    var terminalAppPaintsShortOfClaim: Bool {
+        let scalars = unicodeScalars
+        guard let first = scalars.first else { return false }
+        if TerminalQuirks.isFlagPair(self) { return true }
+        if scalars.contains(where: { $0.value == 0x20E3 }) { return true }
+        // The first-scalar guard keeps `m🏻` (an SGR final byte fused with a
+        // lone Fitzpatrick, which is Grapheme_Extend) out of here.
+        return scalars.contains { $0.value == 0x200D }
+            && first.properties.isEmoji
+            && !first.properties.isEmojiPresentation
     }
 
     /// The number of terminal cells iTerm2's cursor actually moves after

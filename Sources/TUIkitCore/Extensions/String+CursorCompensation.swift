@@ -170,47 +170,50 @@ extension String {
     }
 
     /// Returns a copy of this string with Terminal.app's cursor-advance
-    /// quirks worked around.
+    /// quirks worked around — every scalar the caller wrote is kept.
     ///
-    /// - **VS-16 pictographic emoji** (under-advance: paints 2 cells but
-    ///   advances the cursor by 1, e.g. 🖥️):  a `CUF(1)` is injected after
-    ///   the cluster to push the cursor to its visual end.
+    /// Apple Terminal keeps two columns per row and compensation must end each
+    /// cluster with BOTH at the claimed width:
     ///
-    /// - **Fitzpatrick skin-tone cluster** (over-advance: paints 2 cells
-    ///   but advances the cursor by 4, e.g. 🤙🏽):
-    ///   * If the cluster is followed by any visible content on the same
-    ///     line, the Fitzpatrick scalar is **stripped** — Terminal.app's
-    ///     row-wide LEFT shift on rows that carry the modifier would
-    ///     otherwise push the trailing content (padding, box border)
-    ///     into the row's rightmost 2 cells and leave them unpainted.
-    ///     No ANSI escape recovers from this: any backward cursor
-    ///     movement after the cluster strips the modifier anyway, and
-    ///     forward writes past the right edge wrap or clamp.
-    ///   * If the cluster is the last visible character on the line,
-    ///     the modifier is **kept** — the over-advance happens with
-    ///     nothing on the row after it, so the shift has nothing to
-    ///     push out of place.
+    /// - the **internal** column (``Swift/Character/terminalAppCursorAdvance``,
+    ///   what DSR reports) decides when the row WRAPS. A cluster that leaves it
+    ///   past the claim makes a full-width row wrap before its tail is written,
+    ///   and the abandoned cells keep the terminal's default background — blank
+    ///   white cells at the end of the row.
+    /// - the **paint** position decides where the glyph and everything after it
+    ///   land. A cluster that leaves it short of the claim shears the rest of
+    ///   the row left.
+    ///
+    /// Three moves cover every measured class
+    /// (`Tools/TerminalProbes/landing_probe.py` + the full-width wrap probe,
+    /// Terminal.app 455.1, alternate screen, 2026-08-26/27):
+    ///
+    /// - **Under-advancers** (VS-16 pictographs 🖥️ ❤️, bare SMP pictographs,
+    ///   lone regional indicators, SF Symbols): internal and paint both stop 1
+    ///   short. `ECH(2)` to paint the claimed cells in the current background,
+    ///   the glyph, then `CUF(1)`. Unchanged for years and measured clean.
+    /// - **Over-advancers** (Fitzpatrick skin tones 🤙🏽 ☝🏻, ZWJ sequences
+    ///   👩‍🚀 👨‍👩‍👧‍👦): internal runs 1–9 past the claim while the glyph
+    ///   composes into it. `CUB(internal − claim)` after the cluster pulls the
+    ///   internal column back, and the paint position — measured, not assumed —
+    ///   snaps WITH it. This is what replaced the old Fitzpatrick strip: the
+    ///   strip kept the two columns in sync by deleting what the user wrote,
+    ///   the pull-back keeps them in sync and 👍🏽 stays 👍🏽.
+    /// - **Paint-short clusters** (``Swift/Character/terminalAppPaintsShortOfClaim``:
+    ///   VS-16-led ZWJ sequences ❤️‍🔥 🏳️‍🌈, flag pairs, keycaps): after the
+    ///   pull-back the next character still paints one cell in. One column
+    ///   further back and `CUF(1)` — same net internal, one more paint cell.
     ///
     /// ANSI escape sequences in the input are preserved.
-    ///
-    /// - Parameter followedByContent: Whether visible cells follow this string
-    ///   on the same row. It decides the skin-tone rule above for a cluster at
-    ///   the very end, which a string that is only PART of a row cannot answer
-    ///   for itself — the animation replay compensates one run's frame at a
-    ///   time, and a frame ending in a skin-tone cluster is at the end of the
-    ///   fragment without being at the end of the row. Defaults to `false`, the
-    ///   whole-row answer.
-    public func withTerminalAppCursorCompensation(followedByContent: Bool = false) -> String {
+    public func withTerminalAppCursorCompensation() -> String {
         // Fast path: every cursor-advance quirk is an emoji cluster, which is
         // always non-ASCII, so a line whose bytes are all < 0x80 cannot need
         // compensation — return it untouched and skip the char-by-char rebuild.
         // `FrameDiffWriter.buildOutputLines` runs this on EVERY output line
         // every frame (on Apple_Terminal — it is gated off elsewhere), and most
         // lines of a non-emoji UI are pure ASCII (text + ANSI escapes, which are
-        // also ASCII). The gate reads no Unicode properties — far cheaper than
-        // the full `containsTerminalAppCursorAdvanceQuirk` predicate, which costs
-        // about as much as the rebuild it would guard — and scans the bytes 8 at
-        // a time (see `utf8ContainsNonASCII`).
+        // also ASCII). The gate reads no Unicode properties and scans the bytes
+        // 8 at a time (see `utf8ContainsNonASCII`).
         guard utf8ContainsNonASCII else { return self }
 
         var result = ""
@@ -229,8 +232,9 @@ extension String {
             }
 
             let claimed = c.terminalWidth
-            let actual = c.terminalAppCursorAdvance
-            if claimed > actual {
+            let internalAdvance = c.terminalAppCursorAdvance
+            let paintsShort = c.terminalAppPaintsShortOfClaim
+            if claimed > internalAdvance {
                 // Under-advancer. The cursor has to reach the glyph's visual
                 // end, and the cells the glyph covers have to carry whatever
                 // background is in force — which CUF alone cannot do, because
@@ -247,76 +251,28 @@ extension String {
                 // width measurement taken after compensation by the width of
                 // each emoji on the line.
                 //
-                // It takes the current background without this function having
-                // to track SGR state at all, because the escapes it is walking
-                // past have already set it.
-                //
                 // Measured on Terminal.app 455.1, alternate screen, ⚙️ 🖥️ and
                 // an SF Symbol, eight in a row on a coloured run: with CUF
                 // alone every second cell keeps the terminal's default and the
                 // row reads as a comb; with the erase first, the run is
-                // unbroken and the glyph is not clipped. Advance is 2 either
-                // way. (`Tools/TerminalProbes/background_probe.py`.)
-                //
-                // Terminal.app only. iTerm2 and Ghostty were measured on the
-                // same battery and already paint every cell a wide glyph
-                // covers, so their walks need nothing here.
+                // unbroken and the glyph is not clipped.
+                // (`Tools/TerminalProbes/background_probe.py`.)
                 result += "\u{1B}[\(claimed)X"
                 result.append(c)
-                result += "\u{1B}[\(claimed - actual)C"
-            } else if actual > claimed,
-                followedByContent || Self.hasVisibleContent(in: self, after: self.index(after: index))
-            {
-                // Over-advancer followed by content — strip the
-                // Fitzpatrick scalar so Terminal.app doesn't apply the
-                // row-wide LEFT shift.
-                //
-                // Built into a local rather than appended straight to
-                // `result`, because whether this cluster needs the erase is
-                // not known until its base has been seen — and the erase has
-                // to come BEFORE the glyph.
-                var stripped = String.UnicodeScalarView()
-                var baseScalar: Unicode.Scalar?
-                var keptVS16 = false
-                for scalar in c.unicodeScalars where !(0x1F3FB...0x1F3FF).contains(scalar.value) {
-                    if baseScalar == nil { baseScalar = scalar }
-                    if scalar.value == 0xFE0F { keptVS16 = true }
-                    stripped.append(scalar)
-                }
-                // Text-default emoji bases (☝ U+261D, ✌ U+270C, 🖐 U+1F590…)
-                // render bare as a 1-cell text glyph in Terminal.app — so
-                // simply dropping the Fitzpatrick would shrink the cluster
-                // from 2 cells to 1, displacing every subsequent character
-                // on the row left by 1 cell.  Restore the 2-cell coloured-
-                // emoji rendering by appending U+FE0F (a no-op for default-
-                // emoji-presentation bases like ✊, so we only do it for
-                // text-default bases), then emit CUF(1) to compensate for
-                // the VS-16 under-advance (Bug A).
-                if let base = baseScalar,
-                   base.properties.isEmoji && !base.properties.isEmojiPresentation
-                {
-                    if !keptVS16 {
-                        stripped.append(Unicode.Scalar(0xFE0F)!)
-                    }
-                    // Restoring VS-16 has turned this cluster into exactly the
-                    // under-advancer the branch above handles: painted two
-                    // cells, cursor moved one. So it needs the same erase —
-                    // without it the cell the cursor skips keeps the
-                    // terminal's default background and a coloured row reads
-                    // as a comb. Measured on Terminal.app 455.1 / macOS
-                    // 15.7.9, six ☝🏽 on a blue run: with CUF alone a white
-                    // cell follows every hand; with the erase first the run is
-                    // unbroken. Advance is 2 either way, so this changes what
-                    // is painted and not where the cursor lands.
-                    result += "\u{1B}[\(claimed)X"
-                    result.unicodeScalars.append(contentsOf: stripped)
-                    result += "\u{1B}[1C"
+                result += "\u{1B}[\(claimed - internalAdvance)C"
+            } else if internalAdvance > claimed || paintsShort {
+                // Over-advancer, or a cluster whose internal column is right
+                // while its paint is short (flags, keycaps): pull the internal
+                // column back to the claim, going one further and stepping
+                // forward for the classes measured to paint short of it.
+                result.append(c)
+                let back = internalAdvance - claimed
+                if paintsShort {
+                    result += "\u{1B}[\(back + 1)D\u{1B}[1C"
                 } else {
-                    result.unicodeScalars.append(contentsOf: stripped)
+                    result += "\u{1B}[\(back)D"
                 }
             } else {
-                // Normal char, or an over-advancer at the very end of
-                // the input — emit verbatim.
                 result.append(c)
             }
             index = self.index(after: index)
@@ -541,23 +497,5 @@ extension String {
         }
 
         return result
-    }
-
-    /// Returns `true` if any character at or after `start` in `string`
-    /// occupies a terminal cell.  Plain ASCII, CJK, emoji etc. all
-    /// count; ANSI escape sequences and zero-width characters do not.
-    fileprivate static func hasVisibleContent(in string: String, after start: String.Index) -> Bool {
-        var index = start
-        while index < string.endIndex {
-            if string[index] == "\u{1B}" {
-                index = string.csiSequenceEnd(from: index)
-                continue
-            }
-            if string[index].terminalWidth > 0 {
-                return true
-            }
-            index = string.index(after: index)
-        }
-        return false
     }
 }

@@ -24,14 +24,20 @@ for the one-screen comparison.
 
 ## Methodology
 
-> **CORRECTED 2026-08-27.** Everything below the line "Advance is the ground
-> truth for layout" was wrong for one host, and this document said it for a
-> year. **Advance is not ground truth. Paint is.** Apple Terminal reports a
-> cursor advance of 4 for 🤙🏽 and 11 for 👨‍👩‍👧‍👦 while composing each glyph
-> into about two cells and painting the next character right after it. Every
-> model built on the reported advance put the following content — padding,
-> borders, whole columns — where nothing was ever drawn. See
-> [Three numbers, not one](#three-numbers-not-one).
+> **CORRECTED 2026-08-27, twice — the first correction was itself wrong.**
+> The original text below called advance "the ground truth for layout". A first
+> correction swung to the opposite pole — "advance is not ground truth, paint
+> is" — rebuilt the Apple Terminal model on paint alone, and shipped the
+> mirror-image defect within a day: every full-width row carrying a skin tone
+> wrapped, leaving default-white cells at its right edge, because the internal
+> column the models no longer tracked is what decides when a row wraps.
+>
+> The truth is that **both counters are load-bearing and compensation must end
+> each cluster with both at the claim**: the internal column (DSR) governs
+> wrapping and how far a row's writes are accepted; the paint position governs
+> where glyphs land. On iTerm2, Ghostty and Warp they agree for every corpus
+> cluster, so the distinction is invisible; on Apple Terminal they diverge on
+> 25, by up to nine cells. See [Three numbers, not one](#three-numbers-not-one).
 
 ### Three numbers, not one
 
@@ -45,21 +51,31 @@ times, mistaken each for another:
 | **ink** | pixels | how many cells the glyph covers — gaps and overlap |
 | **reserve** | the wrap test | whether the row wraps early |
 
-`landing` is the one a layout must agree with, and it is the one no escape
-sequence will tell you. On iTerm2, Ghostty and Warp it equals `advance` for all
-69 corpus clusters. On Apple Terminal it differs for 25 of them.
+`advance` and `landing` are BOTH load-bearing, for different failures: a walk
+that leaves the internal column past the claim wraps every full-width row that
+carries the cluster (white cells at the row's right edge — measured, and
+briefly shipped); one that leaves paint short of the claim shears the row.
+`landing` is the one no escape sequence will tell you. On iTerm2, Ghostty and
+Warp the two are equal for all 69 corpus clusters; on Apple Terminal they
+differ for 25.
 
 The displacement is **row-wide, not local**: on a row already carrying 🤙🏽, an
 absolute `CUP` to column 50 paints at column 48. Every later cell on the row
 inherits the whole accumulated error, which is why a single skin-toned emoji
 moves an enclosing border two cells left.
 
-Compensation is a **forward move only**. `CUF(n)` moves the paint position by
-exactly `n` on every host measured. `CUB` does not have a usable inverse:
-`CUB(advance − claim)` lands 18 of 25 Apple Terminal clusters on the claim and
-7 somewhere else, because a backward move interacts with whatever the glyph did.
-So a claim must never be narrower than the landing, and
-`TerminalLedgerConformanceTests` asserts exactly that.
+Compensation moves BOTH counters. `CUF(n)` moves internal and paint by exactly
+`n`. `CUB(n)` moves internal by exactly `−n`, while its paint response is
+non-linear — measured, it *snaps paint to the internal column* for skin tones
+and emoji-led ZWJ sequences (`CUB(advance − claim)` lands both counters on the
+claim at once), but leaves paint one short for three classes: VS-16-led ZWJ
+sequences, flag pairs and keycaps, which therefore go back one further and
+`CUF(1)`. Every sequence the walk emits was verified in the terminal itself:
+full-width rows, one and three clusters each, no wrap, internal exactly at the
+width (`replay_wrap`). A claim must never be narrower than the landing —
+`TerminalLedgerConformanceTests` asserts that — and no emission may leave the
+internal sum above the claim — `CursorAdvanceConservationTests` sums exactly
+that, and catches both halves of the briefly-shipped defect under mutation.
 
 ### Measuring paint
 

@@ -145,22 +145,20 @@ struct ReplayCursorCompensationTests {
     /// given, and a run's frame ends where the run does, not where the row
     /// does. Told that the row continues, a cluster at the fragment's end takes
     /// the strip it would have taken as part of a whole row.
-    @Test("A fragment is told whether the row continues after it")
-    func fragmentsAnswerForTheRowNotThemselves() {
+    @Test("A compensated fragment keeps the user's scalars and conserves the internal column")
+    func fragmentsKeepScalarsAndConserve() {
         let writer = FrameDiffWriter(
             isAppleTerminal: true, isITerm2: false, isGhostty: false, isWarp: false, isTmux: false)
-        let cluster = "\u{270A}\u{1F3FB}"  // ✊🏻 — 2 cells, next character painted at 2
-        // The tone the user asked for is kept in every position now. It used to
-        // be stripped when the row continued past the cluster, to escape a
-        // row-wide shift that a DSR-built model predicted and the glyph does
-        // not produce — see `String.composedPaintAdvance`.
+        let cluster = "\u{270A}\u{1F3FB}"  // ✊🏻 — 2 cells; internal advance 4
+        // The tone the user asked for is kept in every position. It used to be
+        // stripped whenever the row continued past the cluster, which kept
+        // Terminal.app's internal column in sync with the claim by deleting
+        // what the user wrote; the walk now pulls the column back with CUB
+        // instead, so the cluster survives and the row still cannot wrap.
         for fragment in [cluster, cluster + "x"] {
-            #expect(
-                writer.compensatingCursorAdvance(fragment)
-                    .unicodeScalars.contains("\u{1F3FB}"))
+            let emitted = writer.compensatingCursorAdvance(fragment)
+            #expect(emitted.unicodeScalars.contains("\u{1F3FB}"))
+            #expect(emitted.contains("\u{1B}[2D"), "internal pulled back to the claim")
         }
-        #expect(
-            writer.compensatingCursorAdvance(cluster, followedByContent: true)
-                .unicodeScalars.contains("\u{1F3FB}"))
     }
 }

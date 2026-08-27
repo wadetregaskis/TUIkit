@@ -156,7 +156,7 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
 extension String {
 
     /// This string with `quirks` compensated for — the generic counterpart of
-    /// the per-host walks (``withTerminalAppCursorCompensation(followedByContent:)``
+    /// the per-host walks (``withTerminalAppCursorCompensation()``
     /// and friends), driven by a set of switches rather than a measured model.
     ///
     /// Applies the skin-tone strip first and then the same CUF injection every

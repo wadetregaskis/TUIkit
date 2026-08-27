@@ -81,49 +81,55 @@ struct TerminalWidthTraitsTests {
     ///
     /// Apple Terminal was briefly modelled as reserving the decomposed width,
     /// on the strength of DSR reporting 5, 8 and 11 for these and of a row
-    /// budgeted at 2 wrapping. Both readings were real; neither says where the
-    /// glyph is drawn. It composes into two cells and paints the next character
-    /// right after them, so the claim stays 2 and the layout stays put.
+    /// budgeted at 2 wrapping. Both readings were real — the INTERNAL column
+    /// decomposes — but the glyph composes into two cells, so the claim is 2
+    /// and the walk pulls the internal column back to it (CUB), which is what
+    /// keeps a full-width row from wrapping without touching the layout.
     @Test(
-        "Apple Terminal claims the composed width, not the width it reports",
+        "Apple Terminal claims the composed width while its internal column decomposes",
         arguments: [
-            "👩‍🚀", "🧑‍🌾", "👨‍👩‍👧", "👨‍👩‍👧‍👦", "👩🏽‍🚀",
-        ])
-    func appleClaimsComposedWidth(text: String) {
+            ("👩‍🚀", 5), ("🧑‍🌾", 5), ("👨‍👩‍👧", 8), ("👨‍👩‍👧‍👦", 11), ("👩🏽‍🚀", 7),
+        ] as [(String, Int)])
+    func appleClaimsComposedWidth(text: String, internalAdvance: Int) {
         #expect(!TerminalClient.widthTraits(of: .appleTerminal).decomposesZWJSequences)
         TerminalWidthTraits.withTraits(Self.apple) {
             #expect(Character(text).terminalWidth == 2)
-            #expect(Character(text).terminalAppCursorAdvance == 2)
+            #expect(Character(text).terminalAppCursorAdvance == internalAdvance)
+            let out = TerminalClient.compensating(text, for: .appleTerminal)
+            #expect(out.contains("\u{1B}[\(internalAdvance - 2)D"),
+                    "the walk pulls the internal column back: |\(out)|")
         }
     }
 
     /// A ZWJ sequence whose FIRST segment has no emoji presentation of its own
-    /// is painted one cell narrower than one whose first segment has — which is
-    /// why 🏴‍☠️ and 🏳️‍🌈 behave differently despite looking like the same
-    /// kind of thing. The existing CUF closes the cell.
+    /// still PAINTS the next character one cell in after the internal pull-back
+    /// — which is why 🏴‍☠️ and 🏳️‍🌈 behave differently despite looking like
+    /// the same kind of thing. The walk goes back one further and steps
+    /// forward: same net internal, one more paint cell.
     @Test(
-        "A ZWJ sequence on a text-presentation base lands one cell in, and the CUF closes it",
+        "A ZWJ sequence on a text-presentation base gets the extra paint nudge",
         arguments: ["❤️‍🔥", "🏳️‍🌈", "⛓️‍💥"])
     func textPresentationLeadingZWJIsCompensated(text: String) {
         TerminalWidthTraits.withTraits(Self.apple) {
             let character = Character(text)
             #expect(character.terminalWidth == 2, "claim")
-            #expect(character.terminalAppCursorAdvance == 1, "measured landing")
-            let out = TerminalClient.compensating(
-                text, for: .appleTerminal, followedByContent: true)
-            #expect(out.contains("\u{1B}[1C"), "one CUF to reach the claimed end")
+            #expect(character.terminalAppCursorAdvance == 4, "internal, DSR-measured")
+            #expect(character.terminalAppPaintsShortOfClaim, "paints short after pull-back")
+            let out = TerminalClient.compensating(text, for: .appleTerminal)
+            #expect(out.contains("\u{1B}[3D\u{1B}[1C"), "back 3, forward 1: |\(out)|")
         }
     }
 
-    /// Every advance the models report is a measurement from a real terminal —
-    /// and for Apple Terminal it is now a measurement of PAINT, not of DSR. The
-    /// two columns differ by a lot for exactly these clusters.
+    /// Every advance the models report is the INTERNAL column measured by DSR
+    /// on the real terminal — for both hosts. (An interim Apple model reported
+    /// the paint position instead; the conservation test then verified paint
+    /// and was blind to the internal drift that wraps full-width rows.)
     @Test(
         "The per-host advance models match what the terminals actually do",
         arguments: [
-            ("👩‍🚀", 2, 5), ("👨‍👩‍👧‍👦", 2, 11), ("👩🏽‍🚀", 2, 7),
-            ("❤️‍🔥", 1, 5), ("🏳️‍🌈", 1, 5),
-            ("👍🏽", 2, 4), ("👍", 2, 2), ("中", 2, 2),
+            ("👩‍🚀", 5, 5), ("👨‍👩‍👧‍👦", 11, 11), ("👩🏽‍🚀", 7, 7),
+            ("❤️‍🔥", 4, 5), ("🏳️‍🌈", 4, 5),
+            ("👍🏽", 4, 4), ("👍", 2, 2), ("中", 2, 2),
         ] as [(String, Int, Int)])
     func advanceModelsMatchMeasurement(text: String, apple: Int, warp: Int) {
         let character = Character(text)
@@ -160,7 +166,7 @@ struct TerminalWidthTraitsTests {
     func skinToneSurvivesWhenClaimed(program: TerminalClient.Program) {
         let row = "│ ✊🏻 │"          // a BMP base: detached on every one of these
         TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: program)) {
-            let out = TerminalClient.compensating(row, for: program, followedByContent: true)
+            let out = TerminalClient.compensating(row, for: program)
             #expect(
                 out.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) },
                 "\(program) must keep the Fitzpatrick modifier once the claim holds it")
@@ -175,7 +181,7 @@ struct TerminalWidthTraitsTests {
     func skinToneStrippedWhenUnclaimed(program: TerminalClient.Program) {
         let row = "│ ✊🏻 │"
         TerminalWidthTraits.withTraits(.composing) {
-            let out = TerminalClient.compensating(row, for: program, followedByContent: true)
+            let out = TerminalClient.compensating(row, for: program)
             #expect(!out.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) })
         }
     }
@@ -196,7 +202,7 @@ struct TerminalWidthTraitsTests {
         #expect(TerminalClient.widthTraits(of: .tmux) == .composing)
         TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: .tmux)) {
             let out = TerminalClient.compensating(
-                "│ ✊🏻 │", for: .tmux, followedByContent: true)
+                "│ ✊🏻 │", for: .tmux)
             #expect(!out.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) })
         }
     }
@@ -210,16 +216,15 @@ struct TerminalWidthTraitsTests {
             (TerminalClient.Program.warp, "👩‍🚀"),
             (.warp, "👨‍👩‍👧‍👦"),
             (.warp, "✊🏻"),
-            (.appleTerminal, "👍🏽"),
+
             (.iTerm2, "✊🏻"),
         ] as [(TerminalClient.Program, String)])
     func claimedClustersAreEmittedVerbatim(program: TerminalClient.Program, text: String) {
-        // ☝🏽 is deliberately absent from this list: on Apple Terminal a
-        // text-presentation base lands one cell in, so it is the one skin-tone
-        // case that still needs an erase and a step — see
-        // `textPresentationLeadingZWJIsCompensated` for the same rule on ZWJ.
+        // No Apple Terminal skin-tone case belongs in this list: its claim is
+        // the composed width, so every skin-tone cluster carries a CUB — the
+        // hosts here are the ones whose CLAIM covers the cluster's full extent.
         TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: program)) {
-            let out = TerminalClient.compensating(text, for: program, followedByContent: true)
+            let out = TerminalClient.compensating(text, for: program)
             #expect(out == text, "expected verbatim, got \(out.debugDescription)")
         }
     }

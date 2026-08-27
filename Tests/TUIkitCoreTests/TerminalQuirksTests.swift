@@ -125,11 +125,6 @@ struct TerminalQuirksTests {
             vs16Pictographs: true,
             barePictographs: true,
             loneRegionalIndicators: true,
-            // Apple Terminal paints the next character in a flag pair's SECOND
-            // cell and in a keycap's, whatever DSR says about either — measured
-            // 2026-08-26, `Tools/TerminalProbes/landing_probe.py`.
-            flagPairs: true,
-            keycapSequences: true,
             planeSixteenPUA: true,
             skinTones: .stripAll,
             erasesUnderGlyphs: true)
