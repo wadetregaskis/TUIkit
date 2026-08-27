@@ -258,7 +258,17 @@ public struct TerminalClient: Sendable, Equatable {
         case .warp:
             TerminalWidthTraits(decomposesZWJSequences: true, skinTone: .detached)
         case .tmux:
-            TerminalWidthTraits(decomposesZWJSequences: false, skinTone: .detachedOnBMPBases)
+            // NOT widened, deliberately. Measured 2026-08-26, tmux 3.7b does
+            // not split by base plane the way iTerm2 does: 👍🏽 🙏🏽 👋🏽 merge
+            // to 2 while 🤙🏽 🤚🏽 — also SMP — detach to 4, and ☝🏽 is 4 where
+            // a base-plus-two rule predicts 3. The line falls where tmux's
+            // Unicode data has a modifier base and where it does not, which is
+            // a per-codepoint fact this enum cannot express. Until it is
+            // measured across the whole modifier-base set, tmux keeps the old
+            // behaviour — the modifier is stripped — because a claim that is
+            // wrong in both directions misaligns rows, and stripping at least
+            // aligns them.
+            .composing
         case .unidentified:
             // A terminal with no measurements is assumed to compose, for the
             // same reason it is assumed to render correctly.

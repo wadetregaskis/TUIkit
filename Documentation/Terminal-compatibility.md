@@ -1503,7 +1503,32 @@ where it should, text wraps around it, and every scalar survives.
 | iTerm2 3.6.11 | composed, 2 | base + swatch on a **BMP** base only |
 | Ghostty 1.3.1 | composed, 2 | merged, 2 |
 | Warp 2026.07 | **decomposed** | base + swatch |
-| tmux 3.7b | composed, 2 | base + swatch on a **BMP** base only |
+| tmux 3.7b | composed, 2 | **not modelled — still stripped** |
+
+**tmux is deliberately not widened**, and the reason is worth recording because
+it is the one host whose skin-tone widths do not follow a rule this model can
+state. Measured 2026-08-26 on 3.7b:
+
+| cluster | tmux advance | a base-plane rule predicts |
+|---|---|---|
+| 👍🏽 🙏🏽 👋🏽 | 2 (merged) | 2 ✓ |
+| 🤙🏽 🤚🏽 | **4** | 2 ✗ — also SMP, and they do NOT merge |
+| ✊🏻 ✌🏽 ✍🏽 | 4 | 4 ✓ |
+| ☝🏽 | **4** | 3 ✗ — a 1-cell base, so base-plus-two gives 3 |
+
+The line falls between Unicode 6.0 modifier bases (👍 🙏 👋) and 9.0 ones
+(🤙 🤚), i.e. where tmux's own Unicode data has a modifier base and where it
+does not. That is a per-codepoint fact, not a plane or a base width, so until
+the whole modifier-base set is measured tmux keeps the old behaviour and the
+modifier is stripped: a claim that is wrong in **both** directions misaligns
+rows, whereas the strip at least aligns them.
+
+**How it was caught** is the point. The unit tests passed, the geometry probes
+passed, and the defect appeared only when the Example emoji page was rendered
+under tmux on a real terminal: the Fitzpatrick row came out SHORT, leaving
+unpainted cells at the right edge — which is precisely the defect the strip was
+introduced to avoid. Widths that are wrong in a way no synthetic probe asks
+about still show up on a real page.
 
 - **Decomposed ZWJ** is the sum of the ZWJ-separated segments **plus one cell
   per joiner** — the joiner takes a column. That predicts every measured case:

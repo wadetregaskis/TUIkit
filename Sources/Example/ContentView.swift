@@ -45,6 +45,26 @@ enum DemoPage: Int, CaseIterable {
     case navigation
     case animation
     case opacity
+
+    /// The page to open on, so a demo page can be inspected without navigating
+    /// to it — `Example --page emoji`.
+    ///
+    /// Verifying a rendering defect means looking at the page that shows it, on
+    /// each terminal, and the terminals cannot always be typed into (a remote
+    /// session, a screen-reading harness, an automation tier that permits
+    /// clicks but not keystrokes). Landing directly on the page removes the
+    /// navigation from the test.
+    static var launchPage: Self {
+        var arguments = CommandLine.arguments.dropFirst().makeIterator()
+        while let argument = arguments.next() {
+            guard argument == "--page", let name = arguments.next() else { continue }
+            // Matched by case NAME rather than raw value: the raw value is the
+            // Int the menu is ordered by, which would make the flag depend on
+            // where a page sits in the list.
+            return allCases.first { String(describing: $0) == name } ?? .menu
+        }
+        return .menu
+    }
 }
 
 // MARK: - App-wide styling
@@ -89,7 +109,7 @@ struct ContentView: View {
     /// App-wide styling toggles (tint, uppercase headers, bold buttons), edited on
     /// the Theme page and applied to every page via the styling cascade.
     @Binding var styling: ExampleStyling
-    @State private var currentPage: DemoPage = .menu
+    @State private var currentPage = DemoPage.launchPage
     /// The main menu's last chosen entry — restored as the focused row when
     /// you come back to the menu, so navigation resumes where you left it.
     @State private var menuSelection: DemoPage = .textStyles

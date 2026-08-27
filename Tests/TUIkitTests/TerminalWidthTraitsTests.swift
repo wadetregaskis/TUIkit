@@ -142,7 +142,7 @@ struct TerminalWidthTraitsTests {
     @Test(
         "A claim that fits the cluster stops the modifier being stripped",
         arguments: [
-            TerminalClient.Program.appleTerminal, .iTerm2, .warp, .tmux,
+            TerminalClient.Program.appleTerminal, .iTerm2, .warp,
         ])
     func skinToneSurvivesWhenClaimed(program: TerminalClient.Program) {
         let row = "│ ✊🏻 │"          // a BMP base: detached on every one of these
@@ -163,6 +163,27 @@ struct TerminalWidthTraitsTests {
         let row = "│ ✊🏻 │"
         TerminalWidthTraits.withTraits(.composing) {
             let out = TerminalClient.compensating(row, for: program, followedByContent: true)
+            #expect(!out.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) })
+        }
+    }
+
+    /// tmux is held at the old behaviour on purpose: its skin-tone widths do
+    /// not split by base plane. Measured on 3.7b, 👍🏽 🙏🏽 👋🏽 merge to 2 while
+    /// 🤙🏽 🤚🏽 — also SMP — detach to 4, and ☝🏽 is 4 where a base-plus-two rule
+    /// predicts 3. The line falls where tmux's Unicode data has a modifier base
+    /// and where it does not, which is a per-codepoint fact this enum cannot
+    /// express. A claim wrong in both directions misaligns rows; the strip at
+    /// least aligns them.
+    ///
+    /// Caught by the Example emoji page rendering a SHORT row under tmux —
+    /// unpainted cells at the right edge — which is exactly the defect the
+    /// Fitzpatrick strip was introduced to avoid.
+    @Test("tmux keeps stripping until its widths are measured per codepoint")
+    func tmuxIsNotWidenedYet() {
+        #expect(TerminalClient.widthTraits(of: .tmux) == .composing)
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: .tmux)) {
+            let out = TerminalClient.compensating(
+                "│ ✊🏻 │", for: .tmux, followedByContent: true)
             #expect(!out.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) })
         }
     }
