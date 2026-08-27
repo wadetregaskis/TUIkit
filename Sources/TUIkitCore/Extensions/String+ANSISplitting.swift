@@ -212,7 +212,12 @@ extension String {
             case .visible(let character):
                 let charWidth = character.terminalWidth
                 if visible + charWidth > visibleCount { return (result, visible) }
-                let advance = character.terminalAppCursorAdvance
+                // Clusters the walk rewrites (separated skin tones, decomposed
+                // ZWJ sequences) advance exactly their claim, monotonically —
+                // the raw internal advance (👨‍👩‍👧‍👦: 11) never happens, so
+                // budgeting it would replace clusters that actually fit.
+                let advance = character.terminalAppWalkRewritesToClaim
+                    ? charWidth : character.terminalAppCursorAdvance
                 if advance > charWidth && cursor + advance > visibleCount {
                     // Over-advancer that would push Terminal.app's cursor past
                     // the right edge.  Replace with `charWidth` plain spaces

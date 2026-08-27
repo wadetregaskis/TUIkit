@@ -170,39 +170,67 @@ extension String {
     }
 
     /// Returns a copy of this string with Terminal.app's cursor-advance
-    /// quirks worked around — every scalar the caller wrote is kept.
+    /// quirks worked around — every scalar the caller wrote reaches the
+    /// screen, some rearranged so the row stays true.
     ///
-    /// Apple Terminal keeps two columns per row and compensation must end each
-    /// cluster with BOTH at the claimed width:
+    /// Apple Terminal keeps THREE facts per row and compensation must square
+    /// all of them with the claim:
     ///
     /// - the **internal** column (``Swift/Character/terminalAppCursorAdvance``,
     ///   what DSR reports) decides when the row WRAPS. A cluster that leaves it
     ///   past the claim makes a full-width row wrap before its tail is written,
     ///   and the abandoned cells keep the terminal's default background — blank
     ///   white cells at the end of the row.
-    /// - the **paint** position decides where the glyph and everything after it
-    ///   land. A cluster that leaves it short of the claim shears the rest of
-    ///   the row left.
+    /// - the **paint** position decides where the glyph and its immediate
+    ///   follower land.
+    /// - the row's **stored width** for the cluster decides where EVERYTHING
+    ///   later on the row paints, absolutely-addressed writes included: a
+    ///   cluster stored wider than it paints displaces the whole tail left by
+    ///   the difference, and no cursor move repairs that, because cursor moves
+    ///   do not edit the store.
     ///
-    /// Three moves cover every measured class
-    /// (`Tools/TerminalProbes/landing_probe.py` + the full-width wrap probe,
-    /// Terminal.app 455.1, alternate screen, 2026-08-26/27):
+    /// The measured treatments (treatment cards 1–4 + DSR probes, Terminal.app
+    /// 455.1, alternate screen, 2026-08-27 — each verified for follower
+    /// alignment, absolute-move alignment, background integrity, and a
+    /// full-width row ending in the cluster with no wrap):
     ///
     /// - **Under-advancers** (VS-16 pictographs 🖥️ ❤️, bare SMP pictographs,
     ///   lone regional indicators, SF Symbols): internal and paint both stop 1
     ///   short. `ECH(2)` to paint the claimed cells in the current background,
     ///   the glyph, then `CUF(1)`. Unchanged for years and measured clean.
-    /// - **Over-advancers** (Fitzpatrick skin tones 🤙🏽 ☝🏻, ZWJ sequences
-    ///   👩‍🚀 👨‍👩‍👧‍👦): internal runs 1–9 past the claim while the glyph
-    ///   composes into it. `CUB(internal − claim)` after the cluster pulls the
-    ///   internal column back, and the paint position — measured, not assumed —
-    ///   snaps WITH it. This is what replaced the old Fitzpatrick strip: the
-    ///   strip kept the two columns in sync by deleting what the user wrote,
-    ///   the pull-back keeps them in sync and 👍🏽 stays 👍🏽.
-    /// - **Paint-short clusters** (``Swift/Character/terminalAppPaintsShortOfClaim``:
-    ///   VS-16-led ZWJ sequences ❤️‍🔥 🏳️‍🌈, flag pairs, keycaps): after the
-    ///   pull-back the next character still paints one cell in. One column
-    ///   further back and `CUF(1)` — same net internal, one more paint cell.
+    /// - **Skin tones on an emoji-presentation base** (🤙🏽 ✊🏿 👍🏽), when
+    ///   ``TUIkitCore/TerminalWidthTraits`` claims the separated width:
+    ///   rewritten as base + ZWNJ + modifier
+    ///   (``Swift/Character/separatedSkinToneEmission``) and emitted with no
+    ///   moves at all — the host renders base, one blank column (the ZWNJ's
+    ///   own), then the swatch, and internal, paint and store all land on the
+    ///   claim of base + 3. The tone survives on screen, which the composed
+    ///   cluster plus any cursor repair measured could not do: every backward
+    ///   move re-renders the cluster as its bare base.
+    /// - **Skin tones on a text-presentation base** (☝🏻 ✍🏿): the same rewrite
+    ///   measured MISALIGNED for these, so they keep `CUB(internal − claim)` —
+    ///   aligned, tone shown only if the terminal ever repaints the cluster
+    ///   unmoved.
+    /// - **Emoji ZWJ sequences** (👨‍👩‍👧‍👦 ❤️‍🔥 👩🏽‍🚀), when the traits
+    ///   claim the decomposed width: decomposed into their segments
+    ///   (``Swift/Character/emojiZWJSegments``), each segment then compensated
+    ///   by its own class — so ❤️‍🔥 becomes an `ECH`'d ❤️ plus a bare 🔥, and
+    ///   👩🏽‍🚀 a separated 👩+ZWNJ+🏽 plus a bare 🚀. Every cursor-move
+    ///   repair that kept the composed glyph left later absolute positioning
+    ///   on the row displaced by 1–2 cells (stored-width mismatch), and the
+    ///   full-width DCH variants wrapped; decomposition is the treatment with
+    ///   nothing wrong with it, at the cost the user accepted: component
+    ///   glyphs instead of the composed one.
+    /// - **Flag pairs and keycaps**
+    ///   (``Swift/Character/terminalAppStoresWiderThanPainted``): internal
+    ///   already equals the claim, the glyph paints into it — and the store
+    ///   keeps one extra column that shifts every follower a cell left. Store
+    ///   surgery: the cluster, `CUB(1)` into it, `DCH(1)` to delete the
+    ///   surplus stored column, `CUF(1)` to restore the cursor. The one
+    ///   emission of ten card variants whose sequential AND absolutely-placed
+    ///   followers both land true.
+    /// - **Tag-sequence flags** (🏴󠁧󠁢󠁳󠁣󠁴󠁿): `CUB(tag count)` — measured aligned,
+    ///   store included.
     ///
     /// ANSI escape sequences in the input are preserved.
     public func withTerminalAppCursorCompensation() -> String {
@@ -216,24 +244,32 @@ extension String {
         // 8 at a time (see `utf8ContainsNonASCII`).
         guard utf8ContainsNonASCII else { return self }
 
+        let traits = TerminalWidthTraits.current
         var result = ""
         result.reserveCapacity(self.count + 8)
-        var index = startIndex
 
-        while index < endIndex {
-            let c = self[index]
-
-            if c == "\u{1B}" {
-                // Preserve an entire ANSI escape sequence: ESC [ params letter
-                let seqStart = index
-                index = csiSequenceEnd(from: index)
-                result += self[seqStart..<index]
-                continue
+        // One cluster's emission — shared between the direct path and the
+        // per-segment recursion of a decomposed ZWJ sequence (whose segments
+        // never contain a further joiner, so this never recurses deeper).
+        func appendCompensated(_ c: Character) {
+            if traits.skinTone == .separatedOnEmojiPresentationBases,
+                let separated = c.separatedSkinToneEmission
+            {
+                result += separated
+                return
             }
-
             let claimed = c.terminalWidth
             let internalAdvance = c.terminalAppCursorAdvance
-            let paintsShort = c.terminalAppPaintsShortOfClaim
+            if c.terminalAppStoresWiderThanPainted, internalAdvance == claimed {
+                // Store surgery presumes the cursor maths already balance —
+                // measured true for this host's flags and keycaps. (The guard
+                // matters for the quirks mirror, where an explorer can combine
+                // this with an under-advance switch; keeping it here keeps the
+                // two walks textually identical.)
+                result.append(c)
+                result += "\u{1B}[1D\u{1B}[1P\u{1B}[1C"
+                return
+            }
             if claimed > internalAdvance {
                 // Under-advancer. The cursor has to reach the glyph's visual
                 // end, and the cells the glyph covers have to carry whatever
@@ -260,20 +296,37 @@ extension String {
                 result += "\u{1B}[\(claimed)X"
                 result.append(c)
                 result += "\u{1B}[\(claimed - internalAdvance)C"
-            } else if internalAdvance > claimed || paintsShort {
-                // Over-advancer, or a cluster whose internal column is right
-                // while its paint is short (flags, keycaps): pull the internal
-                // column back to the claim, going one further and stepping
-                // forward for the classes measured to paint short of it.
+            } else if internalAdvance > claimed {
+                // Over-advancer (text-presentation skin tones, tag flags):
+                // pull the internal column back to the claim; the paint
+                // position — measured, not assumed — snaps with it.
                 result.append(c)
-                let back = internalAdvance - claimed
-                if paintsShort {
-                    result += "\u{1B}[\(back + 1)D\u{1B}[1C"
-                } else {
-                    result += "\u{1B}[\(back)D"
-                }
+                result += "\u{1B}[\(internalAdvance - claimed)D"
             } else {
                 result.append(c)
+            }
+        }
+
+        var index = startIndex
+        while index < endIndex {
+            let c = self[index]
+
+            if c == "\u{1B}" {
+                // Preserve an entire ANSI escape sequence: ESC [ params letter
+                let seqStart = index
+                index = csiSequenceEnd(from: index)
+                result += self[seqStart..<index]
+                continue
+            }
+
+            if traits.zwjSequences == .decomposedDroppingJoiners,
+                let segments = c.emojiZWJSegments
+            {
+                for segment in segments {
+                    appendCompensated(segment)
+                }
+            } else {
+                appendCompensated(c)
             }
             index = self.index(after: index)
         }

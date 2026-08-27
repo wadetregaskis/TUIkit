@@ -84,10 +84,10 @@ struct CustomClientView: View {
                 .foregroundStyle(.palette.foregroundSecondary)
             toggle("ZWJ sequences  👩\u{200D}🚀 👨\u{200D}👩\u{200D}👧\u{200D}👦", \.zwjSequences)
             toggle("Tag-sequence flags  🏴\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}", \.tagFlags)
-            Text("Next character paints inside the glyph").bold()
-            Text("Turn this on if the character after a flag, keycap or ❤️\u{200D}🔥-style sequence overlaps its last cell.")
+            Text("Everything after the glyph sits one cell left").bold()
+            Text("Turn this on if content after a flag or keycap — including later runs on the same row — lands one cell left of where it belongs.")
                 .foregroundStyle(.palette.foregroundSecondary)
-            toggle("Nudge paint-short composites  🇺🇸 1\u{FE0F}\u{20E3} ❤️\u{200D}🔥", \.paintShortComposites)
+            toggle("Trim wide-stored composites  🇺🇸 1\u{FE0F}\u{20E3}", \.storesWideComposites)
             Text("Background under a compensated glyph").bold()
             Text("Turn this on if compensated glyphs sit on the terminal's own background instead of the app's — a coloured row that reads as a comb.")
                 .foregroundStyle(.palette.foregroundSecondary)
@@ -143,7 +143,8 @@ struct CustomClientView: View {
         case .keep: "Keep them — the terminal joins the cluster correctly (Ghostty)"
         case .stripAll: "Strip every one (a claim that cannot hold the detached pair)"
         case .stripBMPBases: "Strip only BMP-based ones — ✊🏻 but not 👍🏽 (tmux)"
-        case .pullBack: "Keep them, pull the internal column back with CUB (Apple Terminal)"
+        case .pullBack: "Keep them, pull the internal column back with CUB — tone lost on screen"
+        case .separate: "Rewrite as base + ZWNJ + swatch, tone kept beside the base (Apple Terminal)"
         }
     }
 

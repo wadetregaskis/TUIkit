@@ -183,8 +183,8 @@ struct QuirkPermutationTests {
         ("apple", TerminalQuirks(
             vs16Pictographs: true, barePictographs: true,
             loneRegionalIndicators: true, planeSixteenPUA: true,
-            zwjSequences: true, tagFlags: true, paintShortComposites: true,
-            skinTones: .pullBack, erasesUnderGlyphs: true)),
+            zwjSequences: true, tagFlags: true, storesWideComposites: true,
+            skinTones: .separate, erasesUnderGlyphs: true)),
         ("iterm2", TerminalQuirks(
             vs16Pictographs: true, keycapSequences: true, planeSixteenPUA: true,
             skinTones: .stripAll)),
@@ -197,13 +197,14 @@ struct QuirkPermutationTests {
             skinTones: .stripBMPBases)),
         ("zwj-alone", TerminalQuirks(zwjSequences: true)),
         ("tagflags-alone", TerminalQuirks(tagFlags: true)),
-        ("nudge-alone", TerminalQuirks(paintShortComposites: true)),
+        ("trim-alone", TerminalQuirks(storesWideComposites: true)),
         ("pullback-alone", TerminalQuirks(skinTones: .pullBack)),
+        ("separate-alone", TerminalQuirks(skinTones: .separate)),
         ("everything", TerminalQuirks(
             vs16Pictographs: true, barePictographs: true, vs15ChromeGlyphs: true,
             loneRegionalIndicators: true, flagPairs: true, keycapSequences: true,
             planeSixteenPUA: true, zwjSequences: true, tagFlags: true,
-            paintShortComposites: true, skinTones: .pullBack,
+            storesWideComposites: true, skinTones: .separate,
             erasesUnderGlyphs: true)),
     ]
 
@@ -211,28 +212,40 @@ struct QuirkPermutationTests {
           arguments: sets, TerminalWidthCorpus.all)
     func conserves(set: (String, TerminalQuirks), entry: TerminalWidthCorpus.Entry) {
         let (name, quirks) = set
-        let emission = entry.text.withCursorCompensation(for: quirks)
-        let advance = emission.cursorAdvance { quirks.cursorAdvance(of: $0) }
-        #expect(
-            advance == emission.strippedLength,
-            """
-            \(entry) under '\(name)': emission sums to \(advance) against \
-            \(emission.strippedLength) visible cells — a full-width row \
-            \(advance > emission.strippedLength ? "wraps" : "shears").
-            """)
+        // Claim-changing switches only hold together under their own implied
+        // claims, exactly as the real walks require the host's traits.
+        TerminalWidthTraits.withTraits(quirks.widthTraits) {
+            let emission = entry.text.withCursorCompensation(for: quirks)
+            let advance = emission.cursorAdvance { quirks.cursorAdvance(of: $0) }
+            #expect(
+                advance == emission.strippedLength,
+                """
+                \(entry) under '\(name)': emission sums to \(advance) against \
+                \(emission.strippedLength) visible cells — a full-width row \
+                \(advance > emission.strippedLength ? "wraps" : "shears").
+                """)
+        }
     }
 
-    @Test("Every scalar survives unless a strip was selected",
+    @Test("Every scalar survives unless a strip or a decomposition was selected",
           arguments: sets, TerminalWidthCorpus.all)
     func preservesContent(set: (String, TerminalQuirks), entry: TerminalWidthCorpus.Entry) {
         let (name, quirks) = set
-        guard quirks.skinTones == .keep || quirks.skinTones == .pullBack else { return }
-        let emission = entry.text.withCursorCompensation(for: quirks)
-        let emitted = Set(emission.unicodeScalars.map(\.value))
-        for scalar in entry.text.unicodeScalars {
-            #expect(
-                emitted.contains(scalar.value),
-                "\(entry) under '\(name)': U+\(String(scalar.value, radix: 16, uppercase: true)) was dropped")
+        switch quirks.skinTones {
+        case .keep, .pullBack, .separate: break
+        case .stripAll, .stripBMPBases: return
+        }
+        TerminalWidthTraits.withTraits(quirks.widthTraits) {
+            let emission = entry.text.withCursorCompensation(for: quirks)
+            let emitted = Set(emission.unicodeScalars.map(\.value))
+            for scalar in entry.text.unicodeScalars {
+                // Software ZWJ decomposition drops the joiners by design —
+                // they are what the host cannot store truthfully.
+                if scalar.value == 0x200D && quirks.zwjSequences { continue }
+                #expect(
+                    emitted.contains(scalar.value),
+                    "\(entry) under '\(name)': U+\(String(scalar.value, radix: 16, uppercase: true)) was dropped")
+            }
         }
     }
 
@@ -244,13 +257,18 @@ struct QuirkPermutationTests {
           arguments: TerminalWidthCorpus.all)
     func appleShapeMatchesTheRealWalk(entry: TerminalWidthCorpus.Entry) {
         let apple = Self.sets.first { $0.0 == "apple" }!.1
-        #expect(
-            apple.cursorAdvance(of: entry.character)
-                == entry.character.terminalAppCursorAdvance,
-            "\(entry): hand-built model diverges from the measured one")
-        #expect(
-            entry.text.withCursorCompensation(for: apple)
-                == entry.text.withTerminalAppCursorCompensation(),
-            "\(entry): hand-built emission diverges from the real walk")
+        // Same claims as startup publishes for the real host — the quirks' own
+        // mapping, pinned equal to `TerminalClient.widthTraits(of:)` by
+        // `TerminalWidthTraitsTests`.
+        TerminalWidthTraits.withTraits(apple.widthTraits) {
+            #expect(
+                apple.cursorAdvance(of: entry.character)
+                    == entry.character.terminalAppCursorAdvance,
+                "\(entry): hand-built model diverges from the measured one")
+            #expect(
+                entry.text.withCursorCompensation(for: apple)
+                    == entry.text.withTerminalAppCursorCompensation(),
+                "\(entry): hand-built emission diverges from the real walk")
+        }
     }
 }

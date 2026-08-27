@@ -38,6 +38,20 @@ for the one-screen comparison.
 > where glyphs land. On iTerm2, Ghostty and Warp they agree for every corpus
 > cluster, so the distinction is invisible; on Apple Terminal they diverge on
 > 25, by up to nine cells. See [Three numbers, not one](#three-numbers-not-one).
+>
+> **EXTENDED 2026-08-27, the same day, by the treatment cards:** there is a
+> THIRD per-row fact — the cluster's **stored width** in the row's text store —
+> and it, not the cursor, decides where everything *later* on the row paints,
+> absolutely-addressed writes included. A cluster stored wider than it paints
+> (a flag pair: 2 painted, one surplus column; a composed ZWJ sequence under
+> any cursor-move repair) displaces the whole tail left, and no cursor move
+> repairs that, because cursor moves do not edit the store. Backward moves are
+> worse than useless here: **any backward cursor motion over a composed
+> cluster makes this terminal re-render it as its bare first segment** — the
+> tone or the sequence survives in the store and dies on screen. The shipped
+> treatments (see the Apple Terminal section) all make stored width == painted
+> width == claim: rewrite (ZWNJ separation), decompose (ZWJ), or delete the
+> surplus stored column (`DCH` — flags, keycaps).
 
 ### Three numbers, not one
 
@@ -64,15 +78,21 @@ absolute `CUP` to column 50 paints at column 48. Every later cell on the row
 inherits the whole accumulated error, which is why a single skin-toned emoji
 moves an enclosing border two cells left.
 
-Compensation moves BOTH counters. `CUF(n)` moves internal and paint by exactly
-`n`. `CUB(n)` moves internal by exactly `−n`, while its paint response is
-non-linear — measured, it *snaps paint to the internal column* for skin tones
-and emoji-led ZWJ sequences (`CUB(advance − claim)` lands both counters on the
-claim at once), but leaves paint one short for three classes: VS-16-led ZWJ
-sequences, flag pairs and keycaps, which therefore go back one further and
-`CUF(1)`. Every sequence the walk emits was verified in the terminal itself:
-full-width rows, one and three clusters each, no wrap, internal exactly at the
-width (`replay_wrap`). A claim must never be narrower than the landing —
+Compensation moves BOTH counters, and must also respect the STORE. `CUF(n)`
+moves internal and paint by exactly `n`. `CUB(n)` moves internal by exactly
+`−n` — and what looks like "paint snapping to the internal column" is the
+terminal re-rendering the cluster as its bare first segment, which is how a
+CUB pull-back silently strips a skin tone on screen (treatment cards,
+2026-08-27). Even where a pull-back aligns, a cluster whose stored width
+differs from its painted width displaces every LATER write on the row —
+sequential or absolutely addressed — by the difference, which cursor moves
+cannot repair. Hence the shipped per-class treatments: rewrite as base + ZWNJ
++ modifier (skin tones on emoji-presentation bases — the one separator the
+terminal does not re-join), software decomposition (ZWJ sequences), and
+`CUB(1)` `DCH(1)` `CUF(1)` store surgery (flags, keycaps). Every emission was
+verified in the terminal itself: follower and absolute-move alignment,
+background integrity, and a full-width row ending in the cluster with no wrap.
+A claim must never be narrower than the landing —
 `TerminalLedgerConformanceTests` asserts that — and no emission may leave the
 internal sum above the claim — `CursorAdvanceConservationTests` sums exactly
 that, and catches both halves of the briefly-shipped defect under mutation.
@@ -417,24 +437,43 @@ before the render loop is built.
 > differ despite looking like the same kind of thing. Flag pairs and keycaps
 > land at 1 regardless.
 >
-> Two consequences.
+> **FINAL 2026-08-27 — the treatment cards.** The table above is the raw host
+> behaviour; the shipped treatments were settled by four "treatment cards"
+> (expect/actual row pairs on a blue background, read against a ruler in the
+> live terminal, DSR recording the cursor at every atom), which added two
+> facts the probes above could not see:
 >
-> **The Fitzpatrick strip is gone.** It existed because a DSR-built model said
-> the cluster over-advanced past its claim and no escape could recover both the
-> modifier and the layout. The glyph composes into the two cells claimed, so
-> there was never anything to recover from. Stripping is not a rendering
-> compromise but a change to what the user wrote: 👍🏽 becomes 👍, and by the
-> same rule 🏳️‍🌈 would become a white flag.
+> - **Any backward cursor motion over a composed cluster re-renders it as its
+>   bare first segment.** A `CUB` pull-back aligns the row and silently strips
+>   the tone (or the family, or the tag flag) ON SCREEN — the scalars survive
+>   only in the store. `DCH` re-renders the same way.
+> - **Stored width is what everything later on the row paints against.** A
+>   cluster stored wider than it paints (flags: one surplus column; composed
+>   ZWJ under any cursor repair: up to nine) displaces sequential AND
+>   absolutely-addressed followers left by the difference. No cursor move
+>   edits the store.
 >
-> **The claim is not widened for this host.** An earlier pass widened it to the
-> reported advance so the layout could hold the decomposed glyph. Warp genuinely
-> draws the components and keeps that treatment; Apple Terminal does not, and a
-> claim of 4 against a landing of 2 is exactly the two-cell leftward border shift
-> that prompted the measurement.
+> The shipped emissions, all card-verified for follower alignment, absolute
+> moves, backgrounds, and a full-width row ending in the cluster (no wrap):
 >
-> `reserve` still tracks the reported advance, so a row can wrap early near the
-> right edge. That is a wrapping problem, not a claim problem, and it is not
-> addressed here.
+> | class | claim | emission | on screen |
+> |---|---|---|---|
+> | tone, emoji-presentation base (🤙🏽 ✊🏿 👍🏽) | 5 | base + **ZWNJ** + modifier, no moves | base, one blank cell, swatch — tone kept |
+> | tone, text-presentation base (☝🏻 ✍🏿) | 2 | cluster + `CUB(int−2)` | aligned; bare base (re-render strip) |
+> | ZWJ sequence (👨‍👩‍👧‍👦 ❤️‍🔥 👩🏽‍🚀) | Σ segments | **decomposed** — joiners removed, each segment its own class | component glyphs |
+> | flag pair (🇺🇸), keycap (1️⃣) | 2 | cluster + `CUB(1)` `DCH(1)` `CUF(1)` | composed; surplus stored column deleted |
+> | tag flag (🏴󠁧󠁢󠁳󠁣󠁴󠁿) | 2 | cluster + `CUB(tags)` | aligned; bare 🏴 |
+> | VS-16 / bare pictograph / lone RI / PUA | 2 | `ECH(2)` + glyph + `CUF(1)` | composed |
+>
+> ZWNJ is the ONE separator that stops re-joining: save/restore-cursor, an
+> SGR, an 80 ms flush gap and absolute re-positioning all left base and
+> modifier adjacent in the store and the terminal composed them again. The
+> ZWNJ costs its own internal column (🤙+ZWNJ+🏽 advances 5), hence the claim
+> of base + 3. It fails on text-presentation bases (☝+ZWNJ+🏻 misaligns),
+> which is why those keep the pull-back. The `DCH` variants of the
+> over-advancing classes all wrapped at the row edge and re-rendered bare, so
+> DCH is confined to the two classes whose internal column already matches the
+> claim.
 
 
 **Tested:** `TERM_PROGRAM_VERSION` 455.1, macOS 15.7 (Sequoia), 2026-07-13.
@@ -527,24 +566,31 @@ before the render loop is built.
   Terminal.app.md` for the full investigation). Compensated with CUF(1) by
   `withTerminalAppCursorCompensation()`. Exception: the East-Asian-Wide
   BMP bases 〰️ 〽️ ㊗️ ㊙️ advance their full 2.
-- **Fitzpatrick skin tones:** the cluster renders as ONE merged,
-  skin-toned glyph (paints 2) but **advances 4** (emoji-presentation
-  bases: 👍🏽 ✊🏻) or **3** (text-presentation bases: ☝🏽; also ☝️🏽
-  with VS-16) — "Bug B". **Since 2026-08-26 the claim is 4 (or 3) to match**,
-  so there is no over-advance and the modifier is KEPT — see *The claim follows
-  the host now*. The strip remains only for a caller that has not published the
-  host's traits, where the claim is still 2 and the over-advance would provoke
-  a row-wide left shift no escape sequence recovers from.
-- **Flag pairs** (🇺🇸): paints 2, **advances 2** — no compensation.
-  (An earlier TUIkit model said advance 1; measured 2 on 455.1.)
+- **Fitzpatrick skin tones:** the composed cluster paints one merged glyph in
+  2 cells while **advancing the internal column 4** (emoji-presentation bases:
+  👍🏽 ✊🏻) or **3** (text-presentation: ☝🏽) — "Bug B" — and any backward
+  move to repair that re-renders it as the bare base. **Since 2026-08-27 an
+  emoji-presentation base is rewritten as base + ZWNJ + modifier** (claim 5:
+  base, the ZWNJ's own blank column, swatch) — the tone survives on screen,
+  everything aligns, nothing wraps. A text-presentation base keeps the
+  `CUB` pull-back at the composed claim of 2 (the rewrite misaligns for it;
+  the tone shows only in the store/copy-paste). The strip remains only for a
+  caller that has not published the host's traits.
+- **Flag pairs** (🇺🇸): paints 2, **advances 2** — and the row STORES one
+  column more than it paints, displacing every later write on the row one cell
+  left. Repaired with store surgery: `CUB(1)` `DCH(1)` `CUF(1)` (2026-08-27;
+  the earlier `CUB(1)+CUF(1)` nudge measured misaligned on the cards).
 - **Lone regional indicator** (🇦): paints 2, **advances 1** → CUF(1).
-- **Keycaps** (1️⃣ #️⃣, with or without VS-16): advance 2 ✓.
-- **ZWJ sequences:** DSR reports a wild over-advance — 👩‍🚀 **5**,
-  ❤️‍🔥 **4**, 👩🏽‍🚀 **7** — but **the glyphs paint 2 cells and rows do
-  NOT shear**. Terminal.app's cursor report and its paint position disagree
-  here; the claim of 2 is correct and no compensation is wanted. See
-  *ZWJ: where DSR lies* below — this bullet said the opposite until
-  2026-08-26.
+- **Keycaps** (1️⃣ #️⃣, with or without VS-16): advance 2 ✓ — and store one
+  column wide, same surgery as flag pairs.
+- **ZWJ sequences:** the internal column decomposes (👩‍🚀 **5**, ❤️‍🔥 **4**,
+  👨‍👩‍👧‍👦 **11**) while the glyph composes into 2 — and every cursor-move
+  repair either displaced the row's tail (stored width) or re-rendered the
+  cluster bare. **Since 2026-08-27 the walk decomposes in software**: joiners
+  removed, each segment emitted under its own class, claim = the sum
+  (👨‍👩‍👧‍👦 = 8, ❤️‍🔥 = 4, 👩🏽‍🚀 = 7 as a separated 👩+ZWNJ+🏽 plus 🚀).
+  Component glyphs on screen — the accepted cost. See *ZWJ: where DSR lies*
+  below for the history.
 - **SF Symbols (Plane-16 PUA, U+100000+):** paints 2, **advances 1** →
   CUF(1). BMP PUA (e.g. U+E0B0 powerline): advances 1, width 1 ✓.
 - **Emoji-repertoire chrome with VS-15** (⬛︎ ⬜︎ + U+FE0E): renders as a
@@ -1758,6 +1804,14 @@ them alters what the user said.
 
 ### ZWJ: where DSR lies, and where the defect actually is — measured 2026-08-26
 
+> **SUPERSEDED 2026-08-27 — kept as history.** The conclusion below ("the
+> claim of 2 is correct and no compensation is wanted") was the second wrong
+> answer for this class: the composed glyph paints 2, but the row wraps at the
+> internal width AND the stored width displaces everything later on the row.
+> The shipped treatment is software decomposition — see the treatment table at
+> the top of this host's section. The measurements below remain correct as
+> measurements, and the Warp analysis stands.
+
 Every advance number in this document comes from DSR (`ESC[6n`), and for ZWJ
 sequences on Terminal.app **DSR is not telling the truth**. This was recorded
 for a year as "Terminal.app badly over-advances ZWJ, rows will shear here,
@@ -1833,11 +1887,12 @@ until a paint test showed it painting 1, which turned a proposed `CUF` into a
 width fix. Two classes, two wrong conclusions from advance alone, in opposite
 directions.
 
-**A residual, genuinely broken:** VS-16-leading ZWJ (❤️‍🔥 ⛓️‍💥 🏳️‍🌈) on
-Terminal.app *does* misbehave visibly — in the same probe its separating pipes
-were overpainted and the `X` landed left of the others. It is the one ZWJ
-sub-class where Terminal.app's report and its paint agree that something is
-wrong. Small, and unhandled as before, but real — unlike the rest of the class.
+**A residual, genuinely broken — RESOLVED 2026-08-27:** VS-16-leading ZWJ
+(❤️‍🔥 ⛓️‍💥 🏳️‍🌈) on Terminal.app misbehaves visibly — in the same probe its
+separating pipes were overpainted and the `X` landed left of the others. Under
+software decomposition the leading VS-16 segment gets its own `ECH`'d
+under-advance treatment (❤️‍🔥 → `ECH(2)` ❤️ `CUF(1)` 🔥, claim 4), which the
+treatment cards measured clean: aligned, background intact, edge-safe.
 
 ## Keyboard modifiers on key events
 

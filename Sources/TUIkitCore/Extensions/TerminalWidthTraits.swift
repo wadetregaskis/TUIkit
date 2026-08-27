@@ -55,29 +55,54 @@ public struct TerminalWidthTraits: Sendable, Equatable {
         case merged
         /// The base is drawn, then the modifier as a separate colour swatch
         /// beside it, so the cluster owns the base's width **plus two**.
-        /// Apple Terminal and Warp, for every base.
+        /// Warp, for every base.
         case detached
         /// Merged for an SMP base (👍🏽), detached for a BMP one (✊🏻 ☝🏽).
         /// iTerm2 and tmux.
         case detachedOnBMPBases
+        /// An emoji-presentation base (🤙🏽 ✊🏿 👍🏽) owns its own width **plus
+        /// three**: the output walk rewrites the cluster as base + ZWNJ +
+        /// modifier, and on the one host measured to need it the ZWNJ itself
+        /// occupies a column, so the cluster renders as base, one blank cell,
+        /// then the swatch. A text-presentation base (☝🏻 ✍🏿) stays merged at
+        /// its composed width — the ZWNJ rewrite was measured to misalign for
+        /// those, so they keep the pull-back walk instead. Apple Terminal.
+        case separatedOnEmojiPresentationBases
     }
 
-    /// The host draws each component of a ZWJ sequence separately rather than
-    /// composing them, so 👩‍🚀 is a woman beside a rocket rather than an
-    /// astronaut, and owns the sum of its parts.
-    ///
-    /// Measured on Warp: the width is the sum of the ZWJ-separated segments
-    /// **plus one cell per joiner** — the joiner itself takes a column. That
-    /// rule predicts every measured case exactly, including 👩🏽‍🚀 at 7
-    /// (4 for the skin-toned segment, 2 for the rocket, 1 for the joiner),
-    /// so it composes with ``skinTone`` rather than duplicating it.
-    public var decomposesZWJSequences: Bool
+    /// What the host does with an emoji ZWJ sequence (👩‍🚀 👨‍👩‍👧‍👦).
+    public enum ZWJSequences: String, Sendable, Equatable, CaseIterable {
+        /// Composed into one glyph at the natural claim. Ghostty, iTerm2,
+        /// Apple Terminal's *paint* (but not its column accounting — see
+        /// ``decomposedDroppingJoiners``), and the assumption for any
+        /// unmeasured host.
+        case composed
+        /// Each segment drawn separately, with the joiner itself taking a
+        /// column: the claim is the sum of the segments **plus one per
+        /// joiner**. Measured on Warp, where this predicts every case exactly
+        /// — 👩‍🚀 = 2+1+2 = 5, 👨‍👩‍👧‍👦 = 11, 👩🏽‍🚀 = 4+1+2 = 7 (the
+        /// skin-toned segment resolving through ``skinTone``, which is why the
+        /// two rules compose instead of duplicating each other).
+        case decomposedKeepingJoiners
+        /// The output walk REMOVES the joiners and emits the segments as
+        /// independent clusters, so the claim is the sum of the segments and
+        /// nothing else: 👨‍👩‍👧‍👦 = 8, ❤️‍🔥 = 4, 👩🏽‍🚀 = 5+2 = 7 (the
+        /// toned segment resolving through ``skinTone``). Apple Terminal —
+        /// its column accounting decomposes every ZWJ sequence whatever we do,
+        /// and every cursor-move repair that let the composed glyph stand was
+        /// measured to leave later absolute positioning on the row displaced,
+        /// so the walk decomposes in software instead.
+        case decomposedDroppingJoiners
+    }
+
+    /// What this host does with a ZWJ sequence.
+    public var zwjSequences: ZWJSequences
 
     /// How this host lays out a skin-tone cluster.
     public var skinTone: SkinTone
 
-    public init(decomposesZWJSequences: Bool = false, skinTone: SkinTone = .merged) {
-        self.decomposesZWJSequences = decomposesZWJSequences
+    public init(zwjSequences: ZWJSequences = .composed, skinTone: SkinTone = .merged) {
+        self.zwjSequences = zwjSequences
         self.skinTone = skinTone
     }
 

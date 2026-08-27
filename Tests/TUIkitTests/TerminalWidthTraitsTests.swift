@@ -18,13 +18,15 @@ import Testing
 struct TerminalWidthTraitsTests {
 
     private static let warp = TerminalWidthTraits(
-        decomposesZWJSequences: true, skinTone: .detached)
-    // Apple Terminal is NOT a widening host. It reports a decomposed advance
-    // and paints a composed glyph, so a claim built on the report is a claim
-    // nothing paints at — see `TerminalClient.widthTraits(of:)`.
-    private static let apple = TerminalWidthTraits.composing
+        zwjSequences: .decomposedKeepingJoiners, skinTone: .detached)
+    // Apple Terminal's walk REWRITES the two classes below (ZWJ decomposition
+    // dropping the joiners, skin-tone separation with a ZWNJ column), so its
+    // claims follow the rewritten forms — see `TerminalClient.widthTraits(of:)`.
+    private static let apple = TerminalWidthTraits(
+        zwjSequences: .decomposedDroppingJoiners,
+        skinTone: .separatedOnEmojiPresentationBases)
     private static let iTerm = TerminalWidthTraits(
-        decomposesZWJSequences: false, skinTone: .detachedOnBMPBases)
+        zwjSequences: .composed, skinTone: .detachedOnBMPBases)
 
     // MARK: - The measured widths
 
@@ -72,51 +74,76 @@ struct TerminalWidthTraitsTests {
         }
     }
 
-    /// Apple Terminal PAINTS a ZWJ cluster composed into about two cells but
-    /// RESERVES the decomposed width — a row budgeted at 2 wraps, measured by
-    /// the row number changing. So the claim is the reserved width and the
-    /// glyph sits at the left of the space it owns.
-    /// The reverse of an earlier decision, and worth stating as a test rather
-    /// than only deleting the old one.
-    ///
-    /// Apple Terminal was briefly modelled as reserving the decomposed width,
-    /// on the strength of DSR reporting 5, 8 and 11 for these and of a row
-    /// budgeted at 2 wrapping. Both readings were real — the INTERNAL column
-    /// decomposes — but the glyph composes into two cells, so the claim is 2
-    /// and the walk pulls the internal column back to it (CUB), which is what
-    /// keeps a full-width row from wrapping without touching the layout.
+    /// Apple Terminal's ZWJ claims are the DECOMPOSED widths with the joiners
+    /// dropped, because that is what the walk emits: every cursor-move repair
+    /// that kept the composed glyph was measured (treatment cards 2–3,
+    /// 2026-08-27) to leave later absolute positioning on the row displaced by
+    /// the cluster's stored-width surplus, and the full-width DCH variants
+    /// wrapped. The segments each carry their own class treatment, which is
+    /// why ❤️\u{200D}🔥 claims 4 (an ECH'd ❤️ plus a bare 🔥) and 👩🏽\u{200D}🚀
+    /// claims 7 (a separated 👩+ZWNJ+🏽 plus a bare 🚀).
     @Test(
-        "Apple Terminal claims the composed width while its internal column decomposes",
+        "Apple Terminal claims the decomposed width and the walk emits the segments",
         arguments: [
-            ("👩‍🚀", 5), ("🧑‍🌾", 5), ("👨‍👩‍👧", 8), ("👨‍👩‍👧‍👦", 11), ("👩🏽‍🚀", 7),
-        ] as [(String, Int)])
-    func appleClaimsComposedWidth(text: String, internalAdvance: Int) {
-        #expect(!TerminalClient.widthTraits(of: .appleTerminal).decomposesZWJSequences)
+            ("👩\u{200D}🚀", 4, "👩🚀"),
+            ("🧑\u{200D}🌾", 4, "🧑🌾"),
+            ("👨\u{200D}👩\u{200D}👧\u{200D}👦", 8, "👨👩👧👦"),
+            ("❤️\u{200D}🔥", 4, "\u{1B}[2X❤️\u{1B}[1C🔥"),
+            ("👩🏽\u{200D}🚀", 7, "👩\u{200C}🏽🚀"),
+        ] as [(String, Int, String)])
+    func appleClaimsDecomposedWidth(text: String, claim: Int, emission: String) {
+        #expect(
+            TerminalClient.widthTraits(of: .appleTerminal)
+                == TerminalWidthTraits(
+                    zwjSequences: .decomposedDroppingJoiners,
+                    skinTone: .separatedOnEmojiPresentationBases))
         TerminalWidthTraits.withTraits(Self.apple) {
-            #expect(Character(text).terminalWidth == 2)
-            #expect(Character(text).terminalAppCursorAdvance == internalAdvance)
+            #expect(Character(text).terminalWidth == claim)
             let out = TerminalClient.compensating(text, for: .appleTerminal)
-            #expect(out.contains("\u{1B}[\(internalAdvance - 2)D"),
-                    "the walk pulls the internal column back: |\(out)|")
+            #expect(out == emission, "|\(out)|")
         }
     }
 
-    /// A ZWJ sequence whose FIRST segment has no emoji presentation of its own
-    /// still PAINTS the next character one cell in after the internal pull-back
-    /// — which is why 🏴‍☠️ and 🏳️‍🌈 behave differently despite looking like
-    /// the same kind of thing. The walk goes back one further and steps
-    /// forward: same net internal, one more paint cell.
+    /// A skin-tone cluster on an emoji-presentation base is rewritten as
+    /// base + ZWNJ + modifier — no cursor moves at all — and claims the
+    /// separated width of base + 3, the ZWNJ occupying its own column
+    /// (measured: 🤙+ZWNJ+🏽 advances 5 and paints base, blank, swatch, with
+    /// followers and absolute moves all landing true — treatment cards 2–3).
+    /// A text-presentation base keeps the composed claim and the pull-back:
+    /// the same rewrite measured misaligned for those.
     @Test(
-        "A ZWJ sequence on a text-presentation base gets the extra paint nudge",
-        arguments: ["❤️‍🔥", "🏳️‍🌈", "⛓️‍💥"])
-    func textPresentationLeadingZWJIsCompensated(text: String) {
+        "Skin tones separate on emoji-presentation bases and pull back on text ones",
+        arguments: [
+            ("🤙🏽", 5, "🤙\u{200C}🏽"),
+            ("✊🏿", 5, "✊\u{200C}🏿"),
+            ("👍🏽", 5, "👍\u{200C}🏽"),
+            ("☝🏻", 2, "☝🏻\u{1B}[1D"),
+            ("✍🏿", 2, "✍🏿\u{1B}[1D"),
+        ] as [(String, Int, String)])
+    func appleSkinTonesSeparateOrPullBack(text: String, claim: Int, emission: String) {
+        TerminalWidthTraits.withTraits(Self.apple) {
+            #expect(Character(text).terminalWidth == claim)
+            let out = TerminalClient.compensating(text, for: .appleTerminal)
+            #expect(out == emission, "|\(out)|")
+        }
+    }
+
+    /// Flag pairs and keycaps are stored one column wider than they paint, and
+    /// the store poisons everything later on the row — so the walk deletes the
+    /// surplus stored column: `CUB(1)`, `DCH(1)`, `CUF(1)` (the one emission of
+    /// ten card variants whose sequential AND absolutely-placed followers both
+    /// landed true; treatment card 4, 2026-08-27).
+    @Test(
+        "Flags and keycaps get the stored-column surgery",
+        arguments: ["🇺🇸", "1\u{FE0F}\u{20E3}", "#\u{FE0F}\u{20E3}"])
+    func flagsAndKeycapsGetStoreSurgery(text: String) {
         TerminalWidthTraits.withTraits(Self.apple) {
             let character = Character(text)
             #expect(character.terminalWidth == 2, "claim")
-            #expect(character.terminalAppCursorAdvance == 4, "internal, DSR-measured")
-            #expect(character.terminalAppPaintsShortOfClaim, "paints short after pull-back")
+            #expect(character.terminalAppCursorAdvance == 2, "internal, DSR-measured")
+            #expect(character.terminalAppStoresWiderThanPainted)
             let out = TerminalClient.compensating(text, for: .appleTerminal)
-            #expect(out.contains("\u{1B}[3D\u{1B}[1C"), "back 3, forward 1: |\(out)|")
+            #expect(out == text + "\u{1B}[1D\u{1B}[1P\u{1B}[1C", "|\(out)|")
         }
     }
 
@@ -218,11 +245,14 @@ struct TerminalWidthTraitsTests {
             (.warp, "✊🏻"),
 
             (.iTerm2, "✊🏻"),
+
+            (.appleTerminal, "🤙\u{200C}🏽"),
+            (.appleTerminal, "👨👩👧👦"),
         ] as [(TerminalClient.Program, String)])
     func claimedClustersAreEmittedVerbatim(program: TerminalClient.Program, text: String) {
-        // No Apple Terminal skin-tone case belongs in this list: its claim is
-        // the composed width, so every skin-tone cluster carries a CUB — the
-        // hosts here are the ones whose CLAIM covers the cluster's full extent.
+        // The Apple cases are the walk's own rewritten forms: re-compensating
+        // an already-separated or already-decomposed emission must be the
+        // identity, or a row would grow on every rebuild.
         TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: program)) {
             let out = TerminalClient.compensating(text, for: program)
             #expect(out == text, "expected verbatim, got \(out.debugDescription)")
@@ -355,7 +385,7 @@ struct TerminalWidthTraitsTests {
 struct TerminalWidthTraitsProcessTests {
 
     private static let warp = TerminalWidthTraits(
-        decomposesZWJSequences: true, skinTone: .detached)
+        zwjSequences: .decomposedKeepingJoiners, skinTone: .detached)
 
     @Test("Changing the process traits bumps the generation; a no-op change does not")
     @MainActor
@@ -395,7 +425,7 @@ struct TerminalWidthTraitsProcessTests {
             TerminalWidthTraits.current = savedTraits
         }
         TerminalClient.simulated = .warp
-        #expect(TerminalWidthTraits.current.decomposesZWJSequences,
+        #expect(TerminalWidthTraits.current.zwjSequences == .decomposedKeepingJoiners,
                 "the picker must move the claim, not just the compensation")
         TerminalClient.simulated = .ghostty
         #expect(TerminalWidthTraits.current == .composing)

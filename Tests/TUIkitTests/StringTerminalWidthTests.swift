@@ -258,16 +258,19 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(result.strippedLength == s.strippedLength, "Visible width preserved")
     }
 
-    @Test("Flag emoji followed by content: CUB(1)+CUF(1) — paint nudged, internal unchanged")
-    func flagFollowedByContentNudgesPaint() {
-        // 🇺🇸's internal column matches the claim (2) but the next character
-        // PAINTS in the flag's second cell. A plain CUF fixed the paint and
-        // pushed the internal column to 3 — one wrapped full-width row per
-        // flag. CUB(1)+CUF(1) is net zero internally and one paint cell
-        // forward; both measured (`replay_wrap`, Terminal.app 455.1).
+    @Test("Flag emoji followed by content: CUB(1)+DCH(1)+CUF(1) — the stored column trimmed")
+    func flagFollowedByContentTrimsTheStore() {
+        // 🇺🇸's internal column matches the claim (2) and the glyph paints
+        // into it — and the row STORES one column more than it paints, which
+        // pushes everything later on the row (absolutely-addressed writes
+        // included) one cell left. The old CUB(1)+CUF(1) nudge fixed only the
+        // immediate follower and measured misaligned on the treatment cards;
+        // deleting the surplus stored column (`DCH`) is the repair whose
+        // sequential and absolute followers both land true (card 4,
+        // Terminal.app 455.1, 2026-08-27).
         let s = "from 🇺🇸 today"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result.contains("\u{1B}[1D\u{1B}[1C"), "|\(result)|")
+        #expect(result.contains("🇺🇸\u{1B}[1D\u{1B}[1P\u{1B}[1C"), "|\(result)|")
         #expect(result.strippedLength == s.strippedLength, "and the row still measures the same")
         // A LONE indicator still under-advances and still gets its CUF.
         let lone = "at \u{1F1E6} end".withTerminalAppCursorCompensation()

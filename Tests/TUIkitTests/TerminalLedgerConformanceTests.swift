@@ -177,13 +177,15 @@ struct TerminalLedgerConformanceTests {
         }
     }
 
-    /// The other half of the Apple Terminal contract: every cluster whose PAINT
-    /// was measured to land short of the claim — after the internal pull-back —
-    /// must carry the extra back-one-forward-one nudge, and no other cluster
-    /// may. The measured landings are the records'; the nudge policy is
-    /// ``Swift/Character/terminalAppPaintsShortOfClaim``.
-    @Test("Apple Terminal's paint-short set matches the measured landings")
-    func appleTerminalPaintShortSetMatchesMeasurement() {
+    /// The other half of the Apple Terminal contract: every cluster in the
+    /// stored-wide set — the ones whose row store keeps a column more than
+    /// they paint, repaired with `CUB(1)` `DCH(1)` `CUF(1)` — must have been
+    /// measured to land its follower short of the claim, because that surplus
+    /// column is exactly what pushes the follower left. The measured landings
+    /// are the records'; the surgery policy is
+    /// ``Swift/Character/terminalAppStoresWiderThanPainted``.
+    @Test("Apple Terminal's stored-wide set matches the measured landings")
+    func appleTerminalStoredWideSetMatchesMeasurement() {
         guard let ledger = Self.ledgers.first(where: { $0.program == .appleTerminal }) else {
             Issue.record("no Apple Terminal ledger")
             return
@@ -192,15 +194,19 @@ struct TerminalLedgerConformanceTests {
             for (id, measurement) in ledger.measurements.sorted(by: { $0.key < $1.key }) {
                 guard let entry = Self.corpus[id] else { continue }
                 // Only one direction is mechanically checkable: everything in
-                // the nudge set must have been measured to land short of the
-                // claim. (The converse does not hold — skin tones land short
-                // raw too, but the plain pull-back was measured to snap their
-                // paint to the claim, so they are deliberately not in the set.)
-                let claim = entry.character.terminalWidth
-                if entry.character.terminalAppPaintsShortOfClaim {
+                // the stored-wide set must have been measured to land short of
+                // its COMPOSED claim. (The converse does not hold — skin tones
+                // and ZWJ sequences land short raw too, and they are treated
+                // by rewriting rather than store surgery.) The composed claim,
+                // not the traits-widened one: the landings were measured
+                // against the raw cluster.
+                let claim = TerminalWidthTraits.withTraits(.composing) {
+                    entry.character.terminalWidth
+                }
+                if entry.character.terminalAppStoresWiderThanPainted {
                     #expect(
                         measurement.landing < claim,
-                        "\(id) carries the paint nudge but lands at \(measurement.landing) of \(claim)")
+                        "\(id) carries the store surgery but lands at \(measurement.landing) of \(claim)")
                 }
             }
         }

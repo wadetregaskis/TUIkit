@@ -41,10 +41,17 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         /// SMP-based ones the terminal joins correctly. This is tmux.
         case stripBMPBases
         /// Keep every scalar and pull the internal column back to the claim
-        /// with `CUB(advance − claim)` after the cluster — Apple Terminal's
-        /// treatment. The advance model is the measured 4 for an
-        /// emoji-presentation base and 3 for a text-presentation one.
+        /// with `CUB(advance − claim)` after the cluster. Aligned everywhere
+        /// measured — and the terminal re-renders the cluster as its bare
+        /// base, so the tone does not survive on screen.
         case pullBack
+        /// Rewrite an emoji-presentation base's cluster as base + ZWNJ +
+        /// modifier, claiming the separated width (base + 3 — the ZWNJ takes a
+        /// column), so the tone renders as a swatch beside the base; pull a
+        /// text-presentation base's cluster back as ``pullBack`` does, because
+        /// the rewrite was measured to misalign for those. Apple Terminal's
+        /// treatment.
+        case separate
     }
 
     /// `<base>+U+FE0F` pictographs — 🖥️ ❤️ ✏️ ⚠️. Painted two cells, advanced
@@ -80,21 +87,26 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
     public var planeSixteenPUA: Bool
 
     /// The terminal's INTERNAL column decomposes a ZWJ sequence — advancing
-    /// the sum of the segments plus one per joiner — while painting the
-    /// composed glyph into the claimed cells. Apple Terminal (👨‍👩‍👧‍👦:
-    /// internal 11, paint 2). The walk pulls the column back with `CUB`.
+    /// the sum of the segments plus one per joiner — and no cursor repair
+    /// squares that with the row's stored content (Apple Terminal:
+    /// 👨‍👩‍👧‍👦 internal 11, paint 2, and every `CUB`/`DCH` repair measured
+    /// either displaced later writes on the row or re-rendered the cluster
+    /// stripped). The walk decomposes the sequence in software instead —
+    /// segments emitted as independent clusters, joiners removed — and the
+    /// claim follows (``widthTraits``).
     public var zwjSequences: Bool
 
     /// The same divergence for tag-sequence flags (🏴󠁧󠁢󠁳󠁣󠁴󠁿): internal advance
-    /// 2 plus one per tag scalar, painted 2. Apple Terminal.
+    /// 2 plus one per tag scalar, painted 2. Apple Terminal. The walk pulls
+    /// the column back with `CUB` — measured aligned, stored width included.
     public var tagFlags: Bool
 
-    /// Flag pairs, keycaps and ZWJ sequences led by a text-presentation
-    /// segment paint the NEXT character one cell short of the internal
-    /// column, even after any pull-back. The walk goes one column further
-    /// back and steps forward — net zero internally, one more paint cell.
-    /// Apple Terminal.
-    public var paintShortComposites: Bool
+    /// Flag pairs and keycaps are STORED one column wider than they paint, so
+    /// everything later on the row — absolutely-addressed writes included —
+    /// lands one cell left, whatever the cursor does. The walk deletes the
+    /// surplus stored column from inside the cluster: `CUB(1)`, `DCH(1)`,
+    /// `CUF(1)`. Apple Terminal.
+    public var storesWideComposites: Bool
 
     /// How this terminal handles skin-tone clusters.
     public var skinTones: SkinTones
@@ -121,7 +133,7 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         planeSixteenPUA: Bool = false,
         zwjSequences: Bool = false,
         tagFlags: Bool = false,
-        paintShortComposites: Bool = false,
+        storesWideComposites: Bool = false,
         skinTones: SkinTones = .keep,
         erasesUnderGlyphs: Bool = false
     ) {
@@ -134,9 +146,24 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         self.planeSixteenPUA = planeSixteenPUA
         self.zwjSequences = zwjSequences
         self.tagFlags = tagFlags
-        self.paintShortComposites = paintShortComposites
+        self.storesWideComposites = storesWideComposites
         self.skinTones = skinTones
         self.erasesUnderGlyphs = erasesUnderGlyphs
+    }
+
+    /// The ``TerminalWidthTraits`` these switches imply — the claims that must
+    /// be in force for the mirror walk's emissions to conserve.
+    ///
+    /// Two switches change what a cluster CLAIMS, not just how it is emitted:
+    /// software ZWJ decomposition makes the sequence claim the sum of its
+    /// segments, and skin-tone separation makes an emoji-presentation base's
+    /// cluster claim the separated width. Whoever renders with a custom quirk
+    /// set applies these traits alongside it, exactly as startup applies the
+    /// identified host's.
+    public var widthTraits: TerminalWidthTraits {
+        TerminalWidthTraits(
+            zwjSequences: zwjSequences ? .decomposedDroppingJoiners : .composed,
+            skinTone: skinTones == .separate ? .separatedOnEmojiPresentationBases : .merged)
     }
 
     /// Whether any workaround at all is selected.
@@ -169,18 +196,21 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         return width
     }
 
-    /// The composed-cluster rules — ZWJ decomposition, tag flags, and skin
+    /// The composed-cluster rules — joiner decomposition, tag flags, and skin
     /// tones — split from ``cursorAdvance(of:)`` because each is a small rule
     /// and together they were most of that function's branching.
     private func composedAdvance(of cluster: Character, width: Int) -> Int? {
         let scalars = cluster.unicodeScalars
 
-        // ZWJ decomposition first — its segments resolve through
+        // Joiner decomposition first — its segments resolve through
         // ``cursorAdvance(of:)``, which is how a skin-toned segment inside a
-        // sequence (👩🏽‍🚀) gets both rules at once.
-        if zwjSequences, scalars.contains(where: { $0.value == 0x200D }),
-            let first = scalars.first, first.properties.isEmoji,
-            let summed = Character.summedInternalZWJAdvance(cluster, segmentAdvance: {
+        // sequence (👩🏽‍🚀) gets both rules at once. The ZWNJ arm prices the
+        // separated skin-tone emission (🤙+ZWNJ+🏽: the joiner takes a column,
+        // so 2+1+2 = 5).
+        let hasZWJ = scalars.contains { $0.value == 0x200D }
+        let hasZWNJ = scalars.contains { $0.value == 0x200C }
+        if (hasZWJ && zwjSequences) || (hasZWNJ && !hasZWJ && skinTones == .separate),
+            let summed = Character.summedInternalJoinerAdvance(cluster, segmentAdvance: {
                 self.cursorAdvance(of: $0)
             })
         {
@@ -194,9 +224,12 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
             scalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) })
         else { return nil }
         switch skinTones {
-        case .pullBack:
+        case .pullBack, .separate:
             // Measured on Apple Terminal: the internal column moves the bare
-            // base's width plus two.
+            // base's width plus two. The same number under `.separate`,
+            // because it describes the same terminal — the switches differ in
+            // what the walk EMITS for it, not in what the host does to the
+            // composed cluster.
             return first.properties.isEmojiPresentation ? 4 : 3
         case .stripAll:
             // Stripped before the walk ever sees it, so its advance is the
@@ -225,17 +258,24 @@ extension String {
     /// and friends), driven by a set of switches rather than a measured model.
     ///
     /// The walk mirrors the real ones move for move — the skin-tone strip
-    /// first where a strip is selected, `ECH`+glyph+`CUF` for under-advancers,
-    /// the cluster plus `CUB` for over-advancers (`.pullBack`, ZWJ, tag
-    /// flags), and the one-further-back-one-forward nudge for the paint-short
-    /// classes — so what is seen while exploring a new terminal is exactly
-    /// what that terminal would get once its model was written down.
-    /// `TerminalQuirksTests` pins the Apple-shaped set to the real Apple walk,
-    /// emission for emission, which is what keeps the mirror from drifting.
+    /// first where a strip is selected, software ZWJ decomposition and the
+    /// base+ZWNJ+modifier skin-tone rewrite where those are selected,
+    /// `ECH`+glyph+`CUF` for under-advancers, the cluster plus `CUB` for
+    /// over-advancers (`.pullBack`, tag flags), and the `CUB(1)` `DCH(1)`
+    /// `CUF(1)` store surgery for flags and keycaps — so what is seen while
+    /// exploring a new terminal is exactly what that terminal would get once
+    /// its model was written down. `TerminalQuirksTests` pins the Apple-shaped
+    /// set to the real Apple walk, emission for emission, which is what keeps
+    /// the mirror from drifting.
+    ///
+    /// Callers rendering with a claim-changing switch (``TerminalQuirks/zwjSequences``,
+    /// ``TerminalQuirks/SkinTones/separate``) must have the matching
+    /// ``TerminalQuirks/widthTraits`` in force, exactly as the real walk
+    /// requires the identified host's traits.
     public func withCursorCompensation(for quirks: TerminalQuirks) -> String {
         let stripped =
             switch quirks.skinTones {
-            case .keep, .pullBack: self
+            case .keep, .pullBack, .separate: self
             case .stripAll: withSkinToneFallback(basePlane: .all)
             case .stripBMPBases: withSkinToneFallback(basePlane: .bmpOnly)
             }
@@ -243,6 +283,41 @@ extension String {
 
         var result = ""
         result.reserveCapacity(stripped.count + 8)
+
+        func appendCompensated(_ character: Character) {
+            if quirks.skinTones == .separate,
+                let separated = character.separatedSkinToneEmission
+            {
+                result += separated
+                return
+            }
+            let claimed = character.terminalWidth
+            let advance = quirks.cursorAdvance(of: character)
+            if quirks.storesWideComposites, character.terminalAppStoresWiderThanPainted,
+                advance == claimed
+            {
+                // Store surgery presumes the cursor maths already balance; an
+                // explorer who has ALSO marked this class as under-advancing
+                // (a different terminal's defect) gets the under-advance
+                // repair, which is the one their advance model describes.
+                result.append(character)
+                result += "\u{1B}[1D\u{1B}[1P\u{1B}[1C"
+                return
+            }
+            if claimed > advance {
+                if quirks.erasesUnderGlyphs {
+                    result += "\u{1B}[\(claimed)X"
+                }
+                result.append(character)
+                result += "\u{1B}[\(claimed - advance)C"
+            } else if advance > claimed {
+                result.append(character)
+                result += "\u{1B}[\(advance - claimed)D"
+            } else {
+                result.append(character)
+            }
+        }
+
         var index = stripped.startIndex
         while index < stripped.endIndex {
             let character = stripped[index]
@@ -252,26 +327,12 @@ extension String {
                 result += stripped[sequenceStart..<index]
                 continue
             }
-            let claimed = character.terminalWidth
-            let advance = quirks.cursorAdvance(of: character)
-            let paintsShort =
-                quirks.paintShortComposites && character.terminalAppPaintsShortOfClaim
-            if claimed > advance {
-                if quirks.erasesUnderGlyphs {
-                    result += "\u{1B}[\(claimed)X"
-                }
-                result.append(character)
-                result += "\u{1B}[\(claimed - advance)C"
-            } else if advance > claimed || paintsShort {
-                result.append(character)
-                let back = advance - claimed
-                if paintsShort {
-                    result += "\u{1B}[\(back + 1)D\u{1B}[1C"
-                } else {
-                    result += "\u{1B}[\(back)D"
+            if quirks.zwjSequences, let segments = character.emojiZWJSegments {
+                for segment in segments {
+                    appendCompensated(segment)
                 }
             } else {
-                result.append(character)
+                appendCompensated(character)
             }
             index = stripped.index(after: index)
         }

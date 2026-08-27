@@ -217,7 +217,16 @@ public struct TerminalClient: Sendable, Equatable {
     ///
     /// Like ``simulated``, this is a diagnostic. `nil` is the only value a
     /// shipping app should have.
-    @MainActor public static var simulatedQuirks: TerminalQuirks?
+    @MainActor public static var simulatedQuirks: TerminalQuirks? {
+        didSet {
+            // Two of the switches change what a cluster CLAIMS, not just how
+            // it is emitted (software ZWJ decomposition, skin-tone
+            // separation), so the traits must follow the switches exactly as
+            // they follow a simulated program.
+            guard simulatedQuirks != oldValue else { return }
+            applyWidthTraits()
+        }
+    }
 
     /// The program whose model is actually being applied: ``simulated`` when
     /// one is set, and the detected client otherwise.
@@ -244,27 +253,36 @@ public struct TerminalClient: Sendable, Equatable {
     public static func widthTraits(of program: Program) -> TerminalWidthTraits {
         switch program {
         case .appleTerminal:
-            // NOT widened, and this reverses an earlier decision made from DSR.
+            // The claims for the two classes whose emission the walk REWRITES,
+            // because for them the claim must match the rewritten form, not
+            // the composed cluster:
             //
-            // Apple Terminal reports an advance of 3 to 11 for these clusters
-            // and *paints* them into one or two cells, drawing the next
-            // character right after the ink. A claim built on the reported
-            // advance is a claim nothing paints at: 🤙🏽 claimed at 4 and
-            // painted at 2 puts the enclosing border two cells to the left,
-            // which is precisely the symptom that prompted the measurement.
+            // - Skin tones on an emoji-presentation base are emitted as base +
+            //   ZWNJ + modifier (the ZWNJ occupying its own column), so 🤙🏽
+            //   claims 5. Text-presentation bases keep the composed claim and
+            //   the pull-back walk — the rewrite measured misaligned for them.
+            // - Emoji ZWJ sequences are emitted as their segments with the
+            //   joiners removed, so 👨‍👩‍👧‍👦 claims 8 and ❤️‍🔥 claims 4.
             //
-            // Measured with `Tools/TerminalProbes/landing_probe.py` on
-            // 2026-08-26 — 25 of the 69 corpus clusters, against none at all on
-            // iTerm2, Ghostty or Warp. The compensation is a forward move, so
-            // nothing is stripped and the modifier survives.
-            .composing
+            // Both reverse the earlier "not widened" decision, which kept the
+            // composed cluster and repaired the cursor with CUB: measured on
+            // the treatment cards (2026-08-27), every cursor-move repair
+            // either re-rendered the cluster stripped (CUB, DCH), displaced
+            // later absolute positioning on the row by the cluster's
+            // stored-width surplus, or wrapped a full-width row. The rewrites
+            // are the treatments with nothing measurably wrong — at the cost
+            // of component glyphs instead of composed ones, and one blank
+            // column inside a separated skin tone.
+            TerminalWidthTraits(
+                zwjSequences: .decomposedDroppingJoiners,
+                skinTone: .separatedOnEmojiPresentationBases)
         case .iTerm2:
-            TerminalWidthTraits(decomposesZWJSequences: false, skinTone: .detachedOnBMPBases)
+            TerminalWidthTraits(zwjSequences: .composed, skinTone: .detachedOnBMPBases)
         case .ghostty:
             // The one host that composes everything.
             .composing
         case .warp:
-            TerminalWidthTraits(decomposesZWJSequences: true, skinTone: .detached)
+            TerminalWidthTraits(zwjSequences: .decomposedKeepingJoiners, skinTone: .detached)
         case .tmux:
             // NOT widened, deliberately. Measured 2026-08-26, tmux 3.7b does
             // not split by base plane the way iTerm2 does: 👍🏽 🙏🏽 👋🏽 merge
@@ -284,13 +302,17 @@ public struct TerminalClient: Sendable, Equatable {
         }
     }
 
-    /// Publishes the identified host's width traits process-wide.
+    /// Publishes the effective width traits process-wide: the hand-built
+    /// quirk set's implied claims when one is being explored, the identified
+    /// (or simulated) host's otherwise.
     ///
     /// Called once at startup, before the render loop is built, because
-    /// `FrameDiffWriter` and every layout pass read the claim.
+    /// `FrameDiffWriter` and every layout pass read the claim — and again by
+    /// the diagnostic setters, whose whole point is changing it.
     @MainActor
     public static func applyWidthTraits() {
-        TerminalWidthTraits.current = widthTraits(of: effective.program)
+        TerminalWidthTraits.current =
+            simulatedQuirks?.widthTraits ?? widthTraits(of: effective.program)
     }
 
     // MARK: - The models

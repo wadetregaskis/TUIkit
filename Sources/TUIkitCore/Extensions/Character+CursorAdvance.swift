@@ -23,33 +23,39 @@ extension Character {
     /// character is printed — the DSR column, which is NOT always where the
     /// glyph or the next character is painted.
     ///
-    /// ## Two counters, and which one this is
+    /// ## Three facts per row, and which one this is
     ///
-    /// Apple Terminal keeps two columns per row and they can disagree by nine:
+    /// Apple Terminal keeps three per-row facts that can disagree:
     ///
     /// - **internal** (this property; DSR-measured): the terminal's own
     ///   bookkeeping. It decides **when the row wraps** and how far a write is
     ///   accepted before the terminal moves to the next row. A row whose
     ///   internal total exceeds the width wraps early, and the cells the wrap
     ///   abandoned keep the terminal's DEFAULT background — the
-    ///   white-cells-at-the-end-of-the-row defect.
-    /// - **paint** (``terminalAppPaintsShortOfClaim`` and the walk's per-class
-    ///   table): where glyphs actually land. 🤙🏽 advances the internal column
-    ///   4 while composing into 2 cells and painting the next character at 2.
+    ///   white-cells-at-the-end-of-the-row defect. 🤙🏽 advances it 4 while
+    ///   composing into 2 cells.
+    /// - **paint**: where the glyph and its immediate follower land.
+    /// - **stored width** (``terminalAppStoresWiderThanPainted``): how many
+    ///   columns the row's text store keeps for the cluster, which decides
+    ///   where everything LATER on the row paints — a store wider than the
+    ///   paint displaces the whole tail left, cursor moves notwithstanding.
     ///
-    /// Compensation must end each cluster with BOTH counters at the claimed
-    /// width. A briefly-shipped model returned paint from this property; the
+    /// Compensation must square all three with the claimed width. A
+    /// briefly-shipped model returned paint from this property; the
     /// conservation test then verified paint and was blind to internal drift,
     /// and every full-width row carrying a skin tone wrapped. Everything here
-    /// is the DSR measurement, and the walk closes the paint gap separately.
+    /// is the DSR measurement; the walk squares the other two per class.
     public var terminalAppCursorAdvance: Int {
-        // A ZWJ cluster first: its INTERNAL advance is the sum of its
-        // segments', including their VS-16 under-advance — DSR-measured to
-        // predict every corpus case exactly (👩‍🚀 2+1+2 = 5, 👨‍👩‍👧‍👦 11,
-        // ❤️‍🔥 1+1+2 = 4, 👩🏽‍🚀 4+1+2 = 7). Unconditional, NOT gated on
-        // ``TerminalWidthTraits``: the claim for this host is the composed
-        // width, but the internal column decomposes regardless.
-        if let summed = Self.summedInternalZWJAdvance(self, segmentAdvance: {
+        // A joined cluster first: its INTERNAL advance is the sum of its
+        // segments' plus one column per joiner — ZWJ or ZWNJ — including the
+        // segments' VS-16 under-advance. DSR-measured to predict every corpus
+        // case exactly (👩‍🚀 2+1+2 = 5, 👨‍👩‍👧‍👦 11, ❤️‍🔥 1+1+2 = 4,
+        // 👩🏽‍🚀 4+1+2 = 7), and the ZWNJ arm against the separated skin-tone
+        // rewrite the walk emits (🤙+ZWNJ+🏽 = 2+1+2 = 5, ☝+ZWNJ+🏻 = 1+1+2 =
+        // 4; 2026-08-27). Unconditional, NOT gated on ``TerminalWidthTraits``:
+        // the claim varies with the traits, but the internal column decomposes
+        // regardless.
+        if let summed = Self.summedInternalJoinerAdvance(self, segmentAdvance: {
             $0.terminalAppCursorAdvance
         }) {
             return summed
@@ -138,29 +144,33 @@ extension Character {
         return terminalWidth
     }
 
-    /// The INTERNAL cursor advance Apple Terminal makes over a ZWJ cluster:
-    /// the sum of its segments' advances plus one column per joiner, or `nil`
-    /// for a cluster with no joiner.
+    /// The INTERNAL cursor advance Apple Terminal makes over a joined cluster
+    /// — ZWJ (U+200D) or ZWNJ (U+200C): the sum of its segments' advances plus
+    /// one column per joiner, or `nil` for a cluster with neither.
     ///
     /// The same arithmetic as ``Swift/String/summedZWJAdvance(_:segmentAdvance:)``
     /// but NOT gated on ``TerminalWidthTraits``: that gate exists for hosts
     /// whose *claim* is widened to the decomposed width (Warp), and Apple
-    /// Terminal is not one — its claim is the composed two cells while its
-    /// internal column decomposes regardless. Gating this on the traits made
-    /// the internal model silently revert to the claim when the widening was
-    /// (correctly) turned off for this host.
-    static func summedInternalZWJAdvance(
+    /// Terminal's internal column decomposes regardless of the claim in force.
+    /// Gating this on the traits made the internal model silently revert to
+    /// the claim when the widening was (correctly) turned off for this host.
+    ///
+    /// The ZWNJ arm is what prices the separated skin-tone rewrite the walk
+    /// emits for this host: the joiner occupies its own internal column
+    /// (measured 2026-08-27 — 🤙+ZWNJ+🏽 advances 5), which is also why the
+    /// separated cluster CLAIMS base + 3 rather than base + 2.
+    static func summedInternalJoinerAdvance(
         _ character: Character, segmentAdvance: (Character) -> Int
     ) -> Int? {
         let scalars = character.unicodeScalars
-        guard scalars.contains(where: { $0.value == 0x200D }),
+        guard scalars.contains(where: { $0.value == 0x200D || $0.value == 0x200C }),
             let first = scalars.first, first.properties.isEmoji
         else { return nil }
         var total = 0
         var joiners = 0
         var segment = String.UnicodeScalarView()
         for scalar in scalars {
-            if scalar.value == 0x200D {
+            if scalar.value == 0x200D || scalar.value == 0x200C {
                 joiners += 1
                 total += segmentAdvance(Character(String(segment)))
                 segment = String.UnicodeScalarView()
@@ -172,48 +182,139 @@ extension Character {
         return total + joiners
     }
 
-    /// `true` when, after this cluster's internal column has been pulled back
-    /// to the claim with `CUB`, the next character still PAINTS one cell short
-    /// of it — so the walk must go back one further and step forward.
+    /// `true` for the clusters Apple Terminal STORES one column wider than it
+    /// paints them — flag pairs and keycap sequences — which the walk repairs
+    /// with store surgery: the cluster, then `CUB(1)`, `DCH(1)`, `CUF(1)`.
     ///
-    /// ## The two counters, and what was measured
+    /// ## Stored width is a third fact, and it poisons the row
     ///
     /// Apple Terminal's internal column (DSR — ``terminalAppCursorAdvance``)
-    /// and its paint position diverge on composed clusters, and compensation
-    /// must end with both at the claimed width: internal, or a full-width row
-    /// wraps and its abandoned tail shows the terminal's default background;
-    /// paint, or everything after the cluster shears. Measured with
-    /// `landing_probe.py` and the move sweep (2026-08-26/27, Terminal.app
-    /// 455.1, alternate screen), `CUB(internal − claim)` after the cluster
-    /// brings BOTH counters to the claim for skin tones and emoji-led ZWJ
-    /// sequences — the paint response to `CUB` is not linear, it *snaps* to
-    /// the internal column:
+    /// says when the row wraps; its paint position says where ink lands; and
+    /// the row's STORED content decides where every *later* write on the row —
+    /// sequential or absolutely addressed — actually paints. A cluster whose
+    /// stored width differs from its painted width displaces everything to
+    /// its right by the difference, and no cursor move can repair that,
+    /// because cursor moves do not edit the store.
     ///
-    /// | cluster | internal | paint after cluster | after `CUB(int−2)` |
-    /// |---|---|---|---|
-    /// | 🤙🏽 ✊🏻 | 4 | 2 | internal 2, paint 2 |
-    /// | ☝🏻 ✌🏼 | 3 | 1 | internal 2, paint 2 |
-    /// | 👩‍🚀 👨‍👩‍👧‍👦 | 5, 11 | 2 | internal 2, paint 2 |
+    /// Flag pairs and keycaps advance the internal column exactly their
+    /// 2-cell claim, paint their glyph into those 2 cells — and still paint
+    /// every follower one cell left (measured 2026-08-27, treatment cards 2–4,
+    /// Terminal.app 455.1: `abc` and an absolutely-placed probe column both
+    /// shifted −1 after 🇺🇸 under the previous pull-back-and-step emission).
+    /// Deleting one stored column from inside the cluster is the only measured
+    /// repair: `CUB(1)` steps into the cluster, `DCH(1)` removes the surplus
+    /// stored column (the follower probes then land exactly), and `CUF(1)`
+    /// restores the cursor the deletion left one short. The DCH shifts and
+    /// backfills everything right of the cursor, which is safe here because
+    /// `FrameDiffWriter` always emits whole rows left to right — everything
+    /// right of the cluster is rewritten after it in the same emission.
     ///
-    /// Three classes are the exception — after the pull-back the next
-    /// character still paints at 1, so they need `CUB(int−claim+1)` then
-    /// `CUF(1)` (same net internal, one more paint cell):
-    ///
-    /// - a ZWJ sequence whose FIRST segment has no emoji presentation of its
-    ///   own (❤️‍🔥, 🏳️‍🌈, ⛓️‍💥 — which is why 🏴‍☠️ behaves differently
-    ///   from 🏳️‍🌈 despite looking like the same kind of thing),
-    /// - flag pairs (internal already equals the claim; paint lands at 1),
-    /// - keycap sequences (likewise).
-    var terminalAppPaintsShortOfClaim: Bool {
+    /// ZWJ sequences led by a text-presentation segment (❤️‍🔥 🏳️‍🌈) used to
+    /// be the third member of this class; the walk now decomposes ZWJ
+    /// sequences for this host instead, so they never reach it.
+    var terminalAppStoresWiderThanPainted: Bool {
         let scalars = unicodeScalars
-        guard let first = scalars.first else { return false }
         if TerminalQuirks.isFlagPair(self) { return true }
-        if scalars.contains(where: { $0.value == 0x20E3 }) { return true }
-        // The first-scalar guard keeps `m🏻` (an SGR final byte fused with a
-        // lone Fitzpatrick, which is Grapheme_Extend) out of here.
-        return scalars.contains { $0.value == 0x200D }
-            && first.properties.isEmoji
-            && !first.properties.isEmojiPresentation
+        guard let first = scalars.first, first.properties.isEmoji else { return false }
+        return scalars.contains { $0.value == 0x20E3 }
+    }
+
+    /// This cluster's ZWJ-separated segments as independent clusters — the
+    /// software decomposition the Apple Terminal walk emits in place of an
+    /// emoji ZWJ sequence — or `nil` when this is not one.
+    ///
+    /// Splits on U+200D only, never U+200C: a separated skin-tone cluster
+    /// (🤙+ZWNJ+🏽) is a finished emission, not something to take further
+    /// apart. The joiners themselves are dropped — that is the point: Apple
+    /// Terminal stores a column for every joiner it is sent while painting
+    /// none, and every cursor-move repair for that mismatch was measured to
+    /// displace later absolute positioning on the row (treatment cards 2–3,
+    /// 2026-08-27). The `isEmoji` guard keeps `m🏻` — an SGR final byte fused
+    /// with a Grapheme_Extend scalar — out, exactly as in the advance model.
+    var emojiZWJSegments: [Character]? {
+        let scalars = unicodeScalars
+        guard scalars.contains(where: { $0.value == 0x200D }),
+            let first = scalars.first, first.properties.isEmoji
+        else { return nil }
+        var segments: [Character] = []
+        var segment = String.UnicodeScalarView()
+        for scalar in scalars {
+            if scalar.value == 0x200D {
+                guard !segment.isEmpty else { return nil }
+                segments.append(Character(String(segment)))
+                segment = String.UnicodeScalarView()
+            } else {
+                segment.append(scalar)
+            }
+        }
+        guard !segment.isEmpty else { return nil }
+        segments.append(Character(String(segment)))
+        return segments
+    }
+
+    /// This skin-tone cluster rewritten as base + ZWNJ + modifier — the
+    /// separated emission the Apple Terminal walk uses for an
+    /// emoji-presentation base — or `nil` for anything else.
+    ///
+    /// The ZWNJ stops the terminal re-joining the pair: every other separator
+    /// measured (save/restore-cursor, an SGR, an 80 ms flush gap, absolute
+    /// re-positioning) left base and modifier adjacent in the row's stored
+    /// text, and Terminal.app composed them again, paint displacement and all.
+    /// ZWNJ is the one that sticks, at the cost of its own blank column
+    /// between base and swatch (treatment cards 1–3, Terminal.app 455.1,
+    /// 2026-08-27). Text-presentation bases return `nil`: the same rewrite was
+    /// measured to misalign for them (☝+ZWNJ+🏻 paints wrong), so they keep
+    /// the pull-back walk.
+    ///
+    /// Idempotent: an already-separated cluster reproduces itself, because the
+    /// base reconstruction skips any U+200C already present.
+    var separatedSkinToneEmission: String? {
+        let scalars = unicodeScalars
+        guard scalars.count > 1, let first = scalars.first,
+            first.properties.isEmojiModifierBase,
+            first.properties.isEmojiPresentation,
+            scalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }),
+            // A ZWJ sequence carrying a tone (👩🏽‍🚀) is not a plain tone
+            // cluster: separating it whole would splice the ZWNJ into the
+            // middle of the sequence. It decomposes first where decomposition
+            // is on, and stays a pull-back cluster where it is not.
+            !scalars.contains(where: { $0.value == 0x200D })
+        else { return nil }
+        var base = String.UnicodeScalarView()
+        var modifiers = String.UnicodeScalarView()
+        for scalar in scalars {
+            if (0x1F3FB...0x1F3FF).contains(scalar.value) {
+                modifiers.append(scalar)
+            } else if scalar.value != 0x200C {
+                base.append(scalar)
+            }
+        }
+        var result = String(base)
+        for modifier in modifiers {
+            result.unicodeScalars.append(Unicode.Scalar(0x200C)!)
+            result.unicodeScalars.append(modifier)
+        }
+        return result
+    }
+
+    /// `true` when the Apple Terminal walk rewrites this cluster into a form
+    /// whose internal advance lands exactly on its claim — an emoji ZWJ
+    /// sequence it will decompose, or a skin-tone cluster it will separate —
+    /// under the ``TerminalWidthTraits`` in force.
+    ///
+    /// The right-edge clip (`ansiAwarePrefixForTerminalApp`) budgets each
+    /// cluster's cursor cost to decide what fits a row without wrapping. For
+    /// these clusters the RAW internal advance (👨‍👩‍👧‍👦: 11) is not what
+    /// the walk emits — the rewritten form advances exactly the claim (8),
+    /// monotonically — so budgeting the raw number would replace clusters
+    /// with spaces that actually fit.
+    var terminalAppWalkRewritesToClaim: Bool {
+        let traits = TerminalWidthTraits.current
+        if traits.zwjSequences == .decomposedDroppingJoiners, emojiZWJSegments != nil {
+            return true
+        }
+        return traits.skinTone == .separatedOnEmojiPresentationBases
+            && separatedSkinToneEmission != nil
     }
 
     /// The number of terminal cells iTerm2's cursor actually moves after

@@ -219,14 +219,14 @@ struct CursorAdvanceModelTests {
     // real terminals (Terminal.app 455.1, iTerm2 3.6.11, macOS 15.7) — see
     // Documentation/Terminal-compatibility.md.
 
-    @Test("Terminal.app: a flag PAIR conserves internally, and the walk nudges its paint")
-    func appleFlagPairInternalAndPaint() {
+    @Test("Terminal.app: a flag PAIR conserves internally, and the walk trims its store")
+    func appleFlagPairInternalAndStore() {
         // The INTERNAL column (this property — it governs wrapping) moves the
-        // full 2 for a pair; the next character PAINTS in the flag's second
-        // cell, which the walk corrects with CUB(1)+CUF(1) — net zero
-        // internally, one paint cell forward. Both measured; a model that
-        // returned the paint (1) here made the walk emit a bare CUF and every
-        // full-width row with a flag wrapped.
+        // full 2 for a pair; the row STORES one column more than it paints,
+        // which pushes everything later on the row a cell left — measured on
+        // the treatment cards, where the old CUB(1)+CUF(1) nudge left both
+        // sequential and absolutely-placed followers misaligned. The walk
+        // deletes the surplus stored column: CUB(1), DCH(1), CUF(1).
         let pair = Character("\u{1F1FA}\u{1F1F8}")  // 🇺🇸
         #expect(pair.terminalAppCursorAdvance == 2)
         #expect(pair.terminalWidth == 2)
@@ -234,9 +234,9 @@ struct CursorAdvanceModelTests {
         let lone = Character("\u{1F1E6}")
         #expect(lone.terminalAppCursorAdvance == 1)
         #expect(lone.terminalWidth == 2)
-        // So a compensated line nudges the pair and steps past the lone one.
+        // So a compensated line trims the pair and steps past the lone one.
         let line = "\u{1F1FA}\u{1F1F8}x".withTerminalAppCursorCompensation()
-        #expect(line.contains("\u{1B}[1D\u{1B}[1C"), "|\(line)|")
+        #expect(line.contains("\u{1B}[1D\u{1B}[1P\u{1B}[1C"), "|\(line)|")
     }
 
     @Test("iTerm2 (alternate screen): keycaps, PUA, and VS-16 emoji under-advance")

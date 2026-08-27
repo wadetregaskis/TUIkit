@@ -214,13 +214,16 @@ extension Character {
     static func decomposedWidth(
         _ scalars: String.UnicodeScalarView, traits: TerminalWidthTraits
     ) -> Int? {
-        if traits.decomposesZWJSequences, scalars.contains(where: { $0.value == 0x200D }) {
-            // Sum of the ZWJ-separated segments plus one cell per joiner: the
-            // joiner itself takes a column. Measured on Warp, where this
-            // predicts every case exactly — 👩‍🚀 = 2+1+2 = 5, 👨‍👩‍👧‍👦 =
-            // 2+1+2+1+2+1+2 = 11, 👩🏽‍🚀 = 4+1+2 = 7 (the skin-toned segment
-            // resolving through this same function, which is why the two rules
-            // compose instead of duplicating each other).
+        if traits.zwjSequences != .composed, scalars.contains(where: { $0.value == 0x200D }) {
+            // Sum of the ZWJ-separated segments, plus one cell per joiner on a
+            // host whose own renderer draws the joiner as a column (Warp —
+            // measured to predict every case exactly: 👩‍🚀 = 2+1+2 = 5,
+            // 👨‍👩‍👧‍👦 = 2+1+2+1+2+1+2 = 11, 👩🏽‍🚀 = 4+1+2 = 7) and
+            // nothing for the joiners where the output walk removes them
+            // before the host ever sees one (Apple Terminal: 👨‍👩‍👧‍👦 = 8,
+            // ❤️‍🔥 = 4). The skin-toned segment resolves through this same
+            // function, which is why the two rules compose instead of
+            // duplicating each other.
             var total = 0
             var joiners = 0
             var segment = String.UnicodeScalarView()
@@ -234,7 +237,7 @@ extension Character {
                 }
             }
             total += Character(String(segment)).terminalWidth
-            return total + joiners
+            return total + (traits.zwjSequences == .decomposedKeepingJoiners ? joiners : 0)
         }
         return detachedSkinToneWidth(scalars, traits: traits)
     }
@@ -254,7 +257,8 @@ extension Character {
     static func summedZWJAdvance(
         _ character: Character, segmentAdvance: (Character) -> Int
     ) -> Int? {
-        guard TerminalWidthTraits.current.decomposesZWJSequences else { return nil }
+        guard TerminalWidthTraits.current.zwjSequences == .decomposedKeepingJoiners
+        else { return nil }
         let scalars = character.unicodeScalars
         guard scalars.contains(where: { $0.value == 0x200D }) else { return nil }
         var total = 0
@@ -290,11 +294,30 @@ extension Character {
         else { return nil }
         // iTerm2 and tmux merge an SMP base and detach only a BMP one.
         if traits.skinTone == .detachedOnBMPBases, first.value > 0xFFFF { return nil }
+        if traits.skinTone == .separatedOnEmojiPresentationBases {
+            // A text-presentation base (☝🏻 ✍🏿) stays composed on this host —
+            // the ZWNJ separation was measured to misalign for it. So does a
+            // ZWJ sequence carrying a tone (👩🏽‍🚀) when ZWJ decomposition is
+            // off: the walk cannot separate it without splicing the ZWNJ into
+            // the sequence, so it pulls back at the composed claim instead.
+            // (Under this host's real traits decomposition is on, and the
+            // toned SEGMENT resolves through this rule after the split.)
+            guard first.properties.isEmojiPresentation,
+                !scalars.contains(where: { $0.value == 0x200D })
+            else { return nil }
+        }
         var base = String.UnicodeScalarView()
-        for scalar in scalars where !(0x1F3FB...0x1F3FF).contains(scalar.value) {
+        for scalar in scalars
+        where !(0x1F3FB...0x1F3FF).contains(scalar.value) && scalar.value != 0x200C {
             base.append(scalar)
         }
-        return Character(String(base)).terminalWidth + 2
+        // Detached: base + 2-cell swatch. Separated: the walk's ZWNJ occupies
+        // its own column between them (measured — Apple Terminal advances
+        // 🤙+ZWNJ+🏽 by 5), so base + separator + swatch. Excluding U+200C from
+        // the base reconstruction above makes the already-rewritten cluster
+        // measure the same as the original it replaces.
+        let swatch = traits.skinTone == .separatedOnEmojiPresentationBases ? 3 : 2
+        return Character(String(base)).terminalWidth + swatch
     }
 }
 

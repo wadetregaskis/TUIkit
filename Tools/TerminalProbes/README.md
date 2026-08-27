@@ -143,3 +143,27 @@ the screenshot.
 
 Strategies are built from the cluster's advance measured live in the run, not
 from a model, so the probe works unchanged on a terminal nobody has measured.
+
+## `treatment_card.py` — the shipped emissions, verifiable at a glance
+
+Where `matrix_probe.py` explores every strategy, this shows only the ones the
+walk SHIPS for Apple Terminal — each as an expect/actual row pair on a blue
+background, so "is it right" is a vertical comparison a human (or a
+screenshot diff) makes in seconds. Page 2 ends a full-width blue row with
+each emission, which is the white-cells-at-the-row-edge and wrap check.
+
+```sh
+PROBE_OUT=/tmp/treatment.json python3 treatment_card.py
+```
+
+The DSR half is fully automatic: `PROBE_OUT` records, per row, the net
+advance against the claim, where sequential followers ended, where an
+absolute CHA landed, and (page 2) whether the row wrapped — each with an `ok`
+verdict. The pixel half (alignment of `ab` and `X`, background holes, glyph
+appearance) needs eyes or a capture.
+
+Four generations of this card settled the 2026-08-27 treatments: it is how
+the ZWNJ separation, the ZWJ decomposition and the flag/keycap `DCH` store
+surgery were chosen over the cursor-move repairs they replaced. The emissions
+here mirror `String.withTerminalAppCursorCompensation()`, and
+`TerminalWidthTraitsTests` pins the same literals on the Swift side.
