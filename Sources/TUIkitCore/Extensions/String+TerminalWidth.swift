@@ -543,6 +543,19 @@ extension Character {
     /// iTerm2 output path strips them first (``withSkinToneFallback()``),
     /// so they never reach the compensation walk.
     public var iTerm2CursorAdvance: Int {
+        // A ZWJ sequence whose FIRST segment is a VS-16 cluster — ❤️‍🔥 🏳️‍🌈 —
+        // advances 1 against a claim of 2: the leading segment carries this
+        // host's VS-16 under-advance and the rest folds into it. Long
+        // documented as unhandled; measurable now that the emoji page draws
+        // one. CUF closes it.
+        if let joiner = unicodeScalars.firstIndex(where: { $0.value == 0x200D }),
+            unicodeScalars[..<joiner].contains(where: { $0.value == 0xFE0F })
+        {
+            // The FIRST segment is what matters, not the base's plane: ❤️ is
+            // BMP and 🏳️ is SMP, and both behave the same because both carry
+            // the selector.
+            return 1
+        }
         let scalars = unicodeScalars
         if scalars.contains(where: { $0.value == 0x20E3 }) {
             return 1
@@ -579,6 +592,18 @@ extension Character {
     ///   a symbol is followed by one blank cell rather than shearing every
     ///   later column on the row left by one.
     public var ghosttyCursorAdvance: Int {
+        // A skin-tone cluster on a BMP text-presentation base — ☝🏻 ✌🏼 ✍🏽 ⛹🏾 —
+        // merges to ONE cell here, not two: the base is a 1-cell text glyph and
+        // Ghostty keeps it that way with the modifier folded in. Claimed 2, so
+        // a CUF is owed, exactly as for its SF Symbols — alignment bought with
+        // a blank cell rather than a shear. Measured 2026-08-26 against every
+        // cluster the Example emoji page draws.
+        if unicodeScalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }),
+            let base = unicodeScalars.first, base.value <= 0xFFFF,
+            base.properties.isEmoji, !base.properties.isEmojiPresentation
+        {
+            return 1
+        }
         let scalars = unicodeScalars
         if scalars.count == 1, let only = scalars.first,
             (0x100000...0x10FFFD).contains(only.value)
@@ -615,6 +640,22 @@ extension Character {
     public var warpCursorAdvance: Int {
         if let summed = Self.summedZWJAdvance(self, segmentAdvance: { $0.warpCursorAdvance }) {
             return summed
+        }
+        // Plane-16 Private Use Area — SF Symbols. Warp advances 1 against the
+        // 2-cell claim, exactly like the other four hosts, and this model was
+        // the only one of the five that did not say so: it fell through to
+        // `terminalWidth`, reported 2, and so emitted no CUF. Every SF Symbol
+        // then sheared its row one cell left, which is why the Example emoji
+        // page's SF Symbols panel drew its right border displaced and its
+        // scrollbar jammed against it.
+        //
+        // Measured 2026-08-26 on the alternate screen: each symbol advances 1,
+        // and a row claimed at 20 cells measured 16 — short by exactly one per
+        // symbol.
+        if unicodeScalars.count == 1, let only = unicodeScalars.first,
+            (0x100000...0x10FFFD).contains(only.value)
+        {
+            return 1
         }
         if isLoneRegionalIndicator || isBarePictographUnderAdvancer {
             return 1

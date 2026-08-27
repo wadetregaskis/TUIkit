@@ -9,6 +9,15 @@ when unset), the visual/aspect probes print to the terminal.
   grapheme-cluster battery + terminal-relevant environment dump (JSON).
   `PROBE_ALT=1` measures on the ALTERNATE screen (the app's buffer) —
   iTerm2 advances some clusters differently there.
+- `page_clusters_probe.py` — measures every distinct cluster an APP ACTUALLY
+  DRAWS, rather than a hand-picked battery: the battery only contains what
+  somebody already thought to doubt. **This is the check that separates
+  "consistent" from "correct".** Verifying rows against each other cannot:
+  the framework and the model share the same numbers, so a model that is wrong
+  about the terminal produces rows that add up perfectly and still render
+  wrong. Verified — with Warp's Plane-16 case removed, every row still summed
+  to the terminal width while every SF Symbol sheared a cell. Found three real
+  shears on 2026-08-26 that no unit test saw.
 - `probe_stamp.py` — not a probe: the shared provenance stamp every probe
   result carries (date, OS, terminal version, screen buffer, and DEC mode 2027,
   the two conditions this project has been bitten by not recording). It asks

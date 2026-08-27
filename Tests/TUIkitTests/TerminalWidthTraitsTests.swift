@@ -218,6 +218,45 @@ struct TerminalWidthTraitsTests {
         #expect(Character("👩‍🚀").terminalWidth == 2, "the pin must not have escaped")
     }
 
+    // MARK: - Measured against the terminals
+
+    /// Advances that a synthetic probe never asked about, found by measuring
+    /// every distinct cluster the Example emoji page actually draws against
+    /// each terminal — 90-odd per host — and comparing them to the model.
+    ///
+    /// Three real shears turned up that way, all of them invisible to the unit
+    /// tests and to the row-width arithmetic, because a model and a framework
+    /// that share the same wrong number agree with each other perfectly.
+    @Test(
+        "Advances measured on the page match the models",
+        arguments: [
+            // Warp gave every SF Symbol 2 and the terminal gives 1: the only
+            // one of the five models with no Plane-16 case, so no CUF was
+            // emitted and the SF Symbols panel drew its border a cell left per
+            // symbol.
+            ("\u{100038}", TerminalClient.Program.warp, 1),
+            ("\u{101867}", .warp, 1),
+            // Ghostty merges a BMP text-presentation base and its modifier into
+            // ONE cell, not two.
+            ("☝🏻", .ghostty, 1), ("✌🏼", .ghostty, 1),
+            ("✍🏽", .ghostty, 1), ("⛹🏾", .ghostty, 1),
+            // iTerm2: a ZWJ sequence whose first segment carries VS-16 advances
+            // 1. The base's plane is not the discriminator — ❤️ is BMP and 🏳️
+            // is SMP and both behave the same.
+            ("❤️‍🔥", .iTerm2, 1), ("🏳️‍🌈", .iTerm2, 1),
+            // Controls: unchanged by any of the above.
+            ("👍", .ghostty, 2), ("中", .iTerm2, 2), ("👍🏽", .warp, 4),
+        ] as [(String, TerminalClient.Program, Int)])
+    func measuredAdvancesMatchTheModels(
+        text: String, program: TerminalClient.Program, expected: Int
+    ) {
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: program)) {
+            #expect(
+                TerminalClient.cursorAdvance(of: Character(text), on: program) == expected,
+                "\(program) advance for \(text)")
+        }
+    }
+
     // MARK: - The right edge
 
     /// The mechanism behind the original defect: a wide cluster written with

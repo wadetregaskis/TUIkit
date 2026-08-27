@@ -1475,6 +1475,39 @@ weight — it existed only to return 1 for scalars the claim had wrongly put at
 2) but is already handled: Apple/iTerm2 genuinely paint 2, so the claim is
 right and the CUF is correct; only Ghostty paints 1 and takes the blank cell.
 
+### Three shears only a real page revealed — 2026-08-26
+
+Checking the Example emoji page on each client, cluster by cluster, found three
+advance errors that every unit test and every row-width check had passed.
+
+| host | cluster | claim | model said | terminal does |
+|---|---|---|---|---|
+| Warp | SF Symbols (Plane-16 PUA) | 2 | 2 | **1** |
+| Ghostty | ☝🏻 ✌🏼 ✍🏽 ⛹🏾 (BMP base + tone) | 2 | 2 | **1** |
+| iTerm2 | ❤️‍🔥 🏳️‍🌈 (VS-16-leading ZWJ) | 2 | 2 | **1** |
+
+Warp's was the visible one: its model was the only one of the five with no
+Plane-16 case, so every SF Symbol sheared its row a cell left and the emoji
+page's SF Symbols panel drew its right border displaced, with the scrollbar
+jammed against it. Ghostty's and iTerm2's are on rows that have been on that
+page all along; iTerm2's had been documented as unhandled for months.
+
+All three are fixed by the same means the framework already uses: the model
+reports what the terminal does, and the existing CUF closes the gap.
+
+**The methodological point, and it is the one worth keeping.** A row-width
+check does NOT find these. The framework and the model share the same numbers,
+so a model that is wrong about the terminal produces rows that add up perfectly
+and still render wrong — verified directly: with Warp's Plane-16 case removed,
+every one of the 44 rows still summed to exactly the terminal width while every
+SF Symbol sheared. Self-consistency is not correctness, and only a measurement
+against the terminal tells them apart.
+
+`Tools/TerminalProbes/page_clusters_probe.py` is that measurement: it takes the
+clusters an app actually draws — 90-odd for this page — and measures each on
+the terminal under test. A hand-picked battery cannot do the same job, because
+a battery only contains what somebody already thought to doubt.
+
 ### The claim follows the host now — 2026-08-26
 
 For most of this document's life the **claim** — how many cells TUIkit's layout
