@@ -244,12 +244,20 @@ public struct TerminalClient: Sendable, Equatable {
     public static func widthTraits(of program: Program) -> TerminalWidthTraits {
         switch program {
         case .appleTerminal:
-            // Reserves the decomposed width for a ZWJ sequence even though it
-            // PAINTS the cluster composed into about two cells: a row budgeted
-            // at 2 wraps, measured by the row number changing. So the claim has
-            // to be the reserved width, and the glyph simply sits at the left
-            // of the space it owns.
-            TerminalWidthTraits(decomposesZWJSequences: true, skinTone: .detached)
+            // NOT widened, and this reverses an earlier decision made from DSR.
+            //
+            // Apple Terminal reports an advance of 3 to 11 for these clusters
+            // and *paints* them into one or two cells, drawing the next
+            // character right after the ink. A claim built on the reported
+            // advance is a claim nothing paints at: 🤙🏽 claimed at 4 and
+            // painted at 2 puts the enclosing border two cells to the left,
+            // which is precisely the symptom that prompted the measurement.
+            //
+            // Measured with `Tools/TerminalProbes/landing_probe.py` on
+            // 2026-08-26 — 25 of the 69 corpus clusters, against none at all on
+            // iTerm2, Ghostty or Warp. The compensation is a forward move, so
+            // nothing is stripped and the modifier survives.
+            .composing
         case .iTerm2:
             TerminalWidthTraits(decomposesZWJSequences: false, skinTone: .detachedOnBMPBases)
         case .ghostty:

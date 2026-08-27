@@ -136,30 +136,33 @@ struct CharacterTerminalAppCursorAdvanceTests {
 
     @Test("Skin-tone emoji on emoji-default base: cursor over-advances by 4 in Terminal.app")
     func skinToneEmojiCursorAdvance() {
-        // 🤙🏽 paints 2 cells but advances Terminal.app's cursor by 4.
-        // Bug B proper — base is in the pictographic block with default
-        // emoji presentation.
+        // 🤙🏽 composes into 2 cells and Terminal.app draws the next character
+        // right after them. DSR says 4 — and DSR is not where the glyph goes:
+        // measured with `Tools/TerminalProbes/landing_probe.py` on 2026-08-26,
+        // the marker after this cluster paints in column 3. Modelling the 4
+        // put the enclosing border two cells to the left of where it belonged.
         let ch = Character("🤙🏽")
         #expect(ch.terminalWidth == 2, "Renders 2 cells")
-        #expect(ch.terminalAppCursorAdvance == 4, "Cursor advances 4 in Terminal.app")
+        #expect(ch.terminalAppCursorAdvance == 2, "The next character paints at 2")
     }
 
     @Test("Skin-tone emoji on text-default base: cursor over-advances by 3 (Bug B variant)")
     func textDefaultSkinToneCursorAdvance() {
-        // ☝ (U+261D) is `isEmoji && !isEmojiPresentation` — its bare-base
-        // rendering is a 1-cell text glyph, so the Fitzpatrick over-advance
-        // is by 2 from a 1-cell baseline → cursor lands at column 3, not 4.
-        // Catalogued empirically for ☝ ✌ ✍ ⛹ 🏋 🏌 🕴 🕵 🖐 in the doc.
+        // ☝ (U+261D) is `isEmoji && !isEmojiPresentation`, and that property —
+        // not the plane, not the DSR reading — is what decides where the next
+        // character paints: one cell for a text-presentation base, two for an
+        // emoji-presentation one. Measured on 2026-08-26 with
+        // `Tools/TerminalProbes/landing_probe.py`; DSR reports 3 and 4 for
+        // these and the glyph is nowhere near either.
         for s in ["☝🏻", "✌🏼", "✍🏽", "⛹🏾"] {
             let ch = Character(s)
             #expect(ch.terminalWidth == 2, "\(s) renders 2 cells")
-            #expect(ch.terminalAppCursorAdvance == 3, "\(s) cursor advances 3 (not 4)")
+            #expect(ch.terminalAppCursorAdvance == 1, "\(s): the next character paints at 1")
         }
-        // ✊ (U+270A) is `isEmojiPresentation` — same plane as the others
-        // but its bare base is already a 2-cell emoji, so the over-advance
-        // lands at 4, like the supplementary-plane Bug B clusters.
+        // ✊ (U+270A) is `isEmojiPresentation` — same plane as the others, and
+        // it lands at 2 rather than 1 for exactly that reason.
         let fist = Character("✊🏿")
-        #expect(fist.terminalAppCursorAdvance == 4, "✊🏿 cursor advances 4")
+        #expect(fist.terminalAppCursorAdvance == 2, "✊🏿: the next character paints at 2")
     }
 
     @Test("VS-16 on an East Asian Wide base: cursor advance is the full 2 (no compensation)")
@@ -206,8 +209,8 @@ struct CharacterTerminalAppCursorAdvanceTests {
             let ch = Character(flag)
             #expect(ch.terminalWidth == 2, "\(flag) paints 2 cells")
             #expect(
-                ch.terminalAppCursorAdvance == 2,
-                "\(flag) advances its full width in Terminal.app 455.1")
+                ch.terminalAppCursorAdvance == 1,
+                "\(flag): the next character paints at 1, whatever DSR says")
         }
     }
 
@@ -255,38 +258,42 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(result.strippedLength == s.strippedLength, "Visible width preserved")
     }
 
-    @Test("Flag emoji followed by content: no CUF (pair advances its full width)")
-    func flagFollowedByContentEmitsNoCUF() {
-        // 🇺🇸 paints 2 cells AND advances 2 — DSR-measured on Terminal.app
-        // 455.1 (see Documentation/Terminal-compatibility.md). The old model
-        // treated the pair like a LONE regional indicator (advance 1), and
-        // the spurious CUF shoved everything after a flag one cell right.
+    @Test("Flag emoji followed by content: CUF(1), because the next cell is painted over it")
+    func flagFollowedByContentEmitsCUF() {
+        // 🇺🇸 paints 2 cells and Terminal.app draws the next character in the
+        // SECOND of them — measured 2026-08-26 with `landing_probe.py`. DSR
+        // reports 2, which is why this test previously asserted the opposite:
+        // the pair looked like the one class that needed nothing.
         let s = "from 🇺🇸 today"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result == s, "no compensation for a full-width-advancing flag pair: |\(result)|")
+        #expect(result.contains("\u{1B}[1C"), "flag pair needs its cell back: |\(result)|")
+        #expect(result.strippedLength == s.strippedLength, "and the row still measures the same")
         // A LONE indicator still under-advances and still gets its CUF.
         let lone = "at \u{1F1E6} end".withTerminalAppCursorCompensation()
         #expect(lone.contains("\u{1B}[1C"), "|\(lone)|")
     }
 
-    @Test("Skin-tone emoji followed by content: Fitzpatrick scalar stripped")
-    func skinToneFollowedByContentStripsModifier() {
-        // When the cluster is followed by inline content on the same
-        // line, Terminal.app applies a row-wide LEFT shift that pushes
-        // the rightmost 2 cells off the visible row.  No ANSI sequence
-        // can recover both the modifier AND the layout — so the
-        // Fitzpatrick scalar is stripped and the base emoji is rendered
-        // alone.
+    @Test("Skin-tone emoji followed by content: the modifier is KEPT")
+    func skinToneFollowedByContentKeepsModifier() {
+        // This used to strip the Fitzpatrick scalar, on the reasoning that no
+        // escape could recover both the modifier and the layout. That was true
+        // of a model built on DSR, which said the cluster advanced 4 against a
+        // claim of 2. It does not: the glyph composes into the two cells
+        // claimed and the next character is painted right after them, so there
+        // is nothing to recover from and nothing to strip.
+        //
+        // Which matters beyond tidiness. Stripping is not a rendering
+        // compromise but a change to what the user wrote — 👍🏽 becomes 👍, and
+        // by the same rule 🏳️‍🌈 would become a white flag.
         let s = "Call 🤙🏽 now"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result == "Call 🤙 now",
-            "Modifier stripped when cluster has visible content after it")
-        #expect(!result.stripped.contains("🤙🏽"), "Fitzpatrick scalar dropped")
-        #expect(result.contains("🤙"), "Base emoji preserved")
+        #expect(result == s, "nothing to compensate, nothing to strip: |\(result)|")
+        #expect(result.unicodeScalars.contains(Unicode.Scalar(0x1F3FD)!),
+                "the Fitzpatrick scalar the user wrote reaches the screen")
     }
 
-    @Test("Text-default base + skin-tone + content: VS-16 inserted, CUF(1) emitted")
-    func textDefaultSkinToneStripsButKeepsWidth() {
+    @Test("Text-default base + skin-tone + content: the cluster is kept, CUF(1) emitted")
+    func textDefaultSkinToneKeepsModifierAndWidth() {
         // ☝🏻 (U+261D + U+1F3FB) is 2 cells wide as a cluster, but the bare
         // base ☝ (U+261D) is only 1 cell — a 1-cell text glyph in Terminal.app.
         // If we just stripped the Fitzpatrick we'd shrink the cluster from
@@ -296,12 +303,10 @@ struct WithTerminalAppCursorCompensationTests {
         // under-advance.
         let s = "go ☝🏻 now"
         let result = s.withTerminalAppCursorCompensation()
-        #expect(result.unicodeScalars.contains(Unicode.Scalar(0xFE0F)!),
-                "VS-16 should be inserted to preserve 2-cell width")
-        #expect(!result.unicodeScalars.contains(Unicode.Scalar(0x1F3FB)!),
-                "Fitzpatrick scalar should be stripped")
+        #expect(result.unicodeScalars.contains(Unicode.Scalar(0x1F3FB)!),
+                "the Fitzpatrick scalar is kept — it is what the user wrote")
         #expect(result.contains("\u{1B}[1C"),
-                "CUF(1) should be emitted for VS-16 under-advance")
+                "and the cell the glyph does not reach is stepped past")
         // The visible width must be unchanged from the original (2 cells
         // per cluster) — that's the whole point of the VS-16 promotion.
         #expect(result.strippedLength == s.strippedLength,
@@ -323,8 +328,8 @@ struct WithTerminalAppCursorCompensationTests {
         for base in ["☝", "⛹", "✌", "✍", "🏋", "🏌", "🕴", "🕵", "🖐"] {
             for tone in ["\u{1F3FB}", "\u{1F3FD}", "\u{1F3FF}"] {
                 let result = "a\(base)\(tone)b".withTerminalAppCursorCompensation()
-                #expect(result.contains("\u{1B}[2X\(base)\u{FE0F}\u{1B}[1C"),
-                        "\(base)\(tone) must be erased under, then drawn, then stepped past")
+                #expect(result.contains("\u{1B}[2X\(base)\(tone)\u{1B}[1C"),
+                        "\(base)\(tone) erased under, drawn WHOLE, stepped past")
             }
         }
     }
@@ -339,19 +344,19 @@ struct WithTerminalAppCursorCompensationTests {
                 "no erase for a cluster that advances as far as it paints")
     }
 
-    @Test("Emoji-default base + skin-tone + content: simple strip, no VS-16")
-    func emojiDefaultSkinToneStripsCleanly() {
-        // ✊ (U+270A) is `isEmojiPresentation` — bare base is already 2
-        // cells, so stripping the Fitzpatrick alone preserves the width
-        // and no VS-16 / CUF is needed.
+    @Test("Emoji-default base + skin-tone + content: kept whole, and nothing to compensate")
+    func emojiDefaultSkinTonePassesThrough() {
+        // ✊ (U+270A) is `isEmojiPresentation`, so the composed cluster is drawn
+        // in the two cells claimed for it and the next character is painted
+        // right after — nothing to erase, step past, or strip.
         let s = "raise ✊🏿 high"
         let result = s.withTerminalAppCursorCompensation()
         #expect(!result.unicodeScalars.contains(Unicode.Scalar(0xFE0F)!),
-                "VS-16 should NOT be inserted for emoji-default base")
-        #expect(!result.unicodeScalars.contains(Unicode.Scalar(0x1F3FF)!),
-                "Fitzpatrick scalar should be stripped")
+                "no VS-16 is inserted")
+        #expect(result.unicodeScalars.contains(Unicode.Scalar(0x1F3FF)!),
+                "the Fitzpatrick scalar is kept")
         #expect(!result.contains("\u{1B}[1C"),
-                "CUF should NOT be emitted (no under-advance to compensate)")
+                "and no cursor move is needed")
         #expect(result.strippedLength == s.strippedLength,
                 "Visible width must be preserved")
     }
@@ -428,15 +433,18 @@ struct AnsiAwarePrefixForTerminalAppTests {
         #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 100) == s)
     }
 
-    @Test("Skin-tone emoji at right edge: replaced with bg-spaces to prevent wrap")
-    func skinToneAtEdgeReplaced() {
-        // The cluster's visible width fits in the remaining cells, but
-        // its 4-cell cursor advance would push Terminal.app's cursor
-        // past the right edge — at which point Terminal.app wraps the
-        // glyph to the next row.  Replace it with plain spaces to keep
-        // the layout intact (skin tone is sacrificed in this case).
+    @Test("Skin-tone emoji at the right edge is kept — it fits where it is drawn")
+    func skinToneAtEdgeKept() {
+        // This used to substitute two spaces, because the cluster's DSR advance
+        // of 4 would run past the right edge and Terminal.app would wrap the
+        // glyph to the next row. The glyph is painted in the two cells claimed
+        // for it, so at a budget of 10 it fits exactly and the tone survives.
+        //
+        // The terminal's own cursor does still run past the edge — `reserve` in
+        // `Tools/TerminalProbes/data/apple-terminal-*-landing.json` is 4 — which
+        // is a wrapping question, not a substitution one.
         let s = "12345678🤙🏽"
-        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == "12345678  ")
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 10) == s)
     }
 
     @Test("Mid-line skin-tone emoji is preserved (over-advance fits)")

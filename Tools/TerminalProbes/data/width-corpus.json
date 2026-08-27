@@ -1,0 +1,622 @@
+{
+ "version": 1,
+ "note": "Curated width corpus, shared by the Swift tests and the Python probes so both ask about the same clusters. `scalars` is authoritative; `text` is the same thing spelled for review and the loader checks they agree.",
+ "clusters": [
+  {
+   "id": "ascii_a",
+   "class": "ascii",
+   "text": "a",
+   "scalars": [
+    "U+0061"
+   ]
+  },
+  {
+   "id": "ascii_bracket",
+   "class": "ascii",
+   "text": "]",
+   "scalars": [
+    "U+005D"
+   ]
+  },
+  {
+   "id": "cjk_han",
+   "class": "cjk",
+   "text": "漢",
+   "scalars": [
+    "U+6F22"
+   ]
+  },
+  {
+   "id": "hangul",
+   "class": "cjk",
+   "text": "한",
+   "scalars": [
+    "U+D55C"
+   ]
+  },
+  {
+   "id": "halfwidth_kana",
+   "class": "cjk",
+   "text": "ｱ",
+   "scalars": [
+    "U+FF71"
+   ]
+  },
+  {
+   "id": "watch",
+   "class": "wide_symbol",
+   "text": "⌚",
+   "scalars": [
+    "U+231A"
+   ]
+  },
+  {
+   "id": "hourglass",
+   "class": "wide_symbol",
+   "text": "⌛",
+   "scalars": [
+    "U+231B"
+   ]
+  },
+  {
+   "id": "fast_forward",
+   "class": "wide_symbol",
+   "text": "⏩",
+   "scalars": [
+    "U+23E9"
+   ]
+  },
+  {
+   "id": "rewind",
+   "class": "wide_symbol",
+   "text": "⏪",
+   "scalars": [
+    "U+23EA"
+   ]
+  },
+  {
+   "id": "up_double",
+   "class": "wide_symbol",
+   "text": "⏫",
+   "scalars": [
+    "U+23EB"
+   ]
+  },
+  {
+   "id": "down_double",
+   "class": "wide_symbol",
+   "text": "⏬",
+   "scalars": [
+    "U+23EC"
+   ]
+  },
+  {
+   "id": "alarm",
+   "class": "wide_symbol",
+   "text": "⏰",
+   "scalars": [
+    "U+23F0"
+   ]
+  },
+  {
+   "id": "hourglass_flowing",
+   "class": "wide_symbol",
+   "text": "⏳",
+   "scalars": [
+    "U+23F3"
+   ]
+  },
+  {
+   "id": "vs16_desktop",
+   "class": "vs16_pictograph",
+   "text": "🖥️",
+   "scalars": [
+    "U+1F5A5",
+    "U+FE0F"
+   ]
+  },
+  {
+   "id": "vs16_shield",
+   "class": "vs16_pictograph",
+   "text": "🛡️",
+   "scalars": [
+    "U+1F6E1",
+    "U+FE0F"
+   ]
+  },
+  {
+   "id": "vs16_heart",
+   "class": "vs16_pictograph",
+   "text": "❤️",
+   "scalars": [
+    "U+2764",
+    "U+FE0F"
+   ]
+  },
+  {
+   "id": "vs16_pencil",
+   "class": "vs16_pictograph",
+   "text": "✏️",
+   "scalars": [
+    "U+270F",
+    "U+FE0F"
+   ]
+  },
+  {
+   "id": "vs16_warning",
+   "class": "vs16_pictograph",
+   "text": "⚠️",
+   "scalars": [
+    "U+26A0",
+    "U+FE0F"
+   ]
+  },
+  {
+   "id": "vs16_gear",
+   "class": "vs16_pictograph",
+   "text": "⚙️",
+   "scalars": [
+    "U+2699",
+    "U+FE0F"
+   ]
+  },
+  {
+   "id": "vs16_wavy_dash",
+   "class": "vs16_wide_exception",
+   "text": "〰️",
+   "scalars": [
+    "U+3030",
+    "U+FE0F"
+   ]
+  },
+  {
+   "id": "vs16_part_alt",
+   "class": "vs16_wide_exception",
+   "text": "〽️",
+   "scalars": [
+    "U+303D",
+    "U+FE0F"
+   ]
+  },
+  {
+   "id": "vs16_congrat",
+   "class": "vs16_wide_exception",
+   "text": "㊗️",
+   "scalars": [
+    "U+3297",
+    "U+FE0F"
+   ]
+  },
+  {
+   "id": "vs16_secret",
+   "class": "vs16_wide_exception",
+   "text": "㊙️",
+   "scalars": [
+    "U+3299",
+    "U+FE0F"
+   ]
+  },
+  {
+   "id": "bare_desktop",
+   "class": "bare_pictograph",
+   "text": "🖥",
+   "scalars": [
+    "U+1F5A5"
+   ]
+  },
+  {
+   "id": "bare_shield",
+   "class": "bare_pictograph",
+   "text": "🛡",
+   "scalars": [
+    "U+1F6E1"
+   ]
+  },
+  {
+   "id": "bare_joystick",
+   "class": "bare_pictograph",
+   "text": "🕹",
+   "scalars": [
+    "U+1F579"
+   ]
+  },
+  {
+   "id": "vs15_black_square",
+   "class": "vs15_chrome",
+   "text": "⬛︎",
+   "scalars": [
+    "U+2B1B",
+    "U+FE0E"
+   ]
+  },
+  {
+   "id": "vs15_white_square",
+   "class": "vs15_chrome",
+   "text": "⬜︎",
+   "scalars": [
+    "U+2B1C",
+    "U+FE0E"
+   ]
+  },
+  {
+   "id": "call_me",
+   "class": "default_emoji",
+   "text": "🤙",
+   "scalars": [
+    "U+1F919"
+   ]
+  },
+  {
+   "id": "partying",
+   "class": "default_emoji",
+   "text": "🥳",
+   "scalars": [
+    "U+1F973"
+   ]
+  },
+  {
+   "id": "grinning",
+   "class": "default_emoji",
+   "text": "😀",
+   "scalars": [
+    "U+1F600"
+   ]
+  },
+  {
+   "id": "wave",
+   "class": "default_emoji",
+   "text": "👋",
+   "scalars": [
+    "U+1F44B"
+   ]
+  },
+  {
+   "id": "fire",
+   "class": "default_emoji",
+   "text": "🔥",
+   "scalars": [
+    "U+1F525"
+   ]
+  },
+  {
+   "id": "crossing",
+   "class": "default_emoji",
+   "text": "🚸",
+   "scalars": [
+    "U+1F6B8"
+   ]
+  },
+  {
+   "id": "telephone",
+   "class": "default_emoji",
+   "text": "📞",
+   "scalars": [
+    "U+1F4DE"
+   ]
+  },
+  {
+   "id": "flute",
+   "class": "recent_emoji",
+   "text": "🪈",
+   "scalars": [
+    "U+1FA88"
+   ]
+  },
+  {
+   "id": "shovel",
+   "class": "recent_emoji",
+   "text": "🪉",
+   "scalars": [
+    "U+1FA89"
+   ]
+  },
+  {
+   "id": "moose",
+   "class": "recent_emoji",
+   "text": "🫎",
+   "scalars": [
+    "U+1FACE"
+   ]
+  },
+  {
+   "id": "pink_heart",
+   "class": "recent_emoji",
+   "text": "🩷",
+   "scalars": [
+    "U+1FA77"
+   ]
+  },
+  {
+   "id": "lone_ri_a",
+   "class": "regional_indicator",
+   "text": "🇦",
+   "scalars": [
+    "U+1F1E6"
+   ]
+  },
+  {
+   "id": "flag_us",
+   "class": "flag_pair",
+   "text": "🇺🇸",
+   "scalars": [
+    "U+1F1FA",
+    "U+1F1F8"
+   ]
+  },
+  {
+   "id": "flag_au",
+   "class": "flag_pair",
+   "text": "🇦🇺",
+   "scalars": [
+    "U+1F1E6",
+    "U+1F1FA"
+   ]
+  },
+  {
+   "id": "flag_scotland",
+   "class": "tag_flag",
+   "text": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+   "scalars": [
+    "U+1F3F4",
+    "U+E0067",
+    "U+E0062",
+    "U+E0073",
+    "U+E0063",
+    "U+E0074",
+    "U+E007F"
+   ]
+  },
+  {
+   "id": "keycap_one",
+   "class": "keycap",
+   "text": "1️⃣",
+   "scalars": [
+    "U+0031",
+    "U+FE0F",
+    "U+20E3"
+   ]
+  },
+  {
+   "id": "keycap_hash",
+   "class": "keycap",
+   "text": "#️⃣",
+   "scalars": [
+    "U+0023",
+    "U+FE0F",
+    "U+20E3"
+   ]
+  },
+  {
+   "id": "sf_symbol_low",
+   "class": "pua16",
+   "text": "􀀸",
+   "scalars": [
+    "U+100038"
+   ]
+  },
+  {
+   "id": "sf_symbol_mid",
+   "class": "pua16",
+   "text": "􁡧",
+   "scalars": [
+    "U+101867"
+   ]
+  },
+  {
+   "id": "sf_symbol_high",
+   "class": "pua16",
+   "text": "􂌨",
+   "scalars": [
+    "U+102328"
+   ]
+  },
+  {
+   "id": "tone_call_me",
+   "class": "skin_tone_smp",
+   "text": "🤙🏽",
+   "scalars": [
+    "U+1F919",
+    "U+1F3FD"
+   ]
+  },
+  {
+   "id": "tone_thumbsup",
+   "class": "skin_tone_smp",
+   "text": "👍🏼",
+   "scalars": [
+    "U+1F44D",
+    "U+1F3FC"
+   ]
+  },
+  {
+   "id": "tone_wave",
+   "class": "skin_tone_smp",
+   "text": "👋🏿",
+   "scalars": [
+    "U+1F44B",
+    "U+1F3FF"
+   ]
+  },
+  {
+   "id": "tone_boy",
+   "class": "skin_tone_smp",
+   "text": "👨🏽",
+   "scalars": [
+    "U+1F468",
+    "U+1F3FD"
+   ]
+  },
+  {
+   "id": "tone_pray",
+   "class": "skin_tone_smp",
+   "text": "🙏🏼",
+   "scalars": [
+    "U+1F64F",
+    "U+1F3FC"
+   ]
+  },
+  {
+   "id": "tone_fist",
+   "class": "skin_tone_bmp_wide",
+   "text": "✊🏻",
+   "scalars": [
+    "U+270A",
+    "U+1F3FB"
+   ]
+  },
+  {
+   "id": "tone_basketball",
+   "class": "skin_tone_bmp_wide",
+   "text": "⛹🏾",
+   "scalars": [
+    "U+26F9",
+    "U+1F3FE"
+   ]
+  },
+  {
+   "id": "tone_point_up",
+   "class": "skin_tone_bmp_narrow",
+   "text": "☝🏻",
+   "scalars": [
+    "U+261D",
+    "U+1F3FB"
+   ]
+  },
+  {
+   "id": "tone_victory",
+   "class": "skin_tone_bmp_narrow",
+   "text": "✌🏼",
+   "scalars": [
+    "U+270C",
+    "U+1F3FC"
+   ]
+  },
+  {
+   "id": "tone_writing",
+   "class": "skin_tone_bmp_narrow",
+   "text": "✍🏽",
+   "scalars": [
+    "U+270D",
+    "U+1F3FD"
+   ]
+  },
+  {
+   "id": "tone_point_up_vs16",
+   "class": "skin_tone_vs16_base",
+   "text": "☝️🏽",
+   "scalars": [
+    "U+261D",
+    "U+FE0F",
+    "U+1F3FD"
+   ]
+  },
+  {
+   "id": "zwj_astronaut",
+   "class": "zwj",
+   "text": "👩‍🚀",
+   "scalars": [
+    "U+1F469",
+    "U+200D",
+    "U+1F680"
+   ]
+  },
+  {
+   "id": "zwj_family4",
+   "class": "zwj",
+   "text": "👨‍👩‍👧‍👦",
+   "scalars": [
+    "U+1F468",
+    "U+200D",
+    "U+1F469",
+    "U+200D",
+    "U+1F467",
+    "U+200D",
+    "U+1F466"
+   ]
+  },
+  {
+   "id": "zwj_heart_fire",
+   "class": "zwj",
+   "text": "❤️‍🔥",
+   "scalars": [
+    "U+2764",
+    "U+FE0F",
+    "U+200D",
+    "U+1F525"
+   ]
+  },
+  {
+   "id": "zwj_rainbow_flag",
+   "class": "zwj",
+   "text": "🏳️‍🌈",
+   "scalars": [
+    "U+1F3F3",
+    "U+FE0F",
+    "U+200D",
+    "U+1F308"
+   ]
+  },
+  {
+   "id": "zwj_pirate_flag",
+   "class": "zwj",
+   "text": "🏴‍☠️",
+   "scalars": [
+    "U+1F3F4",
+    "U+200D",
+    "U+2620",
+    "U+FE0F"
+   ]
+  },
+  {
+   "id": "zwj_farmer",
+   "class": "zwj",
+   "text": "🧑‍🌾",
+   "scalars": [
+    "U+1F9D1",
+    "U+200D",
+    "U+1F33E"
+   ]
+  },
+  {
+   "id": "zwj_red_hair",
+   "class": "zwj",
+   "text": "👩‍🦰",
+   "scalars": [
+    "U+1F469",
+    "U+200D",
+    "U+1F9B0"
+   ]
+  },
+  {
+   "id": "zwj_broken_chain",
+   "class": "zwj",
+   "text": "⛓️‍💥",
+   "scalars": [
+    "U+26D3",
+    "U+FE0F",
+    "U+200D",
+    "U+1F4A5"
+   ]
+  },
+  {
+   "id": "zwj_astronaut_tone",
+   "class": "zwj_skin_tone",
+   "text": "👩🏽‍🚀",
+   "scalars": [
+    "U+1F469",
+    "U+1F3FD",
+    "U+200D",
+    "U+1F680"
+   ]
+  },
+  {
+   "id": "combining_acute",
+   "class": "combining",
+   "text": "é",
+   "scalars": [
+    "U+0065",
+    "U+0301"
+   ]
+  }
+ ]
+}

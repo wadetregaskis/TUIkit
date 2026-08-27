@@ -149,18 +149,18 @@ struct ReplayCursorCompensationTests {
     func fragmentsAnswerForTheRowNotThemselves() {
         let writer = FrameDiffWriter(
             isAppleTerminal: true, isITerm2: false, isGhostty: false, isWarp: false, isTmux: false)
-        let cluster = "\u{270A}\u{1F3FB}"  // ✊🏻 — painted 2 cells, cursor advanced 4
-        // Last thing on the row: the over-advance has nothing to shove, so the
-        // tone the user asked for is kept.
-        #expect(writer.compensatingCursorAdvance(cluster).unicodeScalars.contains("\u{1F3FB}"))
-        // The same fragment with the row continuing past it: stripped, exactly
-        // as a whole row carrying trailing content would be.
+        let cluster = "\u{270A}\u{1F3FB}"  // ✊🏻 — 2 cells, next character painted at 2
+        // The tone the user asked for is kept in every position now. It used to
+        // be stripped when the row continued past the cluster, to escape a
+        // row-wide shift that a DSR-built model predicted and the glyph does
+        // not produce — see `String.composedPaintAdvance`.
+        for fragment in [cluster, cluster + "x"] {
+            #expect(
+                writer.compensatingCursorAdvance(fragment)
+                    .unicodeScalars.contains("\u{1F3FB}"))
+        }
         #expect(
-            !writer.compensatingCursorAdvance(cluster, followedByContent: true)
+            writer.compensatingCursorAdvance(cluster, followedByContent: true)
                 .unicodeScalars.contains("\u{1F3FB}"))
-        // …which is the answer it reaches on its own when the content is there
-        // to see.
-        #expect(!writer.compensatingCursorAdvance(cluster + "x").unicodeScalars
-            .contains("\u{1F3FB}"))
     }
 }

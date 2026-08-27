@@ -91,6 +91,56 @@ extension String {
         return result
     }
 
+    /// Where the cursor lands after a terminal whose model is `advance`
+    /// processes this string — the *emitted-output* counterpart of
+    /// ``strippedLength``, which counts the cells the visible characters claim
+    /// and knows nothing about escapes.
+    ///
+    /// This is the number the compensation walks exist to control, so it is the
+    /// number a test has to be able to ask for. A walk that emits a cluster
+    /// unchanged, a walk that pushes the cursor forward past a narrow glyph and
+    /// a walk that rewrites the cluster into something else entirely all end
+    /// somewhere, and only this says where: `CUF` counts forward, `CUB` counts
+    /// back, and every other escape — `SGR`, `ECH`, anything at all that paints
+    /// or colours without moving — contributes nothing, because it moves
+    /// nothing.
+    ///
+    /// The contract every host's output path owes the layout is that this,
+    /// measured on the compensated row, equals the ``strippedLength`` of the
+    /// row that went in. `CursorAdvanceConservationTests` is that sentence as
+    /// an assertion.
+    ///
+    /// - Parameter advance: the host's cursor advance for one character —
+    ///   ``Swift/Character/terminalAppCursorAdvance`` and its siblings, or
+    ///   ``TerminalQuirks/cursorAdvance(of:)`` for a terminal being explored.
+    public func cursorAdvance(perCharacter advance: (Character) -> Int) -> Int {
+        var total = 0
+        var index = startIndex
+
+        while index < endIndex {
+            guard self[index] == "\u{1B}" else {
+                total += advance(self[index])
+                index = self.index(after: index)
+                continue
+            }
+            let start = index
+            index = csiSequenceEnd(from: index)
+            let sequence = self[start..<index]
+            // CSI Ps C / CSI Ps D — the only two escapes any walk here emits
+            // that move the cursor. The parameter defaults to 1 when omitted,
+            // per ECMA-48.
+            guard let final = sequence.last, final == "C" || final == "D",
+                sequence.hasPrefix("\u{1B}[")
+            else { continue }
+            let digits = sequence.dropFirst(2).dropLast()
+            guard digits.allSatisfy(\.isNumber) else { continue }
+            let count = digits.isEmpty ? 1 : (Int(digits) ?? 0)
+            total += (final == "C") ? count : -count
+        }
+
+        return total
+    }
+
     /// Returns `true` if any character in this string has a Terminal.app
     /// cursor advance that differs from its visible cell width — VS-16
     /// pictographic emoji (advance 1, width 2) or any Fitzpatrick skin-

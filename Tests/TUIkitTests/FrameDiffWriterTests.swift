@@ -219,20 +219,21 @@ struct CursorAdvanceModelTests {
     // real terminals (Terminal.app 455.1, iTerm2 3.6.11, macOS 15.7) — see
     // Documentation/Terminal-compatibility.md.
 
-    @Test("Terminal.app: a flag PAIR advances its full width (no CUF)")
-    func appleFlagPairAdvancesFullWidth() {
+    @Test("Terminal.app: a flag PAIR paints the next character in its second cell")
+    func appleFlagPairUnderAdvances() {
+        // DSR says 2 for a pair; the glyph is 2 cells and the next character is
+        // painted in the second of them. Measured 2026-08-26 with
+        // `Tools/TerminalProbes/landing_probe.py`.
         let pair = Character("\u{1F1FA}\u{1F1F8}")  // 🇺🇸
-        #expect(pair.terminalAppCursorAdvance == 2)
+        #expect(pair.terminalAppCursorAdvance == 1)
         #expect(pair.terminalWidth == 2)
         // A LONE regional indicator still under-advances.
         let lone = Character("\u{1F1E6}")
         #expect(lone.terminalAppCursorAdvance == 1)
         #expect(lone.terminalWidth == 2)
-        // So a compensated line CUFs after the lone indicator but NOT after
-        // the pair (the old model CUF'd both, shoving content after a flag
-        // one cell right).
+        // So a compensated line steps past both.
         let line = "\u{1F1FA}\u{1F1F8}x".withTerminalAppCursorCompensation()
-        #expect(!line.contains("\u{1B}[1C"), "|\(line)|")
+        #expect(line.contains("\u{1B}[1C"), "|\(line)|")
     }
 
     @Test("iTerm2 (alternate screen): keycaps, PUA, and VS-16 emoji under-advance")

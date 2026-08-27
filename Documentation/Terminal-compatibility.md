@@ -24,6 +24,73 @@ for the one-screen comparison.
 
 ## Methodology
 
+> **CORRECTED 2026-08-27.** Everything below the line "Advance is the ground
+> truth for layout" was wrong for one host, and this document said it for a
+> year. **Advance is not ground truth. Paint is.** Apple Terminal reports a
+> cursor advance of 4 for 🤙🏽 and 11 for 👨‍👩‍👧‍👦 while composing each glyph
+> into about two cells and painting the next character right after it. Every
+> model built on the reported advance put the following content — padding,
+> borders, whole columns — where nothing was ever drawn. See
+> [Three numbers, not one](#three-numbers-not-one).
+
+### Three numbers, not one
+
+A cluster has three different measurements and this project has, at various
+times, mistaken each for another:
+
+| number | measured by | what it governs |
+|---|---|---|
+| **advance** | DSR (`ESC[6n`) | the terminal's own bookkeeping |
+| **landing** | pixels | **where the next character is drawn** — row alignment |
+| **ink** | pixels | how many cells the glyph covers — gaps and overlap |
+| **reserve** | the wrap test | whether the row wraps early |
+
+`landing` is the one a layout must agree with, and it is the one no escape
+sequence will tell you. On iTerm2, Ghostty and Warp it equals `advance` for all
+69 corpus clusters. On Apple Terminal it differs for 25 of them.
+
+The displacement is **row-wide, not local**: on a row already carrying 🤙🏽, an
+absolute `CUP` to column 50 paints at column 48. Every later cell on the row
+inherits the whole accumulated error, which is why a single skin-toned emoji
+moves an enclosing border two cells left.
+
+Compensation is a **forward move only**. `CUF(n)` moves the paint position by
+exactly `n` on every host measured. `CUB` does not have a usable inverse:
+`CUB(advance − claim)` lands 18 of 25 Apple Terminal clusters on the claim and
+7 somewhere else, because a backward move interacts with whatever the glyph did.
+So a claim must never be narrower than the landing, and
+`TerminalLedgerConformanceTests` asserts exactly that.
+
+### Measuring paint
+
+`landing_probe.py` prints a cluster, lets the terminal put a magenta marker
+wherever it thinks the cursor is, and screenshots the result;
+`landing_analyze.py` reads the marker's column out of the pixels. The reading is
+arithmetic, not judgement — this project has a poor record of interpreting
+screenshots by eye, and every conclusion in this section that had to be
+corrected was corrected by a program looking at the same picture.
+
+The instrument checks itself in two ways, both of which caught real errors:
+
+- **A self-check marker** at a column the probe chose, with nothing in front of
+  it. If the analyser cannot read that column back exactly it aborts rather than
+  report numbers off a mis-derived grid.
+- **Control clusters** whose landing is known before any terminal is asked
+  (ASCII is 1, East-Asian-Wide is 2). iTerm2 read uniformly +1 on these,
+  including for `a`; taking that as a terminal behaviour would have "corrected"
+  all 69 clusters on a host that gets every one of them right.
+
+Four bugs in the instrument were found this way, each of which produced
+confident, plausible, wrong numbers: reading the marker's left edge (a wide
+glyph's ink spills into it, biasing every skin-tone reading), bounding `ink` by
+`landing` (they then agree by construction), measuring `ink` further along the
+same row (it inherits the displacement being measured), and calibrating off a
+stale window from an earlier run.
+
+`ink` is recorded but **not asserted on**: the reading is a coverage threshold
+over an antialiased glyph and it is not yet reliable enough — it puts 👍🏼 at
+five cells on a host where it composes into about two.
+
 Every probe result is written with a provenance stamp (`probe_stamp.py`) and
 the curated ones are committed under `Tools/TerminalProbes/data/`, one file per
 terminal, version and screen buffer. The stamp records the two conditions this
@@ -315,6 +382,44 @@ before the render loop is built.
 ---
 
 ## Apple Terminal.app
+
+> **CORRECTED 2026-08-27.** This host reports one thing and paints another, and
+> the tables below were built from the report. Measured with `landing_probe.py`
+> on 455.1 / macOS 15.7.9, alternate screen:
+>
+> | cluster | claim | DSR advance | reserve | **paints next at** |
+> |---|---|---|---|---|
+> | 🤙🏽 👍🏼 ✊🏻 | 2 | 4 | 4 | **2** |
+> | ☝🏻 ✌🏼 ✍🏽 ⛹🏾 | 2 | 3 | 3 | **1** |
+> | 👩‍🚀 🏴‍☠️ 🧑‍🌾 | 2 | 5 | 5 | **2** |
+> | 👨‍👩‍👧‍👦 | 2 | 11 | 11 | **2** |
+> | ❤️‍🔥 🏳️‍🌈 ⛓️‍💥 | 2 | 4 | 4 | **1** |
+> | 🇺🇸 🇦🇺 1️⃣ #️⃣ | 2 | 2 | 2 | **1** |
+>
+> One rule predicts every case: **two cells if the cluster's base has emoji
+> presentation of its own, one if it does not** — which is why 🏴‍☠️ and 🏳️‍🌈
+> differ despite looking like the same kind of thing. Flag pairs and keycaps
+> land at 1 regardless.
+>
+> Two consequences.
+>
+> **The Fitzpatrick strip is gone.** It existed because a DSR-built model said
+> the cluster over-advanced past its claim and no escape could recover both the
+> modifier and the layout. The glyph composes into the two cells claimed, so
+> there was never anything to recover from. Stripping is not a rendering
+> compromise but a change to what the user wrote: 👍🏽 becomes 👍, and by the
+> same rule 🏳️‍🌈 would become a white flag.
+>
+> **The claim is not widened for this host.** An earlier pass widened it to the
+> reported advance so the layout could hold the decomposed glyph. Warp genuinely
+> draws the components and keeps that treatment; Apple Terminal does not, and a
+> claim of 4 against a landing of 2 is exactly the two-cell leftward border shift
+> that prompted the measurement.
+>
+> `reserve` still tracks the reported advance, so a row can wrap early near the
+> right edge. That is a wrapping problem, not a claim problem, and it is not
+> addressed here.
+
 
 **Tested:** `TERM_PROGRAM_VERSION` 455.1, macOS 15.7 (Sequoia), 2026-07-13.
 

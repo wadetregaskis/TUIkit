@@ -19,8 +19,10 @@ struct TerminalWidthTraitsTests {
 
     private static let warp = TerminalWidthTraits(
         decomposesZWJSequences: true, skinTone: .detached)
-    private static let apple = TerminalWidthTraits(
-        decomposesZWJSequences: true, skinTone: .detached)
+    // Apple Terminal is NOT a widening host. It reports a decomposed advance
+    // and paints a composed glyph, so a claim built on the report is a claim
+    // nothing paints at — see `TerminalClient.widthTraits(of:)`.
+    private static let apple = TerminalWidthTraits.composing
     private static let iTerm = TerminalWidthTraits(
         decomposesZWJSequences: false, skinTone: .detachedOnBMPBases)
 
@@ -54,7 +56,9 @@ struct TerminalWidthTraitsTests {
             ("☝️🏽", 4),
         ] as [(String, Int)])
     func detachedSkinToneWidths(text: String, expected: Int) {
-        TerminalWidthTraits.withTraits(Self.apple) {
+        // Warp, not Apple Terminal: Warp genuinely draws the base and the
+        // modifier side by side, which is what a detached claim describes.
+        TerminalWidthTraits.withTraits(Self.warp) {
             #expect(Character(text).terminalWidth == expected)
         }
     }
@@ -72,45 +76,54 @@ struct TerminalWidthTraitsTests {
     /// RESERVES the decomposed width — a row budgeted at 2 wraps, measured by
     /// the row number changing. So the claim is the reserved width and the
     /// glyph sits at the left of the space it owns.
+    /// The reverse of an earlier decision, and worth stating as a test rather
+    /// than only deleting the old one.
+    ///
+    /// Apple Terminal was briefly modelled as reserving the decomposed width,
+    /// on the strength of DSR reporting 5, 8 and 11 for these and of a row
+    /// budgeted at 2 wrapping. Both readings were real; neither says where the
+    /// glyph is drawn. It composes into two cells and paints the next character
+    /// right after them, so the claim stays 2 and the layout stays put.
     @Test(
-        "Apple Terminal reserves the decomposed width even though it composes the glyph",
+        "Apple Terminal claims the composed width, not the width it reports",
         arguments: [
-            ("👩‍🚀", 5), ("🧑‍🌾", 5), ("👨‍👩‍👧", 8), ("👨‍👩‍👧‍👦", 11), ("👩🏽‍🚀", 7),
-        ] as [(String, Int)])
-    func appleReservesDecomposedWidth(text: String, expected: Int) {
-        #expect(TerminalClient.widthTraits(of: .appleTerminal).decomposesZWJSequences)
+            "👩‍🚀", "🧑‍🌾", "👨‍👩‍👧", "👨‍👩‍👧‍👦", "👩🏽‍🚀",
+        ])
+    func appleClaimsComposedWidth(text: String) {
+        #expect(!TerminalClient.widthTraits(of: .appleTerminal).decomposesZWJSequences)
         TerminalWidthTraits.withTraits(Self.apple) {
-            #expect(Character(text).terminalWidth == expected)
+            #expect(Character(text).terminalWidth == 2)
+            #expect(Character(text).terminalAppCursorAdvance == 2)
         }
     }
 
-    /// Where the claim and the host's own advance differ, the EXISTING
-    /// compensation closes the gap — the same trade already accepted for a
-    /// Ghostty SF Symbol that paints narrower than the layout allocated.
-    ///
-    /// ❤️‍🔥 and 🏳️‍🌈 lead with a VS-16 segment, which Apple Terminal
-    /// under-advances, so they advance 4 against a claim of 5.
+    /// A ZWJ sequence whose FIRST segment has no emoji presentation of its own
+    /// is painted one cell narrower than one whose first segment has — which is
+    /// why 🏴‍☠️ and 🏳️‍🌈 behave differently despite looking like the same
+    /// kind of thing. The existing CUF closes the cell.
     @Test(
-        "A VS-16-leading ZWJ over-claims by one and the CUF closes it",
-        arguments: ["❤️‍🔥", "🏳️‍🌈"])
-    func vs16LeadingZWJIsCompensated(text: String) {
+        "A ZWJ sequence on a text-presentation base lands one cell in, and the CUF closes it",
+        arguments: ["❤️‍🔥", "🏳️‍🌈", "⛓️‍💥"])
+    func textPresentationLeadingZWJIsCompensated(text: String) {
         TerminalWidthTraits.withTraits(Self.apple) {
             let character = Character(text)
-            #expect(character.terminalWidth == 5, "claim")
-            #expect(character.terminalAppCursorAdvance == 4, "measured advance")
+            #expect(character.terminalWidth == 2, "claim")
+            #expect(character.terminalAppCursorAdvance == 1, "measured landing")
             let out = TerminalClient.compensating(
                 text, for: .appleTerminal, followedByContent: true)
             #expect(out.contains("\u{1B}[1C"), "one CUF to reach the claimed end")
         }
     }
 
-    /// Every advance the models report is a measurement from a real terminal.
+    /// Every advance the models report is a measurement from a real terminal —
+    /// and for Apple Terminal it is now a measurement of PAINT, not of DSR. The
+    /// two columns differ by a lot for exactly these clusters.
     @Test(
         "The per-host advance models match what the terminals actually do",
         arguments: [
-            ("👩‍🚀", 5, 5), ("👨‍👩‍👧‍👦", 11, 11), ("👩🏽‍🚀", 7, 7),
-            ("❤️‍🔥", 4, 5), ("🏳️‍🌈", 4, 5),
-            ("👍🏽", 4, 4), ("👍", 2, 2), ("中", 2, 2),
+            ("👩‍🚀", 2, 5), ("👨‍👩‍👧‍👦", 2, 11), ("👩🏽‍🚀", 2, 7),
+            ("❤️‍🔥", 1, 5), ("🏳️‍🌈", 1, 5),
+            ("👍🏽", 2, 4), ("👍", 2, 2), ("中", 2, 2),
         ] as [(String, Int, Int)])
     func advanceModelsMatchMeasurement(text: String, apple: Int, warp: Int) {
         let character = Character(text)
@@ -198,10 +211,13 @@ struct TerminalWidthTraitsTests {
             (.warp, "👨‍👩‍👧‍👦"),
             (.warp, "✊🏻"),
             (.appleTerminal, "👍🏽"),
-            (.appleTerminal, "☝🏽"),
             (.iTerm2, "✊🏻"),
         ] as [(TerminalClient.Program, String)])
     func claimedClustersAreEmittedVerbatim(program: TerminalClient.Program, text: String) {
+        // ☝🏽 is deliberately absent from this list: on Apple Terminal a
+        // text-presentation base lands one cell in, so it is the one skin-tone
+        // case that still needs an erase and a step — see
+        // `textPresentationLeadingZWJIsCompensated` for the same rule on ZWJ.
         TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: program)) {
             let out = TerminalClient.compensating(text, for: program, followedByContent: true)
             #expect(out == text, "expected verbatim, got \(out.debugDescription)")

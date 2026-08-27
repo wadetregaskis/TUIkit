@@ -1,0 +1,520 @@
+{
+ "grid": {
+  "0": {
+   "cell_height": 34.0,
+   "cell_width": 14.143,
+   "origin_x": 0,
+   "origin_y": 158
+  },
+  "1": {
+   "cell_height": 34.0,
+   "cell_width": 14.143,
+   "origin_x": 0,
+   "origin_y": 158
+  },
+  "2": {
+   "cell_height": 34.0,
+   "cell_width": 14.143,
+   "origin_x": 0,
+   "origin_y": 158
+  }
+ },
+ "instrument_bias": 1,
+ "measurements": {
+  "alarm": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "ascii_a": {
+   "advance": 1,
+   "class": "ascii",
+   "ink": 1,
+   "landing": 1,
+   "reserve": 1
+  },
+  "ascii_bracket": {
+   "advance": 1,
+   "class": "ascii",
+   "ink": 1,
+   "landing": 1,
+   "reserve": 1
+  },
+  "bare_desktop": {
+   "advance": 1,
+   "class": "bare_pictograph",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "bare_joystick": {
+   "advance": 1,
+   "class": "bare_pictograph",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "bare_shield": {
+   "advance": 1,
+   "class": "bare_pictograph",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "call_me": {
+   "advance": 2,
+   "class": "default_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "cjk_han": {
+   "advance": 2,
+   "class": "cjk",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "combining_acute": {
+   "advance": 1,
+   "class": "combining",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "crossing": {
+   "advance": 2,
+   "class": "default_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "down_double": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "fast_forward": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "fire": {
+   "advance": 2,
+   "class": "default_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "flag_au": {
+   "advance": 2,
+   "class": "flag_pair",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "flag_scotland": {
+   "advance": 2,
+   "class": "tag_flag",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "flag_us": {
+   "advance": 2,
+   "class": "flag_pair",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "flute": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "grinning": {
+   "advance": 2,
+   "class": "default_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "halfwidth_kana": {
+   "advance": 1,
+   "class": "cjk",
+   "ink": 1,
+   "landing": 1,
+   "reserve": 1
+  },
+  "hangul": {
+   "advance": 2,
+   "class": "cjk",
+   "ink": 1,
+   "landing": 2,
+   "reserve": 2
+  },
+  "hourglass": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "hourglass_flowing": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "keycap_hash": {
+   "advance": 1,
+   "class": "keycap",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "keycap_one": {
+   "advance": 1,
+   "class": "keycap",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "lone_ri_a": {
+   "advance": 2,
+   "class": "regional_indicator",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "moose": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "partying": {
+   "advance": 2,
+   "class": "default_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "pink_heart": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "rewind": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "sf_symbol_high": {
+   "advance": 1,
+   "class": "pua16",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "sf_symbol_low": {
+   "advance": 1,
+   "class": "pua16",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "sf_symbol_mid": {
+   "advance": 1,
+   "class": "pua16",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "shovel": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "telephone": {
+   "advance": 2,
+   "class": "default_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "tone_basketball": {
+   "advance": 3,
+   "class": "skin_tone_bmp_wide",
+   "ink": 3,
+   "landing": 3,
+   "reserve": 3
+  },
+  "tone_boy": {
+   "advance": 2,
+   "class": "skin_tone_smp",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "tone_call_me": {
+   "advance": 2,
+   "class": "skin_tone_smp",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "tone_fist": {
+   "advance": 4,
+   "class": "skin_tone_bmp_wide",
+   "ink": 4,
+   "landing": 4,
+   "reserve": 4
+  },
+  "tone_point_up": {
+   "advance": 3,
+   "class": "skin_tone_bmp_narrow",
+   "ink": 3,
+   "landing": 3,
+   "reserve": 3
+  },
+  "tone_point_up_vs16": {
+   "advance": 3,
+   "class": "skin_tone_vs16_base",
+   "ink": 3,
+   "landing": 3,
+   "reserve": 3
+  },
+  "tone_pray": {
+   "advance": 2,
+   "class": "skin_tone_smp",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "tone_thumbsup": {
+   "advance": 2,
+   "class": "skin_tone_smp",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "tone_victory": {
+   "advance": 3,
+   "class": "skin_tone_bmp_narrow",
+   "ink": 3,
+   "landing": 3,
+   "reserve": 3
+  },
+  "tone_wave": {
+   "advance": 2,
+   "class": "skin_tone_smp",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "tone_writing": {
+   "advance": 3,
+   "class": "skin_tone_bmp_narrow",
+   "ink": 3,
+   "landing": 3,
+   "reserve": 3
+  },
+  "up_double": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "vs15_black_square": {
+   "advance": 2,
+   "class": "vs15_chrome",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "vs15_white_square": {
+   "advance": 2,
+   "class": "vs15_chrome",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "vs16_congrat": {
+   "advance": 2,
+   "class": "vs16_wide_exception",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "vs16_desktop": {
+   "advance": 1,
+   "class": "vs16_pictograph",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "vs16_gear": {
+   "advance": 1,
+   "class": "vs16_pictograph",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "vs16_heart": {
+   "advance": 1,
+   "class": "vs16_pictograph",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "vs16_part_alt": {
+   "advance": 2,
+   "class": "vs16_wide_exception",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "vs16_pencil": {
+   "advance": 1,
+   "class": "vs16_pictograph",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "vs16_secret": {
+   "advance": 2,
+   "class": "vs16_wide_exception",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "vs16_shield": {
+   "advance": 1,
+   "class": "vs16_pictograph",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "vs16_warning": {
+   "advance": 1,
+   "class": "vs16_pictograph",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "vs16_wavy_dash": {
+   "advance": 2,
+   "class": "vs16_wide_exception",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "watch": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "wave": {
+   "advance": 2,
+   "class": "default_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "zwj_astronaut": {
+   "advance": 2,
+   "class": "zwj",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "zwj_astronaut_tone": {
+   "advance": 2,
+   "class": "zwj_skin_tone",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "zwj_broken_chain": {
+   "advance": 1,
+   "class": "zwj",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "zwj_family4": {
+   "advance": 2,
+   "class": "zwj",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "zwj_farmer": {
+   "advance": 2,
+   "class": "zwj",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "zwj_heart_fire": {
+   "advance": 1,
+   "class": "zwj",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "zwj_pirate_flag": {
+   "advance": 2,
+   "class": "zwj",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "zwj_rainbow_flag": {
+   "advance": 1,
+   "class": "zwj",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "zwj_red_hair": {
+   "advance": 2,
+   "class": "zwj",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  }
+ },
+ "stamp": {
+  "date": "2026-08-26 22:01:38 -0700",
+  "env": {
+   "COLORTERM": "truecolor",
+   "LC_TERMINAL": "iTerm2",
+   "LC_TERMINAL_VERSION": "3.6.11",
+   "TERM": "xterm-256color",
+   "TERM_PROGRAM": "iTerm.app",
+   "TERM_PROGRAM_VERSION": "3.6.11"
+  },
+  "screen": "alternate"
+ }
+}

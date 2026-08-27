@@ -71,3 +71,33 @@ use `Tools/Smoke/raw_probe.py`, which decodes nothing: it drives the app
 through a key script and counts patterns in the bytes themselves — including
 whether a cluster carried its cursor compensation, and `--term-program` to
 force a host model from any terminal.
+
+## `landing_probe.py` + `landing_analyze.py` — where the next character PAINTS
+
+`advance_probe.py` asks the terminal where its cursor went. These two measure
+where the glyph after a cluster is actually drawn, which is not the same
+question and is the one a layout needs answered. Apple Terminal reports an
+advance of 4 for 🤙🏽 and paints the next character two cells along; every model
+built on the report put borders where nothing was drawn.
+
+Run the probe inside the terminal under test:
+
+```sh
+PROBE_OUT=/tmp/landing.json PROBE_SHOT=/tmp/shot python3 landing_probe.py --wrap
+```
+
+then read the pictures:
+
+```sh
+python3 landing_analyze.py /tmp/landing.json -o data/<host>-<version>-alternate-landing.json
+```
+
+Prefer `PROBE_SYNC=1` and have **another process** take the screenshots (the
+probe writes `<shot>.ready` and waits for `<shot>.done`). macOS asks the
+terminal to confirm direct screen access and puts the dialog **over the window
+being measured**, which hid a calibration mark for five runs.
+
+Both clusters and expectations come from `data/width-corpus.json`, shared with
+the Swift tests so a measurement always answers a question something asks.
+`TerminalLedgerConformanceTests` is where the records are checked against the
+models.
