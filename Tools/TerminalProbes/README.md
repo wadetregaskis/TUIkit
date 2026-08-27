@@ -117,3 +117,29 @@ python3 border_probe.py /tmp/app.png
 It crops to the app's own painted background first, so the desktop and other
 windows cannot contribute an edge, and exits 1 on any outlier — so it can gate a
 smoke run rather than only inform one.
+
+## `matrix_probe.py` + `matrix_analyze.py` — the whole truth table in one run
+
+Every corpus cluster × every applicable emission strategy (verbatim, `CUF`,
+`ECH+CUF`, `CUB`, `CUB+CUF`, software strip, and the detach candidates: ZWNJ,
+DECSC/DECRC separator, SGR separator, absolute positioning), measured in a
+single run inside the terminal under test:
+
+```sh
+PROBE_OUT=/tmp/matrix.json python3 matrix_probe.py                 # DSR phase
+PROBE_OUT=/tmp/matrix.json PROBE_SHOT=/tmp/mx PROBE_SYNC=1 \
+    python3 matrix_probe.py                                        # + pixels
+python3 matrix_analyze.py /tmp/matrix.json -o data/<host>-matrix.json
+```
+
+The DSR phase needs no display and answers, per (cluster, strategy): the net
+internal advance, and whether a full-width row wraps — budgeted BOTH at the
+composed claim and at the strategy's own advance, because a detach strategy's
+premise is that the layout would claim its wider extent. The pixel phase adds
+where the next character paints, the glyph's ink, and an APPEARANCE
+classification (composed / stripped / detached / other) computed by comparing
+each cell against reference glyphs rendered in the same run — no human reads
+the screenshot.
+
+Strategies are built from the cluster's advance measured live in the run, not
+from a model, so the probe works unchanged on a terminal nobody has measured.
