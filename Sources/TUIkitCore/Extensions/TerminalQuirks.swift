@@ -215,7 +215,14 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         // so 2+1+2 = 5).
         let hasZWJ = scalars.contains { $0.value == 0x200D }
         let hasZWNJ = scalars.contains { $0.value == 0x200C }
-        if (hasZWJ && zwjSequences) || (hasZWNJ && !hasZWJ && skinTones == .separate),
+        // The ZWNJ sum applies under `.pullBack` as well as `.separate`: both
+        // describe the same terminal (the internal column sums joiners
+        // whatever the walk emits — see the tone arm below), and a
+        // pre-separated base+ZWNJ+modifier cluster can arrive in user data.
+        // Pricing it 4 under `.pullBack` emitted CUB(2) where the real model
+        // sums 5 and the real walk emits CUB(3) — a one-cell mirror drift.
+        if (hasZWJ && zwjSequences)
+            || (hasZWNJ && !hasZWJ && (skinTones == .separate || skinTones == .pullBack)),
             let summed = Character.summedInternalJoinerAdvance(cluster, segmentAdvance: {
                 self.cursorAdvance(of: $0)
             })

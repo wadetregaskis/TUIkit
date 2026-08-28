@@ -115,6 +115,21 @@ struct TerminalQuirksTests {
         #expect(bmp.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) } == keepsBMP)
     }
 
+    @Test("A pre-separated tone cluster prices its joiner under .pullBack too")
+    func pullBackPricesSeparatedCluster() {
+        // 🤙+ZWNJ+🏽 — user-authored, or previously rewritten text fed back
+        // in. The ZWNJ occupies its own internal column on the host both
+        // switches describe (DSR-measured: the pair advances 5 = 2+1+2), so
+        // `.pullBack` must sum it exactly as `.separate` does. It used to
+        // fall to the raw-tone arm and price 4, emitting CUB(2) where the
+        // real walk under non-separated traits emits CUB(3).
+        let cluster = Character("🤙\u{200C}🏽")
+        var quirks = TerminalQuirks()
+        quirks.skinTones = .pullBack
+        #expect(quirks.cursorAdvance(of: cluster) == 5)
+        #expect(cluster.terminalAppCursorAdvance == 5, "the real model it mirrors")
+    }
+
     @Test("A hand-built set can express a terminal TUIkit already measured")
     func canReproduceAMeasuredHost() {
         // The test that makes the export worth exporting: if the switches
