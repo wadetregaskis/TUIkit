@@ -49,12 +49,15 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         /// measured — and the terminal re-renders the cluster as its bare
         /// base, so the tone does not survive on screen.
         case pullBack
-        /// Rewrite an emoji-presentation base's cluster as base + ZWNJ +
-        /// modifier, claiming the separated width (base + 3 — the ZWNJ takes a
-        /// column), so the tone renders as a swatch beside the base; pull a
-        /// text-presentation base's cluster back as ``pullBack`` does, because
-        /// the rewrite was measured to misalign for those. Apple Terminal's
-        /// treatment.
+        /// Rewrite every Fitzpatrick cluster as base + ZWNJ + modifier,
+        /// claiming the separated width (base + 3 — the ZWNJ takes a
+        /// column), so the tone renders as a swatch beside the base. A
+        /// text-presentation base (☝🏻) is promoted with VS-16 first — the
+        /// bare rewrite was measured to misalign for those, and the old
+        /// pull-back re-rendered the narrow monochrome glyph with the tone
+        /// lost — and the promoted form then takes the ordinary
+        /// erase-and-push (`ECH(5)` + cluster + `CUF(1)`, card-measured
+        /// 2026-08-28). Apple Terminal's treatment.
         case separate
     }
 

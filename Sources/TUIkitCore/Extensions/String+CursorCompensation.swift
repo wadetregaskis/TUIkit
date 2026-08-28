@@ -142,13 +142,21 @@ extension String {
     }
 
     /// Returns `true` if any character in this string has a Terminal.app
-    /// cursor advance that differs from its visible cell width — VS-16
-    /// pictographic emoji (advance 1, width 2) or any Fitzpatrick skin-
-    /// tone cluster whose modifier survived ``withTerminalAppCursorCompensation``
-    /// (i.e. it was the last visible character on the line — advance 4,
-    /// width 2).  These rows trip Terminal.app's right-edge phantom-cell
-    /// bug; `FrameDiffWriter.repaintRightEdge` uses this check to scope
-    /// its two-pass repaint to only the rows that need it.
+    /// cursor advance that differs from its visible cell width. These rows
+    /// trip Terminal.app's right-edge phantom-cell bug;
+    /// `FrameDiffWriter.repaintRightEdge` uses this check to scope its
+    /// two-pass repaint to only the rows that need it.
+    ///
+    /// It runs on the COMPENSATED line, so what it flags are the emitted
+    /// clusters whose advance still disagrees with their claim around the
+    /// injected escapes: the `ECH`/`CUF` under-advancers (a VS-16 ❤️, a bare
+    /// 🖥, an SF Symbol, a VS-16-promoted separated tone) and the
+    /// `CUB`-repaired over-advancers (tag flags, bare keycaps). A plain
+    /// separated tone pair drops OUT of the repaint's scope here — its
+    /// rewritten cluster advances exactly its claim, and its card measured
+    /// the right edge clean. (An earlier note described a strip-era pipeline
+    /// in which a modifier could only "survive" as the line's last visible
+    /// character; since 2026-08-27 every modifier survives, via separation.)
     public var containsTerminalAppCursorAdvanceQuirk: Bool {
         var index = startIndex
         while index < endIndex {
@@ -207,10 +215,16 @@ extension String {
     ///   claim of base + 3. The tone survives on screen, which the composed
     ///   cluster plus any cursor repair measured could not do: every backward
     ///   move re-renders the cluster as its bare base.
-    /// - **Skin tones on a text-presentation base** (☝🏻 ✍🏿): the same rewrite
-    ///   measured MISALIGNED for these, so they keep `CUB(internal − claim)` —
-    ///   aligned, tone shown only if the terminal ever repaints the cluster
-    ///   unmoved.
+    /// - **Skin tones on a text-presentation base** (☝🏻 ✍🏿 ⛹🏾): the bare
+    ///   rewrite measured MISALIGNED for these, so the base is **promoted
+    ///   with VS-16 first** and then separated the same way (2026-08-28,
+    ///   superseding a `CUB(internal − claim)` pull-back that re-rendered
+    ///   the bare narrow monochrome glyph beside a blank cell, tone lost —
+    ///   user-reported). The promoted base is a VS-16 under-advancer on this
+    ///   host, so the rewritten cluster takes the ordinary erase-and-push:
+    ///   `ECH(5)` ☝️‌🏻 `CUF(1)`, claim 2 + 1 + 2 — card-measured aligned with
+    ///   the tone kept, the pair adjacent, and the spare column trailing the
+    ///   swatch.
     /// - **Emoji ZWJ sequences** (👨‍👩‍👧‍👦 ❤️‍🔥 👩🏽‍🚀), when the traits
     ///   claim the decomposed width: decomposed into their segments
     ///   (``Swift/Character/emojiZWJSegments``), each segment then compensated
@@ -497,10 +511,13 @@ extension String {
     /// claimed cells but its cursor advance covers one, and with `CUF`
     /// alone the second cell kept the default background under the glyph's
     /// right half — the iTerm2 SF Symbol shape exactly; both the `ECH` and
-    /// styled-space variants filled it. Warp's other divergences are
-    /// OVER-advances (keycaps, 〰️/〽️) which no CUF can correct, or
-    /// skin-tone clusters — stripped first by ``withSkinToneFallback()``
-    /// when the claim in force cannot hold them.
+    /// styled-space variants filled it. Skin tones pass through whole: the
+    /// published `.detached` claims cover Warp's base+swatch rendering (the
+    /// ``withSkinToneFallback(scope:)`` strip fires only for a caller that
+    /// never published traits), and the walk drops ZWJ joiners and the
+    /// redundant tone VS-16 exactly as the traits describe. Warp's remaining
+    /// divergences are OVER-advances (keycaps, 〰️/〽️) which no CUF can
+    /// correct; they are left alone and documented.
     /// ANSI escape sequences are preserved.
     public func withWarpCursorCompensation() -> String {
         withCursorForwardCompensation(erasingUnderGlyph: true) { $0.warpCursorAdvance }
@@ -519,9 +536,10 @@ extension String {
     /// Pushing the cursor to the claimed column keeps the layout intact and
     /// leaves the glyph a blank cell to paint into.
     ///
-    /// tmux's BMP-base skin-tone over-advance is handled upstream by
-    /// ``withSkinToneFallback()``, as on iTerm2 and Warp; a bare ☝ remains
-    /// uncorrectable (see ``Character/tmuxCursorAdvance``).
+    /// tmux's detached-base skin tones are handled upstream by
+    /// ``withSkinToneFallback(scope:)`` — the last live customer of the
+    /// strip, per the measured ``Character/tmuxMergedToneBases`` set; a bare
+    /// ☝ remains uncorrectable (see ``Character/tmuxCursorAdvance``).
     /// ANSI escape sequences are preserved.
     public func withTmuxCursorCompensation() -> String {
         withCursorForwardCompensation { $0.tmuxCursorAdvance }
@@ -531,11 +549,13 @@ extension String {
     /// cursor forward by the shortfall whenever the host advances it less
     /// than the character's painted ``Character/terminalWidth``.
     ///
-    /// One walk serves every host whose quirks are pure under-advances
-    /// (iTerm2, Ghostty, Warp); only the per-host advance model differs, so
-    /// it is the parameter. Terminal.app keeps its own walk — it must also
-    /// rewrite content (stripping mid-line skin tones), which this cannot
-    /// express. ANSI escape sequences are copied through untouched.
+    /// One walk serves every host whose treatments are rewrite-free apart
+    /// from the shared normalization (iTerm2, Ghostty, Warp, tmux); only the
+    /// per-host advance model differs, so it is the parameter. Terminal.app
+    /// keeps its own walk — its treatments rewrite content (tone separation
+    /// with VS-16 promotion) and repair the row STORE (`CUB`/`DCH` surgery),
+    /// which this cannot express. ANSI escape sequences are copied through
+    /// untouched.
     ///
     /// - Parameters:
     ///   - erasingUnderGlyph: Emit `ECH` for the glyph's claimed cells before

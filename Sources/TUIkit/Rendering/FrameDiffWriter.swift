@@ -35,16 +35,22 @@ import Foundation
 /// ```
 @MainActor
 final class FrameDiffWriter {
-    /// Whether the host terminal is macOS Terminal.app.
+    /// Whether the host terminal is macOS Terminal.app — the host with the
+    /// deepest emoji divergences (three per-row facts: internal column,
+    /// paint, row store) and so its own walk: tone separation, software ZWJ
+    /// decomposition, store surgery, the right-edge phantom repaint (see
+    /// ``buildOutputLines`` and ``repaintRightEdge``).
     ///
-    /// Terminal.app has emoji cursor-advance and right-edge phantom-cell bugs
-    /// that the output path works around (see ``buildOutputLines`` and
-    /// ``repaintRightEdge``). EVERY other terminal — iTerm2, kitty, Alacritty,
-    /// WezTerm, VS Code's terminal, and all Linux/BSD consoles — advances the
-    /// cursor correctly, so applying those workarounds there does not merely
-    /// waste time, it CORRUPTS output: it injects spurious `CUF` cursor moves
-    /// (shifting everything after an emoji one cell right). Detected once from
-    /// `TERM_PROGRAM`; injectable so tests exercise both paths
+    /// Each measured host gets ITS model and no other's — an earlier note
+    /// here claimed every other terminal advances correctly, which was true
+    /// only of the classes then measured; iTerm2, Ghostty, Warp and tmux
+    /// each have their own (smaller) walks now. The gating still matters in
+    /// the same way it always did: applying one host's workarounds to
+    /// another CORRUPTS output (a spurious `CUF` shifts everything after an
+    /// emoji one cell right), and an UNIDENTIFIED terminal — kitty,
+    /// Alacritty, WezTerm, VS Code, the Linux consoles — gets no rewriting
+    /// at all, because an unmeasured terminal is assumed correct. Detected
+    /// once from `TERM_PROGRAM`; injectable so tests exercise every path
     /// deterministically regardless of which terminal runs them.
     private let isAppleTerminal: Bool
 
@@ -67,11 +73,14 @@ final class FrameDiffWriter {
     /// detection/injection story as `isAppleTerminal`.
     private let isGhostty: Bool
 
-    /// Whether the host terminal is Warp, which draws Fitzpatrick skin-tone
-    /// clusters as base + swatch exactly as iTerm2 does (so it takes the same
-    /// `String.withSkinToneFallback()` strip) and under-advances a lone
-    /// regional indicator as Terminal.app does (so it takes a CUF). Same
-    /// detection/injection story as `isAppleTerminal`.
+    /// Whether the host terminal is Warp, which never composes a ZWJ
+    /// sequence (the walk drops the joiners under its published
+    /// `.decomposedDroppingJoiners` traits), draws Fitzpatrick tones as
+    /// base + swatch (the `.detached` claims cover them, so the modifiers
+    /// pass through; the `String.withSkinToneFallback(scope:)` strip fires
+    /// only when no traits were published), and under-advances a lone
+    /// regional indicator, its SF Symbols and the seven Unicode 16.0 emoji
+    /// (ECH+CUF). Same detection/injection story as `isAppleTerminal`.
     private let isWarp: Bool
 
     /// Whether we are running inside tmux, which is a COMPOSITOR rather than a

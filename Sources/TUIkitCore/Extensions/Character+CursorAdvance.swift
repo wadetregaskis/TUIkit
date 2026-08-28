@@ -444,12 +444,20 @@ extension Character {
     /// - **Plane-16 Private Use Area** (U+100000…U+10FFFD — SF Symbols).
     ///
     /// Unlike Terminal.app: flag pairs AND lone regional indicators
-    /// advance 2, and ZWJ sequences mostly advance 2 (except VS-16-leading
-    /// ones like ❤️‍🔥, advance 1 — unhandled, as ZWJ is on both hosts).
-    /// Fitzpatrick skin-tone clusters also mis-advance on iTerm2 (SMP
-    /// bases merge to 2, BMP bases draw base + swatch at 4/3), but the
-    /// iTerm2 output path strips them first (``withSkinToneFallback()``),
-    /// so they never reach the compensation walk.
+    /// advance 2, and ZWJ sequences mostly advance 2 — except VS-16-leading
+    /// ones like ❤️‍🔥, which advance 1 and are modelled below (the arm was
+    /// long documented as unhandled; the ordinary ECH+CUF closes it).
+    /// Fitzpatrick skin tones split by base: SMP bases merge to 2, BMP
+    /// bases draw base + swatch — and since the detached-claim widening
+    /// (`TerminalWidthTraits`, `.detachedOnBMPBases`) the layout claims the
+    /// cells that rendering occupies, so the clusters pass through the walk
+    /// un-stripped and mostly aligned. The strip
+    /// (``String/withSkinToneFallback(scope:)``) fires only for a caller
+    /// that never published the host's traits. The odd members are modelled
+    /// explicitly below: a text-presentation base with a redundant VS-16
+    /// advances 3 (raw truth — the walk normalizes it away), and the SMP
+    /// text-presentation pair 🏋🏽 merges NARROW at 1 against its composed
+    /// claim of 2, closed by ECH(2)+CUF(1).
     public var iTerm2CursorAdvance: Int {
         // A ZWJ sequence whose FIRST segment is a VS-16 cluster — ❤️‍🔥 🏳️‍🌈 —
         // advances 1 against a claim of 2: the leading segment carries this

@@ -17,6 +17,21 @@ change that relies on terminal-specific behaviour (`TerminalHost`,
 **fifth cursor-advance model** here, not a fall-through to "unknown": a change
 touching cursor advance must consider tmux's grid explicitly.
 
+Two structural rules hold everywhere in that machinery:
+
+- **The advance MODELS state raw-cluster truth, ungated.** Only the WALKS
+  (and the claims) are gated on `TerminalWidthTraits`. A model gated on the
+  traits silently reverts to the claim when a widening is turned off — it
+  happened, and the conformance suite could not see it because a
+  self-consistent model passes conservation while being wrong about the
+  terminal. Where a walk rewrites a cluster, the raw cluster's model keeps
+  an explicit arm anyway (`TerminalLedgerConformanceTests` checks it against
+  the committed records).
+- **Every emission must net the cursor to the claim** (the conservation
+  law, `CursorAdvanceConservationTests`) — and consistency is not
+  correctness, which is why every model value must also trace to a record
+  under `Tools/TerminalProbes/data/`.
+
 **Terminals covered:** Apple Terminal.app, iTerm2, Ghostty, Warp, tmux
 (all measured). Jump to the
 [measured advance table](#measured-advance-table-divergences-and-key-rows)
@@ -53,9 +68,9 @@ for the one-screen comparison.
 > width == claim: rewrite (ZWNJ separation), decompose (ZWJ), or delete the
 > surplus stored column (`DCH` — flags, keycaps).
 
-### Three numbers, not one
+### Four numbers, not one
 
-A cluster has three different measurements and this project has, at various
+A cluster has four different measurements and this project has, at various
 times, mistaken each for another:
 
 | number | measured by | what it governs |
@@ -87,9 +102,10 @@ CUB pull-back silently strips a skin tone on screen (treatment cards,
 differs from its painted width displaces every LATER write on the row —
 sequential or absolutely addressed — by the difference, which cursor moves
 cannot repair. Hence the shipped per-class treatments: rewrite as base + ZWNJ
-+ modifier (skin tones on emoji-presentation bases — the one separator the
-terminal does not re-join), software decomposition (ZWJ sequences), and
-`CUB(1)` `DCH(1)` `CUF(1)` store surgery (flags, keycaps). Every emission was
++ modifier (every Fitzpatrick cluster — the one separator the terminal does
+not re-join, with a text-presentation base VS-16-promoted first, 2026-08-28),
+software decomposition (ZWJ sequences), and `CUB(1)` `DCH(1)` `CUF(1)` store
+surgery (FE0F keycaps and flag pairs; a BARE keycap is pulled back instead). Every emission was
 verified in the terminal itself: follower and absolute-move alignment,
 background integrity, and a full-width row ending in the cluster with no wrap.
 A claim must never be narrower than the landing —
@@ -503,6 +519,17 @@ before the render loop is built.
 > over-advancing classes all wrapped at the row edge and re-rendered bare, so
 > DCH is confined to the two classes whose internal column already matches the
 > claim.
+>
+> One candidate was rejected before it reached a card: **interleaving a
+> cursor move between base and modifier** (base + `CUF(1)` + modifier —
+> "candidate A" of the 2026-08-28 session). In Swift's own grapheme
+> segmentation a Fitzpatrick modifier is an Extend scalar, so it FUSES with
+> the escape's final byte: `…C` + 🏻 becomes one `Character`, and every
+> Character-level escape scanner in the pipeline (`csiSequenceEnd`, the
+> advance oracle, the width scan) mis-parses the emission it itself
+> produced — the same `m🏻` hazard the SGR-collapsing code documents. The
+> contiguous-cluster emission (`ECH` + whole rewritten cluster + `CUF`) has
+> no such seam, which is why it shipped.
 
 
 **Tested:** `TERM_PROGRAM_VERSION` 455.1, macOS 15.7 (Sequoia), 2026-07-13.
@@ -591,10 +618,13 @@ before the render loop is built.
   place. A container that paints a surface publishes it
   (`EnvironmentValues.surfaceBackground`); the field derives from that.
 - **VS-16 pictographic emoji** (❤️ ✏️ ☎️ 🖥️ 🛡️ …): paints 2,
-  **advances 1** ("Bug A" — see `Emoji rendering bugs in macOS Sequoia's
-  Terminal.app.md` for the full investigation). Compensated with CUF(1) by
-  `withTerminalAppCursorCompensation()`. Exception: the East-Asian-Wide
-  BMP bases 〰️ 〽️ ㊗️ ㊙️ advance their full 2.
+  **advances 1** ("Bug A" — see `Historical/Emoji rendering bugs in macOS
+  Sequoia's Terminal.app (2026-07).md` for the original investigation).
+  Compensated with `ECH(2)` + glyph + `CUF(1)` by
+  `withTerminalAppCursorCompensation()` — the erase since 2026-08-23, when a
+  coloured run showed the skipped cell keeps the default background with CUF
+  alone. Exception: the East-Asian-Wide BMP bases 〰️ 〽️ ㊗️ ㊙️ advance
+  their full 2.
 - **Fitzpatrick skin tones:** the composed cluster paints one merged glyph in
   2 cells while **advancing the internal column 4** (emoji-presentation bases:
   👍🏽 ✊🏻) or **3** (text-presentation: ☝🏽) — "Bug B" — and any backward
@@ -613,9 +643,13 @@ before the render loop is built.
   column more than it paints, displacing every later write on the row one cell
   left. Repaired with store surgery: `CUB(1)` `DCH(1)` `CUF(1)` (2026-08-27;
   the earlier `CUB(1)+CUF(1)` nudge measured misaligned on the cards).
-- **Lone regional indicator** (🇦): paints 2, **advances 1** → CUF(1).
-- **Keycaps** (1️⃣ #️⃣, with or without VS-16): advance 2 ✓ — and store one
-  column wide, same surgery as flag pairs.
+- **Lone regional indicator** (🇦): paints 2, **advances 1** →
+  `ECH(2)`+glyph+`CUF(1)`, like every under-advancer here.
+- **Keycaps** (1️⃣ #️⃣, with VS-16): advance 2 ✓ — and store one column
+  wide, same surgery as flag pairs. The BARE form (1⃣, claimed 1 — the
+  base's own width) also advances 2, an over-advance pulled back with
+  `CUB(1)` since 2026-08-28 (it used to mis-enter the surgery on a
+  fall-through model value; paint/store unmeasured, pixel card queued).
 - **ZWJ sequences:** the internal column decomposes (👩‍🚀 **5**, ❤️‍🔥 **4**,
   👨‍👩‍👧‍👦 **11**) while the glyph composes into 2 — and every cursor-move
   repair either displaced the row's tail (stored width) or re-rendered the
@@ -625,7 +659,8 @@ before the render loop is built.
   Component glyphs on screen — the accepted cost. See *ZWJ: where DSR lies*
   below for the history.
 - **SF Symbols (Plane-16 PUA, U+100000+):** paints 2, **advances 1** →
-  CUF(1). BMP PUA (e.g. U+E0B0 powerline): advances 1, width 1 ✓.
+  `ECH(2)`+glyph+`CUF(1)`. BMP PUA (e.g. U+E0B0 powerline): advances 1,
+  width 1 ✓.
 - **Emoji-repertoire chrome with VS-15** (⬛︎ ⬜︎ + U+FE0E): renders as a
   single seamless 2-cell monochrome, SGR-tintable glyph — *preferred*
   here because adjacent FULL BLOCK `█` cells show visible seams
@@ -995,8 +1030,11 @@ and the *composed* classes wrong.
   covers them. Re-run the sweep when Warp updates or a Unicode version
   ships.
 - **OVER-advancers, unhandled** (no escape can pull a cursor back to a
-  column the glyph has already painted over):
-  keycaps 1️⃣ #️⃣ *️⃣ advance **3**; 〰️ 〽️ advance **3**.
+  column the glyph has already painted over — the seven entries in
+  `TerminalLedgerConformanceTests.knownAdvanceDivergences`, all Warp's):
+  keycaps 1️⃣ #️⃣ *️⃣ advance **3**; 〰️ 〽️ ㊗️ ㊙️ (the EAW-base VS-16
+  exceptions) advance **3**; the tag-sequence flag 🏴󠁧󠁢󠁳󠁣󠁴󠁿 composes into one
+  glyph but advances and lands at **3**.
 
   **ZWJ sequences left this list on 2026-08-28 — the walk drops the joiners
   in software.** Warp does not compose ZWJ sequences: it draws the
@@ -1085,11 +1123,11 @@ TUIkit's depth detection picks truecolor correctly. No `Tc`/`RGB`
 What matters under tmux is agreement between TUIkit's width tables and
 *tmux's* wcwidth. Measured, with what the tmux path now does about each
 divergence (`String.tmuxCursorAdvance` + `withTmuxCursorCompensation()` +
-`withSkinToneFallback(basePlane: .bmpOnly)`):
+`withSkinToneFallback(scope:)` with the measured keep-set):
 
 | Cluster | tmux 3.7b | TUIkit claims | Handled how |
 |---|---|---|---|
-| `U+100038` etc. (Plane-16 PUA, **SF Symbols**) | **1** | **2** (`String+TerminalWidth.swift:166`) | CUF: one `ESC[1C` after each, landing the cursor at the claimed column |
+| `U+100038` etc. (Plane-16 PUA, **SF Symbols**) | **1** | **2** (`String+TerminalWidth.swift`, the Plane-16 arm) | CUF: one `ESC[1C` after each, landing the cursor at the claimed column |
 | `U+1F5A5`, `U+1F6E1`, `U+1F577`, `U+1F39E`, `U+1F3D9` (bare SMP pictographs) | **1** | **2** | CUF, same as above |
 | `U+1F060` domino, `U+1F0A1` playing card | **1** | 2 | CUF, same as above |
 | `U+270A U+1F3FB`, `U+1F919 U+1F3FD` (skin tone on a base tmux **detaches** — 64 of the 134 modifier bases, per codepoint) | **4** | 2 | swatch stripped (`.keepingTmuxMerged` strips exactly the detaching bases) → back to a 2-cell advance |
@@ -1108,7 +1146,7 @@ per glyph, and the border was visibly broken. The tmux path now emits one CUF
 per under-advancing cluster, landing the cursor at the claimed column, so the
 border closes. Same fix for the bare SMP pictographs and the dominoes/cards.
 
-The `:166` comment ("SF Mono: 2 cells") is right about the *font* in a native
+The claim's comment ("SF Mono: 2 cells") is right about the *font* in a native
 terminal and about the width TUIkit paints; tmux's wcwidth has never heard of
 SF Symbols and advances 1, which is why the tmux path adds the CUF rather than
 changing the claim. `withSkinToneFallback(scope: .keepingTmuxMerged)` is
@@ -2011,8 +2049,10 @@ all — 👩‍🚀 draws as 👩 then 🚀 — so paint and reservation agree w
 other and disagree with a 2-cell claim. Terminal.app composes the glyph but
 reserves the same decomposed width, so it looks right and still over-runs. On
 both, a row budgeted at 2 wraps; on both, budgeting the reserved width fixes
-it. Warp composes tag-sequence flags correctly (🏴󠁧󠁢󠁥󠁮󠁧󠁿 lands with the controls),
-so that class is fine everywhere.
+it. Warp COMPOSES tag-sequence flags into one glyph — but advances and lands
+them at 3 against the 2-cell claim (`flag_scotland` in its landing ledger; a
+recorded known divergence, uncorrectable forward), so the class is aligned
+everywhere except Warp, where it shears one cell.
 
 **The lesson, again.** The paint card was the right instrument for the
 *previous* question (does 🀀 paint one cell or two) and the wrong one for this
@@ -2247,17 +2287,21 @@ the probes (no five-button mouse was attached).
   under-advance).
 - `Character.terminalAppCursorAdvance` / `.iTerm2CursorAdvance` /
   `.ghosttyCursorAdvance` / `.warpCursorAdvance` — the per-host advance
-  models (TUIkitCore), each pinned to the table above by
+  models (TUIkitCore), pinned to the committed measurement records in
+  `Tools/TerminalProbes/data/` by `TerminalLedgerConformanceTests` (which
+  also carries the known-divergence ledger), with spot batteries in
   `GhosttyWarpCompatibilityTests` / `StringTerminalWidthTests`.
 - `KeyEvent.normalizingLegacyShiftedFunctionKeys()` +
   `Terminal.finalize` — Apple Terminal's shifted-function-key re-coding
   (F13…F20 read back as Shift+F5…F12), gated on `TerminalHost.isAppleTerminal`.
 - `String+CursorCompensation.swift` — the per-host line rewriters.
-  `withCursorForwardCompensation(advance:)` is the shared CUF walk for
-  every host whose quirks are pure under-advances (iTerm2, Ghostty, Warp);
-  Terminal.app keeps its own walk because it must also rewrite content.
-  `String.withSkinToneFallback()` — the swatch strip, used by iTerm2 AND
-  Warp (NOT Ghostty, which merges skin tones correctly).
+  `withCursorForwardCompensation(advance:)` is the shared erase-and-push
+  walk (iTerm2, Ghostty, Warp, tmux), which also drops ZWJ joiners and the
+  redundant tone VS-16 where the traits say so; Terminal.app keeps its own
+  walk for its rewrites (tone separation) and store surgery.
+  `String.withSkinToneFallback(scope:)` — the swatch strip: live only for
+  tmux (the measured `.keepingTmuxMerged` set) and as the no-traits
+  fallback on iTerm2/Warp.
 
 ### Per-host output pipeline (FrameDiffWriter)
 
@@ -2269,11 +2313,11 @@ here.)
 
 | Host | Clip | Then |
 |---|---|---|
-| tmux | plain | `withSkinToneFallback(.bmpOnly)` → `withTmuxCursorCompensation()` |
+| tmux | plain | `withSkinToneFallback(scope:)` (`.keepingTmuxMerged` when every client renders kept tones, `.all` otherwise — per-client, push-refreshed) → `withTmuxCursorCompensation()` |
 | Apple Terminal | cursor-aware | `withTerminalAppCursorCompensation()` |
-| iTerm2 | plain | `withSkinToneFallback()` → `withITerm2CursorCompensation()` |
+| iTerm2 | plain | `withITerm2CursorCompensation()` (the strip is inert under the published `.detachedOnBMPBases` claims — no-traits fallback only) |
 | Ghostty | plain | `withGhosttyCursorCompensation()` |
-| Warp | plain | `withSkinToneFallback()` → `withWarpCursorCompensation()` |
+| Warp | plain | `withWarpCursorCompensation()` (strip inert under `.detached` claims, as iTerm2) |
 | anything else | plain | **untouched** (compensation would corrupt a correct terminal) |
 - `FrameDiffWriter` — applies the rewriters on its build path; Apple-only
   right-edge repaint.

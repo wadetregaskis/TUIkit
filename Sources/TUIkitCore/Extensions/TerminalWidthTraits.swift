@@ -58,7 +58,10 @@ public struct TerminalWidthTraits: Sendable, Equatable {
         /// Warp, for every base.
         case detached
         /// Merged for an SMP base (👍🏽), detached for a BMP one (✊🏻 ☝🏽).
-        /// iTerm2 and tmux.
+        /// iTerm2. (tmux was ONCE believed to fit here too; its split turned
+        /// out to be per base codepoint, not per plane — see
+        /// ``Swift/Character/tmuxMergedToneBases`` — so tmux keeps
+        /// ``merged``-shaped traits and strips the detaching bases instead.)
         case detachedOnBMPBases
         /// The output walk rewrites every Fitzpatrick cluster as base + ZWNJ +
         /// modifier, and on the one host measured to need it the ZWNJ costs a
@@ -72,11 +75,12 @@ public struct TerminalWidthTraits: Sendable, Equatable {
         /// text-presentation base (☝🏻 ✍🏿 ⛹🏾) is **promoted with VS-16**
         /// first — the bare rewrite was measured to misalign, and the shipped
         /// pull-back re-rendered it as the bare narrow monochrome glyph with a
-        /// blank cell beside it (user-reported 2026-08-28). The promoted base
-        /// is a VS-16 under-advancer on this host, so the walk erases and
-        /// `CUF`s it exactly as it does the standalone VS-16 class, measured
-        /// aligned with the tone kept: `ECH(2)` ☝️ `CUF(1)` ZWNJ 🏻, claim
-        /// 2 + 1 + 2. Apple Terminal.
+        /// blank cell beside it (user-reported 2026-08-28). The promoted
+        /// cluster is a VS-16 under-advancer on this host, so the whole
+        /// rewritten cluster takes the standalone VS-16 class's erase-and-
+        /// push: `ECH(5)` ☝️‌🏻 `CUF(1)` — the erase covering all five claimed
+        /// cells (2 + 1 + 2), the push closing the one-column shortfall —
+        /// card-measured aligned with the tone kept. Apple Terminal.
         case separated
     }
 
