@@ -252,6 +252,14 @@ extension String {
         // per-segment recursion of a decomposed ZWJ sequence (whose segments
         // never contain a further joiner, so this never recurses deeper).
         func appendCompensated(_ character: Character) {
+            // No `withoutRedundantToneVS16` here, unlike the shared walk: on
+            // this host both spellings of a VS-16-carrying tone cluster
+            // measure identically (☝️🏽 and ☝🏽 advance 3, land 1 — ledger),
+            // so under the separated traits the rewrite below already treats
+            // the spelled form (its base reconstruction keeps the selector
+            // separation would otherwise re-add), and under the pull-back
+            // fallback a strip would discard the author's scalar for no
+            // rendering gain at all.
             var c = character
             if traits.skinTone == .separated,
                 let separated = c.separatedSkinToneEmission
@@ -549,7 +557,15 @@ extension String {
         result.reserveCapacity(self.count + 8)
         var index = startIndex
 
-        func appendCompensated(_ c: Character) {
+        func appendCompensated(_ character: Character) {
+            // A redundant VS-16 on a tone cluster (☝️🏽) is stripped first:
+            // the modifier alone forces emoji presentation (UTS #51), and the
+            // normalized pair is the one every host was measured to handle —
+            // Ghostty merges it (the selector defeated the merge, detaching
+            // 4 cells against a 2-cell claim), iTerm2 and Warp render it in
+            // exactly the bare-base + swatch cells the claim allocates. See
+            // ``Character/withoutRedundantToneVS16`` for the per-host numbers.
+            let c = character.withoutRedundantToneVS16 ?? character
             let claimed = c.terminalWidth
             let actual = advance(c)
             if claimed > actual, erasingUnderGlyph {

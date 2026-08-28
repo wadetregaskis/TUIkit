@@ -122,28 +122,32 @@ struct TerminalLedgerConformanceTests {
     ///   2026-08-28 (`recent_emoji_sweep.py`, all four hosts, the whole
     ///   1FA70–1FAFF block): exactly those seven diverge, on Warp alone, and
     ///   `warpCursorAdvance` now models them.
-    /// - **`tone_point_up_vs16`** (☝️🏽) on Ghostty and iTerm2: a
-    ///   text-presentation base promoted by VS-16 and then given a modifier.
-    ///   One cluster, two hosts, two different answers (4 and 3), and no other
-    ///   cluster in its class to generalise from.
+    /// - **`tone_point_up_vs16`** (☝️🏽) on Ghostty and iTerm2 WAS here —
+    ///   "one cluster, two hosts, two different answers (4 and 3), and no
+    ///   other cluster in its class to generalise from". Resolved 2026-08-28
+    ///   without generalising: the VS-16 in that spelling is redundant (the
+    ///   modifier itself forces emoji presentation, UTS #51), the walks strip
+    ///   it (`Character.withoutRedundantToneVS16`), and the normalized ☝🏽 is
+    ///   measured on every host. The raw models grew explicit arms for the
+    ///   spelled form (Ghostty 4, Warp 4) and iTerm2's fall-through lands on
+    ///   the corrected bare-base claim (3), so all four now match their
+    ///   ledgers exactly.
     /// The model reports a different value than the terminal was measured to.
     static let knownAdvanceDivergences: Set<String> = [
         "warp/vs16_wavy_dash", "warp/vs16_part_alt",
         "warp/vs16_congrat", "warp/vs16_secret",
         "warp/keycap_one", "warp/keycap_hash", "warp/flag_scotland",
-        "ghostty/tone_point_up_vs16", "iTerm2/tone_point_up_vs16",
     ]
 
     /// The claim is *narrower* than where the terminal paints, which no forward
-    /// move can correct. A strict subset of ``knownAdvanceDivergences``: the two
-    /// it leaves out (e.g. `iTerm2/tone_point_up_vs16`) are
-    /// mis-modelled but still claimed widely enough, so they must keep failing
-    /// this one if they ever start to.
+    /// move can correct. Currently identical to ``knownAdvanceDivergences`` —
+    /// every remaining divergence is a Warp over-paint — but kept separate:
+    /// a cluster that is mis-modelled while still claimed widely enough must
+    /// keep failing the advance check without gaining an entry here.
     static let knownNarrowClaims: Set<String> = [
         "warp/vs16_wavy_dash", "warp/vs16_part_alt",
         "warp/vs16_congrat", "warp/vs16_secret",
         "warp/keycap_one", "warp/keycap_hash", "warp/flag_scotland",
-        "ghostty/tone_point_up_vs16",
     ]
 
     // MARK: - The assertions
@@ -232,6 +236,14 @@ struct TerminalLedgerConformanceTests {
                 if TerminalWidthTraits.current.zwjSequences == .decomposedDroppingJoiners,
                     entry.character.emojiZWJSegments != nil
                 {
+                    continue
+                }
+                // Same reasoning for a tone cluster carrying a redundant
+                // VS-16 (☝️🏽): every measured host's walk strips the selector
+                // before emission, so the raw landing describes a cluster the
+                // terminal never receives — the normalized pair satisfies the
+                // invariant through its own ledger row (tone_point_up).
+                if entry.character.withoutRedundantToneVS16 != nil {
                     continue
                 }
                 let claim = entry.character.terminalWidth

@@ -728,6 +728,13 @@ non-default setup.
     un-stripped and the swatch the user sees is iTerm2's own rendering.
     (The strip — generic-yellow fallback, `withSkinToneFallback()` — now
     fires only for a caller that has not published the host's traits.)
+  - A tone cluster still carrying a redundant VS-16 (☝️🏽) renders in **3**
+    cells — bare base + swatch, NOT the promoted base's 4 — measured
+    2026-08-28 in every column (advance, ink, landing, reserve). The old
+    promoted claim of 4 left a one-cell hole; since 2026-08-28 the walk
+    strips the redundant selector (the modifier alone forces emoji
+    presentation, UTS #51) and the claim prices the normalized pair at 3:
+    aligned verbatim.
 - **Flag pairs:** advance 2 ✓. **Lone regional indicator: advance 2**
   (differs from Terminal.app's 1) — width claim 2 ✓, nothing needed.
 - **Keycaps** (1️⃣ #️⃣ *️⃣, bare or with VS-16): paints 2, **advances 1**
@@ -738,7 +745,9 @@ non-default setup.
   which is what the ECH fills.
 - **ZWJ sequences:** advance 2 ✓ and paint 2 ✓ — confirmed by the paint
   card, not only by DSR. EXCEPT VS-16-leading ones (❤️‍🔥 🏳️‍🌈) which
-  advance 1 on the alternate screen; unhandled.
+  advance 1 on the alternate screen — long documented as unhandled, now
+  modelled (`iTerm2CursorAdvance` returns 1 for a VS-16-carrying leading
+  segment) and closed by the ordinary ECH(2)+CUF(1) repair.
 - **Emoji chrome with VS-15** (⬛︎ ⬜︎ + U+FE0E): monochrome, tintable,
   2 cells, no shear — on the `supportsEmojiChrome` allowlist, so
   `ToggleCharacterSet.automatic` = `.emoji` here too.
@@ -877,12 +886,22 @@ is deliberately NOT applied here — it would discard a correct rendering.
     the glyph never paints, so with CUF alone it kept the terminal's
     default background on a coloured run (user-reported, card-measured;
     the only Ghostty class that showed the hole).
-    *A tighter fix would be a host-dependent width claim, but the claim is
-    deliberately host-independent (layout must be identical headless).*
-- **`☝🏽` / `☝️🏽`** (BMP text-presentation base + skin tone) advance 1 and
-  **4** respectively against a claim of 2 — the only over-advance measured
-  on Ghostty. Unhandled, as ZWJ is on Terminal.app; these clusters do not
-  appear in TUIkit's own chrome.
+    *The claim stays 2 even though Ghostty draws 1: Apple Terminal and
+    iTerm2 paint these glyphs 2 cells wide, and `TerminalWidthTraits` only
+    widens claims for the classes where a 2-cell claim would force
+    substitution — a Ghostty-only 1-cell claim would buy one blank cell at
+    the price of a per-host layout difference.*
+- **`☝🏽`** (BMP text-presentation base + skin tone) merges to ONE cell —
+  the base is a 1-cell text glyph and Ghostty keeps it that way with the
+  modifier folded in. Modelled since 2026-08-26 (`ghosttyCursorAdvance`
+  returns 1); ECH(2)+CUF(1) lands it on the 2-cell claim, tone kept.
+- **`☝️🏽`** (the same pair with a redundant VS-16) is the opposite: the
+  selector DEFEATS the merge and Ghostty detaches promoted base + swatch
+  across **4** cells (ledger, 2026-08-28) — the only over-advance measured
+  on Ghostty, and one the ECH+CUF repair used to make a cell worse. Since
+  2026-08-28 the walk strips the redundant selector (the modifier alone
+  forces emoji presentation, UTS #51), so Ghostty receives the merging
+  pair above and the class is closed.
 - **Cell aspect ratio:** fills `ws_xpixel`/`ws_ypixel` AND answers CSI
   14t/18t, which agree within ~1.4% (ioctl **2.154**, CSI 2.125 — default
   font). Slightly taller than the 2.0 default; auto-detection handles it.
@@ -930,10 +949,18 @@ and the *composed* classes wrong.
 - **VS-15 chrome** (⬛︎ ⬜︎) advances 2 ✓ and paints clean squares → Warp is
   on the `supportsEmojiChrome` allowlist with no help at all.
 - **Fitzpatrick skin tones paint base + a separate swatch at 4 cells**
-  (3 for BMP bases) against a claim of 2 — the same shape as Terminal.app's
-  Bug B and iTerm2's. **Observed** in the demo's "Unicode compatible"
-  feature box: the skin-toned 👍🏽 sheared the box's right border two cells
-  out of place. Handled by the shared `withSkinToneFallback()` strip.
+  (3 for BMP bases) against the old claim of 2 — the same shape as
+  Terminal.app's Bug B and iTerm2's. **Observed** in the demo's "Unicode
+  compatible" feature box: the skin-toned 👍🏽 sheared the box's right
+  border two cells out of place. Since the detached-claim widening
+  (`TerminalWidthTraits`, skinTone `.detached` — every base, unlike
+  iTerm2's by-plane split) the layout claims the cells the detached
+  rendering occupies, the modifiers pass through un-stripped, and the
+  swatch the user sees is Warp's own. (The `withSkinToneFallback()` strip
+  fires only for a caller that has not published the host's traits.) A
+  redundant VS-16 on the base (☝️🏽, raw advance 4) is stripped by the walk
+  since 2026-08-28 — the modifier alone forces emoji presentation — and
+  the normalized pair renders in exactly the 3 cells the claim allocates.
 - **Lone regional indicator** (🇦) advances 1 against a claim of 2 — same as
   Terminal.app; ECH(2)+CUF(1) via `withWarpCursorCompensation()`. The erase
   is measured (2026-08-28, Warp tone card): with CUF alone the second cell
@@ -1487,6 +1514,7 @@ and (much more so) Warp do NOT — always probe with `PROBE_ALT=1`.
 | ✊🏻 (BMP emoji-pres. + skin) | 2 | **4** | **4** (swatch) | 2 (merged) | **4** |
 | ☝🏽 (BMP text-pres. + skin) | 2 | **3** | **3** (swatch) | **1** | **3** |
 | ☝️🏽 (…+ VS-16) | 2 | **3** | **3** | **4** | **4** |
+| ⤷ *(normalized since 2026-08-28 — the redundant selector is stripped by the non-Apple walks, so what those hosts receive is the ☝🏽 row above; Apple's separation re-promotes it identically either way)* | | ✓ | ✓ | ✓ | ✓ |
 | 👩‍🚀 / ❤️‍🔥 / 👩🏽‍🚀 (ZWJ) | 2 | **5 / 4 / 7** | 2 / **1** / 2 | 2 / 2 / 2 | **5 / 5 / 7** |
 | U+100038 etc. (SF Symbols PUA) | 2 | **1** (paints 2) | **1** (paints 2) | **1** (paints 1) | **1** |
 | 🏽 (standalone modifier) | 2 | 2 | 2 | 2 | 2 |
@@ -1846,9 +1874,13 @@ about still show up on a real page.
   resolves its first segment through the skin-tone rule, so the two compose
   rather than duplicating each other.
 - **A detached skin tone** is the base's width **plus two** for the swatch:
-  👍🏽 and ✊🏻 at 4, ☝🏽 at 3 (a 1-cell text-presentation base), and ☝️🏽 at 4 —
-  which is why the base width is taken from the cluster-minus-modifier rather
-  than from the first scalar.
+  👍🏽 and ✊🏻 at 4, ☝🏽 at 3 (a 1-cell text-presentation base). A redundant
+  VS-16 on the base (☝️🏽) does NOT widen the claim, because since
+  2026-08-28 the walks strip it before emission — the modifier alone
+  forces emoji presentation (UTS #51), and the normalized pair is the
+  measured-aligned one on both detaching hosts (iTerm2 painted the spelled
+  form in 3 cells against the promoted claim of 4, a one-cell hole; Warp
+  painted it in 4 where the normalized pair takes 3).
 
 **Claim equals advance for every one of these**, because they are all cases
 where the host is self-consistent — it advances as far as it paints. So the

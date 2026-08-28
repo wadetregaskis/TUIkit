@@ -323,6 +323,62 @@ extension Character {
         return result
     }
 
+    /// This Fitzpatrick cluster with its redundant emoji-presentation selector
+    /// removed — ☝️🏽 (U+261D U+FE0F U+1F3FD) becomes ☝🏽 — or `nil` when there
+    /// is no selector to remove or this is not a plain tone cluster.
+    ///
+    /// UTS #51 has the modifier itself force emoji presentation, so
+    /// `base + VS-16 + modifier` is a non-RGI spelling of `base + modifier`:
+    /// the same emoji, one scalar shorter — and the spelled form is the one
+    /// the terminals mishandle, where the plain form is measured on every
+    /// host (ledger rows `tone_point_up_vs16` vs `tone_point_up`):
+    ///
+    /// - **Ghostty** detaches ☝️🏽 across 4 cells (the selector defeats its
+    ///   merge) but merges ☝🏽 at advance 1 — which the ordinary
+    ///   `ECH(2)`+`CUF(1)` under-advance repair lands exactly on the 2-cell
+    ///   claim, tone kept.
+    /// - **iTerm2** renders ☝️🏽 in 3 cells against the old promoted claim of
+    ///   4 (a one-cell hole) and ☝🏽 in exactly the 3 the bare-base claim
+    ///   allocates — aligned verbatim.
+    /// - **Warp** gives the pair 4 cells spelled, 3 normalized — aligned
+    ///   either way, one cell tighter without the selector.
+    /// - **Apple Terminal** does not use this: both spellings measure
+    ///   identically there (advance 3, land 1), its separation rewrite
+    ///   already treats the spelled form (the base reconstruction keeps the
+    ///   selector separation would otherwise re-add), and under the pull-back
+    ///   fallback a strip would discard the author's scalar for no rendering
+    ///   gain.
+    ///
+    /// The shared forward-compensation walk (iTerm2, Ghostty, Warp, tmux)
+    /// emits the normalized form and `String.detachedSkinToneWidth` prices
+    /// it, which closed what the conformance suite recorded as "one cluster,
+    /// two hosts, two answers".
+    /// The raw models keep explicit arms for the spelled form, because a raw
+    /// cluster the user's terminal receives un-normalized still advances the
+    /// measured way.
+    ///
+    /// ZWJ- and ZWNJ-carrying clusters are left alone: a selector inside a
+    /// sequence is not redundant in the same way (the sequence's segments
+    /// normalize individually after decomposition where decomposition is on),
+    /// and an already-separated base+ZWNJ+modifier pair is a finished
+    /// emission.
+    var withoutRedundantToneVS16: Character? {
+        let scalars = unicodeScalars
+        guard scalars.count > 1, let first = scalars.first,
+            first.properties.isEmojiModifierBase,
+            scalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }),
+            scalars.contains(where: { $0.value == 0xFE0F }),
+            !scalars.contains(where: { $0.value == 0x200D || $0.value == 0x200C })
+        else { return nil }
+        var result = String.UnicodeScalarView()
+        for scalar in scalars where scalar.value != 0xFE0F {
+            result.append(scalar)
+        }
+        // Base scalars plus Extend-class modifiers: one grapheme by
+        // construction.
+        return Character(String(result))
+    }
+
     /// `true` when the Apple Terminal walk rewrites this cluster into a form
     /// whose emission lands the cursor exactly on its claim — an emoji ZWJ
     /// sequence it will decompose, or a skin-tone cluster it will separate —
@@ -427,11 +483,24 @@ extension Character {
         // Ghostty keeps it that way with the modifier folded in. Claimed 2, so
         // a CUF is owed, exactly as for its SF Symbols — alignment bought with
         // a blank cell rather than a shear. Measured 2026-08-26 against every
-        // cluster the Example emoji page draws.
+        // cluster the Example emoji page draws. A ZWJ sequence is excluded:
+        // Ghostty composes those (every measured toned sequence advances 2),
+        // and no BMP-base toned sequence has been measured, so one falls
+        // through to the claim like any other assumed-correct cluster.
         if unicodeScalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }),
+            !unicodeScalars.contains(where: { $0.value == 0x200D }),
             let base = unicodeScalars.first, base.value <= 0xFFFF,
             base.properties.isEmoji, !base.properties.isEmojiPresentation
         {
+            // …unless a redundant VS-16 rides along (☝️🏽): the selector
+            // defeats the merge, and Ghostty detaches the promoted 2-cell base
+            // plus a 2-cell swatch — advance 4 (ledger row tone_point_up_vs16,
+            // the class's one measured member). Raw-cluster truth only: the
+            // walk strips the selector (`withoutRedundantToneVS16`), so what
+            // Ghostty receives is the merging pair above.
+            if unicodeScalars.contains(where: { $0.value == 0xFE0F }) {
+                return 4
+            }
             return 1
         }
         let scalars = unicodeScalars
@@ -510,6 +579,20 @@ extension Character {
             Self.unicode16EmojiWarpDoesNotKnow.contains(only.value)
         {
             return 1
+        }
+        // A tone cluster still carrying its redundant VS-16 (☝️🏽): Warp keeps
+        // the base promoted and detaches the swatch beside it — 2 + 2 = 4
+        // (ledger row tone_point_up_vs16), one more than the 3-cell claim of
+        // the normalized pair. Raw-cluster truth only: the walk strips the
+        // selector (`withoutRedundantToneVS16`) before Warp sees it, and the
+        // normalized ☝🏽 falls through below to the claim it was measured to
+        // advance (3).
+        if unicodeScalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }),
+            unicodeScalars.contains(where: { $0.value == 0xFE0F }),
+            let first = unicodeScalars.first, first.properties.isEmojiModifierBase,
+            !first.properties.isEmojiPresentation
+        {
+            return 4
         }
         return terminalWidth
     }

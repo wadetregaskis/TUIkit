@@ -313,9 +313,13 @@ extension Character {
     ///
     /// The base's own width **plus two** for the swatch, which is what every
     /// measurement shows: 👍🏽 and ✊🏻 at 4 (2-cell bases), ☝🏽 at 3 (a 1-cell
-    /// text-presentation base) and ☝️🏽 at 4 (the same base promoted to 2 cells
-    /// by its selector). Taking the base's width from the cluster-minus-modifier
-    /// rather than from the first scalar is what gets that last case right.
+    /// text-presentation base). A redundant VS-16 on the base (☝️🏽) does not
+    /// widen the detached claim: the walks strip it before emission
+    /// (``Swift/Character/withoutRedundantToneVS16`` — the modifier alone
+    /// forces emoji presentation, and the normalized pair is the measured-
+    /// aligned one on iTerm2 and Warp at exactly this bare-base + 2), so the
+    /// claim prices what actually goes out. Only the SEPARATED claim keeps
+    /// the selector, because the Apple walk re-promotes the base itself.
     static func detachedSkinToneWidth(
         _ scalars: String.UnicodeScalarView, traits: TerminalWidthTraits
     ) -> Int? {
@@ -340,6 +344,11 @@ extension Character {
         var base = String.UnicodeScalarView()
         for scalar in scalars
         where !(0x1F3FB...0x1F3FF).contains(scalar.value) && scalar.value != 0x200C {
+            // The detached claims price the normalized emission — the walk
+            // strips a redundant VS-16 before the host sees the cluster — so
+            // the selector is excluded here too. The separated claim keeps
+            // it: the Apple walk prices the PROMOTED base (see below).
+            if scalar.value == 0xFE0F, traits.skinTone != .separated { continue }
             base.append(scalar)
         }
         // The walk promotes a text-presentation base (☝🏻 ✍🏿 ⛹🏾) with VS-16

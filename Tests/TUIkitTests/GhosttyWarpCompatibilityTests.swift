@@ -86,6 +86,13 @@ struct GhosttyWarpCompatibilityTests {
             ("\u{2B1B}\u{FE0E}", 2, 1),  // ⬛︎ VS-15 chrome: paints 2, advances 1
             ("\u{2B1C}\u{FE0E}", 2, 1),  // ⬜︎
             ("\u{100038}", 2, 1),  // SF Symbol PUA
+            // A BMP text-presentation base merges its tone into ONE cell…
+            ("\u{261D}\u{1F3FD}", 2, 1),  // ☝🏽
+            // …but a redundant VS-16 defeats the merge: promoted base +
+            // detached swatch, advance 4 (ledger tone_point_up_vs16). The
+            // walk strips the selector, so this raw number never reaches the
+            // screen.
+            ("\u{261D}\u{FE0F}\u{1F3FD}", 2, 4),  // ☝️🏽
         ])
     func ghosttyAdvanceModel(cluster: String, claimed: Int, advance: Int) {
         let char = Character(cluster)
@@ -119,6 +126,11 @@ struct GhosttyWarpCompatibilityTests {
             ("\u{1FAE9}", 2, 1),  // 🫩 face with bags under eyes
             // Its Unicode 15.0 neighbour, for the boundary:
             ("\u{1FA88}", 2, 2),  // 🪈 flute
+            // A tone cluster still carrying its redundant VS-16: promoted
+            // base + detached swatch, advance 4 (ledger tone_point_up_vs16).
+            // Raw truth only — the walk emits the normalized ☝🏽, measured
+            // at 3, which is also its detached claim.
+            ("\u{261D}\u{FE0F}\u{1F3FD}", 2, 4),  // ☝️🏽
         ])
     func warpAdvanceModel(cluster: String, claimed: Int, advance: Int) {
         let char = Character(cluster)

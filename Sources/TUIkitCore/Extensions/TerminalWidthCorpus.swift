@@ -152,7 +152,9 @@ package enum TerminalWidthCorpus {
             "Fitzpatrick modifier on an SMP base (🤙🏽). Apple Terminal: internal 4, paints 2 — the two-counter divergence.",
         "skin_tone_bmp_wide": "Fitzpatrick on a BMP emoji-presentation base (✊🏻): internal 4, paints 2 on Apple Terminal.",
         "skin_tone_bmp_narrow": "Fitzpatrick on a BMP text-presentation base (☝🏻): internal 3, paints 1 on Apple Terminal.",
-        "skin_tone_vs16_base": "VS-16-promoted base plus modifier (☝️🏽): the case with a different answer on every host.",
+        "skin_tone_vs16_base":
+            "VS-16-promoted base plus modifier (☝️🏽): raw, a different answer on every host; "
+            + "since 2026-08-28 the walks strip the redundant selector, so only the raw models differ.",
         "zwj":
             "ZWJ sequence. Apple Terminal composes the glyph while its internal column decomposes (👨‍👩‍👧‍👦: 11 vs 2); Warp decomposes both.",
         "zwj_skin_tone": "A skin-toned segment inside a ZWJ sequence (👩🏽‍🚀) — both rules at once.",

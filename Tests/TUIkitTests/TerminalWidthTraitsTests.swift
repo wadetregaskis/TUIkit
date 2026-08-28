@@ -74,10 +74,11 @@ struct TerminalWidthTraitsTests {
             ("👍🏽", 4), ("🤙🏽", 4), ("✊🏻", 4),
             // A 1-cell text-presentation base gives 3 …
             ("☝🏽", 3),
-            // … and 4 once its selector promotes it to 2, which is why the base
-            // width is taken from the cluster-minus-modifier and not from the
-            // first scalar alone.
-            ("☝️🏽", 4),
+            // … and a redundant VS-16 on it does NOT widen the claim: the
+            // walk strips the selector before emission (the modifier alone
+            // forces emoji presentation), so both spellings price the
+            // normalized pair — measured at exactly 3 on iTerm2 and Warp.
+            ("☝️🏽", 3),
         ] as [(String, Int)])
     func detachedSkinToneWidths(text: String, expected: Int) {
         // Warp, not Apple Terminal: Warp genuinely draws the base and the
@@ -155,6 +156,43 @@ struct TerminalWidthTraitsTests {
             #expect(Character(text).terminalWidth == claim)
             let out = TerminalClient.compensating(text, for: .appleTerminal)
             #expect(out == emission, "|\(out)|")
+        }
+    }
+
+    /// A redundant VS-16 before a Fitzpatrick modifier (☝️🏽) is stripped by
+    /// every walk: UTS #51 has the modifier itself force emoji presentation,
+    /// so the normalized pair is the same emoji — and the one each host was
+    /// measured to handle (the `tone_point_up` ledger rows), where the
+    /// spelled form was "one cluster, two hosts, two answers": Ghostty
+    /// detached it across 4 cells against a 2-cell claim, iTerm2 painted 3
+    /// into a 4-cell claim. (Apple Terminal is pinned above: its separation
+    /// re-promotes the base, so both spellings emit identical bytes.)
+    @Test("A redundant VS-16 on a tone cluster is stripped and priced away")
+    func redundantToneVS16IsNormalized() {
+        let spelled = "\u{261D}\u{FE0F}\u{1F3FD}"
+        // Ghostty merges the normalized pair (advance 1, ledger) — the plain
+        // under-advance repair lands it on the composed 2-cell claim with the
+        // tone KEPT, where the spelled form sheared 2 cells.
+        TerminalWidthTraits.withTraits(.composing) {
+            #expect(Character(spelled).terminalWidth == 2)
+            let out = TerminalClient.compensating(spelled, for: .ghostty)
+            #expect(out == "\u{1B}[2X\u{261D}\u{1F3FD}\u{1B}[1C", "|\(out)|")
+        }
+        // iTerm2 renders the detached BMP pair in bare-base + swatch = 3
+        // cells (ledger: advance 3, ink 3) — claim 3, emitted verbatim,
+        // aligned, where the spelled form left a one-cell hole in a 4-cell
+        // claim.
+        TerminalWidthTraits.withTraits(Self.iTerm) {
+            #expect(Character(spelled).terminalWidth == 3)
+            let out = TerminalClient.compensating(spelled, for: .iTerm2)
+            #expect(out == "\u{261D}\u{1F3FD}", "|\(out)|")
+        }
+        // Warp likewise: 3 normalized where the spelled form took 4 — same
+        // alignment, one cell tighter.
+        TerminalWidthTraits.withTraits(Self.warp) {
+            #expect(Character(spelled).terminalWidth == 3)
+            let out = TerminalClient.compensating(spelled, for: .warp)
+            #expect(out == "\u{261D}\u{1F3FD}", "|\(out)|")
         }
     }
 
