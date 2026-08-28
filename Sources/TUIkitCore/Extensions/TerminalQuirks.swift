@@ -115,10 +115,16 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
     /// background rather than the one in force, so they have to be erased into
     /// that background before the glyph is drawn.
     ///
-    /// Measured on Apple Terminal and nowhere else: with the cursor move alone,
-    /// eight under-advancing glyphs on a coloured run leave every second cell
-    /// unpainted and the row reads as a comb. Every other measured host already
-    /// paints every cell a wide glyph covers.
+    /// Measured on all four native hosts — an earlier note here said "Apple
+    /// Terminal and nowhere else", which turned out to mean "nowhere else had
+    /// been measured on a coloured run": Apple Terminal first (eight
+    /// under-advancing glyphs on a coloured run leave every second cell
+    /// unpainted and the row reads as a comb), then 2026-08-28 the same hole
+    /// under every SF Symbol on iTerm2 and Ghostty, iTerm2's keycaps and
+    /// VS-16 clusters, and the right half of Warp's lone regional indicator.
+    /// Only tmux remains unmeasured, and an unmeasured terminal is assumed to
+    /// paint correctly — which is why this stays a switch instead of always
+    /// riding along with an under-advance.
     public var erasesUnderGlyphs: Bool
 
     /// A terminal with no known defects — the correct starting point, and the
@@ -286,6 +292,21 @@ extension String {
 
         func appendCompensated(_ original: Character) {
             var character = original
+            switch quirks.skinTones {
+            case .keep, .stripAll, .stripBMPBases:
+                // The shared forward-compensation walk strips a redundant
+                // VS-16 from a tone cluster (☝️🏽 → ☝🏽) before pricing it —
+                // see ``Swift/Character/withoutRedundantToneVS16`` — so the
+                // switch families that mirror it do too. The Apple-shaped
+                // families do not, exactly like the real Apple walk:
+                // `.separate` re-promotes the base itself (both spellings
+                // emit identical bytes), and `.pullBack` preserves the
+                // author's scalar because both spellings measure identically
+                // there.
+                character = character.withoutRedundantToneVS16 ?? character
+            case .separate, .pullBack:
+                break
+            }
             if quirks.skinTones == .separate,
                 let separated = character.separatedSkinToneEmission
             {

@@ -178,6 +178,15 @@ struct QuirkPermutationTests {
 
     /// Every quirk-set shape worth holding the properties over: the measured
     /// hosts, each mechanism in isolation, and the kitchen sink.
+    ///
+    /// The host-named shapes carry the 2026-08-28 erase (all four native
+    /// hosts were measured to leave the default background under the cells an
+    /// under-advancer skips; tmux stays bare-CUF, unmeasured). "apple" and
+    /// "ghostty" are pinned to their real walks emission-for-emission below;
+    /// "iterm2" and "warp" are the strip-era approximations, because the
+    /// switches cannot yet express the detached-claim pipeline those hosts
+    /// really run (a recorded expressivity gap) — they stay in the list as
+    /// shape diversity for the conservation and preservation properties.
     static let sets: [(String, TerminalQuirks)] = [
         ("none", TerminalQuirks()),
         ("apple", TerminalQuirks(
@@ -187,11 +196,13 @@ struct QuirkPermutationTests {
             skinTones: .separate, erasesUnderGlyphs: true)),
         ("iterm2", TerminalQuirks(
             vs16Pictographs: true, keycapSequences: true, planeSixteenPUA: true,
-            skinTones: .stripAll)),
-        ("ghostty", TerminalQuirks(vs15ChromeGlyphs: true, planeSixteenPUA: true)),
+            skinTones: .stripAll, erasesUnderGlyphs: true)),
+        ("ghostty", TerminalQuirks(
+            barePictographs: true, vs15ChromeGlyphs: true, planeSixteenPUA: true,
+            erasesUnderGlyphs: true)),
         ("warp", TerminalQuirks(
             loneRegionalIndicators: true, planeSixteenPUA: true,
-            skinTones: .stripAll)),
+            skinTones: .stripAll, erasesUnderGlyphs: true)),
         ("tmux", TerminalQuirks(
             loneRegionalIndicators: true, planeSixteenPUA: true,
             skinTones: .stripBMPBases)),
@@ -260,6 +271,16 @@ struct QuirkPermutationTests {
                 // Software ZWJ decomposition drops the joiners by design —
                 // they are what the host cannot store truthfully.
                 if scalar.value == 0x200D && quirks.zwjSequences { continue }
+                // The keep-family walks strip a redundant VS-16 from a tone
+                // cluster by design (☝️🏽 → ☝🏽 — the modifier alone forces
+                // emoji presentation, and the normalized pair is the one the
+                // hosts were measured to handle). The Apple-family walks
+                // (.separate, .pullBack) keep it.
+                if scalar.value == 0xFE0F, quirks.skinTones == .keep,
+                    entry.character.withoutRedundantToneVS16 != nil
+                {
+                    continue
+                }
                 #expect(
                     emitted.contains(scalar.value),
                     "\(entry) under '\(name)': U+\(String(scalar.value, radix: 16, uppercase: true)) was dropped")
@@ -286,6 +307,35 @@ struct QuirkPermutationTests {
             #expect(
                 entry.text.withCursorCompensation(for: apple)
                     == entry.text.withTerminalAppCursorCompensation(),
+                "\(entry): hand-built emission diverges from the real walk")
+        }
+    }
+
+    /// The same pin for the Ghostty shape — the drift this would have caught
+    /// is real: the shapes carried no `erasesUnderGlyphs` for months after
+    /// the real walks grew the measured erase. The skip set is the mirror's
+    /// recorded expressivity gap: Ghostty merges a BMP text-presentation
+    /// base's tone into ONE cell (`ghosttyCursorAdvance` returns 1, the
+    /// spelled ☝️🏽 detaches at 4) and no switch expresses either, so the
+    /// mirror emits those five rows verbatim where the real walk repairs
+    /// them.
+    @Test("The Ghostty-shaped set reproduces the real Ghostty walk",
+          arguments: TerminalWidthCorpus.all)
+    func ghosttyShapeMatchesTheRealWalk(entry: TerminalWidthCorpus.Entry) {
+        let mirrorLacksToneMergeSwitch: Set<String> = [
+            "tone_point_up", "tone_victory", "tone_writing", "tone_basketball",
+            "tone_point_up_vs16",
+        ]
+        guard !mirrorLacksToneMergeSwitch.contains(entry.id) else { return }
+        let ghostty = Self.sets.first { $0.0 == "ghostty" }!.1
+        TerminalWidthTraits.withTraits(ghostty.widthTraits) {
+            #expect(
+                ghostty.cursorAdvance(of: entry.character)
+                    == entry.character.ghosttyCursorAdvance,
+                "\(entry): hand-built model diverges from the measured one")
+            #expect(
+                entry.text.withCursorCompensation(for: ghostty)
+                    == entry.text.withGhosttyCursorCompensation(),
                 "\(entry): hand-built emission diverges from the real walk")
         }
     }
