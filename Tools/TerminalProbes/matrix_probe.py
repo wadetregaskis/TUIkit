@@ -277,10 +277,19 @@ def draw_pixel_pages(terminal, entries, shot_prefix, sync):
         terminal.write(entry["text"])
         _, after = terminal.report()
         raw_advance = after - 1
+        base, modifier = split_parts(entry["text"])
+        stripped = stripped_form(entry)
         for name, payload in strategies_for(entry, raw_advance, claim):
             test_rows.append({"id": entry["id"], "class": entry["class"],
                               "claim": claim, "strategy": name,
-                              "payload": payload, "text": entry["text"]})
+                              "payload": payload, "text": entry["text"],
+                              # The part texts ride along so the analyzer can
+                              # resolve references BY GLYPH: reference rows are
+                              # deduplicated per (kind, glyph), so an id-keyed
+                              # lookup missed every cluster whose modifier had
+                              # already been drawn for an earlier one.
+                              "base": base, "modifier": modifier,
+                              "stripped": stripped})
 
     pages, cells = [], []
     queue = [("ref", row) for row in reference_rows] + [("test", row) for row in test_rows]
@@ -304,7 +313,11 @@ def draw_pixel_pages(terminal, entries, shot_prefix, sync):
                 if row["payload"] is None:  # cup_place
                     base, modifier = split_parts(row["text"])
                     terminal.write(base)
-                    terminal.write(f"\x1b[{row_number};{1 + row['claim'] + 1}H")
+                    # Adjacent: the base occupies columns 1..claim, so the
+                    # modifier goes at claim+1 — phase A's 3-column gutter
+                    # produced the same adjacency, and an earlier +1 here made
+                    # the classifier judge the probe's own gap as "detached".
+                    terminal.write(f"\x1b[{row_number};{row['claim'] + 1}H")
                     terminal.write(modifier)
                 else:
                     terminal.write(row["payload"])
@@ -316,7 +329,7 @@ def draw_pixel_pages(terminal, entries, shot_prefix, sync):
                 if row["payload"] is None:
                     base, modifier = split_parts(row["text"])
                     terminal.write(base)
-                    terminal.write(f"\x1b[{row_number + 1};{1 + row['claim'] + 1}H")
+                    terminal.write(f"\x1b[{row_number + 1};{row['claim'] + 1}H")
                     terminal.write(modifier)
                 else:
                     terminal.write(row["payload"])

@@ -2,8 +2,12 @@
 """Sweep the 1FA70-1FAFF emoji block (+ controls) through DSR in the current
 terminal: which recent emoji does this host's width table not know?
 Fully automatic - the JSON is the result; the screen just shows a summary.
+Writes to $PROBE_OUT, defaulting to ./recent_emoji_sweep.json — an earlier
+version silently discarded the whole sweep when the variable was unset.
 """
 import json, os, termios, tty
+
+import probe_stamp
 
 E = "\x1b"
 
@@ -19,6 +23,10 @@ SWEEP = [int(x, 16) for x in """
 1FAE9 1FAF0 1FAF1 1FAF2 1FAF3 1FAF4 1FAF5 1FAF6 1FAF7 1FAF8
 1F600 1F6DC
 """.split()]
+# The list is the block's ASSIGNED emoji as of Unicode 16.0 plus two controls
+# (1F600 baseline, 1F6DC the newest 15.0 control). The gaps it skips —
+# 1FA7D-7F, 1FA8A-8E, 1FAC7-CD, 1FADD-DE, 1FAEA-EF, 1FAF9-FF — were
+# UNASSIGNED at 16.0; when a Unicode release assigns them, add them here.
 
 fd = os.open("/dev/tty", os.O_RDWR)
 saved = termios.tcgetattr(fd)
@@ -34,9 +42,14 @@ def report():
     r, c = b.split(b"[")[1][:-1].split(b";")
     return int(r), int(c)
 
-out = {"program": os.environ.get("TERM_PROGRAM", "?"), "advances": {}}
+out = {"advances": {}}
 try:
     write(f"{E}[8;30;100t{E}[?1049h{E}[?25l{E}[2J{E}[H")
+    # The full provenance stamp (TERM_PROGRAM + version, screen, mode 2027,
+    # date), before the sweep so a stray reply cannot land mid-battery — this
+    # record seeded a shipped model row, and a number without its conditions
+    # cannot be re-read.
+    out["stamp"] = probe_stamp.stamp(fd, "recent_emoji_sweep.py", True)
     write("Recent-emoji sweep (automatic)...\r\n")
     for v in SWEEP:
         write(f"{E}[20;1H{E}[K")
@@ -48,9 +61,9 @@ try:
     narrow = [k for k, a in out["advances"].items() if a == 1]
     write(f"{E}[3;1HDone: {len(out['advances'])} scalars, advance 1 for: {' '.join(narrow) or 'none'}\r\n")
     write("q = quit\r\n")
-    if "PROBE_OUT" in os.environ:
-        with open(os.environ["PROBE_OUT"], "w") as f:
-            json.dump(out, f, indent=1)
+    out_path = os.environ.get("PROBE_OUT", "recent_emoji_sweep.json")
+    with open(out_path, "w") as f:
+        json.dump(out, f, indent=1)
     while os.read(fd, 1) not in (b"q", b"\x03"):
         pass
     write(f"{E}[?25h{E}[?1049l")

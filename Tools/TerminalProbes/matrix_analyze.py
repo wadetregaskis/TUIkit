@@ -68,22 +68,31 @@ def main():
     # Reference signatures, keyed (kind, cluster id). Two widths per reference:
     # the glyph's own cells and one extra, so a composed-vs-stripped comparison
     # is not confused by antialiased spill.
-    references = {}
+    # Reference signatures AND their source cells, keyed (kind, GLYPH text):
+    # the probe deduplicates reference rows per glyph, so an id-keyed lookup
+    # missed every cluster whose part had already been drawn for an earlier
+    # one — and the swatch crop must come from the reference cell's OWN page,
+    # not the test cell's (an earlier version mixed the two, comparing the
+    # swatch against whatever row sat at that number on the wrong page).
+    references, reference_cells = {}, {}
     for cell in pixels["cells"]:
         if cell["kind"] == "test":
             continue
         page = cell["page"]
-        references[(cell["kind"], cell["id"])] = glyph_signature(
-            images[page], grids[page], cell["row"], 4)
+        key = (cell["kind"], cell["text"])
+        references[key] = glyph_signature(images[page], grids[page], cell["row"], 4)
+        reference_cells[key] = cell
 
     def classify(cell):
         page = cell["page"]
         signature = glyph_signature(images[page], grids[page], cell["ink_row"], 4)
+        own = [("ref_raw", cell["text"]), ("ref_strip", cell.get("stripped")),
+               ("ref_base", cell.get("base")), ("ref_mod", cell.get("modifier"))]
         candidates = []
-        for (kind, cid), reference in references.items():
-            if cid != cell["id"] and kind != "ref_mod":
-                continue
-            candidates.append((distance(signature, reference), kind))
+        for kind, text in own:
+            reference = references.get((kind, text)) if text else None
+            if reference is not None:
+                candidates.append((distance(signature, reference), kind))
         if not candidates:
             return None, None
         candidates.sort()
@@ -92,18 +101,18 @@ def main():
                  "ref_base": "base-only", "ref_mod": "modifier-only"}[best_kind]
         # Detached = the base in its cells AND the modifier's swatch beside it.
         # Compare cells 3..4 against the lone-modifier reference directly.
-        base_reference = references.get(("ref_base", cell["id"]))
-        modifier_reference = references.get(("ref_mod", cell["id"]))
-        if base_reference and modifier_reference:
+        base_reference = references.get(("ref_base", cell.get("base")))
+        modifier_cell = reference_cells.get(("ref_mod", cell.get("modifier")))
+        raw_reference = references.get(("ref_raw", cell["text"]))
+        if base_reference is not None and modifier_cell is not None and raw_reference is not None:
             beside = cell_image(images[page], grids[page], cell["ink_row"],
                                 cell["claim"] + 1, cell["claim"] + 5)
             beside_signature = list(beside.resize((16, 16), Image.BOX).getdata())
-            swatch = cell_image(images[page], grids[page],
-                                [c for c in pixels["cells"]
-                                 if c.get("kind") == "ref_mod" and c["id"] == cell["id"]][0]["row"],
-                                1, 5)
+            swatch_page = modifier_cell["page"]
+            swatch = cell_image(images[swatch_page], grids[swatch_page],
+                                modifier_cell["row"], 1, 5)
             swatch_signature = list(swatch.resize((16, 16), Image.BOX).getdata())
-            if (distance(signature, base_reference) < distance(signature, references[("ref_raw", cell["id"])])
+            if (distance(signature, base_reference) < distance(signature, raw_reference)
                     and distance(beside_signature, swatch_signature) < 16 * 16 * 90):
                 label = "detached"
         return label, best_distance

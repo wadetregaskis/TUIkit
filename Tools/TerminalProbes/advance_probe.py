@@ -81,7 +81,10 @@ BATTERY.update({
     "keycap_0": "0\uFE0F\u20E3",
     "keycap_bare": "1\u20E3",                  # no VS16
     "pua_lower": "\U00101867",                  # another SF symbol
-    "pua_bmp_sf": "\U000F0000" if False else "\U00102446",
+    # Renamed from "pua_bmp_sf" 2026-08-28 (which also carried a dead
+    # `if False` arm): U+102446 is Plane-16 PUA, not BMP — the committed
+    # records up to that date hold the measurement under the old, wrong name.
+    "pua16_second": "\U00102446",
     "zwj_heart_fire": "\u2764\uFE0F\u200D\U0001F525",  # ❤️‍🔥
     "vs16_umbrella": "\u2602\uFE0F",           # ☂️
     "vs16_check": "\u2714\uFE0F",              # ✔️

@@ -58,8 +58,9 @@ TESTS = [
      "call-me hand, one blank cell, tone swatch"),
     ("tone sep BMP base", 5, "✊" + ZWNJ + "\U0001F3FF",
      "fist, one blank cell, tone swatch"),
-    ("tone pullback", 2, "☝\U0001F3FB" + cub(1),
-     "bare point-up (tone lost on this host)"),
+    ("tone sep promoted", 5,
+     ech(5) + "☝\uFE0F" + ZWNJ + "\U0001F3FB" + cuf(1),
+     "emoji point-up and swatch ADJACENT, one trailing blank"),
     ("zwj family", 8, "\U0001F468\U0001F469\U0001F467\U0001F466",
      "four separate people"),
     ("zwj heartfire", 4, ech(2) + "❤️" + cuf(1) + "\U0001F525",
@@ -153,6 +154,19 @@ def page2():
 
 try:
     write(f"{E}[8;44;{WIDTH}t{E}[?25l")
+    # The CSI 8 resize is a request, not a guarantee (Ghostty ignores it, a
+    # tmux pane cannot honour it). Measure the width that actually took and
+    # follow it — the full-width edge rows and the DSR wrap detection are
+    # meaningless against an assumed width.
+    write(f"{E}[999G")
+    os.write(fd, b"\x1b[6n")
+    reply = b""
+    while not reply.endswith(b"R"):
+        reply += os.read(fd, 1)
+    actual = int(reply[reply.rfind(b"\x1b[") + 2:-1].split(b";")[1])
+    if actual != WIDTH:
+        WIDTH = actual
+        XCOL = min(XCOL, WIDTH - 30)
     page = 1
     page1()
     dump()

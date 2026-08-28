@@ -54,6 +54,8 @@ import termios
 import time
 import tty
 
+import probe_stamp
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 CORPUS = os.path.join(HERE, "data", "width-corpus.json")
 
@@ -296,14 +298,12 @@ def measure_reserves(terminal, clusters):
     return reserves
 
 
-def stamp():
-    keys = ("TERM", "TERM_PROGRAM", "TERM_PROGRAM_VERSION", "TERMINFO",
-            "LC_TERMINAL", "LC_TERMINAL_VERSION", "TMUX", "COLORTERM")
-    return {
-        "env": {k: os.environ[k] for k in keys if k in os.environ},
-        "date": time.strftime("%Y-%m-%d %H:%M:%S %z"),
-        "screen": "alternate",
-    }
+def stamp(terminal):
+    """Full provenance via the shared helper (TERM_* env, version, screen,
+    mode 2027, OS, date) — the committed landing records used to carry only
+    env + date, which violates the data README's own rule that a number
+    without its conditions cannot be re-read."""
+    return probe_stamp.stamp(terminal.fd, "landing_probe.py", True)
 
 
 def main():
@@ -316,13 +316,16 @@ def main():
     clusters = load_corpus()
 
     with Terminal() as terminal:
+        # Stamp FIRST: it asks DECRQM, and a reply arriving mid-battery would
+        # be read as part of a cursor report.
+        provenance = stamp(terminal)
         document = measure_landings(terminal, clusters, shot_prefix, hold, sync)
         if "--wrap" in sys.argv:
             reserves = measure_reserves(terminal, clusters)
             for cell in document["cells"]:
                 cell["reserve"] = reserves.get(cell["id"])
 
-    document["stamp"] = stamp()
+    document["stamp"] = provenance
     with open(output, "w") as handle:
         json.dump(document, handle, indent=1, sort_keys=True)
     print(f"manifest -> {output} "

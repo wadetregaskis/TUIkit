@@ -56,14 +56,29 @@ def extract(frame_path, out_path):
 
     def joins(character):
         value = ord(character)
-        return (0x0300 <= value <= 0x036F or value in (0x200D, 0xFE0F, 0xFE0E)
-                or 0x1F3FB <= value <= 0x1F3FF or 0xE0000 <= value <= 0xE007F
-                or 0x1F1E6 <= value <= 0x1F1FF)
+        # Combining marks (including U+20E3 COMBINING ENCLOSING KEYCAP —
+        # its omission dropped every keycap an app drew: the ASCII base fell
+        # out and the marks surfaced as bogus one-scalar "clusters"),
+        # selectors, ZWJ, Fitzpatrick modifiers, and tag scalars.
+        return (0x0300 <= value <= 0x036F or 0x20D0 <= value <= 0x20FF
+                or value in (0x200D, 0xFE0F, 0xFE0E)
+                or 0x1F3FB <= value <= 0x1F3FF or 0xE0000 <= value <= 0xE007F)
+
+    def is_ri(character):
+        return 0x1F1E6 <= ord(character) <= 0x1F1FF
 
     clusters, index = [], 0
     while index < len(text):
         end = index + 1
-        if ord(text[index]) > 0x7F or joins(text[index]):
+        if is_ri(text[index]):
+            # Regional indicators PAIR: a run of four is two flags back to
+            # back, not one cluster (treating RI as a generic joiner glued
+            # adjacent flags together).
+            if end < len(text) and is_ri(text[end]):
+                end += 1
+        elif ord(text[index]) > 0x7F or (end < len(text) and joins(text[end])):
+            # An ASCII scalar can START a cluster when the next scalar joins
+            # (keycaps: "1" + FE0F + 20E3).
             while end < len(text) and joins(text[end]):
                 end += 1
                 # A joiner binds whatever follows it into the same cluster.
