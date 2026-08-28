@@ -253,8 +253,8 @@ extension Character {
     }
 
     /// This skin-tone cluster rewritten as base + ZWNJ + modifier — the
-    /// separated emission the Apple Terminal walk uses for an
-    /// emoji-presentation base — or `nil` for anything else.
+    /// separated form the Apple Terminal walk emits for every Fitzpatrick
+    /// cluster — or `nil` for anything that is not one.
     ///
     /// The ZWNJ stops the terminal re-joining the pair: every other separator
     /// measured (save/restore-cursor, an SGR, an 80 ms flush gap, absolute
@@ -262,17 +262,26 @@ extension Character {
     /// text, and Terminal.app composed them again, paint displacement and all.
     /// ZWNJ is the one that sticks, at the cost of its own blank column
     /// between base and swatch (treatment cards 1–3, Terminal.app 455.1,
-    /// 2026-08-27). Text-presentation bases return `nil`: the same rewrite was
-    /// measured to misalign for them (☝+ZWNJ+🏻 paints wrong), so they keep
-    /// the pull-back walk.
+    /// 2026-08-27).
+    ///
+    /// A text-presentation base (☝🏻 ✍🏿 ⛹🏾) is **promoted with VS-16**: the
+    /// bare rewrite was measured to misalign (☝+ZWNJ+🏻 paints wrong), and the
+    /// old pull-back re-rendered the cluster as its bare narrow monochrome
+    /// glyph — tone lost AND a blank cell beside it (user-reported
+    /// 2026-08-28). The promoted form stays a single grapheme whose internal
+    /// advance (base 1 + ZWNJ 1 + modifier 2) falls one short of its claim
+    /// (2 + 1 + 2), so the caller's ordinary under-advance arm finishes the
+    /// job — `ECH(5)` + cluster + `CUF(1)`, card-measured aligned with the
+    /// tone kept as a swatch. An emoji-presentation base needs no promotion
+    /// and lands exactly on its claim, appended plain.
     ///
     /// Idempotent: an already-separated cluster reproduces itself, because the
-    /// base reconstruction skips any U+200C already present.
+    /// base reconstruction skips any U+200C already present and keeps an
+    /// existing VS-16.
     var separatedSkinToneEmission: String? {
         let scalars = unicodeScalars
         guard scalars.count > 1, let first = scalars.first,
             first.properties.isEmojiModifierBase,
-            first.properties.isEmojiPresentation,
             scalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }),
             // A ZWJ sequence carrying a tone (👩🏽‍🚀) is not a plain tone
             // cluster: separating it whole would splice the ZWNJ into the
@@ -289,6 +298,11 @@ extension Character {
                 base.append(scalar)
             }
         }
+        if !first.properties.isEmojiPresentation,
+            !base.contains(where: { $0.value == 0xFE0F })
+        {
+            base.append(Unicode.Scalar(0xFE0F)!)
+        }
         var result = String(base)
         for modifier in modifiers {
             result.unicodeScalars.append(Unicode.Scalar(0x200C)!)
@@ -298,22 +312,23 @@ extension Character {
     }
 
     /// `true` when the Apple Terminal walk rewrites this cluster into a form
-    /// whose internal advance lands exactly on its claim — an emoji ZWJ
+    /// whose emission lands the cursor exactly on its claim — an emoji ZWJ
     /// sequence it will decompose, or a skin-tone cluster it will separate —
     /// under the ``TerminalWidthTraits`` in force.
     ///
     /// The right-edge clip (`ansiAwarePrefixForTerminalApp`) budgets each
     /// cluster's cursor cost to decide what fits a row without wrapping. For
     /// these clusters the RAW internal advance (👨‍👩‍👧‍👦: 11) is not what
-    /// the walk emits — the rewritten form advances exactly the claim (8),
-    /// monotonically — so budgeting the raw number would replace clusters
+    /// the walk emits — the rewritten form lands on the claim (8),
+    /// monotonically (a VS-16-promoted separated tone gets there via its
+    /// trailing `CUF`) — so budgeting the raw number would replace clusters
     /// with spaces that actually fit.
     var terminalAppWalkRewritesToClaim: Bool {
         let traits = TerminalWidthTraits.current
         if traits.zwjSequences == .decomposedDroppingJoiners, emojiZWJSegments != nil {
             return true
         }
-        return traits.skinTone == .separatedOnEmojiPresentationBases
+        return traits.skinTone == .separated
             && separatedSkinToneEmission != nil
     }
 

@@ -49,13 +49,13 @@ final class FrameDiffWriter {
     private let isAppleTerminal: Bool
 
     /// Whether the host terminal is iTerm2, which (in its default width
-    /// configuration) renders a Fitzpatrick skin-tone cluster as the base
-    /// emoji PLUS a separate 2-cell colour swatch — 4 cells painted where
-    /// the column accounting claims 2, shifting the rest of the row right.
-    /// Its build path strips the modifiers (falling back to the
-    /// generic-yellow base — `String.withSkinToneFallback()`), which
-    /// restores the 2-cell claim exactly. Same detection/injection story as
-    /// `isAppleTerminal`.
+    /// configuration) renders a BMP-based Fitzpatrick cluster as the base
+    /// emoji PLUS a separate 2-cell colour swatch. The published width
+    /// traits (`.detachedOnBMPBases`) claim the cells that rendering
+    /// actually occupies, so the modifiers pass through and the swatch is
+    /// iTerm2's own; the strip (`String.withSkinToneFallback()`) fires only
+    /// when no traits were published and the old 2-cell claim is in force.
+    /// Same detection/injection story as `isAppleTerminal`.
     private let isITerm2: Bool
 
     /// Whether the host terminal is Ghostty, which advances every composed

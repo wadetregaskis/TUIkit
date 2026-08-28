@@ -294,15 +294,15 @@ extension Character {
         else { return nil }
         // iTerm2 and tmux merge an SMP base and detach only a BMP one.
         if traits.skinTone == .detachedOnBMPBases, first.value > 0xFFFF { return nil }
-        if traits.skinTone == .separatedOnEmojiPresentationBases {
-            // A text-presentation base (☝🏻 ✍🏿) stays composed on this host —
-            // the ZWNJ separation was measured to misalign for it. So does a
-            // ZWJ sequence carrying a tone (👩🏽‍🚀) when ZWJ decomposition is
+        if traits.skinTone == .separated {
+            // The walk only separates a plain Fitzpatrick cluster — the first
+            // scalar must be a modifier base. A ZWJ sequence carrying a tone
+            // (👩🏽‍🚀) stays at its composed claim when ZWJ decomposition is
             // off: the walk cannot separate it without splicing the ZWNJ into
-            // the sequence, so it pulls back at the composed claim instead.
-            // (Under this host's real traits decomposition is on, and the
-            // toned SEGMENT resolves through this rule after the split.)
-            guard first.properties.isEmojiPresentation,
+            // the sequence, so it pulls back instead. (Under this host's real
+            // traits decomposition is on, and the toned SEGMENT resolves
+            // through this rule after the split.)
+            guard first.properties.isEmojiModifierBase,
                 !scalars.contains(where: { $0.value == 0x200D })
             else { return nil }
         }
@@ -311,12 +311,22 @@ extension Character {
         where !(0x1F3FB...0x1F3FF).contains(scalar.value) && scalar.value != 0x200C {
             base.append(scalar)
         }
+        // The walk promotes a text-presentation base (☝🏻 ✍🏿 ⛹🏾) with VS-16
+        // before separating — the bare rewrite was measured to misalign — so
+        // the claim must price the base the same way the walk emits it: the
+        // promoted 2-cell form, not the bare 1-cell one. An already-promoted
+        // cluster (☝️🏻) keeps its selector through the reconstruction above
+        // and needs nothing added.
+        if traits.skinTone == .separated, !first.properties.isEmojiPresentation,
+            !base.contains(where: { $0.value == 0xFE0F }) {
+            base.append(Unicode.Scalar(0xFE0F)!)
+        }
         // Detached: base + 2-cell swatch. Separated: the walk's ZWNJ occupies
         // its own column between them (measured — Apple Terminal advances
         // 🤙+ZWNJ+🏽 by 5), so base + separator + swatch. Excluding U+200C from
         // the base reconstruction above makes the already-rewritten cluster
         // measure the same as the original it replaces.
-        let swatch = traits.skinTone == .separatedOnEmojiPresentationBases ? 3 : 2
+        let swatch = traits.skinTone == .separated ? 3 : 2
         return Character(String(base)).terminalWidth + swatch
     }
 }

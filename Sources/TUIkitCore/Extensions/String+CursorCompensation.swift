@@ -251,12 +251,19 @@ extension String {
         // One cluster's emission — shared between the direct path and the
         // per-segment recursion of a decomposed ZWJ sequence (whose segments
         // never contain a further joiner, so this never recurses deeper).
-        func appendCompensated(_ c: Character) {
-            if traits.skinTone == .separatedOnEmojiPresentationBases,
+        func appendCompensated(_ character: Character) {
+            var c = character
+            if traits.skinTone == .separated,
                 let separated = c.separatedSkinToneEmission
             {
-                result += separated
-                return
+                // The rewrite is a single grapheme by construction (base
+                // scalars plus an Extend-only tail), and it falls THROUGH to
+                // the arms below rather than being appended verbatim: an
+                // emoji-presentation base lands exactly on its claim and goes
+                // out plain, while a VS-16-promoted text-presentation base
+                // under-advances by one and takes the same ECH + CUF as the
+                // standalone VS-16 class — ECH(5) ☝️‌🏻 CUF(1), card-measured.
+                c = Character(separated)
             }
             let claimed = c.terminalWidth
             let internalAdvance = c.terminalAppCursorAdvance

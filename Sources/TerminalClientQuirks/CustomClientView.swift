@@ -144,7 +144,7 @@ struct CustomClientView: View {
         case .stripAll: "Strip every one (a claim that cannot hold the detached pair)"
         case .stripBMPBases: "Strip only BMP-based ones — ✊🏻 but not 👍🏽 (tmux)"
         case .pullBack: "Keep them, pull the internal column back with CUB — tone lost on screen"
-        case .separate: "Rewrite as base + ZWNJ + swatch, tone kept beside the base (Apple Terminal)"
+        case .separate: "Rewrite as base + ZWNJ + swatch, tone kept beside the base; text-presentation bases promoted with VS-16 (Apple Terminal)"
         }
     }
 

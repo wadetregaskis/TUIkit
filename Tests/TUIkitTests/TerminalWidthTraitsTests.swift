@@ -24,7 +24,7 @@ struct TerminalWidthTraitsTests {
     // claims follow the rewritten forms — see `TerminalClient.widthTraits(of:)`.
     private static let apple = TerminalWidthTraits(
         zwjSequences: .decomposedDroppingJoiners,
-        skinTone: .separatedOnEmojiPresentationBases)
+        skinTone: .separated)
     private static let iTerm = TerminalWidthTraits(
         zwjSequences: .composed, skinTone: .detachedOnBMPBases)
 
@@ -96,7 +96,7 @@ struct TerminalWidthTraitsTests {
             TerminalClient.widthTraits(of: .appleTerminal)
                 == TerminalWidthTraits(
                     zwjSequences: .decomposedDroppingJoiners,
-                    skinTone: .separatedOnEmojiPresentationBases))
+                    skinTone: .separated))
         TerminalWidthTraits.withTraits(Self.apple) {
             #expect(Character(text).terminalWidth == claim)
             let out = TerminalClient.compensating(text, for: .appleTerminal)
@@ -104,21 +104,29 @@ struct TerminalWidthTraitsTests {
         }
     }
 
-    /// A skin-tone cluster on an emoji-presentation base is rewritten as
-    /// base + ZWNJ + modifier — no cursor moves at all — and claims the
-    /// separated width of base + 3, the ZWNJ occupying its own column
-    /// (measured: 🤙+ZWNJ+🏽 advances 5 and paints base, blank, swatch, with
-    /// followers and absolute moves all landing true — treatment cards 2–3).
-    /// A text-presentation base keeps the composed claim and the pull-back:
-    /// the same rewrite measured misaligned for those.
+    /// Every skin-tone cluster is rewritten as base + ZWNJ + modifier and
+    /// claims the separated width of base + 3, the ZWNJ occupying its own
+    /// column (measured: 🤙+ZWNJ+🏽 advances 5 and paints base, blank, swatch,
+    /// with followers and absolute moves all landing true — treatment cards
+    /// 2–3). An emoji-presentation base needs no cursor moves at all. A
+    /// text-presentation base (☝🏻 ✍🏿) is promoted with VS-16 — the bare
+    /// rewrite measured misaligned, and the pull-back it shipped with
+    /// re-rendered the bare narrow glyph beside a blank cell (user-reported
+    /// 2026-08-28) — and the promoted cluster's internal advance (1+1+2) falls
+    /// one short of the claim, so the walk's ordinary under-advance arm wraps
+    /// it: `ECH(5)` + cluster + `CUF(1)`, card-measured aligned, sequential
+    /// and absolute followers both true, tone kept as a swatch.
     @Test(
-        "Skin tones separate on emoji-presentation bases and pull back on text ones",
+        "Skin tones separate: plain on emoji bases, VS-16-promoted on text ones",
         arguments: [
             ("🤙🏽", 5, "🤙\u{200C}🏽"),
             ("✊🏿", 5, "✊\u{200C}🏿"),
             ("👍🏽", 5, "👍\u{200C}🏽"),
-            ("☝🏻", 2, "☝🏻\u{1B}[1D"),
-            ("✍🏿", 2, "✍🏿\u{1B}[1D"),
+            ("☝🏻", 5, "\u{1B}[5X☝\u{FE0F}\u{200C}\u{1F3FB}\u{1B}[1C"),
+            ("✍🏿", 5, "\u{1B}[5X✍\u{FE0F}\u{200C}\u{1F3FF}\u{1B}[1C"),
+            ("⛹🏾", 5, "\u{1B}[5X⛹\u{FE0F}\u{200C}\u{1F3FE}\u{1B}[1C"),
+            // Already VS-16-promoted by the author: nothing is double-added.
+            ("☝\u{FE0F}\u{1F3FD}", 5, "\u{1B}[5X☝\u{FE0F}\u{200C}\u{1F3FD}\u{1B}[1C"),
         ] as [(String, Int, String)])
     func appleSkinTonesSeparateOrPullBack(text: String, claim: Int, emission: String) {
         TerminalWidthTraits.withTraits(Self.apple) {

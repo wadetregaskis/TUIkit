@@ -70,13 +70,13 @@ struct ClientPickerView: View {
     private func summary(of program: TerminalClient.Program) -> String {
         switch program {
         case .appleTerminal:
-            "CUF for VS-16 / bare / lone-RI / SF Symbols; strips skin tones"
+            "ECH+CUF for under-advancers; tones separate as swatches; ZWJ decomposed"
         case .iTerm2:
             "ECH+CUF for VS-16, keycaps, SF Symbols (alternate screen); tones detach on BMP bases"
         case .ghostty:
             "ECH+CUF for VS-15 chrome and SF Symbols; keeps skin tones"
         case .warp:
-            "CUF for lone regional indicators; strips skin tones"
+            "CUF for lone regional indicators; tones detach as swatches"
         case .tmux:
             "compositor: its own grid, its own model; strips BMP-base skin tones"
         case .unidentified:

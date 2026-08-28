@@ -163,7 +163,7 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
     public var widthTraits: TerminalWidthTraits {
         TerminalWidthTraits(
             zwjSequences: zwjSequences ? .decomposedDroppingJoiners : .composed,
-            skinTone: skinTones == .separate ? .separatedOnEmojiPresentationBases : .merged)
+            skinTone: skinTones == .separate ? .separated : .merged)
     }
 
     /// Whether any workaround at all is selected.
@@ -284,12 +284,17 @@ extension String {
         var result = ""
         result.reserveCapacity(stripped.count + 8)
 
-        func appendCompensated(_ character: Character) {
+        func appendCompensated(_ original: Character) {
+            var character = original
             if quirks.skinTones == .separate,
                 let separated = character.separatedSkinToneEmission
             {
-                result += separated
-                return
+                // Falls THROUGH to the arms below, as in the real Apple walk:
+                // an emoji-presentation base lands on its claim and goes out
+                // plain; a VS-16-promoted text-presentation base
+                // under-advances (when the explorer's advance model says so)
+                // and takes the ordinary ECH/CUF repair.
+                character = Character(separated)
             }
             let claimed = character.terminalWidth
             let advance = quirks.cursorAdvance(of: character)

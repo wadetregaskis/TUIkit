@@ -459,7 +459,7 @@ before the render loop is built.
 > | class | claim | emission | on screen |
 > |---|---|---|---|
 > | tone, emoji-presentation base (🤙🏽 ✊🏿 👍🏽) | 5 | base + **ZWNJ** + modifier, no moves | base, one blank cell, swatch — tone kept |
-> | tone, text-presentation base (☝🏻 ✍🏿) | 2 | cluster + `CUB(int−2)` | aligned; bare base (re-render strip) |
+> | tone, text-presentation base (☝🏻 ✍🏿 ⛹🏾) | 5 | `ECH(5)` + **VS-16-promoted** base+ZWNJ+modifier + `CUF(1)` | emoji base, one blank cell, swatch — tone kept (2026-08-28; superseded the `CUB(int−2)` pull-back, which re-rendered the bare NARROW glyph beside a blank cell) |
 > | ZWJ sequence (👨‍👩‍👧‍👦 ❤️‍🔥 👩🏽‍🚀) | Σ segments | **decomposed** — joiners removed, each segment its own class | component glyphs |
 > | flag pair (🇺🇸), keycap (1️⃣) | 2 | cluster + `CUB(1)` `DCH(1)` `CUF(1)` | composed; surplus stored column deleted |
 > | tag flag (🏴󠁧󠁢󠁳󠁣󠁴󠁿) | 2 | cluster + `CUB(tags)` | aligned; bare 🏴 |
@@ -469,8 +469,13 @@ before the render loop is built.
 > SGR, an 80 ms flush gap and absolute re-positioning all left base and
 > modifier adjacent in the store and the terminal composed them again. The
 > ZWNJ costs its own internal column (🤙+ZWNJ+🏽 advances 5), hence the claim
-> of base + 3. It fails on text-presentation bases (☝+ZWNJ+🏻 misaligns),
-> which is why those keep the pull-back. The `DCH` variants of the
+> of base + 3. The BARE rewrite fails on text-presentation bases (☝+ZWNJ+🏻
+> misaligns), so those first shipped with the pull-back — until 2026-08-28,
+> when the pull-back's own cost surfaced (bare narrow glyph, blank cell, tone
+> lost) and the VS-16-promoted rewrite measured clean: promote the base to its
+> emoji-presentation form, and the cluster becomes an ordinary under-advancer
+> (internal 1+1+2 against a claim of 2+1+2) that the standard `ECH`+`CUF` arm
+> already handles (point-up cards 1–2). The `DCH` variants of the
 > over-advancing classes all wrapped at the row edge and re-rendered bare, so
 > DCH is confined to the two classes whose internal column already matches the
 > claim.
@@ -572,10 +577,14 @@ before the render loop is built.
   move to repair that re-renders it as the bare base. **Since 2026-08-27 an
   emoji-presentation base is rewritten as base + ZWNJ + modifier** (claim 5:
   base, the ZWNJ's own blank column, swatch) — the tone survives on screen,
-  everything aligns, nothing wraps. A text-presentation base keeps the
-  `CUB` pull-back at the composed claim of 2 (the rewrite misaligns for it;
-  the tone shows only in the store/copy-paste). The strip remains only for a
-  caller that has not published the host's traits.
+  everything aligns, nothing wraps. **Since 2026-08-28 a text-presentation
+  base (☝🏻 ✌🏼 ✍🏽 ⛹🏾) is promoted with VS-16 and rewritten the same
+  way**, claim 5: the promoted base is a Bug-A under-advancer, so the walk
+  wraps the rewritten cluster in the standard `ECH(5)`+`CUF(1)` — measured
+  aligned, tone kept. (Its first shipped treatment, the `CUB` pull-back at
+  the composed claim of 2, was user-caught re-rendering the bare NARROW
+  glyph: one cell of ink, a blank cell beside it, tone lost.) The strip
+  remains only for a caller that has not published the host's traits.
 - **Flag pairs** (🇺🇸): paints 2, **advances 2** — and the row STORES one
   column more than it paints, displacing every later write on the row one cell
   left. Repaired with store surgery: `CUB(1)` `DCH(1)` `CUF(1)` (2026-08-27;
@@ -690,10 +699,12 @@ non-default setup.
   - SMP bases (👍🏽): render MERGED (one skin-toned glyph), advance 2 ✓.
   - BMP bases (✊🏻 ☝🏽): render **base + separate 2-cell colour swatch**,
     advancing 4 / 3 — same numbers as Terminal.app's Bug B but with the
-    swatch visible. Because TUIkit's layout claims 2, unstripped clusters
-    shift the rest of the row. The iTerm2 output path therefore strips
-    the modifiers (generic-yellow fallback, `withSkinToneFallback()`),
-    which also makes output independent of the Unicode-version setting.
+    swatch visible. Since the detached-claim widening (`TerminalWidthTraits`,
+    skinTone `.detachedOnBMPBases`) the layout claims the 4/3 cells the
+    detached rendering actually occupies, so the modifiers pass through
+    un-stripped and the swatch the user sees is iTerm2's own rendering.
+    (The strip — generic-yellow fallback, `withSkinToneFallback()` — now
+    fires only for a caller that has not published the host's traits.)
 - **Flag pairs:** advance 2 ✓. **Lone regional indicator: advance 2**
   (differs from Terminal.app's 1) — width claim 2 ✓, nothing needed.
 - **Keycaps** (1️⃣ #️⃣ *️⃣, bare or with VS-16): paints 2, **advances 1**
@@ -1496,7 +1507,15 @@ cluster (`📁`), and plain ASCII each put the character AFTER them in the same
 column. The layout arithmetic is exact; what remains is only how Apple's font
 paints a narrow glyph inside the two cells it owns.
 
-#### The skin-tone path needed the same erase — FIXED 2026-08-26
+#### The skin-tone path needed the same erase — FIXED 2026-08-26 (strip-era; SUPERSEDED 2026-08-28)
+
+> This section documents the STRIP-era treatment: a text-presentation tone
+> cluster had its modifier removed and `U+FE0F` restored. Since 2026-08-28 the
+> modifier is KEPT — the cluster is rewritten as the VS-16-promoted base +
+> ZWNJ + modifier (see the treatment-card table) — but the finding stands:
+> the promoted form is a paint-2/advance-1 under-advancer, and the
+> `ECH`-before-glyph this section measured is exactly what the new emission
+> wraps the whole rewritten cluster in.
 
 The erase above was added to the branch that handles under-advancing clusters.
 Terminal.app's walk has a *second* branch, for the clusters that OVER-advance:

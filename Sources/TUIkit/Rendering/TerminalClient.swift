@@ -257,10 +257,12 @@ public struct TerminalClient: Sendable, Equatable {
             // because for them the claim must match the rewritten form, not
             // the composed cluster:
             //
-            // - Skin tones on an emoji-presentation base are emitted as base +
-            //   ZWNJ + modifier (the ZWNJ occupying its own column), so 🤙🏽
-            //   claims 5. Text-presentation bases keep the composed claim and
-            //   the pull-back walk — the rewrite measured misaligned for them.
+            // - Skin tones are emitted as base + ZWNJ + modifier (the ZWNJ
+            //   occupying its own column), so 🤙🏽 claims 5. A
+            //   text-presentation base (☝🏻 ⛹🏾) is promoted with VS-16 first
+            //   and claims 5 too — the bare rewrite measured misaligned, and
+            //   the pull-back it shipped with re-rendered the cluster as the
+            //   bare narrow glyph with a blank cell beside it (2026-08-28).
             // - Emoji ZWJ sequences are emitted as their segments with the
             //   joiners removed, so 👨‍👩‍👧‍👦 claims 8 and ❤️‍🔥 claims 4.
             //
@@ -275,7 +277,7 @@ public struct TerminalClient: Sendable, Equatable {
             // column inside a separated skin tone.
             TerminalWidthTraits(
                 zwjSequences: .decomposedDroppingJoiners,
-                skinTone: .separatedOnEmojiPresentationBases)
+                skinTone: .separated)
         case .iTerm2:
             TerminalWidthTraits(zwjSequences: .composed, skinTone: .detachedOnBMPBases)
         case .ghostty:

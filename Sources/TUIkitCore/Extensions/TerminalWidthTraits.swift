@@ -60,14 +60,21 @@ public struct TerminalWidthTraits: Sendable, Equatable {
         /// Merged for an SMP base (👍🏽), detached for a BMP one (✊🏻 ☝🏽).
         /// iTerm2 and tmux.
         case detachedOnBMPBases
-        /// An emoji-presentation base (🤙🏽 ✊🏿 👍🏽) owns its own width **plus
-        /// three**: the output walk rewrites the cluster as base + ZWNJ +
+        /// The output walk rewrites every Fitzpatrick cluster as base + ZWNJ +
         /// modifier, and on the one host measured to need it the ZWNJ itself
         /// occupies a column, so the cluster renders as base, one blank cell,
-        /// then the swatch. A text-presentation base (☝🏻 ✍🏿) stays merged at
-        /// its composed width — the ZWNJ rewrite was measured to misalign for
-        /// those, so they keep the pull-back walk instead. Apple Terminal.
-        case separatedOnEmojiPresentationBases
+        /// then the swatch — the base's promoted width **plus three**.
+        ///
+        /// An emoji-presentation base (🤙🏽 ✊🏿 👍🏽) is emitted as written. A
+        /// text-presentation base (☝🏻 ✍🏿 ⛹🏾) is **promoted with VS-16**
+        /// first — the bare rewrite was measured to misalign, and the shipped
+        /// pull-back re-rendered it as the bare narrow monochrome glyph with a
+        /// blank cell beside it (user-reported 2026-08-28). The promoted base
+        /// is a VS-16 under-advancer on this host, so the walk erases and
+        /// `CUF`s it exactly as it does the standalone VS-16 class, measured
+        /// aligned with the tone kept: `ECH(2)` ☝️ `CUF(1)` ZWNJ 🏻, claim
+        /// 2 + 1 + 2. Apple Terminal.
+        case separated
     }
 
     /// What the host does with an emoji ZWJ sequence (👩‍🚀 👨‍👩‍👧‍👦).
