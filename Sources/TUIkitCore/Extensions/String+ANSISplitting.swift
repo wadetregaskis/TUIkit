@@ -203,7 +203,6 @@ extension String {
 
         var result = ""
         var visible = 0
-        var cursor  = 0   // Terminal.app cursor advance from start of line
 
         for segment in ansiSegments() {
             switch segment {
@@ -212,27 +211,42 @@ extension String {
             case .visible(let character):
                 let charWidth = character.terminalWidth
                 if visible + charWidth > visibleCount { return (result, visible) }
+                // The walk nets every emitted cluster back to its claim (the
+                // conservation law: under-advancers are CUF'd up, over-
+                // advancers CUB'd back, rewrites land there by construction),
+                // so the internal column at every cluster BOUNDARY is the sum
+                // of claims — `visible` — whatever raw advances came before.
+                // What can still overflow is one cluster's own mid-emission
+                // peak: an over-advancer reaches its raw internal advance
+                // before its repair pulls the column back, and the wrap fires
+                // at the peak, mid-cluster, before any compensation runs.
+                //
+                // (An earlier version kept a second accumulator of raw
+                // advances instead, which was wrong in both directions: eight
+                // compensated ⚙️ read as column 8 when the walk had really
+                // netted 16, letting a tag flag through whose peak wrapped
+                // the row — and a kept tag flag inflated the tally by its
+                // pre-CUB surplus, substituting later clusters that fit.)
+                //
                 // Clusters the walk rewrites (separated skin tones, decomposed
-                // ZWJ sequences) advance exactly their claim, monotonically —
-                // the raw internal advance (👨‍👩‍👧‍👦: 11) never happens, so
+                // ZWJ sequences) peak at their claim, monotonically — the raw
+                // internal advance (👨‍👩‍👧‍👦: 11) never happens, so
                 // budgeting it would replace clusters that actually fit.
                 let advance = character.terminalAppWalkRewritesToClaim
                     ? charWidth : character.terminalAppCursorAdvance
-                if advance > charWidth && cursor + advance > visibleCount {
-                    // Over-advancer that would push Terminal.app's cursor past
-                    // the right edge.  Replace with `charWidth` plain spaces
-                    // to preserve the layout but avoid the wrap-to-next-row
-                    // bug.  Skin tone is sacrificed in this narrow case.
+                if advance > charWidth && visible + advance > visibleCount {
+                    // Over-advancer whose peak would push Terminal.app's
+                    // cursor past the right edge.  Replace with `charWidth`
+                    // plain spaces to preserve the layout but avoid the
+                    // wrap-to-next-row bug.  Skin tone is sacrificed in this
+                    // narrow case.
                     if charWidth > 0 {
                         result.append(String(repeating: " ", count: charWidth))
                     }
-                    visible += charWidth
-                    cursor += charWidth
                 } else {
                     result.append(character)
-                    visible += charWidth
-                    cursor += advance
                 }
+                visible += charWidth
             }
         }
 

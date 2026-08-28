@@ -448,6 +448,33 @@ struct AnsiAwarePrefixForTerminalAppTests {
         #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 20) == "Call 🤙🏽 now")
     }
 
+    @Test("The budget is the sum of claims, not of raw advances — under-count half")
+    func budgetIsClaimsNotRawAdvancesUnderCount() {
+        // Four ⚙️ (VS-16 under-advancers: claim 2, raw advance 1) then the
+        // Scotland tag flag (claim 2, raw internal advance 8 — 2 plus one per
+        // tag scalar). The walk nets each ⚙️ back to its 2-cell claim, so the
+        // flag really starts at column 8 and its mid-cluster peak reaches
+        // 8 + 8 = 16: past a 12-cell row, and the wrap fires BEFORE the
+        // flag's CUB pull-back runs. An earlier budget summed raw advances
+        // (4 after the gears), concluded 4 + 8 = 12 fits, and let the row
+        // wrap — so the flag must be substituted here.
+        let flag = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}"
+        let s = "⚙️⚙️⚙️⚙️" + flag
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 12) == "⚙️⚙️⚙️⚙️  ")
+    }
+
+    @Test("The budget is the sum of claims, not of raw advances — over-count half")
+    func budgetIsClaimsNotRawAdvancesOverCount() {
+        // A kept tag flag's CUB nets it back to its 2-cell claim, so the ☝🏽
+        // later on the row starts at column 6 and peaks at 6 + 3 = 9: exactly
+        // fits a 9-cell row. The raw-advance budget carried the flag's
+        // pre-CUB surplus (cursor 12 after "abcd") and substituted a cluster
+        // that fits.
+        let flag = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}"
+        let s = flag + "abcd☝🏽x"
+        #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 9) == s)
+    }
+
     @Test("Wide CJK character respects the visible boundary (not over-advancing)")
     func cjkBoundary() {
         let s = "Hi 所有"
