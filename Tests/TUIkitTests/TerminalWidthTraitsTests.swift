@@ -243,6 +243,41 @@ struct TerminalWidthTraitsTests {
         }
     }
 
+    /// A BARE keycap (1⃣ — no VS-16) is a different cluster: claimed 1 (the
+    /// base's own width) but Apple Terminal advances it 2 (DSR, the advance
+    /// battery record — the only host that does; the other three advance 1,
+    /// matching the claim). It used to satisfy the stores-wider predicate,
+    /// fall through the model to its claim, pass the surgery's
+    /// advance-equals-claim guard on the strength of that wrong number, and
+    /// take a `CUB(1)` `DCH(1)` `CUF(1)` calibrated for the FE0F form: the
+    /// emission ended at the cursor's real column, one past the claim, and
+    /// deleted a stored column never measured to be surplus. Now it is
+    /// modelled at its measured 2 and pulled back like any over-advancer.
+    /// (Paint and store for the bare form are unmeasured — a pixel card is
+    /// queued; the pull-back is the alignment-safe treatment meanwhile.)
+    @Test("A bare keycap is pulled back, not store-surgered")
+    func bareKeycapIsPulledBackNotSurgered() {
+        let bare = "1\u{20E3}"
+        TerminalWidthTraits.withTraits(Self.apple) {
+            let character = Character(bare)
+            #expect(character.terminalWidth == 1, "claim — the base's own width")
+            #expect(character.terminalAppCursorAdvance == 2, "internal, DSR-measured")
+            #expect(!character.terminalAppStoresWiderThanPainted, "surgery is the FE0F form's")
+            let out = TerminalClient.compensating(bare, for: .appleTerminal)
+            #expect(out == bare + "\u{1B}[1D", "|\(out)|")
+        }
+        // The other three hosts advance it 1, exactly the claim: untouched.
+        for (traits, program) in [
+            (Self.iTerm, TerminalClient.Program.iTerm2),
+            (.composing, .ghostty),
+            (Self.warp, .warp),
+        ] as [(TerminalWidthTraits, TerminalClient.Program)] {
+            TerminalWidthTraits.withTraits(traits) {
+                #expect(TerminalClient.compensating(bare, for: program) == bare, "\(program)")
+            }
+        }
+    }
+
     /// Every advance the models report is the INTERNAL column measured by DSR
     /// on the real terminal — for both hosts. (An interim Apple model reported
     /// the paint position instead; the conservation test then verified paint

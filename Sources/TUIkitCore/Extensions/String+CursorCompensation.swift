@@ -312,9 +312,11 @@ extension String {
                 result.append(c)
                 result += "\u{1B}[\(claimed - internalAdvance)C"
             } else if internalAdvance > claimed {
-                // Over-advancer (text-presentation skin tones, tag flags):
-                // pull the internal column back to the claim; the paint
-                // position — measured, not assumed — snaps with it.
+                // Over-advancer (text-presentation skin tones under the
+                // pull-back fallback, tag flags, bare keycaps): pull the
+                // internal column back to the claim; the paint position —
+                // measured for the first two classes, not yet for bare
+                // keycaps — snaps with it.
                 result.append(c)
                 result += "\u{1B}[\(internalAdvance - claimed)D"
             } else {

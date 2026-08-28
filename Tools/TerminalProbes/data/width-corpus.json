@@ -435,6 +435,15 @@
    ]
   },
   {
+   "id": "keycap_bare",
+   "class": "keycap_bare",
+   "text": "1⃣",
+   "scalars": [
+    "U+0031",
+    "U+20E3"
+   ]
+  },
+  {
    "id": "sf_symbol_low",
    "class": "pua16",
    "text": "􀀸",
@@ -554,6 +563,26 @@
    "text": "☝️🏽",
    "scalars": [
     "U+261D",
+    "U+FE0F",
+    "U+1F3FD"
+   ]
+  },
+  {
+   "id": "tone_victory_vs16",
+   "class": "skin_tone_vs16_base",
+   "text": "✌️🏼",
+   "scalars": [
+    "U+270C",
+    "U+FE0F",
+    "U+1F3FC"
+   ]
+  },
+  {
+   "id": "tone_lifter_vs16",
+   "class": "skin_tone_vs16_smp",
+   "text": "🏋️🏽",
+   "scalars": [
+    "U+1F3CB",
     "U+FE0F",
     "U+1F3FD"
    ]

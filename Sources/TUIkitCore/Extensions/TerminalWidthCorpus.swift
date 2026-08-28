@@ -96,6 +96,7 @@ package enum TerminalWidthCorpus {
         Entry(id: "flag_scotland", category: "tag_flag", text: "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}"),
         Entry(id: "keycap_one", category: "keycap", text: "\u{31}\u{FE0F}\u{20E3}"),
         Entry(id: "keycap_hash", category: "keycap", text: "\u{23}\u{FE0F}\u{20E3}"),
+        Entry(id: "keycap_bare", category: "keycap_bare", text: "\u{31}\u{20E3}"),
         Entry(id: "sf_symbol_low", category: "pua16", text: "\u{100038}"),
         Entry(id: "sf_symbol_mid", category: "pua16", text: "\u{101867}"),
         Entry(id: "sf_symbol_high", category: "pua16", text: "\u{102328}"),
@@ -110,6 +111,8 @@ package enum TerminalWidthCorpus {
         Entry(id: "tone_victory", category: "skin_tone_bmp_narrow", text: "\u{270C}\u{1F3FC}"),
         Entry(id: "tone_writing", category: "skin_tone_bmp_narrow", text: "\u{270D}\u{1F3FD}"),
         Entry(id: "tone_point_up_vs16", category: "skin_tone_vs16_base", text: "\u{261D}\u{FE0F}\u{1F3FD}"),
+        Entry(id: "tone_victory_vs16", category: "skin_tone_vs16_base", text: "\u{270C}\u{FE0F}\u{1F3FC}"),
+        Entry(id: "tone_lifter_vs16", category: "skin_tone_vs16_smp", text: "\u{1F3CB}\u{FE0F}\u{1F3FD}"),
         Entry(id: "zwj_astronaut", category: "zwj", text: "\u{1F469}\u{200D}\u{1F680}"),
         Entry(id: "zwj_family4", category: "zwj", text: "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"),
         Entry(id: "zwj_heart_fire", category: "zwj", text: "\u{2764}\u{FE0F}\u{200D}\u{1F525}"),
@@ -147,6 +150,9 @@ package enum TerminalWidthCorpus {
         "tag_flag": "🏴 plus tag scalars. Apple Terminal's internal column advances 2 + one per tag (Scotland: 8) while painting 2.",
         "keycap":
             "Base + U+FE0F + U+20E3. Under-advances on iTerm2; paints short of its advance on Apple Terminal.",
+        "keycap_bare":
+            "Base + U+20E3 with NO selector: claimed 1 (the base's own width). "
+                + "The compatibility table records Apple Terminal advancing it 2.",
         "pua16": "Plane-16 Private Use Area — SF Symbols. Painted 2 where the font exists, advanced 1 on every measured host.",
         "skin_tone_smp":
             "Fitzpatrick modifier on an SMP base (🤙🏽). Apple Terminal: internal 4, paints 2 — the two-counter divergence.",
@@ -155,6 +161,9 @@ package enum TerminalWidthCorpus {
         "skin_tone_vs16_base":
             "VS-16-promoted base plus modifier (☝️🏽): raw, a different answer on every host; "
             + "since 2026-08-28 the walks strip the redundant selector, so only the raw models differ.",
+        "skin_tone_vs16_smp":
+            "The SMP flavour (🏋️🏽): a text-presentation SMP base, promoted then toned — "
+                + "outside every by-plane rule, so it gets its own row.",
         "zwj":
             "ZWJ sequence. Apple Terminal composes the glyph while its internal column decomposes (👨‍👩‍👧‍👦: 11 vs 2); Warp decomposes both.",
         "zwj_skin_tone": "A skin-toned segment inside a ZWJ sequence (👩🏽‍🚀) — both rules at once.",

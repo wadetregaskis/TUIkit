@@ -105,6 +105,22 @@ extension Character {
 
         guard scalars.count > 1, let first = scalars.first else { return terminalWidth }
 
+        // A keycap — base + U+20E3, with or without VS-16 — advances 2
+        // whatever the claim (DSR, the advance battery record). The FE0F form
+        // matches its 2-cell claim and is repaired for its wide STORE by
+        // surgery; the BARE form (1⃣) is claimed 1 — the base's own width —
+        // so its 2 is an over-advance the walk pulls back with CUB(1).
+        // Modelled explicitly because the fall-through used to report the
+        // claim (1), and the stores-wider predicate then routed the bare form
+        // into store surgery calibrated for a cluster it is not: the surgery
+        // ends at the cursor's real column (2), one past the claim, shearing
+        // every follower — and deleting a stored column never measured to be
+        // surplus. (The bare form's paint and store remain unmeasured; the
+        // pull-back is the alignment-safe treatment until a pixel card runs.)
+        if scalars.contains(where: { $0.value == 0x20E3 }) {
+            return 2
+        }
+
         // `<base>+U+FE0F` where the base is a default-text-presentation
         // emoji (e.g. ❤️ = U+2764+FE0F, ✏️ = U+270F+FE0F, 🖥️ = U+1F5A5+FE0F):
         // paints the glyph 2 cells wide (matching `terminalWidth`) but only
@@ -224,7 +240,13 @@ extension Character {
         let scalars = unicodeScalars
         if TerminalQuirks.isFlagPair(self) { return true }
         guard let first = scalars.first, first.properties.isEmoji else { return false }
+        // The FE0F form only: the surgery's card battery measured base +
+        // U+FE0F + U+20E3, whose advance (2) equals its claim. A BARE keycap
+        // (1⃣, claimed 1, advance 2) is an over-advancer with an UNMEASURED
+        // store — including it here fired the surgery with the wrong balance,
+        // ending one column past the claim.
         return scalars.contains { $0.value == 0x20E3 }
+            && scalars.contains { $0.value == 0xFE0F }
     }
 
     /// This cluster's ZWJ-separated segments as independent clusters — the

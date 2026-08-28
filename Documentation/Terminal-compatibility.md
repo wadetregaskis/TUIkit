@@ -462,6 +462,7 @@ before the render loop is built.
 > | tone, text-presentation base (☝🏻 ✍🏿 ⛹🏾) | 5 | `ECH(5)` + **VS-16-promoted** base+ZWNJ+modifier + `CUF(1)` | emoji base and swatch ADJACENT, one trailing blank (painted by the ECH) — tone kept (2026-08-28; superseded the `CUB(int−2)` pull-back, which re-rendered the bare NARROW glyph beside a blank cell) |
 > | ZWJ sequence (👨‍👩‍👧‍👦 ❤️‍🔥 👩🏽‍🚀) | Σ segments | **decomposed** — joiners removed, each segment its own class | component glyphs |
 > | flag pair (🇺🇸), keycap (1️⃣) | 2 | cluster + `CUB(1)` `DCH(1)` `CUF(1)` | composed; surplus stored column deleted |
+> | BARE keycap (1⃣, no VS-16) | 1 | cluster + `CUB(1)` | advance 2 (DSR record); it used to mis-enter the FE0F surgery on a fall-through model value of 1 and end one column past the claim. Paint/store unmeasured — pixel card queued (2026-08-28) |
 > | tag flag (🏴󠁧󠁢󠁳󠁣󠁴󠁿) | 2 | cluster + `CUB(tags)` | aligned; bare 🏴 |
 > | VS-16 / bare pictograph / lone RI / PUA | 2 | `ECH(2)` + glyph + `CUF(1)` | composed |
 >
@@ -1510,6 +1511,7 @@ and (much more so) Warp do NOT — always probe with `PROBE_ALT=1`.
 | 🇦 (lone regional indicator) | 2 | **1** | 2 | 2 | **1** |
 | 1️⃣ #️⃣ *️⃣ (keycaps) | 2 | 2 | **1** | 2 | **3** |
 | 1⃣ (bare keycap, no VS-16) | 1 | **2** | 1 | 1 | 1 |
+| ⤷ *(modelled + pulled back with `CUB(1)` since 2026-08-28 — it used to fall through to the claim and mis-enter the FE0F form's store surgery)* | | ✓ | | | |
 | 👍🏽 (SMP base + skin) | 2 | **4** | 2 (merged) | 2 (merged) | **4** |
 | ✊🏻 (BMP emoji-pres. + skin) | 2 | **4** | **4** (swatch) | 2 (merged) | **4** |
 | ☝🏽 (BMP text-pres. + skin) | 2 | **3** | **3** (swatch) | **1** | **3** |
