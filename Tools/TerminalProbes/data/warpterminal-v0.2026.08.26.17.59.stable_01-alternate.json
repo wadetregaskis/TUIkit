@@ -93,23 +93,23 @@
    "cluster": "U+231B"
   },
   "keycap_0": {
-   "advance": 2,
+   "advance": 3,
    "cluster": "U+0030 U+FE0F U+20E3"
   },
   "keycap_1": {
-   "advance": 2,
+   "advance": 3,
    "cluster": "U+0031 U+FE0F U+20E3"
   },
   "keycap_bare": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+0031 U+20E3"
   },
   "keycap_hash": {
-   "advance": 2,
+   "advance": 3,
    "cluster": "U+0023 U+FE0F U+20E3"
   },
   "keycap_star": {
-   "advance": 2,
+   "advance": 3,
    "cluster": "U+002A U+FE0F U+20E3"
   },
   "lone_ri": {
@@ -153,7 +153,7 @@
    "cluster": "U+1F3CB U+1F3FD"
   },
   "skin_lifter_vs16": {
-   "advance": 3,
+   "advance": 4,
    "cluster": "U+1F3CB U+FE0F U+1F3FD"
   },
   "skin_point_up": {
@@ -161,7 +161,7 @@
    "cluster": "U+261D U+1F3FD"
   },
   "skin_point_vs16": {
-   "advance": 3,
+   "advance": 4,
    "cluster": "U+261D U+FE0F U+1F3FD"
   },
   "skin_standalone": {
@@ -173,7 +173,7 @@
    "cluster": "U+1F44D U+1F3FD"
   },
   "skin_victory_vs16": {
-   "advance": 3,
+   "advance": 4,
    "cluster": "U+270C U+FE0F U+1F3FC"
   },
   "sq_filled": {
@@ -185,31 +185,31 @@
    "cluster": "U+1FA88"
   },
   "u16_face_bags": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+1FAE9"
   },
   "u16_fingerprint": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+1FAC6"
   },
   "u16_harp": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+1FA89"
   },
   "u16_leafless_tree": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+1FABE"
   },
   "u16_root_vegetable": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+1FADC"
   },
   "u16_shovel": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+1FA8F"
   },
   "u16_splatter": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+1FADF"
   },
   "vs15_bigsquare": {
@@ -221,63 +221,63 @@
    "cluster": "U+2B1C U+FE0E"
   },
   "vs16_check": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+2714 U+FE0F"
   },
   "vs16_gear": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+2699 U+FE0F"
   },
   "vs16_hammer_pick": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+2692 U+FE0F"
   },
   "vs16_heart": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+2764 U+FE0F"
   },
   "vs16_part_alt": {
-   "advance": 2,
+   "advance": 3,
    "cluster": "U+303D U+FE0F"
   },
   "vs16_pencil": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+270F U+FE0F"
   },
   "vs16_phone": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+260E U+FE0F"
   },
   "vs16_scissors": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+2702 U+FE0F"
   },
   "vs16_screen": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+1F5A5 U+FE0F"
   },
   "vs16_shield": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+1F6E1 U+FE0F"
   },
   "vs16_smp_joystick": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+1F579 U+FE0F"
   },
   "vs16_smp_shield": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+1F6E1 U+FE0F"
   },
   "vs16_umbrella": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+2602 U+FE0F"
   },
   "vs16_warning": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+26A0 U+FE0F"
   },
   "vs16_wavydash": {
-   "advance": 2,
+   "advance": 3,
    "cluster": "U+3030 U+FE0F"
   },
   "watch": {
@@ -289,7 +289,7 @@
    "cluster": "U+1F469 U+200D U+1F680"
   },
   "zwj_heart_fire": {
-   "advance": 4,
+   "advance": 5,
    "cluster": "U+2764 U+FE0F U+200D U+1F525"
   },
   "zwj_skin": {
@@ -299,19 +299,18 @@
  },
  "stamp": {
   "env": {
+   "COLORTERM": "truecolor",
    "TERM": "xterm-256color",
-   "TERM_PROGRAM": "Apple_Terminal",
-   "TERM_PROGRAM_VERSION": "455.1",
-   "TERM_SESSION_ID": "DB591C5D-6591-4A3C-A1BF-264AC21AECEF",
-   "__CFBundleIdentifier": "com.apple.Terminal"
+   "TERM_PROGRAM": "WarpTerminal",
+   "TERM_PROGRAM_VERSION": "v0.2026.08.26.17.59.stable_01",
+   "__CFBundleIdentifier": "dev.warp.Warp-Stable"
   },
   "machine": "arm64",
-  "measured": "2026-08-28T09:50:30-07:00",
+  "measured": "2026-08-28T09:49:48-07:00",
   "method": "DSR cursor report \u2014 confirm any disagreement with visual_card.py",
-  "mode_2027_grapheme_clustering": "not asked (Apple Terminal prints this query's final byte)",
+  "mode_2027_grapheme_clustering": null,
   "os": "macOS 15.7.9",
   "probe": "advance_probe.py",
-  "screen": "alternate",
-  "terminal_app_build": "455.1"
+  "screen": "alternate"
  }
 }

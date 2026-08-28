@@ -148,6 +148,14 @@
    "advance": 2,
    "cluster": "U+270A U+1F3FB"
   },
+  "skin_lifter_bare": {
+   "advance": 1,
+   "cluster": "U+1F3CB U+1F3FD"
+  },
+  "skin_lifter_vs16": {
+   "advance": 4,
+   "cluster": "U+1F3CB U+FE0F U+1F3FD"
+  },
   "skin_point_up": {
    "advance": 1,
    "cluster": "U+261D U+1F3FD"
@@ -164,9 +172,45 @@
    "advance": 2,
    "cluster": "U+1F44D U+1F3FD"
   },
+  "skin_victory_vs16": {
+   "advance": 4,
+   "cluster": "U+270C U+FE0F U+1F3FC"
+  },
   "sq_filled": {
    "advance": 1,
    "cluster": "U+25A0"
+  },
+  "u15_flute": {
+   "advance": 2,
+   "cluster": "U+1FA88"
+  },
+  "u16_face_bags": {
+   "advance": 2,
+   "cluster": "U+1FAE9"
+  },
+  "u16_fingerprint": {
+   "advance": 2,
+   "cluster": "U+1FAC6"
+  },
+  "u16_harp": {
+   "advance": 2,
+   "cluster": "U+1FA89"
+  },
+  "u16_leafless_tree": {
+   "advance": 2,
+   "cluster": "U+1FABE"
+  },
+  "u16_root_vegetable": {
+   "advance": 2,
+   "cluster": "U+1FADC"
+  },
+  "u16_shovel": {
+   "advance": 2,
+   "cluster": "U+1FA8F"
+  },
+  "u16_splatter": {
+   "advance": 2,
+   "cluster": "U+1FADF"
   },
   "vs15_bigsquare": {
    "advance": 1,
@@ -261,10 +305,10 @@
    "TERMINFO": "/Applications/Ghostty.app/Contents/Resources/terminfo",
    "TERM_PROGRAM": "ghostty",
    "TERM_PROGRAM_VERSION": "1.3.1",
-   "__CFBundleIdentifier": "com.anthropic.claudefordesktop"
+   "__CFBundleIdentifier": "com.mitchellh.ghostty"
   },
   "machine": "arm64",
-  "measured": "2026-08-26T13:51:39-07:00",
+  "measured": "2026-08-28T09:49:31-07:00",
   "method": "DSR cursor report \u2014 confirm any disagreement with visual_card.py",
   "mode_2027_grapheme_clustering": "set",
   "os": "macOS 15.7.9",

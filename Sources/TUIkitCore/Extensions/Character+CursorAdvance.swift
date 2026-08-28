@@ -473,6 +473,24 @@ extension Character {
         {
             return 1
         }
+        // Fitzpatrick tones on a TEXT-presentation base, both planes (DSR
+        // sweep 2026-08-28, committed advance record):
+        //
+        // - Spelled with a redundant FE0F (☝️🏽 3, 🏋️🏽 3): narrow base 1 +
+        //   swatch 2, whatever the plane. Raw-cluster truth only — the walk
+        //   strips the selector before this host sees it.
+        // - The bare SMP form (🏋🏽): 1 — merged NARROW, unlike a BMP base
+        //   (☝🏽), which detaches at 3, exactly the widened claim, and so
+        //   falls through below. Claimed 2 (`.detachedOnBMPBases` widens
+        //   only BMP bases), so the ordinary ECH(2)+CUF(1) closes it.
+        if scalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }),
+            let first = scalars.first, first.properties.isEmojiModifierBase,
+            !first.properties.isEmojiPresentation,
+            !scalars.contains(where: { $0.value == 0x200D || $0.value == 0x200C })
+        {
+            if scalars.contains(where: { $0.value == 0xFE0F }) { return 3 }
+            if first.value > 0xFFFF { return 1 }
+        }
         if isVS16UnderAdvancer || isBarePictographUnderAdvancer {
             return 1
         }
@@ -500,26 +518,30 @@ extension Character {
     ///   a symbol is followed by one blank cell rather than shearing every
     ///   later column on the row left by one.
     public var ghosttyCursorAdvance: Int {
-        // A skin-tone cluster on a BMP text-presentation base — ☝🏻 ✌🏼 ✍🏽 ⛹🏾 —
-        // merges to ONE cell here, not two: the base is a 1-cell text glyph and
-        // Ghostty keeps it that way with the modifier folded in. Claimed 2, so
-        // a CUF is owed, exactly as for its SF Symbols — alignment bought with
-        // a blank cell rather than a shear. Measured 2026-08-26 against every
-        // cluster the Example emoji page draws. A ZWJ sequence is excluded:
+        // A skin-tone cluster on a text-presentation base — ☝🏻 ✌🏼 ✍🏽 ⛹🏾, and
+        // the SMP flavour 🏋🏽 — merges to ONE cell here, not two: the base is
+        // a 1-cell text glyph and Ghostty keeps it that way with the modifier
+        // folded in, whatever the base's plane (BMP measured 2026-08-26
+        // against every cluster the Example emoji page draws; SMP by the
+        // 2026-08-28 DSR sweep, committed advance record). Claimed 2, so a
+        // CUF is owed, exactly as for its SF Symbols — alignment bought with
+        // a blank cell rather than a shear. A ZWJ sequence is excluded:
         // Ghostty composes those (every measured toned sequence advances 2),
-        // and no BMP-base toned sequence has been measured, so one falls
-        // through to the claim like any other assumed-correct cluster.
+        // and no text-presentation-base toned sequence has been measured, so
+        // one falls through to the claim like any other assumed-correct
+        // cluster.
         if unicodeScalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }),
             !unicodeScalars.contains(where: { $0.value == 0x200D }),
-            let base = unicodeScalars.first, base.value <= 0xFFFF,
-            base.properties.isEmoji, !base.properties.isEmojiPresentation
+            let base = unicodeScalars.first, base.properties.isEmojiModifierBase,
+            !base.properties.isEmojiPresentation
         {
-            // …unless a redundant VS-16 rides along (☝️🏽): the selector
-            // defeats the merge, and Ghostty detaches the promoted 2-cell base
-            // plus a 2-cell swatch — advance 4 (ledger row tone_point_up_vs16,
-            // the class's one measured member). Raw-cluster truth only: the
-            // walk strips the selector (`withoutRedundantToneVS16`), so what
-            // Ghostty receives is the merging pair above.
+            // …unless a redundant VS-16 rides along (☝️🏽 🏋️🏽): the selector
+            // defeats the merge, and Ghostty detaches the promoted 2-cell
+            // base plus a 2-cell swatch — advance 4 on both planes (ledger
+            // row tone_point_up_vs16; the 2026-08-28 DSR sweep for the
+            // siblings). Raw-cluster truth only: the walk strips the selector
+            // (`withoutRedundantToneVS16`), so what Ghostty receives is the
+            // merging pair above.
             if unicodeScalars.contains(where: { $0.value == 0xFE0F }) {
                 return 4
             }
@@ -602,27 +624,40 @@ extension Character {
         {
             return 1
         }
-        // A tone cluster still carrying its redundant VS-16 (☝️🏽): Warp keeps
-        // the base promoted and detaches the swatch beside it — 2 + 2 = 4
-        // (ledger row tone_point_up_vs16), one more than the 3-cell claim of
-        // the normalized pair. Raw-cluster truth only: the walk strips the
-        // selector (`withoutRedundantToneVS16`) before Warp sees it, and the
-        // normalized ☝🏽 falls through below to the claim it was measured to
-        // advance (3).
+        // Fitzpatrick tones: Warp detaches every one, and the composition is
+        // exactly "however far the bare base advances, plus 2 per swatch".
+        // That one rule predicts every measured row (DSR sweeps 2026-08-28 +
+        // the landing ledger): 👍🏽 = 2+2, ✊🏻 = 2+2, ☝🏽 = 1+2, 🏋🏽 = 1+2
+        // (the bare SMP pictograph base itself advances 1 here), and with a
+        // redundant FE0F kept the base is promoted to 2: ☝️🏽 = 🏋️🏽 = 4 —
+        // raw-cluster truth only, since the walk strips the selector before
+        // Warp sees it. Stating the composition instead of falling through to
+        // `terminalWidth` is what keeps this raw truth out of the claim's
+        // trait-coupling.
         if unicodeScalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }),
-            unicodeScalars.contains(where: { $0.value == 0xFE0F }),
             let first = unicodeScalars.first, first.properties.isEmojiModifierBase,
-            !first.properties.isEmojiPresentation
+            !unicodeScalars.contains(where: { $0.value == 0x200D || $0.value == 0x200C })
         {
-            return 4
+            var base = String.UnicodeScalarView()
+            var modifiers = 0
+            for scalar in unicodeScalars {
+                if (0x1F3FB...0x1F3FF).contains(scalar.value) {
+                    modifiers += 1
+                } else {
+                    base.append(scalar)
+                }
+            }
+            return Character(String(base)).warpCursorAdvance + 2 * modifiers
         }
         return terminalWidth
     }
 
     /// Unicode 16.0's new emoji (2024): 🪉 harp, 🪏 shovel, 🪾 leafless tree,
     /// 🫆 fingerprint, 🫜 root vegetable, 🫟 splatter, 🫩 face with bags under
-    /// eyes. Warp v0.2026.07.08's width table predates them — see
-    /// ``warpCursorAdvance``.
+    /// eyes. Warp v0.2026.07.08's width table predates them — and
+    /// v0.2026.08.26.17.59.stable_01, the self-update measured 2026-08-28,
+    /// still advances all seven by 1 (committed advance record; zero drift on
+    /// any other battery row either). See ``warpCursorAdvance``.
     private static let unicode16EmojiWarpDoesNotKnow: Set<UInt32> = [
         0x1FA89, 0x1FA8F, 0x1FABE, 0x1FAC6, 0x1FADC, 0x1FADF, 0x1FAE9,
     ]

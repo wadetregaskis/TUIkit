@@ -93,27 +93,27 @@
    "cluster": "U+231B"
   },
   "keycap_0": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+0030 U+FE0F U+20E3"
   },
   "keycap_1": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+0031 U+FE0F U+20E3"
   },
   "keycap_bare": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+0031 U+20E3"
   },
   "keycap_hash": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+0023 U+FE0F U+20E3"
   },
   "keycap_star": {
-   "advance": 2,
+   "advance": 1,
    "cluster": "U+002A U+FE0F U+20E3"
   },
   "lone_ri": {
-   "advance": 1,
+   "advance": 2,
    "cluster": "U+1F1E6"
   },
   "nfd_e": {
@@ -149,7 +149,7 @@
    "cluster": "U+270A U+1F3FB"
   },
   "skin_lifter_bare": {
-   "advance": 3,
+   "advance": 1,
    "cluster": "U+1F3CB U+1F3FD"
   },
   "skin_lifter_vs16": {
@@ -169,7 +169,7 @@
    "cluster": "U+1F3FD"
   },
   "skin_thumbs": {
-   "advance": 4,
+   "advance": 2,
    "cluster": "U+1F44D U+1F3FD"
   },
   "skin_victory_vs16": {
@@ -285,33 +285,39 @@
    "cluster": "U+231A"
   },
   "zwj_astronaut": {
-   "advance": 5,
+   "advance": 2,
    "cluster": "U+1F469 U+200D U+1F680"
   },
   "zwj_heart_fire": {
-   "advance": 4,
+   "advance": 1,
    "cluster": "U+2764 U+FE0F U+200D U+1F525"
   },
   "zwj_skin": {
-   "advance": 7,
+   "advance": 2,
    "cluster": "U+1F469 U+1F3FD U+200D U+1F680"
   }
  },
  "stamp": {
   "env": {
+   "COLORFGBG": "0;15",
+   "COLORTERM": "truecolor",
+   "ITERM_PROFILE": "Default",
+   "ITERM_SESSION_ID": "w0t1p0:225D66E8-DC1B-4FD6-83D3-487FCCF71AAD",
+   "LC_TERMINAL": "iTerm2",
+   "LC_TERMINAL_VERSION": "3.6.11",
    "TERM": "xterm-256color",
-   "TERM_PROGRAM": "Apple_Terminal",
-   "TERM_PROGRAM_VERSION": "455.1",
-   "TERM_SESSION_ID": "DB591C5D-6591-4A3C-A1BF-264AC21AECEF",
-   "__CFBundleIdentifier": "com.apple.Terminal"
+   "TERMINFO_DIRS": "/Applications/iTerm.app/Contents/Resources/terminfo:/usr/share/terminfo",
+   "TERM_PROGRAM": "iTerm.app",
+   "TERM_PROGRAM_VERSION": "3.6.11",
+   "TERM_SESSION_ID": "w0t1p0:225D66E8-DC1B-4FD6-83D3-487FCCF71AAD",
+   "__CFBundleIdentifier": "com.googlecode.iterm2"
   },
   "machine": "arm64",
-  "measured": "2026-08-28T09:50:30-07:00",
+  "measured": "2026-08-28T09:48:59-07:00",
   "method": "DSR cursor report \u2014 confirm any disagreement with visual_card.py",
-  "mode_2027_grapheme_clustering": "not asked (Apple Terminal prints this query's final byte)",
+  "mode_2027_grapheme_clustering": "permanently reset",
   "os": "macOS 15.7.9",
   "probe": "advance_probe.py",
-  "screen": "alternate",
-  "terminal_app_build": "455.1"
+  "screen": "alternate"
  }
 }

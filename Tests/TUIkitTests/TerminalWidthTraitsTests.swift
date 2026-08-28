@@ -224,6 +224,52 @@ struct TerminalWidthTraitsTests {
         }
     }
 
+    /// The SMP flavour of the text-presentation tone class — 🏋🏽, a base
+    /// outside every by-plane rule — measured on all four hosts by the
+    /// 2026-08-28 DSR sweep (committed advance records): the bare pair merges
+    /// NARROW on iTerm2 and Ghostty (advance 1), detaches at bare-base+2 = 3
+    /// on Warp, and separates on Apple like any other tone. Each host's walk
+    /// closes its gap with the ordinary ECH + CUF; before the sweep the
+    /// models fell through to the claim and iTerm2/Ghostty sheared a cell.
+    @Test("The SMP text-presentation tone pair is closed on every host")
+    func smpTextPresentationToneHandledEverywhere() {
+        let bare = "\u{1F3CB}\u{1F3FD}"  // 🏋🏽
+        let spelled = "\u{1F3CB}\u{FE0F}\u{1F3FD}"  // 🏋️🏽 — normalized away
+        TerminalWidthTraits.withTraits(.composing) {
+            for text in [bare, spelled] {
+                #expect(Character(text).terminalWidth == 2)
+                let out = TerminalClient.compensating(text, for: .ghostty)
+                #expect(out == "\u{1B}[2X\u{1F3CB}\u{1F3FD}\u{1B}[1C", "ghostty |\(out)|")
+            }
+        }
+        TerminalWidthTraits.withTraits(Self.iTerm) {
+            for text in [bare, spelled] {
+                #expect(Character(text).terminalWidth == 2, "SMP: not widened by-plane")
+                let out = TerminalClient.compensating(text, for: .iTerm2)
+                #expect(out == "\u{1B}[2X\u{1F3CB}\u{1F3FD}\u{1B}[1C", "iTerm2 |\(out)|")
+            }
+        }
+        TerminalWidthTraits.withTraits(Self.warp) {
+            for text in [bare, spelled] {
+                #expect(Character(text).terminalWidth == 4, "detached: bare base 2 + swatch")
+                let out = TerminalClient.compensating(text, for: .warp)
+                #expect(out == "\u{1B}[4X\u{1F3CB}\u{1F3FD}\u{1B}[1C", "warp |\(out)|")
+            }
+        }
+        TerminalWidthTraits.withTraits(Self.apple) {
+            // Separation promotes the base itself, so both spellings emit the
+            // same bytes: ECH(5) + 🏋️+ZWNJ+🏽 + CUF(1) — the promoted base is
+            // a VS-16 under-advancer here (internal 1+1+2 = 4 against 5).
+            for text in [bare, spelled] {
+                #expect(Character(text).terminalWidth == 5)
+                let out = TerminalClient.compensating(text, for: .appleTerminal)
+                #expect(
+                    out == "\u{1B}[5X\u{1F3CB}\u{FE0F}\u{200C}\u{1F3FD}\u{1B}[1C",
+                    "apple |\(out)|")
+            }
+        }
+    }
+
     /// Flag pairs and keycaps are stored one column wider than they paint, and
     /// the store poisons everything later on the row — so the walk deletes the
     /// surplus stored column: `CUB(1)`, `DCH(1)`, `CUF(1)` (the one emission of

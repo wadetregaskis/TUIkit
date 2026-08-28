@@ -96,6 +96,30 @@ BATTERY.update({
     "powerline": "\uE0B0",                      # BMP PUA powerline
 })
 
+BATTERY.update({
+    # The vs16-tone class siblings added to the width corpus 2026-08-28: the
+    # normalization treatment generalizes from tone_point_up_vs16
+    # (skin_point_vs16 above) to the whole class, and these rows test the
+    # generalization -- a second BMP member, and the SMP flavour no by-plane
+    # rule covers.
+    "skin_victory_vs16": "\u270C\uFE0F\U0001F3FC",
+    "skin_lifter_vs16": "\U0001F3CB\uFE0F\U0001F3FD",
+    # The NORMALIZED form of the row above -- what the walks emit for it --
+    # and a text-presentation SMP base + tone, outside every by-plane rule.
+    "skin_lifter_bare": "\U0001F3CB\U0001F3FD",
+    # Unicode 16.0's seven emoji singletons (Warp's 15.1 width table advances
+    # each 1 against the 2-cell claim -- recent_emoji_sweep.py, 2026-08-28),
+    # plus the Unicode 15.0 neighbour for the boundary.
+    "u16_harp": "\U0001FA89",
+    "u16_shovel": "\U0001FA8F",
+    "u16_leafless_tree": "\U0001FABE",
+    "u16_fingerprint": "\U0001FAC6",
+    "u16_root_vegetable": "\U0001FADC",
+    "u16_splatter": "\U0001FADF",
+    "u16_face_bags": "\U0001FAE9",
+    "u15_flute": "\U0001FA88",
+})
+
 def cursor_col(fd):
     os.write(fd, b"\x1b[6n")
     buf = b""
@@ -137,4 +161,5 @@ def main():
     with open(out_path, "w") as f:
         json.dump({"stamp": provenance, "advances": results}, f, indent=1, sort_keys=True)
 
-main()
+if __name__ == "__main__":
+    main()

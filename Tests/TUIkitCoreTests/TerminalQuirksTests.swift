@@ -345,7 +345,7 @@ struct QuirkPermutationTests {
     func ghosttyShapeMatchesTheRealWalk(entry: TerminalWidthCorpus.Entry) {
         let mirrorLacksToneMergeSwitch: Set<String> = [
             "tone_point_up", "tone_victory", "tone_writing", "tone_basketball",
-            "tone_point_up_vs16", "tone_victory_vs16",
+            "tone_point_up_vs16", "tone_victory_vs16", "tone_lifter_vs16",
         ]
         guard !mirrorLacksToneMergeSwitch.contains(entry.id) else { return }
         let ghostty = Self.sets.first { $0.0 == "ghostty" }!.1

@@ -729,13 +729,19 @@ non-default setup.
     un-stripped and the swatch the user sees is iTerm2's own rendering.
     (The strip — generic-yellow fallback, `withSkinToneFallback()` — now
     fires only for a caller that has not published the host's traits.)
-  - A tone cluster still carrying a redundant VS-16 (☝️🏽) renders in **3**
-    cells — bare base + swatch, NOT the promoted base's 4 — measured
-    2026-08-28 in every column (advance, ink, landing, reserve). The old
-    promoted claim of 4 left a one-cell hole; since 2026-08-28 the walk
-    strips the redundant selector (the modifier alone forces emoji
-    presentation, UTS #51) and the claim prices the normalized pair at 3:
-    aligned verbatim.
+  - A tone cluster still carrying a redundant VS-16 (☝️🏽 🏋️🏽) renders in
+    **3** cells on either plane — narrow base + swatch, NOT the promoted
+    base's 4 — measured 2026-08-28 (☝️🏽 in every landing column; the
+    siblings by DSR sweep). The old promoted claim of 4 left a one-cell
+    hole; since 2026-08-28 the walk strips the redundant selector (the
+    modifier alone forces emoji presentation, UTS #51) and the claim
+    prices the normalized pair: aligned.
+  - The **SMP text-presentation** pair (🏋🏽) breaks the by-plane rule from
+    the other side: where BMP bases detach (✊🏻 4, ☝🏽 3), this one merges
+    NARROW — advance **1** against the composed claim of 2 (DSR sweep
+    2026-08-28; `.detachedOnBMPBases` deliberately does not widen SMP).
+    Modelled at 1, so the ordinary ECH(2)+CUF(1) closes it — before the
+    sweep the model fell through to 2 and each such pair sheared a cell.
 - **Flag pairs:** advance 2 ✓. **Lone regional indicator: advance 2**
   (differs from Terminal.app's 1) — width claim 2 ✓, nothing needed.
 - **Keycaps** (1️⃣ #️⃣ *️⃣, bare or with VS-16): paints 2, **advances 1**
@@ -892,17 +898,18 @@ is deliberately NOT applied here — it would discard a correct rendering.
     widens claims for the classes where a 2-cell claim would force
     substitution — a Ghostty-only 1-cell claim would buy one blank cell at
     the price of a per-host layout difference.*
-- **`☝🏽`** (BMP text-presentation base + skin tone) merges to ONE cell —
-  the base is a 1-cell text glyph and Ghostty keeps it that way with the
-  modifier folded in. Modelled since 2026-08-26 (`ghosttyCursorAdvance`
-  returns 1); ECH(2)+CUF(1) lands it on the 2-cell claim, tone kept.
-- **`☝️🏽`** (the same pair with a redundant VS-16) is the opposite: the
-  selector DEFEATS the merge and Ghostty detaches promoted base + swatch
-  across **4** cells (ledger, 2026-08-28) — the only over-advance measured
-  on Ghostty, and one the ECH+CUF repair used to make a cell worse. Since
-  2026-08-28 the walk strips the redundant selector (the modifier alone
-  forces emoji presentation, UTS #51), so Ghostty receives the merging
-  pair above and the class is closed.
+- **`☝🏽` / `🏋🏽`** (text-presentation base + skin tone, either plane)
+  merge to ONE cell — the base is a 1-cell text glyph and Ghostty keeps it
+  that way with the modifier folded in. Modelled since 2026-08-26 (BMP;
+  the SMP flavour by the 2026-08-28 DSR sweep); ECH(2)+CUF(1) lands each
+  on the 2-cell claim, tone kept.
+- **`☝️🏽` / `🏋️🏽`** (the same pairs with a redundant VS-16) are the
+  opposite: the selector DEFEATS the merge and Ghostty detaches promoted
+  base + swatch across **4** cells (ledger + sweep, 2026-08-28) — the only
+  over-advance measured on Ghostty, and one the ECH+CUF repair used to
+  make a cell worse. Since 2026-08-28 the walk strips the redundant
+  selector (the modifier alone forces emoji presentation, UTS #51), so
+  Ghostty receives the merging pairs above and the class is closed.
 - **Cell aspect ratio:** fills `ws_xpixel`/`ws_ypixel` AND answers CSI
   14t/18t, which agree within ~1.4% (ioctl **2.154**, CSI 2.125 — default
   font). Slightly taller than the 2.0 default; auto-detection handles it.
@@ -943,6 +950,13 @@ is deliberately NOT applied here — it would discard a correct rendering.
 
 Warp is the mirror image of Ghostty: it gets the *selector* classes right
 and the *composed* classes wrong.
+
+> **Version drift check (2026-08-28).** Warp self-updated to
+> `v0.2026.08.26.17.59.stable_01`; the full advance battery re-run on that
+> build reproduced every one of the 63 previously committed rows exactly —
+> including all seven Unicode 16.0 emoji still at 1 — so everything below
+> measured on v0.2026.07.08 holds unchanged (committed record:
+> `data/warpterminal-v0.2026.08.26.17.59.stable_01-alternate.json`).
 
 - **Colour:** truecolor.
 - **VS-16 pictographs** (❤️ ✏️ 🖥️) advance 2 ✓ — no Bug-A compensation
