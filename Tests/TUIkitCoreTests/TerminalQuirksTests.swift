@@ -227,6 +227,24 @@ struct QuirkPermutationTests {
         }
     }
 
+    /// The mirror shares ``Character/summedInternalJoinerAdvance`` with the
+    /// Apple model, and so shared its crash: a truncated or stray-joiner
+    /// cluster leaves an empty segment, and `Character("")` is a stdlib
+    /// `fatalError`. The summer now declines such clusters, so the mirror
+    /// prices and emits them as ordinary unmeasured clusters — nothing to pin
+    /// but no-trap and conservation, under every quirk shape.
+    @Test("A degenerate joiner cluster neither traps nor drifts",
+          arguments: sets,
+          ["👨\u{200D}👩\u{200D}", "👍\u{200D}", "👍\u{200C}", "x\u{200D}", "👨\u{200D}\u{200D}"])
+    func degenerateJoinerCluster(set: (String, TerminalQuirks), cluster: String) {
+        let (name, quirks) = set
+        TerminalWidthTraits.withTraits(quirks.widthTraits) {
+            let emission = cluster.withCursorCompensation(for: quirks)
+            let advance = emission.cursorAdvance { quirks.cursorAdvance(of: $0) }
+            #expect(advance == emission.strippedLength, "\(cluster.unicodeScalars) under '\(name)'")
+        }
+    }
+
     @Test("Every scalar survives unless a strip or a decomposition was selected",
           arguments: sets, TerminalWidthCorpus.all)
     func preservesContent(set: (String, TerminalQuirks), entry: TerminalWidthCorpus.Entry) {

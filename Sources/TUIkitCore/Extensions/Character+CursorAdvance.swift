@@ -171,6 +171,13 @@ extension Character {
         var segment = String.UnicodeScalarView()
         for scalar in scalars {
             if scalar.value == 0x200D || scalar.value == 0x200C {
+                // A leading, trailing, or doubled joiner leaves an empty
+                // segment — `Character("")` is a fatalError, and such clusters
+                // are ordinary data (a family emoji truncated at a byte limit,
+                // a stray joiner pasted from the web). Same answer as
+                // ``emojiZWJSegments``: not a sequence this sums; the caller
+                // falls through to composed pricing.
+                guard !segment.isEmpty else { return nil }
                 joiners += 1
                 total += segmentAdvance(Character(String(segment)))
                 segment = String.UnicodeScalarView()
@@ -178,6 +185,7 @@ extension Character {
                 segment.append(scalar)
             }
         }
+        guard !segment.isEmpty else { return nil }
         total += segmentAdvance(Character(String(segment)))
         return total + joiners
     }

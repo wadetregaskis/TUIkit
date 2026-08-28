@@ -214,7 +214,7 @@ extension Character {
     static func decomposedWidth(
         _ scalars: String.UnicodeScalarView, traits: TerminalWidthTraits
     ) -> Int? {
-        if traits.zwjSequences != .composed, scalars.contains(where: { $0.value == 0x200D }) {
+        if scalars.contains(where: { $0.value == 0x200D }) {
             // Sum of the ZWJ-separated segments, plus one cell per joiner on a
             // host whose own renderer draws the joiner as a column (Warp —
             // measured to predict every case exactly: 👩‍🚀 = 2+1+2 = 5,
@@ -224,11 +224,25 @@ extension Character {
             // ❤️‍🔥 = 4). The skin-toned segment resolves through this same
             // function, which is why the two rules compose instead of
             // duplicating each other.
+            //
+            // The gates mirror the walk's ``Character/emojiZWJSegments``
+            // exactly — emoji-led, no empty segment — because the claim must
+            // price what the walk will EMIT: a non-emoji ZWJ cluster ("x‍y")
+            // or a malformed one (trailing/doubled joiner) goes out verbatim,
+            // so it keeps its composed claim. Falling through to the
+            // skin-tone arm instead would price a ZWJ cluster the walk never
+            // separates, so a ZWJ cluster answers here or not at all. (And
+            // `Character("")` on the empty segment is a fatalError — such
+            // clusters are ordinary truncated/stray-joiner data.)
+            guard traits.zwjSequences != .composed,
+                let first = scalars.first, first.properties.isEmoji
+            else { return nil }
             var total = 0
             var joiners = 0
             var segment = String.UnicodeScalarView()
             for scalar in scalars {
                 if scalar.value == 0x200D {
+                    guard !segment.isEmpty else { return nil }
                     joiners += 1
                     total += Character(String(segment)).terminalWidth
                     segment = String.UnicodeScalarView()
@@ -236,6 +250,7 @@ extension Character {
                     segment.append(scalar)
                 }
             }
+            guard !segment.isEmpty else { return nil }
             total += Character(String(segment)).terminalWidth
             return total + (traits.zwjSequences == .decomposedKeepingJoiners ? joiners : 0)
         }
@@ -264,12 +279,23 @@ extension Character {
         _ character: Character, segmentAdvance: (Character) -> Int
     ) -> Int? {
         let scalars = character.unicodeScalars
-        guard scalars.contains(where: { $0.value == 0x200D }) else { return nil }
+        // The `isEmoji` lead guard matches ``Character/emojiZWJSegments`` and
+        // the Apple sibling: a non-emoji ZWJ cluster ("x‍y", Arabic text using
+        // ZWJ to force joining forms) is not something any host was measured
+        // to decompose — and summing it would crash below on the empty
+        // segment a stray joiner leaves.
+        guard scalars.contains(where: { $0.value == 0x200D }),
+            let first = scalars.first, first.properties.isEmoji
+        else { return nil }
         var total = 0
         var joiners = 0
         var segment = String.UnicodeScalarView()
         for scalar in scalars {
             if scalar.value == 0x200D {
+                // Empty segment (leading/trailing/doubled joiner):
+                // `Character("")` traps, and the cluster is malformed data,
+                // not a sequence — same answer as ``Character/emojiZWJSegments``.
+                guard !segment.isEmpty else { return nil }
                 joiners += 1
                 total += segmentAdvance(Character(String(segment)))
                 segment = String.UnicodeScalarView()
@@ -277,6 +303,7 @@ extension Character {
                 segment.append(scalar)
             }
         }
+        guard !segment.isEmpty else { return nil }
         total += segmentAdvance(Character(String(segment)))
         return total + joiners
     }

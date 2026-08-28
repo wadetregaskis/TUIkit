@@ -117,6 +117,35 @@ struct CursorAdvanceConservationTests {
         }
     }
 
+    // MARK: - Degenerate joiner clusters
+
+    /// A truncated or stray-joiner cluster — a family emoji cut at a byte
+    /// limit ("👨‍👩‍"), a letter with a trailing ZWJ from Arabic-style
+    /// joining ("x‍"), a doubled joiner — is a single grapheme cluster that
+    /// reaches the width scan and the walks like any other user data. The
+    /// joiner summers used to build a `Character` from the empty segment such
+    /// a cluster leaves, which is a stdlib `fatalError`: measuring the string
+    /// alone crashed on the hosts whose traits decompose ZWJ (Apple Terminal,
+    /// Warp), and `warpCursorAdvance` crashed on ANY letter+ZWJ cluster. They
+    /// now decline the cluster (same answer as `emojiZWJSegments`), so it
+    /// prices and emits as an ordinary unmeasured cluster: nothing to pin but
+    /// no-trap and conservation.
+    @Test(
+        "A degenerate joiner cluster neither traps nor drifts",
+        arguments: TerminalClient.Program.allCases,
+        ["👨\u{200D}👩\u{200D}", "👍\u{200D}", "👍\u{200C}", "x\u{200D}", "👨\u{200D}\u{200D}"])
+    func degenerateJoinerCluster(program: TerminalClient.Program, cluster: String) {
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: program)) {
+            #expect(cluster.count == 1, "not one grapheme — the case tests nothing")
+            let row = cluster + "|"
+            let claim = row.strippedLength
+            let emitted = TerminalClient.compensating(row, for: program)
+            #expect(
+                landing(emitted, on: program) == claim,
+                "\(cluster.unicodeScalars.map { String(format: "U+%04X", $0.value) }) on \(program.rawValue)")
+        }
+    }
+
     // MARK: - The oracle itself
 
     /// `cursorAdvance(perCharacter:)` is what every expectation above is
