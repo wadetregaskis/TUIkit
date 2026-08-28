@@ -756,13 +756,14 @@ extension RenderLoop {
         environment.resolvedAutomaticToggleCharacterSet = .automatic(
             emojiChrome: capabilities.emojiChrome)
         environment.supportsEmojiChrome = capabilities.emojiChrome
-        // The writer's tmux skin-tone plane follows the same per-client answer:
-        // keep SMP-base tones only when every attached client renders them
-        // (Ghostty alone). Set per frame; a change always arrives via the
+        // The writer's tmux skin-tone scope follows the same per-client answer:
+        // keep the tone bases tmux itself merges (the measured 70 — see
+        // Character.tmuxMergedToneBases) only when every attached client also
+        // renders tmux's re-emission of them (Ghostty alone). Set per frame; a change always arrives via the
         // refresher's onChange, whose full invalidation keeps the writer's
         // line-reuse cache from serving lines stripped under the old policy.
-        diffWriter.tmuxSkinToneBasePlane =
-            capabilities.skinTonesSafe ? .bmpOnly : .all
+        diffWriter.tmuxSkinToneScope =
+            capabilities.skinTonesSafe ? .keepingTmuxMerged : .all
 
         // Runtime services (shared with ViewRenderer's one-off path so
         // the wired set can't drift — see EnvironmentValues.applyRuntimeServices).

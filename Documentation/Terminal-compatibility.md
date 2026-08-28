@@ -1092,11 +1092,11 @@ divergence (`String.tmuxCursorAdvance` + `withTmuxCursorCompensation()` +
 | `U+100038` etc. (Plane-16 PUA, **SF Symbols**) | **1** | **2** (`String+TerminalWidth.swift:166`) | CUF: one `ESC[1C` after each, landing the cursor at the claimed column |
 | `U+1F5A5`, `U+1F6E1`, `U+1F577`, `U+1F39E`, `U+1F3D9` (bare SMP pictographs) | **1** | **2** | CUF, same as above |
 | `U+1F060` domino, `U+1F0A1` playing card | **1** | 2 | CUF, same as above |
-| `U+270A U+1F3FB` (**BMP** + skin tone) | **4** | 2 | swatch stripped (`.bmpOnly`) → back to a 2-cell advance |
+| `U+270A U+1F3FB`, `U+1F919 U+1F3FD` (skin tone on a base tmux **detaches** — 64 of the 134 modifier bases, per codepoint) | **4** | 2 | swatch stripped (`.keepingTmuxMerged` strips exactly the detaching bases) → back to a 2-cell advance |
 | `U+2B1B U+FE0E` (VS-15 chrome ⬛︎) | **2** | 2 | ✓ already agrees (both 2) — no action |
 | `U+1F1E6` lone regional indicator | 1 | 1 | ✓ |
 | `U+4E2D` CJK · `U+1F44D` emoji · ZWJ families · `U+1F1FA U+1F1F8` flag | 2 | 2 | ✓ |
-| `U+1F44D U+1F3FD` (**SMP** + skin tone) | 2 | 2 | ✓ — NOT stripped (`.bmpOnly` keeps it; tmux joins it correctly) |
+| `U+1F44D U+1F3FD` (skin tone on a base tmux **merges** — the measured 70, `Character.tmuxMergedToneBases`) | 2 | 2 | ✓ — NOT stripped when every attached client renders kept tones |
 | `U+0065 U+0301` NFD · `U+E0B0` powerline · `U+2588` block | 1 | 1 | ✓ |
 
 **The defect this closed:** the main menu's "Supports SF Symbols" FeatureBox
@@ -1111,10 +1111,19 @@ border closes. Same fix for the bare SMP pictographs and the dominoes/cards.
 The `:166` comment ("SF Mono: 2 cells") is right about the *font* in a native
 terminal and about the width TUIkit paints; tmux's wcwidth has never heard of
 SF Symbols and advances 1, which is why the tmux path adds the CUF rather than
-changing the claim. `withSkinToneFallback(basePlane: .bmpOnly)` is deliberately
-narrower than the iTerm2/Warp blanket strip: tmux joins an **SMP**-base skin
-tone (👍🏽) into the 2 cells claimed, and only over-advances on a **BMP** base
-(✊🏻 ☝🏽), so stripping the SMP ones would discard a cluster tmux gets right.
+changing the claim. `withSkinToneFallback(scope: .keepingTmuxMerged)` is
+deliberately narrower than the blanket strip: tmux joins 70 of the 134
+modifier bases (👍🏽 👋🏽 🤦🏽 🧑🏽 …) into exactly the 2 cells claimed, and
+stripping those would discard clusters it gets right. Which bases merge is
+**per codepoint** — the full sweep (2026-08-28,
+`advance_probe.py --modifier-bases`, headless tmux, record
+`data/tmux-3.7b-tonebases.json`) retired two tidy wrong rules in a row: it is
+not by base plane (🤙 and 🤚, SMP, detach at 4 while 🧑, also SMP, merges —
+caught 2026-08-26 when the Fitzpatrick row rendered short under a policy that
+kept every SMP base) and not by Unicode era (Unicode-6.0 🎅 detaches while
+the Unicode-10.0 🧍…🧝 run merges). The measured set
+(`Character.tmuxMergedToneBases`) is the rule, and
+`TmuxCompatibilityTests` pins it against the record row for row.
 
 ### Pane geometry (why a "normal" terminal still hits small-size bugs)
 
@@ -1336,12 +1345,14 @@ NATIVE advance while tmux's grid believes 2 cells:
 
 So the per-client policy converges exactly on the native one: Ghostty alone
 keeps skin tones. The strip happens at SOURCE (`FrameDiffWriter`'s
-`tmuxSkinToneBasePlane`, `.bmpOnly` for all-Ghostty clients, `.all`
+`tmuxSkinToneScope`, `.keepingTmuxMerged` for all-Ghostty clients, `.all`
 otherwise) — the one fix that survives the hop, because tmux's grid then
-holds and re-emits the toneless cluster. The plane rides the same
+holds and re-emits the toneless cluster. The scope rides the same
 push-refreshed client probe as the chrome, so a client change restyles both
-in the same full redraw. BMP-base tones (✊🏻 ☝🏽) are always stripped under
-tmux: tmux's own grid over-advances those, client-independent.
+in the same full redraw. Tones on the 64 bases tmux itself DETACHES (✊🏻 ☝🏽
+🤙🏽 — the complement of `Character.tmuxMergedToneBases`) are always
+stripped under tmux: its own grid over-advances those, client-independent,
+so no client choice can save them.
 
 **A chrome flip invalidates the render cache**, not just the frame diff: the
 diff invalidation rewrites every line, but line content comes from the render

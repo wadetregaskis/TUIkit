@@ -163,10 +163,18 @@ struct TmuxCompatibilityTests {
     // MARK: - Skin tones: strip only what tmux actually gets wrong
 
     @Test(
-        "A BMP-based skin tone is stripped — tmux over-advances those to 4",
-        arguments: ["\u{270A}\u{1F3FB}", "\u{261D}\u{1F3FD}", "\u{261D}\u{FE0F}\u{1F3FD}"])
-    func bmpBasedSkinTonesAreStripped(text: String) {
-        let stripped = text.withSkinToneFallback(basePlane: .bmpOnly)
+        "A detached-base skin tone is stripped — tmux over-advances those to 4",
+        arguments: [
+            "\u{270A}\u{1F3FB}",  // ✊🏻 — BMP, detaches
+            "\u{261D}\u{1F3FD}",  // ☝🏽 — BMP, detaches
+            "\u{261D}\u{FE0F}\u{1F3FD}",  // ☝️🏽
+            // 🤙🏽 — SMP, and it DETACHES: the row the by-plane rule kept
+            // and sheared. The full modifier-base sweep (2026-08-28,
+            // committed as tmux-3.7b-tonebases.json) moved it to this list.
+            "\u{1F919}\u{1F3FD}",
+        ])
+    func detachedBaseSkinTonesAreStripped(text: String) {
+        let stripped = text.withSkinToneFallback(scope: .keepingTmuxMerged)
         #expect(
             !stripped.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) },
             "the modifier must go — tmux would give this cluster 4 cells against our 2")
@@ -176,19 +184,20 @@ struct TmuxCompatibilityTests {
     }
 
     @Test(
-        "An SMP-based skin tone SURVIVES — tmux joins those correctly",
+        "A merged-base skin tone SURVIVES — tmux joins those correctly",
         arguments: [
             "\u{1F44D}\u{1F3FD}",                               // 👍🏽
             "\u{1F469}\u{1F3FD}\u{200D}\u{1F680}",              // 👩🏽‍🚀
-            "\u{1F919}\u{1F3FD}",                               // 🤙🏽 (the main menu's)
         ])
-    func smpBasedSkinTonesSurvive(text: String) {
+    func mergedBaseSkinTonesSurvive(text: String) {
         // The regression this guards: the tmux path first took the blanket
         // strip, so 👍🏽 was flattened to 👍 even though tmux allocates it
         // exactly the 2 cells we claim and every client renders it correctly.
         // Stripping a cluster the terminal gets RIGHT is a silent loss of the
-        // user's content, not a compensation.
-        let stripped = text.withSkinToneFallback(basePlane: .bmpOnly)
+        // user's content, not a compensation. (🤙🏽 used to be in this list —
+        // the by-plane rule kept every SMP base — and the full sweep showed
+        // tmux detaches it: it now belongs to the stripped test above.)
+        let stripped = text.withSkinToneFallback(scope: .keepingTmuxMerged)
         #expect(stripped == text, "must pass through untouched")
         #expect(
             stripped.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) },
@@ -209,9 +218,47 @@ struct TmuxCompatibilityTests {
         }
     }
 
+    /// The measured record behind ``Swift/Character/tmuxMergedToneBases`` —
+    /// the full modifier-base sweep (`advance_probe.py --modifier-bases`,
+    /// tmux 3.7b, headless, 2026-08-28) — checked against the model row for
+    /// row: every base the record measured merging must advance 2, every one
+    /// it measured detaching must advance 4, and the baked set must equal
+    /// the record's merge set exactly. The last expectation also catches a
+    /// toolchain upgrade whose Emoji_Modifier_Base enumeration outgrows the
+    /// swept 134 — the cue to re-run the sweep, not to guess.
+    @Test("The tone-base sweep record matches the model, row for row")
+    func toneBaseRecordMatchesModel() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // TUIkitTests/
+            .deletingLastPathComponent()  // Tests/
+            .deletingLastPathComponent()  // repository root
+            .appendingPathComponent("Tools/TerminalProbes/data/tmux-3.7b-tonebases.json")
+        struct Row: Decodable { let advance: Int }
+        struct Record: Decodable { let advances: [String: Row] }
+        let record = try JSONDecoder().decode(Record.self, from: Data(contentsOf: url))
+        var measuredMerged: Set<UInt32> = []
+        var sweptBases: Set<UInt32> = []
+        for (id, row) in record.advances where id.hasPrefix("tonebase_") {
+            let point = UInt32(id.dropFirst("tonebase_".count), radix: 16)!
+            sweptBases.insert(point)
+            let cluster = Character(String(Unicode.Scalar(point)!) + "\u{1F3FD}")
+            #expect(
+                cluster.tmuxCursorAdvance == row.advance,
+                "U+\(String(point, radix: 16, uppercase: true)): model \(cluster.tmuxCursorAdvance), measured \(row.advance)")
+            if row.advance == 2 { measuredMerged.insert(point) }
+        }
+        #expect(measuredMerged == Character.tmuxMergedToneBases, "the baked set IS the record")
+        let toolchainBases = Set(
+            (0...0x10FFFF).compactMap { Unicode.Scalar($0) }
+                .filter(\.properties.isEmojiModifierBase).map(\.value))
+        #expect(
+            toolchainBases == sweptBases,
+            "the toolchain's modifier-base set outgrew the sweep — re-run it")
+    }
+
     @Test("A standalone swatch is content, and survives either way")
     func standaloneSwatchSurvives() {
-        #expect("\u{1F3FD}".withSkinToneFallback(basePlane: .bmpOnly) == "\u{1F3FD}")
+        #expect("\u{1F3FD}".withSkinToneFallback(scope: .keepingTmuxMerged) == "\u{1F3FD}")
         #expect("\u{1F3FD}".withSkinToneFallback() == "\u{1F3FD}")
     }
 
@@ -257,11 +304,11 @@ struct TmuxCompatibilityTests {
         }
     }
 
-    @Test("The writer's tmux skin-tone plane is per-client: .all strips 👍🏽, .bmpOnly keeps it")
+    @Test("The writer's tmux skin-tone scope is per-client: .all strips 👍🏽, .keepingTmuxMerged keeps it")
     @MainActor
-    func tmuxSkinTonePlaneIsHonoured() {
+    func tmuxSkinToneScopeIsHonoured() {
         // The plane is set per frame by RenderLoop from the push-refreshed
-        // client capabilities: .bmpOnly only when every attached client
+        // client capabilities: .keepingTmuxMerged only when every attached client
         // renders SMP-base tones (Ghostty alone, measured), .all otherwise —
         // stripping at SOURCE is the one fix that survives tmux's verbatim
         // re-emission (no CUF can reach the client).
@@ -269,14 +316,14 @@ struct TmuxCompatibilityTests {
             isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: false, isTmux: true)
         let thumbs = "\u{1F44D}\u{1F3FD} ok"  // SMP base + tone
 
-        writer.tmuxSkinToneBasePlane = .all
+        writer.tmuxSkinToneScope = .all
         let stripped = buildLine(writer, raw: thumbs)
         #expect(
             !stripped.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) },
             "an Apple Terminal / Warp client would advance the toned cluster to 4 — strip at source")
 
         writer.invalidate()  // as the refresher's onChange does on every policy change
-        writer.tmuxSkinToneBasePlane = .bmpOnly
+        writer.tmuxSkinToneScope = .keepingTmuxMerged
         let kept = buildLine(writer, raw: thumbs)
         #expect(
             kept.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) },

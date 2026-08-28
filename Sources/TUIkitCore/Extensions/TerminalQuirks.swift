@@ -37,9 +37,13 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         /// the detached rendering instead, so their real output paths keep the
         /// modifier; the strip is what a claim that does NOT cover it needs).
         case stripAll
-        /// Strip only clusters whose base is a BMP scalar (✊🏻 ☝🏽), keeping the
-        /// SMP-based ones the terminal joins correctly. This is tmux.
-        case stripBMPBases
+        /// Strip only clusters whose base tmux was measured to DETACH,
+        /// keeping the 70 bases it merges into the claim
+        /// (``Swift/Character/tmuxMergedToneBases``). This is tmux — and the
+        /// split is per codepoint, not per plane: 🤙 (SMP) detaches while 🧑
+        /// (also SMP) merges, which is what sank the by-plane rule this case
+        /// used to encode (`stripBMPBases`, retired 2026-08-28).
+        case stripTmuxDetached
         /// Keep every scalar and pull the internal column back to the claim
         /// with `CUB(advance − claim)` after the cluster. Aligned everywhere
         /// measured — and the terminal re-renders the cluster as its bare
@@ -248,8 +252,11 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
             // Stripped before the walk ever sees it, so its advance is the
             // base's — which is the claim, hence no divergence to report.
             return width
-        case .stripBMPBases:
-            return first.value <= 0xFFFF ? width : nil
+        case .stripTmuxDetached:
+            // A detached-base cluster is stripped before the walk, so its
+            // advance is the base's — the claim. A merged one is kept, and
+            // falls through to whatever other switches say about it.
+            return Character.tmuxMergedToneBases.contains(first.value) ? nil : width
         case .keep:
             return nil
         }
@@ -289,8 +296,8 @@ extension String {
         let stripped =
             switch quirks.skinTones {
             case .keep, .pullBack, .separate: self
-            case .stripAll: withSkinToneFallback(basePlane: .all)
-            case .stripBMPBases: withSkinToneFallback(basePlane: .bmpOnly)
+            case .stripAll: withSkinToneFallback(scope: .all)
+            case .stripTmuxDetached: withSkinToneFallback(scope: .keepingTmuxMerged)
             }
         guard !quirks.isEmpty else { return stripped }
 
@@ -300,7 +307,7 @@ extension String {
         func appendCompensated(_ original: Character) {
             var character = original
             switch quirks.skinTones {
-            case .keep, .stripAll, .stripBMPBases:
+            case .keep, .stripAll, .stripTmuxDetached:
                 // The shared forward-compensation walk strips a redundant
                 // VS-16 from a tone cluster (☝️🏽 → ☝🏽) before pricing it —
                 // see ``Swift/Character/withoutRedundantToneVS16`` — so the

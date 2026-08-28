@@ -142,7 +142,7 @@ struct CustomClientView: View {
         switch option {
         case .keep: "Keep them — the terminal joins the cluster correctly (Ghostty)"
         case .stripAll: "Strip every one (a claim that cannot hold the detached pair)"
-        case .stripBMPBases: "Strip only BMP-based ones — ✊🏻 but not 👍🏽 (tmux)"
+        case .stripTmuxDetached: "Strip only the bases tmux detaches — 🤙🏽 goes, 👍🏽 stays (tmux)"
         case .pullBack: "Keep them, pull the internal column back with CUB — tone lost on screen"
         case .separate: "Rewrite as base + ZWNJ + swatch, tone kept beside the base; text-presentation bases promoted with VS-16 (Apple Terminal)"
         }

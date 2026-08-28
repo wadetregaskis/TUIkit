@@ -36,11 +36,13 @@
 ///   chrome correctly (Apple Terminal, iTerm2, Warp — NOT Ghostty, whose
 ///   native support depends on a compensation that cannot cross tmux).
 /// - `skinTonesSafe`: all clients advance tmux's verbatim re-emission of
-///   SMP-base skin-tone clusters (👍🏽) by the 2 cells tmux believes
+///   the tone clusters tmux itself merges (👍🏽 — the measured 70-base set,
+///   `Character.tmuxMergedToneBases`) by the 2 cells tmux believes
 ///   (Ghostty ONLY — Apple Terminal and Warp advance 4, shearing the row,
 ///   and iTerm2 paints the tone as a broken separate swatch). When false,
-///   the writer strips the modifiers at source, which — unlike cursor
-///   compensation — survives the tmux hop: tmux's grid then holds and
+///   the writer strips ALL modifiers at source; when true it still strips
+///   the bases tmux detaches, which no client can repair — the strip, unlike
+///   cursor compensation, survives the tmux hop: tmux's grid then holds and
 ///   re-emits the toneless cluster.
 ///
 /// `mayImproveShortly` covers a measured race: the `client-attached` tmux hook

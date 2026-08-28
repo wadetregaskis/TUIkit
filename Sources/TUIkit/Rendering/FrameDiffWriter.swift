@@ -85,7 +85,7 @@ final class FrameDiffWriter {
     /// terminals attached AND with none — identical every time.
     private let isTmux: Bool
 
-    /// Which skin-tone bases the tmux path strips: `.bmpOnly` when every
+    /// Which skin-tone bases the tmux path strips: `.keepingTmuxMerged` when every
     /// attached client renders SMP-base tones (Ghostty alone, measured),
     /// `.all` otherwise — Apple Terminal and Warp advance tmux's verbatim
     /// re-emission of 👍🏽 by 4 against tmux's believed 2, shearing the row,
@@ -100,7 +100,7 @@ final class FrameDiffWriter {
     /// flags — legitimate against the line-reuse cache only because every
     /// change arrives via the refresher's `onChange`, which fully invalidates
     /// this writer before the next frame is built.
-    var tmuxSkinToneBasePlane: String.SkinToneBasePlane = .all
+    var tmuxSkinToneScope: String.SkinToneFallbackScope = .all
 
     /// The model the caches were last built under, so a change of it can be
     /// noticed. `TerminalClient.simulated` and `.simulatedQuirks` can change
@@ -457,7 +457,7 @@ extension FrameDiffWriter {
         case .program(let program):
             return TerminalClient.compensating(
                 text, for: program,
-                tmuxSkinTones: tmuxSkinToneBasePlane)
+                tmuxSkinTones: tmuxSkinToneScope)
         }
     }
 

@@ -297,13 +297,16 @@ public struct TerminalClient: Sendable, Equatable {
             // NOT widened, deliberately. Measured 2026-08-26, tmux 3.7b does
             // not split by base plane the way iTerm2 does: 👍🏽 🙏🏽 👋🏽 merge
             // to 2 while 🤙🏽 🤚🏽 — also SMP — detach to 4, and ☝🏽 is 4 where
-            // a base-plus-two rule predicts 3. The line falls where tmux's
-            // Unicode data has a modifier base and where it does not, which is
-            // a per-codepoint fact this enum cannot express. Until it is
-            // measured across the whole modifier-base set, tmux keeps the old
-            // behaviour — the modifier is stripped — because a claim that is
-            // wrong in both directions misaligns rows, and stripping at least
-            // aligns them.
+            // a base-plus-two rule predicts 3. The whole modifier-base set
+            // was then swept on 2026-08-28 (`Character.tmuxMergedToneBases`:
+            // 70 of 134 merge, 64 detach — per codepoint, with no clean rule;
+            // the "where tmux's Unicode data has a modifier base" hypothesis
+            // recorded here at the time was ALSO wrong, since Unicode-6.0
+            // Santa detaches while the Unicode-10.0 🧍…🧝 run merges). The
+            // strip now follows that measured set (`.keepingTmuxMerged` when
+            // every attached client renders kept tones), and this enum stays
+            // narrow: a widened claim would have to be wrong in one direction
+            // or the other for half the set, and stripping aligns rows.
             .composing
         case .unidentified:
             // A terminal with no measurements is assumed to compose, for the
@@ -365,10 +368,10 @@ public struct TerminalClient: Sendable, Equatable {
     /// without startup having published the host's traits still gets the old,
     /// safe behaviour.
     private static func strippingSkinTonesIfUnclaimed(
-        _ text: String, basePlane: String.SkinToneBasePlane = .all
+        _ text: String, scope: String.SkinToneFallbackScope = .all
     ) -> String {
         TerminalWidthTraits.current.skinTone == .merged
-            ? text.withSkinToneFallback(basePlane: basePlane) : text
+            ? text.withSkinToneFallback(scope: scope) : text
     }
 
     /// `text` with `program`'s cursor-advance divergences compensated for.
@@ -382,21 +385,22 @@ public struct TerminalClient: Sendable, Equatable {
     /// - Parameters:
     ///   - text: a whole row, or a fragment of one.
     ///   - program: the terminal that will paint it.
-    ///   - tmuxSkinTones: which skin-tone bases to strip under tmux. tmux joins
-    ///     an SMP-based cluster (👍🏽) into exactly the two cells we claim and
-    ///     only over-advances on a BMP base (✊🏻), so the answer depends on
-    ///     which clients are attached.
+    ///   - tmuxSkinTones: which skin-tone bases to strip under tmux. tmux
+    ///     merges 70 of the 134 modifier bases into exactly the two cells we
+    ///     claim and detaches the rest (a per-codepoint fact — see
+    ///     ``TUIkitCore/Swift/Character/tmuxMergedToneBases``), so whether the
+    ///     merged ones can be KEPT depends on which clients are attached.
     public static func compensating(
         _ text: String,
         for program: Program,
-        tmuxSkinTones: String.SkinToneBasePlane = .all
+        tmuxSkinTones: String.SkinToneFallbackScope = .all
     ) -> String {
         switch program {
         case .tmux:
             // FIRST, because tmux is a compositor: ITS grid is what our output
             // lands in, so the outer terminal's quirks apply to tmux's output,
             // not ours.
-            return strippingSkinTonesIfUnclaimed(text, basePlane: tmuxSkinTones)
+            return strippingSkinTonesIfUnclaimed(text, scope: tmuxSkinTones)
                 .withTmuxCursorCompensation()
         case .appleTerminal:
             return text.withTerminalAppCursorCompensation()

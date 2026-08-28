@@ -1,0 +1,566 @@
+{
+ "advances": {
+  "ascii_a": {
+   "advance": 1,
+   "cluster": "U+0061"
+  },
+  "cjk": {
+   "advance": 2,
+   "cluster": "U+4E2D"
+  },
+  "tonebase_1F385": {
+   "advance": 4,
+   "cluster": "U+1F385 U+1F3FD"
+  },
+  "tonebase_1F3C2": {
+   "advance": 4,
+   "cluster": "U+1F3C2 U+1F3FD"
+  },
+  "tonebase_1F3C3": {
+   "advance": 4,
+   "cluster": "U+1F3C3 U+1F3FD"
+  },
+  "tonebase_1F3C4": {
+   "advance": 4,
+   "cluster": "U+1F3C4 U+1F3FD"
+  },
+  "tonebase_1F3C7": {
+   "advance": 4,
+   "cluster": "U+1F3C7 U+1F3FD"
+  },
+  "tonebase_1F3CA": {
+   "advance": 4,
+   "cluster": "U+1F3CA U+1F3FD"
+  },
+  "tonebase_1F3CB": {
+   "advance": 4,
+   "cluster": "U+1F3CB U+1F3FD"
+  },
+  "tonebase_1F3CC": {
+   "advance": 4,
+   "cluster": "U+1F3CC U+1F3FD"
+  },
+  "tonebase_1F442": {
+   "advance": 4,
+   "cluster": "U+1F442 U+1F3FD"
+  },
+  "tonebase_1F443": {
+   "advance": 4,
+   "cluster": "U+1F443 U+1F3FD"
+  },
+  "tonebase_1F446": {
+   "advance": 4,
+   "cluster": "U+1F446 U+1F3FD"
+  },
+  "tonebase_1F447": {
+   "advance": 4,
+   "cluster": "U+1F447 U+1F3FD"
+  },
+  "tonebase_1F448": {
+   "advance": 4,
+   "cluster": "U+1F448 U+1F3FD"
+  },
+  "tonebase_1F449": {
+   "advance": 4,
+   "cluster": "U+1F449 U+1F3FD"
+  },
+  "tonebase_1F44A": {
+   "advance": 4,
+   "cluster": "U+1F44A U+1F3FD"
+  },
+  "tonebase_1F44B": {
+   "advance": 2,
+   "cluster": "U+1F44B U+1F3FD"
+  },
+  "tonebase_1F44C": {
+   "advance": 2,
+   "cluster": "U+1F44C U+1F3FD"
+  },
+  "tonebase_1F44D": {
+   "advance": 2,
+   "cluster": "U+1F44D U+1F3FD"
+  },
+  "tonebase_1F44E": {
+   "advance": 2,
+   "cluster": "U+1F44E U+1F3FD"
+  },
+  "tonebase_1F44F": {
+   "advance": 2,
+   "cluster": "U+1F44F U+1F3FD"
+  },
+  "tonebase_1F450": {
+   "advance": 2,
+   "cluster": "U+1F450 U+1F3FD"
+  },
+  "tonebase_1F466": {
+   "advance": 2,
+   "cluster": "U+1F466 U+1F3FD"
+  },
+  "tonebase_1F467": {
+   "advance": 2,
+   "cluster": "U+1F467 U+1F3FD"
+  },
+  "tonebase_1F468": {
+   "advance": 2,
+   "cluster": "U+1F468 U+1F3FD"
+  },
+  "tonebase_1F469": {
+   "advance": 2,
+   "cluster": "U+1F469 U+1F3FD"
+  },
+  "tonebase_1F46A": {
+   "advance": 4,
+   "cluster": "U+1F46A U+1F3FD"
+  },
+  "tonebase_1F46B": {
+   "advance": 4,
+   "cluster": "U+1F46B U+1F3FD"
+  },
+  "tonebase_1F46C": {
+   "advance": 4,
+   "cluster": "U+1F46C U+1F3FD"
+  },
+  "tonebase_1F46D": {
+   "advance": 4,
+   "cluster": "U+1F46D U+1F3FD"
+  },
+  "tonebase_1F46E": {
+   "advance": 2,
+   "cluster": "U+1F46E U+1F3FD"
+  },
+  "tonebase_1F46F": {
+   "advance": 4,
+   "cluster": "U+1F46F U+1F3FD"
+  },
+  "tonebase_1F470": {
+   "advance": 2,
+   "cluster": "U+1F470 U+1F3FD"
+  },
+  "tonebase_1F471": {
+   "advance": 2,
+   "cluster": "U+1F471 U+1F3FD"
+  },
+  "tonebase_1F472": {
+   "advance": 2,
+   "cluster": "U+1F472 U+1F3FD"
+  },
+  "tonebase_1F473": {
+   "advance": 2,
+   "cluster": "U+1F473 U+1F3FD"
+  },
+  "tonebase_1F474": {
+   "advance": 2,
+   "cluster": "U+1F474 U+1F3FD"
+  },
+  "tonebase_1F475": {
+   "advance": 2,
+   "cluster": "U+1F475 U+1F3FD"
+  },
+  "tonebase_1F476": {
+   "advance": 2,
+   "cluster": "U+1F476 U+1F3FD"
+  },
+  "tonebase_1F477": {
+   "advance": 2,
+   "cluster": "U+1F477 U+1F3FD"
+  },
+  "tonebase_1F478": {
+   "advance": 2,
+   "cluster": "U+1F478 U+1F3FD"
+  },
+  "tonebase_1F47C": {
+   "advance": 2,
+   "cluster": "U+1F47C U+1F3FD"
+  },
+  "tonebase_1F481": {
+   "advance": 2,
+   "cluster": "U+1F481 U+1F3FD"
+  },
+  "tonebase_1F482": {
+   "advance": 2,
+   "cluster": "U+1F482 U+1F3FD"
+  },
+  "tonebase_1F483": {
+   "advance": 2,
+   "cluster": "U+1F483 U+1F3FD"
+  },
+  "tonebase_1F485": {
+   "advance": 2,
+   "cluster": "U+1F485 U+1F3FD"
+  },
+  "tonebase_1F486": {
+   "advance": 2,
+   "cluster": "U+1F486 U+1F3FD"
+  },
+  "tonebase_1F487": {
+   "advance": 2,
+   "cluster": "U+1F487 U+1F3FD"
+  },
+  "tonebase_1F48F": {
+   "advance": 4,
+   "cluster": "U+1F48F U+1F3FD"
+  },
+  "tonebase_1F491": {
+   "advance": 4,
+   "cluster": "U+1F491 U+1F3FD"
+  },
+  "tonebase_1F4AA": {
+   "advance": 2,
+   "cluster": "U+1F4AA U+1F3FD"
+  },
+  "tonebase_1F574": {
+   "advance": 4,
+   "cluster": "U+1F574 U+1F3FD"
+  },
+  "tonebase_1F575": {
+   "advance": 2,
+   "cluster": "U+1F575 U+1F3FD"
+  },
+  "tonebase_1F57A": {
+   "advance": 2,
+   "cluster": "U+1F57A U+1F3FD"
+  },
+  "tonebase_1F590": {
+   "advance": 2,
+   "cluster": "U+1F590 U+1F3FD"
+  },
+  "tonebase_1F595": {
+   "advance": 2,
+   "cluster": "U+1F595 U+1F3FD"
+  },
+  "tonebase_1F596": {
+   "advance": 2,
+   "cluster": "U+1F596 U+1F3FD"
+  },
+  "tonebase_1F645": {
+   "advance": 2,
+   "cluster": "U+1F645 U+1F3FD"
+  },
+  "tonebase_1F646": {
+   "advance": 2,
+   "cluster": "U+1F646 U+1F3FD"
+  },
+  "tonebase_1F647": {
+   "advance": 2,
+   "cluster": "U+1F647 U+1F3FD"
+  },
+  "tonebase_1F64B": {
+   "advance": 2,
+   "cluster": "U+1F64B U+1F3FD"
+  },
+  "tonebase_1F64C": {
+   "advance": 2,
+   "cluster": "U+1F64C U+1F3FD"
+  },
+  "tonebase_1F64D": {
+   "advance": 2,
+   "cluster": "U+1F64D U+1F3FD"
+  },
+  "tonebase_1F64E": {
+   "advance": 2,
+   "cluster": "U+1F64E U+1F3FD"
+  },
+  "tonebase_1F64F": {
+   "advance": 2,
+   "cluster": "U+1F64F U+1F3FD"
+  },
+  "tonebase_1F6A3": {
+   "advance": 4,
+   "cluster": "U+1F6A3 U+1F3FD"
+  },
+  "tonebase_1F6B4": {
+   "advance": 2,
+   "cluster": "U+1F6B4 U+1F3FD"
+  },
+  "tonebase_1F6B5": {
+   "advance": 2,
+   "cluster": "U+1F6B5 U+1F3FD"
+  },
+  "tonebase_1F6B6": {
+   "advance": 2,
+   "cluster": "U+1F6B6 U+1F3FD"
+  },
+  "tonebase_1F6C0": {
+   "advance": 4,
+   "cluster": "U+1F6C0 U+1F3FD"
+  },
+  "tonebase_1F6CC": {
+   "advance": 4,
+   "cluster": "U+1F6CC U+1F3FD"
+  },
+  "tonebase_1F90C": {
+   "advance": 4,
+   "cluster": "U+1F90C U+1F3FD"
+  },
+  "tonebase_1F90F": {
+   "advance": 4,
+   "cluster": "U+1F90F U+1F3FD"
+  },
+  "tonebase_1F918": {
+   "advance": 4,
+   "cluster": "U+1F918 U+1F3FD"
+  },
+  "tonebase_1F919": {
+   "advance": 4,
+   "cluster": "U+1F919 U+1F3FD"
+  },
+  "tonebase_1F91A": {
+   "advance": 4,
+   "cluster": "U+1F91A U+1F3FD"
+  },
+  "tonebase_1F91B": {
+   "advance": 4,
+   "cluster": "U+1F91B U+1F3FD"
+  },
+  "tonebase_1F91C": {
+   "advance": 4,
+   "cluster": "U+1F91C U+1F3FD"
+  },
+  "tonebase_1F91D": {
+   "advance": 4,
+   "cluster": "U+1F91D U+1F3FD"
+  },
+  "tonebase_1F91E": {
+   "advance": 4,
+   "cluster": "U+1F91E U+1F3FD"
+  },
+  "tonebase_1F91F": {
+   "advance": 4,
+   "cluster": "U+1F91F U+1F3FD"
+  },
+  "tonebase_1F926": {
+   "advance": 2,
+   "cluster": "U+1F926 U+1F3FD"
+  },
+  "tonebase_1F930": {
+   "advance": 4,
+   "cluster": "U+1F930 U+1F3FD"
+  },
+  "tonebase_1F931": {
+   "advance": 4,
+   "cluster": "U+1F931 U+1F3FD"
+  },
+  "tonebase_1F932": {
+   "advance": 4,
+   "cluster": "U+1F932 U+1F3FD"
+  },
+  "tonebase_1F933": {
+   "advance": 4,
+   "cluster": "U+1F933 U+1F3FD"
+  },
+  "tonebase_1F934": {
+   "advance": 4,
+   "cluster": "U+1F934 U+1F3FD"
+  },
+  "tonebase_1F935": {
+   "advance": 4,
+   "cluster": "U+1F935 U+1F3FD"
+  },
+  "tonebase_1F936": {
+   "advance": 4,
+   "cluster": "U+1F936 U+1F3FD"
+  },
+  "tonebase_1F937": {
+   "advance": 2,
+   "cluster": "U+1F937 U+1F3FD"
+  },
+  "tonebase_1F938": {
+   "advance": 2,
+   "cluster": "U+1F938 U+1F3FD"
+  },
+  "tonebase_1F939": {
+   "advance": 2,
+   "cluster": "U+1F939 U+1F3FD"
+  },
+  "tonebase_1F93C": {
+   "advance": 4,
+   "cluster": "U+1F93C U+1F3FD"
+  },
+  "tonebase_1F93D": {
+   "advance": 2,
+   "cluster": "U+1F93D U+1F3FD"
+  },
+  "tonebase_1F93E": {
+   "advance": 2,
+   "cluster": "U+1F93E U+1F3FD"
+  },
+  "tonebase_1F977": {
+   "advance": 4,
+   "cluster": "U+1F977 U+1F3FD"
+  },
+  "tonebase_1F9B5": {
+   "advance": 2,
+   "cluster": "U+1F9B5 U+1F3FD"
+  },
+  "tonebase_1F9B6": {
+   "advance": 2,
+   "cluster": "U+1F9B6 U+1F3FD"
+  },
+  "tonebase_1F9B8": {
+   "advance": 2,
+   "cluster": "U+1F9B8 U+1F3FD"
+  },
+  "tonebase_1F9B9": {
+   "advance": 2,
+   "cluster": "U+1F9B9 U+1F3FD"
+  },
+  "tonebase_1F9BB": {
+   "advance": 4,
+   "cluster": "U+1F9BB U+1F3FD"
+  },
+  "tonebase_1F9CD": {
+   "advance": 2,
+   "cluster": "U+1F9CD U+1F3FD"
+  },
+  "tonebase_1F9CE": {
+   "advance": 2,
+   "cluster": "U+1F9CE U+1F3FD"
+  },
+  "tonebase_1F9CF": {
+   "advance": 2,
+   "cluster": "U+1F9CF U+1F3FD"
+  },
+  "tonebase_1F9D1": {
+   "advance": 2,
+   "cluster": "U+1F9D1 U+1F3FD"
+  },
+  "tonebase_1F9D2": {
+   "advance": 2,
+   "cluster": "U+1F9D2 U+1F3FD"
+  },
+  "tonebase_1F9D3": {
+   "advance": 2,
+   "cluster": "U+1F9D3 U+1F3FD"
+  },
+  "tonebase_1F9D4": {
+   "advance": 2,
+   "cluster": "U+1F9D4 U+1F3FD"
+  },
+  "tonebase_1F9D5": {
+   "advance": 2,
+   "cluster": "U+1F9D5 U+1F3FD"
+  },
+  "tonebase_1F9D6": {
+   "advance": 2,
+   "cluster": "U+1F9D6 U+1F3FD"
+  },
+  "tonebase_1F9D7": {
+   "advance": 2,
+   "cluster": "U+1F9D7 U+1F3FD"
+  },
+  "tonebase_1F9D8": {
+   "advance": 2,
+   "cluster": "U+1F9D8 U+1F3FD"
+  },
+  "tonebase_1F9D9": {
+   "advance": 2,
+   "cluster": "U+1F9D9 U+1F3FD"
+  },
+  "tonebase_1F9DA": {
+   "advance": 2,
+   "cluster": "U+1F9DA U+1F3FD"
+  },
+  "tonebase_1F9DB": {
+   "advance": 2,
+   "cluster": "U+1F9DB U+1F3FD"
+  },
+  "tonebase_1F9DC": {
+   "advance": 2,
+   "cluster": "U+1F9DC U+1F3FD"
+  },
+  "tonebase_1F9DD": {
+   "advance": 2,
+   "cluster": "U+1F9DD U+1F3FD"
+  },
+  "tonebase_1FAC3": {
+   "advance": 4,
+   "cluster": "U+1FAC3 U+1F3FD"
+  },
+  "tonebase_1FAC4": {
+   "advance": 4,
+   "cluster": "U+1FAC4 U+1F3FD"
+  },
+  "tonebase_1FAC5": {
+   "advance": 4,
+   "cluster": "U+1FAC5 U+1F3FD"
+  },
+  "tonebase_1FAF0": {
+   "advance": 4,
+   "cluster": "U+1FAF0 U+1F3FD"
+  },
+  "tonebase_1FAF1": {
+   "advance": 4,
+   "cluster": "U+1FAF1 U+1F3FD"
+  },
+  "tonebase_1FAF2": {
+   "advance": 4,
+   "cluster": "U+1FAF2 U+1F3FD"
+  },
+  "tonebase_1FAF3": {
+   "advance": 4,
+   "cluster": "U+1FAF3 U+1F3FD"
+  },
+  "tonebase_1FAF4": {
+   "advance": 4,
+   "cluster": "U+1FAF4 U+1F3FD"
+  },
+  "tonebase_1FAF5": {
+   "advance": 4,
+   "cluster": "U+1FAF5 U+1F3FD"
+  },
+  "tonebase_1FAF6": {
+   "advance": 4,
+   "cluster": "U+1FAF6 U+1F3FD"
+  },
+  "tonebase_1FAF7": {
+   "advance": 4,
+   "cluster": "U+1FAF7 U+1F3FD"
+  },
+  "tonebase_1FAF8": {
+   "advance": 4,
+   "cluster": "U+1FAF8 U+1F3FD"
+  },
+  "tonebase_261D": {
+   "advance": 4,
+   "cluster": "U+261D U+1F3FD"
+  },
+  "tonebase_26F9": {
+   "advance": 4,
+   "cluster": "U+26F9 U+1F3FD"
+  },
+  "tonebase_270A": {
+   "advance": 4,
+   "cluster": "U+270A U+1F3FD"
+  },
+  "tonebase_270B": {
+   "advance": 4,
+   "cluster": "U+270B U+1F3FD"
+  },
+  "tonebase_270C": {
+   "advance": 4,
+   "cluster": "U+270C U+1F3FD"
+  },
+  "tonebase_270D": {
+   "advance": 4,
+   "cluster": "U+270D U+1F3FD"
+  }
+ },
+ "stamp": {
+  "env": {
+   "COLORTERM": "truecolor",
+   "TERM": "tmux-256color",
+   "TERM_PROGRAM": "tmux",
+   "TERM_PROGRAM_VERSION": "3.7b",
+   "TMUX": "/private/tmp/tmux-501/default,20187,0",
+   "TMUX_PANE": "%0",
+   "__CFBundleIdentifier": "com.anthropic.claudefordesktop"
+  },
+  "machine": "arm64",
+  "measured": "2026-08-28T09:57:51-07:00",
+  "method": "DSR cursor report \u2014 confirm any disagreement with visual_card.py",
+  "mode_2027_grapheme_clustering": "not recognised",
+  "os": "macOS 15.7.9",
+  "probe": "advance_probe.py",
+  "screen": "alternate"
+ }
+}

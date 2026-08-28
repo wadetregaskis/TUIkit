@@ -130,6 +130,21 @@ def cursor_col(fd):
     row, col = inner.split(b";")
     return int(col)
 
+def modifier_base_battery(path):
+    """--modifier-bases FILE: replace the battery with base+U+1F3FD rows for
+    every codepoint listed in FILE (hex, whitespace-separated), plus two
+    calibration controls. This is the tmux keep-set question: which bases does
+    the compositor merge into the 2-cell claim, and which does it detach? The
+    file should come from the toolchain's own Emoji_Modifier_Base enumeration
+    (swift -e over isEmojiModifierBase), because that is the set the strip
+    predicate can actually test at runtime."""
+    with open(path) as handle:
+        points = [int(token, 16) for token in handle.read().split()]
+    battery = {"ascii_a": "a", "cjk": "\u4E2D"}
+    for point in points:
+        battery["tonebase_%04X" % point] = chr(point) + "\U0001F3FD"
+    return battery
+
 def main():
     out_path = os.environ.get("PROBE_OUT", "advance_probe.json")
     fd = sys.stdin.fileno()
@@ -143,7 +158,11 @@ def main():
         # Before the battery: the stamp asks DECRQM, and a reply arriving mid
         # battery would be read as part of a cursor report.
         provenance = probe_stamp.stamp(fd, "advance_probe.py", use_alt)
-        for name, cluster in BATTERY.items():
+        battery = BATTERY
+        if "--modifier-bases" in sys.argv:
+            battery = modifier_base_battery(
+                sys.argv[sys.argv.index("--modifier-bases") + 1])
+        for name, cluster in battery.items():
             os.write(1, b"\r\x1b[2K")           # column 1, clear line
             start = cursor_col(fd)
             os.write(1, cluster.encode())

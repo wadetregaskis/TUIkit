@@ -689,15 +689,20 @@ extension Character {
     ///   Terminal.app and Warp.
     ///
     /// Everything else agrees: CJK 2, emoji-presentation 2, ZWJ families 2,
-    /// flag pairs 2, SMP + skin tone 2, NFD 1, powerline 1, blocks 1.
+    /// flag pairs 2, NFD 1, powerline 1, blocks 1.
     ///
-    /// Skin-tone clusters on a **BMP** base (✊🏻 = U+270A U+1F3FB) OVER-advance
-    /// at 4 — tmux declines to join them — but never reach this model: the
-    /// output path strips the modifier via ``String/withSkinToneFallback()``
-    /// first, exactly as on iTerm2 and Warp, after which the base advances 2 as
-    /// claimed. The one uncorrectable divergence is a bare ☝ (U+261D with no
-    /// selector): tmux advances 2 against a 1-cell claim, and CUF cannot claw a
-    /// cursor back. It is left alone and documented, as ZWJ is on Terminal.app.
+    /// Skin-tone clusters split **per base codepoint**
+    /// (``tmuxMergedToneBases``): 70 of the 134 modifier bases merge to the
+    /// 2-cell claim, the other 64 DETACH at 4 — the full sweep, 2026-08-28,
+    /// which replaced two successive wrong generalizations (a by-plane rule,
+    /// then a by-Unicode-era one). The detaching clusters never reach tmux:
+    /// the output path strips the modifier via
+    /// ``String/withSkinToneFallback(scope:)`` first (its one remaining live
+    /// customer — iTerm2 and Warp moved to detached claims), after which the
+    /// base advances 2 as claimed. The one uncorrectable divergence is a
+    /// bare ☝ (U+261D with no selector): tmux advances 2 against a 1-cell
+    /// claim, and CUF cannot claw a cursor back. It is left alone and
+    /// documented, as ZWJ is on Terminal.app.
     public var tmuxCursorAdvance: Int {
         let scalars = unicodeScalars
         if scalars.count == 1, let only = scalars.first {
@@ -712,8 +717,53 @@ extension Character {
         // a CUF here is exactly the set the predicate names.
         if isBarePictographUnderAdvancer { return 1 }
         if isLoneRegionalIndicator { return 1 }
+        // Fitzpatrick tones: 2 on a base tmux merges, 4 on one it detaches —
+        // per codepoint, the full modifier-base sweep (2026-08-28). The
+        // detaching ones are stripped before tmux ever sees them; this raw
+        // truth is for the oracles and the record-conformance test.
+        if scalars.contains(where: { (0x1F3FB...0x1F3FF).contains($0.value) }),
+            let first = scalars.first, first.properties.isEmojiModifierBase,
+            !scalars.contains(where: { $0.value == 0x200D || $0.value == 0x200C })
+        {
+            return Self.tmuxMergedToneBases.contains(first.value) ? 2 : 4
+        }
         return terminalWidth
     }
+
+    /// The Emoji_Modifier_Base codepoints tmux 3.7b MERGES with a following
+    /// Fitzpatrick modifier into the 2 cells TUIkit claims — 70 of the
+    /// toolchain's 134 — measured 2026-08-28 by
+    /// `advance_probe.py --modifier-bases` over the whole set, inside a
+    /// headless tmux with no client attached (safe because tmux's grid is
+    /// client-independent: five-way measured identical, 2026-07-15). The
+    /// committed record is `Tools/TerminalProbes/data/tmux-3.7b-tonebases.json`,
+    /// and `TmuxCompatibilityTests` pins this set against it row for row.
+    ///
+    /// The other 64 bases DETACH (advance 4 against the 2-cell claim), and
+    /// the strip (``String/withSkinToneFallback(scope:)``,
+    /// `.keepingTmuxMerged`) removes exactly those. The split is a
+    /// per-codepoint fact with no clean rule — TWO tidy generalizations
+    /// preceded this sweep and both were wrong: it is not by plane (🤙
+    /// U+1F919, SMP, detaches; 🧑 U+1F9D1, SMP, merges — which sank
+    /// `.detachedOnBMPBases` for tmux on 2026-08-26) and not by Unicode era
+    /// (🎅 U+1F385 of Unicode 6.0 detaches while 🤦 U+1F926 of 9.0 and the
+    /// whole 🧍…🧝 U+1F9CD–1F9DD run of 10.0+ merge, which sinks the
+    /// "tmux's tables predate the newer bases" hypothesis recorded with that
+    /// commit). The measured set is the rule.
+    static let tmuxMergedToneBases: Set<UInt32> = [
+        0x1F44B, 0x1F44C, 0x1F44D, 0x1F44E, 0x1F44F, 0x1F450,
+        0x1F466, 0x1F467, 0x1F468, 0x1F469, 0x1F46E, 0x1F470,
+        0x1F471, 0x1F472, 0x1F473, 0x1F474, 0x1F475, 0x1F476,
+        0x1F477, 0x1F478, 0x1F47C, 0x1F481, 0x1F482, 0x1F483,
+        0x1F485, 0x1F486, 0x1F487, 0x1F4AA, 0x1F575, 0x1F57A,
+        0x1F590, 0x1F595, 0x1F596, 0x1F645, 0x1F646, 0x1F647,
+        0x1F64B, 0x1F64C, 0x1F64D, 0x1F64E, 0x1F64F, 0x1F6B4,
+        0x1F6B5, 0x1F6B6, 0x1F926, 0x1F937, 0x1F938, 0x1F939,
+        0x1F93D, 0x1F93E, 0x1F9B5, 0x1F9B6, 0x1F9B8, 0x1F9B9,
+        0x1F9CD, 0x1F9CE, 0x1F9CF, 0x1F9D1, 0x1F9D2, 0x1F9D3,
+        0x1F9D4, 0x1F9D5, 0x1F9D6, 0x1F9D7, 0x1F9D8, 0x1F9D9,
+        0x1F9DA, 0x1F9DB, 0x1F9DC, 0x1F9DD,
+    ]
 
     /// Whether this character is a **bare** SMP pictograph — an emoji-capable
     /// scalar whose default presentation is TEXT (`Emoji=Yes`,

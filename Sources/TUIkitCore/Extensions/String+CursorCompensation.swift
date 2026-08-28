@@ -351,22 +351,26 @@ extension String {
         return result
     }
 
-    /// Which skin-tone clusters ``withSkinToneFallback(basePlane:)`` strips,
-    /// selected by the Unicode plane of the cluster's BASE scalar.
+    /// Which skin-tone clusters ``withSkinToneFallback(scope:)`` strips.
     ///
-    /// The distinction exists because terminals differ in *which* skin-tone
-    /// clusters they fail to join, and stripping one a terminal handles
+    /// The distinction exists because tmux differs per BASE CODEPOINT in
+    /// which skin-tone clusters it joins, and stripping one it handles
     /// correctly is a real loss: the user asked for 👍🏽 and gets 👍.
     ///
-    /// - ``all``: every skin-tone cluster (iTerm2, Warp — they split all of them).
-    /// - ``bmpOnly``: only clusters whose base is a BMP scalar (✊🏻 ☝🏽). This is
-    ///   tmux, which joins an SMP-based cluster (👍🏽 👩🏽‍🚀) into the 2 cells we
-    ///   claim — DSR-measured — and only over-advances (4 cells) on BMP bases.
-    public enum SkinToneBasePlane: Sendable {
+    /// - ``all``: every skin-tone cluster — the safe answer, and the right
+    ///   one whenever any attached client mis-renders a kept tone.
+    /// - ``keepingTmuxMerged``: strip only the clusters tmux DETACHES,
+    ///   keeping the 70 bases it was measured to merge into the 2-cell claim
+    ///   (``Swift/Character/tmuxMergedToneBases``). This replaced a by-plane
+    ///   rule (`bmpOnly`) on 2026-08-28, when the full modifier-base sweep
+    ///   showed the split is per-codepoint: 🤙 (SMP) detaches while 🧑 (also
+    ///   SMP) merges, so a plane test kept clusters tmux shears and the
+    ///   Fitzpatrick row rendered short exactly as before the strip existed.
+    public enum SkinToneFallbackScope: Sendable {
         /// Strip every skin-tone cluster, whatever its base.
         case all
-        /// Strip only clusters whose base scalar is in the BMP (below U+10000).
-        case bmpOnly
+        /// Strip only clusters whose base tmux was measured to detach.
+        case keepingTmuxMerged
     }
 
     /// Returns a copy of this string with Fitzpatrick skin-tone modifiers
@@ -392,14 +396,17 @@ extension String {
     /// intentional content — a 2-cell swatch, correctly claimed — and pass
     /// through untouched, as do ANSI escape sequences.
     ///
-    /// - Parameter basePlane: which bases to strip. `.all` (the default) is the
-    ///   iTerm2/Warp behaviour: those terminals split EVERY skin-tone cluster,
-    ///   so every one must go. `.bmpOnly` strips only clusters whose base is a
-    ///   BMP scalar (✊🏻 ☝🏽), which is what tmux needs — tmux joins an
-    ///   SMP-based cluster (👍🏽 👩🏽‍🚀) into the 2 cells we claim and only
-    ///   fails on BMP bases, so stripping those it gets right would throw away
-    ///   skin tones the user asked for and the client renders correctly.
-    public func withSkinToneFallback(basePlane: SkinToneBasePlane = .all) -> String {
+    /// Since the detached-claim widening (`TerminalWidthTraits`) this fires on
+    /// no native host: iTerm2 and Warp claim the cells their detached
+    /// renderings occupy, so their modifiers pass through, and the strip is
+    /// their no-traits-published fallback only. Its remaining live customer
+    /// is tmux, whose compositor grid the claims cannot follow per-client.
+    ///
+    /// - Parameter scope: which bases to strip. `.all` (the default) is the
+    ///   safe fallback. `.keepingTmuxMerged` keeps the bases tmux was
+    ///   measured to merge into the claim — used when every attached client
+    ///   also renders tmux's re-emission of them correctly.
+    public func withSkinToneFallback(scope: SkinToneFallbackScope = .all) -> String {
         // Fast path: a skin-tone cluster is always non-ASCII, so a line whose
         // bytes are all < 0x80 cannot need the fallback (same gate as
         // `withTerminalAppCursorCompensation` — this too runs on every
@@ -422,12 +429,12 @@ extension String {
             }
 
             let scalars = c.unicodeScalars
-            let baseIsBMP = (scalars.first?.value ?? 0) < 0x10000
+            let baseMerges = Character.tmuxMergedToneBases.contains(scalars.first?.value ?? 0)
             let isModifiedCluster =
                 scalars.count > 1
                 && scalars.first!.properties.isEmojiModifierBase
                 && scalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
-                && (basePlane == .all || baseIsBMP)
+                && (scope == .all || !baseMerges)
             if isModifiedCluster {
                 var keptVS16 = false
                 for scalar in scalars where !(0x1F3FB...0x1F3FF).contains(scalar.value) {

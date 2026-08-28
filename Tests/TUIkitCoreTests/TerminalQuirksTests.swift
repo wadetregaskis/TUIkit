@@ -99,20 +99,27 @@ struct TerminalQuirksTests {
     }
 
     @Test(
-        "Skin tones are stripped by plane, as each measured host needs",
+        "Skin tones are stripped by scope, as each measured host needs",
         arguments: [
             (TerminalQuirks.SkinTones.keep, true, true),
             (TerminalQuirks.SkinTones.stripAll, false, false),
-            (TerminalQuirks.SkinTones.stripBMPBases, true, false),
+            (TerminalQuirks.SkinTones.stripTmuxDetached, true, false),
         ])
-    func skinTonePlanes(setting: TerminalQuirks.SkinTones, keepsSMP: Bool, keepsBMP: Bool) {
+    func skinToneScopes(setting: TerminalQuirks.SkinTones, keepsMerged: Bool, keepsDetached: Bool) {
         var quirks = TerminalQuirks()
         quirks.skinTones = setting
-        // 👍🏽 has an SMP base; ✊🏻's is BMP — the distinction tmux needs.
-        let smp = "👍🏽".withCursorCompensation(for: quirks)
-        let bmp = "✊🏻".withCursorCompensation(for: quirks)
-        #expect(smp.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) } == keepsSMP)
-        #expect(bmp.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) } == keepsBMP)
+        // 👍 is a base tmux merges; ✊ and 🤙 are ones it detaches — and 🤙 is
+        // SMP, which is the row that proves the split is per codepoint, not
+        // per plane.
+        let merged = "👍🏽".withCursorCompensation(for: quirks)
+        let detachedBMP = "✊🏻".withCursorCompensation(for: quirks)
+        let detachedSMP = "🤙🏽".withCursorCompensation(for: quirks)
+        func hasTone(_ s: String) -> Bool {
+            s.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
+        }
+        #expect(hasTone(merged) == keepsMerged)
+        #expect(hasTone(detachedBMP) == keepsDetached)
+        #expect(hasTone(detachedSMP) == keepsDetached)
     }
 
     @Test("A pre-separated tone cluster prices its joiner under .pullBack too")
@@ -220,7 +227,7 @@ struct QuirkPermutationTests {
             skinTones: .stripAll, erasesUnderGlyphs: true)),
         ("tmux", TerminalQuirks(
             loneRegionalIndicators: true, planeSixteenPUA: true,
-            skinTones: .stripBMPBases)),
+            skinTones: .stripTmuxDetached)),
         ("zwj-alone", TerminalQuirks(zwjSequences: true)),
         ("tagflags-alone", TerminalQuirks(tagFlags: true)),
         ("trim-alone", TerminalQuirks(storesWideComposites: true)),
@@ -277,7 +284,7 @@ struct QuirkPermutationTests {
         let (name, quirks) = set
         switch quirks.skinTones {
         case .keep, .pullBack, .separate: break
-        case .stripAll, .stripBMPBases: return
+        case .stripAll, .stripTmuxDetached: return
         }
         TerminalWidthTraits.withTraits(quirks.widthTraits) {
             let emission = entry.text.withCursorCompensation(for: quirks)
