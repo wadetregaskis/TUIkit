@@ -459,7 +459,7 @@ before the render loop is built.
 > | class | claim | emission | on screen |
 > |---|---|---|---|
 > | tone, emoji-presentation base (🤙🏽 ✊🏿 👍🏽) | 5 | base + **ZWNJ** + modifier, no moves | base, one blank cell, swatch — tone kept |
-> | tone, text-presentation base (☝🏻 ✍🏿 ⛹🏾) | 5 | `ECH(5)` + **VS-16-promoted** base+ZWNJ+modifier + `CUF(1)` | emoji base, one blank cell, swatch — tone kept (2026-08-28; superseded the `CUB(int−2)` pull-back, which re-rendered the bare NARROW glyph beside a blank cell) |
+> | tone, text-presentation base (☝🏻 ✍🏿 ⛹🏾) | 5 | `ECH(5)` + **VS-16-promoted** base+ZWNJ+modifier + `CUF(1)` | emoji base and swatch ADJACENT, one trailing blank (painted by the ECH) — tone kept (2026-08-28; superseded the `CUB(int−2)` pull-back, which re-rendered the bare NARROW glyph beside a blank cell) |
 > | ZWJ sequence (👨‍👩‍👧‍👦 ❤️‍🔥 👩🏽‍🚀) | Σ segments | **decomposed** — joiners removed, each segment its own class | component glyphs |
 > | flag pair (🇺🇸), keycap (1️⃣) | 2 | cluster + `CUB(1)` `DCH(1)` `CUF(1)` | composed; surplus stored column deleted |
 > | tag flag (🏴󠁧󠁢󠁳󠁣󠁴󠁿) | 2 | cluster + `CUB(tags)` | aligned; bare 🏴 |
@@ -475,7 +475,30 @@ before the render loop is built.
 > lost) and the VS-16-promoted rewrite measured clean: promote the base to its
 > emoji-presentation form, and the cluster becomes an ordinary under-advancer
 > (internal 1+1+2 against a claim of 2+1+2) that the standard `ECH`+`CUF` arm
-> already handles (point-up cards 1–2). The `DCH` variants of the
+> already handles (point-up cards 1–2).
+>
+> **Where the ZWNJ's column lands differs by base — measured, both cards
+> user-read.** After an emoji-presentation base (🤙‌🏽) the ZWNJ paints its
+> own blank column MID-pair: base, gap, swatch. After a VS-16-promoted
+> text-presentation base (☝️‌🏻) it paints NOTHING — the pair renders
+> adjacent and the spare column trails the swatch, covered by the emission's
+> `ECH(5)`. A redundant VS-16 added to an emoji-presentation base does NOT
+> buy the adjacent form: 🤙️‌🏽 renders identically to 🤙‌🏽, gap mid-pair,
+> same net 5 (adjacency card, 2026-08-28).
+>
+> **The separator hunt (2026-08-28) — negative result, recorded so it stays
+> settled.** Looking for a gap-free separator: U+200B ZWSP, U+2060 WORD
+> JOINER, U+00AD SOFT HYPHEN and U+FEFF each cost an internal column exactly
+> as ZWNJ does (net 5). U+034F COMBINING GRAPHEME JOINER composes straight
+> through — the cluster renders as the merged toned glyph at internal 4 /
+> paint 2, the raw cluster's displacement profile: its CHA-60 follower
+> painted two cells left, and a full-width row budgeted at its measured
+> advance ended two cells short of the edge with the background unpainted in
+> both. Reversing the pair (modifier first, net 4, adjacent) is unsafe: a
+> leading modifier sits beside whatever PRECEDES the cluster on the row, and
+> this terminal composes tone pairs even across cursor moves. The ZWNJ's
+> column is the price of separation; on promoted text-presentation bases it
+> at least trails rather than splitting the pair. The `DCH` variants of the
 > over-advancing classes all wrapped at the row edge and re-rendered bare, so
 > DCH is confined to the two classes whose internal column already matches the
 > claim.

@@ -260,9 +260,13 @@ extension Character {
     /// measured (save/restore-cursor, an SGR, an 80 ms flush gap, absolute
     /// re-positioning) left base and modifier adjacent in the row's stored
     /// text, and Terminal.app composed them again, paint displacement and all.
-    /// ZWNJ is the one that sticks, at the cost of its own blank column
-    /// between base and swatch (treatment cards 1–3, Terminal.app 455.1,
-    /// 2026-08-27).
+    /// ZWNJ is the one that sticks, at the cost of one blank column — painted
+    /// mid-pair after an emoji-presentation base, trailing the swatch after a
+    /// VS-16-promoted one (treatment cards 1–3 2026-08-27; point-up and
+    /// adjacency cards 2026-08-28, which also ruled out every alternative:
+    /// ZWSP/WJ/SHY/BOM-class separators each cost the same column, CGJ
+    /// composes straight through into the displacing raw-cluster profile, and
+    /// a reversed pair could soak up tone from whatever precedes it).
     ///
     /// A text-presentation base (☝🏻 ✍🏿 ⛹🏾) is **promoted with VS-16**: the
     /// bare rewrite was measured to misalign (☝+ZWNJ+🏻 paints wrong), and the

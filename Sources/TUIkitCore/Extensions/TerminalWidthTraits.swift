@@ -61,9 +61,12 @@ public struct TerminalWidthTraits: Sendable, Equatable {
         /// iTerm2 and tmux.
         case detachedOnBMPBases
         /// The output walk rewrites every Fitzpatrick cluster as base + ZWNJ +
-        /// modifier, and on the one host measured to need it the ZWNJ itself
-        /// occupies a column, so the cluster renders as base, one blank cell,
-        /// then the swatch — the base's promoted width **plus three**.
+        /// modifier, and on the one host measured to need it the ZWNJ costs a
+        /// column, so the cluster claims the base's promoted width **plus
+        /// three**. Where the extra column LANDS differs by base: after an
+        /// emoji-presentation base the ZWNJ paints its own blank column
+        /// mid-pair (base, gap, swatch); after a VS-16-promoted one the pair
+        /// renders adjacent and the spare column trails the swatch.
         ///
         /// An emoji-presentation base (🤙🏽 ✊🏿 👍🏽) is emitted as written. A
         /// text-presentation base (☝🏻 ✍🏿 ⛹🏾) is **promoted with VS-16**
