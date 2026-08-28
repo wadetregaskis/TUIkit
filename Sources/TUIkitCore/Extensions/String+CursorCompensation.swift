@@ -158,6 +158,12 @@ extension String {
     /// in which a modifier could only "survive" as the line's last visible
     /// character; since 2026-08-27 every modifier survives, via separation.)
     public var containsTerminalAppCursorAdvanceQuirk: Bool {
+        // Every quirk cluster is non-ASCII, so a pure-ASCII row cannot
+        // contain one — the same byte gate as the walks, which this check
+        // lacked: it ran the full per-Character advance-model walk over
+        // every changed row on Apple Terminal, including the plain-ASCII
+        // majority.
+        guard utf8ContainsNonASCII else { return false }
         var index = startIndex
         while index < endIndex {
             if self[index] == "\u{1B}" {
@@ -443,12 +449,16 @@ extension String {
             }
 
             let scalars = c.unicodeScalars
-            let baseMerges = Character.tmuxMergedToneBases.contains(scalars.first?.value ?? 0)
+            // Cheapest test first: the Fitzpatrick range scan is plain
+            // integer compares, where `isEmojiModifierBase` is an ICU
+            // property lookup — and most multi-scalar clusters on a line
+            // (CJK+VS, NFD text) have no modifier at all.
             let isModifiedCluster =
                 scalars.count > 1
-                && scalars.first!.properties.isEmojiModifierBase
                 && scalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
-                && (scope == .all || !baseMerges)
+                && scalars.first!.properties.isEmojiModifierBase
+                && (scope == .all
+                    || !Character.tmuxMergedToneBases.contains(scalars.first!.value))
             if isModifiedCluster {
                 var keptVS16 = false
                 for scalar in scalars where !(0x1F3FB...0x1F3FF).contains(scalar.value) {

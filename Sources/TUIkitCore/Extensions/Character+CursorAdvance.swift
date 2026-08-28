@@ -628,6 +628,9 @@ extension Character {
         // and Apple Terminal, iTerm2 and Ghostty advance all 113 by 2. The
         // ECH+CUF under-advance repair covers them like any other.
         if unicodeScalars.count == 1, let only = unicodeScalars.first,
+            // Range guard before the set: the seven all sit in 1FA89…1FAE9,
+            // so every other single-scalar character skips the set hash.
+            (0x1FA89...0x1FAE9).contains(only.value),
             Self.unicode16EmojiWarpDoesNotKnow.contains(only.value)
         {
             return 1

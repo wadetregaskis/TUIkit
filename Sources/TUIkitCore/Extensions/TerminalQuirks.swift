@@ -267,7 +267,11 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
 
     /// A flag: exactly two regional indicators.
     static func isFlagPair(_ cluster: Character) -> Bool {
-        let scalars = Array(cluster.unicodeScalars)
+        // On the scalar view directly — no Array. This runs inside
+        // `terminalAppStoresWiderThanPainted`, which the Apple walk asks for
+        // every visible character of every non-ASCII output line, and the
+        // Array copy was a heap allocation per character on that path.
+        let scalars = cluster.unicodeScalars
         return scalars.count == 2 && scalars.allSatisfy { (0x1F1E6...0x1F1FF).contains($0.value) }
     }
 }
