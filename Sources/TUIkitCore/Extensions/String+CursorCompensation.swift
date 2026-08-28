@@ -473,17 +473,20 @@ extension String {
         withCursorForwardCompensation(erasingUnderGlyph: true) { $0.ghosttyCursorAdvance }
     }
 
-    /// Returns a copy of this string with Warp's lone-regional-indicator
-    /// under-advance worked around by CUF injection. No `ECH` here, unlike
-    /// iTerm2 and Ghostty: whether Warp leaves the skipped cell's
-    /// background unpainted is not yet measured, and an unmeasured host is
-    /// assumed to render correctly. Warp's other divergences are
-    /// OVER-advances (keycaps, 〰️/〽️, ZWJ) which no CUF can correct, or
+    /// Returns a copy of this string with Warp's under-advances (lone
+    /// regional indicators, SF Symbols, bare pictographs) worked around by
+    /// the same `ECH` + glyph + `CUF` treatment as the other hosts. The
+    /// erase is measured here too (2026-08-28): a lone 🇦's ink spans both
+    /// claimed cells but its cursor advance covers one, and with `CUF`
+    /// alone the second cell kept the default background under the glyph's
+    /// right half — the iTerm2 SF Symbol shape exactly; both the `ECH` and
+    /// styled-space variants filled it. Warp's other divergences are
+    /// OVER-advances (keycaps, 〰️/〽️) which no CUF can correct, or
     /// skin-tone clusters — stripped first by ``withSkinToneFallback()``
     /// when the claim in force cannot hold them.
     /// ANSI escape sequences are preserved.
     public func withWarpCursorCompensation() -> String {
-        withCursorForwardCompensation { $0.warpCursorAdvance }
+        withCursorForwardCompensation(erasingUnderGlyph: true) { $0.warpCursorAdvance }
     }
 
     /// Returns a copy of this string with tmux's cursor-advance divergences
@@ -527,9 +530,11 @@ extension String {
     ///     same hole under the cells their under-advancers skip — every SF
     ///     Symbol on both, plus keycaps and VS-16 clusters on iTerm2 — so the
     ///     earlier claim that only Terminal.app needed the erase was wrong: it
-    ///     had simply never been measured on a coloured run elsewhere. It
-    ///     stays a parameter because Warp and tmux remain unmeasured, and an
-    ///     unmeasured terminal is assumed to paint correctly.
+    ///     had simply never been measured on a coloured run elsewhere. Warp
+    ///     followed the same day (a lone 🇦 left the default background under
+    ///     the glyph's right half). It stays a parameter because tmux remains
+    ///     unmeasured, and an unmeasured terminal is assumed to paint
+    ///     correctly.
     ///   - advance: The host's cursor advance for a character.
     func withCursorForwardCompensation(
         erasingUnderGlyph: Bool = false,

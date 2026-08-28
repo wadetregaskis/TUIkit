@@ -935,7 +935,11 @@ and the *composed* classes wrong.
   feature box: the skin-toned 👍🏽 sheared the box's right border two cells
   out of place. Handled by the shared `withSkinToneFallback()` strip.
 - **Lone regional indicator** (🇦) advances 1 against a claim of 2 — same as
-  Terminal.app; CUF via `withWarpCursorCompensation()`.
+  Terminal.app; ECH(2)+CUF(1) via `withWarpCursorCompensation()`. The erase
+  is measured (2026-08-28, Warp tone card): with CUF alone the second cell
+  kept the default background under the right half of the glyph's ink — the
+  iTerm2 SF Symbol shape — and both the ECH and styled-space variants filled
+  it, glyph intact.
 - **OVER-advancers, unhandled** (no escape can pull a cursor back to a
   column the glyph has already painted over):
   keycaps 1️⃣ #️⃣ *️⃣ advance **3**; 〰️ 〽️ advance **3**; ZWJ 👩‍🚀
@@ -1516,9 +1520,10 @@ under their second cell on both iTerm2 and Ghostty), then card-measured
   it measured harmless.
 
 `withITerm2CursorCompensation` and `withGhosttyCursorCompensation` now use the
-same `ECH` + glyph + `CUF` shape as Terminal.app. Warp (lone RI, its only
-`CUF` class) and tmux remain bare-`CUF` pending the same coloured-run
-measurement.
+same `ECH` + glyph + `CUF` shape as Terminal.app — and `withWarpCursorCompensation`
+followed the same day, when the Warp tone card showed a lone 🇦 with the
+default background under the right half of its ink. Only tmux remains
+bare-`CUF`, pending the same coloured-run measurement.
 
 ECH rather than "n spaces, then CUB(n)", which also works and was tried first:
 the spaces are visible CHARACTERS, so every width measured after compensation —

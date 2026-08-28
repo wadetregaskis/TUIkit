@@ -143,15 +143,16 @@ struct GhosttyWarpCompatibilityTests {
         // Without the model fix every one of these is a no-op and the "|"
         // lands a cell early — the shear this whole class is about.
         let raw = "\u{1F5A5}|"
-        // Terminal.app, iTerm2 and Ghostty erase the pair of cells first —
-        // all three are measured to leave the cell their cursor skips at the
-        // default background on a coloured run (Apple 2026-08-26, the other
-        // two 2026-08-28). Warp is unmeasured on that question, so its walk
-        // keeps the bare CUF. The advance is identical either way.
+        // Every native host erases the pair of cells first — all four are
+        // measured to leave the cell their cursor skips at the default
+        // background on a coloured run (Apple 2026-08-26; iTerm2, Ghostty
+        // and Warp 2026-08-28 — on Warp the hole sat under the right half of
+        // a lone regional indicator's ink). The advance is identical either
+        // way; tmux stays bare-CUF, unmeasured.
         #expect(raw.withTerminalAppCursorCompensation() == "\u{1B}[2X\u{1F5A5}\u{1B}[1C|")
         #expect(raw.withITerm2CursorCompensation() == "\u{1B}[2X\u{1F5A5}\u{1B}[1C|")
         #expect(raw.withGhosttyCursorCompensation() == "\u{1B}[2X\u{1F5A5}\u{1B}[1C|")
-        #expect(raw.withWarpCursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
+        #expect(raw.withWarpCursorCompensation() == "\u{1B}[2X\u{1F5A5}\u{1B}[1C|")
         // The erase writes no visible characters, so every width measured
         // after compensation still counts the cells the row occupies.
         #expect(raw.withTerminalAppCursorCompensation().strippedLength == raw.strippedLength)

@@ -76,7 +76,7 @@ struct ClientPickerView: View {
         case .ghostty:
             "ECH+CUF for VS-15 chrome and SF Symbols; keeps skin tones"
         case .warp:
-            "CUF for lone regional indicators; tones detach as swatches"
+            "ECH+CUF for lone RI, SF Symbols, bare pictographs; tones detach as swatches"
         case .tmux:
             "compositor: its own grid, its own model; strips BMP-base skin tones"
         case .unidentified:
