@@ -446,16 +446,24 @@ extension Character {
     /// and Ghostty respectively) but mishandles the composed-emoji classes:
     ///
     /// - **Fitzpatrick skin tones** paint base + a separate swatch at 4 cells
-    ///   (3 for BMP bases) — the same shape as Terminal.app's Bug B, and
-    ///   handled the same way: the output path strips the modifiers via
-    ///   ``String/withSkinToneFallback()`` BEFORE this model is consulted, so
-    ///   they never reach the compensation walk.
+    ///   (3 for BMP bases) — the same shape as Terminal.app's Bug B. The
+    ///   published traits (`skinTone: .detached`) claim those cells, so the
+    ///   swatch passes through; the strip
+    ///   (``String/withSkinToneFallback()``) fires only when no traits were
+    ///   published and the old 2-cell claim is in force.
     /// - **Lone regional indicators** (🇦 alone) advance 1 against a claim of
-    ///   2 — same as Terminal.app; CUF fixes it.
-    /// - **Keycaps** (1️⃣, advance 3), **〰️/〽️** (advance 3) and **ZWJ
-    ///   sequences** (👩‍🚀 advances 5, 👩🏽‍🚀 7) OVER-advance. CUF cannot
-    ///   claw a cursor back and these paint wider than any claim, so they are
-    ///   left alone and documented, exactly as ZWJ is on Terminal.app.
+    ///   2 — same as Terminal.app; ECH(2)+CUF(1) fixes it (the erase since
+    ///   2026-08-28: the second cell kept the default background under the
+    ///   glyph's right half with CUF alone).
+    /// - **ZWJ sequences** advance the segment sum plus one column per kept
+    ///   joiner (👩‍🚀 5, 👩🏽‍🚀 7 raw) — Warp draws the components with the
+    ///   joiner's column blank between them. Since 2026-08-28 the walk drops
+    ///   the joiners (`decomposedDroppingJoiners`), so what is emitted are
+    ///   the segments themselves and this summed rule describes only a RAW
+    ///   cluster.
+    /// - **Keycaps** (1️⃣, advance 3) and **〰️/〽️** (advance 3) OVER-advance.
+    ///   CUF cannot claw a cursor back and these paint wider than any claim,
+    ///   so they are left alone and documented.
     ///   Warp additionally disagrees with itself across screen buffers (its
     ///   primary screen advances VS-16 by 1, the alternate by 2); the model
     ///   uses the alternate screen, where TUIkit apps run.

@@ -253,12 +253,16 @@ extension Character {
     /// the existing CUF close the gap, exactly as it does for a Ghostty SF
     /// Symbol that paints narrower than the layout allocated.
     ///
-    /// `nil` when this cluster is not a decomposed ZWJ sequence.
+    /// Deliberately NOT gated on ``TerminalWidthTraits``: the raw cluster
+    /// advances this way on the host regardless of what the walk chooses to
+    /// emit for it, and an earlier traits-gated Apple sibling silently
+    /// reverted the model when the claim-widening was turned off. The caller
+    /// (a per-host advance model) is the gate.
+    ///
+    /// `nil` when this cluster is not a ZWJ sequence.
     static func summedZWJAdvance(
         _ character: Character, segmentAdvance: (Character) -> Int
     ) -> Int? {
-        guard TerminalWidthTraits.current.zwjSequences == .decomposedKeepingJoiners
-        else { return nil }
         let scalars = character.unicodeScalars
         guard scalars.contains(where: { $0.value == 0x200D }) else { return nil }
         var total = 0

@@ -544,20 +544,12 @@ extension String {
         // same gate as the Terminal.app walk).
         guard utf8ContainsNonASCII else { return self }
 
+        let traits = TerminalWidthTraits.current
         var result = ""
         result.reserveCapacity(self.count + 8)
         var index = startIndex
 
-        while index < endIndex {
-            let c = self[index]
-
-            if c == "\u{1B}" {
-                let seqStart = index
-                index = csiSequenceEnd(from: index)
-                result += self[seqStart..<index]
-                continue
-            }
-
+        func appendCompensated(_ c: Character) {
             let claimed = c.terminalWidth
             let actual = advance(c)
             if claimed > actual, erasingUnderGlyph {
@@ -572,6 +564,34 @@ extension String {
             result.append(c)
             if claimed > actual {
                 result += "\u{1B}[\(claimed - actual)C"
+            }
+        }
+
+        while index < endIndex {
+            let c = self[index]
+
+            if c == "\u{1B}" {
+                let seqStart = index
+                index = csiSequenceEnd(from: index)
+                result += self[seqStart..<index]
+                continue
+            }
+
+            // Software ZWJ decomposition, exactly as in the Apple walk: when
+            // the host's traits say the walk drops the joiners (Warp,
+            // 2026-08-28 — the joiner columns were the gaps between the
+            // components it draws anyway, and the dropped forms measured
+            // aligned for sequential AND absolute followers), each segment is
+            // emitted and compensated on its own. Hosts whose traits compose
+            // (iTerm2, Ghostty, tmux) never enter this branch.
+            if traits.zwjSequences == .decomposedDroppingJoiners,
+                let segments = c.emojiZWJSegments
+            {
+                for segment in segments {
+                    appendCompensated(segment)
+                }
+            } else {
+                appendCompensated(c)
             }
             index = self.index(after: index)
         }

@@ -942,16 +942,27 @@ and the *composed* classes wrong.
   it, glyph intact.
 - **OVER-advancers, unhandled** (no escape can pull a cursor back to a
   column the glyph has already painted over):
-  keycaps 1️⃣ #️⃣ *️⃣ advance **3**; 〰️ 〽️ advance **3**; ZWJ 👩‍🚀
-  advances **5**, ❤️‍🔥 **5**, 👩🏽‍🚀 **7**.
+  keycaps 1️⃣ #️⃣ *️⃣ advance **3**; 〰️ 〽️ advance **3**.
 
-  ⚠️ **Warp's ZWJ over-advance is the real one, and it is Warp's alone.**
-  Warp does not compose ZWJ sequences — it draws the components, 👩 then 🚀 —
-  so paint and advance agree with each other and disagree with the claim, and
-  rows genuinely shift right. This was recorded as "equally unhandled on
-  Terminal.app (5/4/7)"; it is not. Terminal.app composes the cluster into 2
-  cells and only its DSR report runs ahead, so its rows do not shear. See
-  *ZWJ: where DSR lies*. Keycaps and 〰️ remain Warp-specific and DO shear.
+  **ZWJ sequences left this list on 2026-08-28 — the walk drops the joiners
+  in software.** Warp does not compose ZWJ sequences: it draws the
+  components with each kept joiner occupying a blank column between them
+  (👩‍🚀 advances 5 raw = 2+1+2), which first became the
+  `decomposedKeepingJoiners` claim (2026-08-26, rows align but the joiner
+  columns read as gaps) and is now emitted with the joiners removed —
+  claim and advance are the bare segment sums (👨‍👩‍👧‍👦 8, 👩🏽‍🚀 6,
+  ❤️‍🔥 4, 🏳️‍🌈 4). Card-measured (Warp ZWJ + tone cards, user-read):
+  every dropped form renders the same components adjacent, gap-free, with
+  sequential and absolute followers landing true, and full decomposition
+  was the user's preferred rendering. One anomaly on the first card — the
+  dropped toned astronaut's CHA follower one cell left — did NOT reproduce
+  on the isolation card (👩🏽 alone / +🚀 / +😀 / +ASCII all true); if it
+  resurfaces, that card is the instrument.
+
+  ⚠️ Terminal.app's ZWJ story is different: it COMPOSES the glyph and only
+  its column accounting runs ahead, so its decomposition exists to keep the
+  store honest — see *ZWJ: where DSR lies*. Keycaps and 〰️ remain
+  Warp-specific and DO shear.
 - ⚠️ **Warp disagrees with itself across screen buffers** — more than any
   other terminal measured. Primary advances VS-16 by 1, alternate by 2;
   keycaps 1 vs 3; ZWJ 4/3/6 vs 5/5/7. The models use the **alternate**

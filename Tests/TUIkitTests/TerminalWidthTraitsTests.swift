@@ -18,6 +18,12 @@ import Testing
 struct TerminalWidthTraitsTests {
 
     private static let warp = TerminalWidthTraits(
+        zwjSequences: .decomposedDroppingJoiners, skinTone: .detached)
+    /// The raw-cluster truth on Warp (and the explorer's option): each kept
+    /// joiner costs a column. The SHIPPED Warp walk drops the joiners instead
+    /// (2026-08-28), so `Self.warp` above mirrors `widthTraits(of: .warp)`
+    /// while this pins the keeping arithmetic on its own.
+    private static let warpKeptJoiners = TerminalWidthTraits(
         zwjSequences: .decomposedKeepingJoiners, skinTone: .detached)
     // Apple Terminal's walk REWRITES the two classes below (ZWJ decomposition
     // dropping the joiners, skin-tone separation with a ZWNJ column), so its
@@ -31,7 +37,7 @@ struct TerminalWidthTraitsTests {
     // MARK: - The measured widths
 
     @Test(
-        "Warp's decomposed ZWJ widths are the sum of the segments plus a cell per joiner",
+        "Kept-joiner ZWJ widths are the segment sum plus a cell per joiner (Warp's raw clusters)",
         arguments: [
             ("👩‍🚀", 5), ("🧑‍🌾", 5), ("👩‍🦰", 5), ("❤️‍🔥", 5),
             ("⛓️‍💥", 5), ("🏳️‍🌈", 5), ("🏴‍☠️", 5),
@@ -41,6 +47,22 @@ struct TerminalWidthTraitsTests {
             ("👩🏽‍🚀", 7),
         ] as [(String, Int)])
     func warpZWJWidths(text: String, expected: Int) {
+        TerminalWidthTraits.withTraits(Self.warpKeptJoiners) {
+            #expect(Character(text).terminalWidth == expected)
+        }
+    }
+
+    /// What Warp ships now: the walk drops the joiners, so the claim is the
+    /// bare segment sum — card-measured 2026-08-28, every dropped form
+    /// rendering the same components adjacent with followers and the CHA
+    /// landing true.
+    @Test(
+        "Warp's shipped ZWJ widths drop the joiners",
+        arguments: [
+            ("👩‍🚀", 4), ("❤️‍🔥", 4), ("🏳️‍🌈", 4),
+            ("👨‍👩‍👧‍👦", 8), ("👩🏽‍🚀", 6),
+        ] as [(String, Int)])
+    func warpDroppedZWJWidths(text: String, expected: Int) {
         TerminalWidthTraits.withTraits(Self.warp) {
             #expect(Character(text).terminalWidth == expected)
         }
@@ -242,14 +264,33 @@ struct TerminalWidthTraitsTests {
         }
     }
 
+    /// Warp's walk drops the ZWJ joiners in software (2026-08-28): the
+    /// components render adjacent (the kept joiner's column was just a gap),
+    /// claims equal the segment sums, and the card measured sequential and
+    /// absolute followers landing true for every dropped form.
+    @Test(
+        "Warp's walk emits ZWJ sequences as their segments, joiners dropped",
+        arguments: [
+            ("👩\u{200D}🚀", "👩🚀"),
+            ("👨\u{200D}👩\u{200D}👧\u{200D}👦", "👨👩👧👦"),
+            ("❤️\u{200D}🔥", "❤️🔥"),
+            ("👩🏽\u{200D}🚀", "👩🏽🚀"),
+        ] as [(String, String)])
+    func warpDropsJoiners(text: String, emission: String) {
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: .warp)) {
+            let out = TerminalClient.compensating(text, for: .warp)
+            #expect(out == emission, "|\(out)|")
+        }
+    }
+
     /// Claim equals advance for these classes, so the compensation machinery
     /// has nothing to do — no CUF, no ECH, no rewrite. That is the test that
     /// says the two models agree rather than fighting.
     @Test(
         "A claimed cluster needs no compensation at all",
         arguments: [
-            (TerminalClient.Program.warp, "👩‍🚀"),
-            (.warp, "👨‍👩‍👧‍👦"),
+            (TerminalClient.Program.warp, "👨👩👧👦"),
+            (.warp, "👩🏽🚀"),
             (.warp, "✊🏻"),
 
             (.iTerm2, "✊🏻"),
@@ -272,7 +313,7 @@ struct TerminalWidthTraitsTests {
     @Test("A scoped pin does not outlive its scope")
     func pinIsScoped() {
         TerminalWidthTraits.withTraits(Self.warp) {
-            #expect(Character("👩‍🚀").terminalWidth == 5)
+            #expect(Character("👩‍🚀").terminalWidth == 4)
         }
         #expect(Character("👩‍🚀").terminalWidth == 2, "the pin must not have escaped")
     }
@@ -392,7 +433,7 @@ struct TerminalWidthTraitsTests {
 @Suite("Terminal width traits — process-wide", .serialized)
 struct TerminalWidthTraitsProcessTests {
 
-    private static let warp = TerminalWidthTraits(
+    private static let keptJoiners = TerminalWidthTraits(
         zwjSequences: .decomposedKeepingJoiners, skinTone: .detached)
 
     @Test("Changing the process traits bumps the generation; a no-op change does not")
@@ -402,11 +443,11 @@ struct TerminalWidthTraitsProcessTests {
         let saved = TerminalWidthTraits.current
         defer { TerminalWidthTraits.current = saved }
 
-        TerminalWidthTraits.current = Self.warp
+        TerminalWidthTraits.current = Self.keptJoiners
         let afterChange = TerminalWidthTraits.generation
         #expect(afterChange > before, "a real change must bump the generation")
 
-        TerminalWidthTraits.current = Self.warp
+        TerminalWidthTraits.current = Self.keptJoiners
         #expect(
             TerminalWidthTraits.generation == afterChange,
             "assigning the same value must not invalidate every cache in the process")
@@ -417,7 +458,7 @@ struct TerminalWidthTraitsProcessTests {
         // A pin is scoped to the work that opted into it; the render path did
         // not, so bumping here would drop every cache for a test's benefit.
         let before = TerminalWidthTraits.generation
-        TerminalWidthTraits.withTraits(Self.warp) {
+        TerminalWidthTraits.withTraits(Self.keptJoiners) {
             #expect(Character("👩‍🚀").terminalWidth == 5)
         }
         #expect(TerminalWidthTraits.generation == before)
@@ -433,7 +474,7 @@ struct TerminalWidthTraitsProcessTests {
             TerminalWidthTraits.current = savedTraits
         }
         TerminalClient.simulated = .warp
-        #expect(TerminalWidthTraits.current.zwjSequences == .decomposedKeepingJoiners,
+        #expect(TerminalWidthTraits.current.zwjSequences == .decomposedDroppingJoiners,
                 "the picker must move the claim, not just the compensation")
         TerminalClient.simulated = .ghostty
         #expect(TerminalWidthTraits.current == .composing)

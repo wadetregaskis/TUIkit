@@ -89,10 +89,13 @@ public struct TerminalWidthTraits: Sendable, Equatable {
         case composed
         /// Each segment drawn separately, with the joiner itself taking a
         /// column: the claim is the sum of the segments **plus one per
-        /// joiner**. Measured on Warp, where this predicts every case exactly
-        /// — 👩‍🚀 = 2+1+2 = 5, 👨‍👩‍👧‍👦 = 11, 👩🏽‍🚀 = 4+1+2 = 7 (the
+        /// joiner**. Measured on Warp, where this predicts every RAW cluster
+        /// exactly — 👩‍🚀 = 2+1+2 = 5, 👨‍👩‍👧‍👦 = 11, 👩🏽‍🚀 = 4+1+2 = 7 (the
         /// skin-toned segment resolving through ``skinTone``, which is why the
-        /// two rules compose instead of duplicating each other).
+        /// two rules compose instead of duplicating each other). Warp's
+        /// SHIPPED walk drops the joiners instead since 2026-08-28 (the kept
+        /// joiner's column was just a gap between the components); this case
+        /// remains the raw-cluster truth and the explorer's option.
         case decomposedKeepingJoiners
         /// The output walk REMOVES the joiners and emits the segments as
         /// independent clusters, so the claim is the sum of the segments and
@@ -101,7 +104,9 @@ public struct TerminalWidthTraits: Sendable, Equatable {
         /// its column accounting decomposes every ZWJ sequence whatever we do,
         /// and every cursor-move repair that let the composed glyph stand was
         /// measured to leave later absolute positioning on the row displaced,
-        /// so the walk decomposes in software instead.
+        /// so the walk decomposes in software instead. Also Warp since
+        /// 2026-08-28: it draws components either way, and dropping the
+        /// joiners removes the blank column each one cost.
         case decomposedDroppingJoiners
     }
 

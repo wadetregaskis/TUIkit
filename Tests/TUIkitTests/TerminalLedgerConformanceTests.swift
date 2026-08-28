@@ -223,6 +223,17 @@ struct TerminalLedgerConformanceTests {
         TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: ledger.program)) {
             for (id, measurement) in ledger.measurements.sorted(by: { $0.key < $1.key }) {
                 guard let entry = Self.corpus[id] else { continue }
+                // A cluster the walk REWRITES never reaches the terminal raw,
+                // so the raw landing this ledger recorded no longer describes
+                // what is emitted: under joiner-dropping traits a ZWJ sequence
+                // goes out as its segments, each of which satisfies this
+                // invariant on its own. (Warp since 2026-08-28, Apple since
+                // 2026-08-27.)
+                if TerminalWidthTraits.current.zwjSequences == .decomposedDroppingJoiners,
+                    entry.character.emojiZWJSegments != nil
+                {
+                    continue
+                }
                 let claim = entry.character.terminalWidth
                 withKnownIssue(
                     "\(ledger)/\(id) is a recorded divergence",

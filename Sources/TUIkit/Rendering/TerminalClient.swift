@@ -284,7 +284,15 @@ public struct TerminalClient: Sendable, Equatable {
             // The one host that composes everything.
             .composing
         case .warp:
-            TerminalWidthTraits(zwjSequences: .decomposedKeepingJoiners, skinTone: .detached)
+            // Dropping rather than keeping the joiners (changed 2026-08-28):
+            // Warp never composes a ZWJ sequence — it draws the components
+            // with each kept joiner occupying a blank column between them —
+            // so removing the joiners removes the gaps and nothing else.
+            // Card-measured: every dropped form renders the same components
+            // adjacent, nets exactly the segment sum (👨‍👩‍👧‍👦 8, 👩🏽‍🚀 6,
+            // ❤️‍🔥 4, 🏳️‍🌈 4), and lands sequential AND absolute followers
+            // true. The user judged the dropped forms strictly superior.
+            TerminalWidthTraits(zwjSequences: .decomposedDroppingJoiners, skinTone: .detached)
         case .tmux:
             // NOT widened, deliberately. Measured 2026-08-26, tmux 3.7b does
             // not split by base plane the way iTerm2 does: 👍🏽 🙏🏽 👋🏽 merge
