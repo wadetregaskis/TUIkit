@@ -263,21 +263,24 @@ struct CursorAdvanceModelTests {
         #expect(Character("\u{2B1B}\u{FE0E}").iTerm2CursorAdvance == 2)  // ⬛︎ (VS-15)
     }
 
-    @Test("iTerm2 compensation CUFs keycaps, PUA, and VS-16 clusters")
+    @Test("iTerm2 compensation erases under keycaps, PUA, and VS-16 clusters")
     func iTerm2CompensationWalk() {
+        // ECH + glyph + CUF, the Terminal.app shape: iTerm2 too paints only
+        // the single cell its cursor advance covers, so without the erase the
+        // second cell keeps the default background (measured 2026-08-28).
         let keycap = "a1\u{FE0F}\u{20E3}b".withITerm2CursorCompensation()
-        #expect(keycap == "a1\u{FE0F}\u{20E3}\u{1B}[1Cb", "|\(keycap)|")
+        #expect(keycap == "a\u{1B}[2X1\u{FE0F}\u{20E3}\u{1B}[1Cb", "|\(keycap)|")
         let pua = "[\u{100038}]".withITerm2CursorCompensation()
-        #expect(pua == "[\u{100038}\u{1B}[1C]", "|\(pua)|")
+        #expect(pua == "[\u{1B}[2X\u{100038}\u{1B}[1C]", "|\(pua)|")
         // The demo's Bug A shape: the CUF pushes the closing bracket clear
         // of the glyph's second cell (alternate-screen under-advance).
         let heart = "[\u{2764}\u{FE0F}]".withITerm2CursorCompensation()
-        #expect(heart == "[\u{2764}\u{FE0F}\u{1B}[1C]", "|\(heart)|")
+        #expect(heart == "[\u{1B}[2X\u{2764}\u{FE0F}\u{1B}[1C]", "|\(heart)|")
         let wavy = "[\u{3030}\u{FE0F}]".withITerm2CursorCompensation()
-        #expect(wavy == "[\u{3030}\u{FE0F}]", "EAW exception, no CUF: |\(wavy)|")
+        #expect(wavy == "[\u{3030}\u{FE0F}]", "EAW exception, no rewrite: |\(wavy)|")
         // ANSI escapes pass through; pure ASCII is the identity fast path.
         let styled = "\u{1B}[31m\u{100038}\u{1B}[0m".withITerm2CursorCompensation()
-        #expect(styled == "\u{1B}[31m\u{100038}\u{1B}[1C\u{1B}[0m", "|\(styled)|")
+        #expect(styled == "\u{1B}[31m\u{1B}[2X\u{100038}\u{1B}[1C\u{1B}[0m", "|\(styled)|")
         #expect("plain".withITerm2CursorCompensation() == "plain")
     }
 
@@ -288,7 +291,7 @@ struct CursorAdvanceModelTests {
             terminalWidth: 30, terminalHeight: 1, bgCode: "", reset: ""
         )[0]
         #expect(!line.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) })
-        #expect(line.contains("\u{100038}\u{1B}[1C"), "PUA compensated: |\(line)|")
+        #expect(line.contains("\u{1B}[2X\u{100038}\u{1B}[1C"), "PUA compensated: |\(line)|")
     }
 }
 

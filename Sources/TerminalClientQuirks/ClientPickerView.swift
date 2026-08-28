@@ -72,9 +72,9 @@ struct ClientPickerView: View {
         case .appleTerminal:
             "CUF for VS-16 / bare / lone-RI / SF Symbols; strips skin tones"
         case .iTerm2:
-            "CUF for VS-16 and keycaps (alternate screen); strips skin tones"
+            "ECH+CUF for VS-16, keycaps, SF Symbols (alternate screen); tones detach on BMP bases"
         case .ghostty:
-            "CUF for VS-15 chrome and SF Symbols; keeps skin tones"
+            "ECH+CUF for VS-15 chrome and SF Symbols; keeps skin tones"
         case .warp:
             "CUF for lone regional indicators; strips skin tones"
         case .tmux:

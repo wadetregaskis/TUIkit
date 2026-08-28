@@ -61,7 +61,7 @@ final class FrameDiffWriter {
     /// Whether the host terminal is Ghostty, which advances every composed
     /// emoji class exactly as claimed (alone among the measured terminals)
     /// but under-advances the VS-15 chrome glyphs ⬛︎ / ⬜︎ and Plane-16 PUA
-    /// SF Symbols. Its build path injects CUF for just those two —
+    /// SF Symbols. Its build path erases-then-CUFs just those two —
     /// `String.withGhosttyCursorCompensation()`; no skin-tone strip, which
     /// would needlessly discard the correct merged rendering. Same
     /// detection/injection story as `isAppleTerminal`.

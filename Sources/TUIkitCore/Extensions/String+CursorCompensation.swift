@@ -431,38 +431,49 @@ extension String {
     }
 
     /// Returns a copy of this string with iTerm2's cursor-advance quirks
-    /// worked around: a `CUF` is injected after each cluster whose painted
-    /// width exceeds its ``Character/iTerm2CursorAdvance`` (keycap
-    /// sequences and Plane-16 PUA glyphs — SF Symbols), pushing the cursor
-    /// to the glyph's visual end exactly as
-    /// ``withTerminalAppCursorCompensation()`` does for Terminal.app's
-    /// (larger) set of under-advancers. iTerm2 has no over-advancers left
-    /// by the time this runs: skin-tone clusters are stripped first by
-    /// ``withSkinToneFallback()``. ANSI escape sequences are preserved.
+    /// worked around: each cluster whose painted width exceeds its
+    /// ``Character/iTerm2CursorAdvance`` (VS-16 pictographs, keycap
+    /// sequences and Plane-16 PUA glyphs — SF Symbols) is erased into the
+    /// background with `ECH`, drawn, then pushed to its visual end with
+    /// `CUF`, exactly as ``withTerminalAppCursorCompensation()`` does for
+    /// Terminal.app's (larger) set of under-advancers.
+    ///
+    /// The erase is measured, not precautionary (2026-08-28): with `CUF`
+    /// alone, iTerm2 paints the background of only the single cell the
+    /// glyph's cursor advance covers, so on a coloured run every SF
+    /// Symbol, keycap and VS-16 cluster left its second cell at the
+    /// terminal's default background — user-reported under SF Symbols,
+    /// card-confirmed for all three classes, and `ECH` (like a styled
+    /// space) fills the hole. ANSI escape sequences are preserved.
     public func withITerm2CursorCompensation() -> String {
-        withCursorForwardCompensation { $0.iTerm2CursorAdvance }
+        withCursorForwardCompensation(erasingUnderGlyph: true) { $0.iTerm2CursorAdvance }
     }
 
     /// Returns a copy of this string with Ghostty's two cursor-advance quirks
-    /// worked around, by the same CUF injection
+    /// worked around, by the same `ECH` + `CUF` treatment
     /// ``withITerm2CursorCompensation()`` uses: the VS-15 chrome glyphs
     /// (⬛︎ ⬜︎ — painted 2 cells, advanced 1, so an uncompensated label
     /// collides with the glyph) and Plane-16 PUA SF Symbols (rendered
-    /// grid-strictly at 1 cell against a 2-cell claim). Ghostty has no
+    /// grid-strictly at 1 cell against a 2-cell claim). The erase is for
+    /// the SF Symbols (measured 2026-08-28): the claimed second cell is one
+    /// the glyph never paints, so with `CUF` alone it kept the terminal's
+    /// default background on a coloured run. Ghostty has no
     /// over-advancers in any class TUIkit emits — it is the only measured
     /// terminal that advances VS-16, ZWJ, keycaps, flags and skin tones
-    /// exactly as claimed, so nothing is stripped on this path.
+    /// exactly as claimed, so nothing else is rewritten on this path.
     /// ANSI escape sequences are preserved.
     public func withGhosttyCursorCompensation() -> String {
-        withCursorForwardCompensation { $0.ghosttyCursorAdvance }
+        withCursorForwardCompensation(erasingUnderGlyph: true) { $0.ghosttyCursorAdvance }
     }
 
     /// Returns a copy of this string with Warp's lone-regional-indicator
-    /// under-advance worked around by CUF injection, as
-    /// ``withITerm2CursorCompensation()`` does for iTerm2. Warp's other
-    /// divergences are OVER-advances (keycaps, 〰️/〽️, ZWJ) which no CUF can
-    /// correct, or skin-tone clusters — stripped first by
-    /// ``withSkinToneFallback()``, exactly as on iTerm2.
+    /// under-advance worked around by CUF injection. No `ECH` here, unlike
+    /// iTerm2 and Ghostty: whether Warp leaves the skipped cell's
+    /// background unpainted is not yet measured, and an unmeasured host is
+    /// assumed to render correctly. Warp's other divergences are
+    /// OVER-advances (keycaps, 〰️/〽️, ZWJ) which no CUF can correct, or
+    /// skin-tone clusters — stripped first by ``withSkinToneFallback()``
+    /// when the claim in force cannot hold them.
     /// ANSI escape sequences are preserved.
     public func withWarpCursorCompensation() -> String {
         withCursorForwardCompensation { $0.warpCursorAdvance }
@@ -501,13 +512,17 @@ extension String {
     ///
     /// - Parameters:
     ///   - erasingUnderGlyph: Emit `ECH` for the glyph's claimed cells before
-    ///     drawing it, so those cells take the background in force. Only
-    ///     Terminal.app was measured to need it — with CUF alone, eight
-    ///     under-advancing glyphs on a coloured run leave every second cell at
-    ///     the terminal's default and the row reads as a comb — and every other
-    ///     measured host already paints every cell a wide glyph covers. It is a
-    ///     parameter rather than an assumption because an unmeasured terminal
-    ///     might go either way, and that is a thing worth being able to try.
+    ///     drawing it, so those cells take the background in force.
+    ///     Terminal.app was the first host measured to need it — with CUF
+    ///     alone, eight under-advancing glyphs on a coloured run leave every
+    ///     second cell at the terminal's default and the row reads as a comb.
+    ///     iTerm2 and Ghostty were then measured (2026-08-28) to leave the
+    ///     same hole under the cells their under-advancers skip — every SF
+    ///     Symbol on both, plus keycaps and VS-16 clusters on iTerm2 — so the
+    ///     earlier claim that only Terminal.app needed the erase was wrong: it
+    ///     had simply never been measured on a coloured run elsewhere. It
+    ///     stays a parameter because Warp and tmux remain unmeasured, and an
+    ///     unmeasured terminal is assumed to paint correctly.
     ///   - advance: The host's cursor advance for a character.
     func withCursorForwardCompensation(
         erasingUnderGlyph: Bool = false,

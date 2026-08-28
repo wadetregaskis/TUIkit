@@ -143,12 +143,14 @@ struct GhosttyWarpCompatibilityTests {
         // Without the model fix every one of these is a no-op and the "|"
         // lands a cell early — the shear this whole class is about.
         let raw = "\u{1F5A5}|"
-        // Terminal.app erases the pair of cells first, because it is the one
-        // host measured NOT to paint the cell its cursor skips — see
-        // `withTerminalAppCursorCompensation`. The advance is identical.
+        // Terminal.app, iTerm2 and Ghostty erase the pair of cells first —
+        // all three are measured to leave the cell their cursor skips at the
+        // default background on a coloured run (Apple 2026-08-26, the other
+        // two 2026-08-28). Warp is unmeasured on that question, so its walk
+        // keeps the bare CUF. The advance is identical either way.
         #expect(raw.withTerminalAppCursorCompensation() == "\u{1B}[2X\u{1F5A5}\u{1B}[1C|")
-        #expect(raw.withITerm2CursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
-        #expect(raw.withGhosttyCursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
+        #expect(raw.withITerm2CursorCompensation() == "\u{1B}[2X\u{1F5A5}\u{1B}[1C|")
+        #expect(raw.withGhosttyCursorCompensation() == "\u{1B}[2X\u{1F5A5}\u{1B}[1C|")
         #expect(raw.withWarpCursorCompensation() == "\u{1F5A5}\u{1B}[1C|")
         // The erase writes no visible characters, so every width measured
         // after compensation still counts the cells the row occupies.
@@ -203,13 +205,19 @@ struct GhosttyWarpCompatibilityTests {
         // overwritten. One CUF(1) restores the claimed 2 cells.
         let compensated = "\u{2B1B}\u{FE0E} On".withGhosttyCursorCompensation()
         #expect(compensated.contains("\u{1B}[1C"), "expected a CUF(1): \(compensated.debugDescription)")
-        #expect(compensated.hasPrefix("\u{2B1B}\u{FE0E}\u{1B}[1C"), "CUF must follow the glyph")
+        #expect(
+            compensated.hasPrefix("\u{1B}[2X\u{2B1B}\u{FE0E}\u{1B}[1C"),
+            "ECH before the glyph, CUF after it")
     }
 
     @Test("Ghostty compensation pushes the cursor past an SF Symbol")
     func ghosttyCompensatesSFSymbol() {
         let compensated = "\u{100038}x".withGhosttyCursorCompensation()
-        #expect(compensated == "\u{100038}\u{1B}[1Cx")
+        // ECH first: Ghostty draws the symbol grid-strictly in ONE cell, so
+        // the claimed second cell is never painted at all — without the erase
+        // it keeps the default background on a coloured run (measured
+        // 2026-08-28, the only Ghostty class that showed the hole).
+        #expect(compensated == "\u{1B}[2X\u{100038}\u{1B}[1Cx")
     }
 
     @Test("Ghostty compensation leaves the classes Ghostty gets right alone")

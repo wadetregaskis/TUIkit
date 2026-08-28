@@ -679,7 +679,9 @@ non-default setup.
   screen paints 2 / advances 2; on the **alternate screen** (where TUIkit
   apps run) paints 2 / **advances 1** — the same under-advance as
   Terminal.app, with the same EAW exceptions (〰️ 〽️ advance 2).
-  Compensated with CUF(1) by `withITerm2CursorCompensation()`. (The
+  Compensated with ECH(2)+glyph+CUF(1) by `withITerm2CursorCompensation()`
+  — the erase added 2026-08-28, when a coloured-run card showed the skipped
+  cell keeps the default background here exactly as on Terminal.app. (The
   primary-screen alignment card renders correctly; the app misrendered
   until the model was rebuilt from alternate-screen measurements —
   user-reported, byte-capture confirmed identical output bytes, and the
@@ -695,9 +697,11 @@ non-default setup.
 - **Flag pairs:** advance 2 ✓. **Lone regional indicator: advance 2**
   (differs from Terminal.app's 1) — width claim 2 ✓, nothing needed.
 - **Keycaps** (1️⃣ #️⃣ *️⃣, bare or with VS-16): paints 2, **advances 1**
-  (both screen modes) → CUF(1) via `withITerm2CursorCompensation()`.
+  (both screen modes) → ECH(2)+CUF(1) via `withITerm2CursorCompensation()`.
 - **SF Symbols (Plane-16 PUA):** paints 2 (monochrome, SGR-tintable),
-  **advances 1** → CUF(1). Same under-advance as Terminal.app.
+  **advances 1** → ECH(2)+CUF(1). Same under-advance as Terminal.app, and
+  the same unpainted second cell on a coloured run (measured 2026-08-28),
+  which is what the ECH fills.
 - **ZWJ sequences:** advance 2 ✓ and paint 2 ✓ — confirmed by the paint
   card, not only by DSR. EXCEPT VS-16-leading ones (❤️‍🔥 🏳️‍🌈) which
   advance 1 on the alternate screen; unhandled.
@@ -828,12 +832,17 @@ is deliberately NOT applied here — it would discard a correct rendering.
   - **VS-15 chrome glyphs** (⬛︎ ⬜︎ = emoji-presentation base + U+FE0E):
     paints 2, **advances 1**. Uncompensated this collides the following
     label with the glyph — observed on the Toggle demo as `■On` where
-    `.unicode` correctly showed `■ On`. CUF(1) fixes it, which is what
+    `.unicode` correctly showed `■ On`. ECH(2)+CUF(1) fixes it (the erase
+    measured harmless here — the ink already covers both cells), which is what
     earns Ghostty its place on the `supportsEmojiChrome` allowlist.
   - **SF Symbols (Plane-16 PUA):** unlike Terminal.app/iTerm2 (which paint
     2 and advance 1), Ghostty renders these grid-strictly at **1 cell** and
-    advances 1. The claim of 2 is therefore an over-claim here; CUF(1)
-    keeps the row aligned at the cost of one blank cell after each symbol.
+    advances 1. The claim of 2 is therefore an over-claim here;
+    ECH(2)+CUF(1) keeps the row aligned at the cost of one blank cell after
+    each symbol — the ECH added 2026-08-28, because that blank cell is one
+    the glyph never paints, so with CUF alone it kept the terminal's
+    default background on a coloured run (user-reported, card-measured;
+    the only Ghostty class that showed the hole).
     *A tighter fix would be a host-dependent width claim, but the claim is
     deliberately host-independent (layout must be identical headless).*
 - **`☝🏽` / `☝️🏽`** (BMP text-presentation base + skin tone) advance 1 and
@@ -1447,14 +1456,35 @@ one-cell hole into stripes no screenshot can be ambiguous about:
 | host | cell the cursor skipped | with `CUF` alone |
 |---|---|---|
 | Terminal.app 455.1 | **not painted** | a comb: every second cell the terminal's default |
-| iTerm2 3.6.11 | painted | unbroken run |
-| Ghostty 1.3.1 | painted | unbroken run |
+| iTerm2 3.6.11 | painted *(not reproduced — see the revision below)* | unbroken run *(ditto)* |
+| Ghostty 1.3.1 | painted *(not reproduced for SF Symbols — see below)* | unbroken run *(ditto)* |
 
-So the fix is Terminal.app's alone. `withTerminalAppCursorCompensation` now
+`withTerminalAppCursorCompensation` therefore
 emits **ECH** (`CSI n X`) before the cluster: it erases n cells from the cursor
 in the current background and does not move it, so the glyph is then drawn over
 cells that already carry the fill. Measured identical advance (2), unbroken
 fill, and the glyph is NOT clipped by the erase.
+
+**REVISED 2026-08-28 — the fix is NOT Terminal.app's alone.** User-reported
+from the live app (SF Symbols on a coloured run showed the default background
+under their second cell on both iTerm2 and Ghostty), then card-measured
+(`bgfill` treatment card: each under-advancer drawn three ways — bare `CUF`,
+`ECH`+glyph+`CUF`, glyph+styled-space — on a blue run, DSR-verified nets):
+
+- **iTerm2 3.6.11** (alternate screen): SF Symbols, keycaps AND VS-16
+  clusters all left the skipped cell at the default background with `CUF`
+  alone; both the `ECH` and styled-space variants filled it, with the glyph
+  intact. This contradicts the 2026-08-23 row above, which did not reproduce;
+  the walk now erases, which is correct under both readings.
+- **Ghostty 1.3.1**: only SF Symbols showed the hole — the one class whose
+  claimed second cell Ghostty (grid-strict, 1-cell symbol) never paints at
+  all. VS-15 chrome (ink across both cells) showed no hole, and `ECH` under
+  it measured harmless.
+
+`withITerm2CursorCompensation` and `withGhosttyCursorCompensation` now use the
+same `ECH` + glyph + `CUF` shape as Terminal.app. Warp (lone RI, its only
+`CUF` class) and tmux remain bare-`CUF` pending the same coloured-run
+measurement.
 
 ECH rather than "n spaces, then CUB(n)", which also works and was tried first:
 the spaces are visible CHARACTERS, so every width measured after compensation —
