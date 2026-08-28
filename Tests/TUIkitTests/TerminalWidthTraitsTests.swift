@@ -159,6 +159,34 @@ struct TerminalWidthTraitsTests {
         }
     }
 
+    /// A degenerate cluster carrying TWO Fitzpatrick scalars — invalid emoji,
+    /// one valid grapheme, possible in arbitrary user data — is priced per
+    /// modifier, because that is the emission's own arithmetic: the Apple
+    /// walk separates it into base + (ZWNJ + modifier) per modifier, and a
+    /// constant one-swatch claim left a 3-cell conservation gap that came out
+    /// as an uncarded CUB(3). With the claim equal to the emission, the walk
+    /// emits it with no cursor moves at all.
+    @Test("A doubled modifier is priced per modifier, and separates with no moves")
+    func doubledModifierPricesPerModifier() {
+        let doubled = "\u{1F44D}\u{1F3FD}\u{1F3FD}"  // 👍🏽🏽, one grapheme
+        #expect(doubled.count == 1)
+        TerminalWidthTraits.withTraits(Self.apple) {
+            // base 2 + (separator 1 + swatch 2) × 2
+            #expect(Character(doubled).terminalWidth == 8)
+            let out = TerminalClient.compensating(doubled, for: .appleTerminal)
+            #expect(
+                out == "\u{1F44D}\u{200C}\u{1F3FD}\u{200C}\u{1F3FD}",
+                "separated, landing exactly on the claim — no CUB, no CUF: |\(out)|")
+        }
+        TerminalWidthTraits.withTraits(Self.warp) {
+            // base 2 + swatch 2 × 2 — extrapolated, consistent with the
+            // verbatim emission on a host that detaches every modifier.
+            #expect(Character(doubled).terminalWidth == 6)
+            let out = TerminalClient.compensating(doubled, for: .warp)
+            #expect(out == doubled, "|\(out)|")
+        }
+    }
+
     /// A redundant VS-16 before a Fitzpatrick modifier (☝️🏽) is stripped by
     /// every walk: UTS #51 has the modifier itself force emoji presentation,
     /// so the normalized pair is the same emoji — and the one each host was

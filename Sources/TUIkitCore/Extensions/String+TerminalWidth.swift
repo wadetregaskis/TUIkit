@@ -366,8 +366,21 @@ extension Character {
         // 🤙+ZWNJ+🏽 by 5), so base + separator + swatch. Excluding U+200C from
         // the base reconstruction above makes the already-rewritten cluster
         // measure the same as the original it replaces.
+        //
+        // PER MODIFIER, not a constant: a degenerate cluster carrying two
+        // Fitzpatrick scalars (👍🏽🏽 — invalid emoji, one valid grapheme,
+        // possible in arbitrary user data) is separated by the Apple walk
+        // into base + (ZWNJ + modifier) × 2, whose internal advance is the
+        // base plus 3 per modifier — a constant swatch priced it 3 short and
+        // the conservation gap came out as an uncarded CUB(3), a backward
+        // move of a size never measured, into the cluster class where
+        // backward moves re-render. No host's rendering of the doubled form
+        // is measured; what the per-modifier claim buys is that the claim
+        // equals the emission's own arithmetic by construction, so the walk
+        // emits it with no cursor moves at all.
         let swatch = traits.skinTone == .separated ? 3 : 2
-        return Character(String(base)).terminalWidth + swatch
+        let modifiers = scalars.count { (0x1F3FB...0x1F3FF).contains($0.value) }
+        return Character(String(base)).terminalWidth + swatch * modifiers
     }
 }
 
