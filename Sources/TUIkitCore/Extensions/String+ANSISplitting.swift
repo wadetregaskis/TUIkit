@@ -254,9 +254,9 @@ extension String {
     }
 
     /// Returns the accumulated SGR (colour/style) state as of `visibleOffset` visible cells,
-    /// concatenated with the remaining visible content and SGR sequences — but with all
-    /// non-SGR ANSI sequences (cursor movement, erase, etc.) stripped from both the
-    /// context scan *and* the returned suffix.
+    /// concatenated with the remaining visible content and SGR sequences — with cursor-
+    /// moving and line-scoped ANSI sequences stripped from both the context scan *and*
+    /// the returned suffix, but `ECH` kept in the suffix.
     ///
     /// Used by `FrameDiffWriter.repaintRightEdge` to re-emit the last few cells of a
     /// line with the correct SGR context: the caller positions the terminal cursor
@@ -264,10 +264,18 @@ extension String {
     /// sequence left in the string would displace the cursor from where the caller put
     /// it and write subsequent characters in the wrong terminal column.
     ///
+    /// `ECH` (`CSI n X`) is the one exception, kept in the SUFFIX only: it paints n
+    /// cells from the cursor **without moving it**, and it is the measured background
+    /// repair for an under-advancing glyph — the walk emits `ECH(2)`+glyph+`CUF(1)`,
+    /// and re-writing that glyph here without its erase left the cell its cursor
+    /// advance skips at pass 1's app background instead of the run's: a one-cell
+    /// version of the comb the erase was added for, at exactly the right edge this
+    /// function serves. In the CONTEXT half it stays dropped — there it is positional
+    /// state from cells the caller is not rewriting.
+    ///
     /// - Parameter visibleOffset: The number of visible terminal cells to skip.
-    /// - Returns: Accumulated SGR state + visible content from `visibleOffset` onward
-    ///   (all non-SGR sequences stripped), or `nil` if the string has fewer than
-    ///   `visibleOffset` visible cells.
+    /// - Returns: Accumulated SGR state + visible content from `visibleOffset` onward,
+    ///   or `nil` if the string has fewer than `visibleOffset` visible cells.
     public func ansiSGRContextAndCleanSuffix(from visibleOffset: Int) -> String? {
         var sgrContext = ""
         var suffix = ""
@@ -279,12 +287,17 @@ extension String {
             let inSuffix = visible >= visibleOffset
             switch segment {
             case .ansi(let sequence, let isSGR):
-                // Keep only SGR sequences; non-SGR (CUF, EL, …) are dropped
-                // so they can't displace the cursor at a fixed write column.
-                guard isSGR else { continue }
                 if inSuffix {
+                    // SGR, plus the cursor-neutral ECH the under-advance
+                    // treatment depends on. Movers (CUF, CUB, …) and
+                    // line-scoped erases (EL) stay dropped: the caller
+                    // positions the cursor explicitly.
+                    let isECH = sequence.last == "X" && sequence.hasPrefix("\u{1B}[")
+                        && sequence.dropFirst(2).dropLast().allSatisfy(\.isNumber)
+                    guard isSGR || isECH else { continue }
                     suffix += sequence
                 } else {
+                    guard isSGR else { continue }
                     sgrContext += sequence
                 }
             case .visible(let character):

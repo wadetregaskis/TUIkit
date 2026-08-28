@@ -565,6 +565,25 @@ struct AnsiSGRContextAndCleanSuffixTests {
         #expect(result.contains("DE"))
     }
 
+    @Test("ECH survives in the suffix, and only there")
+    func echSurvivesInSuffixOnly() {
+        // The walk's under-advance emission is ECH(2)+glyph+CUF(1); the
+        // right-edge repaint rewrites it at a fixed column, where the CUF
+        // must go (it moves the cursor) but the ECH must STAY (it paints
+        // the cell the glyph's advance skips, without moving — dropping it
+        // left that cell at the app background instead of the run's, a
+        // one-cell comb at the row's right edge). In the context half it is
+        // positional and stays stripped.
+        let styled = "\u{1B}[44mAB\u{1B}[2X⚙️\u{1B}[1C"
+        let result = styled.ansiSGRContextAndCleanSuffix(from: 2)!
+        #expect(result == "\u{1B}[44m\u{1B}[2X⚙️", "|\(result)|")
+
+        // An ECH before the split is context-half: dropped.
+        let early = "\u{1B}[2X⚙️\u{1B}[1CAB"
+        let tail = early.ansiSGRContextAndCleanSuffix(from: 2)!
+        #expect(tail == "AB", "|\(tail)|")
+    }
+
     // MARK: SGR sequences are preserved
 
     @Test("SGR context from before split is prepended to result")
