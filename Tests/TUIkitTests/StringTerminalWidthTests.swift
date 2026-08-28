@@ -244,16 +244,22 @@ struct WithTerminalAppCursorCompensationTests {
         #expect(!result.contains("\u{1B}[1C"), "Should contain no CUF")
     }
 
-    @Test("Skin-tone emoji followed by a box-drawing border: Fitzpatrick stripped")
-    func skinToneFollowedByBoxBorderStripsModifier() {
-        // A table row "│ 🤙🏽 │" must have the Fitzpatrick scalar stripped so
-        // that Terminal.app's over-advance doesn't push the trailing border
-        // character past where the column accounting expects it.
+    @Test("Skin-tone emoji followed by a box-drawing border: kept, pulled back")
+    func skinToneFollowedByBoxBorderKeepsModifier() {
+        // A table row "│ 🤙🏽 │" under the no-traits fallback: the cluster is
+        // kept whole and CUB(2) squares the internal column, so the trailing
+        // border lands where the column accounting expects it.
+        //
+        // This test's previous incarnation is a cautionary tale: its title
+        // described the strip era, and its assertion checked that U+1F3FB is
+        // absent — from a cluster whose modifier is U+1F3FD. It passed
+        // VACUOUSLY through two eras of behaviour change, asserting nothing.
         let s = "│ 🤙🏽 │"
         let result = s.withTerminalAppCursorCompensation()
         #expect(
-            !result.unicodeScalars.contains(Unicode.Scalar(0x1F3FB)!),
-            "Fitzpatrick scalar dropped when followed by a box-border character")
+            result.unicodeScalars.contains(Unicode.Scalar(0x1F3FD)!),
+            "the modifier the user wrote reaches the screen: |\(result)|")
+        #expect(result.contains("🤙🏽\u{1B}[2D"), "internal pulled back to the claim: |\(result)|")
         #expect(result.contains("│"), "Both border characters preserved")
         #expect(result.strippedLength == s.strippedLength, "Visible width preserved")
     }
@@ -325,11 +331,12 @@ struct WithTerminalAppCursorCompensationTests {
         }
     }
 
-    @Test("An emoji-default skin-tone base is stripped bare and NOT erased under")
+    @Test("An emoji-presentation tone cluster is never erased under")
     func emojiDefaultSkinToneDoesNotErase() {
-        // ✊ needs no VS-16 promotion, so it stays a 2-cell/2-advance glyph and
-        // there is nothing for an erase to fix. Guards the erase from spreading
-        // to the branch that does not need it.
+        // ✊🏻 under the fallback is kept whole with a pull-back — its glyph
+        // paints as far as its claim, so there is nothing for an erase to
+        // fix. Guards the erase from spreading to the branch that does not
+        // need it. (The title once said "stripped bare" — the strip era.)
         let result = "a✊🏻b".withTerminalAppCursorCompensation()
         #expect(!result.contains("\u{1B}[2X"),
                 "no erase for a cluster that advances as far as it paints")
