@@ -28,25 +28,31 @@ when unset), the visual/aspect probes print to the terminal.
   screen). Written by a probe, never by hand. See `data/README.md`.
 - `visual_card.py` — static `|<c>|<c>|<c>|X` alignment card with a column
   ruler, for screenshot inspection of PAINTED width (which DSR can't see),
-  merged-vs-split clusters, seams, and swatches. **This is the authority when
-  it disagrees with `advance_probe.py`**: DSR is a cursor *report*, and on
-  Terminal.app the report and the paint come apart for ZWJ sequences (DSR 5,
-  8, 11; painted 2, rows do not shear). Treat a DSR advance that contradicts
-  the claim as a hypothesis and confirm it here before compensating.
+  merged-vs-split clusters, seams, and swatches. It answers exactly ONE of a
+  row's four facts — paint. DSR (advance) governs when the row WRAPS, the
+  landing governs where followers go, and the store governs later absolute
+  writes: on Apple Terminal a ZWJ sequence paints 2 while DSR reports 5/8/11,
+  and a full-width row budgeted at the painted 2 really does wrap (measured
+  2026-08-26; an earlier note here concluded "rows do not shear" from the
+  paint alone, and was wrong). Confirm a divergence with the wrap test and
+  `landing_probe.py`/`treatment_card.py` before compensating — no single
+  instrument settles it.
 - `background_probe.py` — does the cell an under-advancing cluster's `CUF`
   skipped keep the background in force? Draws each compensation strategy as a
   RUN of clusters, so a one-cell hole reads as stripes on a screenshot, and
   DSR-measures the advance of each at the same time. `PROBE_WIDE=1` draws the
   rows double-width (DECDWL) for the capture.
-- `row_probe.py` — the same clusters on a FULL-WIDTH row, which is what an app
-  draws: does the row spend exactly what it claims, or overspend and wrap? The
-  measurement is taken four cells short of the edge, because the cursor CLAMPS
-  at the last column and reports the same number either way.
 - `mouse_probe.py` — raw-mode SGR mouse byte capture (1000/1002/1006);
   every input sequence is appended human-readably. `q` quits.
+- `identity_probe.py` — asks the terminal WHO it is over escape queries
+  (DA1/DA2/DA3, XTVERSION, XTGETTCAP), DSR-fenced so a silent terminal
+  cannot stall it. This is the measurement behind identifying a host over
+  ssh, where `TERM_PROGRAM` does not survive the hop.
 - `cell_aspect_probe.py` — the terminal cell's height:width ratio (what
   `Image` needs to render undistorted), via `TIOCGWINSZ` pixel fields and
-  the `CSI 14t`/`18t` escape queries. Prints to stdout.
+  the `CSI 14t`/`18t` escape queries. Report to `$PROBE_OUT` (default
+  `./cell_aspect_probe.txt`); stdout stays attached to the terminal for the
+  queries themselves.
 
 `palette_probe.py` asks a different question from the rest: not how the cursor
 moves, but what colour the terminal actually paints for a name we emit. The
@@ -57,7 +63,11 @@ host and record the answers in the compatibility document.
 
 Extend the battery in `advance_probe.py` rather than hand-rolling one-off
 probes, and record new results (with `TERM_PROGRAM_VERSION`) in the
-compatibility document.
+compatibility document. (`Tools/EmojiBugScanner` is the Swift bulk variant of
+the same DSR question — a GENERATED corpus of tens of thousands of clusters,
+for sweeps the curated battery cannot cover; its 46k-cluster diff of the
+quirks mirror against the hand-written model is how the missing skin-tone
+erase was found. Prefer the battery for anything the corpus already names.)
 
 A note on the PTY harnesses: `pyte` drops everything after a **U+FE0F** in the
 same write (VS-16 is width 0 with combining class 0, so its `Screen.draw` hits
@@ -95,7 +105,12 @@ python3 landing_analyze.py /tmp/landing.json -o data/<host>-<version>-alternate-
 Prefer `PROBE_SYNC=1` and have **another process** take the screenshots (the
 probe writes `<shot>.ready` and waits for `<shot>.done`). macOS asks the
 terminal to confirm direct screen access and puts the dialog **over the window
-being measured**, which hid a calibration mark for five runs.
+being measured**, which hid a calibration mark for five runs. Without Screen
+Recording permission the capture fails outright ("could not create image from
+display 0") — grant it in System Settings, or fall back to the DSR halves
+(`advance_probe.py` measures advance; `--wrap` here measures reserve) and
+record the row in `TerminalLedgerConformanceTests.awaitingLandingMeasurement`
+until the pixel halves can run.
 
 Both clusters and expectations come from `data/width-corpus.json`, shared with
 the Swift tests so a measurement always answers a question something asks.
@@ -143,6 +158,9 @@ the screenshot.
 
 Strategies are built from the cluster's advance measured live in the run, not
 from a model, so the probe works unchanged on a terminal nobody has measured.
+
+(`row_probe.py`, retired 2026-08-28, asked phase A's wrap question for four
+clusters by hand; the matrix asks it for every corpus cluster × strategy.)
 
 ## `treatment_card.py` — the shipped emissions, verifiable at a glance
 

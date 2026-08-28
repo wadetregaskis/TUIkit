@@ -1,11 +1,29 @@
 # Measurement records
 
-One file per (terminal, version, screen buffer), written by a probe and never
-by hand. `<terminal>-<version>-<screen>.json`.
+Written by a probe and never by hand. These are the evidence behind the
+tables in `Documentation/Terminal-compatibility.md`. The doc explains what
+the numbers *mean*; these say who measured what, when, and under which
+conditions. Four kinds of file live here:
 
-These are the evidence behind the tables in
-`Documentation/Terminal-compatibility.md`. The doc explains what the numbers
-*mean*; these say who measured what, when, and under which conditions.
+- **`width-corpus.json`** — the shared cluster corpus: every cluster the
+  probes measure and the Swift tests ask about, one id per row, duplicated
+  scalar-for-scalar in `TerminalWidthCorpus.swift` (a parity test pins the
+  two). A measurement always answers a question something asks.
+- **`<terminal>-<version>-<screen>.json`** — ADVANCE records
+  (`advance_probe.py`): DSR cursor reports for the curated battery.
+- **`<terminal>-<version>-<screen>-landing.json`** — LANDING records
+  (`landing_probe.py` + `landing_analyze.py`): per corpus row, all four
+  facts — advance (DSR), landing and ink (pixels), reserve (the wrap test).
+  These are what `TerminalLedgerConformanceTests` checks every model
+  against, and the known-divergence ledger lives beside that suite. A
+  corpus row no landing record has yet measured must be listed in the
+  suite's `awaitingLandingMeasurement` set, so its absence cannot read as
+  a pass.
+- **`tmux-3.7b-tonebases.json`** — the full Emoji_Modifier_Base sweep
+  (`advance_probe.py --modifier-bases`): which of the 134 bases tmux merges
+  with a following tone (70) and which it detaches (64). The source of
+  `Character.tmuxMergedToneBases`, pinned row-for-row by
+  `TmuxCompatibilityTests`.
 
 ## Why the conditions are in the file
 
@@ -29,14 +47,18 @@ uninterpretable one.
 
 ## What these numbers are, and are not
 
-`advances` are **DSR cursor reports** — what the terminal *says* it did.
-
-That is not always what it painted. On Apple Terminal a ZWJ sequence reports an
-advance of 5, 8 or 11 while the glyph composes into two cells and the row does
-not shear at all. An advance here that disagrees with TUIkit's width claim is a
-hypothesis about rendering, and `visual_card.py` is what settles it — draw
-`|<c>|<c>|<c>|X` and look at the column. Confirm before compensating; the
-project has reached a wrong conclusion from advance alone in both directions.
+`advances` are **DSR cursor reports** — what the terminal *says* it did, and
+that is ONE of a row's four facts. On Apple Terminal a ZWJ sequence reports
+an advance of 5, 8 or 11 while the glyph composes into two cells — and an
+earlier version of this note concluded from the paint that "the row does not
+shear at all", which is FALSE: the advance governs wrapping, and a full-width
+row budgeted at the painted 2 wraps (measured 2026-08-26). The paint governs
+followers, the store governs later absolute writes, the reserve governs the
+edge. An advance here that disagrees with TUIkit's width claim is a
+hypothesis about rendering; confirm it with the wrap test plus
+`landing_probe.py`/`treatment_card.py` — `visual_card.py` answers paint
+only — before compensating. The project has reached a wrong conclusion from
+a single fact in both directions.
 
 ## Adding a terminal
 
@@ -56,3 +78,16 @@ A new terminal's numbers are worth having even with no model written for it:
 they are what a model would be built from, and until one exists the terminal
 stays unidentified and its output is left alone, which is the correct
 behaviour rather than a gap.
+
+An advance record alone does not feed the conformance suite — that reads the
+LANDING records. The full pipeline for a terminal that is getting a model:
+
+```sh
+cd Tools/TerminalProbes
+PROBE_OUT=/tmp/landing.json PROBE_SHOT=/tmp/shot python3 landing_probe.py --wrap
+python3 landing_analyze.py /tmp/landing.json \
+    -o data/<terminal>-<version>-alternate-landing.json
+```
+
+then write the model from the record, and let
+`TerminalLedgerConformanceTests` hold the two together.
