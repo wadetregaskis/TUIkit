@@ -150,6 +150,39 @@ struct TerminalLedgerConformanceTests {
         "warp/keycap_one", "warp/keycap_hash", "warp/flag_scotland",
     ]
 
+    /// Corpus rows with no landing measurement on ANY host yet — the pixel
+    /// halves need Screen Recording, which this machine's terminals do not
+    /// currently hold (the DSR halves are committed in the advance records).
+    /// Listed explicitly so a missing measurement cannot look like a pass:
+    /// ``ledgerCoversTheCorpus`` fails for a row that is absent from a ledger
+    /// AND absent from this list, and fails the other way when a measured row
+    /// forgets to leave it.
+    static let awaitingLandingMeasurement: Set<String> = [
+        // Unicode 16.0 rows added 2026-08-28 (advance swept, landing pending).
+        "shovel", "leafless_tree", "fingerprint", "root_vegetable",
+        "splatter", "face_bags",
+        // The 2026-08-28 additions from the review (same status).
+        "keycap_bare", "tone_victory_vs16", "tone_lifter_vs16",
+    ]
+
+    /// The completeness half the suite lacked: it flagged a measurement with
+    /// no corpus row, but a corpus row with no measurement got zero
+    /// conformance coverage silently — and "the measurements have not been
+    /// taken" must not look like "the measurements pass".
+    @Test("Every corpus row is measured in every ledger, or its absence is recorded",
+          arguments: ledgers)
+    func ledgerCoversTheCorpus(ledger: Ledger) {
+        for entry in WidthCorpus.clusters where ledger.measurements[entry.id] == nil {
+            #expect(
+                Self.awaitingLandingMeasurement.contains(entry.id),
+                "\(ledger)/\(entry.id): no landing measurement, and not recorded as awaiting one")
+        }
+        for id in Self.awaitingLandingMeasurement where ledger.measurements[id] != nil {
+            Issue.record(
+                "\(ledger)/\(id) is measured now — remove it from awaitingLandingMeasurement")
+        }
+    }
+
     // MARK: - The assertions
 
     @Test("Each host's advance model reports the measured INTERNAL column",

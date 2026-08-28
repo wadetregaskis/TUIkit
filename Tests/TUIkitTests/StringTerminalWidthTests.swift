@@ -475,6 +475,27 @@ struct AnsiAwarePrefixForTerminalAppTests {
         #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 9) == s)
     }
 
+    /// The clip under the SHIPPED Apple traits, which no clip test exercised:
+    /// a separated tone cluster is rewritten to land monotonically on its
+    /// claim, so at the right edge it is kept where its RAW advance profile
+    /// would have been substituted — the rewrite is precisely what makes the
+    /// edge slot safe for it.
+    @Test("Under the published Apple traits a separated tone fills the row to the edge")
+    func separatedToneKeptAtEdgeUnderPublishedTraits() {
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: .appleTerminal)) {
+            let s = "abcdef🤙🏽"  // 6 + the separated claim of 5 = 11
+            #expect(s.strippedLength == 11)
+            #expect(s.ansiAwarePrefixForTerminalApp(visibleCount: 11) == s, "kept, exactly full")
+            // A tag flag is NOT rewritten — its raw peak still wraps, so the
+            // substitution fires under these traits exactly as under none.
+            let flag = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}"
+            let flagged = "abcdef" + flag
+            #expect(
+                flagged.ansiAwarePrefixForTerminalApp(visibleCount: 8) == "abcdef  ",
+                "peak 6+8 wraps an 8-cell row: substituted")
+        }
+    }
+
     @Test("Wide CJK character respects the visible boundary (not over-advancing)")
     func cjkBoundary() {
         let s = "Hi 所有"

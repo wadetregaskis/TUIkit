@@ -256,6 +256,20 @@ struct TmuxCompatibilityTests {
             "the toolchain's modifier-base set outgrew the sweep — re-run it")
     }
 
+    /// tmux's walk pushes with a bare CUF — deliberately NO `ECH`, because
+    /// whether tmux leaves the skipped cell at the default background has
+    /// never been measured, and an unmeasured terminal is assumed to paint
+    /// correctly. This pin exists because flipping the shared walk's
+    /// `erasingUnderGlyphs` default would otherwise pass every tmux test
+    /// silently; if tmux is ever measured to need the erase, this is the
+    /// test to update alongside the walk.
+    @Test("The tmux walk pushes with bare CUF — no erase, unmeasured there")
+    func tmuxWalkDoesNotErase() {
+        let out = "\u{100038}x".withTmuxCursorCompensation()
+        #expect(out == "\u{100038}\u{1B}[1Cx", "|\(out)|")
+        #expect(!out.contains("\u{1B}[2X"), "no ECH without a measurement")
+    }
+
     @Test("A standalone swatch is content, and survives either way")
     func standaloneSwatchSurvives() {
         #expect("\u{1F3FD}".withSkinToneFallback(scope: .keepingTmuxMerged) == "\u{1F3FD}")

@@ -276,16 +276,46 @@ struct GhosttyWarpCompatibilityTests {
         #expect(line.hasSkinToneModifier, "modifier must survive: \(line.debugDescription)")
     }
 
-    @Test("Warp strips skin tones, as iTerm2 does")
+    @Test("Warp under its published traits keeps the modifier — the claim covers the swatch")
     @MainActor
-    func warpStripsSkinTones() {
-        // Warp paints base + separate swatch at 4 cells against a claim of 2 —
-        // confirmed visually as a sheared feature-box border in the demo app.
+    func warpKeepsSkinTonesUnderPublishedTraits() {
+        // The SHIPPED pipeline: startup publishes `.detached` claims, the
+        // layout allocates the 4 cells Warp's base+swatch really occupies,
+        // and the modifier passes through. Every writer test used to run
+        // only the no-traits fallback below, so the real configuration's
+        // pipeline had no pin at all.
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: .warp)) {
+            let writer = FrameDiffWriter(
+                isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: true)
+            let line = buildLine(writer, raw: "\u{1F44D}\u{1F3FD}")
+            #expect(line.hasSkinToneModifier, "modifier must survive: \(line.debugDescription)")
+        }
+    }
+
+    @Test("Warp with no published traits still strips — the fallback claim cannot hold a swatch")
+    @MainActor
+    func warpStripsSkinTonesWithoutTraits() {
+        // The no-traits fallback (a caller that never ran startup): the old
+        // 2-cell claim is in force, Warp would paint base + swatch at 4 —
+        // confirmed visually as a sheared feature-box border in the demo app
+        // — so the strip restores the claim at the cost of the tone.
         let writer = FrameDiffWriter(
             isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: true)
         let line = buildLine(writer, raw: "\u{1F44D}\u{1F3FD}")
         #expect(!line.hasSkinToneModifier, "modifier must be stripped: \(line.debugDescription)")
         #expect(line.contains("\u{1F44D}"), "base must survive")
+    }
+
+    @Test("Warp under its published traits decomposes a ZWJ sequence in the writer itself")
+    @MainActor
+    func warpWriterDropsJoinersUnderPublishedTraits() {
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: .warp)) {
+            let writer = FrameDiffWriter(
+                isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: true)
+            let line = buildLine(writer, raw: "\u{1F469}\u{200D}\u{1F680}")
+            #expect(!line.unicodeScalars.contains { $0.value == 0x200D }, "joiner dropped")
+            #expect(line.contains("\u{1F469}") && line.contains("\u{1F680}"), "segments kept")
+        }
     }
 
     @Test("An unknown terminal is still left completely untouched")

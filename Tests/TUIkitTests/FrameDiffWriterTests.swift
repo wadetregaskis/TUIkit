@@ -310,16 +310,34 @@ struct FrameDiffWriterITerm2GatingTests {
         line.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
     }
 
-    @Test("iTerm2 strips skin-tone modifiers, falling back to the generic base")
+    @Test("iTerm2 with no published traits strips skin-tone modifiers")
     func iTerm2StripsModifiers() {
-        // iTerm2 (default width configuration) draws the modifier as a
-        // SEPARATE 2-cell swatch beside the base — 4 painted cells where the
-        // column accounting claims 2 — shifting the rest of the row right.
+        // The NO-TRAITS fallback: with the old 2-cell claim in force, iTerm2
+        // (default width configuration) would draw the modifier as a SEPARATE
+        // 2-cell swatch beside the base — 4 painted cells where the column
+        // accounting claims 2 — shifting the rest of the row right, so the
+        // strip restores the claim. The shipped pipeline publishes
+        // `.detachedOnBMPBases` at startup and keeps the modifier (next test).
         let line = firstLine(text: "a\u{1F44D}\u{1F3FD}b", isITerm2: true)  // a👍🏽b
         #expect(!containsSkinTone(line), "modifier stripped: |\(line)|")
         #expect(line.contains("\u{1F44D}"), "the base emoji survives: |\(line)|")
         #expect(line.contains("b"), "trailing content survives: |\(line)|")
         #expect(!line.contains("\u{1B}[1C"), "no cursor compensation on iTerm2")
+    }
+
+    @Test("iTerm2 under its published traits keeps the modifier — the claim covers it")
+    func iTerm2KeepsModifiersUnderPublishedTraits() {
+        // The SHIPPED pipeline: `.detachedOnBMPBases` claims the cells the
+        // rendering occupies (👍🏽 merges at 2; ✊🏻 detaches and claims 4), so
+        // the strip is inert and the user's scalars reach the screen. Every
+        // writer test used to run only the fallback above, leaving the real
+        // configuration's writer pipeline unpinned.
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: .iTerm2)) {
+            for cluster in ["\u{1F44D}\u{1F3FD}", "\u{270A}\u{1F3FB}"] {
+                let line = firstLine(text: "a\(cluster)b", isITerm2: true)
+                #expect(containsSkinTone(line), "modifier survives: |\(line)|")
+            }
+        }
     }
 
     @Test("A text-presentation base keeps its 2-cell claim via VS-16")
