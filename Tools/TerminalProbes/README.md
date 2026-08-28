@@ -167,3 +167,23 @@ the ZWNJ separation, the ZWJ decomposition and the flag/keycap `DCH` store
 surgery were chosen over the cursor-move repairs they replaced. The emissions
 here mirror `String.withTerminalAppCursorCompensation()`, and
 `TerminalWidthTraitsTests` pins the same literals on the Swift side.
+
+## `recent_emoji_sweep.py` — does this host's width table know the new emoji?
+
+Fully automatic (no eyes needed): DSR-measures the cursor advance of every
+emoji-presentation scalar in the 1FA70–1FAFF block — where new emoji land
+version after version — plus controls, and reports the ones the host
+advances 1 against the 2-cell claim.
+
+```sh
+PROBE_OUT=/tmp/sweep.json python3 recent_emoji_sweep.py
+```
+
+First run (2026-08-28, all four hosts): Warp v0.2026.07.08 advances exactly
+the seven Unicode 16.0 additions (🪉 🪏 🪾 🫆 🫜 🫟 🫩) by 1 — its width
+table is Unicode 15.1 — while Apple Terminal, iTerm2 and Ghostty advance
+all 113 by 2. That measurement is `Character.warpCursorAdvance`'s
+`unicode16EmojiWarpDoesNotKnow` set. Re-run when a Unicode version ships,
+when a terminal updates, or when one emoji misbehaves — the sweep costs
+seconds and answers for the whole block; extend `SWEEP` when new emoji land
+outside it.

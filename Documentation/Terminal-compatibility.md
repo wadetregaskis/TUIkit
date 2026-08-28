@@ -940,6 +940,18 @@ and the *composed* classes wrong.
   kept the default background under the right half of the glyph's ink — the
   iTerm2 SF Symbol shape — and both the ECH and styled-space variants filled
   it, glyph intact.
+- **Unicode 16.0's seven emoji** (🪉 U+1FA89, 🪏 U+1FA8F, 🪾 U+1FABE,
+  🫆 U+1FAC6, 🫜 U+1FADC, 🫟 U+1FADF, 🫩 U+1FAE9) advance 1 against the
+  2-cell claim — **Warp's width table is Unicode 15.1**. User-reported on
+  U+1FAE9 (every later character on the row shifted one left), then the
+  whole 1FA70–1FAFF block DSR-swept on all four hosts
+  (`recent_emoji_sweep.py`, 2026-08-28): exactly these seven diverge, on
+  Warp alone — Apple Terminal, iTerm2 and Ghostty advance all 113
+  emoji-presentation scalars in the block by 2, and Warp's own Unicode
+  15.0 emoji (🪈 🫎 🩷) advance 2, so 15.1/16.0 is the exact boundary.
+  Modelled in `warpCursorAdvance`; the standard ECH(2)+CUF(1) repair
+  covers them. Re-run the sweep when Warp updates or a Unicode version
+  ships.
 - **OVER-advancers, unhandled** (no escape can pull a cursor back to a
   column the glyph has already painted over):
   keycaps 1️⃣ #️⃣ *️⃣ advance **3**; 〰️ 〽️ advance **3**.

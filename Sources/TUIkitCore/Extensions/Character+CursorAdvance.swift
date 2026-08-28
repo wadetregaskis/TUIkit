@@ -490,8 +490,29 @@ extension Character {
         if isLoneRegionalIndicator || isBarePictographUnderAdvancer {
             return 1
         }
+        // Unicode 16.0's seven emoji singletons: Warp's width table is
+        // Unicode 15.1, so it advances each of these 1 against the 2-cell
+        // claim — user-reported on U+1FAE9 (every later character on the row
+        // shifted one left), then the whole 1FA70–1FAFF block swept by DSR
+        // (recent_emoji_sweep.py, 2026-08-28): exactly these seven advance 1;
+        // all 106 other emoji-presentation scalars in the block advance 2,
+        // and Apple Terminal, iTerm2 and Ghostty advance all 113 by 2. The
+        // ECH+CUF under-advance repair covers them like any other.
+        if unicodeScalars.count == 1, let only = unicodeScalars.first,
+            Self.unicode16EmojiWarpDoesNotKnow.contains(only.value)
+        {
+            return 1
+        }
         return terminalWidth
     }
+
+    /// Unicode 16.0's new emoji (2024): 🪉 harp, 🪏 shovel, 🪾 leafless tree,
+    /// 🫆 fingerprint, 🫜 root vegetable, 🫟 splatter, 🫩 face with bags under
+    /// eyes. Warp v0.2026.07.08's width table predates them — see
+    /// ``warpCursorAdvance``.
+    private static let unicode16EmojiWarpDoesNotKnow: Set<UInt32> = [
+        0x1FA89, 0x1FA8F, 0x1FABE, 0x1FAC6, 0x1FADC, 0x1FADF, 0x1FAE9,
+    ]
 
     /// The number of columns **tmux** advances the text cursor by when this
     /// character is printed (DSR-measured inside tmux 3.7b, 2026-07-15).

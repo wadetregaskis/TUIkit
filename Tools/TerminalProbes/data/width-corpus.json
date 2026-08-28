@@ -303,11 +303,59 @@
    ]
   },
   {
-   "id": "shovel",
+   "id": "harp",
    "class": "recent_emoji",
    "text": "🪉",
    "scalars": [
     "U+1FA89"
+   ]
+  },
+  {
+   "id": "shovel",
+   "class": "recent_emoji",
+   "text": "🪏",
+   "scalars": [
+    "U+1FA8F"
+   ]
+  },
+  {
+   "id": "leafless_tree",
+   "class": "recent_emoji",
+   "text": "🪾",
+   "scalars": [
+    "U+1FABE"
+   ]
+  },
+  {
+   "id": "fingerprint",
+   "class": "recent_emoji",
+   "text": "🫆",
+   "scalars": [
+    "U+1FAC6"
+   ]
+  },
+  {
+   "id": "root_vegetable",
+   "class": "recent_emoji",
+   "text": "🫜",
+   "scalars": [
+    "U+1FADC"
+   ]
+  },
+  {
+   "id": "splatter",
+   "class": "recent_emoji",
+   "text": "🫟",
+   "scalars": [
+    "U+1FADF"
+   ]
+  },
+  {
+   "id": "face_bags",
+   "class": "recent_emoji",
+   "text": "🫩",
+   "scalars": [
+    "U+1FAE9"
    ]
   },
   {

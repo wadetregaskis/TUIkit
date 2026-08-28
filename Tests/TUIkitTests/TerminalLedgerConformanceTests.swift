@@ -116,11 +116,12 @@ struct TerminalLedgerConformanceTests {
     ///   `Documentation/Terminal-compatibility.md` as Warp limitations; each
     ///   needs the claim widened for its class, which
     ///   ``TUIkitCore/TerminalWidthTraits`` does not express yet.
-    /// - **`warp/shovel`** (🪉 U+1FA89) paints at 1 where 🪈 U+1FA88 beside it
-    ///   paints at 2 — Warp's width data disagreeing with the toolchain's about
-    ///   one recent codepoint. Fixing it for one codepoint would be worse than
-    ///   not fixing it; what it needs is a sweep of recent additions through
-    ///   this same probe, which is a corpus change rather than a model change.
+    /// - `warp/harp` (🪉 U+1FA89, the corpus row once misnamed "shovel")
+    ///   WAS here — Warp's width table is Unicode 15.1 and advances the seven
+    ///   Unicode 16.0 emoji by 1. The sweep this entry asked for ran on
+    ///   2026-08-28 (`recent_emoji_sweep.py`, all four hosts, the whole
+    ///   1FA70–1FAFF block): exactly those seven diverge, on Warp alone, and
+    ///   `warpCursorAdvance` now models them.
     /// - **`tone_point_up_vs16`** (☝️🏽) on Ghostty and iTerm2: a
     ///   text-presentation base promoted by VS-16 and then given a modifier.
     ///   One cluster, two hosts, two different answers (4 and 3), and no other
@@ -130,13 +131,12 @@ struct TerminalLedgerConformanceTests {
         "warp/vs16_wavy_dash", "warp/vs16_part_alt",
         "warp/vs16_congrat", "warp/vs16_secret",
         "warp/keycap_one", "warp/keycap_hash", "warp/flag_scotland",
-        "warp/shovel",
         "ghostty/tone_point_up_vs16", "iTerm2/tone_point_up_vs16",
     ]
 
     /// The claim is *narrower* than where the terminal paints, which no forward
     /// move can correct. A strict subset of ``knownAdvanceDivergences``: the two
-    /// it leaves out (`iTerm2/tone_point_up_vs16` and `warp/shovel`) are
+    /// it leaves out (e.g. `iTerm2/tone_point_up_vs16`) are
     /// mis-modelled but still claimed widely enough, so they must keep failing
     /// this one if they ever start to.
     static let knownNarrowClaims: Set<String> = [

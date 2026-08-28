@@ -105,6 +105,20 @@ struct GhosttyWarpCompatibilityTests {
             ("\u{1F44D}", 2, 2),
             ("\u{1F1FA}\u{1F1F8}", 2, 2),
             ("\u{1F1E6}", 2, 1),  // lone RI under-advances, as on Apple Terminal
+            // Unicode 16.0's seven emoji: Warp's table is Unicode 15.1, so
+            // each advances 1 against the 2-cell claim (user-reported on
+            // U+1FAE9, then the whole 1FA70–1FAFF block DSR-swept 2026-08-28:
+            // exactly these seven, on Warp alone — Apple Terminal, iTerm2 and
+            // Ghostty advance all 113 emoji-presentation scalars by 2).
+            ("\u{1FA89}", 2, 1),  // 🪉 harp
+            ("\u{1FA8F}", 2, 1),  // 🪏 shovel
+            ("\u{1FABE}", 2, 1),  // 🪾 leafless tree
+            ("\u{1FAC6}", 2, 1),  // 🫆 fingerprint
+            ("\u{1FADC}", 2, 1),  // 🫜 root vegetable
+            ("\u{1FADF}", 2, 1),  // 🫟 splatter
+            ("\u{1FAE9}", 2, 1),  // 🫩 face with bags under eyes
+            // Its Unicode 15.0 neighbour, for the boundary:
+            ("\u{1FA88}", 2, 2),  // 🪈 flute
         ])
     func warpAdvanceModel(cluster: String, claimed: Int, advance: Int) {
         let char = Character(cluster)

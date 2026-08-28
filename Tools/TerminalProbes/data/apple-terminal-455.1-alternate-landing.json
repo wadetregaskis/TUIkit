@@ -185,6 +185,13 @@
    "landing": 2,
    "reserve": 2
   },
+  "harp": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
   "hourglass": {
    "advance": 2,
    "class": "wide_symbol",
@@ -268,13 +275,6 @@
    "ink": 2,
    "landing": 1,
    "reserve": 1
-  },
-  "shovel": {
-   "advance": 2,
-   "class": "recent_emoji",
-   "ink": 2,
-   "landing": 2,
-   "reserve": 2
   },
   "telephone": {
    "advance": 2,
