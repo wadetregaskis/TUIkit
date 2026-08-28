@@ -1,9 +1,27 @@
 # Emoji rendering bugs in macOS Sequoia's Terminal.app
 
-> **Status.** The #18/#19 fix described below has shipped; the helpers
-> live in `Sources/TUIkitCore/Extensions/String+CursorCompensation.swift`
-> and `String+TerminalWidth.swift`. References to the "working tree"
-> below reflect the state during the investigation.
+> **Status (2026-08-28): HISTORICAL — superseded twice over.** This is the
+> July 2026 investigation record. Its "shipping fix" (#18/#19: strip the
+> modifier when content follows, VS-16-promote text-presentation bases) was
+> retired on 2026-08-27, and its concluding claim — that Bug B admits no
+> workaround which keeps both the modifier and an intact right edge — was
+> **falsified**: the base+ZWNJ+modifier separation preserves the modifier
+> everywhere, at the cost of one column (mid-pair after an emoji-presentation
+> base, trailing after a promoted one). The current treatments, the
+> three-facts-per-row model (internal / paint / store) that explains what
+> this document could only catalogue, and the follow-up separator hunt are
+> all in `Documentation/Terminal-compatibility.md`, which is canonical.
+>
+> What remains valuable here — and why the file is kept — is the
+> **nineteen-approach rejection ledger**: which repairs were tried against
+> Bug B, in what order, and how each failed. Approaches #3/#6/#10 (every
+> CUB variant strips the modifier), #11/#12 (deferral discovers the
+> row-wide LEFT shift), and #14 (DECRC counts as backward movement in
+> context) are measurements that still constrain any future attempt.
+> References to the "working tree" reflect the state during the
+> investigation; helpers it names now live in
+> `Sources/TUIkitCore/Extensions/String+CursorCompensation.swift` and
+> `String+TerminalWidth.swift`, much evolved.
 
 This document catalogues the Terminal.app rendering quirks that TUIkit has
 to work around in macOS 15 (Sequoia), the approaches that were tried during
@@ -207,6 +225,14 @@ plus the existing two-pass `repaintRightEdge` for the phantom-cell
 right-edge bug — those workarounds were never the problem.
 
 ## Conclusion: why Bug B can't be worked around perfectly
+
+> **Falsified 2026-08-28** — kept as written because the reasoning shows
+> exactly which premise fell: "preserving the modifier requires never
+> writing anything to the row after the cluster" assumed the cluster must
+> reach the terminal COMPOSED. Emitting it as base + ZWNJ + modifier — one
+> rewritten grapheme the terminal never re-joins — preserves the modifier
+> with an intact right edge, and no backward move is ever needed. See the
+> treatment table in `Terminal-compatibility.md`.
 
 The bug has two independent halves that pull against each other:
 
