@@ -226,7 +226,6 @@ struct ContainersPage: View {
             ) {
                 appearanceManager?.cyclePrevious()
             },
-            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "status.scroll"),
         ]
     }
 }

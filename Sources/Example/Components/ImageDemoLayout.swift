@@ -134,7 +134,6 @@ enum ImageDemoStatusBar {
             ) {
                 zoom.wrappedValue = ImageDemoHelpers.zoomedOut(zoom.wrappedValue)
             },
-            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "page.imageFile.scroll"),
         ]
     }
 }

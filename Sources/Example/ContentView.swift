@@ -289,8 +289,7 @@ struct ContentView: View {
         [
             StatusBarItem(shortcut: Shortcut.escape, label: "status.back") { [pageSetter] in
                 pageSetter.wrappedValue = .menu
-            },
-            StatusBarItem(shortcut: Shortcut.arrowsUpDown, label: "status.scroll"),
+            }
         ]
     }
 }
