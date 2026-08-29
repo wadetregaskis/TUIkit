@@ -482,10 +482,19 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         if !isDisabled {
             // The ▾ disclosure occupies the two cells between the content and
             // the closing cap; clicks there toggle the menu, not the caret.
+            //
+            // Plus the cap itself, which is leeway rather than sloppiness: the
+            // arrow is ONE cell, the pad to its left already counts, and a
+            // pointer a single cell wide of a target that small has no way to
+            // see the miss coming. The cap is chrome with no click behaviour of
+            // its own, so nothing is taken from anything else — a press on it
+            // used to focus the field and drop the caret at the end, which is
+            // not what someone reaching for the arrow meant.
             let leading = chrome.leadingCells
             let disclosureRange: Range<Int>? =
                 suggestionMenu != nil
-                ? (leading + textWidth)..<(leading + textWidth + 2) : nil
+                ? (leading + textWidth)..<(leading + textWidth + 2 + chrome.trailingCells)
+                : nil
             TextFieldMouseHandler.register(
                 buffer: &buffer,
                 context: context,

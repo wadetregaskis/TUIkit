@@ -578,6 +578,43 @@ struct TextSuggestionMenuTests {
         #expect(!screen.contains("alpha"), "a second click closes it: \(screen)")
     }
 
+    /// The click target is wider than the arrow, and this says how much wider.
+    ///
+    /// The `▾` is ONE cell. The pad to its left has always counted; the closing
+    /// cap to its right had not, so a pointer one cell wide of a one-cell
+    /// target focused the field and dropped the caret at the end instead —
+    /// which is not what someone reaching for the arrow meant, and not a miss
+    /// they can see coming. The cap has no click behaviour of its own, so
+    /// nothing is taken from anything else.
+    @Test(
+        "The arrow, its pad and the cap beside it all open the menu",
+        arguments: [21, 22, 23])
+    func disclosureLeeway(column: Int) {
+        let tui = TUIContext()
+        let focus = FocusManager()
+        let env = makeEnvironment(tui: tui, focus: focus)
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.standard)
+        let box = TextBox()
+        let field = makeField(box)
+
+        func renderAndWire() -> FrameBuffer {
+            let buffer = render(field, tui: tui, focus: focus, env: env)
+            let composited = buffer.compositingOverlays(
+                maxWidth: 60, maxHeight: 20, palette: env.palette)
+            dispatcher.setRegions(composited.hitTestRegions)
+            return composited
+        }
+        _ = renderAndWire()
+
+        // The frame is 24 wide: content, then the pad at 21, the `▾` at 22 and
+        // the closing cap at 23.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: column, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: column, y: 0))
+        let screen = renderAndWire().lines.map(\.stripped).joined(separator: "\n")
+        #expect(screen.contains("alpha"), "a click at x=\(column) did not open the menu: \(screen)")
+    }
+
     /// The (y, x) of `needle`'s first character in the buffer, or nil.
     private func locate(_ needle: String, in buffer: FrameBuffer) -> (row: Int, column: Int)? {
         for (row, line) in buffer.lines.enumerated() {

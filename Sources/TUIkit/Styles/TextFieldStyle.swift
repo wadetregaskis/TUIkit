@@ -155,6 +155,13 @@ struct FieldChrome {
     /// happen.
     var leadingCells: Int { width / 2 }
 
+    /// Cells after the content ends — the trailing cap, or none.
+    ///
+    /// The combo box's click target reaches through it: the cap is a single
+    /// cell hard against the `▾`, and a click one cell wide of a two-cell
+    /// target is a miss the pointer has no way to see coming.
+    var trailingCells: Int { width - leadingCells }
+
     /// Builds the chrome for a style, tinting the caps toward the accent while
     /// hovered so the affordance reads as "clickable" without mimicking the
     /// focused look.
