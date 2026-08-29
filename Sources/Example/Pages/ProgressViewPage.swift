@@ -236,10 +236,20 @@ struct ProgressViewPage: View {
                     }
                     gaugeRow(label: "accessoryLinear         ", fraction: fraction, style: .accessoryLinear)
                     gaugeRow(label: "accessoryLinearCapacity ", fraction: fraction, style: .accessoryLinearCapacity)
+                    // No percent sign in a ring: its interior is four cells
+                    // and "100%" fills it corner to corner, where the bare
+                    // number sits in the middle of its own circle. The linear
+                    // gauges above keep theirs — they have a column to spare.
                     HStack(spacing: 3) {
-                        circularGauge(label: "accessoryCircular", fraction: fraction, style: .accessoryCircular)
-                        circularGauge(label: "…Capacity", fraction: fraction, style: .accessoryCircularCapacity)
-                        circularGauge(label: "…Tiny", fraction: fraction, style: .accessoryCircularTiny)
+                        circularGauge(
+                            label: "accessoryCircular", fraction: fraction,
+                            text: percent(fraction), style: .accessoryCircular)
+                        circularGauge(
+                            label: "…Capacity", fraction: fraction,
+                            text: percent(fraction), style: .accessoryCircularCapacity)
+                        circularGauge(
+                            label: "…Tiny", fraction: fraction,
+                            text: percent(fraction), style: .accessoryCircularTiny)
                     }
 
                     // Non-percentage read-outs: the same gauges over other
@@ -382,18 +392,26 @@ struct ProgressViewPage: View {
         }
     }
 
-    /// A circular gauge with its style name below it. `text` overrides the
-    /// read-out (default: the fraction as a percentage).
+    /// A circular gauge with its style name below it.
+    ///
+    /// `text` is required rather than defaulted: a ring has four cells for its
+    /// read-out, so what goes in one is always a decision.
     @ViewBuilder
     private func circularGauge(
-        label: String, fraction: Double, text: String? = nil, style: GaugeStyle
+        label: String, fraction: Double, text: String, style: GaugeStyle
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Gauge(value: fraction) { EmptyView() } currentValueLabel: {
-                Text(text ?? "\(Int((fraction * 100).rounded()))%")
+                Text(text)
             }
             .gaugeStyle(style)
             Text(label).dim()
         }
+    }
+
+    /// `fraction` as a whole number of percent, with no unit — the read-out
+    /// the ring gauges take.
+    private func percent(_ fraction: Double) -> String {
+        "\(Int((fraction * 100).rounded()))"
     }
 }
