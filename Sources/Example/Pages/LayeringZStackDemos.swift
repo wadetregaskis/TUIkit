@@ -1,7 +1,7 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
-//  LayoutZStackDemos.swift
+//  LayeringZStackDemos.swift
 //
-//  The Layout System page's ZStack section: five bands making one claim from
+//  The Layering page's ZStack section: five bands making one claim from
 //  five angles — the top layer owns every cell it lands on, and nothing shows
 //  through.
 //
@@ -11,7 +11,7 @@
 import Foundation
 import TUIkit
 
-extension LayoutPage {
+extension LayeringPage {
 
     /// One band's geometry: how wide the layer underneath is, how wide the
     /// layer on top is, and how the two are aligned.
@@ -78,7 +78,7 @@ extension LayoutPage {
 
     /// The whole section.
     @ViewBuilder var zstackSection: some View {
-        DemoSection("page.layout.section.zstack") {
+        DemoSection("page.layering.section.zstack") {
             // One `TimelineView` either way, with a schedule that stops rather
             // than a branch that swaps the view out: swapping would change the
             // subtree's IDENTITY every time the toggle moved, and take the
@@ -93,7 +93,7 @@ extension LayoutPage {
 
     @ViewBuilder private func zstackBody(travel: Double) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text("page.layout.zstack.explain")
+            Text("page.layering.zstack.explain")
                 .foregroundStyle(.palette.foregroundSecondary)
 
             // Slide every example's top layer at once: the partial overlaps are
@@ -108,7 +108,7 @@ extension LayoutPage {
                     value: Binding(get: { travel }, set: { zstackTravel = $0 }),
                     in: -1...1, step: 0.05
                 ) {
-                    Text("page.layout.zstack.offset")
+                    Text("page.layering.zstack.offset")
                         .foregroundStyle(.palette.foregroundSecondary)
                 }
                 .sliderShowsValue(false)
@@ -121,17 +121,17 @@ extension LayoutPage {
                     .frame(width: 5, alignment: .trailing)
                     .bold()
                     .foregroundStyle(.palette.accent)
-                Toggle("page.layout.zstack.animate", isOn: $zstackAnimates)
+                Toggle("page.layering.zstack.animate", isOn: $zstackAnimates)
             }
 
             // 1 — What it does. Children stack back-to-front and alignment
             // positions them within the union of their sizes.
-            Text("page.layout.zstack.case1")
+            Text("page.layering.zstack.case1")
                 .foregroundStyle(.palette.foregroundTertiary)
             band(Self.zstackCase1) {
                 Text(String(repeating: "▒", count: Self.zstackCase1.under))
                     .foregroundStyle(.palette.accent)
-                Text(" \(L("page.layout.onTop")) ").bold().inverted()
+                Text(" \(L("page.layering.onTop")) ").bold().inverted()
                     .offset(x: Self.zstackCase1.offset(travel))
             }
 
@@ -140,19 +140,19 @@ extension LayoutPage {
             // hole in the band rather than letting it through. Beside it, the
             // same label with no padding: the hole shrinks to exactly the
             // glyphs.
-            Text("page.layout.zstack.case2")
+            Text("page.layering.zstack.case2")
                 .foregroundStyle(.palette.foregroundTertiary)
             HStack(spacing: 3) {
                 band(Self.zstackCase2Padded) {
                     Text(String(repeating: "▒", count: Self.zstackCase2Padded.under))
                         .foregroundStyle(.palette.accent)
-                    Text(verbatim: "   \(L("page.layout.zstack.word"))   ")
+                    Text(verbatim: "   \(L("page.layering.zstack.word"))   ")
                         .offset(x: Self.zstackCase2Padded.offset(travel))
                 }
                 band(Self.zstackCase2Bare) {
                     Text(String(repeating: "▒", count: Self.zstackCase2Bare.under))
                         .foregroundStyle(.palette.accent)
-                    Text(verbatim: L("page.layout.zstack.word"))
+                    Text(verbatim: L("page.layering.zstack.word"))
                         .offset(x: Self.zstackCase2Bare.offset(travel))
                 }
             }
@@ -165,7 +165,7 @@ extension LayoutPage {
         // 3 — Nor is there any blending. Two words over each other give the top
         // one's cells, not a mixture of both; the lower one survives only where
         // the upper does not reach.
-        Text("page.layout.zstack.case3")
+        Text("page.layering.zstack.case3")
             .foregroundStyle(.palette.foregroundTertiary)
         band(Self.zstackCase3, alignment: .leading) {
             Text(verbatim: "UNDERNEATH·UNDERNEATH")
@@ -176,18 +176,22 @@ extension LayoutPage {
                 .offset(x: Self.zstackCase3.offset(travel))
         }
 
-        // 4 — What to reach for instead. `.opacity` is not compositing: it
-        // moves a COLOUR toward the background and the cell stays as opaque as
-        // it was, which is why it can fade text that has nothing behind it and
-        // cannot show what does.
-        Text("page.layout.zstack.case4")
+        // 4 — What `.opacity` changes about all of that, driven by the three
+        // controls at the top of the page rather than by a number written here.
+        //
+        // The old version of this band was fixed at `0.45` and said `.opacity`
+        // "moves a COLOUR toward the background", which stopped being true when
+        // opacity became a composite — and 0.45 is below the glyph threshold,
+        // so the label was not merely wrong about itself, it was invisible: the
+        // band's own `▒` won every contested cell and the demo showed nothing
+        // happening at all.
+        Text("page.layering.zstack.case4")
             .foregroundStyle(.palette.foregroundTertiary)
         band(Self.zstackCase4) {
             Text(String(repeating: "▒", count: Self.zstackCase4.under))
                 .foregroundStyle(.palette.accent)
-            Text(" \(L("page.layout.zstack.faded")) ")
-                .foregroundStyle(.palette.foreground)
-                .opacity(0.45)
+            topLayer(" \(L("page.layering.zstack.faded")) ")
+                .opacity(zstackOpacity)
                 .offset(x: Self.zstackCase4.offset(travel))
         }
 
@@ -198,22 +202,45 @@ extension LayoutPage {
         // tint of the layer beneath anywhere in it, and no seam. Slide it and
         // the lower background reappears cell for cell exactly where the upper
         // one stops.
-        Text("page.layout.zstack.case5")
+        Text("page.layering.zstack.case5")
             .foregroundStyle(.palette.foregroundTertiary)
         band(Self.zstackCase5, alignment: .leading) {
             // The lower block's own label sits at its far end, beyond anything
             // the upper block can reach, so what moves in this demo is the
             // colours rather than a word being eaten a letter at a time.
-            Text("page.layout.zstack.under")
+            Text("page.layering.zstack.under")
                 .padding(.trailing, 1)
                 .frame(width: Self.zstackCase5.under, alignment: .trailing)
                 .foregroundStyle(.palette.background)
                 .background(.palette.info)
-            Text("page.layout.zstack.over")
+            Text("page.layering.zstack.over")
                 .frame(width: Self.zstackCase5.over, alignment: .center)
                 .foregroundStyle(.palette.background)
                 .background(.palette.warning)
                 .offset(x: Self.zstackCase5.offset(travel))
+        }
+    }
+
+    /// The top layer of case 4: a label painting whichever colours the controls
+    /// at the top of the page say it does.
+    ///
+    /// Off, the two toggles leave it painting NOTHING — no foreground, no
+    /// background — which is the state that shows what a composite falls back
+    /// to. With a background it is opaque cell for cell at alpha 1; without
+    /// one, the band behind shows through its letters at every alpha, because a
+    /// cell that names no background has none to win with.
+    @ViewBuilder private func topLayer(_ text: String) -> some View {
+        let label = Text(verbatim: text).bold()
+        if zstackTopBackground {
+            label
+                .foregroundStyle(
+                    zstackTopForeground ? .palette.background : .palette.foreground
+                )
+                .background(.palette.warning)
+        } else if zstackTopForeground {
+            label.foregroundStyle(.palette.foreground)
+        } else {
+            label
         }
     }
 

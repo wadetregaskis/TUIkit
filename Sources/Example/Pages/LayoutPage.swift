@@ -132,32 +132,6 @@ struct LayoutPage: View {
     /// Whether the chips flow onto wrapped lines or stack in one column.
     @State private var flowChipsLayout = true
 
-    /// Where the ZStack demos' TOP layer sits, as a fraction of its full
-    /// travel: `-1` is clear of the layer beneath it on the left, `0` is where
-    /// its alignment puts it, `+1` is clear on the right.
-    ///
-    /// A fraction rather than a cell count, because the five bands are
-    /// different widths and their top layers are aligned differently — so one
-    /// count of cells would run out of travel in some and past the end in
-    /// others. Each case turns the fraction into its own offset.
-    ///
-    /// One control for all five, because the point being made is the same in
-    /// each: the top layer owns the cells it lands on and nothing shows
-    /// through, so what changes as it slides is only WHICH cells those are.
-    ///
-    /// - Note: internal rather than `private`, and it cannot be otherwise: the
-    ///   demo that reads it is an `extension LayoutPage` in
-    ///   `LayoutZStackDemos.swift`, and Swift's `private` is file-scoped. A
-    ///   stored property cannot live in an extension, so the only alternative
-    ///   is merging two files that were split on purpose.
-    @State var zstackTravel = 0.0  // swiftlint:disable:this private_swiftui_state
-
-    /// Whether the travel sweeps back and forth on its own.
-    ///
-    /// - Note: internal for the reason ``zstackTravel`` gives — the demo that
-    ///   reads it lives in another file.
-    @State var zstackAnimates = false  // swiftlint:disable:this private_swiftui_state
-
     /// Which axes the resize demo offers, driven by the toggles beside it.
     @State private var resizableWidth = true
     @State private var resizableHeight = true
@@ -418,8 +392,6 @@ struct LayoutPage: View {
                 }
                 .border(.brightBlack)
             }
-
-            zstackSection
 
             DemoSection("page.layout.section.alignmentGuide") {
                 VStack(alignment: .leading, spacing: 1) {

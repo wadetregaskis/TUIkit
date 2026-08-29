@@ -44,7 +44,7 @@ enum DemoPage: Int, CaseIterable {
     case menus
     case navigation
     case animation
-    case opacity
+    case layering
 
     /// The page to open on, so a demo page can be inspected without navigating
     /// to it — `Example --page emoji`.
@@ -279,8 +279,8 @@ struct ContentView: View {
             FocusPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         case .animation:
             AnimationPage().statusBarItems(subPageItems(pageSetter: pageSetter))
-        case .opacity:
-            OpacityPage().statusBarItems(subPageItems(pageSetter: pageSetter))
+        case .layering:
+            LayeringPage().statusBarItems(subPageItems(pageSetter: pageSetter))
         }
     }
 
