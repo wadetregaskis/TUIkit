@@ -218,16 +218,20 @@ struct TrackStyleEditor: View {
             Text("component.trackEditor.comboHint")
                 .foregroundStyle(.palette.foregroundSecondary)
 
+            // Full width, not a fixed 36 cells: this is the one bar on either
+            // page that the reader is editing, and a coarse fill (an emoji
+            // pattern quantizes the track to its own cell width) has visibly
+            // more to show at 80 cells than at 36.
             switch preview {
             case .progress:
                 ProgressView(value: animatedFraction)
                     .progressViewStyle(.custom(configuration))
-                    .frame(width: 36)
+                    .frame(maxWidth: .infinity)
                     .trackGradientScaling(gradientSpansTrack ? .track : .fill)
             case .slider:
                 Slider(value: $sliderValue)
                     .trackStyle(.custom(configuration))
-                    .frame(width: 36)
+                    .frame(maxWidth: .infinity)
                     .trackGradientScaling(gradientSpansTrack ? .track : .fill)
             }
         }
