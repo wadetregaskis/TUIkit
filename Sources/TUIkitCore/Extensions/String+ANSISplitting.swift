@@ -91,7 +91,7 @@ extension String {
                 }
             }
         }
-        return ansiAwarePrefixWithWidth(visibleCount: visibleCount)
+        return exactAnsiAwarePrefixWithWidth(visibleCount: visibleCount)
     }
 
     /// Like ``ansiAwarePrefix(visibleCount:)`` but also returns the visible cell
@@ -102,6 +102,33 @@ extension String {
     /// redundant `strippedLength` re-scan of the clipped string. The width is
     /// exactly `prefix.strippedLength` by construction.
     public func ansiAwarePrefixWithWidth(visibleCount: Int) -> (prefix: String, visibleWidth: Int) {
+        guard visibleCount > 0 else { return ("", 0) }
+
+        // The commonest case on the emission path by a wide margin: the line
+        // already fits, so the walk would materialize a segment per character
+        // only to hand back the string it was given. `strippedLength` answers
+        // "does it fit" without allocating, and has its own byte-wise fast
+        // path for the plain-ASCII majority.
+        //
+        // Equivalent by construction: the walk emits every segment in order
+        // and only stops early at a cut, so with no cut it reassembles the
+        // original and reports `strippedLength`. `ANSIPrefixKnownWidthTests`
+        // pins that against ``exactAnsiAwarePrefixWithWidth(visibleCount:)``
+        // rather than leaving it as an argument.
+        let width = strippedLength
+        if width <= visibleCount { return (self, width) }
+
+        return exactAnsiAwarePrefixWithWidth(visibleCount: visibleCount)
+    }
+
+    /// The clip with no fast path at all — the segment walk itself.
+    ///
+    /// Kept reachable so the fast paths in front of it have an oracle to be
+    /// pinned against. Both public entry points are required to be
+    /// byte-identical to this for every input at every cut point, and a test
+    /// that could only compare one fast path to another would not be checking
+    /// anything.
+    func exactAnsiAwarePrefixWithWidth(visibleCount: Int) -> (prefix: String, visibleWidth: Int) {
         guard visibleCount > 0 else { return ("", 0) }
 
         var result = ""

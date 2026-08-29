@@ -51,15 +51,27 @@ struct ANSIPrefixKnownWidthTests {
         for string in corpus {
             let width = string.strippedLength
             for cut in 0...(width + 2) {
-                let slow = string.ansiAwarePrefixWithWidth(visibleCount: cut)
-                let fast = string.ansiAwarePrefixWithWidth(
+                // The oracle is the walk ITSELF, not the other fast path.
+                // Both public entry points now short-circuit a line that
+                // already fits, so comparing them to each other would agree
+                // by construction over exactly the cuts that matters most.
+                let walk = string.exactAnsiAwarePrefixWithWidth(visibleCount: cut)
+                let plain = string.ansiAwarePrefixWithWidth(visibleCount: cut)
+                let known = string.ansiAwarePrefixWithWidth(
                     visibleCount: cut, knownVisibleWidth: width)
                 #expect(
-                    slow.prefix == fast.prefix && slow.visibleWidth == fast.visibleWidth,
+                    walk.prefix == plain.prefix && walk.visibleWidth == plain.visibleWidth,
                     """
                     cut \(cut) of \(string.debugDescription): \
-                    walk \(slow.prefix.debugDescription) (\(slow.visibleWidth)) \
-                    vs fast \(fast.prefix.debugDescription) (\(fast.visibleWidth))
+                    walk \(walk.prefix.debugDescription) (\(walk.visibleWidth)) \
+                    vs fits-fast-path \(plain.prefix.debugDescription) (\(plain.visibleWidth))
+                    """)
+                #expect(
+                    walk.prefix == known.prefix && walk.visibleWidth == known.visibleWidth,
+                    """
+                    cut \(cut) of \(string.debugDescription): \
+                    walk \(walk.prefix.debugDescription) (\(walk.visibleWidth)) \
+                    vs known-width \(known.prefix.debugDescription) (\(known.visibleWidth))
                     """)
             }
         }
