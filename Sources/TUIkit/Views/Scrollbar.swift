@@ -403,7 +403,7 @@ struct ScrollbarColors {
         // stepping the cell it is over further, not by starting a second story.
         let track = palette.foregroundQuaternary.resolve(with: palette)
         let now = Self.separated(
-            cycle.colorNow(dim: Self.pulseDim(palette), bright: palette.accent), from: track)
+            cycle.colorNow(dim: palette.accent, bright: Self.pulseLift(palette)), from: track)
         return Self(
             thumb: now,
             track: palette.foregroundQuaternary,
@@ -411,15 +411,29 @@ struct ScrollbarColors {
             hover: hoveredCell.map { ($0, palette.hoveredForeground(now)) })
     }
 
-    /// The recessive end of the focused bar's breath.
+    /// The far end of the focused bar's breath: the accent LIFTED, away from
+    /// the page — brighter on a dark palette, darker on a light one.
     ///
-    /// The accent faded toward the background — which on several palettes lands
-    /// on, or past, the track's own quiet tone. Separated from the track by
-    /// ``separated(_:from:)``, like every other point of the breath.
+    /// The breath used to run the other way, from the accent down to
+    /// `accent.opacity(focusPulseMin, over: background)`, which is what every
+    /// other focused control does. On a thumb it did not work, and the reason
+    /// is that a thumb is an AREA rather than an outline: a button's border
+    /// fading toward the page still has its label, while a solid block fading
+    /// toward the page is a hole. Measured on the green palette, the recessive
+    /// end came out `rgb(11, 27, 11)` — darker than the track it sits in
+    /// (`rgb(22, 90, 22)`) and all but the background (`rgb(5, 10, 5)`), so the
+    /// scroller read as pulsing in and out of existence.
+    ///
+    /// ``Palette/hoveredForeground(_:)`` is the framework's existing answer to
+    /// "one step away from the page, whichever way that is": brighter on a dark
+    /// palette, and on a light one — or on a palette whose accent is already at
+    /// the extreme, like the white terminal's — darker instead. The same rule
+    /// the pointer's own lift follows, which is why the hovered cell can go on
+    /// stepping one further from wherever the breath currently is.
     @MainActor
-    static func pulseDim(_ palette: any Palette) -> Color {
+    static func pulseLift(_ palette: any Palette) -> Color {
         separated(
-            palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background),
+            palette.hoveredForeground(palette.accent),
             from: palette.foregroundQuaternary.resolve(with: palette))
     }
 
@@ -490,7 +504,8 @@ struct ScrollbarPulse {
     @MainActor
     var frames: [ScrollbarColors] {
         let track = palette.foregroundQuaternary.resolve(with: palette)
-        return cycle.colors(dim: ScrollbarColors.pulseDim(palette), bright: palette.accent)
+        return cycle.colors(
+            dim: palette.accent, bright: ScrollbarColors.pulseLift(palette))
             .map { ScrollbarColors.separated($0, from: track) }
             .map { accent in
                 ScrollbarColors(

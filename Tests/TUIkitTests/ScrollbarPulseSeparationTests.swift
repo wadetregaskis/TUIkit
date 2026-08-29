@@ -41,7 +41,7 @@ struct ScrollbarPulseSeparationTests {
             environment.palette = palette
             let cycle = SelectionEmphasisClock(environment: environment).cycle(true)
             let frames = cycle.colors(
-                dim: ScrollbarColors.pulseDim(palette), bright: palette.accent
+                dim: palette.accent, bright: ScrollbarColors.pulseLift(palette)
             ).map { ScrollbarColors.separated($0, from: track) }
             #expect(!frames.isEmpty, "the cycle has frames to check")
             for (index, thumb) in frames.enumerated() {
