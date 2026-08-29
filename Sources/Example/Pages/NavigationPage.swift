@@ -82,6 +82,14 @@ struct NavigationPage: View {
             Text("page.navigation.intro")
                 .foregroundStyle(.palette.foregroundSecondary)
 
+            // The stack takes whatever height is left, and keeps it whatever is
+            // on top of it. Without this the box was as tall as the screen
+            // currently showing: the root hugs its rows, while every pushed
+            // screen ends in a `Spacer()` that puts its "back to the root"
+            // button at the bottom — so walking in and out redrew the border in
+            // a different place each time. A navigation stack in an app owns
+            // its area; this says so, and the page's own two lines still sit
+            // above and below it.
             NavigationStack(path: $path) {
                 rootScreen
                     .navigationDestination(for: Planet.self) { planetScreen($0) }
@@ -89,10 +97,14 @@ struct NavigationPage: View {
                     .navigationDestination(for: Feature.self) { featureScreen($0) }
                     .navigationDestination(for: Sample.self) { sampleScreen($0) }
             }
+            .frame(maxHeight: .infinity, alignment: .topLeading)
             .border(.palette.border)
 
             Text("\(L("page.navigation.depth")) \(path.count)")
                 .foregroundStyle(.palette.foregroundSecondary)
+        }
+        .appHeader {
+            DemoAppHeader("menu.item.navigation", subtitle: "page.navigation.subtitle")
         }
     }
 
