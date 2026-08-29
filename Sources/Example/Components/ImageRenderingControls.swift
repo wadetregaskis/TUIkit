@@ -32,10 +32,6 @@ struct ImageRenderingControls: View {
     /// converter's luminance-ascending mapping).
     private static let ramps = [" .:-=+*#%@", " ░▒▓█", " .oO@", " ._xX#"]
 
-    /// How wide a slider in the pane is. Narrow enough that the pane stays a
-    /// column rather than a second page.
-    private static let sliderWidth = 14
-
     var body: some View {
         ScrollView {
             // In the order the renderer applies them: the image is sampled into
@@ -133,7 +129,7 @@ struct ImageRenderingControls: View {
                 // the raw threshold value shown after it.
                 Slider(value: $settings.edgeThreshold, in: 0.3...2.0, step: 0.1)
                     .sliderShowsValue(false)
-                    .frame(width: Self.sliderWidth)
+                    .frame(maxWidth: .infinity)
                 Text(String(format: "%.1f", settings.edgeThreshold)).dim()
             }
             .disabled(
@@ -267,8 +263,14 @@ struct ImageRenderingControls: View {
                     set: { value.wrappedValue = Int($0.rounded()) }),
                 in: Double(range.lowerBound)...Double(range.upperBound), step: 1
             )
+            // The slider's own `%`-of-range read-out would mislead beside the
+            // count shown after it — 4 greys of 2...16 is not "14%" of
+            // anything the reader is choosing.
             .sliderShowsValue(false)
-            .frame(width: Self.sliderWidth)
+            // The pane is a fixed width, so "as wide as it can be" is a width:
+            // a 14-cell track gave two greys per cell of travel where the row
+            // has room for one.
+            .frame(maxWidth: .infinity)
             Text(verbatim: "\(value.wrappedValue)").dim()
         }
         .disabled(!enabled)
