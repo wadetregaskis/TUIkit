@@ -105,117 +105,38 @@ struct ProgressViewPage: View {
         let current = Self.cyclableStyles[determinateStyleIndex]
         VStack(alignment: .leading, spacing: 1) {
 
-            if terminalWidth >= 80 {
+            // Two columns of the same shape: each mode, then that mode's
+            // catalogue of styles directly under it.
+            //
+            // A wider threshold than the `>= 80` this took when only the two
+            // top sections were side by side. Those hold width-flexible bars
+            // and shrink to whatever column they are given; the catalogues
+            // below them are fixed-width rows (24 cells for a determinate bar,
+            // 36 for an indeterminate one) and cannot.
+            if terminalWidth >= Self.twoColumnWidth {
                 HStack(alignment: .top, spacing: 2) {
-                    determinateSection(style: current.style)
-                        .frame(maxWidth: .infinity)
-                    indeterminateSection
-                        .frame(maxWidth: .infinity)
+                    VStack(alignment: .leading, spacing: 1) {
+                        determinateSection(style: current.style)
+                        determinateStylesSection
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 1) {
+                        indeterminateSection
+                        indeterminateStylesSection
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
                 determinateSection(style: current.style)
+                determinateStylesSection
                 indeterminateSection
-            }
-
-            DemoSection("page.progressView.determinateStyles") {
-                VStack(alignment: .leading, spacing: 0) {
-                    Picker("page.progressView.gradientScaling", selection: $gradientScaling) {
-                        Text("page.progressView.gradientScalingTrack").tag(TrackGradientScaling.track)
-                        Text("page.progressView.gradientScalingFill").tag(TrackGradientScaling.fill)
-                    }
-                    .pickerStyle(.inline)
-                    HStack(spacing: 1) {
-                        Text("Style        ").dim()
-                        Text("    Progress       ").dim().frame(width: 24)
-                    }
-                    determinateRow(label: "block        ", style: .block)
-                    determinateRow(label: "blockFine    ", style: .blockFine)
-                    determinateRow(label: "shade        ", style: .shade)
-                    determinateRow(label: "bar          ", style: .bar)
-                    determinateRow(label: "dot          ", style: .dot)
-                    determinateRow(label: "braille      ", style: .braille)
-                    determinateRow(
-                        label: "shadeRamp    ",
-                        style: .shadeRamp(gradient: nil)
-                    )
-                    determinateRow(
-                        label: "shadeRamp(g) ",
-                        style: .shadeRamp(gradient: [
-                            .rgb(255, 80, 80),
-                            .rgb(255, 200, 80),
-                            .rgb(80, 220, 120),
-                        ])
-                    )
-                    determinateRow(
-                        label: "threeSegment ",
-                        style: .threeSegment(
-                            leading: "Sw",
-                            middle: "i",
-                            trailing: "ft",
-                            emptyFill: "·"
-                        )
-                    )
-                    // Segment colouring: one colour per segment…
-                    determinateRow(
-                        label: "threeSeg(per)",
-                        style: .threeSegment(
-                            leading: "Sw", middle: "i", trailing: "ft", emptyFill: "·",
-                            coloring: .perSegment(
-                                leading: .rgb(255, 120, 60),
-                                middle: .rgb(220, 220, 220),
-                                trailing: .rgb(80, 160, 255))
-                        )
-                    )
-                    // …or a per-cell gradient across the whole lit span.
-                    determinateRow(
-                        label: "threeSeg(gr) ",
-                        style: .threeSegment(
-                            leading: "Sw", middle: "i", trailing: "ft", emptyFill: "·",
-                            coloring: .gradient([
-                                .rgb(255, 80, 80), .rgb(255, 200, 80), .rgb(80, 220, 120),
-                            ])
-                        )
-                    )
-                    // A hand-rolled `.custom` recipe: a shade-ramp fill with a
-                    // solid background for the unfilled region — a combination
-                    // no named preset provides (showcasing TrackConfiguration).
-                    determinateRow(
-                        label: "custom       ",
-                        style: .custom(
-                            TrackConfiguration(
-                                fullGlyph: "█", partialRamp: ["░", "▒", "▓"],
-                                emptyStyle: .background))
-                    )
-                }
-                .trackGradientScaling(gradientScaling)
+                indeterminateStylesSection
             }
 
             // Build-your-own TrackConfiguration: every ingredient the named
             // presets are made of, applied live to a determinate bar.
             DemoSection("page.trackEditor.section") {
                 TrackStyleEditor(preview: .progress)
-            }
-
-            DemoSection("page.progressView.indeterminateAnimations") {
-                VStack(alignment: .leading, spacing: 0) {
-                    indeterminateRow(label: "sweep        ", style: .sweep)
-                    indeterminateRow(label: "barberPole   ", style: .barberPole)
-                    indeterminateRow(label: "pulse        ", style: .pulse)
-                    indeterminateRow(label: "knightRider  ", style: .knightRider)
-                    indeterminateRow(label: "gradient     ", style: .gradient())
-                    // The same slide with caller-supplied stops: any ≥2 RGB
-                    // colours, cyclically wrapped — editable via the gradient
-                    // editor below (teal → violet until you change it).
-                    indeterminateRow(
-                        label: "gradient(c)  ",
-                        style: .gradient(colors: gradientStops))
-                    HStack(spacing: 1) {
-                        ForEach(Array(gradientStops.enumerated()), id: \.offset) { _, stop in
-                            Text("██").foregroundStyle(stop)
-                        }
-                        Button("page.progressView.editGradient") { editingGradient = true }
-                    }
-                }
             }
 
             // A Gauge is the sibling of ProgressView — it shows where a value
@@ -302,6 +223,116 @@ struct ProgressViewPage: View {
             StatusBarItem(shortcut: "s", label: "\(L("page.progressView.styleLabel")): \(current.name)") {
                 determinateStyleIndex =
                     (determinateStyleIndex + 1) % Self.cyclableStyles.count
+            }
+        }
+    }
+
+    /// How wide the terminal has to be for the two catalogues to sit side
+    /// by side. Their rows are fixed-width, so below this they stack rather
+    /// than clip.
+    private static let twoColumnWidth = 106
+
+    /// The determinate catalogue: every built-in ``TrackStyle`` at the
+    /// page's shared fraction, so they fill together.
+    @ViewBuilder
+    private var determinateStylesSection: some View {
+        DemoSection("page.progressView.determinateStyles") {
+            VStack(alignment: .leading, spacing: 0) {
+                Picker("page.progressView.gradientScaling", selection: $gradientScaling) {
+                    Text("page.progressView.gradientScalingTrack").tag(TrackGradientScaling.track)
+                    Text("page.progressView.gradientScalingFill").tag(TrackGradientScaling.fill)
+                }
+                .pickerStyle(.inline)
+                HStack(spacing: 1) {
+                    Text("Style        ").dim()
+                    Text("    Progress       ").dim().frame(width: 24)
+                }
+                determinateRow(label: "block        ", style: .block)
+                determinateRow(label: "blockFine    ", style: .blockFine)
+                determinateRow(label: "shade        ", style: .shade)
+                determinateRow(label: "bar          ", style: .bar)
+                determinateRow(label: "dot          ", style: .dot)
+                determinateRow(label: "braille      ", style: .braille)
+                determinateRow(
+                    label: "shadeRamp    ",
+                    style: .shadeRamp(gradient: nil)
+                )
+                determinateRow(
+                    label: "shadeRamp(g) ",
+                    style: .shadeRamp(gradient: [
+                        .rgb(255, 80, 80),
+                        .rgb(255, 200, 80),
+                        .rgb(80, 220, 120),
+                    ])
+                )
+                determinateRow(
+                    label: "threeSegment ",
+                    style: .threeSegment(
+                        leading: "Sw",
+                        middle: "i",
+                        trailing: "ft",
+                        emptyFill: "·"
+                    )
+                )
+                // Segment colouring: one colour per segment…
+                determinateRow(
+                    label: "threeSeg(per)",
+                    style: .threeSegment(
+                        leading: "Sw", middle: "i", trailing: "ft", emptyFill: "·",
+                        coloring: .perSegment(
+                            leading: .rgb(255, 120, 60),
+                            middle: .rgb(220, 220, 220),
+                            trailing: .rgb(80, 160, 255))
+                    )
+                )
+                // …or a per-cell gradient across the whole lit span.
+                determinateRow(
+                    label: "threeSeg(gr) ",
+                    style: .threeSegment(
+                        leading: "Sw", middle: "i", trailing: "ft", emptyFill: "·",
+                        coloring: .gradient([
+                            .rgb(255, 80, 80), .rgb(255, 200, 80), .rgb(80, 220, 120),
+                        ])
+                    )
+                )
+                // A hand-rolled `.custom` recipe: a shade-ramp fill with a
+                // solid background for the unfilled region — a combination
+                // no named preset provides (showcasing TrackConfiguration).
+                determinateRow(
+                    label: "custom       ",
+                    style: .custom(
+                        TrackConfiguration(
+                            fullGlyph: "█", partialRamp: ["░", "▒", "▓"],
+                            emptyStyle: .background))
+                )
+            }
+            .trackGradientScaling(gradientScaling)
+        }
+    }
+
+    /// The indeterminate catalogue — the peer of
+    /// ``determinateStylesSection``, and the second column's lower half.
+    @ViewBuilder
+    private var indeterminateStylesSection: some View {
+        DemoSection("page.progressView.indeterminateStyles") {
+            VStack(alignment: .leading, spacing: 0) {
+                indeterminateRow(label: "sweep        ", style: .sweep)
+                indeterminateRow(label: "barberPole   ", style: .barberPole)
+                indeterminateRow(label: "pulse        ", style: .pulse)
+                indeterminateRow(label: "knightRider  ", style: .knightRider)
+                indeterminateRow(label: "gradient     ", style: .gradient())
+                // The same slide with caller-supplied stops: any ≥2 RGB
+                // colours, cyclically wrapped — editable via the gradient
+                // editor below (teal → violet until you change it).
+                indeterminateRow(
+                    label: "gradient(c)  ",
+                    style: .gradient(colors: gradientStops))
+                HStack(spacing: 1) {
+                    ForEach(Array(gradientStops.enumerated()), id: \.offset) { _, stop in
+                        Text("██").foregroundStyle(stop)
+                    }
+                    Button("page.progressView.editGradient") { editingGradient = true }
+                }
             }
         }
     }
