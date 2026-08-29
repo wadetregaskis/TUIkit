@@ -50,18 +50,26 @@ struct OpacityPage: View {
 
     // MARK: - The controls
 
+    /// A `0...1` alpha as whole percent — the unit both sliders step in.
+    private static func percent(_ value: Double) -> String {
+        "\(Int((value * 100).rounded()))%"
+    }
+
     private var controls: some View {
         DemoSection("page.opacity.section.controls") {
             VStack(alignment: .leading, spacing: 0) {
                 Text("page.opacity.controls.hint")
                     .foregroundStyle(.palette.foregroundSecondary)
-                Slider(value: $opacity, in: 0...1, step: 0.05) {
-                    Text("\(L("page.opacity.slider.inner")) \(String(format: "%.2f", opacity))")
+                // A percent a step, and read out as one: the rules these demos
+                // show turn on where a value sits between 0 and 1, and "45%"
+                // says that where "0.45" makes the reader do the conversion.
+                Slider(value: $opacity, in: 0...1, step: 0.01) {
+                    Text("\(L("page.opacity.slider.inner")) \(Self.percent(opacity))")
                 }
-                Slider(value: $outer, in: 0...1, step: 0.05) {
+                Slider(value: $outer, in: 0...1, step: 0.01) {
                     Text(
                         "\(L("page.opacity.slider.outer")) "
-                            + String(format: "%.2f → %.2f", outer, outer * opacity))
+                            + "\(Self.percent(outer)) → \(Self.percent(outer * opacity))")
                 }
             }
         }
