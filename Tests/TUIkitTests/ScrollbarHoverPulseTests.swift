@@ -6,9 +6,10 @@
 //  ARE the bar from the first tick onward, so a run built without the hover
 //  paints the lift away and it never comes back while the pointer sits there.
 //
-//  The cell under the pointer is by construction a thumb or an arrow — exactly
-//  the cells that earn a run — so this is not an edge case, it is the whole of
-//  what hovering a scrollbar looks like.
+//  The lift is the ARROWS' alone. A thumb is drawn as a filled cell background
+//  rather than a glyph, so lifting the one cell under the pointer put a
+//  brighter block in the middle of a solid bar and read as a block cursor
+//  parked on the scroller; an arrow is a single cell and IS its own control.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -80,11 +81,10 @@ struct ScrollbarHoverPulseTests {
         let plain = harness.settled()
         let barColumn = plain.width - 1
 
-        // Hover a cell that ACTUALLY earns a run: that is the claim under test
-        // — the cells the pointer can meaningfully land on are the cells the
-        // run loop repaints.
-        guard let target = plain.animatedCells.first else {
-            Issue.record("a focused bar hands over animated rows; got none")
+        // The leading arrow: a cell that earns a run AND takes the lift, which
+        // is the pair of facts under test.
+        guard let target = plain.animatedCells.first(where: { $0.offsetY == 0 }) else {
+            Issue.record("a focused bar hands over an animated arrow row; got none")
             return
         }
         let row = target.offsetY
@@ -131,5 +131,35 @@ struct ScrollbarHoverPulseTests {
             hovered.animatedCells.first(where: { $0.offsetY == other.offsetY })?.frames
                 == other.frames,
             "a row the pointer is not on changed")
+    }
+
+    /// The thumb does not answer the pointer, and that is the fix rather than
+    /// an omission.
+    ///
+    /// It is drawn as a filled cell background, so the one-cell lift landed as
+    /// a brighter block sitting in the middle of a solid bar — a block cursor
+    /// on the scroller, which is what it was reported as. An arrow is a single
+    /// cell and is the whole of its own control, so it keeps the lift.
+    @Test("The pointer does not put a bright cell on the thumb")
+    func hoveringTheThumbChangesNothing() {
+        let harness = Harness()
+        let plain = harness.settled()
+        let barColumn = plain.width - 1
+
+        // Every row that is not an arrow. The thumb is the point of this test
+        // and it is ONE cell here (100 rows in a viewport of eight), so a range
+        // chosen to be safely clear of the ends skips the only row that can
+        // fail — a track cell is drawn from `track` and never took the lift
+        // even before the fix, so a test that hovers only track passes on
+        // broken code. It did.
+        let interior = 1..<(plain.lines.count - 1)
+        var offenders: [Int] = []
+        for row in interior {
+            harness.movePointer(to: (x: barColumn, y: row))
+            if harness.frame().lines[row] != plain.lines[row] { offenders.append(row) }
+        }
+        #expect(
+            offenders.isEmpty,
+            "the pointer lifted a track/thumb cell on rows \(offenders)")
     }
 }

@@ -346,9 +346,16 @@ struct ScrollbarColors {
     /// the one at the far end too. Only one cell is ever under the pointer.
     var hover: (cell: Int, color: Color)?
 
-    /// `base`, or the hover tone when the pointer is over cell `index`.
-    func color(_ base: Color, atCell index: Int) -> Color {
-        hover.map { $0.cell == index ? $0.color : base } ?? base
+    /// The arrow colour, in the hover tone when the pointer is on cell `index`.
+    ///
+    /// **Arrows only, and deliberately.** The thumb is drawn as a filled cell
+    /// background rather than a glyph, so lifting the one cell under the
+    /// pointer put a brighter block in the middle of a solid bar — which reads
+    /// as a block cursor parked on the scroller rather than as a hover state,
+    /// and was reported as one. An arrow is a single cell and IS the control it
+    /// draws, so there the lift means exactly what it looks like.
+    func arrowColor(atCell index: Int) -> Color {
+        hover.map { $0.cell == index ? $0.color : arrow } ?? arrow
     }
 
     /// The standard palette for a bar that doubles as its container's focus
@@ -640,20 +647,17 @@ enum ScrollbarRenderer {
         guard height > 0 else { return [] }
         let reserve = height > arrowReserve(arrows) ? arrowReserve(arrows) : 0
         let trackLen = height - reserve
-        let perEnd = reserve / 2
         let lines = trackCells(
             count: trackLen, extent: extent, viewport: viewport, offset: offset,
             proportional: proportional, vertical: true
-        ).enumerated().map {
-            styledCell(
-                $0.element, thumb: colors.color(colors.thumb, atCell: $0.offset + perEnd),
-                track: colors.track)
+        ).map {
+            styledCell($0, thumb: colors.thumb, track: colors.track)
         }
 
         guard reserve > 0 else { return lines }
         func arrow(_ glyph: String, atCell cell: Int) -> String {
             ANSIRenderer.colorize(
-                glyph, foreground: colors.color(colors.arrow, atCell: cell),
+                glyph, foreground: colors.arrowColor(atCell: cell),
                 background: colors.track)
         }
         // `single` → ▲ … ▼; `double` → ▲▼ … ▲▼ (both arrows at each end).
@@ -733,20 +737,17 @@ enum ScrollbarRenderer {
         guard width > 0 else { return "" }
         let reserve = width > arrowReserve(arrows) ? arrowReserve(arrows) : 0
         let trackLen = width - reserve
-        let perEnd = reserve / 2
         let trackStr = trackCells(
             count: trackLen, extent: extent, viewport: viewport, offset: offset,
             proportional: proportional, vertical: false
-        ).enumerated().map {
-            styledCell(
-                $0.element, thumb: colors.color(colors.thumb, atCell: $0.offset + perEnd),
-                track: colors.track)
+        ).map {
+            styledCell($0, thumb: colors.thumb, track: colors.track)
         }.joined()
 
         guard reserve > 0 else { return trackStr }
         func arrow(_ glyph: String, atCell cell: Int) -> String {
             ANSIRenderer.colorize(
-                glyph, foreground: colors.color(colors.arrow, atCell: cell),
+                glyph, foreground: colors.arrowColor(atCell: cell),
                 background: colors.track)
         }
         let last = width - 1
