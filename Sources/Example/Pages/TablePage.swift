@@ -256,6 +256,12 @@ struct TablePage: View {
             // tracks the visible region (sub-cell-precise thumb, ▲/▼ end arrows).
             .frame(height: 8)
             .scrollIndicators(.visible)
+            // Against the table it reports on. It used to be one entry in a
+            // "Current Selections" section below both tables, which read as a
+            // heading for the ratio demo that followed it rather than as a
+            // report on the two demos above.
+            ValueDisplayRow(
+                "page.table.currentSelection", singleSelection ?? L("page.table.none"))
 
             // Two multi-line tables side by side: the small original (12 rows,
             // 2-line Details) on the left demonstrates wrapping cells, and a
@@ -280,6 +286,11 @@ struct TablePage: View {
                             .width(.fixed(22))
                             .lineLimit(2)
                     }
+                    ValueDisplayRow(
+                        "page.table.currentSelection",
+                        multiSelection.isEmpty
+                            ? L("page.table.none")
+                            : multiSelection.sorted().joined(separator: ", "))
                 }
                 .frame(maxWidth: .infinity)
 
@@ -313,31 +324,25 @@ struct TablePage: View {
                 .frame(maxWidth: .infinity)
             }
 
-            // Directly under the two tables it reports on — the file browser
-            // above and the multi-selection table beside it. It used to sit at
-            // the foot of the page, half a dozen demos away from either, where
-            // there was no way to tell what it was reporting.
-            DemoSection("page.table.currentSelections") {
-                VStack(alignment: .leading, spacing: 1) {
-                    ValueDisplayRow("page.table.single", singleSelection ?? L("page.table.none"))
-                    ValueDisplayRow("page.table.multi", multiSelection.isEmpty ? L("page.table.none") : multiSelection.sorted().joined(separator: ", "))
+            DemoSection("page.table.ratioSection") {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("page.table.ratioCaption")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    Table(FileEntry.sampleFiles, selection: $ratioSelection) {
+                        // `.ratio` sizes each column to a fraction of the
+                        // table's width: Name takes half, Size and Type split
+                        // the rest.
+                        TableColumn("page.table.column.name", value: \FileEntry.name)
+                            .width(.ratio(0.5))
+                        TableColumn("page.table.column.size", value: \FileEntry.size)
+                            .width(.ratio(0.25))
+                            .alignment(.trailing)
+                        TableColumn("page.table.column.type", value: \FileEntry.type)
+                            .width(.ratio(0.25))
+                    }
+                    .frame(height: 6)
                 }
             }
-
-            Text("page.table.ratioCaption")
-                .foregroundStyle(.palette.foregroundSecondary)
-            Table(FileEntry.sampleFiles, selection: $ratioSelection) {
-                // `.ratio` sizes each column to a fraction of the table's
-                // width: Name takes half, Size and Type split the rest.
-                TableColumn("page.table.column.name", value: \FileEntry.name)
-                    .width(.ratio(0.5))
-                TableColumn("page.table.column.size", value: \FileEntry.size)
-                    .width(.ratio(0.25))
-                    .alignment(.trailing)
-                TableColumn("page.table.column.type", value: \FileEntry.type)
-                    .width(.ratio(0.25))
-            }
-            .frame(height: 6)
 
             // Animated cells: every string below derives from `liveTick`, which
             // a `.task` loop advances four times a second — spinner frames,
