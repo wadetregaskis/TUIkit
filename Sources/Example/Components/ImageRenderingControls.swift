@@ -38,10 +38,16 @@ struct ImageRenderingControls: View {
 
     var body: some View {
         ScrollView {
+            // In the order the renderer applies them: the image is sampled into
+            // cells (how many samples per cell, and which glyph each becomes),
+            // then re-mapped by the tone curve, then quantised to the colours
+            // available. The pane used to read characters -> colour -> tone,
+            // which put the last stage in the middle.
             VStack(alignment: .leading, spacing: 1) {
                 characters
-                colour
+                sampling
                 tone
+                colour
             }
         }
         // A disabled control still ASSERTS the value it displays, so every
@@ -105,6 +111,10 @@ struct ImageRenderingControls: View {
             rampField
                 .disabled(settings.charset != .custom)
                 .padding(.leading, 2)
+            // Off the ramp field and onto its own footing: what follows applies
+            // to the charset CHOICE above rather than to the custom ramp it
+            // would otherwise appear to continue.
+            Text("")
             // Shape-awareness: match glyphs by their measured in-cell ink
             // distribution instead of overall luminance. Applies to every
             // charset except a custom ramp.
@@ -155,10 +165,21 @@ struct ImageRenderingControls: View {
             counted(
                 "component.imageControls.colours", value: $settings.sampledColours, in: 2...64,
                 enabled: settings.colour == .sampled)
-            // Supersampling applies to every non-shape renderer: each sample
-            // (cell tone, half-cell pixel, braille dot) becomes an N×N area
-            // average.
-            Text("component.imageControls.supersampling").dim()
+            Toggle("component.imageControls.dithering", isOn: $settings.dithering)
+        }
+    }
+
+    // MARK: - Sampling
+
+    /// Supersampling is not a colour knob — it decides how many pixels each
+    /// SAMPLE is averaged from, before anything has been mapped to a glyph or a
+    /// colour at all. It sat under "Colour" as a dim caption, which read as one
+    /// more of that section's rows rather than as a stage of its own.
+    @ViewBuilder private var sampling: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            heading("component.imageControls.supersampling")
+            // Applies to every non-shape renderer: each sample (cell tone,
+            // half-cell pixel, braille dot) becomes an N x N area average.
             RadioButtonGroup(selection: $settings.supersampling, orientation: .horizontal) {
                 RadioButtonItem(0, "component.imageControls.auto")
                 RadioButtonItem(1, "1\u{D7}")
@@ -169,8 +190,6 @@ struct ImageRenderingControls: View {
             .disabled(
                 !ImageDemoHelpers.usesSupersampling(
                     settings.charset, shapeAware: settings.shapeAware))
-            .padding(.leading, 2)
-            Toggle("component.imageControls.dithering", isOn: $settings.dithering)
         }
     }
 
