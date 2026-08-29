@@ -136,6 +136,49 @@ push A and B further apart in time, weakening the pairing); and shorter runs
 with proportionally more reps (helped `churn`, hurt `fanout`, which needs
 enough frames to amortise process start-up).
 
+## `ab_bench.py` is blind to the whole output half — `emit_bench.py`
+
+`--bench` is a counted `renderToBuffer` loop with **no PTY**. Everything
+downstream of the frame buffer therefore never runs:
+`FrameDiffWriter.buildOutputLines`, the per-line right-edge clip, the per-host
+cursor-compensation walks, the diff, the writes. `buildOutputLines` is called
+only from `RenderLoop`, and `ab_bench.py` never starts one.
+
+That is not a small blind spot. It is where every terminal quirk workaround in
+the framework lives, and a change there can be measured by `ab_bench.py` as
+exactly zero while being worth 2% of a real app's CPU.
+
+The one-command proof, worth re-running whenever this is doubted — force the
+heaviest compensation walk of any host and compare it against the lightest:
+
+```sh
+TERM_PROGRAM=Apple_Terminal $BIN --bench --scenario dashboard --iterations 4000
+TERM_PROGRAM=ghostty        $BIN --bench --scenario dashboard --iterations 4000
+```
+
+144.3 µs vs 143.7 µs — identical. If emission were in the timed region it
+could not be.
+
+`emit_bench.py` measures that half. It runs the app for real — a PTY,
+`--autopilot`, the host forced by environment — and reads the process's own
+CPU time over a fixed window, the technique `idle_cpu.py` already established
+here (`ps -o cputime=`; `RUSAGE_CHILDREN` reads 0 for a live child). The
+statistics are `ab_bench.py`'s, for the same reasons: CPU time not wall clock,
+order randomised per rep, paired ratios, a bootstrap interval, and
+"indistinguishable" whenever that interval touches 1.0.
+
+```sh
+Tools/Profiling/emit_bench.py /tmp/old /tmp/new --host Apple_Terminal
+Tools/Profiling/emit_bench.py /tmp/old /tmp/new --scenarios dashboard --window 8.0
+```
+
+**Its resolution is coarser than `ab_bench.py`'s**, and the reason is `ps`:
+CPU time comes back in centiseconds, so a scenario burning 0.25 s over the
+window has two significant digits and ties are common. Lengthen `--window`
+before believing a small number — the same measurement went from ±5.2% at
+`--window 3.0` to ±3.5% at 8.0. A tie is reported as indistinguishable, not
+as a verdict.
+
 ## The pieces
 
 ### `record.sh` — orchestrator
