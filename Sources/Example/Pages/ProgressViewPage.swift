@@ -139,6 +139,14 @@ struct ProgressViewPage: View {
                 TrackStyleEditor(preview: .progress)
             }
 
+            // …and its twin for the other mode. The catalogue above shows what
+            // the five named animations look like; this is what they are made
+            // of, and every one of them is a preset of what these controls
+            // build.
+            DemoSection("page.indeterminateEditor.section") {
+                IndeterminateStyleEditor()
+            }
+
             // A Gauge is the sibling of ProgressView — it shows where a value
             // sits in a range rather than progress toward completion — so it
             // lives here. Its default shaded meter reads distinctly from the

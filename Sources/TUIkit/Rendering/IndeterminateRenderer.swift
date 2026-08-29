@@ -10,10 +10,11 @@ import Foundation
 
 /// Utility for rendering an animated indeterminate-progress bar.
 ///
-/// All styles read the wall-clock time and derive a phase in `0..<1` that
-/// advances continuously, so the bar animates at a consistent visual
-/// speed regardless of how often the view tree re-renders. The
-/// ``IndeterminateStyle`` enum picks which animation is drawn.
+/// Every animation derives a phase in `0..<1` from an elapsed time, so the bar
+/// animates at a consistent visual speed regardless of how often the view tree
+/// re-renders. What is drawn comes from an ``IndeterminateConfiguration``, of
+/// which each ``IndeterminateStyle`` case is a preset — so a named style and a
+/// hand-rolled `.custom(_:)` go down the same path.
 enum IndeterminateRenderer {
 
     /// Renders one frame of the indeterminate animation.
@@ -21,11 +22,10 @@ enum IndeterminateRenderer {
     /// - Parameters:
     ///   - width: The track's total width in terminal cells.
     ///   - style: The chosen animation.
-    ///   - filledColor: The colour for "lit" cells. (Used by `.sweep`,
-    ///     `.pulse`, `.knightRider` as the bright endpoint of the
-    ///     `dim → bright` lerp.)
-    ///   - emptyColor: The colour for "unlit" cells.
-    ///   - accentColor: The high-energy accent colour.
+    ///   - filledColor: The control's own "lit" colour, used where the
+    ///     configuration names no colours of its own.
+    ///   - emptyColor: The colour for unlit cells, and the dim end of a ramp.
+    ///   - accentColor: The bright end of a ramp.
     /// - Returns: An ANSI-styled string of exactly `width` visible cells.
     static func render(
         width: Int,
@@ -36,22 +36,27 @@ enum IndeterminateRenderer {
         elapsed: Double
     ) -> String {
         guard width > 0 else { return "" }
-        switch style {
+        let configuration = style.configuration
+        switch configuration.motion {
         case .sweep:
             return renderSweep(
-                width: width, filled: filledColor, empty: emptyColor, accent: accentColor,
-                elapsed: elapsed)
+                width: width, configuration: configuration, empty: emptyColor,
+                accent: accentColor, elapsed: elapsed)
         case .barberPole:
             return renderBarberPole(
-                width: width, filled: filledColor, accent: accentColor, elapsed: elapsed)
+                width: width, configuration: configuration, filled: filledColor,
+                accent: accentColor, elapsed: elapsed)
         case .pulse:
             return renderPulse(
-                width: width, dim: emptyColor, bright: accentColor, elapsed: elapsed)
+                width: width, configuration: configuration, dim: emptyColor,
+                bright: accentColor, elapsed: elapsed)
         case .knightRider:
             return renderKnightRider(
-                width: width, empty: emptyColor, accent: accentColor, elapsed: elapsed)
-        case .gradient(let colors):
-            return renderGradient(width: width, colors: colors, elapsed: elapsed)
+                width: width, configuration: configuration, empty: emptyColor,
+                accent: accentColor, elapsed: elapsed)
+        case .gradient:
+            return renderGradient(
+                width: width, configuration: configuration, elapsed: elapsed)
         }
     }
 
@@ -86,22 +91,100 @@ enum IndeterminateRenderer {
     /// frame at once and leave them as an ``AnimatedCellRun`` instead of asking
     /// to be re-rendered thirty times a second.
     private static func phase(elapsed: Double, period: Double = 1.6) -> Double {
+        let period = period > 0 ? period : 1.6
         let wrapped = elapsed.truncatingRemainder(dividingBy: period)
         return (wrapped < 0 ? wrapped + period : wrapped) / period
     }
 
     /// How long one full pass of `style` takes.
     ///
-    /// Each style's own period, in one place, because the cycle builder needs
-    /// exactly what the renderer uses and two copies would drift.
+    /// The cycle builder needs exactly what the renderer uses, so both read it
+    /// off the configuration rather than keeping a table of their own.
     static func period(of style: IndeterminateStyle) -> Double {
-        switch style {
-        case .sweep: 1.6
-        case .barberPole: 0.6
-        case .pulse: 1.8
-        case .knightRider: 2.0
-        case .gradient: 2.4
+        let period = style.configuration.period
+        return period > 0 ? period : 1.6
+    }
+
+    /// The lit run's length in cells — at least one, however small the
+    /// fraction or the track.
+    private static func segment(
+        of configuration: IndeterminateConfiguration, across width: Int
+    ) -> Int {
+        max(1, Int(Double(width) * max(0, configuration.extent)))
+    }
+
+    /// A ramp's stops, from the dim end to the bright end. Fewer than two
+    /// usable ones falls back to the control's own pair.
+    private static func ramp(
+        _ configuration: IndeterminateConfiguration, dim: Color, bright: Color
+    ) -> [Color] {
+        guard let colors = configuration.colors, colors.count >= 2 else { return [dim, bright] }
+        return colors
+    }
+}
+
+// MARK: - Laying a row
+
+extension IndeterminateRenderer {
+    /// Builds a row of exactly `width` cells, asking `cell` what to draw at
+    /// each column it reaches.
+    ///
+    /// The pattern index is the COLUMN, not the glyph count, so the texture is
+    /// anchored to the track: cell *j* always shows the same pattern character
+    /// while the motion sweeps over it — the same rule
+    /// ``TrackConfiguration/fill`` follows.
+    ///
+    /// A glyph that would cross the last column is dropped and the shortfall
+    /// padded with spaces, so a multi-cell pattern coarsens the animation
+    /// without ever changing how wide it is.
+    ///
+    /// Adjacent cells of the SAME colour are emitted under one escape. That is
+    /// not a micro-optimisation: these frames are pre-rendered by the cycle
+    /// builder and replayed from an ``AnimatedCellRun``, so a per-cell escape
+    /// is paid again on every tick for as long as the bar is on screen. A
+    /// `pulse` frame is one colour across the whole track and comes out as one
+    /// run; a `sweep` frame is a short ramp and then a long flat tail.
+    private static func laid(
+        width: Int, cell: (Int) -> (glyph: Character, color: Color)
+    ) -> String {
+        var result = ""
+        var run = ""
+        var runColor: Color?
+        func flush() {
+            guard !run.isEmpty, let runColor else { return }
+            result += ANSIRenderer.colorize(run, foreground: runColor)
+            run = ""
         }
+        var column = 0
+        while column < width {
+            let (glyph, color) = cell(column)
+            // The colour is taken BEFORE the fit is tested, so that a glyph too
+            // wide for the room left still names the colour its padding is
+            // drawn in. Testing first left `runColor` nil when the very first
+            // glyph did not fit — a two-cell fill in a one-cell track — and the
+            // padding was then dropped by the flush, so the row came out empty.
+            if color != runColor {
+                flush()
+                runColor = color
+            }
+            let glyphWidth = max(1, glyph.terminalWidth)
+            guard column + glyphWidth <= width else { break }
+            run.append(glyph)
+            column += glyphWidth
+        }
+        if column < width {
+            // The shortfall a multi-cell pattern leaves, in whatever colour was
+            // last drawn — it is the continuation of that run, not a new thing.
+            run += String(repeating: " ", count: width - column)
+        }
+        flush()
+        return result
+    }
+
+    /// The character of `pattern` anchored at `column`. An empty pattern draws
+    /// a space, which is what "nothing here" means in a cell grid.
+    private static func glyph(_ pattern: [Character], at column: Int) -> Character {
+        pattern.isEmpty ? " " : pattern[column % pattern.count]
     }
 }
 
@@ -111,67 +194,67 @@ extension IndeterminateRenderer {
     /// The original animation: a bright segment with a fading trail
     /// sweeps continuously across the track.
     private static func renderSweep(
-        width: Int, filled: Color, empty: Color, accent: Color, elapsed: Double
+        width: Int, configuration: IndeterminateConfiguration,
+        empty: Color, accent: Color, elapsed: Double
     ) -> String {
-        let phase = phase(elapsed: elapsed)
-        let segment = max(1, width / 3)
+        let phase = phase(elapsed: elapsed, period: configuration.period)
+        let segment = segment(of: configuration, across: width)
         let head = Int(phase * Double(width))
-        var result = ""
-        for index in 0..<width {
-            let behind = (index - head + width) % width
-            if behind < segment {
-                let intensity = 1.0 - Double(behind) / Double(segment)
-                let colour = Color.lerp(empty, accent, phase: intensity)
-                result += ANSIRenderer.colorize("█", foreground: colour)
-            } else {
-                result += ANSIRenderer.colorize("░", foreground: empty)
+        let fill = Array(configuration.fill)
+        let unlit = Array(configuration.empty)
+        let stops = ramp(configuration, dim: empty, bright: accent)
+        return laid(width: width) { column in
+            let behind = (column - head + width) % width
+            guard behind < segment else {
+                return (glyph(unlit, at: column), empty)
             }
+            let intensity = 1.0 - Double(behind) / Double(segment)
+            return (glyph(fill, at: column), Color.interpolate(stops: stops, phase: intensity))
         }
-        _ = filled  // kept in the signature for callers that need it
-        return result
     }
 }
 
 // MARK: - Barber Pole
 
 extension IndeterminateRenderer {
-    /// `◢◤` triangle pattern shifted left one cell per frame, alternately
-    /// coloured filled / accent to read as moving diagonal stripes.
+    /// The fill pattern shifted one cell per step, its glyphs coloured in turn
+    /// so the row reads as moving diagonal stripes.
     private static func renderBarberPole(
-        width: Int, filled: Color, accent: Color, elapsed: Double
+        width: Int, configuration: IndeterminateConfiguration,
+        filled: Color, accent: Color, elapsed: Double
     ) -> String {
-        let glyphs: [Character] = ["◢", "◤"]
-        // Use a fast-cycling phase so the stripes appear to scroll
-        // briskly; the eye reads `0.6 s` per stripe-pair shift as
-        // "moving" rather than "ticking".
-        let phaseInCells = Int(phase(elapsed: elapsed, period: 0.6) * Double(width * 2))
-        var result = ""
-        for index in 0..<width {
-            let slot = (index + phaseInCells) % 2
-            let glyph = glyphs[slot]
-            let colour = (slot == 0) ? accent : filled
-            result += ANSIRenderer.colorize(String(glyph), foreground: colour)
+        let fill = Array(configuration.fill)
+        let stripes = configuration.colors?.isEmpty == false
+            ? configuration.colors! : [accent, filled]
+        // A fast-cycling phase so the stripes appear to scroll briskly; the eye
+        // reads the built-in `0.6 s` per stripe-pair shift as "moving" rather
+        // than "ticking".
+        let shift = Int(phase(elapsed: elapsed, period: configuration.period) * Double(width * 2))
+        return laid(width: width) { column in
+            let slot = fill.isEmpty ? 0 : (column + shift) % fill.count
+            return (glyph(fill, at: column + shift), stripes[slot % stripes.count])
         }
-        return result
     }
 }
 
 // MARK: - Pulse
 
 extension IndeterminateRenderer {
-    /// The whole bar breathes between dim and bright accent.
+    /// The whole bar breathes between the two ends of the ramp.
     private static func renderPulse(
-        width: Int, dim: Color, bright: Color, elapsed: Double
+        width: Int, configuration: IndeterminateConfiguration,
+        dim: Color, bright: Color, elapsed: Double
     ) -> String {
         // A sine wave gives a smoother breath than a sawtooth `phase()`,
         // and clamping its `0..<2π` range to `[0, 1]` via `(1 - cos)/2`
         // makes the brightest and dimmest points sit at the start and
         // middle of each period — easier to read as "alive but waiting".
-        let raw = phase(elapsed: elapsed, period: 1.8) * .pi * 2
+        let raw = phase(elapsed: elapsed, period: configuration.period) * .pi * 2
         let intensity = (1.0 - cos(raw)) / 2.0
-        let colour = Color.lerp(dim, bright, phase: intensity)
-        let bar = String(repeating: "█", count: width)
-        return ANSIRenderer.colorize(bar, foreground: colour)
+        let colour = Color.interpolate(
+            stops: ramp(configuration, dim: dim, bright: bright), phase: intensity)
+        let fill = Array(configuration.fill)
+        return laid(width: width) { column in (glyph(fill, at: column), colour) }
     }
 }
 
@@ -181,30 +264,30 @@ extension IndeterminateRenderer {
     /// A single bright block bounces left-to-right and back, with a short
     /// fading trail behind the head.
     private static func renderKnightRider(
-        width: Int, empty: Color, accent: Color, elapsed: Double
+        width: Int, configuration: IndeterminateConfiguration,
+        empty: Color, accent: Color, elapsed: Double
     ) -> String {
-        let segment = max(1, width / 8)
+        let segment = segment(of: configuration, across: width)
         // Bounce with a triangle wave: phase goes 0 → 1 → 0, mapped to
         // head position 0 → (width − 1) → 0.
-        let raw = phase(elapsed: elapsed, period: 2.0)
+        let raw = phase(elapsed: elapsed, period: configuration.period)
         let triangle = raw < 0.5 ? raw * 2.0 : (1.0 - raw) * 2.0
         let head = Int(triangle * Double(max(0, width - 1)))
         let direction = raw < 0.5 ? 1 : -1
-        var result = ""
-        for index in 0..<width {
+        let fill = Array(configuration.fill)
+        let unlit = Array(configuration.empty)
+        let stops = ramp(configuration, dim: empty, bright: accent)
+        return laid(width: width) { column in
             // The trail extends *behind* the head — i.e. in the
             // opposite direction of motion — so the leading edge stays
             // visually sharp.
-            let offset = (index - head) * -direction
-            if offset >= 0 && offset < segment {
-                let intensity = 1.0 - Double(offset) / Double(segment)
-                let colour = Color.lerp(empty, accent, phase: intensity)
-                result += ANSIRenderer.colorize("█", foreground: colour)
-            } else {
-                result += ANSIRenderer.colorize("░", foreground: empty)
+            let offset = (column - head) * -direction
+            guard offset >= 0, offset < segment else {
+                return (glyph(unlit, at: column), empty)
             }
+            let intensity = 1.0 - Double(offset) / Double(segment)
+            return (glyph(fill, at: column), Color.interpolate(stops: stops, phase: intensity))
         }
-        return result
     }
 }
 
@@ -212,21 +295,21 @@ extension IndeterminateRenderer {
 
 extension IndeterminateRenderer {
     /// A cyclic hue ramp slid continuously across the track. Each cell
-    /// picks its colour from a six-stop rainbow with the offset rotating
-    /// once per period — produces a fluid, OS-style "indeterminate
-    /// busy" feel without ever leaving an empty cell.
+    /// picks its colour from the stops with the offset rotating once per
+    /// period — produces a fluid, OS-style "indeterminate busy" feel
+    /// without ever leaving an empty cell.
     ///
     /// Scrolls left-to-right: subtracting `phase` from each cell's
     /// position means a given colour (say amber) reappears at a higher
     /// index as time passes, so the eye reads the gradient as moving
     /// rightward.
     private static func renderGradient(
-        width: Int, colors: [Color]?, elapsed: Double
+        width: Int, configuration: IndeterminateConfiguration, elapsed: Double
     ) -> String {
         // Custom stops need resolvable RGB (semantic colours have none until a
         // palette is applied); anything unresolvable is skipped, and fewer
         // than two usable stops falls back to the built-in rainbow.
-        let custom = colors?.compactMap { color -> (r: UInt8, g: UInt8, b: UInt8)? in
+        let custom = configuration.colors?.compactMap { color -> (r: UInt8, g: UInt8, b: UInt8)? in
             guard let components = color.rgbComponents else { return nil }
             return (components.red, components.green, components.blue)
         }
@@ -241,20 +324,19 @@ extension IndeterminateRenderer {
             // swiftlint:enable comma
         ]
         let stops = (custom?.count ?? 0) >= 2 ? custom! : builtIn
-        let phase = phase(elapsed: elapsed, period: 2.4)
-        var result = ""
-        for index in 0..<width {
-            // Each cell samples at its own offset in the rainbow, minus
-            // a global time-dependent shift so the pattern scrolls
+        let phase = phase(elapsed: elapsed, period: configuration.period)
+        let fill = Array(configuration.fill)
+        return laid(width: width) { column in
+            // Each cell samples at its own offset in the ramp, minus a
+            // global time-dependent shift so the pattern scrolls
             // rightward. We add 1.0 before the wrap so the subtraction
             // never produces a negative value (Swift's
             // `truncatingRemainder` keeps the sign of the dividend).
-            let raw = (Double(index) / Double(max(1, width)) - phase + 1.0)
+            let raw = (Double(column) / Double(max(1, width)) - phase + 1.0)
                 .truncatingRemainder(dividingBy: 1.0)
             let (r, g, b) = sample(stops: stops, at: raw)
-            result += ANSIRenderer.colorize("█", foreground: .rgb(r, g, b))
+            return (glyph(fill, at: column), .rgb(r, g, b))
         }
-        return result
     }
 
     /// Piecewise-linear lookup into a list of RGB stops, wrapped so the

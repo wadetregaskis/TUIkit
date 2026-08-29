@@ -290,6 +290,7 @@ struct MyApp: App {
 - ``TrackStyle``
 - ``TrackConfiguration``
 - ``IndeterminateStyle``
+- ``IndeterminateConfiguration``
 - ``ListStyle``
 - ``PlainListStyle``
 - ``InsetGroupedListStyle``

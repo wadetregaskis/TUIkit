@@ -66,6 +66,33 @@ public enum IndeterminateStyle: Sendable, Equatable {
     /// ``TrackConfiguration/fillGradient`` and
     /// ``SegmentColoring/gradient(_:)``.
     case gradient(colors: [Color]? = nil)
+
+    /// A hand-rolled recipe: any motion, drawn with any glyphs, in any
+    /// colours, at any speed.
+    ///
+    /// The twin of ``TrackStyle/custom(_:)``. Every case above is a preset of
+    /// the same type, so this adds no second renderer — see
+    /// ``IndeterminateConfiguration``.
+    case custom(IndeterminateConfiguration)
+}
+
+extension IndeterminateStyle {
+    /// The recipe this style names.
+    ///
+    /// The named cases exist because they are the ones worth naming, not
+    /// because they are made of anything else: each is a preset, and this is
+    /// where the two spellings meet so that nothing downstream has to know
+    /// which one it was given.
+    public var configuration: IndeterminateConfiguration {
+        switch self {
+        case .sweep: .sweep
+        case .barberPole: .barberPole
+        case .pulse: .pulse
+        case .knightRider: .knightRider
+        case .gradient(let colors): .gradient(colors: colors)
+        case .custom(let configuration): configuration
+        }
+    }
 }
 
 // MARK: - Environment Key
