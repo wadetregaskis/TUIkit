@@ -1029,6 +1029,28 @@ and the *composed* classes wrong.
   Modelled in `warpCursorAdvance`; the standard ECH(2)+CUF(1) repair
   covers them. Re-run the sweep when Warp updates or a Unicode version
   ships.
+- **BMP emoji-presentation clusters ink only ONE of the two cells they
+  own** — ⌚ U+231A, ⌛ U+231B, ⏫ U+23EB, ⏬ U+23EC, ⏳ U+23F3 (but not
+  ⏩ ⏪ ⏰, which ink both). **Nothing is emitted for these, and nothing
+  should be:** Warp advances the full 2, the claim is 2 and the landing is
+  2, so no branch of `withWarpCursorCompensation()` fires and every
+  follower lands true. What the reader sees is Warp resolving these to a
+  monochrome TEXT glyph — from a UI font rather than its colour-emoji font
+  — and drawing that narrow glyph in the left half of the pair it correctly
+  reserved. No escape sequence can influence a font-fallback choice, so
+  there is no treatment to write; the blank right-hand cell is Warp's, not
+  ours.
+
+  Recorded because the symptom — low-fidelity glyph, apparent gap after it
+  — is indistinguishable at a glance from the under-advances above, which
+  we DO compensate and which do produce a blank cell. The two are told
+  apart by the ledger, not by eye: an under-advance has `advance < claim`,
+  this has `advance == claim == landing` with `ink` short. Warp alone —
+  Apple Terminal, iTerm2 and Ghostty ink both cells for all eight (Apple
+  inks 3 for ⏩ ⏪ ⏫ ⏬). Measured on v0.2026.07.08.17.54.stable_02
+  (landing record, `ink` column). The 2026-08-26 self-update was
+  DSR-re-measured with zero drift, but its ink is unmeasured: the pixel
+  half needs Screen Recording, currently denied.
 - **OVER-advancers, unhandled** (no escape can pull a cursor back to a
   column the glyph has already painted over — the seven entries in
   `TerminalLedgerConformanceTests.knownAdvanceDivergences`, all Warp's):
