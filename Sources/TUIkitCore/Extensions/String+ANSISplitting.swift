@@ -228,6 +228,35 @@ extension String {
     public func ansiAwarePrefixForTerminalAppWithWidth(visibleCount: Int) -> (prefix: String, visibleWidth: Int) {
         guard visibleCount > 0 else { return ("", 0) }
 
+        // Same "it already fits" short-cut as the plain clip, but it needs a
+        // STRICTER guard, because this walk does a second thing: it replaces
+        // an over-advancer whose mid-emission peak would cross the right edge
+        // with plain spaces. That can fire on a line that fits — a skin tone
+        // claiming 2 at column 77 of an 80-cell row peaks at 81 — so "fits"
+        // alone is not enough to skip the walk.
+        //
+        // `utf8MayNeedCompensation` is exactly the missing half: false means
+        // the line holds no cluster any advance model acts on, so no character
+        // can have an advance wider than its claim, so no substitution can
+        // fire. That covers the case this is for — a bordered, otherwise-ASCII
+        // row, which is most rows of most TUIkit apps and the same rows the
+        // compensation walks now skip.
+        if !utf8MayNeedCompensation {
+            let width = strippedLength
+            if width <= visibleCount { return (self, width) }
+        }
+
+        return exactAnsiAwarePrefixForTerminalAppWithWidth(visibleCount: visibleCount)
+    }
+
+    /// The Terminal.app clip with no fast path — the walk itself, kept
+    /// reachable as the oracle its fast path is pinned against. See
+    /// ``exactAnsiAwarePrefixWithWidth(visibleCount:)``.
+    func exactAnsiAwarePrefixForTerminalAppWithWidth(
+        visibleCount: Int
+    ) -> (prefix: String, visibleWidth: Int) {
+        guard visibleCount > 0 else { return ("", 0) }
+
         var result = ""
         var visible = 0
 

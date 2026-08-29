@@ -77,6 +77,45 @@ struct ANSIPrefixKnownWidthTests {
         }
     }
 
+    /// The Terminal.app clip's fast path carries a second obligation the
+    /// plain one does not: that walk substitutes plain spaces for an
+    /// over-advancer whose mid-emission peak would cross the right edge, and
+    /// that can fire on a line whose visible cells all fit. So the corpus
+    /// here adds clusters that over-advance on Terminal.app, cut at every
+    /// point including the ones where the substitution triggers.
+    @Test("The Terminal.app clip is byte-identical to its walk at every cut")
+    func terminalAppMatchesExactWalk() {
+        let inputs = corpus + [
+            // Over-advancers: skin tone (claims 2, advances 4), a keycap, a
+            // tag flag, and one sitting at the very end of a line that fits.
+            "ok 🤙🏽 done",
+            "\u{1B}[32m🤙🏽\u{1B}[0m  ",
+            "1️⃣ 2️⃣ 3️⃣",
+            "🏴󠁧󠁢󠁳󠁣󠁴󠁿 flag",
+            "aaaaaaaa🤙🏽",
+            "🖥️ ❤️ ⚠️ mixed",
+            // Bordered rows — the shape the fast path exists for.
+            "│ plain ascii row │",
+            "┌──────────────┐",
+            "│ 日本語 │",
+            "│ 🤙🏽 │",
+        ]
+        for string in inputs {
+            let width = string.strippedLength
+            for cut in 0...(width + 2) {
+                let walk = string.exactAnsiAwarePrefixForTerminalAppWithWidth(visibleCount: cut)
+                let fast = string.ansiAwarePrefixForTerminalAppWithWidth(visibleCount: cut)
+                #expect(
+                    walk.prefix == fast.prefix && walk.visibleWidth == fast.visibleWidth,
+                    """
+                    cut \(cut) of \(string.debugDescription): \
+                    walk \(walk.prefix.debugDescription) (\(walk.visibleWidth)) \
+                    vs fast \(fast.prefix.debugDescription) (\(fast.visibleWidth))
+                    """)
+            }
+        }
+    }
+
     @Test("A cut past the width returns the string unchanged")
     func noCutNeeded() {
         let line = "\u{1B}[32mok\u{1B}[0m  "
