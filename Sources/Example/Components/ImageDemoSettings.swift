@@ -61,6 +61,15 @@ struct ImageDemoSettings: Equatable {
 
     var dithering = false
 
+    /// Whether ``ColourMode/mono`` draws in the theme's colours (the default,
+    /// and what it has always done) or in literal black and white.
+    ///
+    /// Mono emits no colour codes at all — a full block where the image is lit
+    /// and a space where it is not — so its cells take whatever is in force
+    /// around them, which in an app is the page's own foreground and
+    /// background. Turning this off states the two colours explicitly instead.
+    var monoThemeColours = true
+
     // MARK: - The tone
 
     var tone: Tone = .off
@@ -120,7 +129,24 @@ struct ImageDemoSettings: Equatable {
         case .trueColor: return .trueColor
         case .ansi256: return .ansi256
         case .grayscale: return .grayscale
-        case .mono: return .mono
+        case .mono:
+            // `.mono` proper emits no colour codes at all — a block where the
+            // image is lit and a space where it is not — so its cells take
+            // whatever the page is drawn in, which IS the theme's two colours.
+            // That is the default and always was.
+            //
+            // Asked for the other reading, the two colours are stated instead,
+            // as a two-entry tone ramp: `.rgb` rather than `.white` / `.black`,
+            // which are palette entries a theme may define as something else,
+            // and "literal" is the point of the option. (Setting them with
+            // `.foregroundStyle` / `.background` on the view does nothing — an
+            // `Image` emits its own lines, and mono's carry no colour for a
+            // modifier to rewrite.)
+            guard monoThemeColours else {
+                return .palette(
+                    ASCIIPalette([.rgb(0, 0, 0), .rgb(255, 255, 255)]).asToneRamp())
+            }
+            return .mono
         case .greys: return .palette(.shades(greyLevels))
         case .sampled: return .palette(.sampled(sampledColours))
         case .themed:

@@ -154,6 +154,12 @@ struct ImageRenderingControls: View {
                 RadioButtonItem(ImageDemoSettings.ColourMode.greys, "component.imageControls.greys")
                 RadioButtonItem(ImageDemoSettings.ColourMode.sampled, "component.imageControls.sampled")
             }
+            // Mono's own knob. It emits no colour codes, so by default its
+            // cells take the page's — which is the theme's, and is what it has
+            // always drawn in. Off, the two colours are stated outright.
+            Toggle("component.imageControls.monoThemeColours", isOn: $settings.monoThemeColours)
+                .disabled(settings.colour != .mono)
+                .padding(.leading, 2)
             // Under "Greys" and "Sampled", in that order: each names how many.
             counted(
                 "component.imageControls.levels", value: $settings.greyLevels, in: 2...16,
