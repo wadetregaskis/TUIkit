@@ -117,9 +117,22 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
     /// pushed everything after a flag one cell right.
     public var flagPairs: Bool
 
-    /// Keycap sequences — 1️⃣ (base + U+FE0F + U+20E3). iTerm2 under-advances
-    /// these.
-    public var keycapSequences: Bool
+    /// What this terminal does with a keycap — base + U+20E3, with or without
+    /// the U+FE0F that makes it emoji-presentation.
+    public enum Keycaps: String, Sendable, Equatable, Codable, CaseIterable {
+        /// Both spellings land on their claim. Ghostty and Warp.
+        case correct
+        /// Advance 1 against the 2-cell claim of the FE0F form. iTerm2.
+        case underAdvances
+        /// Advance 2 whatever the claim — which the FE0F form (claimed 2)
+        /// meets and the BARE form (1⃣, claimed 1, the base's own width) runs
+        /// one past, so the bare one is pulled back with `CUB(1)`. Apple
+        /// Terminal.
+        case alwaysTwoColumns
+    }
+
+    /// How this terminal handles keycaps — 1️⃣ and its selector-less spelling.
+    public var keycaps: Keycaps
 
     /// Plane-16 Private Use Area — SF Symbols. Painted two cells by any font
     /// that has the glyphs, advanced one on every measured host.
@@ -192,7 +205,7 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         vs15ChromeGlyphs: Bool = false,
         loneRegionalIndicators: Bool = false,
         flagPairs: Bool = false,
-        keycapSequences: Bool = false,
+        keycaps: Keycaps = .correct,
         planeSixteenPUA: Bool = false,
         preUnicode16WidthTable: Bool = false,
         zwjSequences: Bool = false,
@@ -207,7 +220,7 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         self.vs15ChromeGlyphs = vs15ChromeGlyphs
         self.loneRegionalIndicators = loneRegionalIndicators
         self.flagPairs = flagPairs
-        self.keycapSequences = keycapSequences
+        self.keycaps = keycaps
         self.planeSixteenPUA = planeSixteenPUA
         self.preUnicode16WidthTable = preUnicode16WidthTable
         self.zwjSequences = zwjSequences
@@ -262,7 +275,9 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
             return 1
         }
         if preUnicode16WidthTable, cluster.isUnicode16EmojiOlderTablesMiss { return 1 }
-        if keycapSequences, scalars.contains(where: { $0.value == 0x20E3 }) { return 1 }
+        if keycaps != .correct, scalars.contains(where: { $0.value == 0x20E3 }) {
+            return keycaps == .underAdvances ? 1 : 2
+        }
         if loneRegionalIndicators, cluster.isLoneRegionalIndicator { return 1 }
         if flagPairs, Self.isFlagPair(cluster) { return 1 }
         // The ZWJ form too: on a host that under-advances a standalone VS-16

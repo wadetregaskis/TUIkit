@@ -52,7 +52,7 @@ if a row breaks, it does not. The switches are:
 | Lone regional indicators | 🇦 on its own (a flag pair is a separate switch) |
 | Skin tones on a narrow base | ☝🏻 ✍🏽 🏋🏽 merge into ONE cell against a 2-cell claim (Ghostty on both planes, iTerm2 on the SMP form) |
 | Flag pairs | 🇺🇸 — correct on every terminal measured so far |
-| Keycap sequences | 1️⃣ |
+| Keycaps | 1️⃣ and bare 1⃣ — one host advances them short, another long; the bare spelling claims one cell where the selector spelling claims two |
 | SF Symbols | Plane-16 Private Use Area |
 | Unicode 16.0 emoji | 🪉 🫆 🫩 — a width table cut before the 2024 release scores the seven narrow |
 | ZWJ sequences | 👨‍👩‍👧‍👦 — the internal column decomposes while the glyph composes; the walk decomposes in software (joiners dropped) |

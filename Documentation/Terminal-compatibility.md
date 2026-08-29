@@ -222,9 +222,12 @@ native shapes are pinned to their real walks emission-for-emission by
 `TerminalQuirksTests`, with no skipped rows. That pin is the point of the
 app — what an explorer dials in is exactly what TUIkit would emit once the
 model was written down — and it only became true when the mirror grew the
-three mechanisms the real walks already had: claiming the detached
-skin-tone swatch (for every base, or only a BMP one), merging a tone into a
-narrow text base's single cell, and a width table cut before Unicode 16.0.
+four mechanisms the real walks already had: claiming the detached skin-tone
+swatch (for every base, or only a BMP one), merging a tone into a narrow
+text base's single cell, a width table cut before Unicode 16.0, and keycaps
+that advance a fixed 2 whichever spelling arrives — which the FE0F form's
+claim meets and the bare form's one-cell claim does not, so only the bare
+one is repaired.
 
 "Advance" below = cells the cursor moves; "paints" = cells with ink.
 TUIkit's shared layout width (`Character.terminalWidth`) claims 2 for all

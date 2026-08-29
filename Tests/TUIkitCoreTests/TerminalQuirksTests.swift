@@ -46,7 +46,7 @@ struct TerminalQuirksTests {
             (TerminalQuirks(vs15ChromeGlyphs: true), Self.chrome, "VS-15 chrome"),
             (TerminalQuirks(loneRegionalIndicators: true), Self.loneRI, "lone RI"),
             (TerminalQuirks(flagPairs: true), Self.flag, "flag pair"),
-            (TerminalQuirks(keycapSequences: true), Self.keycap, "keycap"),
+            (TerminalQuirks(keycaps: .underAdvances), Self.keycap, "keycap"),
             (TerminalQuirks(planeSixteenPUA: true), Self.sfSymbol, "SF Symbol"),
         ]
         let everything: [Character] = [
@@ -166,7 +166,7 @@ struct TerminalQuirksTests {
         let row = "│ Plain ASCII row │"
         let all = TerminalQuirks(
             vs16Pictographs: true, barePictographs: true, vs15ChromeGlyphs: true,
-            loneRegionalIndicators: true, flagPairs: true, keycapSequences: true,
+            loneRegionalIndicators: true, flagPairs: true, keycaps: .alwaysTwoColumns,
             planeSixteenPUA: true, skinTones: .stripAll, erasesUnderGlyphs: true)
         #expect(row.withCursorCompensation(for: all) == row)
     }
@@ -211,12 +211,13 @@ struct QuirkPermutationTests {
         ("none", TerminalQuirks()),
         ("apple", TerminalQuirks(
             vs16Pictographs: true, barePictographs: true,
-            loneRegionalIndicators: true, planeSixteenPUA: true,
+            loneRegionalIndicators: true, keycaps: .alwaysTwoColumns,
+            planeSixteenPUA: true,
             zwjSequences: true, tagFlags: true, storesWideComposites: true,
             skinTones: .separate, erasesUnderGlyphs: true)),
         ("iterm2", TerminalQuirks(
             vs16Pictographs: true, barePictographs: true,
-            keycapSequences: true, planeSixteenPUA: true,
+            keycaps: .underAdvances, planeSixteenPUA: true,
             skinTones: .keepDetachedOnBMPBases, mergesTonesOnTextBases: true,
             erasesUnderGlyphs: true)),
         ("ghostty", TerminalQuirks(
@@ -236,7 +237,7 @@ struct QuirkPermutationTests {
         ("separate-alone", TerminalQuirks(skinTones: .separate)),
         ("everything", TerminalQuirks(
             vs16Pictographs: true, barePictographs: true, vs15ChromeGlyphs: true,
-            loneRegionalIndicators: true, flagPairs: true, keycapSequences: true,
+            loneRegionalIndicators: true, flagPairs: true, keycaps: .alwaysTwoColumns,
             planeSixteenPUA: true, preUnicode16WidthTable: true,
             zwjSequences: true, tagFlags: true,
             storesWideComposites: true, skinTones: .separate,
@@ -319,12 +320,6 @@ struct QuirkPermutationTests {
     @Test("The Apple-shaped set reproduces the real Apple walk",
           arguments: TerminalWidthCorpus.all)
     func appleShapeMatchesTheRealWalk(entry: TerminalWidthCorpus.Entry) {
-        // The mirror's expressivity gap on this host: no switch says "a BARE
-        // keycap over-advances to 2 against a 1-cell claim" (Apple is the
-        // only measured host that does it — `keycapSequences` means the
-        // iTerm2-style UNDER-advance), so the mirror emits 1⃣ verbatim where
-        // the real walk pulls it back.
-        guard entry.id != "keycap_bare" else { return }
         let apple = Self.sets.first { $0.0 == "apple" }!.1
         // Same claims as startup publishes for the real host — the quirks' own
         // mapping, pinned equal to `TerminalClient.widthTraits(of:)` by

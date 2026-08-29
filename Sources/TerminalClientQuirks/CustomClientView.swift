@@ -35,6 +35,7 @@ struct CustomClientView: View {
             heading
             switches
             skinTones
+            keycaps
             strip
             export
         }
@@ -78,7 +79,6 @@ struct CustomClientView: View {
             toggle("Lone regional indicators  🇦", \.loneRegionalIndicators)
             toggle("Skin tones on a narrow base  ☝🏻 ✍🏽 🏋🏽", \.mergesTonesOnTextBases)
             toggle("Flag pairs  🇺🇸", \.flagPairs)
-            toggle("Keycap sequences  1\u{FE0F}\u{20E3}", \.keycapSequences)
             toggle("SF Symbols (Plane-16 PUA)", \.planeSixteenPUA)
             toggle("Unicode 16.0 emoji  🪉 🫆 🫩", \.preUnicode16WidthTable)
             Text("Internal column runs past the composed glyph").bold()
@@ -117,26 +117,57 @@ struct CustomClientView: View {
     /// not just degree: strips change what the user wrote, the pull-back keeps
     /// it and squares the internal column with `CUB`.
     private var skinTones: some View {
+        picker(
+            "Skin-tone clusters  🤙🏽 ✊🏻",
+            "These over-advance the internal column; pick how this terminal needs them handled.",
+            \.skinTones, describe: describe)
+    }
+
+    /// Keycaps need a picker rather than a toggle for the same reason skin
+    /// tones do: the measured hosts disagree about the DIRECTION, not just the
+    /// presence, of the defect.
+    private var keycaps: some View {
+        picker(
+            "Keycaps  1\u{FE0F}\u{20E3}  1\u{20E3}",
+            "One host advances these short, another long — and the bare spelling claims one cell where the selector spelling claims two.",
+            \.keycaps, describe: describe)
+    }
+
+    /// One radio group over an enum switch — the shape both pickers share.
+    private func picker<Option>(
+        _ title: String,
+        _ explanation: String,
+        _ path: WritableKeyPath<TerminalQuirks, Option>,
+        describe: @escaping (Option) -> String
+    ) -> some View where Option: CaseIterable & Hashable, Option.AllCases: RandomAccessCollection {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Skin-tone clusters  🤙🏽 ✊🏻").bold()
-            Text("These over-advance the internal column; pick how this terminal needs them handled.")
-                .foregroundStyle(.palette.foregroundSecondary)
-            ForEach(TerminalQuirks.SkinTones.allCases, id: \.self) { option in
+            Text(title).bold()
+            Text(explanation).foregroundStyle(.palette.foregroundSecondary)
+            ForEach(Option.allCases, id: \.self) { option in
+                let selected = quirks[keyPath: path] == option
                 Button {
                     var updated = quirks
-                    updated.skinTones = option
+                    updated[keyPath: path] = option
                     apply(updated)
                 } label: {
                     HStack(spacing: 1) {
-                        Text(quirks.skinTones == option ? "●" : "○")
+                        Text(selected ? "●" : "○")
                             .foregroundStyle(
-                                quirks.skinTones == option
-                                    ? .palette.accent : .palette.foregroundTertiary)
+                                selected ? .palette.accent : .palette.foregroundTertiary)
                         Text(describe(option))
                     }
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+
+    private func describe(_ option: TerminalQuirks.Keycaps) -> String {
+        switch option {
+        case .correct: "They land on their claim (Ghostty, Warp)"
+        case .underAdvances: "1\u{FE0F}\u{20E3} advances 1 against its 2-cell claim (iTerm2)"
+        case .alwaysTwoColumns:
+            "Always 2 — which the selector spelling claims, and the bare 1\u{20E3} overruns by one (Apple Terminal)"
         }
     }
 
@@ -238,7 +269,7 @@ struct CustomClientView: View {
         if quirks.vs15ChromeGlyphs { parts.append("vs15ChromeGlyphs: true") }
         if quirks.loneRegionalIndicators { parts.append("loneRegionalIndicators: true") }
         if quirks.flagPairs { parts.append("flagPairs: true") }
-        if quirks.keycapSequences { parts.append("keycapSequences: true") }
+        if quirks.keycaps != .correct { parts.append("keycaps: .\(quirks.keycaps.rawValue)") }
         if quirks.planeSixteenPUA { parts.append("planeSixteenPUA: true") }
         if quirks.preUnicode16WidthTable { parts.append("preUnicode16WidthTable: true") }
         if quirks.skinTones != .keep { parts.append("skinTones: .\(quirks.skinTones.rawValue)") }
