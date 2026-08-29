@@ -46,6 +46,55 @@ private extension String {
 }
 
 extension String {
+    /// `true` if this line contains any byte a per-host advance model could
+    /// act on — the narrower second gate behind ``utf8ContainsNonASCII``.
+    ///
+    /// The first gate asks "is this pure ASCII", which the framework's OWN
+    /// chrome defeats: a box-drawing border (U+2500 block) is non-ASCII, so
+    /// every bordered row — most rows of most TUIkit apps — took the full
+    /// per-`Character` walk, reading Unicode properties for a row that could
+    /// not possibly need compensating.
+    ///
+    /// Every scalar any model reads is either **above the BMP** (skin tones,
+    /// regional indicators, bare pictographs, Plane-16 PUA, tag scalars, the
+    /// Unicode 16.0 additions — all 4-byte UTF-8, lead `0xF0`–`0xF4`) or one
+    /// of exactly four BMP scalars: U+FE0E and U+FE0F (the variation
+    /// selectors, lead `0xEF`) and U+200C and U+200D (the joiners, `E2 80`)
+    /// plus U+20E3 (the keycap, `E2 83`). So the test is: any byte ≥ `0xEF`,
+    /// or an `E2` followed by `80` or `83`.
+    ///
+    /// Box drawing and block elements are `E2 94`–`E2 96`, and CJK is `E3`–
+    /// `E9`; none of them match, which is the point.
+    ///
+    /// This is an over-approximation on purpose — `0xEF` admits all of
+    /// U+F000–U+FFFF and the joiner pair admits U+2000–U+20FF — because a
+    /// gate that is too eager only costs a walk that finds nothing, while one
+    /// that is too clever silently skips a cluster that needed repair. That
+    /// direction is pinned by `CompensationGateTests`, which sweeps the
+    /// corpus and a generated range and fails if any string the walks
+    /// actually change is one this gate would have skipped.
+    ///
+    /// Byte-at-a-time rather than 8-at-a-time (the SWAR "any byte ≥ N" trick
+    /// needs N ≤ 128) — but it only runs on lines the first gate already
+    /// found non-ASCII, and its per-byte work is a comparison where the walk's
+    /// is grapheme breaking plus Unicode property lookups.
+    var utf8MayNeedCompensation: Bool {
+        utf8.withContiguousStorageIfAvailable { buffer -> Bool in
+            guard let base = buffer.baseAddress else { return true }
+            let count = buffer.count
+            var i = 0
+            while i < count {
+                let byte = base[i]
+                if byte >= 0xEF { return true }
+                if byte == 0xE2, i + 1 < count, base[i + 1] == 0x80 || base[i + 1] == 0x83 {
+                    return true
+                }
+                i += 1
+            }
+            return false
+        } ?? true
+    }
+
     /// Returns a copy safe to emit as a single terminal row.
     ///
     /// Every C0 control character that would move the cursor off the row — a
@@ -163,7 +212,7 @@ extension String {
         // lacked: it ran the full per-Character advance-model walk over
         // every changed row on Apple Terminal, including the plain-ASCII
         // majority.
-        guard utf8ContainsNonASCII else { return false }
+        guard utf8ContainsNonASCII, utf8MayNeedCompensation else { return false }
         var index = startIndex
         while index < endIndex {
             if self[index] == "\u{1B}" {
@@ -261,8 +310,10 @@ extension String {
         // every frame (on Apple_Terminal — it is gated off elsewhere), and most
         // lines of a non-emoji UI are pure ASCII (text + ANSI escapes, which are
         // also ASCII). The gate reads no Unicode properties and scans the bytes
-        // 8 at a time (see `utf8ContainsNonASCII`).
-        guard utf8ContainsNonASCII else { return self }
+        // 8 at a time (see `utf8ContainsNonASCII`), and a second, narrower
+        // gate then rejects the rows that are non-ASCII only because of the
+        // framework's own box-drawing chrome (see `utf8MayNeedCompensation`).
+        guard utf8ContainsNonASCII, utf8MayNeedCompensation else { return self }
 
         let traits = TerminalWidthTraits.current
         var result = ""
@@ -430,8 +481,9 @@ extension String {
         // Fast path: a skin-tone cluster is always non-ASCII, so a line whose
         // bytes are all < 0x80 cannot need the fallback (same gate as
         // `withTerminalAppCursorCompensation` — this too runs on every
-        // (re)built output line on the terminals it applies to).
-        guard utf8ContainsNonASCII else { return self }
+        // (re)built output line on the terminals it applies to), and a
+        // bordered row is rejected by the narrower second gate.
+        guard utf8ContainsNonASCII, utf8MayNeedCompensation else { return self }
 
         var result = ""
         result.reserveCapacity(self.count)
@@ -588,8 +640,9 @@ extension String {
         advance: (Character) -> Int
     ) -> String {
         // Fast path: every quirk cluster is non-ASCII (same reasoning and
-        // same gate as the Terminal.app walk).
-        guard utf8ContainsNonASCII else { return self }
+        // same gates as the Terminal.app walk, the second of which is what
+        // keeps a box-drawing border off this path).
+        guard utf8ContainsNonASCII, utf8MayNeedCompensation else { return self }
 
         let traits = TerminalWidthTraits.current
         var result = ""
