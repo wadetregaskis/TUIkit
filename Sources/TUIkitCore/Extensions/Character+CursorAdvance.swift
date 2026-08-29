@@ -464,12 +464,7 @@ extension Character {
         // host's VS-16 under-advance and the rest folds into it. Long
         // documented as unhandled; measurable now that the emoji page draws
         // one. CUF closes it.
-        if let joiner = unicodeScalars.firstIndex(where: { $0.value == 0x200D }),
-            unicodeScalars[..<joiner].contains(where: { $0.value == 0xFE0F })
-        {
-            // The FIRST segment is what matters, not the base's plane: ❤️ is
-            // BMP and 🏳️ is SMP, and both behave the same because both carry
-            // the selector.
+        if leadsWithVS16Segment {
             return 1
         }
         let scalars = unicodeScalars
@@ -627,12 +622,7 @@ extension Character {
         // all 106 other emoji-presentation scalars in the block advance 2,
         // and Apple Terminal, iTerm2 and Ghostty advance all 113 by 2. The
         // ECH+CUF under-advance repair covers them like any other.
-        if unicodeScalars.count == 1, let only = unicodeScalars.first,
-            // Range guard before the set: the seven all sit in 1FA89…1FAE9,
-            // so every other single-scalar character skips the set hash.
-            (0x1FA89...0x1FAE9).contains(only.value),
-            Self.unicode16EmojiWarpDoesNotKnow.contains(only.value)
-        {
+        if isUnicode16EmojiOlderTablesMiss {
             return 1
         }
         // Fitzpatrick tones: Warp detaches every one, and the composition is
@@ -663,15 +653,43 @@ extension Character {
         return terminalWidth
     }
 
-    /// Unicode 16.0's new emoji (2024): 🪉 harp, 🪏 shovel, 🪾 leafless tree,
-    /// 🫆 fingerprint, 🫜 root vegetable, 🫟 splatter, 🫩 face with bags under
-    /// eyes. Warp v0.2026.07.08's width table predates them — and
-    /// v0.2026.08.26.17.59.stable_01, the self-update measured 2026-08-28,
-    /// still advances all seven by 1 (committed advance record; zero drift on
-    /// any other battery row either). See ``warpCursorAdvance``.
-    private static let unicode16EmojiWarpDoesNotKnow: Set<UInt32> = [
+    /// One of Unicode 16.0's new emoji (2024) — 🪉 harp, 🪏 shovel, 🪾 leafless
+    /// tree, 🫆 fingerprint, 🫜 root vegetable, 🫟 splatter, 🫩 face with bags
+    /// under eyes — which a width table cut before that release scores as
+    /// narrow, advancing 1 against a 2-cell claim.
+    ///
+    /// Named for the class rather than the host: Warp is the only terminal
+    /// measured to have it (v0.2026.07.08 and still v0.2026.08.26.17.59, the
+    /// self-update measured 2026-08-28 — committed advance record, zero drift
+    /// on any other battery row either), but any terminal carrying a
+    /// pre-16.0 table would, which is why ``TerminalQuirks`` offers it as a
+    /// switch. Apple Terminal, iTerm2 and Ghostty advance all seven by 2.
+    public var isUnicode16EmojiOlderTablesMiss: Bool {
+        // Range guard before the set: the seven all sit in 1FA89…1FAE9, so
+        // every other single-scalar character skips the set hash.
+        guard unicodeScalars.count == 1, let only = unicodeScalars.first,
+            (0x1FA89...0x1FAE9).contains(only.value)
+        else { return false }
+        return Self.unicode16Emoji.contains(only.value)
+    }
+
+    private static let unicode16Emoji: Set<UInt32> = [
         0x1FA89, 0x1FA8F, 0x1FABE, 0x1FAC6, 0x1FADC, 0x1FADF, 0x1FAE9,
     ]
+
+    /// An emoji ZWJ sequence whose FIRST segment carries a VS-16 — ❤️‍🔥 🏳️‍🌈
+    /// ⛓️‍💥. On a host that under-advances standalone VS-16 clusters the
+    /// leading segment carries that defect and the rest of the sequence folds
+    /// into it, so the whole cluster advances 1 against a 2-cell claim.
+    ///
+    /// The first segment is what matters, not the base's plane: ❤️ is BMP and
+    /// 🏳️ is SMP, and both behave the same because both carry the selector.
+    public var leadsWithVS16Segment: Bool {
+        guard let joiner = unicodeScalars.firstIndex(where: { $0.value == 0x200D }) else {
+            return false
+        }
+        return unicodeScalars[..<joiner].contains { $0.value == 0xFE0F }
+    }
 
     /// The number of columns **tmux** advances the text cursor by when this
     /// character is printed (DSR-measured inside tmux 3.7b, 2026-07-15).

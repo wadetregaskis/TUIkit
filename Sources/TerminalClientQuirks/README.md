@@ -50,13 +50,15 @@ if a row breaks, it does not. The switches are:
 | Bare pictographs | 🛡 🖥 — same, with no selector at all |
 | VS-15 chrome glyphs | ⬛︎ ⬜︎ — TUIkit draws toggles with these |
 | Lone regional indicators | 🇦 on its own (a flag pair is a separate switch) |
+| Skin tones on a narrow base | ☝🏻 ✍🏽 🏋🏽 merge into ONE cell against a 2-cell claim (Ghostty on both planes, iTerm2 on the SMP form) |
 | Flag pairs | 🇺🇸 — correct on every terminal measured so far |
 | Keycap sequences | 1️⃣ |
 | SF Symbols | Plane-16 Private Use Area |
+| Unicode 16.0 emoji | 🪉 🫆 🫩 — a width table cut before the 2024 release scores the seven narrow |
 | ZWJ sequences | 👨‍👩‍👧‍👦 — the internal column decomposes while the glyph composes; the walk decomposes in software (joiners dropped) |
 | Tag flags | 🏴󠁧󠁢󠁳󠁣󠁴󠁿 — advances 2 + one per tag scalar; pulled back with `CUB` |
 | Stores wide composites | flags/keycaps whose row STORE keeps a surplus column; repaired with `CUB(1)` `DCH(1)` `CUF(1)` |
-| Skin tones | 🤙🏽 *over*-advances — five treatments to try: keep, strip all, strip only what tmux detaches, pull back (`CUB` — tone lost on repaint), or SEPARATE as base+ZWNJ+modifier, which is how Apple Terminal keeps the tone |
+| Skin tones | 🤙🏽 *over*-advances — seven treatments to try: keep; CLAIM the detached swatch, for every base (Warp) or only a BMP one (iTerm2); strip all; strip only what tmux detaches; pull back (`CUB` — tone lost on repaint); or SEPARATE as base+ZWNJ+modifier, which is how Apple Terminal keeps the tone |
 | Background erase | compensated glyphs sit on the terminal's default background |
 
 Then fill in the terminal's name and version and write the report. It records

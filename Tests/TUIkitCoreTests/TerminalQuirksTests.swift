@@ -203,12 +203,10 @@ struct QuirkPermutationTests {
     ///
     /// The host-named shapes carry the 2026-08-28 erase (all four native
     /// hosts were measured to leave the default background under the cells an
-    /// under-advancer skips; tmux stays bare-CUF, unmeasured). "apple" and
-    /// "ghostty" are pinned to their real walks emission-for-emission below;
-    /// "iterm2" and "warp" are the strip-era approximations, because the
-    /// switches cannot yet express the detached-claim pipeline those hosts
-    /// really run (a recorded expressivity gap) — they stay in the list as
-    /// shape diversity for the conservation and preservation properties.
+    /// under-advancer skips; tmux stays bare-CUF, unmeasured). All four are
+    /// pinned to their real walks emission-for-emission below — "iterm2" and
+    /// "warp" were strip-era approximations until the mirror grew the
+    /// detached-claim cases and the narrow-base tone merge.
     static let sets: [(String, TerminalQuirks)] = [
         ("none", TerminalQuirks()),
         ("apple", TerminalQuirks(
@@ -217,14 +215,17 @@ struct QuirkPermutationTests {
             zwjSequences: true, tagFlags: true, storesWideComposites: true,
             skinTones: .separate, erasesUnderGlyphs: true)),
         ("iterm2", TerminalQuirks(
-            vs16Pictographs: true, keycapSequences: true, planeSixteenPUA: true,
-            skinTones: .stripAll, erasesUnderGlyphs: true)),
+            vs16Pictographs: true, barePictographs: true,
+            keycapSequences: true, planeSixteenPUA: true,
+            skinTones: .keepDetachedOnBMPBases, mergesTonesOnTextBases: true,
+            erasesUnderGlyphs: true)),
         ("ghostty", TerminalQuirks(
             barePictographs: true, vs15ChromeGlyphs: true, planeSixteenPUA: true,
-            erasesUnderGlyphs: true)),
+            mergesTonesOnTextBases: true, erasesUnderGlyphs: true)),
         ("warp", TerminalQuirks(
-            loneRegionalIndicators: true, planeSixteenPUA: true,
-            skinTones: .stripAll, erasesUnderGlyphs: true)),
+            barePictographs: true, loneRegionalIndicators: true, planeSixteenPUA: true,
+            preUnicode16WidthTable: true, zwjSequences: true,
+            skinTones: .keepDetached, erasesUnderGlyphs: true)),
         ("tmux", TerminalQuirks(
             loneRegionalIndicators: true, planeSixteenPUA: true,
             skinTones: .stripTmuxDetached)),
@@ -236,7 +237,8 @@ struct QuirkPermutationTests {
         ("everything", TerminalQuirks(
             vs16Pictographs: true, barePictographs: true, vs15ChromeGlyphs: true,
             loneRegionalIndicators: true, flagPairs: true, keycapSequences: true,
-            planeSixteenPUA: true, zwjSequences: true, tagFlags: true,
+            planeSixteenPUA: true, preUnicode16WidthTable: true,
+            zwjSequences: true, tagFlags: true,
             storesWideComposites: true, skinTones: .separate,
             erasesUnderGlyphs: true)),
     ]
@@ -283,7 +285,7 @@ struct QuirkPermutationTests {
     func preservesContent(set: (String, TerminalQuirks), entry: TerminalWidthCorpus.Entry) {
         let (name, quirks) = set
         switch quirks.skinTones {
-        case .keep, .pullBack, .separate: break
+        case .keep, .keepDetached, .keepDetachedOnBMPBases, .pullBack, .separate: break
         case .stripAll, .stripTmuxDetached: return
         }
         TerminalWidthTraits.withTraits(quirks.widthTraits) {
@@ -298,7 +300,7 @@ struct QuirkPermutationTests {
                 // emoji presentation, and the normalized pair is the one the
                 // hosts were measured to handle). The Apple-family walks
                 // (.separate, .pullBack) keep it.
-                if scalar.value == 0xFE0F, quirks.skinTones == .keep,
+                if scalar.value == 0xFE0F, quirks.skinTones.stripsRedundantToneVS16,
                     entry.character.withoutRedundantToneVS16 != nil
                 {
                     continue
@@ -341,20 +343,13 @@ struct QuirkPermutationTests {
 
     /// The same pin for the Ghostty shape — the drift this would have caught
     /// is real: the shapes carried no `erasesUnderGlyphs` for months after
-    /// the real walks grew the measured erase. The skip set is the mirror's
-    /// recorded expressivity gap: Ghostty merges a BMP text-presentation
-    /// base's tone into ONE cell (`ghosttyCursorAdvance` returns 1, the
-    /// spelled ☝️🏽 detaches at 4) and no switch expresses either, so the
-    /// mirror emits those five rows verbatim where the real walk repairs
-    /// them.
+    /// the real walks grew the measured erase. It carried a skip set for as
+    /// long, covering the seven tone rows Ghostty merges into ONE cell; that
+    /// is what ``TerminalQuirks/mergesTonesOnTextBases`` now expresses, and
+    /// the set is gone.
     @Test("The Ghostty-shaped set reproduces the real Ghostty walk",
           arguments: TerminalWidthCorpus.all)
     func ghosttyShapeMatchesTheRealWalk(entry: TerminalWidthCorpus.Entry) {
-        let mirrorLacksToneMergeSwitch: Set<String> = [
-            "tone_point_up", "tone_victory", "tone_writing", "tone_basketball",
-            "tone_point_up_vs16", "tone_victory_vs16", "tone_lifter_vs16",
-        ]
-        guard !mirrorLacksToneMergeSwitch.contains(entry.id) else { return }
         let ghostty = Self.sets.first { $0.0 == "ghostty" }!.1
         TerminalWidthTraits.withTraits(ghostty.widthTraits) {
             #expect(
@@ -364,6 +359,46 @@ struct QuirkPermutationTests {
             #expect(
                 entry.text.withCursorCompensation(for: ghostty)
                     == entry.text.withGhosttyCursorCompensation(),
+                "\(entry): hand-built emission diverges from the real walk")
+        }
+    }
+
+    /// The same pin for iTerm2 — the host that needs both new mechanisms at
+    /// once, and the reason they are separate switches: a BMP base's tone
+    /// DETACHES (the claim widens to cover the swatch, so nothing is emitted)
+    /// while the SMP form 🏋🏽 MERGES to one cell against a 2-cell claim and
+    /// takes the ordinary erase-and-push.
+    @Test("The iTerm2-shaped set reproduces the real iTerm2 walk",
+          arguments: TerminalWidthCorpus.all)
+    func iTerm2ShapeMatchesTheRealWalk(entry: TerminalWidthCorpus.Entry) {
+        let iterm2 = Self.sets.first { $0.0 == "iterm2" }!.1
+        TerminalWidthTraits.withTraits(iterm2.widthTraits) {
+            #expect(
+                iterm2.cursorAdvance(of: entry.character)
+                    == entry.character.iTerm2CursorAdvance,
+                "\(entry): hand-built model diverges from the measured one")
+            #expect(
+                entry.text.withCursorCompensation(for: iterm2)
+                    == entry.text.withITerm2CursorCompensation(),
+                "\(entry): hand-built emission diverges from the real walk")
+        }
+    }
+
+    /// And for Warp, which detaches every base. Its remaining divergences are
+    /// OVER-advances no escape can repair (keycaps, the EAW-base VS-16
+    /// exceptions, the tag flag), which both sides leave alone — so they are
+    /// agreement, not a skip.
+    @Test("The Warp-shaped set reproduces the real Warp walk",
+          arguments: TerminalWidthCorpus.all)
+    func warpShapeMatchesTheRealWalk(entry: TerminalWidthCorpus.Entry) {
+        let warp = Self.sets.first { $0.0 == "warp" }!.1
+        TerminalWidthTraits.withTraits(warp.widthTraits) {
+            #expect(
+                warp.cursorAdvance(of: entry.character) == entry.character.warpCursorAdvance,
+                "\(entry): hand-built model diverges from the measured one")
+            #expect(
+                entry.text.withCursorCompensation(for: warp)
+                    == entry.text.withWarpCursorCompensation(),
                 "\(entry): hand-built emission diverges from the real walk")
         }
     }

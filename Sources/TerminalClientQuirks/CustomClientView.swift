@@ -76,9 +76,11 @@ struct CustomClientView: View {
             toggle("Bare pictographs  🛡 🖥", \.barePictographs)
             toggle("VS-15 chrome glyphs  ⬛\u{FE0E} ⬜\u{FE0E}", \.vs15ChromeGlyphs)
             toggle("Lone regional indicators  🇦", \.loneRegionalIndicators)
+            toggle("Skin tones on a narrow base  ☝🏻 ✍🏽 🏋🏽", \.mergesTonesOnTextBases)
             toggle("Flag pairs  🇺🇸", \.flagPairs)
             toggle("Keycap sequences  1\u{FE0F}\u{20E3}", \.keycapSequences)
             toggle("SF Symbols (Plane-16 PUA)", \.planeSixteenPUA)
+            toggle("Unicode 16.0 emoji  🪉 🫆 🫩", \.preUnicode16WidthTable)
             Text("Internal column runs past the composed glyph").bold()
             Text("Turn one on if rows carrying that class wrap early — blank default-background cells at the row's right edge.")
                 .foregroundStyle(.palette.foregroundSecondary)
@@ -141,6 +143,8 @@ struct CustomClientView: View {
     private func describe(_ option: TerminalQuirks.SkinTones) -> String {
         switch option {
         case .keep: "Keep them — the terminal joins the cluster correctly (Ghostty)"
+        case .keepDetached: "Keep them and claim the swatch beside the base — base width + 2 (Warp)"
+        case .keepDetachedOnBMPBases: "Claim the swatch for a BMP base ☝🏽 ✊🏻; an SMP base 👍🏽 joins (iTerm2)"
         case .stripAll: "Strip every one (a claim that cannot hold the detached pair)"
         case .stripTmuxDetached: "Strip only the bases tmux detaches — 🤙🏽 goes, 👍🏽 stays (tmux)"
         case .pullBack: "Keep them, pull the internal column back with CUB — tone lost on screen"
@@ -236,7 +240,9 @@ struct CustomClientView: View {
         if quirks.flagPairs { parts.append("flagPairs: true") }
         if quirks.keycapSequences { parts.append("keycapSequences: true") }
         if quirks.planeSixteenPUA { parts.append("planeSixteenPUA: true") }
+        if quirks.preUnicode16WidthTable { parts.append("preUnicode16WidthTable: true") }
         if quirks.skinTones != .keep { parts.append("skinTones: .\(quirks.skinTones.rawValue)") }
+        if quirks.mergesTonesOnTextBases { parts.append("mergesTonesOnTextBases: true") }
         if quirks.erasesUnderGlyphs { parts.append("erasesUnderGlyphs: true") }
         return parts.isEmpty
             ? "TerminalQuirks()  # nothing needed — this terminal renders correctly"

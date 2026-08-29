@@ -217,6 +217,15 @@ cluster class, so an unmeasured terminal can be characterised by experiment
 and exported as a `TerminalQuirks(...)` literal — see
 `Sources/TerminalClientQuirks/README.md`.
 
+Since 2026-08-28 the switches can express **every** measured host: all four
+native shapes are pinned to their real walks emission-for-emission by
+`TerminalQuirksTests`, with no skipped rows. That pin is the point of the
+app — what an explorer dials in is exactly what TUIkit would emit once the
+model was written down — and it only became true when the mirror grew the
+three mechanisms the real walks already had: claiming the detached
+skin-tone swatch (for every base, or only a BMP one), merging a tone into a
+narrow text base's single cell, and a width table cut before Unicode 16.0.
+
 "Advance" below = cells the cursor moves; "paints" = cells with ink.
 TUIkit's shared layout width (`Character.terminalWidth`) claims 2 for all
 the emoji-class clusters below unless noted.
