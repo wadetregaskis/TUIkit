@@ -23,26 +23,34 @@ extension ItemListHandler {
     /// the line is kept so ``publishRowBands(_:)`` can ask the question again
     /// against the next frame's rows.
     func hoverExternalDrop(atContentY contentY: Int) {
-        // A NEW pointer position is a new situation: the auto-scroll retarget
-        // gets one run against it, whatever the rows have done since.
-        //
-        // The SAME position repeated is not, and the difference is the whole
-        // reason this is a condition rather than an assignment. A held pointer
-        // keeps reporting — a trackpad reports many times a second without
-        // moving a cell — and re-arming the retarget on every report let its
-        // answer and this one alternate forever: on a list whose rows exactly
-        // fill it, this method reads the gap's own band and keeps it where the
-        // pointer is, while the retarget's past-the-rows rule pulls it onto the
-        // last row. Two defensible answers, one per frame, and the gap flipped
-        // between them for as long as the drag was held there.
-        if lastExternalDropContentY != contentY { externalDropResolvedOffset = nil }
         lastExternalDropContentY = contentY
         // Past the rows, a pointer that is simply resting there means "append"
         // — the conventional answer, and the one a short list has always given.
         // Only the auto-scroll retarget below reads it differently, because
         // there the rows are moving and "the end of the data" is an answer about
         // somewhere the cursor is not.
-        setExternalDropSlot(dropTarget(atContentY: contentY) ?? itemCount)
+        let target = dropTarget(atContentY: contentY)
+        setExternalDropSlot(target ?? itemCount)
+        // Whether the retarget gets a run against this position turns on
+        // WHETHER THE POINTER LANDED ON A BAND, and nothing else.
+        //
+        // On one, this has just answered from the pointer's own position, which
+        // is the best answer there is: the retarget can only replace it with a
+        // derived one, and its past-the-rows rule does exactly that at the
+        // bottom of a list whose rows fill it — the gap the pointer is resting
+        // on is itself the last band, so "past the rows" is true of a cursor
+        // sitting squarely on it, and the gap is pulled one line up off the
+        // pointer. Re-arming on a changed line (which is what this was) merely
+        // slowed the 2026-08-24 flip from every frame to every mouse movement:
+        // the two rules still disagreed, and the render still had the last word
+        // over the pointer.
+        //
+        // Off one — the hot margin is chrome, and that is where a drag held at
+        // the edge rests — the fallback above is the "append" answer, about the
+        // end of the data rather than about anywhere near the cursor. That is
+        // what the retarget exists to correct, so it is armed, and the correction
+        // lands on the very next frame rather than a scroll step later.
+        externalDropResolvedOffset = target == nil ? nil : scrollOffset
     }
 
     /// Points the slot at `contentY` WITHOUT remembering the line.

@@ -83,6 +83,21 @@ struct ExternalDropFullListTests {
             }
         }
 
+        /// The gap's line, found by what is NOT on it.
+        ///
+        /// ``slotLine(_:)`` asks for a line that is blank to the last cell, and
+        /// the gap is often not: the scroll indicator rides the interior's last
+        /// column, and at the bottom of an overflowing list that is the very
+        /// line the gap is on. Every row here is a single letter, so "an
+        /// interior line with no letter on it" names the gap without having to
+        /// enumerate the chrome that may share it.
+        func gapLine(_ buffer: FrameBuffer) -> Int? {
+            buffer.lines.indices.first { line in
+                guard line > 0, line < buffer.lines.count - 1 else { return false }
+                return !buffer.lines[line].stripped.contains(where: \.isLetter)
+            }
+        }
+
         /// Presses somewhere else, then holds the pointer on `y`.
         func hold(at y: Int) {
             tui.mouseEventDispatcher.dispatch(
@@ -214,6 +229,70 @@ struct ExternalDropFullListTests {
                 fixture.tui.dragAndDropSession.end()
                 _ = fixture.render()
             }
+        }
+    }
+
+    /// Moving the pointer is a new position, and the answer it gives has to
+    /// survive the render that follows it.
+    ///
+    /// The 2026-08-24 fix stopped the gap flipping every frame, and left it
+    /// flipping once per mouse movement: a hover re-armed the auto-scroll
+    /// retarget whenever the pointer named a different line, so the render after
+    /// each movement still overrode the pointer's own answer with the retarget's
+    /// past-the-rows one. On the bottom row of a list whose rows exactly fill
+    /// it, that pulled the gap one line UP off the cursor and pushed the last
+    /// row down under it — reported as "sometimes under the cursor, sometimes
+    /// one row above".
+    ///
+    /// Auto-scroll is deliberately not driven during the wiggle: with the rows
+    /// standing still there is nothing for the retarget to correct, so anything
+    /// it changes is the bug. `isAutoScrolling` is still set from the settling
+    /// phase above, so the path under test is live.
+    @Test("A moved pointer keeps the gap on its own line")
+    func gapFollowsAMovedPointer() {
+        for rowCount in 3...6 {
+            let names = Array("abcdefgh".map(String.init).prefix(rowCount))
+            let fixture = Fixture(rows: names, height: rowCount + 2)
+            var buffer = fixture.render()
+            guard let bottom = fixture.rowLines(buffer).last,
+                let top = fixture.rowLines(buffer).first
+            else {
+                Issue.record("\(rowCount): no rows drawn")
+                continue
+            }
+            fixture.hold(at: bottom)
+            // Let the rows finish moving first: the steady state is what the
+            // report is about.
+            for tick in 0..<12 {
+                fixture.tui.dragAndDropSession.driveAutoScroll(
+                    nowNanos: UInt64(tick) &* 120_000_000)
+                fixture.move(to: bottom)
+                _ = fixture.render()
+            }
+            for target in [top, bottom, top, bottom] {
+                fixture.move(to: target)
+                let answered = fixture.handler?.externalDropSlot
+                for frame in 0..<4 {
+                    buffer = fixture.render()
+                    #expect(
+                        fixture.handler?.externalDropSlot == answered,
+                        """
+                        \(rowCount) rows, moved to line \(target), frame \(frame): \
+                        the render moved the gap from \
+                        \(answered.map(String.init) ?? "-") to \
+                        \(fixture.handler?.externalDropSlot.map(String.init) ?? "-")
+                        """)
+                }
+                #expect(
+                    fixture.gapLine(buffer) == target,
+                    """
+                    \(rowCount) rows: the pointer is on line \(target) and the gap \
+                    settled on \(fixture.gapLine(buffer).map(String.init) ?? "-")
+                    """)
+            }
+            fixture.tui.dragAndDropSession.cancelReturningToOrigin()
+            fixture.tui.dragAndDropSession.end()
+            _ = fixture.render()
         }
     }
 }

@@ -570,8 +570,9 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// write it.
     var lastExternalDropContentY: Int?
 
-    /// The scroll offset the auto-scroll retarget last answered for, or `nil`
-    /// if the pointer has moved since.
+    /// The scroll offset the slot was last resolved at — by the auto-scroll
+    /// retarget, or by a hover that had a band to read — or `nil` when the
+    /// standing answer is one the retarget should replace.
     ///
     /// That retarget exists for one reason: the rows move under a motionless
     /// pointer, so the slot the pointer named goes stale. It follows that it
@@ -583,10 +584,19 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// flips between two places on alternate frames with the pointer perfectly
     /// still.
     ///
-    /// `nil` after every hover, so a newly-named pointer position always gets
-    /// one answer — the pointer that starts auto-scroll is by definition on
-    /// chrome, where the hover's own rule ("past the rows means append") is not
-    /// the answer wanted.
+    /// So a hover that landed ON a band writes the current offset here rather
+    /// than clearing it: it has answered from the pointer's own position, and
+    /// the retarget can only replace that with a derived one. Clearing it on
+    /// every newly-named line (which is what this did until 2026-08-29) did not
+    /// avoid the flip, only its frequency — the render after each mouse movement
+    /// still overrode the pointer, so the gap sat one line above the cursor on
+    /// the bottom row of a full list.
+    ///
+    /// `nil` only for a hover that landed on no band at all. The pointer that
+    /// starts auto-scroll is by definition on chrome, and there the hover's own
+    /// rule ("past the rows means append") is an answer about the end of the
+    /// data rather than about anywhere near the cursor — exactly what the
+    /// retarget is for.
     var externalDropResolvedOffset: Int?
 
     /// Rows whose picture is still flying home, drawn BLANK where they belong.
