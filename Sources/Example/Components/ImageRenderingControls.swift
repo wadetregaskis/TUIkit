@@ -56,8 +56,11 @@ struct ImageRenderingControls: View {
         // The engine's minimum sized subset is 2 glyphs (fewer isn't a
         // ramp/vocabulary), so 1 is unreachable: stepping up from 0 lands on 2,
         // stepping down from 2 lands on 0 (= the full repertoire).
-        .onChange(of: settings.glyphCount) { old, new in
-            if new == 1 { settings.glyphCount = new > old ? 2 : 0 }
+        .onChange(of: settings.asciiGlyphs) { old, new in
+            if new == 1 { settings.asciiGlyphs = new > old ? 2 : 0 }
+        }
+        .onChange(of: settings.unicodeGlyphs) { old, new in
+            if new == 1 { settings.unicodeGlyphs = new > old ? 2 : 0 }
         }
         .modal(isPresented: $editingLUT) {
             GradientEditorPanel(
@@ -72,27 +75,25 @@ struct ImageRenderingControls: View {
     @ViewBuilder private var characters: some View {
         VStack(alignment: .leading, spacing: 0) {
             heading("component.imageControls.characters")
+            // One group per option rather than one group of four, so each
+            // option's own parameter can sit directly under IT — which is what
+            // this pane always meant to do and could only manage for whichever
+            // option happened to be last. The groups share a binding, so
+            // choosing in one clears the others exactly as a single group
+            // would; what it costs is arrow-key travel between options, which
+            // becomes Tab.
             RadioButtonGroup(selection: $settings.charset) {
                 RadioButtonItem(ImageDemoHelpers.Charset.ascii, "component.imageControls.ascii")
-                RadioButtonItem(ImageDemoHelpers.Charset.unicode, "component.imageControls.unicode")
+            }
+            glyphStepper(.ascii, value: $settings.asciiGlyphs)
+            RadioButtonGroup(selection: $settings.charset) {
+                RadioButtonItem(
+                    ImageDemoHelpers.Charset.unicode, "component.imageControls.unicode")
+            }
+            glyphStepper(.unicode, value: $settings.unicodeGlyphs)
+            RadioButtonGroup(selection: $settings.charset) {
                 RadioButtonItem(ImageDemoHelpers.Charset.blocks, "component.imageControls.blocks")
-                RadioButtonItem(ImageDemoHelpers.Charset.custom, "component.imageControls.custom")
             }
-            // Charset size: how many glyphs the ideal subset keeps (0 = the
-            // full repertoire). ASCII and Unicode, which are the two above it.
-            HStack(spacing: 1) {
-                Stepper(
-                    "component.imageControls.glyphs", value: $settings.glyphCount,
-                    in: 0...max(
-                        2,
-                        ImageDemoHelpers.maximumGlyphs(
-                            settings.charset, shapeAware: settings.shapeAware)))
-                if settings.glyphCount == 0 {
-                    Text("component.imageControls.allGlyphs").dim()
-                }
-            }
-            .disabled(!ImageDemoHelpers.usesGlyphCount(settings.charset))
-            .padding(.leading, 2)
             // The blocks charset's discrete size, under the blocks radio.
             RadioButtonGroup(selection: $settings.blockStyleIndex, orientation: .horizontal) {
                 RadioButtonItem(0, ImageDemoHelpers.blockStyleLabel(0))
@@ -104,6 +105,9 @@ struct ImageRenderingControls: View {
                 !ImageDemoHelpers.usesBlockStyle(
                     settings.charset, shapeAware: settings.shapeAware))
             .padding(.leading, 2)
+            RadioButtonGroup(selection: $settings.charset) {
+                RadioButtonItem(ImageDemoHelpers.Charset.custom, "component.imageControls.custom")
+            }
             rampField
                 .disabled(settings.charset != .custom)
                 .padding(.leading, 2)
@@ -140,19 +144,39 @@ struct ImageRenderingControls: View {
         }
     }
 
+    /// One charset's glyph-count stepper, under its own radio button and inert
+    /// while another charset is chosen. `0` is the whole repertoire.
+    @ViewBuilder private func glyphStepper(
+        _ charset: ImageDemoHelpers.Charset, value: Binding<Int>
+    ) -> some View {
+        HStack(spacing: 1) {
+            Stepper(
+                "component.imageControls.glyphs", value: value,
+                in: 0...max(
+                    2,
+                    ImageDemoHelpers.maximumGlyphs(charset, shapeAware: settings.shapeAware)))
+            if value.wrappedValue == 0 {
+                Text("component.imageControls.allGlyphs").dim()
+            }
+        }
+        .disabled(settings.charset != charset)
+        .padding(.leading, 2)
+    }
+
     // MARK: - Colour
 
     @ViewBuilder private var colour: some View {
         VStack(alignment: .leading, spacing: 0) {
             heading("component.imageControls.colour")
             RadioButtonGroup(selection: $settings.colour) {
-                RadioButtonItem(ImageDemoSettings.ColourMode.trueColor, "component.imageControls.trueColour")
-                RadioButtonItem(ImageDemoSettings.ColourMode.ansi256, "component.imageControls.colours256")
-                RadioButtonItem(ImageDemoSettings.ColourMode.grayscale, "component.imageControls.greyscale")
-                RadioButtonItem(ImageDemoSettings.ColourMode.mono, "component.imageControls.mono")
-                RadioButtonItem(ImageDemoSettings.ColourMode.themed, "component.imageControls.themed")
-                RadioButtonItem(ImageDemoSettings.ColourMode.greys, "component.imageControls.greys")
-                RadioButtonItem(ImageDemoSettings.ColourMode.sampled, "component.imageControls.sampled")
+                RadioButtonItem(
+                    ImageDemoSettings.ColourMode.trueColor, "component.imageControls.trueColour")
+                RadioButtonItem(
+                    ImageDemoSettings.ColourMode.ansi256, "component.imageControls.colours256")
+                RadioButtonItem(
+                    ImageDemoSettings.ColourMode.grayscale, "component.imageControls.greyscale")
+                RadioButtonItem(
+                    ImageDemoSettings.ColourMode.mono, "component.imageControls.mono")
             }
             // Mono's own knob. It emits no colour codes, so by default its
             // cells take the page's — which is the theme's, and is what it has
@@ -160,10 +184,19 @@ struct ImageRenderingControls: View {
             Toggle("component.imageControls.monoThemeColours", isOn: $settings.monoThemeColours)
                 .disabled(settings.colour != .mono)
                 .padding(.leading, 2)
-            // Under "Greys" and "Sampled", in that order: each names how many.
+            RadioButtonGroup(selection: $settings.colour) {
+                RadioButtonItem(
+                    ImageDemoSettings.ColourMode.themed, "component.imageControls.themed")
+                RadioButtonItem(
+                    ImageDemoSettings.ColourMode.greys, "component.imageControls.greys")
+            }
             counted(
                 "component.imageControls.levels", value: $settings.greyLevels, in: 2...16,
                 enabled: settings.colour == .greys)
+            RadioButtonGroup(selection: $settings.colour) {
+                RadioButtonItem(
+                    ImageDemoSettings.ColourMode.sampled, "component.imageControls.sampled")
+            }
             counted(
                 "component.imageControls.colours", value: $settings.sampledColours, in: 2...64,
                 enabled: settings.colour == .sampled)
@@ -204,10 +237,12 @@ struct ImageRenderingControls: View {
             heading("component.imageControls.tone")
             RadioButtonGroup(selection: $settings.tone) {
                 RadioButtonItem(ImageDemoSettings.Tone.off, "component.imageControls.toneOff")
-                RadioButtonItem(ImageDemoSettings.Tone.negative, "component.imageControls.toneNegative")
-                RadioButtonItem(ImageDemoSettings.Tone.accent, "component.imageControls.toneAccent")
-                RadioButtonItem(ImageDemoSettings.Tone.duotone, "component.imageControls.toneDuotone")
-                RadioButtonItem(ImageDemoSettings.Tone.lut, "component.imageControls.toneLUT")
+                RadioButtonItem(
+                    ImageDemoSettings.Tone.negative, "component.imageControls.toneNegative")
+                RadioButtonItem(
+                    ImageDemoSettings.Tone.accent, "component.imageControls.toneAccent")
+                RadioButtonItem(
+                    ImageDemoSettings.Tone.duotone, "component.imageControls.toneDuotone")
             }
             // Duotone's two ends, under its own radio button.
             VStack(alignment: .leading, spacing: 0) {
@@ -222,6 +257,9 @@ struct ImageRenderingControls: View {
             }
             .disabled(settings.tone != .duotone)
             .padding(.leading, 2)
+            RadioButtonGroup(selection: $settings.tone) {
+                RadioButtonItem(ImageDemoSettings.Tone.lut, "component.imageControls.toneLUT")
+            }
             // …and the LUT's, under its own: the ramp as it stands, and the way
             // in to editing it.
             HStack(spacing: 1) {
@@ -233,9 +271,6 @@ struct ImageRenderingControls: View {
         }
     }
 
-    /// The LUT's ramp, drawn as it will be applied: the stops interpolated
-    /// across the tone range, which is exactly what the curve does to the
-    /// image. Not a row of swatches — that would show the stops and hide the
     /// thing they define.
     private var lutPreview: some View {
         let width = 12

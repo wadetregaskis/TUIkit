@@ -99,7 +99,7 @@ enum ImageDemoHelpers {
     static func maximumGlyphs(_ charset: Charset, shapeAware: Bool) -> Int {
         var probe = ImageDemoSettings()
         probe.charset = charset
-        probe.glyphCount = 0
+
         probe.blockStyleIndex = 0
         probe.customRamp = ""
         return probe.characterSet.maximumGlyphs(shapeAware: shapeAware) ?? 0

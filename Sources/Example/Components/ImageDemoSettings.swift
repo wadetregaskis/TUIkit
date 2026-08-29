@@ -25,8 +25,16 @@ struct ImageDemoSettings: Equatable {
 
     var charset: ImageDemoHelpers.Charset = .blocks
 
-    /// How many glyphs the sizeable charsets use: 0 = the full repertoire.
-    var glyphCount = 0
+    /// How many glyphs the ASCII charset uses: 0 = the full repertoire.
+    ///
+    /// One per sizeable charset rather than one shared: the two repertoires are
+    /// different sizes (`maximumGlyphs` differs), so a count chosen for one is
+    /// not a count for the other, and sharing it clamped a considered ASCII
+    /// choice on the way through Unicode.
+    var asciiGlyphs = 0
+
+    /// How many glyphs the Unicode charset uses: 0 = the full repertoire.
+    var unicodeGlyphs = 0
 
     /// Which ``ImageDemoHelpers/blockStyles`` entry the blocks charset uses
     /// (while not shape-aware).
@@ -111,10 +119,9 @@ struct ImageDemoSettings: Equatable {
     /// the full repertoire; an empty custom ramp falls back to a 10-glyph ASCII
     /// ramp so the demo never renders blank.
     var characterSet: ASCIICharacterSet {
-        let glyphs = glyphCount > 0 ? glyphCount : nil
         switch charset {
-        case .ascii: return .ascii(glyphs: glyphs)
-        case .unicode: return .unicode(glyphs: glyphs)
+        case .ascii: return .ascii(glyphs: asciiGlyphs > 0 ? asciiGlyphs : nil)
+        case .unicode: return .unicode(glyphs: unicodeGlyphs > 0 ? unicodeGlyphs : nil)
         case .blocks:
             return .blocks(
                 ImageDemoHelpers.blockStyles[
@@ -213,12 +220,13 @@ struct ImageDemoSettings: Equatable {
         }
         if !ImageDemoHelpers.usesEdgeTracing(charset, shapeAware: shapeAware) { edgeLines = false }
         if !ImageDemoHelpers.usesBlockStyle(charset, shapeAware: shapeAware) { blockStyleIndex = 0 }
-        if ImageDemoHelpers.usesGlyphCount(charset) {
-            glyphCount = min(
-                glyphCount, ImageDemoHelpers.maximumGlyphs(charset, shapeAware: shapeAware))
-        } else {
-            glyphCount = 0
-        }
+        // Each charset's own count, clamped to its own repertoire. Neither is
+        // zeroed when the other is chosen: a count is not a claim about what is
+        // being drawn in a mode that does not use it.
+        asciiGlyphs = min(
+            asciiGlyphs, ImageDemoHelpers.maximumGlyphs(.ascii, shapeAware: shapeAware))
+        unicodeGlyphs = min(
+            unicodeGlyphs, ImageDemoHelpers.maximumGlyphs(.unicode, shapeAware: shapeAware))
         greyLevels = min(16, max(2, greyLevels))
         sampledColours = min(64, max(2, sampledColours))
         // A one-stop LUT is not a mapping; the editor can delete down to one,
