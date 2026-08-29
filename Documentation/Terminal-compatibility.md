@@ -1004,7 +1004,13 @@ is deliberately NOT applied here — it would discard a correct rendering.
 ## Warp
 
 **Tested:** `v0.2026.07.08.17.54.stable_02`, macOS 15.7, default config,
-2026-07-14.
+2026-07-14; **re-measured end to end on `v0.2026.08.26.17.59.stable_01`,
+macOS 15.7.9, 2026-08-28** — both the advance battery and the landing/ink/
+reserve record, with zero drift on every row of either (see the version-drift
+note below). Numbers in this section are good for both builds unless a row
+says otherwise. The exceptions are the **tmux** and **Device Attributes**
+tables further down: those were measured with the July build attached and
+have NOT been re-run, so they still name it.
 
 ### Environment
 
@@ -1012,7 +1018,7 @@ is deliberately NOT applied here — it would discard a correct rendering.
 |---|---|
 | `TERM` | `xterm-256color` (**not** a Warp-specific value — detect on `TERM_PROGRAM`) |
 | `TERM_PROGRAM` | `WarpTerminal` |
-| `TERM_PROGRAM_VERSION` | `v0.2026.07.08.17.54.stable_02` |
+| `TERM_PROGRAM_VERSION` | `v0.2026.08.26.17.59.stable_01` (was `v0.2026.07.08.17.54.stable_02`; the format is stable, the value is not — never match on it) |
 | `COLORTERM` | `truecolor` |
 | `WARP_TERMINAL_SESSION_UUID` / `WARP_IS_LOCAL_SHELL_SESSION` / `WARP_HONOR_PS1` … | set |
 | `__CFBundleIdentifier` | `dev.warp.Warp-Stable` |
@@ -1265,6 +1271,8 @@ It IS possible — tmux probes each client with XTVERSION and exposes the answer
 | iTerm2 | `iTerm2 3.6.11` | `xterm-256color` | 256,bpaste,ccolour,clipboard,hyperlinks,cstyle,extkeys,focus,margins,mouse,osc7,progressbar,RGB,sixel,strikethrough,sync,title,usstyle |
 | Ghostty | `ghostty 1.3.1` | `xterm-ghostty` | bpaste,ccolour,clipboard,cstyle,focus,RGB,title |
 | Warp | `Warp(v0.2026.07.08…)` | `xterm-256color` | bpaste,ccolour,clipboard,cstyle,focus,RGB,title |
+<!-- The XTVERSION string reports whatever build is running; this row records
+     what the July build answered and was not re-run on the 2026-08-26 one. -->
 | Apple Terminal | *(empty — answers no XTVERSION)* | `xterm-256color` | bpaste,ccolour,clipboard,cstyle,focus,title |
 
 Read from inside a pane with
@@ -1624,7 +1632,7 @@ and (much more so) Warp do NOT — always probe with `PROBE_ALT=1`.
 
 **Bold = diverges from the claim** (i.e. needs compensation, or shears).
 
-| Cluster | Claim | Terminal.app 455.1 | iTerm2 3.6.11 | Ghostty 1.3.1 | Warp 2026.07.08 |
+| Cluster | Claim | Terminal.app 455.1 | iTerm2 3.6.11 | Ghostty 1.3.1 | Warp 2026.07.08 / 08.26 |
 |---|---|---|---|---|---|
 | `a`, `─`, `▒`, `■`, `⣿`, NFD `é` | 1 | 1 | 1 | 1 | 1 |
 | CJK 中, `██`(2), `▐▌`(2) | 2 | 2 | 2 | 2 | 2 |

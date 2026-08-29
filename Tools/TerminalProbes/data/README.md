@@ -25,6 +25,30 @@ conditions. Four kinds of file live here:
   `Character.tmuxMergedToneBases`, pinned row-for-row by
   `TmuxCompatibilityTests`.
 
+## When a record is superseded — retire it, or keep it?
+
+Both happen, and the reason is not "how old is it".
+
+**An advance record for a superseded version stays.** `warpterminal-v0.2026.07.08.17.54-alternate.json`
+is referenced by no test and describes a build nobody has installed, and it
+stays anyway: it is the baseline the compatibility document's zero-drift claim
+rests on. "The 2026-08-26 self-update reproduced every one of the 63 committed
+rows exactly" is only checkable while both files are here. Delete it and that
+sentence becomes something the reader has to take on trust, which is the
+opposite of what this directory is for.
+
+**A record the instrument got wrong goes.** The July *landing* record was
+retired on 2026-08-28, when the probe was found to have been screenshotting
+its own cursor inside the ink window (see the compatibility document's
+"Measuring paint"). Its `ink` column contains values no terminal ever
+produced, it cannot be re-measured — that build is gone — and a wrong number
+with a provenance stamp is more dangerous than no number at all, because the
+stamp is what makes it look trustworthy.
+
+So the test is **is it wrong, or merely old**. Old is evidence. Wrong is a
+trap, and the fact that it was written by a probe rather than by hand is
+exactly why somebody would believe it.
+
 ## Why the conditions are in the file
 
 Twice now a measurement in this project has been recorded without the
