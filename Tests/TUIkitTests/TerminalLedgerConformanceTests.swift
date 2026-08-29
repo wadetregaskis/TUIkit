@@ -81,7 +81,7 @@ struct TerminalLedgerConformanceTests {
         (.appleTerminal, "apple-terminal-455.1-alternate-landing.json"),
         (.iTerm2, "iterm2-3.6.11-alternate-landing.json"),
         (.ghostty, "ghostty-1.3.1-alternate-landing.json"),
-        (.warp, "warpterminal-v0.2026.07.08.17.54.stable_02-alternate-landing.json"),
+        (.warp, "warpterminal-v0.2026.08.26.17.59.stable_01-alternate-landing.json"),
     ]
 
     static let ledgers: [Ledger] = {
@@ -150,20 +150,17 @@ struct TerminalLedgerConformanceTests {
         "warp/keycap_one", "warp/keycap_hash", "warp/flag_scotland",
     ]
 
-    /// Corpus rows with no landing measurement on ANY host yet — the pixel
-    /// halves need Screen Recording, which this machine's terminals do not
-    /// currently hold (the DSR halves are committed in the advance records).
+    /// Corpus rows with no landing measurement on ANY host yet.
+    ///
+    /// Empty since 2026-08-28, when Screen Recording was restored and all four
+    /// hosts were measured over the whole corpus. Kept rather than deleted: it
+    /// is the seam a newly added corpus row passes through, and the assertions
+    /// below are what stop "not measured yet" from reading as "passes".
     /// Listed explicitly so a missing measurement cannot look like a pass:
     /// ``ledgerCoversTheCorpus`` fails for a row that is absent from a ledger
     /// AND absent from this list, and fails the other way when a measured row
     /// forgets to leave it.
-    static let awaitingLandingMeasurement: Set<String> = [
-        // Unicode 16.0 rows added 2026-08-28 (advance swept, landing pending).
-        "shovel", "leafless_tree", "fingerprint", "root_vegetable",
-        "splatter", "face_bags",
-        // The 2026-08-28 additions from the review (same status).
-        "keycap_bare", "tone_victory_vs16", "tone_lifter_vs16",
-    ]
+    static let awaitingLandingMeasurement: Set<String> = []
 
     /// The completeness half the suite lacked: it flagged a measurement with
     /// no corpus row, but a corpus row with no measurement got zero

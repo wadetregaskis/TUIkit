@@ -3,44 +3,50 @@
   "0": {
    "cell_height": 28.0,
    "cell_width": 14.0,
-   "origin_x": 242,
-   "origin_y": 342
+   "origin_x": 184,
+   "origin_y": 284
   },
   "1": {
    "cell_height": 28.0,
    "cell_width": 14.0,
-   "origin_x": 242,
-   "origin_y": 342
+   "origin_x": 184,
+   "origin_y": 284
   },
   "2": {
    "cell_height": 28.0,
    "cell_width": 14.0,
-   "origin_x": 242,
-   "origin_y": 342
+   "origin_x": 184,
+   "origin_y": 284
   },
   "3": {
    "cell_height": 28.0,
    "cell_width": 14.0,
-   "origin_x": 242,
-   "origin_y": 342
+   "origin_x": 184,
+   "origin_y": 284
   },
   "4": {
    "cell_height": 28.0,
    "cell_width": 14.0,
-   "origin_x": 242,
-   "origin_y": 342
+   "origin_x": 184,
+   "origin_y": 284
   },
   "5": {
    "cell_height": 28.0,
    "cell_width": 14.0,
-   "origin_x": 242,
-   "origin_y": 342
+   "origin_x": 184,
+   "origin_y": 284
   },
   "6": {
    "cell_height": 28.0,
    "cell_width": 14.0,
-   "origin_x": 242,
-   "origin_y": 342
+   "origin_x": 184,
+   "origin_y": 284
+  },
+  "7": {
+   "cell_height": 28.0,
+   "cell_width": 14.0,
+   "origin_x": 184,
+   "origin_y": 284
   }
  },
  "instrument_bias": 0,
@@ -104,7 +110,7 @@
   "combining_acute": {
    "advance": 1,
    "class": "combining",
-   "ink": 2,
+   "ink": 1,
    "landing": 1,
    "reserve": 1
   },
@@ -122,10 +128,24 @@
    "landing": 2,
    "reserve": 2
   },
+  "face_bags": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
   "fast_forward": {
    "advance": 2,
    "class": "wide_symbol",
    "ink": 3,
+   "landing": 2,
+   "reserve": 2
+  },
+  "fingerprint": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
    "landing": 2,
    "reserve": 2
   },
@@ -206,6 +226,13 @@
    "landing": 2,
    "reserve": 2
   },
+  "keycap_bare": {
+   "advance": 2,
+   "class": "keycap_bare",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 2
+  },
   "keycap_hash": {
    "advance": 2,
    "class": "keycap",
@@ -218,6 +245,13 @@
    "class": "keycap",
    "ink": 3,
    "landing": 1,
+   "reserve": 2
+  },
+  "leafless_tree": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
    "reserve": 2
   },
   "lone_ri_a": {
@@ -237,7 +271,7 @@
   "partying": {
    "advance": 2,
    "class": "default_emoji",
-   "ink": 3,
+   "ink": 2,
    "landing": 2,
    "reserve": 2
   },
@@ -252,6 +286,13 @@
    "advance": 2,
    "class": "wide_symbol",
    "ink": 3,
+   "landing": 2,
+   "reserve": 2
+  },
+  "root_vegetable": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
    "landing": 2,
    "reserve": 2
   },
@@ -275,6 +316,20 @@
    "ink": 2,
    "landing": 1,
    "reserve": 1
+  },
+  "shovel": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "splatter": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
   },
   "telephone": {
    "advance": 2,
@@ -311,6 +366,13 @@
    "landing": 2,
    "reserve": 4
   },
+  "tone_lifter_vs16": {
+   "advance": 3,
+   "class": "skin_tone_vs16_smp",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 3
+  },
   "tone_point_up": {
    "advance": 3,
    "class": "skin_tone_bmp_narrow",
@@ -335,13 +397,20 @@
   "tone_thumbsup": {
    "advance": 4,
    "class": "skin_tone_smp",
-   "ink": 5,
+   "ink": 2,
    "landing": 2,
    "reserve": 4
   },
   "tone_victory": {
    "advance": 3,
    "class": "skin_tone_bmp_narrow",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 3
+  },
+  "tone_victory_vs16": {
+   "advance": 3,
+   "class": "skin_tone_vs16_base",
    "ink": 2,
    "landing": 1,
    "reserve": 3
@@ -447,7 +516,7 @@
   "vs16_wavy_dash": {
    "advance": 2,
    "class": "vs16_wide_exception",
-   "ink": 3,
+   "ink": 2,
    "landing": 2,
    "reserve": 2
   },
@@ -468,7 +537,7 @@
   "zwj_astronaut": {
    "advance": 5,
    "class": "zwj",
-   "ink": 6,
+   "ink": 2,
    "landing": 2,
    "reserve": 5
   },
@@ -530,12 +599,20 @@
   }
  },
  "stamp": {
-  "date": "2026-08-26 21:55:50 -0700",
   "env": {
    "TERM": "xterm-256color",
    "TERM_PROGRAM": "Apple_Terminal",
-   "TERM_PROGRAM_VERSION": "455.1"
+   "TERM_PROGRAM_VERSION": "455.1",
+   "TERM_SESSION_ID": "51346861-8B09-4204-8906-CB719F36B9BA",
+   "__CFBundleIdentifier": "com.apple.Terminal"
   },
-  "screen": "alternate"
+  "machine": "arm64",
+  "measured": "2026-08-28T22:30:11-07:00",
+  "method": "DSR cursor report \u2014 confirm any disagreement with visual_card.py",
+  "mode_2027_grapheme_clustering": "not asked (Apple Terminal prints this query's final byte)",
+  "os": "macOS 15.7.9",
+  "probe": "landing_probe.py",
+  "screen": "alternate",
+  "terminal_app_build": "455.1"
  }
 }

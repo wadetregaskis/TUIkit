@@ -3,19 +3,19 @@
   "0": {
    "cell_height": 32.0,
    "cell_width": 16.0,
-   "origin_x": 504,
+   "origin_x": 6,
    "origin_y": 122
   },
   "1": {
    "cell_height": 32.0,
    "cell_width": 16.0,
-   "origin_x": 504,
+   "origin_x": 6,
    "origin_y": 122
   },
   "2": {
    "cell_height": 32.0,
    "cell_width": 16.0,
-   "origin_x": 504,
+   "origin_x": 6,
    "origin_y": 122
   }
  },
@@ -80,7 +80,7 @@
   "combining_acute": {
    "advance": 1,
    "class": "combining",
-   "ink": 2,
+   "ink": 1,
    "landing": 1,
    "reserve": 1
   },
@@ -98,12 +98,26 @@
    "landing": 2,
    "reserve": 2
   },
+  "face_bags": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
   "fast_forward": {
    "advance": 2,
    "class": "wide_symbol",
    "ink": 2,
    "landing": 2,
    "reserve": 2
+  },
+  "fingerprint": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
   },
   "fire": {
    "advance": 2,
@@ -182,6 +196,13 @@
    "landing": 2,
    "reserve": 2
   },
+  "keycap_bare": {
+   "advance": 1,
+   "class": "keycap_bare",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
   "keycap_hash": {
    "advance": 3,
    "class": "keycap",
@@ -194,6 +215,13 @@
    "class": "keycap",
    "ink": 3,
    "landing": 3,
+   "reserve": 1
+  },
+  "leafless_tree": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 1,
    "reserve": 1
   },
   "lone_ri_a": {
@@ -231,6 +259,13 @@
    "landing": 2,
    "reserve": 2
   },
+  "root_vegetable": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
   "sf_symbol_high": {
    "advance": 1,
    "class": "pua16",
@@ -249,6 +284,20 @@
    "advance": 1,
    "class": "pua16",
    "ink": 0,
+   "landing": 1,
+   "reserve": 1
+  },
+  "shovel": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
+  "splatter": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "ink": 2,
    "landing": 1,
    "reserve": 1
   },
@@ -287,6 +336,13 @@
    "landing": 4,
    "reserve": 4
   },
+  "tone_lifter_vs16": {
+   "advance": 4,
+   "class": "skin_tone_vs16_smp",
+   "ink": 5,
+   "landing": 4,
+   "reserve": 4
+  },
   "tone_point_up": {
    "advance": 3,
    "class": "skin_tone_bmp_narrow",
@@ -321,6 +377,13 @@
    "ink": 4,
    "landing": 3,
    "reserve": 3
+  },
+  "tone_victory_vs16": {
+   "advance": 4,
+   "class": "skin_tone_vs16_base",
+   "ink": 5,
+   "landing": 4,
+   "reserve": 4
   },
   "tone_wave": {
    "advance": 4,
@@ -506,13 +569,19 @@
   }
  },
  "stamp": {
-  "date": "2026-08-26 22:05:51 -0700",
   "env": {
    "COLORTERM": "truecolor",
    "TERM": "xterm-256color",
    "TERM_PROGRAM": "WarpTerminal",
-   "TERM_PROGRAM_VERSION": "v0.2026.07.08.17.54.stable_02"
+   "TERM_PROGRAM_VERSION": "v0.2026.08.26.17.59.stable_01",
+   "__CFBundleIdentifier": "dev.warp.Warp-Stable"
   },
+  "machine": "arm64",
+  "measured": "2026-08-28T22:31:53-07:00",
+  "method": "DSR cursor report \u2014 confirm any disagreement with visual_card.py",
+  "mode_2027_grapheme_clustering": null,
+  "os": "macOS 15.7.9",
+  "probe": "landing_probe.py",
   "screen": "alternate"
  }
 }

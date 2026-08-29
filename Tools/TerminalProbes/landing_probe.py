@@ -144,8 +144,18 @@ INK_CELLS = 8
 
 
 def draw_page(terminal, entries, last_row):
-    """One cluster per row, each followed by its marker. Returns the cells."""
-    terminal.write("\x1b[0m\x1b[2J\x1b[H")
+    """One cluster per row, each followed by its marker. Returns the cells.
+
+    The cursor is hidden and parked before the page is captured. It is not a
+    cosmetic detail: the terminal leaves a block cursor sitting immediately
+    after the LAST cluster drawn, which is inside that row's `INK_CELLS`
+    window, and `ink_cells` reports the rightmost inked cell. Every committed
+    record taken before this was fixed therefore read `ink == advance + 1` for
+    the final cluster on each page — one contaminated row per page, per host,
+    and which cluster it was moved with the corpus. It read as a terminal
+    inking a cell it does not ink.
+    """
+    terminal.write("\x1b[?25l\x1b[0m\x1b[2J\x1b[H")
     for row in (1, last_row):
         terminal.write(f"\x1b[{row};1H{CALIBRATION}")
     terminal.write(f"\x1b[1;{CALIBRATION_COLUMN}H{CALIBRATION}")
@@ -171,6 +181,9 @@ def draw_page(terminal, entries, last_row):
             "column": 1,
             "advance": after - 1,
         })
+    # Belt and braces for a terminal that ignores DECTCEM: park the cursor on
+    # the self-check row, which is neither a landing row nor an ink row.
+    terminal.write(f"\x1b[{SELF_CHECK_ROW};1H")
     return cells
 
 
@@ -233,7 +246,7 @@ def measure_landings(terminal, clusters, shot_prefix, hold, sync):
         time.sleep(0.5)
         rows, columns = terminal.size()
     if columns < CALIBRATION_COLUMN + 2 or rows < FIRST_ROW + 3:
-        terminal.write("\x1b[?1049l")
+        terminal.write("\x1b[?25h\x1b[?1049l")
         raise SystemExit(f"need at least {CALIBRATION_COLUMN + 2}x{FIRST_ROW + 3}, "
                          f"have {columns}x{rows} — and the terminal did not "
                          f"resize when asked. Make the window bigger.")
@@ -259,7 +272,7 @@ def measure_landings(terminal, clusters, shot_prefix, hold, sync):
         pages.append({"index": index, "last_row": last_row, "screenshot": path})
         cells.extend(page_cells)
 
-    terminal.write("\x1b[?1049l")
+    terminal.write("\x1b[?25h\x1b[?1049l")
     return {"pages": pages, "cells": cells,
             "grid": {"first_row": FIRST_ROW,
                      "calibration_column": CALIBRATION_COLUMN,
@@ -294,7 +307,7 @@ def measure_reserves(terminal, clusters):
                 found = budget
                 break
         reserves[entry["id"]] = found
-    terminal.write("\x1b[?1049l")
+    terminal.write("\x1b[?25h\x1b[?1049l")
     return reserves
 
 

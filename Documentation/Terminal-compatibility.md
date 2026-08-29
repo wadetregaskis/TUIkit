@@ -132,16 +132,40 @@ The instrument checks itself in two ways, both of which caught real errors:
   including for `a`; taking that as a terminal behaviour would have "corrected"
   all 69 clusters on a host that gets every one of them right.
 
-Four bugs in the instrument were found this way, each of which produced
+Five bugs in the instrument were found this way, each of which produced
 confident, plausible, wrong numbers: reading the marker's left edge (a wide
 glyph's ink spills into it, biasing every skin-tone reading), bounding `ink` by
 `landing` (they then agree by construction), measuring `ink` further along the
-same row (it inherits the displacement being measured), and calibrating off a
-stale window from an earlier run.
+same row (it inherits the displacement being measured), calibrating off a
+stale window from an earlier run, and — found 2026-08-28 — **screenshotting a
+page with the cursor still on it**.
 
-`ink` is recorded but **not asserted on**: the reading is a coverage threshold
-over an antialiased glyph and it is not yet reliable enough — it puts 👍🏼 at
-five cells on a host where it composes into about two.
+That last one is worth stating plainly, because it is the reason this section
+used to say `ink` could not be trusted. The probe draws each cluster a second
+time on its own row to measure ink, and then simply stopped: the terminal left
+a block cursor sitting immediately after the *last* cluster on the page, inside
+the eight-cell ink window, and `ink_cells` reports the **rightmost** inked cell.
+So exactly one row per page — whichever cluster happened to fall last — read
+`ink == advance + 1`, describing the cursor rather than the glyph. It was
+invisible precisely because it was rare, self-consistent, and moved: which
+cluster it hit depends on where the page breaks fall, so growing the corpus
+changed the answer for a host whose rendering had not changed at all.
+
+The probe now hides the cursor (DECTCEM) and parks it on the self-check row.
+Re-measuring all four hosts afterwards moved **only** `ink`, and only on
+last-on-page rows — `advance`, `landing` and `reserve` are DSR- and
+wrap-derived and were identical to the cell — which is what a fix for this
+specific fault should look like. Seven committed values were wrong:
+`combining_acute` on all four hosts (2 → 1, its true one cell), and on Apple
+Terminal `partying` (3 → 2), `vs16_wavy_dash` (3 → 2), `zwj_astronaut`
+(6 → 2) and `tone_thumbsup` (5 → 2).
+
+`ink` is still recorded but **not asserted on** — it remains a coverage
+threshold over an antialiased glyph, and a genuine over-ink (Apple paints
+⏩ ⏪ ⏫ ⏬ into three cells) is a real reading rather than a bug. But the
+specific evidence this document cited for distrusting it — "it puts 👍🏼 at five
+cells on a host where it composes into about two" — was the cursor, not the
+threshold. That host puts 👍🏼 at two.
 
 Every probe result is written with a provenance stamp (`probe_stamp.py`) and
 the curated ones are committed under `Tools/TerminalProbes/data/`, one file per
@@ -991,7 +1015,11 @@ and the *composed* classes wrong.
 > build reproduced every one of the 63 previously committed rows exactly —
 > including all seven Unicode 16.0 emoji still at 1 — so everything below
 > measured on v0.2026.07.08 holds unchanged (committed record:
-> `data/warpterminal-v0.2026.08.26.17.59.stable_01-alternate.json`).
+> `data/warpterminal-v0.2026.08.26.17.59.stable_01-alternate.json`). The
+> landing record was re-taken on the new build the same day and likewise
+> drifted on nothing, so the July landing file — which no longer describes
+> any installed build, and which carried the cursor artefact below — was
+> replaced rather than kept.
 
 - **Colour:** truecolor.
 - **VS-16 pictographs** (❤️ ✏️ 🖥️) advance 2 ✓ — no Bug-A compensation
@@ -1047,10 +1075,10 @@ and the *composed* classes wrong.
   apart by the ledger, not by eye: an under-advance has `advance < claim`,
   this has `advance == claim == landing` with `ink` short. Warp alone —
   Apple Terminal, iTerm2 and Ghostty ink both cells for all eight (Apple
-  inks 3 for ⏩ ⏪ ⏫ ⏬). Measured on v0.2026.07.08.17.54.stable_02
-  (landing record, `ink` column). The 2026-08-26 self-update was
-  DSR-re-measured with zero drift, but its ink is unmeasured: the pixel
-  half needs Screen Recording, currently denied.
+  inks 3 for ⏩ ⏪ ⏫ ⏬). Re-measured end to end on
+  `v0.2026.08.26.17.59.stable_01` (landing record, `ink` column) once Screen
+  Recording came back on 2026-08-28: all four facts for all 69 previously
+  measured rows reproduced with **zero drift**, this ink split included.
 - **OVER-advancers, unhandled** (no escape can pull a cursor back to a
   column the glyph has already painted over — the seven entries in
   `TerminalLedgerConformanceTests.knownAdvanceDivergences`, all Warp's):

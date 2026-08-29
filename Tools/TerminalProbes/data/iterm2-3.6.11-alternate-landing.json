@@ -17,6 +17,12 @@
    "cell_width": 14.143,
    "origin_x": 0,
    "origin_y": 158
+  },
+  "3": {
+   "cell_height": 34.0,
+   "cell_width": 14.143,
+   "origin_x": 0,
+   "origin_y": 158
   }
  },
  "instrument_bias": 1,
@@ -80,7 +86,7 @@
   "combining_acute": {
    "advance": 1,
    "class": "combining",
-   "ink": 2,
+   "ink": 1,
    "landing": 1,
    "reserve": 1
   },
@@ -98,9 +104,23 @@
    "landing": 2,
    "reserve": 2
   },
+  "face_bags": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
   "fast_forward": {
    "advance": 2,
    "class": "wide_symbol",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "fingerprint": {
+   "advance": 2,
+   "class": "recent_emoji",
    "ink": 2,
    "landing": 2,
    "reserve": 2
@@ -182,6 +202,13 @@
    "landing": 2,
    "reserve": 2
   },
+  "keycap_bare": {
+   "advance": 1,
+   "class": "keycap_bare",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
   "keycap_hash": {
    "advance": 1,
    "class": "keycap",
@@ -195,6 +222,13 @@
    "ink": 2,
    "landing": 1,
    "reserve": 1
+  },
+  "leafless_tree": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
   },
   "lone_ri_a": {
    "advance": 2,
@@ -231,6 +265,13 @@
    "landing": 2,
    "reserve": 2
   },
+  "root_vegetable": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
   "sf_symbol_high": {
    "advance": 1,
    "class": "pua16",
@@ -251,6 +292,20 @@
    "ink": 2,
    "landing": 1,
    "reserve": 1
+  },
+  "shovel": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "splatter": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
   },
   "telephone": {
    "advance": 2,
@@ -287,6 +342,13 @@
    "landing": 4,
    "reserve": 4
   },
+  "tone_lifter_vs16": {
+   "advance": 3,
+   "class": "skin_tone_vs16_smp",
+   "ink": 3,
+   "landing": 3,
+   "reserve": 3
+  },
   "tone_point_up": {
    "advance": 3,
    "class": "skin_tone_bmp_narrow",
@@ -318,6 +380,13 @@
   "tone_victory": {
    "advance": 3,
    "class": "skin_tone_bmp_narrow",
+   "ink": 3,
+   "landing": 3,
+   "reserve": 3
+  },
+  "tone_victory_vs16": {
+   "advance": 3,
+   "class": "skin_tone_vs16_base",
    "ink": 3,
    "landing": 3,
    "reserve": 3
@@ -506,15 +575,26 @@
   }
  },
  "stamp": {
-  "date": "2026-08-26 22:01:38 -0700",
   "env": {
+   "COLORFGBG": "0;15",
    "COLORTERM": "truecolor",
+   "ITERM_PROFILE": "Default",
+   "ITERM_SESSION_ID": "w0t1p0:9BA7A608-0FFE-4F11-9C84-FDD99F38846A",
    "LC_TERMINAL": "iTerm2",
    "LC_TERMINAL_VERSION": "3.6.11",
    "TERM": "xterm-256color",
+   "TERMINFO_DIRS": "/Applications/iTerm.app/Contents/Resources/terminfo:/usr/share/terminfo",
    "TERM_PROGRAM": "iTerm.app",
-   "TERM_PROGRAM_VERSION": "3.6.11"
+   "TERM_PROGRAM_VERSION": "3.6.11",
+   "TERM_SESSION_ID": "w0t1p0:9BA7A608-0FFE-4F11-9C84-FDD99F38846A",
+   "__CFBundleIdentifier": "com.googlecode.iterm2"
   },
+  "machine": "arm64",
+  "measured": "2026-08-28T22:30:43-07:00",
+  "method": "DSR cursor report \u2014 confirm any disagreement with visual_card.py",
+  "mode_2027_grapheme_clustering": "permanently reset",
+  "os": "macOS 15.7.9",
+  "probe": "landing_probe.py",
   "screen": "alternate"
  }
 }

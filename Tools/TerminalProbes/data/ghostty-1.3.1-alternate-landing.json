@@ -17,6 +17,12 @@
    "cell_width": 16.0,
    "origin_x": 4,
    "origin_y": 110
+  },
+  "3": {
+   "cell_height": 34.0,
+   "cell_width": 16.0,
+   "origin_x": 4,
+   "origin_y": 110
   }
  },
  "instrument_bias": 0,
@@ -98,9 +104,23 @@
    "landing": 2,
    "reserve": 2
   },
+  "face_bags": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
   "fast_forward": {
    "advance": 2,
    "class": "wide_symbol",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "fingerprint": {
+   "advance": 2,
+   "class": "recent_emoji",
    "ink": 2,
    "landing": 2,
    "reserve": 2
@@ -182,6 +202,13 @@
    "landing": 2,
    "reserve": 2
   },
+  "keycap_bare": {
+   "advance": 1,
+   "class": "keycap_bare",
+   "ink": 2,
+   "landing": 1,
+   "reserve": 1
+  },
   "keycap_hash": {
    "advance": 2,
    "class": "keycap",
@@ -192,6 +219,13 @@
   "keycap_one": {
    "advance": 2,
    "class": "keycap",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "leafless_tree": {
+   "advance": 2,
+   "class": "recent_emoji",
    "ink": 2,
    "landing": 2,
    "reserve": 2
@@ -231,6 +265,13 @@
    "landing": 2,
    "reserve": 2
   },
+  "root_vegetable": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
   "sf_symbol_high": {
    "advance": 1,
    "class": "pua16",
@@ -251,6 +292,20 @@
    "ink": 2,
    "landing": 1,
    "reserve": 1
+  },
+  "shovel": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
+  },
+  "splatter": {
+   "advance": 2,
+   "class": "recent_emoji",
+   "ink": 2,
+   "landing": 2,
+   "reserve": 2
   },
   "telephone": {
    "advance": 2,
@@ -287,6 +342,13 @@
    "landing": 2,
    "reserve": 2
   },
+  "tone_lifter_vs16": {
+   "advance": 4,
+   "class": "skin_tone_vs16_smp",
+   "ink": 2,
+   "landing": 4,
+   "reserve": 4
+  },
   "tone_point_up": {
    "advance": 1,
    "class": "skin_tone_bmp_narrow",
@@ -321,6 +383,13 @@
    "ink": 2,
    "landing": 1,
    "reserve": 1
+  },
+  "tone_victory_vs16": {
+   "advance": 4,
+   "class": "skin_tone_vs16_base",
+   "ink": 2,
+   "landing": 4,
+   "reserve": 4
   },
   "tone_wave": {
    "advance": 2,
@@ -506,14 +575,21 @@
   }
  },
  "stamp": {
-  "date": "2026-08-26 22:05:24 -0700",
   "env": {
    "COLORTERM": "truecolor",
+   "GHOSTTY_RESOURCES_DIR": "/Applications/Ghostty.app/Contents/Resources/ghostty",
    "TERM": "xterm-ghostty",
    "TERMINFO": "/Applications/Ghostty.app/Contents/Resources/terminfo",
    "TERM_PROGRAM": "ghostty",
-   "TERM_PROGRAM_VERSION": "1.3.1"
+   "TERM_PROGRAM_VERSION": "1.3.1",
+   "__CFBundleIdentifier": "com.anthropic.claudefordesktop"
   },
+  "machine": "arm64",
+  "measured": "2026-08-28T22:31:21-07:00",
+  "method": "DSR cursor report \u2014 confirm any disagreement with visual_card.py",
+  "mode_2027_grapheme_clustering": "set",
+  "os": "macOS 15.7.9",
+  "probe": "landing_probe.py",
   "screen": "alternate"
  }
 }
