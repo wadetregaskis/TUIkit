@@ -62,7 +62,15 @@ extension View {
     ///     .animation(.easeInOut(duration: 0.4), value: hasSaved)
     /// ```
     ///
-    /// - Parameter opacity: `0` (invisible) through `1` (unchanged).
+    /// > Note: `1` is fully opaque rather than a no-op. A cell that names no
+    ///   background of its own has none to paint with, so what is behind it
+    ///   shows through at every value including `1` — which is what makes the
+    ///   top of the range continuous with the rest of it, and is the same thing
+    ///   ``View/background(_:)`` does one level down. What an opaque layer does
+    ///   win outright is the character: a blank cell *with* a background hides
+    ///   what is behind it, where a translucent one would have tinted it.
+    ///
+    /// - Parameter opacity: `0` (invisible) through `1` (fully opaque).
     /// - Returns: A view composited at that opacity over whatever it is drawn on.
     public func opacity(_ opacity: Double) -> some View {
         _OpacityView(content: self, opacity: opacity)
@@ -108,9 +116,24 @@ extension _OpacityView: Renderable {
         // pass for as long as the view is on screen.
         let repeating = cycling(context)
         let factor = min(max(repeating?.current ?? opacity, 0), 1)
-        // Fully opaque is the identity, and taking it means an untouched
-        // subtree cannot be changed by this code path at all.
-        guard factor < 1 || repeating != nil else { return buffer }
+        // Fully opaque is NOT the identity, and short-circuiting it here as
+        // though it were put a discontinuity at exactly one point of the range.
+        //
+        // The composite's rule for a cell that names no background of its own
+        // is that what is behind it shows: the blend keeps the destination's
+        // background at EVERY alpha, because a colour that is not there cannot
+        // be blended. So `Text` over a coloured block reads as text ON the
+        // block for every value up to but not including 1 — and at 1, with no
+        // region marked, the plain composite replaced those cells outright and
+        // the block's colour under the letters was gone. Reported as "slide the
+        // opacity up and the text suddenly gets a black background at 100%",
+        // and as a one-frame flicker per cycle in a fade that breathes up to 1
+        // and back.
+        //
+        // The cost of no longer skipping is paid where it is real rather than
+        // here: `resolvingOpacity` drops a fully-opaque region when there is
+        // nothing behind it to inherit, which is the case at a root and is what
+        // the overwhelming majority of `.opacity(1)` subtrees are drawn over.
 
         buffer.opacityRegions = Self.fading(
             buffer.opacityRegions, by: factor, cycle: repeating?.cycle,
@@ -215,8 +238,11 @@ extension _OpacityView {
     static func fadingOverlays(
         _ overlays: [OverlayLayer], by factor: Double, cycle: OpacityCycle? = nil
     ) -> [OverlayLayer] {
-        guard factor < 1 || cycle != nil else { return overlays }
-        return overlays.map { layer in
+        // Fully opaque is marked like any other value, for the reason
+        // `renderToBuffer` gives: a displaced child of a `.opacity(1)` subtree
+        // has to composite against what it lands on exactly as its siblings in
+        // flow do, or the two disagree about what a background-less cell shows.
+        overlays.map { layer in
             guard !layer.isScreenLevel else { return layer }
             var faded = layer
             faded.content.opacityRegions = fading(

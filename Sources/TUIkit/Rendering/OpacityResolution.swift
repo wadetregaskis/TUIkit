@@ -75,15 +75,29 @@ extension FrameBuffer {
         palette: any Palette
     ) -> Self {
         guard !opacityRegions.isEmpty else { return self }
-        // A fully opaque region is the identity, and taking that here means an
-        // untouched layer comes out byte-for-byte untouched rather than
-        // round-tripping through the cell walk to arrive at the same picture.
+        // A fully opaque region is the identity ONLY where there is nothing
+        // behind it, and that is the test rather than the alpha alone.
         //
-        // Unless it is CYCLING, in which case opaque is merely where the fade
+        // What a fully opaque composite still does is let a cell that names no
+        // background show the one behind it — the blend keeps the destination's
+        // background at every alpha, a colour that is not there being nothing to
+        // blend. Over an empty destination there is no such colour either way,
+        // so the walk would arrive back at the same picture and the layer is
+        // better left byte-for-byte untouched: that is the root, and it is what
+        // nearly every `.opacity(1)` in an app is drawn over. Over something —
+        // a `ZStack` sibling, an `.overlay`, a list row's fill — dropping it
+        // punched the cells out to the ambient surface, which is the black (or,
+        // on a light terminal, white) rectangle that appeared under text at
+        // exactly 100% and nowhere below it.
+        //
+        // A CYCLING region is always kept: opaque is merely where its fade
         // happens to be this instant — usually its very first frame — and
         // dropping it there would mean the fade never produced any frames at
         // all and never ran.
-        let translucent = opacityRegions.filter { $0.opacity < 1 || $0.cycle != nil }
+        let opaqueMatters = !destination.isEmpty
+        let translucent = opacityRegions.filter {
+            $0.opacity < 1 || $0.cycle != nil || opaqueMatters
+        }
         guard !translucent.isEmpty else {
             var resolved = self
             resolved.opacityRegions = []

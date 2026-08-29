@@ -43,16 +43,44 @@ struct OpacityResolutionTests {
         return buffer
     }
 
-    @Test("An opaque region is the identity, and is spent")
-    func opaqueIsTheIdentity() {
+    @Test("An opaque region over nothing is spent without touching the layer")
+    func opaqueOverNothingIsTheIdentity() {
         let line = ANSIRenderer.colorize("hello", foreground: .green)
         let source = faded(line, 1, width: 5)
-        let resolved = source.resolvingOpacity(
-            over: FrameBuffer(lines: ["....."]), surface: .black, palette: palette())
+        let resolved = source.resolvingOpacity(surface: .black, palette: palette())
 
+        // Byte-for-byte, not merely pixel-for-pixel: this is the root, where
+        // nearly every `.opacity(1)` in an app is resolved, and rewriting a row
+        // to arrive back at the same picture is repaint volume for nothing.
         #expect(resolved.lines == [line])
         // Spent, not carried: a region that has been asked and answered must
         // not be asked again by whatever composites the result next.
+        #expect(resolved.opacityRegions.isEmpty)
+    }
+
+    /// Fully opaque is not the same thing as "replaces the cell".
+    ///
+    /// A cell that names no background has none to blend, so the destination's
+    /// shows at every alpha — including 1. Skipping the walk there (which the
+    /// alpha `< 1` filter used to do) made the top of the range the one value
+    /// where the cells were punched out to the ambient surface instead: text
+    /// over a coloured field that read correctly at 99% and gained a black
+    /// rectangle at 100%.
+    @Test("An opaque region still lets the destination's background through")
+    func opaqueKeepsWhatIsBehind() {
+        let field = Color.rgb(160, 30, 30)
+        let source = faded(ANSIRenderer.colorize("hello", foreground: .green), 1, width: 5)
+        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("     ", background: field)])
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        // Whatever spelling this build's renderer picks for the field — truecolor
+        // or the 256 cube — the resolved row has to name the same one.
+        let expected = ANSIRenderer.backgroundCodes(for: field).joined(separator: ";")
+        #expect(resolved.lines.first?.stripped == "hello")
+        #expect(
+            resolved.lines.first?.contains(expected) == true,
+            "the field under the letters (\(expected)): \(resolved.lines)")
         #expect(resolved.opacityRegions.isEmpty)
     }
 

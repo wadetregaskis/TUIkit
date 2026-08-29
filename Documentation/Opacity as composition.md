@@ -172,7 +172,7 @@ Where the cost moves:
 |---|---|---|
 | when | once per render of the faded subtree | once per COMPOSITE of the faded layer |
 | what | rewrite the subtree's SGR colours | decompose source AND destination cells, blend, re-emit |
-| scope | pays wherever `.opacity` appears | same — an α of 1 is the identity and takes an early return |
+| scope | pays wherever `.opacity` appears | same — an α of 1 over an empty destination takes an early return (see §9.7) |
 
 Two real risks, both measurable before committing to anything:
 
@@ -474,9 +474,9 @@ found by it.
   from `renderToBuffer` would capture the unresolved layer and agree with
   itself forever while the app drew something else.
 - **A cycling region must survive its own opaque phases.** The resolution
-  drops regions at α = 1 as the identity, which silently dropped every
-  repeating fade whose current phase happened to be full — usually its first
-  frame, so the fade never started.
+  drops regions at α = 1 over an empty destination, which silently dropped
+  every repeating fade whose current phase happened to be full — usually its
+  first frame, so the fade never started.
 - **The compositor is told "served by runs" BEFORE it bakes**, not after. The
   bake happens frames later in the same pass and out of the view's reach, and
   a cycle still marked "needs rendering" wakes the loop every tick whatever
@@ -607,3 +607,45 @@ identical frames when scheduling wakes, and the replay tick-skip compares
 frame CONTENT, so a repeated frame costs neither a wake nor a write. Measured
 unchanged either way: the Example's breathing fade replays at the same byte
 rate and CPU before and after the refinements.
+
+## 9.7 α = 1 is not the identity, and treating it as one was visible
+
+Three separate early returns took a fully opaque region to be a no-op: the
+modifier declined to mark the region at all, the resolution filtered such
+regions out, and the cell blend returned the source verbatim. Each was written
+for the same reason — an untouched subtree should come out untouched — and
+together they put the range's only discontinuity at its top.
+
+What a fully opaque composite still does is the background rule: **a cell that
+names no background has none to win with, so what is behind it shows.** That
+holds at every alpha, 1 included, because a colour that is not there is nothing
+to blend. The three returns skipped it, so the plain composite replaced those
+cells and the destination's colour under them was gone. Reported from the
+Example's Opacity page as text over a coloured field reading correctly at 99%
+and gaining a black rectangle at 100% (white on a light terminal — the ambient
+surface, which is exactly what the cells fell back to), and as a one-frame
+flicker per cycle in a fade breathing between 0.5 and 1: the frame that landed
+on the endpoint took the early return.
+
+What DOES snap at 1 is the pane rule, and deliberately. Below 1 a source blank
+carrying a background keeps the destination's character and tints only its
+field — the veil tints the surface under text, never the text (§6a). An opaque
+pane is not a veil, so at 1 it hides what is behind it. The discontinuity is in
+the CHARACTER rather than the colour, which is where a cell grid puts every
+other one it cannot avoid.
+
+Three cases, one rule each, at α = 1:
+
+| source cell | result |
+|---|---|
+| anything with a background of its own | the source, outright |
+| ink with no background | the source's character and colour, on the destination's background |
+| a blank with neither ink nor background | the destination, untouched |
+
+The cost is kept off the common path by asking a better question than the alpha
+alone: an opaque region is dropped when **there is nothing behind it**, which is
+the case at a root and is where nearly every `.opacity(1)` in an app is
+resolved. There the walk would arrive back at the same picture, and the layer is
+better left byte-for-byte identical — re-emitting a row to reach the same cells
+is repaint volume for nothing. Over a real destination — a `ZStack` sibling, an
+`.overlay`, a list row's fill — the region is kept and the walk runs.

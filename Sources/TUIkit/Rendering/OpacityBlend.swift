@@ -174,8 +174,43 @@ extension FrameBuffer {
         source: RowCell, destination: RowCell?, alpha: Double?,
         surface: Color, defaultForeground: Color
     ) -> RowCell {
-        // Uncovered, or fully opaque: the source stands as it is.
-        guard let alpha, alpha < 1 else { return source }
+        // Uncovered: the source stands as it is.
+        guard let alpha else { return source }
+        // Fully opaque: the layer wins the cell outright — and that is a
+        // different statement from "the source stands as it is", which is what
+        // this used to say and which put the range's only discontinuity at its
+        // top.
+        //
+        // A cell that names no background has none to win WITH. There is
+        // nothing to blend and nothing to paint, so what is behind it shows —
+        // at 1 exactly as at 0.999, which is the rule the whole range below
+        // follows. Taking the source verbatim instead punched those cells out
+        // to the ambient surface: text over a coloured field that read
+        // correctly at 99% and gained a black (or, on a light terminal, white)
+        // rectangle at 100%, and a fade breathing up to 1 that flickered once
+        // per cycle as it touched the top.
+        //
+        // What DOES snap at 1 is the pane rule below: under a translucent pane
+        // the destination keeps its own character (the veil tints the surface
+        // under text, never the text), and an OPAQUE pane is not a veil — a
+        // source blank carrying a background hides what is behind it. That
+        // discontinuity is the deliberate one, and it is in the character
+        // rather than the colour, which is where a cell grid puts every other
+        // one.
+        if alpha >= 1 {
+            guard source.background == nil else { return source }
+            // Painting nothing at all — no background and no ink — leaves the
+            // destination exactly as it was, which is what keeps a fully opaque
+            // container's padding from blanking the rectangle it covers.
+            if source.character == " ", !source.style.paintsInkOnBlankCell {
+                return destination ?? source
+            }
+            guard let background = destination?.background else { return source }
+            var result = source
+            result.background = background
+            result.style = source.style.settingBackground(background)
+            return result
+        }
         // At zero the source contributes nothing at all, and the destination
         // is not merely approximated, it is UNTOUCHED: character, colours and
         // attributes — re-emitted through the span, so equivalent styling
