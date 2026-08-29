@@ -373,6 +373,13 @@ extension FrameDiffWriter {
         return lines
     }
 
+    /// A reset fused with the styling that follows it — the spelling
+    /// ``String/collapsingAdjacentSGR()`` gives a line's first absolute run.
+    private static let collapsedReset = "\u{1B}[0;"
+
+    /// What is left of a collapsed reset once its `ESC[0m` has been split off.
+    private static let sgrIntroducer = "\u{1B}["
+
     /// Builds one terminal-ready output line from a raw buffer line (`nil` marks
     /// an empty row past the buffer's height). Pure given the writer's
     /// `isAppleTerminal`.
@@ -425,10 +432,28 @@ extension FrameDiffWriter {
         // under-advance. All models are DSR-measured; see
         // Documentation/Terminal-compatibility.md.
         let compensated = compensatingCursorAdvance(clipped)
+        // A reset is not always a sequence of its OWN, and the restoration below
+        // matches only the literal `ESC[0m`.
+        //
+        // `collapsingAdjacentSGR()` renders a line's first absolute run as
+        // `ESC[0;<params>m` — reset and styling in one sequence — so anything
+        // that collapses before reaching here arrives in that spelling. The
+        // opacity resolution does, at the seam where it splices a faded span.
+        // Unseen by the replacement, those cells cleared the row's background
+        // and showed the TERMINAL's instead: white on Apple Terminal's light
+        // profile, black on a dark one. Reported as the Animation page's fading
+        // and breathing text having a white background.
+        //
+        // Split back apart rather than matched separately, so there is one
+        // spelling for the restoration to find — and `collapsingAdjacentSGR()`
+        // at the end of this function puts the pieces together again, with the
+        // background now between them.
+        let separated = compensated.replacing(
+            Self.collapsedReset, with: reset + Self.sgrIntroducer)
         // Native Swift `replacing(_:with:)` — NOT Foundation's
         // `replacingOccurrences`, which bridges to `NSString` and was ~8% of the
         // render loop in a Mode-B (live-app) profile.
-        let mainWithBg = compensated.replacing(reset, with: reset + bgCode)
+        let mainWithBg = separated.replacing(reset, with: reset + bgCode)
         let padding = max(0, terminalWidth - clippedWidth)
         let line = bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset
         // Last, after every compensation has had the bytes it expects to match

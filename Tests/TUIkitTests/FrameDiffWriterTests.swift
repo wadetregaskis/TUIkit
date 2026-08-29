@@ -52,6 +52,56 @@ struct BuildOutputLinesTests {
         #expect(line.contains("Hi"))
     }
 
+    /// A reset that arrives already fused with its styling still has to give the
+    /// row's background back.
+    ///
+    /// `collapsingAdjacentSGR()` renders a line's first absolute run as
+    /// `ESC[0;<params>m`, and the opacity resolution collapses at the seam where
+    /// it splices a faded span — so a faded row reaches the writer in that
+    /// spelling. The restoration matched the literal `ESC[0m` alone, so those
+    /// cells cleared the background and showed the terminal's own: reported as
+    /// the Animation page's fading text having a white background in Apple
+    /// Terminal, whose default profile is light.
+    ///
+    /// Measured on the real app (Opacity page, "Text through text", the faded
+    /// front line) — before: `ESC[0;38;5;77m` and the page background absent
+    /// until the unfaded tail; after: `ESC[38;5;77;48;5;16m` from the first cell.
+    @Test("A collapsed reset gets the row background back too")
+    func collapsedResetRestoresBackground() {
+        let writer = FrameDiffWriter()
+        // What a faded span looks like once collapsed: reset and foreground in
+        // one sequence, with no background of its own.
+        let buffer = FrameBuffer(lines: ["\u{1B}[0;38;5;77mfaded\u{1B}[0m"])
+
+        let line = writer.buildOutputLines(
+            buffer: buffer,
+            terminalWidth: 12,
+            terminalHeight: 1,
+            bgCode: "\u{1B}[48;5;16m",
+            reset: "\u{1B}[0m"
+        )[0]
+
+        // The cells carrying "faded" must name the row's background. Whatever
+        // spelling the final collapse settles on, no `faded` may be reached
+        // through a reset that has not had the background restated after it.
+        let beforeText = String(line[line.startIndex..<(line.range(of: "faded")?.lowerBound ?? line.endIndex)])
+        guard let lastReset = beforeText.range(of: "\u{1B}[0", options: .backwards) else {
+            // No reset before the text at all: the row's leading background
+            // stands, which is also correct.
+            #expect(beforeText.contains("48;5;16"), "no background before the text: \(escaped(line))")
+            return
+        }
+        let afterLastReset = String(beforeText[lastReset.lowerBound...])
+        #expect(
+            afterLastReset.contains("48;5;16"),
+            "the last reset before the text does not restate the background: \(escaped(line))")
+    }
+
+    /// `\u{1B}` rendered visibly, for a failure message worth reading.
+    private func escaped(_ line: String) -> String {
+        line.replacingOccurrences(of: "\u{1B}", with: "<ESC>")
+    }
+
     @Test("Empty rows are filled with background-colored spaces")
     func emptyRowsFilled() {
         let writer = FrameDiffWriter()
