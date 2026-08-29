@@ -707,3 +707,91 @@ extension String {
         return result
     }
 }
+
+// MARK: - Un-compensating a span
+
+extension String {
+    /// Whether this line carries any `ECH` or `CUF` — the two escapes a
+    /// cursor-advance compensation emits, and the only ones
+    /// ``removingCursorCompensation(coveringColumns:)`` can have work to do on.
+    ///
+    /// A byte scan, so a line with no compensation (which is nearly every line,
+    /// on nearly every host) costs one pass and no allocation.
+    var containsCursorCompensation: Bool {
+        utf8.withContiguousStorageIfAvailable { buffer -> Bool in
+            guard let base = buffer.baseAddress else { return true }
+            var index = 0
+            while index + 2 < buffer.count {
+                guard base[index] == 0x1B, base[index + 1] == UInt8(ascii: "[") else {
+                    index += 1
+                    continue
+                }
+                var scan = index + 2
+                while scan < buffer.count, base[scan] >= 0x30, base[scan] <= 0x39 { scan += 1 }
+                if scan < buffer.count,
+                    base[scan] == UInt8(ascii: "X") || base[scan] == UInt8(ascii: "C")
+                {
+                    return true
+                }
+                index += 2
+            }
+            return false
+        } ?? true
+    }
+
+    /// This line with the cursor-advance compensation for `columns` removed.
+    ///
+    /// A host that under-advances a cluster is given `ECH(n)` before it and
+    /// `CUF(m)` after — see ``withTerminalAppCursorCompensation()`` and its
+    /// siblings. The pair belongs to the cluster between them, and when
+    /// something replaces that cluster the pair has to go with it.
+    ///
+    /// That is what the animation replay does: it splices a freshly-compensated
+    /// frame over a run's cells, and those cells were compensated too, by
+    /// `buildLine`, when the row was rendered. The splice works in COLUMNS and
+    /// an escape claims no column, so the pair survived on either side of the
+    /// new frame — which brought its own — and the row was left one `CUF` long.
+    /// Every cell after the run then sat one place to the right, on the one host
+    /// that compensates the glyph in question. Reported against a focused
+    /// `Toggle`'s `⬜︎` in Ghostty, appearing and disappearing as renders and
+    /// replays alternated on the same row.
+    ///
+    /// Which side a pair belongs to is decided by KIND, not by position alone,
+    /// because both can sit at the span's far edge and mean opposite things: an
+    /// `ECH` there introduces the cluster AFTER the span and must stay, while a
+    /// `CUF` there closes the last cluster INSIDE it and must go. Hence the
+    /// half-open range for one and its mirror for the other.
+    ///
+    /// Columns are the LAYOUT's, which is the space the caller's `column` and
+    /// `width` are in: a visible character advances by its
+    /// ``Swift/Character/terminalWidth`` and the compensation escapes advance by
+    /// nothing, since reconciling the host's advance with that width is the
+    /// whole of what they are for.
+    func removingCursorCompensation(coveringColumns columns: Range<Int>) -> String {
+        guard !columns.isEmpty, containsCursorCompensation else { return self }
+        var result = ""
+        result.reserveCapacity(count)
+        var column = 0
+        var index = startIndex
+        while index < endIndex {
+            guard self[index] == "\u{1B}" else {
+                result.append(self[index])
+                column += self[index].terminalWidth
+                index = self.index(after: index)
+                continue
+            }
+            let start = index
+            index = csiSequenceEnd(from: index)
+            let sequence = self[start..<index]
+            let final = sequence.last
+            let drop =
+                switch final {
+                case "X": columns.contains(column)
+                case "C": column > columns.lowerBound && column <= columns.upperBound
+                default: false
+                }
+            if !drop { result += sequence }
+        }
+        return result
+    }
+}

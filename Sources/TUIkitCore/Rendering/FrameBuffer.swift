@@ -1107,9 +1107,16 @@ extension FrameBuffer {
     public static func patchingAnimatedCells(
         in line: String, with frame: String, atColumn column: Int, width: Int
     ) -> String {
-        let background = line.ansiSGRStateAt(visibleColumn: column).renderedBackground
+        // The cells about to be replaced may carry a host's cursor-advance
+        // compensation, put there by `buildLine` when the row was rendered. The
+        // frame brings its own, so the old pair has to go — see
+        // ``Swift/String/removingCursorCompensation(coveringColumns:)``, which
+        // is where the story of the extra `CUF` is written down.
+        let base = line.removingCursorCompensation(
+            coveringColumns: column..<(column + width))
+        let background = base.ansiSGRStateAt(visibleColumn: column).renderedBackground
         return insertOverlay(
-            base: line.padToVisibleWidth(max(line.strippedLength, column + width)),
+            base: base.padToVisibleWidth(max(base.strippedLength, column + width)),
             overlay: background + restating(background, afterResetsIn: frame),
             atColumn: column)
     }

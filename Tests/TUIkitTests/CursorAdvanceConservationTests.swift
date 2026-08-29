@@ -162,4 +162,62 @@ struct CursorAdvanceConservationTests {
         #expect("a\u{1B}[2Db".cursorAdvance(perCharacter: ascii) == 0, "CUB(2)")
         #expect("\u{1B}[?25l".cursorAdvance(perCharacter: ascii) == 0, "a private-marker sequence")
     }
+
+    // MARK: - The replay patch
+
+    /// A row is compensated when it is RENDERED, and the frame an animation
+    /// replay splices into it is compensated again — and both walks own the same
+    /// cells. So the pair the render put around them has to come out before the
+    /// frame's pair goes in, or the row keeps two `CUF`s where it claimed one
+    /// advance, and every cell after the run sits one place to the right.
+    ///
+    /// Reported as a focused `Toggle`'s label shifting one cell right in
+    /// Ghostty, appearing and disappearing as renders and replays alternated on
+    /// that row. Ghostty alone because it is the only measured host that
+    /// compensates `⬜︎` — a chrome glyph under VS-15 — so on Apple Terminal,
+    /// iTerm2 and Warp the same row goes out bare and there was nothing to
+    /// duplicate.
+    ///
+    /// Asserted against the RENDERED row rather than against a number: the
+    /// replay's job is to change the picture and nothing else, so the two must
+    /// land in the same column whatever the host's model says that column is.
+    @MainActor
+    @Test(
+        "A replayed run lands the row exactly where the render did",
+        arguments: TerminalClient.Program.allCases,
+        ["\u{2B1C}\u{FE0E}", "\u{2699}\u{FE0F}", "x", "\u{1F600}"])
+    func replayPatchConservesTheAdvance(program: TerminalClient.Program, glyph: String) {
+        TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: program)) {
+            let writer = FrameDiffWriter(
+                isAppleTerminal: program == .appleTerminal,
+                isITerm2: program == .iTerm2,
+                isGhostty: program == .ghostty,
+                isWarp: program == .warp,
+                isTmux: false)
+            // The shape of a Toggle's row: the animated glyph at column 1, its
+            // label after it. The label is what moves when the arithmetic slips.
+            let raw = " " + glyph + " Enable Notifications"
+            let width = glyph.strippedLength
+            let rendered = writer.buildOutputLines(
+                buffer: FrameBuffer(lines: [raw]),
+                terminalWidth: 40, terminalHeight: 1,
+                bgCode: "\u{1B}[48;5;16m", reset: "\u{1B}[0m")[0]
+            // The run replaces the glyph's cells with the same glyph in another
+            // colour, which is what a focus pulse is.
+            let frame = "\u{1B}[38;5;35m" + glyph + "\u{1B}[0m"
+            let patched = writer.patchingAnimatedRun(
+                in: rendered, with: frame, atColumn: 1, width: width, terminalWidth: 40)
+
+            let claim = landing(rendered, on: program)
+            #expect(
+                landing(patched, on: program) == claim,
+                """
+                \(program) \(glyph.unicodeScalars.map { "U+\(String($0.value, radix: 16, uppercase: true))" }.joined(separator: " ")): \
+                the render lands at \(claim) and the replay at \
+                \(landing(patched, on: program))
+                """)
+            // And the label is still there, unshifted — the symptom itself.
+            #expect(patched.stripped.contains("Enable Notifications"))
+        }
+    }
 }

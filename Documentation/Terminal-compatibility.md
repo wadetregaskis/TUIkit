@@ -2394,6 +2394,37 @@ here.)
 - `ToggleCharacterSet.automatic` + `SwitchIndicatorGlyphs` — chrome glyph
   selection per host.
 
+#### The animation replay compensates a second time — FIXED 2026-08-29
+
+A row is compensated when it is rendered. When an `AnimatedCellRun` on that row
+ticks, the replay splices a fresh frame over the run's cells — and compensates
+THAT, because the frame may carry a different cluster from the one the render
+drew (a spinner's frames do).
+
+Both walks therefore own the same cells, and the splice works in COLUMNS while
+an escape claims none: the `ECH` the render put before the cluster and the `CUF`
+it put after both survived, on either side of a frame that had brought its own
+pair. The row was left one `CUF` long and every cell after the run sat one place
+to the right — until the next full render redrew it correctly, so the offset
+came and went with no period.
+
+Reported against a focused `Toggle` in **Ghostty**, whose `⬜︎` (a chrome glyph
+under VS-15) is compensated there and bare on every other host — so only Ghostty
+showed it for that glyph. The class is not Ghostty's: the conservation test added
+with the fix catches it on Apple Terminal and iTerm2 too, with `⚙️`.
+
+Fixed at the splice (`FrameBuffer.patchingAnimatedCells`), which now removes the
+render's compensation for the columns it is replacing before inserting the
+frame. Which side a pair belongs to is decided by KIND, not position: at the
+span's far edge an `ECH` introduces the cluster AFTER the span and stays, while
+a `CUF` there closes the last cluster INSIDE it and goes.
+
+Measured on the Example's Toggles page, Ghostty, the focused row:
+
+    render   ESC[2K ' ' SGR ESC[2X ⬜︎ ESC[1C SGR ' ' SGR 'Enable…'
+    replay   ESC[2K ' ' SGR ESC[2X SGR ESC[2X ⬜︎ ESC[1C SGR ESC[1C SGR ' ' …
+                              ^^^^^^^^^^^^^^ frame's own pair    ^^^^^^^ leftover
+
 ### SGR codes the output path emits (recorded 2026-08-20)
 
 `String.collapsingAdjacentSGR()` states a line's styling once and then emits
