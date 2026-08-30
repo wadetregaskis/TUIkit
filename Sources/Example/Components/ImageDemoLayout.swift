@@ -97,13 +97,13 @@ enum ImageDemoStatusBar {
             // and keeps every one of them, which is why an inversion here is a
             // negative rather than a two-colour image.
             StatusBarItem(
-                shortcut: "n|N", label: settings.wrappedValue.toneLabel, key: .character("n")
+                shortcut: "t|T", label: settings.wrappedValue.toneLabel, key: .character("t")
             ) {
                 settings.wrappedValue.tone = ImageDemoSettings.cycled(
                     settings.wrappedValue.tone, by: 1)
             },
             StatusBarItem(
-                shortcut: "N", label: "", key: .character("N"), displayInStatusBar: false
+                shortcut: "T", label: "", key: .character("T"), displayInStatusBar: false
             ) {
                 settings.wrappedValue.tone = ImageDemoSettings.cycled(
                     settings.wrappedValue.tone, by: -1)
