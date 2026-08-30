@@ -105,4 +105,52 @@ struct QuantisedRampTests {
             #expect(indices.count >= 4, "collapsed to \(runs(stops))")
         }
     }
+
+    // MARK: - The cache
+
+    /// The cache must not be able to change the answer — which is the whole
+    /// risk of consulting it before the ramp is sampled, and of retiring a
+    /// generation instead of the whole table.
+    @Test("A cached ramp is the ramp")
+    func cacheReturnsTheSameRamp() {
+        let stops: [Color] = [.rgb(255, 80, 80), .rgb(80, 160, 255)]
+        let first = Color.quantisedRamp(stops: stops, count: 40, depth: .palette256)
+        for _ in 0..<3 {
+            #expect(Color.quantisedRamp(stops: stops, count: 40, depth: .palette256) == first)
+        }
+        // A different width is a different ramp, not the cached one resized.
+        let narrow = Color.quantisedRamp(stops: stops, count: 12, depth: .palette256)
+        #expect(narrow.count == 12)
+        #expect(narrow != Array(first.prefix(12)))
+    }
+
+    /// Past the generation size, so the turnover actually happens — the answers
+    /// must survive it. A `removeAll` cliff passed this too; what it would not
+    /// survive is being wrong about which entry belongs to which key, which is
+    /// what promoting a stale entry could get wrong.
+    @Test("Answers survive a cache turnover")
+    func answersSurviveTurnover() {
+        let stops: [Color] = [.rgb(20, 200, 120), .rgb(240, 80, 20)]
+        let before = Color.quantisedRamp(stops: stops, count: 33, depth: .palette256)
+        // Distinct keys by width; 600 crosses the 512-entry generation.
+        for width in 3..<603 {
+            _ = Color.quantisedRamp(stops: stops, count: width, depth: .palette256)
+        }
+        #expect(Color.quantisedRamp(stops: stops, count: 33, depth: .palette256) == before)
+    }
+
+    /// The guards the early lookup skips past have to keep holding: below three
+    /// cells there is no sequence to repair, and the answer is the plain
+    /// interpolation whatever the cache has seen.
+    @Test("Short ramps and non-256 depths are never served from the cache")
+    func shortRampsBypassTheCache() {
+        let stops: [Color] = [.rgb(0, 0, 0), .rgb(255, 255, 255)]
+        for count in 0...2 {
+            let ramp = Color.quantisedRamp(stops: stops, count: count, depth: .palette256)
+            #expect(ramp.count == count)
+            #expect(ramp.allSatisfy { $0.rgbComponents != nil }, "quantised a ramp too short to repair")
+        }
+        let plain = Color.quantisedRamp(stops: stops, count: 40, depth: .truecolor)
+        #expect(plain.allSatisfy { if case .rgb = $0.value { return true } else { return false } })
+    }
 }
