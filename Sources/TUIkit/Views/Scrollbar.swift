@@ -399,9 +399,6 @@ struct ScrollbarColors {
         // cells are handed to the run loop instead — see `focusCycle` and
         // ``AnimatedCellRun``.
         let cycle = context.environment.selectionEmphasis.cycle(true)
-        // A focused bar is already breathing the accent; the pointer says so by
-        // stepping the cell it is over further, not by starting a second story.
-        let track = Self.track(in: palette)
         // The dim end strictly — it is the thumb's RESTING state, and a resting
         // thumb quieter than its groove is the hole this all exists to stop.
         // The bright end and every point between are the breath, and are
