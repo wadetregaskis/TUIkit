@@ -61,7 +61,7 @@ extension StatusBarItemsModifier: Renderable {
 
         // Declare the registration to any value-memoizing ancestor, exactly as
         // the preference and `onKeyPress` modifiers do. The status bar's items
-        // are rebuilt from scratch every render pass (`clearSectionItems()`),
+        // are rebuilt from scratch every render pass (`beginRenderPass()`),
         // so a subtree served from cache never re-registers and its items
         // silently vanish from the bar — a disappearance nothing in the
         // buffer reveals, since this modifier adds no hit region and reads no

@@ -868,7 +868,7 @@ extension RenderLoop {
         tuiContext.preferences.beginRenderPass()
         tuiContext.stateStorage.beginSceneRender()
         focusManager.beginSceneRender()
-        statusBar.clearSectionItems()
+        statusBar.beginRenderPass()
         // The transient escape-label override is published by whichever
         // open modal surface (Picker drop-down, etc.) renders in this
         // frame; clearing it here makes the default the absence of any

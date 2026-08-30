@@ -68,7 +68,7 @@ struct ModalInputGrabTests {
             tui.stateStorage.beginRenderPass()
             tui.renderCache.beginRenderPass()
             tui.keyboardShortcuts.beginRenderPass()
-            statusBar.clearSectionItems()
+            statusBar.beginRenderPass()
             focusManager.beginRenderPass()
             _ = renderToBuffer(view, context: context)
             focusManager.endRenderPass()

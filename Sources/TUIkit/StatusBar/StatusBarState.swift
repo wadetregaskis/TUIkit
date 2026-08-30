@@ -52,6 +52,32 @@ public final class StatusBarState: @unchecked Sendable {
     /// Global user items that are always shown (lowest priority).
     private var userGlobalItems: [any StatusBarItemProtocol] = []
 
+    /// Global items a `.statusBarItems` modifier declared during THIS render
+    /// pass, cleared at the start of every one.
+    ///
+    /// Kept apart from ``userGlobalItems``, which an app sets imperatively and
+    /// expects to persist. A declaration in the view tree is only true while
+    /// the view is in the tree, and the tree is rebuilt every frame — so items
+    /// declared by a page that has gone away have to go with it. They did not:
+    /// pressing Escape back to the Example's menu left every shortcut of the
+    /// page just left sitting on the bar, because the modifier wrote straight
+    /// into `userGlobalItems` and nothing ever cleared it.
+    ///
+    /// (Section items were already right — ``registerSectionItems`` is cleared
+    /// per pass, and has been since the modifier's own comment was written. It
+    /// is the branch for a page NOT inside a `.focusSection()` that leaked, and
+    /// that is the common one.)
+    private var declaredGlobalItems: [any StatusBarItemProtocol] = []
+
+    /// The global items in force: this pass's declaration when there is one,
+    /// and the app's own standing set otherwise.
+    ///
+    /// Precedence rather than a merge, because that is what the modifier did
+    /// when it wrote into the same property — it replaced.
+    private var globalItems: [any StatusBarItemProtocol] {
+        declaredGlobalItems.isEmpty ? userGlobalItems : declaredGlobalItems
+    }
+
     // MARK: - Section Items (Declarative API)
 
     /// Items registered per focus section during rendering.
@@ -285,7 +311,7 @@ public final class StatusBarState: @unchecked Sendable {
             return resolvedSectionItems(for: activeSectionID)
         }
         if let topContext = userContextStack.last { return topContext.items }
-        return userGlobalItems
+        return globalItems
     }
 
     /// All currently active items for rendering and event handling.
@@ -352,12 +378,14 @@ extension StatusBarState {
     public func clearUserItems() {
         userContextStack.removeAll()
         userGlobalItems.removeAll()
+        declaredGlobalItems.removeAll()
     }
 
     /// Clears everything including user items and hides system items.
     public func clear() {
         userContextStack.removeAll()
         userGlobalItems.removeAll()
+        declaredGlobalItems.removeAll()
         showSystemItems = false
     }
 
@@ -402,7 +430,7 @@ extension StatusBarState {
 extension StatusBarState {
     /// Sets the global user items without triggering a re-render.
     func setItemsSilently(_ items: [any StatusBarItemProtocol]) {
-        userGlobalItems = items
+        declaredGlobalItems = items
     }
 
     /// Registers status bar items for a focus section.
@@ -415,9 +443,15 @@ extension StatusBarState {
         sectionItems.append((sectionID, items, composition))
     }
 
-    /// Clears all section items at the start of a render pass.
-    func clearSectionItems() {
+    /// Drops everything the view tree declared last pass, at the start of the
+    /// next one.
+    ///
+    /// Both kinds: a section's items and a page's global ones. Anything still
+    /// in the tree re-declares itself as it renders; anything that left takes
+    /// its shortcuts with it, which is the whole point.
+    func beginRenderPass() {
         sectionItems.removeAll()
+        declaredGlobalItems.removeAll()
     }
 
     /// Pushes a new user context without triggering a re-render.
@@ -433,7 +467,7 @@ extension StatusBarState {
     /// Resolves items for a given section using its composition strategy.
     fileprivate func resolvedSectionItems(for sectionID: String) -> [any StatusBarItemProtocol] {
         guard let entry = sectionItems.first(where: { $0.sectionID == sectionID }) else {
-            return userGlobalItems
+            return globalItems
         }
 
         switch entry.composition {
@@ -441,7 +475,7 @@ extension StatusBarState {
             return entry.items
         case .merge:
             let sectionShortcuts = Set(entry.items.map { $0.shortcut })
-            let filteredGlobal = userGlobalItems.filter { !sectionShortcuts.contains($0.shortcut) }
+            let filteredGlobal = globalItems.filter { !sectionShortcuts.contains($0.shortcut) }
             return entry.items + filteredGlobal
         }
     }

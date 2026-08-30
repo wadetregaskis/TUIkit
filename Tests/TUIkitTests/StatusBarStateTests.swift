@@ -552,7 +552,7 @@ struct StatusBarSectionCascadingTests {
             composition: .merge
         )
 
-        state.clearSectionItems()
+        state.beginRenderPass()
 
         // Set global items so we have something to compare
         state.setItemsSilently([

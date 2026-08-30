@@ -34,7 +34,7 @@ struct StatusBarItemsMemoTests {
             availableWidth: 40, availableHeight: 10,
             environment: environment, tuiContext: tuiContext)
 
-        environment.statusBar?.clearSectionItems()
+        environment.statusBar?.beginRenderPass()
         // The bar derives its active section from the focus manager, exactly
         // as `RenderLoop.beginRenderPass` wires it.
         environment.statusBar?.focusManager = focusManager
