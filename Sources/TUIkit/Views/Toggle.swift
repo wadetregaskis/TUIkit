@@ -239,12 +239,18 @@ public struct Toggle<Label: View>: View {
     /// Whether the toggle is disabled.
     var isDisabled: Bool
 
+    /// Builds the controls this toggle governs, drawn under it — `nil` for a
+    /// toggle that governs nothing but its own value. See
+    /// ``View/toggleContent(_:)``.
+    var content: (@MainActor () -> AnyView)?
+
     public var body: some View {
         _ToggleCore(
             isOn: isOn,
             label: label,
             focusID: focusID,
-            isDisabled: isDisabled
+            isDisabled: isDisabled,
+            content: content
         )
     }
 }
@@ -282,6 +288,7 @@ extension Toggle where Label == Text {
         // Auto-generated focusID from view identity (collision-free)
         self.focusID = nil
         self.isDisabled = false
+        self.content = nil
     }
 }
 
@@ -301,6 +308,7 @@ extension Toggle {
         self.label = label()
         self.focusID = nil
         self.isDisabled = false
+        self.content = nil
     }
 }
 
@@ -314,6 +322,51 @@ extension Toggle {
     public func disabled(_ disabled: Bool = true) -> Toggle {
         var copy = self
         copy.isDisabled = disabled
+        return copy
+    }
+
+    /// The controls this toggle governs, drawn under it and live only while it
+    /// is on.
+    ///
+    /// ```swift
+    /// Toggle("Edge lines", isOn: $edgeLines)
+    ///     .toggleContent {
+    ///         Slider(value: $threshold, in: 0.3...2.0, step: 0.1) { Text("Threshold") }
+    ///     }
+    /// ```
+    ///
+    /// ```
+    ///   ■ Edge lines
+    ///     Threshold ◀ ━━━━━━●──────── ▶ 0.9
+    /// ```
+    ///
+    /// A switch that turns something on nearly always has that something's
+    /// settings beside it, and stacking them by hand gets the two things this
+    /// does right wrong: the indent has to be the INDICATOR's width, which is
+    /// a `ToggleCharacterSet` resolved against the terminal at render time
+    /// (`■` is one cell, `⬛︎` two, `[x]` three) — a hardcoded two lines the
+    /// content up under the box on some terminals and under the label on
+    /// others. And the content has to be disabled while the toggle is off, or
+    /// the keyboard walks into settings for something that is not happening.
+    ///
+    /// The content is always DRAWN, on or off, so the rows below the toggle do
+    /// not move as it is flipped. What changes is whether it is live — and a
+    /// disabled control is not a focus stop, so **Tab** from the toggle reaches
+    /// its content exactly when that content applies. Same shape, and the same
+    /// reasoning, as ``RadioButtonItem``'s per-option content.
+    ///
+    /// - Note: A custom ``ToggleStyle`` draws its own indicator, and there is
+    ///   nothing there for this to measure, so content under one is not
+    ///   indented.
+    ///
+    /// - Parameter content: The controls this toggle governs.
+    /// - Returns: A toggle that carries `content` beneath it.
+    @MainActor
+    public func toggleContent<Content: View>(
+        @ViewBuilder _ content: @escaping () -> Content
+    ) -> Toggle {
+        var copy = self
+        copy.content = { AnyView(content()) }
         return copy
     }
 

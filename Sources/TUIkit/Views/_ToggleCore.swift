@@ -52,6 +52,9 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     let focusID: String?
     let isDisabled: Bool
 
+    /// The controls this toggle governs — see ``View/toggleContent(_:)``.
+    let content: (@MainActor () -> AnyView)?
+
     var body: Never {
         fatalError("_ToggleCore renders via Renderable")
     }
@@ -318,7 +321,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     private func builtInStyleBuffer(
         isSwitch: Bool, isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool,
         labelContext: RenderContext, palette: any Palette, context: RenderContext
-    ) -> (buffer: FrameBuffer, clickWidth: Int, clickHeight: Int) {
+    ) -> (buffer: FrameBuffer, clickWidth: Int, clickHeight: Int, indent: Int) {
         let styledIndicator =
             isSwitch
             ? styledSwitchIndicator(
@@ -338,7 +341,21 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         if !context.isMeasuring, let animation = styledIndicator.animation {
             buffer.animatedCells = [animation]
         }
-        return (buffer, composed.titleWidth, composed.titleRows)
+        return (
+            buffer, composed.titleWidth, composed.titleRows,
+            Self.labelIndent(forIndicator: styledIndicator.text))
+    }
+
+    /// The column the label starts in: the indicator's own width plus the space
+    /// after it.
+    ///
+    /// One function, because three things line up on it — a multi-view label's
+    /// subtitle, the controls `toggleContent(_:)` carries, and nothing else may
+    /// guess it. The indicator is a `ToggleCharacterSet` resolved against the
+    /// terminal at render time, so its width is `■` = 1, `⬛︎` = 2, `[x]` = 3,
+    /// and a hardcoded indent is wrong on two terminals out of three.
+    static func labelIndent(forIndicator indicator: String) -> Int {
+        FrameBuffer(lines: [indicator]).width + 1
     }
 
     /// Composes a built-in toggle's buffer from its indicator and label.
@@ -389,8 +406,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         if !isDisabled {
             subtitleContext.environment.foregroundStyle = palette.foregroundSecondary
         }
-        let indicatorWidth = FrameBuffer(lines: [indicator]).width
-        let indent = indicatorWidth + 1
+        let indent = Self.labelIndent(forIndicator: indicator)
         let indentString = String(repeating: " ", count: indent)
         // Wrap the subtitle to the width left after the indent. The enclosing
         // stack hands the toggle the same `availableWidth` in both the measure
@@ -462,6 +478,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // so the hit region must not extend over it.
         let clickWidth: Int
         let clickHeight: Int
+        /// The column ``View/toggleContent(_:)``'s controls start in.
+        let contentIndent: Int
         let toggleStyle = context.environment.toggleStyle
         if toggleStyle is DefaultToggleStyle || toggleStyle is CheckboxToggleStyle
             || toggleStyle is SwitchToggleStyle {
@@ -500,6 +518,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             buffer = built.buffer
             clickWidth = built.clickWidth
             clickHeight = built.clickHeight
+            contentIndent = built.indent
         } else {
             let configuration = ToggleStyleConfiguration(
                 label: AnyView(label),
@@ -510,45 +529,77 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             buffer = toggleStyle.makeBuffer(configuration: configuration, context: context)
             clickWidth = buffer.width
             clickHeight = buffer.height
+            // A custom style draws its own indicator — there is nothing here to
+            // measure, so content under it is not indented under one.
+            contentIndent = 0
         }
 
-        // Hit-test region: a left-button release anywhere on the
-        // toggle row flips its value, mirroring how Space / Enter
-        // activate it. The same region drives the hover state
-        // machine — .entered / .exited (synthesised by the
-        // dispatcher) flip the hover StateBox.
-        if !isDisabled, !context.isMeasuring,
-            let mouseDispatcher = context.environment.mouseEventDispatcher
-        {
-            mouseDispatcher.requestFeature(.motion)
-            let focusManager = context.environment.focusManager
-            let captureFocusID = persistedFocusID
-            let toggleBinding = isOn
-            let captureHoverBox = hoverBox
-            let handlerID = mouseDispatcher.register(hoverBox: captureHoverBox) { event in
-                switch event.phase {
-                case .pressed where event.button == .left:
-                    return true
-                case .released where event.button == .left:
-                    focusManager?.focus(id: captureFocusID)
-                    toggleBinding.wrappedValue.toggle()
-                    return true
-                default:
-                    return false
-                }
-            }
-            buffer.hitTestRegions.append(
-                HitTestRegion(
-                    offsetX: 0,
-                    offsetY: 0,
-                    width: clickWidth,
-                    height: clickHeight,
-                    handlerID: handlerID,
-                    focusID: persistedFocusID
-                )
-            )
+        // What the toggle governs, under it and indented to its label. Drawn
+        // whether the toggle is on or off — so the rows below do not move as it
+        // is flipped — but live only while it is on, which is also what keeps
+        // it out of the focus ring when it does not apply. Its own identity, a
+        // step off the core's, because indices 0... at the core's identity
+        // belong to a composite LABEL's `@State`.
+        if let content {
+            let governed = content()
+                .padding(.leading, contentIndent)
+                .disabled(isDisabled || !isOnValue)
+            buffer.appendVertically(
+                TUIkitView.renderToBuffer(
+                    governed,
+                    context: context.withChildIdentity(erasedType: AnyView.self, index: 0)))
         }
+
+        registerPointer(
+            on: &buffer, focusID: persistedFocusID, hoverBox: hoverBox,
+            clickWidth: clickWidth, clickHeight: clickHeight, isDisabled: isDisabled,
+            context: context)
 
         return buffer
+    }
+
+    /// Hit-test region: a left-button release anywhere on the toggle row flips
+    /// its value, mirroring how Space / Enter activate it. The same region
+    /// drives the hover state machine — .entered / .exited (synthesised by the
+    /// dispatcher) flip the hover StateBox.
+    ///
+    /// The region covers the indicator-and-title row ONLY. Neither a
+    /// multi-view label's subtitle nor the controls ``View/toggleContent(_:)``
+    /// carries is a click target: clicking a slider under a toggle must move
+    /// the slider, not flip the switch out from under it.
+    private func registerPointer(
+        on buffer: inout FrameBuffer, focusID persistedFocusID: String,
+        hoverBox: StateBox<Bool>, clickWidth: Int, clickHeight: Int, isDisabled: Bool,
+        context: RenderContext
+    ) {
+        guard !isDisabled, !context.isMeasuring,
+            let mouseDispatcher = context.environment.mouseEventDispatcher
+        else { return }
+        mouseDispatcher.requestFeature(.motion)
+        let focusManager = context.environment.focusManager
+        let captureFocusID = persistedFocusID
+        let toggleBinding = isOn
+        let handlerID = mouseDispatcher.register(hoverBox: hoverBox) { event in
+            switch event.phase {
+            case .pressed where event.button == .left:
+                return true
+            case .released where event.button == .left:
+                focusManager?.focus(id: captureFocusID)
+                toggleBinding.wrappedValue.toggle()
+                return true
+            default:
+                return false
+            }
+        }
+        buffer.hitTestRegions.append(
+            HitTestRegion(
+                offsetX: 0,
+                offsetY: 0,
+                width: clickWidth,
+                height: clickHeight,
+                handlerID: handlerID,
+                focusID: persistedFocusID
+            )
+        )
     }
 }

@@ -121,25 +121,24 @@ struct ImageRenderingControls: View {
                 .disabled(!ImageDemoHelpers.usesShape(settings.charset))
             // Edge tracing applies to the shape-aware ascii/unicode charsets:
             // cells on a clean light/dark boundary draw as directional line
-            // glyphs; the threshold picks how strong a gradient qualifies.
+            // glyphs; the threshold picks how strong a gradient qualifies — so
+            // the threshold is the toggle's own content, indented to its label
+            // and live only while it is on.
             Toggle("component.imageControls.edgeLines", isOn: $settings.edgeLines)
+                .toggleContent {
+                    HStack(spacing: 1) {
+                        Text("component.imageControls.edgeThreshold").dim()
+                        // The slider's own `%`-of-range read-out would mislead
+                        // beside the raw threshold value shown after it.
+                        Slider(value: $settings.edgeThreshold, in: 0.3...2.0, step: 0.1)
+                            .sliderShowsValue(false)
+                            .frame(maxWidth: .infinity)
+                        Text(String(format: "%.1f", settings.edgeThreshold)).dim()
+                    }
+                }
                 .disabled(
                     !ImageDemoHelpers.usesEdgeTracing(
                         settings.charset, shapeAware: settings.shapeAware))
-            HStack(spacing: 1) {
-                Text("component.imageControls.edgeThreshold").dim()
-                // The slider's own `%`-of-range read-out would mislead beside
-                // the raw threshold value shown after it.
-                Slider(value: $settings.edgeThreshold, in: 0.3...2.0, step: 0.1)
-                    .sliderShowsValue(false)
-                    .frame(maxWidth: .infinity)
-                Text(String(format: "%.1f", settings.edgeThreshold)).dim()
-            }
-            .disabled(
-                !settings.edgeLines
-                    || !ImageDemoHelpers.usesEdgeTracing(
-                        settings.charset, shapeAware: settings.shapeAware))
-            .padding(.leading, 2)
         }
     }
 
