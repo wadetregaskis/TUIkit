@@ -236,6 +236,51 @@ repairs a gradient into a monotone one on a 256-colour terminal: a curve is not
 required to be monotone, and a preview that banded differently from the picture
 beside it would be worse than one that bands with it.
 
+## Considered: a 3-D LUT
+
+A 3-D LUT — the `.cube` file a colour grade ships as — maps *(R, G, B)* to
+*(R, G, B)* through a cube of samples with trilinear interpolation between
+them. It is the thing a tone curve is the one-dimensional case of, and the
+question is whether it is worth having.
+
+**Mechanically it is easy, and cheap.** It would sit exactly where the tone
+curve does, in the `mapPixels` immediately after the box reduction — so it sees
+the *sampling* grid, not the source image. That grid is `cols × grid.x` by
+`rows × grid.y`: 25,600 pixels for braille at 80×40 cells, and 160,000 in the
+heaviest case (the shape matcher's 5×10). A 33³ cube is 108 KB of bytes and a
+trilinear read is a few dozen operations, so the whole pass is well under a
+millisecond, behind a render memo that only re-runs when something changed.
+Parsing `.cube` is about sixty lines of text handling and no new dependency.
+
+**The reasons not to are about what it would be FOR.**
+
+- **It cannot be authored here.** A 33³ cube is 35,937 entries. There is no
+  terminal editor for that and there is not going to be one, so the feature is
+  *load someone else's grade*, not *express a mapping* — a different feature
+  from the one `.imageToneCurve` is, and a smaller one.
+- **Most of its subtlety dies downstream.** A film LUT earns its keep in the
+  last few percent of colour, and the default output here is a 6×6×6 cube of
+  256 colours in a grid of character cells. On a truecolor terminal drawing
+  braille or half blocks it would survive; on `.ansi256` almost none of it
+  would, and the palette machinery already decides what colours are available.
+
+**The middle rung is the interesting one: per-channel curves.** Three transfer
+curves — one for R, one for G, one for B — are three copies of the machinery
+that already exists, edited by three passes of the editor that already exists,
+and they cover most of what "remap the colours" actually means in practice:
+colour casts, cross-processing, split-toning, warm highlights over cool
+shadows. They cannot rotate a hue or touch one colour selectively; only a true
+cube can do that.
+
+They would also retire a wart. `.inverted` is a Boolean on the type
+(`negatesChannels`) rather than a curve, and the doc comment says why: a
+negative complements each channel independently, which *cannot be said as a
+curve* when the curve is a function of luminance alone. Per-channel curves say
+it directly — three descending ramps — so the special case would stop being one.
+
+The recommendation, then: **per-channel curves before a 3-D LUT**, and a 3-D
+LUT only ever as a `.cube` loader, never as an editor.
+
 ## Still open
 
 - **Should `.grayscale` become `.palette(.shades(24))` internally?** It is 24
