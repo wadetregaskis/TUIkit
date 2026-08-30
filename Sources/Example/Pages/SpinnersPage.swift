@@ -131,33 +131,32 @@ struct SpinnersPage: View {
                     .frame(width: 44, alignment: .leading)
                     .foregroundStyle(.palette.foregroundSecondary)
 
-                // No blank row between the choice and the thing it chooses.
-                VStack(alignment: .leading, spacing: 0) {
-                    // Two states of one choice, so two radio buttons rather
-                    // than a checkbox: "theme accent" is not a modifier on the
-                    // colour below it, it is the alternative to it. As a
-                    // `Toggle` the two controls read as unrelated, and nothing
-                    // said that switching it off is what makes the colour take
-                    // effect.
-                    RadioButtonGroup(selection: colorSourceBinding) {
-                        RadioButtonItem(ColorSource.theme, "page.spinners.editorThemeColour")
-                        RadioButtonItem(ColorSource.custom, "page.spinners.editorCustomColour")
+                // Two states of one choice, so two radio buttons rather than a
+                // checkbox: "theme accent" is not a modifier on the colour
+                // below it, it is the alternative to it. As a `Toggle` the two
+                // controls read as unrelated, and nothing said that switching
+                // it off is what makes the colour take effect.
+                RadioButtonGroup(selection: colorSourceBinding) {
+                    RadioButtonItem(ColorSource.theme, "page.spinners.editorThemeColour")
+                    RadioButtonItem(ColorSource.custom, "page.spinners.editorCustomColour") {
+                        // The option's own content, so the group indents it to
+                        // the label and disables it while the other option is
+                        // chosen — the two together are what say "this is the
+                        // colour that option means". It was a hand-written
+                        // indent and a hand-written `disabled` beside the
+                        // group, which is the same thing said twice and once
+                        // wrong: the indent is the INDICATOR's width, not 2.
+                        //
+                        // Swatch only: the inline R/G/B sliders are ninety
+                        // cells wide, which alone decided this page's layout —
+                        // no side-by-side arrangement could fit, so the
+                        // customiser fell below the catalogue. The swatch still
+                        // focuses and still opens the full editor on Return,
+                        // Space or a click.
+                        ColorPicker("page.spinners.editorColour", selection: colorBinding)
+                            .colorPickerChannels(.hidden)
+                            .colorPickerLabelWidth(8)
                     }
-
-                    // Indented to the second radio button's LABEL, and disabled
-                    // while the first one is chosen — the two together are what
-                    // say "this is the colour that option means".
-                    //
-                    // Swatch only: the inline R/G/B sliders are ninety cells
-                    // wide, which alone decided this page's layout — no
-                    // side-by-side arrangement could fit, so the customiser
-                    // fell below the catalogue. The swatch still focuses and
-                    // still opens the full editor on Return, Space or a click.
-                    ColorPicker("page.spinners.editorColour", selection: colorBinding)
-                        .colorPickerChannels(.hidden)
-                        .colorPickerLabelWidth(8)
-                        .disabled(editorUsesThemeColor)
-                        .padding(.leading, 2)
                 }
 
                 customFields
