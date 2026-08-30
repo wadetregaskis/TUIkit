@@ -402,8 +402,16 @@ struct ScrollbarColors {
         // A focused bar is already breathing the accent; the pointer says so by
         // stepping the cell it is over further, not by starting a second story.
         let track = palette.foregroundQuaternary.resolve(with: palette)
+        // The dim end strictly — it is the thumb's RESTING state, and a resting
+        // thumb quieter than its groove is the hole this all exists to stop.
+        // The bright end and every point between are the breath, and are
+        // separated from the track without that second rule: see `pulseLift`
+        // for the three palettes that have no room to satisfy both.
         let now = Self.separated(
-            cycle.colorNow(dim: palette.accent, bright: Self.pulseLift(palette)), in: palette)
+            cycle.colorNow(
+                dim: Self.separated(palette.accent.resolve(with: palette), in: palette),
+                bright: Self.pulseLift(palette)),
+            in: palette, standingOffThePage: false)
         return Self(
             thumb: now,
             track: palette.foregroundQuaternary,
@@ -430,9 +438,39 @@ struct ScrollbarColors {
     /// the extreme, like the white terminal's — darker instead. The same rule
     /// the pointer's own lift follows, which is why the hovered cell can go on
     /// stepping one further from wherever the breath currently is.
+    /// …and where there is no room in that direction, the other one.
+    ///
+    /// `hoveredForeground` steps AWAY from the page, and a palette whose accent
+    /// already sits at the far end has nowhere to step: measured on **Ocean**,
+    /// whose accent is `215,255,255`, both ends of the breath came out at
+    /// `215,255,255` — a focused scrollbar that did not move. Man Page's had
+    /// collapsed onto black the same way, from the other side, once its own
+    /// track separation pushed it there.
+    ///
+    /// So the lift is floored against the RESTING end, and
+    /// ``Color/ensuringRenderedContrast(atLeast:against:)`` takes whichever
+    /// direction has the room. Toward the page is not the fault the breath's
+    /// direction was reversed to fix: that was a fade all the way down to
+    /// `focusPulseMin`, which turns a solid block into a hole, and this is the
+    /// smallest step that can be seen at all — with the track separation put
+    /// back afterwards, so it cannot land in its own groove.
     @MainActor
     static func pulseLift(_ palette: any Palette) -> Color {
-        separated(palette.hoveredForeground(palette.accent), in: palette)
+        let lifted = separated(palette.hoveredForeground(palette.accent), in: palette)
+        let resting = separated(palette.accent.resolve(with: palette), in: palette)
+        guard renderedRatio(lifted, resting) < ViewConstants.chromePulseFloor else { return lifted }
+        // A fixed proportional step toward whichever extreme the resting colour
+        // is FURTHER from, rather than another contrast walk: the walk moves in
+        // 1% lightness steps and a colour this close to an extreme needs a
+        // large move to change its contrast at all, so it stopped short every
+        // time. A fifth of the way to the far end is always a visible change
+        // and never more than a breath.
+        let extreme: Color =
+            renderedRatio(resting, .rgb(255, 255, 255)) >= renderedRatio(resting, .rgb(0, 0, 0))
+            ? .rgb(255, 255, 255) : .rgb(0, 0, 0)
+        return separated(
+            resting.compositing(ViewConstants.chromePulseDepth, over: extreme),
+            in: palette, standingOffThePage: false)
     }
 
     /// `thumb`, pushed until it is legible against `track`.
@@ -477,15 +515,23 @@ struct ScrollbarColors {
     /// rather than converges. Failing all three the plain separation stands —
     /// being tellable from the track is the more important of the two
     /// properties, and it is the one a caller cannot recover.
+    /// - Parameter standingOffThePage: Whether the answer must also be at least
+    ///   as loud against the page as the track is. True for anything drawn as
+    ///   the thumb's resting state; false for the far end of a BREATH, where
+    ///   the alternative is no breath at all — the smallest visible step cannot
+    ///   read as a hole, and three palettes have no room to make it in the
+    ///   other direction.
     @MainActor
-    static func separated(_ thumb: Color, in palette: any Palette) -> Color {
+    static func separated(
+        _ thumb: Color, in palette: any Palette, standingOffThePage: Bool = true
+    ) -> Color {
         let track = palette.foregroundQuaternary.resolve(with: palette)
         let page = palette.background.resolve(with: palette)
         let floored = thumb.ensuringRenderedContrast(
             atLeast: ViewConstants.chromeSeparationFloor, against: track)
         let groove = renderedRatio(track, page)
         func standsOff(_ color: Color) -> Bool {
-            renderedRatio(color, page) >= groove
+            (!standingOffThePage || renderedRatio(color, page) >= groove)
                 && renderedRatio(color, track) >= ViewConstants.chromeSeparationFloor
         }
         guard !standsOff(floored) else { return floored }
@@ -548,8 +594,10 @@ struct ScrollbarPulse {
     @MainActor
     var frames: [ScrollbarColors] {
         cycle.colors(
-            dim: palette.accent, bright: ScrollbarColors.pulseLift(palette))
-            .map { ScrollbarColors.separated($0, in: palette) }
+            dim: ScrollbarColors.separated(palette.accent.resolve(with: palette), in: palette),
+            bright: ScrollbarColors.pulseLift(palette)
+        )
+        .map { ScrollbarColors.separated($0, in: palette, standingOffThePage: false) }
             .map { accent in
                 ScrollbarColors(
                     thumb: accent, track: palette.foregroundQuaternary, arrow: accent,

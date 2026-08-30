@@ -88,6 +88,31 @@ public enum ViewConstants {
     /// it reading as a breath.
     public static let chromeSeparationFloor: Double = 1.6
 
+    /// The least contrast between the two ENDS of a chrome breath for the
+    /// breath to be seen at all.
+    ///
+    /// Lower again than ``chromeSeparationFloor``, and for a different reason:
+    /// that one separates two things sitting side by side, and this separates
+    /// one thing at two moments. What it has to beat is the 256-colour cube —
+    /// two ends that quantise onto the same entry are not a breath, they are a
+    /// still bar. Measured across the shipped palettes, the ones that visibly
+    /// breathe sit at 1.11 and up, and the ones reported as not breathing at
+    /// all sat at exactly 1.00: Ocean's accent is already `215,255,255` and one
+    /// step further from the page is the same colour, and Man Page's had been
+    /// pushed to black by its own track separation.
+    public static let chromePulseFloor: Double = 1.15
+
+    /// How much of the resting colour survives at the far end of a chrome
+    /// breath that has nowhere to lift to — the rest being the extreme it is
+    /// further from.
+    ///
+    /// A fixed proportion rather than another contrast walk: that walks
+    /// lightness in 1% steps, and a colour already near an extreme needs a
+    /// large move before its contrast changes at all, so the walk stopped short
+    /// every time on exactly the palettes that needed it. Four fifths is always
+    /// a visible change and never more than a breath.
+    public static let chromePulseDepth: Double = 0.8
+
     /// Accent opacity for selection indicator bullets.
     public static let selectionIndicator: Double = 0.60
 

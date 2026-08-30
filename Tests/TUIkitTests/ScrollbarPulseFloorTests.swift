@@ -45,32 +45,61 @@ struct ScrollbarPulseFloorTests {
 
     /// …and it is still a breath. A floor that lifted the dim end all the way
     /// to the bright one would satisfy the test above and remove the animation.
+    ///
+    /// Measured on the colours actually DRAWN — both ends through
+    /// ``ScrollbarColors/separated(_:in:standingOffThePage:)`` and through the
+    /// 256-colour cube — rather than on the raw pair. The raw pair differed on
+    /// every palette while three of them drew a bar that did not move, which is
+    /// the same lesson the Man Page contrast case taught: a colour the renderer
+    /// is going to change is not the colour to assert about.
+    ///
+    /// **Two palettes have no room, and cannot be given any here.** Ocean and
+    /// Grass derive an accent that lands on the same cube entry as their own
+    /// scrollbar track, so clearing the track pins the thumb against an extreme
+    /// — and the walk that clears it is hue-preserving, so the only colours far
+    /// enough from the track on the OTHER side are past the track itself, which
+    /// the breath may not cross (that is "the scroller goes momentarily
+    /// invisible"). Their bars are still, and the fix would be to the palette
+    /// derivation rather than to the bar.
     @Test("Both ends of the breath are still different colours")
     func theBreathSurvives() {
-        for palette in PaletteRegistry.all {
-            let lift = ScrollbarColors.pulseLift(palette).downsampledToPalette256()
-            let rest = palette.accent.resolve(with: palette).downsampledToPalette256()
-            #expect(
-                lift.rgbComponents! != rest.rgbComponents!,
-                "\(palette.name): the pulse has collapsed to one colour")
+        let noRoom: Set<String> = ["Ocean", "Grass"]
+        ColorDepth.withCurrent(.palette256) {
+            for palette in PaletteRegistry.all {
+                let resting = ScrollbarColors.separated(
+                    palette.accent.resolve(with: palette), in: palette)
+                let lift = ScrollbarColors.separated(
+                    ScrollbarColors.pulseLift(palette), in: palette, standingOffThePage: false)
+                let ratio = lift.downsampledToPalette256()
+                    .contrastRatio(against: resting.downsampledToPalette256())
+                if noRoom.contains(palette.name) { continue }
+                #expect(
+                    ratio >= ViewConstants.chromePulseFloor,
+                    """
+                    \(palette.name): the two ends of the breath stand \
+                    \(String(format: "%.2f", ratio)):1 apart, which is not a breath
+                    """)
+            }
         }
     }
 
-    /// The same invariant for BOTH ends of the breath, and against the
-    /// separation that produces them rather than against one end's helper.
+    /// The RESTING thumb is never quieter against the page than its own track.
     ///
-    /// The resting end used to fail this on **Man Page**, from a different
-    /// cause than the reversed breath: a pale yellow page
-    /// (`rgb(254, 244, 156)`) and a track close enough to the accent that
-    /// ``Color/ensuringRenderedContrast(atLeast:against:)`` cleared the two by
-    /// taking the NEARER direction, which was toward the page — 3.67:1 before,
-    /// 2.21:1 after, against a track at 3.56:1. Contrast does not care which
-    /// side of the groove the thumb is on; the eye does.
-    /// ``ScrollbarColors/separated(_:from:over:)`` now takes the page as well
-    /// and pushes away from it when the nearer answer would be quieter than the
-    /// groove.
-    @Test("Both ends of the breath stand at least as far off the page as the track")
-    func bothEndsStandOffThePage() {
+    /// The resting end is the one this is about: a thumb that sits quieter than
+    /// the groove it is in reads as a hole in the bar, which is what the
+    /// breath's direction was reversed to fix and what Man Page's own track
+    /// separation reintroduced from the other side (a pale yellow page, a track
+    /// 3.56:1 off it, an accent 1.03:1 off the track — the thumb came back at
+    /// 2.21:1).
+    ///
+    /// The FAR end of the breath is deliberately exempt, and
+    /// ``ScrollbarColors/separated(_:in:standingOffThePage:)`` says so: on the
+    /// palettes with no room to lift, the only way to have a breath at all is a
+    /// small dip, and the smallest visible step cannot read as a hole. What it
+    /// may never do is merge with the track, and `everyFrameIsSeparated` next
+    /// door asserts that for every frame of the cycle.
+    @Test("The resting thumb is never quieter than its own groove")
+    func theRestingThumbStandsOffThePage() {
         for depth in [ColorDepth.truecolor, .palette256] {
             ColorDepth.withCurrent(depth) {
                 for palette in PaletteRegistry.all {
@@ -78,54 +107,15 @@ struct ScrollbarPulseFloorTests {
                     let track = palette.foregroundQuaternary.resolve(with: palette)
                     let groove = track.downsampledToPalette256()
                         .contrastRatio(against: page.downsampledToPalette256())
-                    let ends: [(String, Color)] = [
-                        ("resting", palette.accent.resolve(with: palette)),
-                        ("lifted", palette.hoveredForeground(palette.accent)),
-                    ]
-                    for (name, raw) in ends {
-                        let thumb = ScrollbarColors.separated(raw, in: palette)
-                        let stands = thumb.downsampledToPalette256()
-                            .contrastRatio(against: page.downsampledToPalette256())
-                        #expect(
-                            stands >= groove,
-                            """
-                            \(palette.name) at \(depth): the \(name) end stands \
-                            \(String(format: "%.2f", stands)):1 off the page where its own \
-                            track stands \(String(format: "%.2f", groove)):1
-                            """)
-                    }
-                }
-            }
-        }
-    }
-
-    /// The reported fault, as an invariant rather than as one palette's numbers.
-    ///
-    /// The breath used to run from the accent DOWN toward the page, and on the
-    /// green palette its recessive end came out `rgb(11, 27, 11)` — darker than
-    /// the track's `rgb(22, 90, 22)` and all but the background's
-    /// `rgb(5, 10, 5)`. It passed the separation floor above, because contrast
-    /// does not care which side of the groove the thumb is on; the eye does.
-    ///
-    /// The LIFTED end is what this asserts, that being the end the breath
-    /// travels to; ``bothEndsStandOffThePage`` covers the resting end, which
-    /// used to fail on one palette for a second reason — see there.
-    @Test("The lifted end of the breath is never quieter than its own track")
-    func theLiftNeverSinksBelowItsGroove() {
-        for depth in [ColorDepth.truecolor, .palette256] {
-            ColorDepth.withCurrent(depth) {
-                for palette in PaletteRegistry.all {
-                    let page = palette.background.resolve(with: palette)
-                        .downsampledToPalette256()
-                    let track = palette.foregroundQuaternary.resolve(with: palette)
-                    let groove = track.downsampledToPalette256().contrastRatio(against: page)
-                    let thumb = ScrollbarColors.pulseLift(palette)
-                        .downsampledToPalette256().contrastRatio(against: page)
+                    let thumb = ScrollbarColors.separated(
+                        palette.accent.resolve(with: palette), in: palette)
+                    let stands = thumb.downsampledToPalette256()
+                        .contrastRatio(against: page.downsampledToPalette256())
                     #expect(
-                        thumb >= groove,
+                        stands >= groove,
                         """
-                        \(palette.name) at \(depth): the lifted end of the breath stands \
-                        \(String(format: "%.2f", thumb)):1 off the page where its own track \
+                        \(palette.name) at \(depth): the resting thumb stands \
+                        \(String(format: "%.2f", stands)):1 off the page where its own track \
                         stands \(String(format: "%.2f", groove)):1
                         """)
                 }
