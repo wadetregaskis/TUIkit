@@ -1,244 +1,550 @@
 # Gradients where a colour is accepted
 
-**Status: proposal. No code.** Written in answer to "if you apply a gradient as
-the colour of a `Text`, it would automatically apply the gradient across the
-contents of that `Text` — what about things which don't have the inherent
-ability to display a gradient, and what does it mean for the gradient vs colour
-picker dialogs?"
+**Status: proposal, revision 3. No code.**
 
-## What exists today
+Revision 1 asserted a resolution model from recollection; it was wrong.
+Revision 2 measured that, and then made its own central decision — not to adopt
+`ShapeStyle` — from recollection, which was also wrong. Revision 3 is what
+survived three adversarial reviews (mechanism, parity, performance), with every
+claim below either measured or cited to a line of code. §10 records what the
+reviews overturned, because the pattern in it is worth keeping.
 
-A colour is ``Color``. A gradient is a bare `[Color]` — stops at even intervals
-— and it is accepted in exactly four places, all of them things that draw a
-*strip*:
+---
 
-| site | spelling |
+## 1. What SwiftUI actually does
+
+Measured with `ImageRenderer` at scale 1, pixels read back; probes under
+`scratchpad/gradprobe*`. Block glyphs, so every pixel of a text's box is ink.
+
+### `foregroundStyle(gradient)` resolves per LEAF, over the leaf's LAYOUT BLOCK
+
+```
+A  vertical gradient applied to the STACK        B  the same applied to EACH Text
+   block 0  top #E05B66  bottom #5E7DDF             block 0  top #E05B66  bottom #5E7DDF
+   block 1  top #E25A63  bottom #5E7BDD             block 1  top #E25A63  bottom #5E7BDD
+```
+
+Identical. Unequal widths say it again and unambiguously:
+
+```
+C  horizontal gradient applied to the STACK
+   block 0   81px wide   left #E8555A   right #4E7DE7    ← full sweep in 81px
+   block 1  321px wide   left #EA5257   right #4B7CE8    ← full sweep in 321px
+```
+
+The per-leaf claim survived every attempt to break it: it holds through an
+interposed `.frame(width: 460)` (glyphs still sweep `#EA575B → #4F7FE9`),
+through `.padding(80)` (identical), and at the seam of adjacent leaves (first
+`Text` ends `#1A7BFB`, the next begins `#FB3F38` — a clean discontinuity). A
+`Label` is **two** leaves, each running its own full ramp (icon
+`#F44A48→#387CF4`, title `#FD3E36→#1C7BFC`); `Image(systemName:)` is its own
+leaf; `Text + Text` concatenation is one.
+
+**And the extent is the leaf's whole layout block, not its line.** A two-line
+`Text("██\n████████")` under a horizontal gradient ends its short first line at
+`#D56274` ≈ t 0.25 — exactly that line's fraction of the *block's* width, not
+blue. This decides the tier-1 implementation (§7.2) and revision 2 had it open.
+
+### Spanning is not expressible, and `.in(_:)` is not the exception
+
+`ShapeStyle.in(_ rect: CGRect)` (interface 8711) exists precisely to override a
+style's resolution extent, so it is the obvious counter-candidate to §4. It is
+not one: **`.in(rect)` re-anchors at each leaf's own origin.** With
+trailing-aligned unequal texts the short block reads `#FE3D33 → #D56174` — t 0…
+0.25, red — not the blue its position in the container demands; and a vertical
+gradient with `.in(whole-content-rect)` across three stacked rows renders all
+three identically (`#E6575F`, `#E6575F`, `#E5575E`). It fixes the ramp's
+**scale**, not its **origin**.
+
+SwiftUI's only spanning idiom is `gradient.mask(content)`, which resolves over
+the gradient view's frame (short block reaches only `#C86A84` where the long one
+reaches `#747CD1`) and costs you either a duplicated copy of the content or its
+interactivity — the masked view is what hit-tests, and it is the gradient.
+(`.overlay(gradient.blendMode(.sourceAtop)).compositingGroup()` duplicates
+nothing and keeps hit-testing, but TUIkit has no `blendMode`, so it is not an
+option here either.)
+
+### Stop semantics, which nothing documents
+
+Measured, and all three must be pinned by test or TUIkit will diverge silently:
+
+- **Unsorted stops render as if sorted.** `red@0.8, blue@0.2` renders blue→red.
+- **Duplicate locations make a hard edge** — `#FF3B2F | #007BFE` at adjacent px.
+- **Out-of-range locations are NOT clamped.** Stops at −0.5 and 1.5 show the
+  0.25–0.75 window of the ramp (`#C96881 → #7F7AC8`).
+
+### The rest
+
+- A bare `Gradient` used as a style is a **vertical, top → bottom** linear
+  gradient (`Rectangle().fill(Gradient(colors: [.red, .blue]))` → `TL #F64743`,
+  `BL #327AF6`).
+- `Color.gradient` is a subtle vertical ramp of that colour (`TL #FF6359 →
+  BL #FF3930`), which in a terminal is exactly the treatment that makes a flat
+  block read as a surface.
+- Diagonals interpolate as expected (`TL #F64743, TR #A674A7, BL #A774A6,
+  BR #317BF6`).
+- **`.tint(gradient)` on real controls: no claim.** The probe rendered
+  `#FFB108 / #FFC701 / #FFB706` — but so did `.tint(Color.red)`. Those
+  AppKit-backed controls ignore `tint` under `ImageRenderer` entirely, so the
+  experiment says nothing.
+
+---
+
+## 2. `ShapeStyle`: adopt it
+
+**Revision 2 said don't, on the grounds that every requirement is underscored
+SPI. That is false, and one `swiftc -typecheck` refutes it.**
+
+The interface carries public default implementations for all three underscored
+requirements (SwiftUICore interface 9452–9461):
+
+```swift
+extension ShapeStyle {
+  nonisolated public static func _makeView<S>(…) -> _ViewOutputs where S : Shape
+  public func _apply(to shape: inout _ShapeStyle_Shape)
+  public static func _apply(to type: inout _ShapeStyle_ShapeType)
+}
+```
+
+and the conformance point is public: `associatedtype Resolved : ShapeStyle =
+Never` plus `func resolve(in: EnvironmentValues) -> Resolved` (macOS 14+). This
+compiles clean:
+
+```swift
+struct MyStyle: ShapeStyle {
+    func resolve(in environment: EnvironmentValues) -> some ShapeStyle {
+        environment.colorScheme == .dark ? Color.white : Color.black
+    }
+}
+```
+
+as do `.foregroundStyle(MyStyle())`, `Rectangle().fill(MyStyle())`,
+`AnyShapeStyle(MyStyle())`, `.foregroundStyle(Gradient(colors:))`,
+`.foregroundStyle(.linearGradient(…))`, `.foregroundStyle(.secondary)` and
+`.foregroundStyle(.red, .blue)`.
+
+Revision 2's justifying example was also backwards. `.foregroundStyle(.thickMaterial)`
+would **not** compile-and-do-nothing under a TUIkit `ShapeStyle`: `.thickMaterial`
+is a static member on `ShapeStyle where Self == Material`, and with no `Material`
+type the member does not exist, so the source fails to compile — which is
+exactly what the parity rules demand. **What compiles is decided by which types
+and static members ship, not by whether the protocol exists.** And the `tint`
+pair is not a protocol-free precedent: the generic overload *requires* the
+protocol; the `@_disfavoredOverload Color?` twin exists so `.tint(nil)` can infer
+a type. Every styling entry point in the SDK is `<S: ShapeStyle>`.
+
+### The shape of it, and how it survives the memo
+
+Adopt the **modern** surface only — `Resolved` / `resolve(in:)` — and leave the
+underscored trio out entirely; nothing outside SwiftUI can call them.
+
+```swift
+public protocol ShapeStyle: Sendable, Equatable {
+    associatedtype Resolved: ShapeStyle = Never
+    func resolve(in environment: EnvironmentValues) -> Resolved
+}
+```
+
+The performance review's hardest constraint lands here: an **existential** in the
+environment turns memoization off for its whole subtree.
+`RenderCache.noteAppliedEnvironment` tests `value is any Equatable`
+([RenderCache.swift:599](Sources/TUIkitView/Rendering/RenderCache.swift:599));
+`.incomparable` sets `hasUncomparableEnvironmentValue` and every store below is
+refused ([Environment.swift:85](Sources/TUIkitView/Environment/Environment.swift:85)).
+
+So: **generic API, concrete storage.** `foregroundStyle<S: ShapeStyle>(_ style: S)`
+resolves `S` at the modifier — which is where SwiftUI resolves too, and what the
+`Resolved` associated type is *for* — down to a concrete, `Equatable` `Paint`:
+
+```swift
+enum Paint: Equatable, Sendable { case color(Color), gradient(GradientPaint) }
+```
+
+One environment slot, one concrete type, cheap `==`. A third-party conformance
+reaches a `Paint` through its own `resolve(in:)`, exactly as SwiftUI's does.
+
+---
+
+## 3. The type family
+
+`UnitPoint` already exists in TUIkit with all ten SwiftUI constants
+([UnitPoint.swift](Sources/TUIkit/Views/UnitPoint.swift)), so most of this is
+source-**identical**.
+
+| SwiftUI | TUIkit | note |
+|---|---|---|
+| `Gradient(colors:)` / `(stops:)`, `Gradient.Stop(color:location:)` | same | also `: ShapeStyle`, meaning a **vertical** linear gradient (§1) |
+| `LinearGradient(gradient:startPoint:endPoint:)` and its `colors:` / `stops:` twins | same | ✓ identical |
+| `EllipticalGradient(…startRadiusFraction:endRadiusFraction:)` | same | ✓ already unit-space |
+| `AngularGradient(…startAngle:endAngle:)` / `(…angle:)` | same, `Angle` | ✓ |
+| `RadialGradient(…startRadius:endRadius:)` | radii `Int` cells | deviation — see below |
+| `AnyGradient`, `Color.gradient` | same | `AnyGradient` must be `Equatable` by value |
+| `AnyShapeStyle(_:)` | same | required — it is *the* style-switching idiom |
+| `HierarchicalShapeStyle` (`.secondary`…), `style.secondary` | same | maps to the palette's foreground tiers |
+| `foregroundStyle(_:_:)` and `(_:_:_:)` | same | 2- and 3-arg forms |
+| `backgroundStyle(_:)` | same | |
+| every gradient type is also a `View` | same | `ZStack { LinearGradient(…) }` must work |
+| `ShapeStyle.opacity(_:)`, `.in(_ rect:)` | same, `CellRect` | `.in(_:)` is the portable "fix the ramp's scale" |
+| static members `.linearGradient(…)`, `.radialGradient(…)`, `.angularGradient(…)` | same | on `ShapeStyle where Self == …` |
+| `Text.foregroundStyle<S>` returns **`Text`** | same | or `Text("a").foregroundStyle(g) + Text("b")` breaks |
+| `Gradient.ColorSpace` (`.device` / `.perceptual`), `colorSpace(_:)` | **ship** | TUIkit already has an opinion — see §6 |
+| `Color.mix(with:by:in:)` | **ship** | this is `Color.interpolate(stops:phase:)` under a TUIkit-only name |
+| `MeshGradient` | **decline, recorded** | "given a cell, what is t?" generalises to (u,v), so it is not impossible — it is simply not worth it at 80×24 |
+| `Shader` | **decline, recorded** | genuinely impossible |
+
+**`RadialGradient`'s radii.** Revision 2 claimed `Int` prevents a silent 10×
+error. It does not: `startRadius: 5, endRadius: 200` — the overwhelmingly common
+spelling — compiles unchanged under `Int` and silently means 200 *cells*. `Int`
+only rejects the rare fractional literal. The honest argument for `Int` is
+**consistency**: every other dimension in TUIkit is `Int` cells
+([frame(width:height:)](Sources/TUIkit/Extensions/View+Layout.swift:232)), and a
+`CGFloat` here would be the sole exception. That is a weaker argument than
+revision 2 made, and it is the true one. Whichever is chosen, the spec hole must
+be closed: **a radius is measured along the horizontal axis in cells, and the
+vertical is derived through `imageCellAspect`** — otherwise a "circle" is an
+ellipse and nothing says which.
+
+---
+
+## 4. The two extents
+
+### Per-item is SwiftUI's, and is the default
+
+> "every row's text is red on the left side and blue on the right side"
+
+```swift
+List(rows) { row in Text(row.title) }
+    .foregroundStyle(LinearGradient(colors: [.red, .blue],
+                                    startPoint: .leading, endPoint: .trailing))
+```
+
+Per-leaf resolution gives this directly. A leaf knows its own layout block, so
+this needs **no buffer metadata, no region and no post-pass** — see §7.2.
+
+### Across-a-set is ours
+
+> "apply a gradient to a set of controls … in such a way that the gradient spans
+> all of them"
+
+Not expressible in SwiftUI (§1), so this is a TUI-specific addition, kept
+**separate from** the SwiftUI spelling rather than changing its meaning:
+
+```swift
+List(rows) { row in Text(row.title) }
+    .foregroundStyle(LinearGradient(colors: [.red, .blue],
+                                    startPoint: .top, endPoint: .bottom))
+    .gradientExtent(.subtree)          // TUI-specific; default is .leaf
+```
+
+### The mechanism: a propagated origin, not a post-pass
+
+Revision 2 proposed painting the "holes" — cells that took the cascade and so
+emitted no foreground SGR — in a walk over the assembled buffer. **That premise
+is false and the walk is too expensive.**
+
+*False:* no leaf emits ink with the foreground unset.
+[Text.swift:717](Sources/TUIkit/Views/Text.swift:717) fills
+`cascaded.foreground ?? environment.foregroundStyle ?? palette.foreground` and
+`ANSIRenderer` emits codes whenever `foregroundColor != nil`. Counted across the
+framework: **152 styled-emission sites in 41 files**, 31 of them reading
+`palette.foreground` directly. And "bare" would not even mean what revision 2
+needed: nothing supplies a default *foreground* anywhere — `RenderBackgroundCodes`
+carries backgrounds only — so a bare cell renders in the terminal user's own
+colour, and making bare mean `palette.foreground` needs a persistent-foreground
+mechanism restating after every reset, i.e. *more* bytes per frame, not fewer.
+
+*Too expensive:* measured in release at 120×40, a naive paint-the-holes walk
+costs **~330 µs**, one `splicing` per line **~350 µs**, `ansiSGRStateAt` per line
+**~326 µs** — against a whole `megalist` frame of **414 µs**. It roughly doubles
+the frame, every frame, and loses to the manual N-modifier version (40 nodes ×
+1.5–5 µs ≈ 60–200 µs) by 2–5×. That fails requirement (b) outright.
+
+**The walk is avoidable.** [VStack.swift:265](Sources/TUIkit/Views/VStack.swift:265):
+
+```
+// === PASS 1: Measure every child's natural size ===
+```
+
+Every child is measured and its height distributed *before any child renders*.
+So a container knows each child's offset in advance, and the origin can be
+handed down instead of the colours being painted back on:
+
+1. `.gradientExtent(.subtree)` measures its child once to learn the extent (the
+   measure memo makes this near-free) and publishes `(origin: .zero, size:)`.
+2. Containers that place children add each child's `(dx, dy)` to the origin as
+   they render it — one environment write per child.
+3. Leaves resolve exactly as in tier 1, against `(origin, extent)` instead of
+   their own box.
+
+One mechanism, two configurations; N dictionary writes instead of N line
+rewrites. It also survives what a post-pass could not: opacity resolution
+baking colours at intermediate composites, `OverlayLayer` content composited at
+the root, and `AnimatedCellRun` frames spliced after the fact — none of which a
+`lines`-only walk reaches (all three are the traps the backdrop work hit in
+`dac23916`).
+
+**Its own risk, stated:** container coverage. A container that does not propagate
+gives its children a shared origin — a graceful degradation (the gradient
+resolves as if that subtree were flat) rather than corruption, but a wrong-looking
+one. The participating set is small — VStack, HStack, ZStack, List, Table, Grid,
+ScrollView — and each is a few lines. **This is the gate for step 4** (§8), and it
+must be measured against the manual alternative before it is built, not after.
+
+And it answers §9's scroll question by construction rather than by taste:
+whether `ScrollView` folds its scroll offset into the origin decides
+content-pinned versus viewport-pinned. **Pin it to the viewport** — content-pinned
+means every scroll step and every append in a log-tail recolours every visible
+cell, forever.
+
+---
+
+## 5. Where a gradient cannot be painted
+
+Revision 2 argued from `Resolved == Never` that "SwiftUI can flatten a colour
+and cannot flatten a gradient". That is over-read: `Resolved == Never` means
+*primitive — not decomposable through the public API*; SwiftUI flattens
+internally via `_apply`. The claim is withdrawn. The TUIkit rule stands on its
+own merits, which are sufficient:
+
+> **A gradient is accepted where a colour is PAINTED. Where a colour is DERIVED
+> FROM, it collapses to a stated representative — and the API says which one.**
+
+TUIkit's chrome derives colours constantly —
+`ensuringRenderedContrast(atLeast:against:)`, the button styles' face / border /
+label chain, `ScrollbarColors`' separation and groove rules, the pulse ramps —
+and each needs one colour to do arithmetic with. So:
+
+- `Gradient.representative` — the colour at `t = 0.5`, for identity, cache keys
+  and derivation.
+- `Gradient.leastContrasting(against:)` — for contrast floors (§6).
+
+`Palette` stays colour-only: its `accent` is read by a dozen derivations, and a
+gradient there would collapse at each of them, differently.
+
+**A one-cell view is not this case in principle but is in practice.** A `Toggle`'s
+indicator has a position, so it *could* sample. But its colour is state-derived
+(`palette.accent` when on, `foreground` when off, hovered variants —
+[_ToggleCore.swift:144](Sources/TUIkit/Views/_ToggleCore.swift:144)), and a
+derived colour must stay stated or the control loses its signalling. Under
+`.subtree` such controls therefore keep their own colours and do **not**
+participate. Revision 2 claimed the opposite; it was wrong, and the honest rule
+is that `.subtree` tints what the cascade would have coloured and nothing else.
+
+---
+
+## 6. Contrast
+
+**Revision 2's guarantee was false.** It claimed "interpolation between two
+floored colours over one background cannot fall below both". Computed:
+
+```
+background #808080
+  white end       contrast 3.95:1
+  black end       contrast 5.32:1
+  sRGB midpoint   contrast 1.00:1      ← worst point on the ramp
+```
+
+Both ends clear the floor comfortably and the middle is invisible. Flooring the
+stops does nothing here, because relative luminance interpolates monotonically
+between the endpoints and therefore **crosses the background's whenever the
+endpoints straddle it**.
+
+The rule that actually works:
+
+1. Floor the stops (still necessary, and it composes with the quantiser).
+2. **Detect straddling per segment** — endpoint luminances on opposite sides of
+   the background's — which is two comparisons per segment.
+3. Where a segment straddles, either insert a compensating stop at the crossing
+   or floor that segment against the background directly. Both bend the ramp;
+   bending it where it would otherwise be unreadable is the point.
+
+Everything painted still goes through
+`Color.quantisedRamp(stops:count:depth:)` rather than per-cell
+`downsampledToPalette256()` — per-cell quantisation is what produced the
+out-of-place colours the monotonicity repair was written for, and the underlying
+metric must not be retuned (three attempts, three reverts).
+
+**`against` what?** Under `.subtree` one ramp can cross the content background, a
+selection fill and a card surface. The surface is not knowable at the leaf. Name
+it: floor against the **modifier's own resolved surface**, documented as an
+approximation, and accept that a gradient crossing a selection highlight is the
+caller's problem — the alternative is flooring at composite time, which puts this
+back into the post-pass the whole design exists to avoid.
+
+---
+
+## 7. Performance
+
+Two requirements, both explicit: **nothing when unused**, and **no worse than by
+hand** when used.
+
+### 7.1 Nothing when unused
+
+`EnvironmentValues` is `[ObjectIdentifier: Any]`
+([EnvironmentKey.swift:46](Sources/TUIkitCore/Environment/EnvironmentKey.swift:46)),
+not a struct of fields — so revision 2's "one more field, one optional read" was
+wrong twice over. The framework already hoisted `renderCache` and `stateStorage`
+out of that dictionary into `RenderContext` because those getters measured
+**4.5% and 5.2% of CPU**
+([RenderContext.swift:42](Sources/TUIkitView/Rendering/RenderContext.swift:42)),
+and the `.foregroundStyle` doc explicitly refuses a per-`Text` store lookup on
+exactly that ground.
+
+**Which is why the `Paint` enum of §2 is not merely a memo fix but the
+performance answer.** It goes in the *existing* `foregroundStyle` slot:
+
+- **zero additional dictionary probes** — `Text` already reads that key on the
+  no-explicit-colour path;
+- **no precedence ambiguity** — a second key would let an outer gradient and an
+  inner colour both be set with nothing to order them, and clearing the other
+  key would cost the plain-colour path a second write plus a second
+  `noteAppliedEnvironment` slot;
+- **`.gradientExtent` is read only after a gradient is found**, so it is never an
+  unconditional second probe.
+
+`EnvironmentValues.foregroundStyle` changes from `Color?` to `Paint?`. Pre-1.0,
+no shims. (Note that TUIkit's `foregroundStyle(_ style: Color?)` is already
+off-parity — SwiftUI's takes no Optional; only `tint` does. The new generic
+overload must be non-optional or `.foregroundStyle(nil)` becomes ambiguous.)
+
+Gates, on named scenarios rather than in the abstract: `ab_bench.py` on
+`megalist`, `table` and `dashboard` (where leaf cost lives), plus the golden
+snapshots as a hard gate that a gradient-free page is byte-identical. And the
+measure pass must skip gradient work entirely (`context.isMeasuring`) or
+`fanout`'s ~4 measures per render each pay for it.
+
+### 7.2 Tier 1, and against doing it by hand
+
+A leaf resolves its own ramp. The one real subtlety is that
+`TextRunAttribution` splits on **source-run membership walking `Character`s**
+([Text+Concatenation.swift:133](Sources/TUIkit/Views/Text+Concatenation.swift:133)),
+while a gradient needs **display-cell-indexed** bands — character index ≠ cell
+index for CJK and emoji, and a band boundary must not split a two-cell glyph.
+Plus §1's finding that the extent is the whole text block: `t` comes from the
+absolute cell position within the block, so a vertical gradient splits across
+*rows* and a multi-line horizontal one does not restart per line. That is new
+logic on the hottest leaf, and it is where tier 1's benchmark bites.
+
+Measured run counts from the real `quantisedRamp` at `.palette256` — the number
+that decides the byte cost, and it is bounded by cube crossings, not by width:
+
+| ramp | 20 cells | 40 | 80 | 120 |
+|---|---|---|---|---|
+| red→blue (2 stops) | 11 | 11 | 11 | 11 |
+| track default (3) | 8 | 9 | 9 | 9 |
+| rainbow (6) | 18 | 22 | 23 | 24 |
+| `Color.gradient`-style | 2 | 2 | 2 | 2 |
+
+Revision 2's "~10 runs, not 40" holds for two and three stops and is ~2× off for
+six. Truecolor is one run per cell: **760–960 bytes for a 40-cell line against
+50 plain.** Two corrections to how that lands:
+
+- **Intra-line diffing is shipped**, not absent
+  (`Documentation/Intra-line output diffing.md`, and `FrameDiffWriter`'s
+  `CellCache`), so a changed line is *not* rewritten whole. The performance
+  review's conclusion here was wrong; the byte measurement stands, its
+  consequence does not.
+- **At any depth but `.palette256`, `quantisedRamp` returns raw interpolated
+  RGB** ([Color+Downsampling.swift:118](Sources/TUIkitStyling/Color/Color+Downsampling.swift:118)),
+  so every cell is a distinct `Color`. Run-grouping must happen on the
+  **depth-resolved** colour or a 16-colour terminal emits one SGR per cell to
+  paint runs that render identically.
+
+Against the manual alternative:
+
+| | manual | proposed |
+|---|---|---|
+| horizontal, within a row | the app does grapheme-accurate cell splitting itself | one ramp lookup; the leaf splits runs it already splits — **strictly better** |
+| vertical, across N rows | N environment writes (60–200 µs at 40 rows) | N environment writes + one extra memoised measure — **comparable**, and it works in a scrolling `List` where the manual version cannot |
+
+### 7.3 Two fixes to `quantisedRamp` this needs anyway
+
+Both visible at [Color+Downsampling.swift:110](Sources/TUIkitStyling/Color/Color+Downsampling.swift:110):
+
+- **It samples before it consults its cache** (`sampled` is built at :111–117,
+  the lookup is at :122–125), so a cache *hit* still pays the whole
+  interpolation — measured 0.42 µs, of which ~0.34 µs is the wasted pre-lookup
+  work. Looking up first makes a hit ~0.09 µs. At one gradient per row on a
+  40-row list that is 17 µs/frame — ~4% of a `megalist` frame — paid for work
+  the memo exists to elide.
+- **Eviction is `removeAll()` above 512 entries** (:145) — a cliff, not an LRU.
+  Bounded per app today; a resize sweep across many widths crosses it and
+  re-pays every cold ramp at once. Cold cost is 21.7 µs (2 stops, 40 cells) to
+  47.7 µs (6 stops, 120), so the cliff is real.
+
+Both are independently worth fixing and belong in step 1.
+
+---
+
+## 8. Order of work, and the branch
+
+On a branch, merged only if the whole thing lands.
+
+1. **`Gradient`, `Gradient.Stop`, `LinearGradient`, `Paint`, `representative`,
+   `leastContrasting(against:)`**, plus the two `quantisedRamp` fixes (§7.3) and
+   the stop-semantics tests (§1). Convert the four existing `[Color]` sites off
+   `[Color]` — `TrackConfiguration`, `TrackStyle` (including
+   `shadeRamp(gradient:)`, whose label keeps saying `gradient` for a `[Color]`),
+   `IndeterminateStyle`, `SegmentColoring`. No behaviour change; golden
+   snapshots must not move.
+2. **The `ShapeStyle` protocol**, `AnyShapeStyle`, the hierarchical styles, the
+   static members, the 2- and 3-arg `foregroundStyle`, `backgroundStyle`,
+   gradient-as-`View`. Storage stays the concrete `Paint`.
+3. **Per-leaf `foregroundStyle` on `Text`** — the cell-indexed banding of §7.2,
+   with `Text.foregroundStyle` returning `Text`. Bench gates of §7.1.
+4. **`.gradientExtent(.subtree)`** via the propagated origin, and the container
+   survey it rests on. **Gated on measuring against the manual N-modifier
+   version**, per requirement (b).
+5. **`background(_:)`**, `.in(_:)`, then `RadialGradient` / `AngularGradient` /
+   `EllipticalGradient`.
+6. **The panel.** Not one dialog, but one dialog with two floors:
+   `ColorPickerPanel` keeps no gradient affordance because its callers include
+   palette slots that cannot store one; `GradientEditorPanel` becomes the union
+   surface by relaxing its floor to a single stop, where a Solid / Gradient
+   switch is just collapsing to or expanding from one stop. The binding type is
+   the discriminator, so the wrong call does not compile. **This step carries a
+   persistence migration** that nothing else does: `GradientEditorPanel(stops:)`
+   is public API taking `Binding<[Color]>` with an even-spacing assumption, and
+   its `@AppStorage` recents format (`;`-separated hex, see
+   `Sources/Example/Components/GradientStopsCodec.swift`) cannot represent
+   `Gradient.Stop.location`.
+
+Steps 1–3 are each independently useful and revertible. Step 4 is the one that
+can fail, and it fails early: the container survey and the bench tell you before
+any of it is written.
+
+---
+
+## 9. Open questions
+
+- **Container coverage for `.subtree`** (§4). How many containers must propagate
+  the origin before the feature reads as correct rather than as approximately
+  correct? This is the step-4 gate.
+- **`TrackGradientScaling` vs `GradientExtent`.** `TrackGradientScaling`
+  (`.track` / `.fill`) is already an extent knob for gradients in one corner of
+  the framework. Two vocabularies for "what does the ramp span" is one too many;
+  `.in(_:)` may unify them.
+- **What a real AppKit control does with `.tint(gradient)`** (§1). Blocks
+  nothing — the §5 rule stands on TUIkit's own needs — but it would be good to
+  know.
+
+---
+
+## 10. What the reviews overturned
+
+Kept because the pattern is the lesson, not the list.
+
+| Revision 2 claimed | Actually |
 |---|---|
-| `TrackConfiguration` | `fillGradient: [Color]?`, `emptyGradient: [Color]?` |
-| `TrackStyle` | `.gradient([Color])`, `.shadeRamp(gradient:)` |
-| `IndeterminateStyle` | `.gradient(colors: [Color]? = nil)` |
-| `SegmentColoring` | `.gradient` |
+| `ShapeStyle` is not conformable outside SwiftUI | It is, via public `resolve(in:)` with public defaults for the underscored trio. **One `swiftc -typecheck` refutes it.** |
+| A cell that took the cascade emits no foreground | No leaf does. 152 emission sites; `Text` always states one |
+| "Bare" means the page's colour | It means the *terminal user's* colour; nothing supplies a default foreground |
+| The `.subtree` walk is cheap | ~330 µs at 120×40 release, against a 414 µs `megalist` frame — 2–5× the manual version |
+| One more `EnvironmentValues` field is ~free | It is a dictionary; the framework already hoisted two services out of it at 4.5% and 5.2% of CPU |
+| Flooring the stops keeps the whole ramp readable | White→black over `#808080`: ends 3.95:1 and 5.32:1, midpoint **1.00:1** |
+| `Resolved == Never` proves SwiftUI cannot flatten a gradient | It proves the *public* API cannot; `_apply` does internally |
+| `Int` radii prevent a silent 10× error | `startRadius: 5` compiles either way. The real argument is consistency |
+| The extent is the leaf's bounds | The leaf's **layout-block** bounds — a two-line `Text` shares one ramp |
 
-Nothing else takes one. `foregroundStyle(_ style: Color?)`, `background(_:)`,
-`tint(_:)`, `listRowBackground(_:)` and every `Palette` slot take a single
-colour.
-
-Two pieces of the machinery a general answer needs already exist and are
-already debugged:
-
-- `Color.quantisedRamp(stops:count:depth:)` — a gradient's per-cell colours
-  quantised **as a sequence**, with the monotonicity repair. Per-cell
-  quantisation is not a substitute: it is what produced the out-of-place
-  colours that repair exists to remove, and the underlying metric must not be
-  retuned (three attempts, three reverts — it is load-bearing for palette
-  derivation).
-- `Color.interpolate(stops:phase:)` — the colour at one point of a ramp.
-
-## The type
-
-**Recommendation: a concrete `Gradient`, and no `ShapeStyle`.**
-
-SwiftUI's answer is a protocol: `foregroundStyle(_ style: some ShapeStyle)`,
-with `Color`, `Gradient`, `LinearGradient`, `Material` and the hierarchical
-styles conforming. Adopting the protocol would make every one of those spell
-correctly and do nothing, which is precisely the failure mode this project
-rejects: **anything unhonourable must not compile**. A protocol whose useful
-conformances are three out of a dozen is a promise the terminal cannot keep.
-
-The *value* type, though, should match SwiftUI exactly, because that costs
-nothing and buys the spelling:
-
-```swift
-Gradient(colors: [.red, .orange, .yellow])          // even spacing
-Gradient(stops: [.init(color: .red, location: 0),
-                 .init(color: .yellow, location: 0.8)])
-```
-
-Positioned stops are a real gain, not just parity: today's `[Color]` cannot
-express "mostly red, then a fast run to yellow at the end", which is the shape
-most hand-made ramps actually want. The tone-curve work already introduced
-positioned stops for the same reason (``ASCIIToneCurve/Stop/position``).
-
-Overload the modifiers that can honour it, one by one, rather than generalising
-them all through a protocol:
-
-```swift
-func foregroundStyle(_ gradient: Gradient) -> some View
-func background(_ gradient: Gradient) -> some View
-func tint(_ gradient: Gradient) -> some View
-```
-
-`TrackConfiguration.fillGradient`, `TrackStyle.gradient` and
-`IndeterminateStyle.gradient` change from `[Color]` to `Gradient`. No shims:
-pre-1.0, delete the old spelling.
-
-## The hard part: what is the gradient's extent?
-
-A colour needs no domain. A gradient needs to know over what extent `t` runs
-from 0 to 1, and SwiftUI answers that with the bounds of the shape being
-filled. TUIkit has no fill pass: the environment carries a colour and each leaf
-uses it whole.
-
-Three candidate domains:
-
-1. **The leaf's own cells.** `VStack { Text("a"); Text("bbbbbb") }` under one
-   `.foregroundStyle(gradient)` gives two ramps of different lengths, both
-   running the full sweep. Trivial to build and visibly wrong.
-2. **The modified subtree's rendered rectangle.** What SwiftUI means, and what
-   anyone applying a gradient to a stack expects.
-3. **The screen.** Well-defined and useless.
-
-(2) is the answer, and the shape of its implementation is already in the
-codebase under another name.
-
-### It is the opacity design
-
-``FrameBuffer`` carries `opacityRegions`: a rectangle plus an alpha, stamped by
-the modifier, shifted through layout exactly as `hitTestRegions` and
-`animatedCells` are, and **resolved late** — at the root, where what is behind
-the region is finally known. `Documentation/Opacity as composition.md` §6b is
-the argument for resolving there and not at the modifier.
-
-A gradient is the same shape with an easier late step: no blending, just a
-rewrite of the foreground (or background) SGR of the covered cells. So:
-
-- `.foregroundStyle(gradient)` stamps a `GradientRegion` naming its rectangle,
-  the stops, and the axis.
-- The region is shifted through layout with the rest of the buffer's metadata.
-- At the root, each covered cell's `t` comes from its position **within the
-  region**, and the ramp is `Color.quantisedRamp` over the region's extent, so
-  the repair applies once to the whole sweep rather than per cell.
-
-Stamping rather than baking also keeps the render memo intact: the subtree
-renders exactly as it would have, and only the final buffer is rewritten —
-which is what lets a gradient sit over a `List` without disabling its row
-memoization.
-
-### The one thing the opacity design does not have to solve
-
-A fade applies to every cell it covers. A **foreground** gradient must not: a
-nested `.foregroundStyle(.red)` beats the cascade, and a rectangle over the
-buffer cannot tell a cell that took the cascade from one that stated its own
-colour.
-
-So the leaf has to opt in, and the buffer has to carry the fact. A leaf that
-reads the cascade and finds a gradient draws its glyphs **with no foreground**
-and stamps a `GradientSpan` over its own cells. Spans ride layout like every
-other piece of buffer metadata. At the root, the region supplies the ramp and
-the extent, the spans say which cells asked for it, and the join is exact.
-
-That is the whole design: **the region says what and how far; the span says
-who.**
-
-## Things that cannot display a gradient
-
-This splits into three cases, and only one of them is really "cannot".
-
-**A view that is one cell.** A `Toggle`'s indicator, a bullet, a scrollbar
-thumb. One cell has one colour, but it also has a *position*, so the answer is
-defined: sample the ramp there. Under a gradient applied to a whole form, the
-toggles down the column each take their own colour and the column reads as one
-sweep — which is the good outcome, and it needs no special case.
-
-**A colour that is derived from rather than painted.** This is the real case,
-and it is everywhere in the chrome: `ensuringRenderedContrast(atLeast:against:)`,
-the button styles' face/border/label derivations, `ScrollbarColors`' separation
-and groove rules, the pulse ramps. Each of these needs *one* colour to do
-arithmetic with.
-
-The rule to write down:
-
-> **A gradient is accepted where a colour is PAINTED, never where a colour is
-> DERIVED FROM.**
-
-`Palette` therefore stays colour-only. A theme's `accent` is read by a dozen
-derivations; a gradient there would have to collapse at each of them, twelve
-times, differently.
-
-Where a painted site nevertheless has to collapse — `tint(_:)` on a control
-whose tint becomes four derived colours — the gradient supplies a
-representative, and the API says so rather than refusing:
-
-- `Gradient.representative` — the colour at `t = 0.5`. For identity, keying and
-  derivation. Stable, and already implemented as `Color.interpolate`.
-- `Gradient.leastContrasting(against:)` — the stop furthest from readable. What
-  a contrast floor must be applied to, because flooring the midpoint leaves the
-  ends below the floor.
-
-**A site that genuinely refuses.** None found. Every painted surface in the
-framework is at least one cell.
-
-## Contrast
-
-A gradient foreground over a themed background can dip under the floor
-mid-ramp, and there are two ways to handle it that are not the same:
-
-- Floor **each cell** after sampling. Correct per cell, and it can bend the ramp
-  where it was smooth — which is exactly the banding the monotonicity repair
-  exists to prevent.
-- Floor **the stops**, then build the ramp, then quantise. The ramp keeps its
-  shape, the repair still means something, and the floor holds everywhere
-  because interpolation between two floored colours over one background cannot
-  dip below both.
-
-**Recommend flooring the stops.** It composes with the existing quantiser
-instead of fighting it.
-
-## The dialogs
-
-They are already halfway combined: `GradientEditorPanel` embeds
-`_ColorPickerBody` — the same preview-plus-tabs body `ColorPickerPanel` wraps —
-to edit the selected stop, rather than nesting a second dialog.
-
-**Recommendation: not one dialog, but one dialog with two floors.**
-
-- `ColorPickerPanel(selection: Binding<Color>)` — unchanged, and deliberately
-  offers no gradient affordance. Its callers include the theme editor's palette
-  slots, which by the rule above cannot store one. Offering a tab that produces
-  a value the caller cannot keep is worse than not offering it.
-- `GradientEditorPanel(gradient: Binding<Gradient>)` — becomes the union
-  surface by **relaxing its floor to one stop**. A one-stop gradient is a solid
-  colour; today the panel forbids it ("Remove" disables at two) because a
-  `[Color]` of one has no meaning to `TrackRenderer`. With a `Gradient` type
-  that renders one stop as a flat fill, the restriction goes away and the panel
-  can carry a plain **Solid / Gradient** switch that is nothing more than a
-  shortcut for collapsing to, or expanding from, one stop.
-
-So: the *binding type* is the discriminator, and the type system does the
-work — a caller that can only take a colour cannot be handed a gradient, and it
-does not compile rather than failing at runtime. Which is the same rule the
-`ShapeStyle` decision above rests on.
-
-## What falls out for free
-
-`OpacityRegion` carries an optional `cycle`, and that is what lets a repeating
-fade replay from pre-rendered phases instead of re-rendering. A `GradientRegion`
-with a phase is the same trick, and it makes a **moving** gradient — a sweep
-across arbitrary content — cost one render plus N re-colourings, replayed by
-``AnimatedCellRun``. That is how `IndeterminateStyle.gradient` already animates;
-generalising the region generalises the sweep.
-
-Not a requirement. Worth building the region with the phase slot present.
-
-## Cost
-
-The late resolution is a per-cell SGR rewrite over the region, the same family
-of work as `resolvingOpacity` — measured at 12–18 ms in a debug build for a
-full-screen dim of a 120×40 terminal, and a gradient over a label is two orders
-of magnitude smaller than that. The case to watch is `.foregroundStyle(gradient)`
-applied to a whole page, which is a full-screen rewrite every render. Since the
-region is stamped rather than baked, the memo survives and it is only the final
-buffer that pays.
-
-## Order of work, if this is taken
-
-1. `Gradient` (+ `Gradient.Stop`), `representative`, `leastContrasting(against:)`.
-   Convert the four existing sites off `[Color]`. No behaviour change.
-2. `GradientRegion` + `GradientSpan` on `FrameBuffer`, shifted through layout,
-   resolved at the root beside `resolvingOpacity`.
-3. `foregroundStyle(_:)` and `background(_:)` overloads; `Text` opts in.
-4. `tint(_:)`, with `representative` documented at each derivation.
-5. The panel's one-stop floor and its Solid / Gradient switch.
-
-Steps 1 and 2 are independently useful and independently testable; step 3 is
-where it becomes visible.
+The common thread: **revision 2's banner was "measured, not recalled", and every
+one of these is something it recalled.** Where it measured, it was right.
