@@ -63,15 +63,25 @@ struct ToneCurveEditorPanelTests {
         }
     }
 
-    @Test("Adding past the last stop lands between it and white")
-    func addingPastTheEnd() {
+    @Test("Adding on the last stop falls back INTO the curve, not on top of it")
+    func addingOnTheLastStop() {
+        // The last stop is at white, which is where it nearly always is, so
+        // there is no room after it. Landing a second stop at the same tone
+        // would make "+" look broken: nothing new is visible, and the new
+        // stop cannot be reached by dragging because its span is zero.
         let (updated, index) = Panel.adding(to: stops, after: 2)
         #expect(updated.count == 4)
-        // The last stop is already at 1, so there is nowhere past it but a
-        // hair beyond — which must still be a DISTINCT, ordered stop rather
-        // than a duplicate that makes the span zero.
-        #expect(Panel.position(of: updated[index]) >= Panel.position(of: stops[2]))
+        let landed = Panel.position(of: updated[index])
+        #expect(landed < Panel.position(of: stops[2]), "landed on top of the last stop")
+        #expect(landed > Panel.position(of: stops[1]), "landed past the stop before it")
         #expect(Panel.sorted(updated).map(Panel.position) == updated.map(Panel.position))
+    }
+
+    @Test("Adding on the only stop of a one-stop list still lands somewhere new")
+    func addingOnASoleStop() {
+        let (updated, index) = Panel.adding(to: [.init(at: 1, to: .rgb(9, 9, 9))], after: 0)
+        #expect(updated.count == 2)
+        #expect(Panel.position(of: updated[index]) < 1)
     }
 
     @Test("Stops sort by position, and equal positions keep their written order")

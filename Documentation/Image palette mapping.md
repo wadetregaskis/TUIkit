@@ -223,7 +223,10 @@ than merely correct:
 
 - **Adding a stop changes nothing.** A new stop takes the colour the curve
   already produces where it lands, so a curve can be refined rather than
-  restarted.
+  restarted. It lands halfway to the next stop, or halfway back to the
+  previous one where there is no room after — which is the case that matters,
+  because the last stop is almost always at white and "+" on it would
+  otherwise put a second stop on top of it and appear to do nothing.
 - **The selection follows the stop, not the slot.** Moving a stop past its
   neighbour re-sorts the list, and the panel re-finds the stop it was editing —
   otherwise dragging one across another would silently hand you a different

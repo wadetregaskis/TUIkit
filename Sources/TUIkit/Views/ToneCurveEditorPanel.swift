@@ -373,24 +373,36 @@ public struct ToneCurveEditorPanel: View {
             .map(\.element)
     }
 
-    /// `list` with a stop added halfway between `index` and the one after it —
-    /// or halfway to white, past the last — coloured with what the curve
-    /// already produces there.
+    /// `list` with a stop added beside the one at `index`, coloured with what
+    /// the curve already produces where it lands.
     ///
     /// That colour is the whole point: a stop added this way changes nothing,
     /// so a curve can be refined rather than restarted.
+    ///
+    /// Halfway to the NEXT stop where there is room, and halfway back to the
+    /// previous one where there is not — which is the case that matters,
+    /// because the last stop is almost always at white and "+" on it would
+    /// otherwise land a second stop on top of it and appear to do nothing.
     static func adding(to list: [ASCIIToneCurve.Stop], after index: Int) -> (
         list: [ASCIIToneCurve.Stop], index: Int
     ) {
         guard !list.isEmpty else {
             return ([ASCIIToneCurve.Stop(at: 0, to: .rgb(0, 0, 0))], 0)
         }
-        let here = position(of: list[min(index, list.count - 1)])
-        let next = index + 1 < list.count ? position(of: list[index + 1]) : 1
-        let midpoint = here < next ? (here + next) / 2 : min(1, here + 0.01)
-        let colour = ASCIIToneCurve(list).color(atTone: midpoint)
-        var updated = list
-        updated.insert(ASCIIToneCurve.Stop(at: midpoint, to: colour), at: min(index + 1, list.count))
-        return (sorted(updated), min(index + 1, updated.count - 1))
+        let at = min(max(0, index), list.count - 1)
+        let here = position(of: list[at])
+        let next = at + 1 < list.count ? position(of: list[at + 1]) : 1
+        let previous = at > 0 ? position(of: list[at - 1]) : 0
+        let landing =
+            if here < next {
+                (here + next) / 2
+            } else if previous < here {
+                (previous + here) / 2
+            } else {
+                here / 2  // one stop, already at the top: halfway back to black
+            }
+        let added = ASCIIToneCurve.Stop(at: landing, to: ASCIIToneCurve(list).color(atTone: landing))
+        let updated = sorted(list + [added])
+        return (updated, updated.firstIndex(of: added) ?? at)
     }
 }
