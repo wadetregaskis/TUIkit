@@ -60,6 +60,12 @@ struct AnimationPage: View {
 
     private var selectedCurve: Curve { Curve(rawValue: curve) ?? .easeInOut }
 
+    /// The animated fraction as the bar's read-out — two decimals, so a value
+    /// mid-flight is visibly moving rather than snapping between 0.0 and 1.0.
+    private static func reading(_ fraction: Double) -> String {
+        String(format: "%.2f", fraction)
+    }
+
     /// The page's animation, assembled from the controls above it.
     ///
     /// One computed property read by every demo — which is the point of the
@@ -95,10 +101,6 @@ struct AnimationPage: View {
             forever
             modifiers
             comingAndGoing
-            DemoSection("page.animation.section.state") {
-                ValueDisplayRow(
-                    "\(L("page.animation.value")):", String(format: "%.2f", fraction))
-            }
             KeyboardHelpSection(shortcuts: [
                 "page.animation.help.tab",
                 "page.animation.help.activate",
@@ -217,9 +219,21 @@ struct AnimationPage: View {
                 // takes the width it is given rather than a number written into
                 // the page, less a cell at each end so it does not run into the
                 // terminal's edges.
+                // The read-out sits ON this row, to the right of the bar it is
+                // reporting. It used to be a section of its own at the foot of
+                // the page, four demos away from the only thing it describes —
+                // which made it read as a page-wide state display rather than
+                // as this bar's own number.
                 GeometryReader { proxy in
-                    AnimatedBar(fraction: fraction, width: max(4, proxy.size.width - 4))
-                        .padding(.horizontal, 2)
+                    let readout = "\(L("page.animation.value")): \(Self.reading(fraction))"
+                    HStack(spacing: 1) {
+                        AnimatedBar(
+                            fraction: fraction,
+                            width: max(4, proxy.size.width - 3 - readout.strippedLength)
+                        )
+                        .padding(.leading, 2)
+                        Text(verbatim: readout).dim()
+                    }
                 }
                 .frame(height: 1)
                 HStack(spacing: 2) {
