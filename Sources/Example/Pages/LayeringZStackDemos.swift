@@ -196,12 +196,18 @@ extension LayeringPage {
         }
 
         // 5 — Backgrounds, which is where "the last child to draw a cell owns
-        // it" stops being an abstraction. Both layers paint a background across
-        // their whole box, including the cells their text does not use, so the
-        // top layer's colour arrives as a solid block with a hard edge — no
-        // tint of the layer beneath anywhere in it, and no seam. Slide it and
-        // the lower background reappears cell for cell exactly where the upper
-        // one stops.
+        // it" stops being the whole story. It IS the whole story at alpha 1:
+        // both layers paint a background across their whole box, so the top
+        // one's colour arrives as a solid block with a hard edge and no seam.
+        // Below 1 the two backgrounds composite, which this demo used to deny
+        // in so many words — it was written when a faded background was a fade
+        // toward the PAGE rather than a composite against what it landed on, and
+        // it kept saying so after that stopped being true. It reads the page's
+        // inner opacity now, so the claim and the picture are the same claim.
+        //
+        // A background is the one thing that composites at EVERY alpha with no
+        // threshold anywhere: the ½ rule decides a contest between two glyphs,
+        // and two fields wanting one cell is not a contest — they mix.
         Text("page.layering.zstack.case5")
             .foregroundStyle(.palette.foregroundTertiary)
         band(Self.zstackCase5, alignment: .leading) {
@@ -217,6 +223,7 @@ extension LayeringPage {
                 .frame(width: Self.zstackCase5.over, alignment: .center)
                 .foregroundStyle(.palette.background)
                 .background(.palette.warning)
+                .opacity(zstackOpacity)
                 .offset(x: Self.zstackCase5.offset(travel))
         }
     }
