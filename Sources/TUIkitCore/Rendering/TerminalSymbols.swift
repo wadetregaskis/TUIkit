@@ -51,6 +51,16 @@ public enum TerminalSymbols {
     /// circle of an enabled-but-unselected one.
     public static let radioDisabledUnselected = "\u{25CC}"
 
+    // MARK: - Tone Curves
+
+    /// Up-pointing triangle (U+25B2) marking where a tone-curve stop sits on
+    /// the tone axis — it points UP at the input strip it names, which is the
+    /// whole of why it is not the disclosure triangle's direction.
+    ///
+    /// East-Asian *ambiguous* width, like the radio indicators beside it, so it
+    /// takes one cell wherever those do.
+    public static let toneCurveStop = "\u{25B2}"
+
     // MARK: - Text Masking
 
     /// Bullet character (U+25CF) used for masking text in SecureField.

@@ -62,7 +62,10 @@ struct ImageRenderingControls: View {
             if new == 1 { settings.unicodeGlyphs = new > old ? 2 : 0 }
         }
         .modal(isPresented: $editingLUT) {
-            GradientEditorPanel(
+            // The curve editor, not the gradient one. A gradient is colours at
+            // even intervals; a look-up table is colours at tones you choose,
+            // and the pane was showing the second as though it were the first.
+            ToneCurveEditorPanel(
                 "component.imageControls.lutTitle",
                 stops: $settings.lutStops,
                 isPresented: $editingLUT)
@@ -264,16 +267,19 @@ struct ImageRenderingControls: View {
         }
     }
 
-    /// thing they define.
+    /// The curve's output across the whole tone range, as a strip — the same
+    /// thing the editor's lower strip shows, at a size that fits the pane.
+    ///
+    /// Straight through the curve, cell by cell, rather than through
+    /// `Color.quantisedRamp`: that helper repairs a GRADIENT into a monotone
+    /// one, and a curve is not required to be monotone.
     private var lutPreview: some View {
         let width = 12
-        // As a ramp, not cell by cell: on a 256-colour terminal the per-cell
-        // nearest match bands. See `Color.quantisedRamp(stops:count:depth:)`.
-        let ramp = Color.quantisedRamp(
-            stops: settings.lutStops, count: width, depth: ColorDepth.current)
+        let curve = ASCIIToneCurve(settings.lutStops)
         return HStack(spacing: 0) {
-            ForEach(ramp.indices, id: \.self) { cell in
-                Text(verbatim: "\u{2588}").foregroundStyle(ramp[cell])
+            ForEach(0..<width, id: \.self) { cell in
+                Text(verbatim: "\u{2588}")
+                    .foregroundStyle(curve.color(atTone: Double(cell) / Double(width - 1)))
             }
         }
     }

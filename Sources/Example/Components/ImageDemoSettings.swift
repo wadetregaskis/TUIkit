@@ -86,10 +86,19 @@ struct ImageDemoSettings: Equatable {
     var duotoneShadow: Color = .rgb(20, 20, 60)
     var duotoneHighlight: Color = .rgb(255, 215, 130)
 
-    /// ``Tone/lut``'s stops, darkest first and evenly spaced across the tone
-    /// range. Two or more; the editor enforces that.
-    var lutStops: [Color] = [
-        .rgb(10, 10, 40), .rgb(180, 40, 70), .rgb(245, 180, 60), .rgb(255, 250, 220),
+    /// ``Tone/lut``'s stops: each one a tone (`0` black … `1` white) and the
+    /// colour it becomes, with everything between two of them interpolated.
+    /// Two or more; the editor enforces that.
+    ///
+    /// The positions are the point. They used to be implicit — four colours
+    /// spaced evenly — which made this a gradient with the input side taken on
+    /// trust, and a gradient is only the special case of a look-up table in
+    /// which every stop happens to sit at an even interval.
+    var lutStops: [ASCIIToneCurve.Stop] = [
+        .init(at: 0, to: .rgb(10, 10, 40)),
+        .init(at: 0.3, to: .rgb(180, 40, 70)),
+        .init(at: 0.65, to: .rgb(245, 180, 60)),
+        .init(at: 1, to: .rgb(255, 250, 220)),
     ]
 
     // MARK: - Colour modes
@@ -178,32 +187,11 @@ struct ImageDemoSettings: Equatable {
                 (.rgb(0, 0, 0), duotoneShadow), (.rgb(255, 255, 255), duotoneHighlight),
             ])
         case .lut:
-            return Self.curve(throughStops: lutStops)
+            return lutStops.count >= 2 ? ASCIIToneCurve(lutStops) : nil
         }
     }
 
     var ditheringMode: DitheringMode { dithering ? .floydSteinberg : .none }
-
-    /// A curve through `stops`, read as evenly spaced across the tone range.
-    ///
-    /// This is what makes an ``ASCIIToneCurve`` a look-up table: the stops name
-    /// the colours the image is to be MADE of, from its darkest tone to its
-    /// lightest, and every tone between two of them is interpolated. Two stops
-    /// is a duotone; more is a gradient map.
-    ///
-    /// The `from` side is a grey, because a curve is a function of luminance
-    /// alone — see ``ASCIIToneCurve``. Even spacing is the editor's model too
-    /// (``GradientEditorPanel`` spaces its stops evenly), so the two agree by
-    /// construction rather than by a conversion nobody would maintain.
-    static func curve(throughStops stops: [Color]) -> ASCIIToneCurve? {
-        guard stops.count >= 2 else { return nil }
-        let last = Double(stops.count - 1)
-        return ASCIIToneCurve(
-            stops.enumerated().map { index, colour in
-                let level = UInt8(clamping: Int((Double(index) / last * 255).rounded()))
-                return (Color.rgb(level, level, level), colour)
-            })
-    }
 
     // MARK: - Keeping the knobs coherent
 
@@ -232,7 +220,7 @@ struct ImageDemoSettings: Equatable {
         sampledColours = min(64, max(2, sampledColours))
         // A one-stop LUT is not a mapping; the editor can delete down to one,
         // so the floor is asserted here rather than hoped for.
-        if lutStops.count == 1 { lutStops.append(.rgb(255, 255, 255)) }
+        if lutStops.count == 1 { lutStops.append(.init(at: 1, to: .rgb(255, 255, 255))) }
     }
 
     /// The status bar's label for the colour mode — the same names the radio

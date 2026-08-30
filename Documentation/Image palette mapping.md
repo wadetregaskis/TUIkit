@@ -193,6 +193,49 @@ A stop may name a theme colour, resolved the same way a palette entry is. An
 unresolved stop drops out, and a curve left with fewer than two knots is inert
 rather than wrong.
 
+### Where a stop sits is a choice, and editing one has to show that
+
+The `from` side of a pair is read for its **luminance and nothing else** — that
+is what makes a curve a curve — so `ASCIIToneCurve.Stop` states it as a
+position on the tone axis (`0` black … `1` white) via `Stop.position` and
+`Stop(at:to:)`. A `from` written as any other colour still works; only its tone
+was ever consulted, and a grey is the one spelling that says so.
+
+Those positions are what distinguishes this from a gradient, and the
+distinction is easy to lose. A TUIkit gradient is a list of colours at *even*
+intervals; a curve is a list of colours at tones *you choose*. Four colours
+evenly spaced is a curve, but it is the special case, and an editor that can
+only produce that special case is a gradient editor wearing the wrong label —
+which is exactly what the demo shipped for a while.
+
+`ToneCurveEditorPanel` is the editor that can say the general case. It draws
+two aligned strips read **column by column** — the tone arriving above, the
+colour leaving below — with a marker under each stop:
+
+```
+ in  ████████████████████████████████████
+     ▲          ▲                  ▲
+ out ████████████████████████████████████
+```
+
+Two properties are worth stating because they are what make it usable rather
+than merely correct:
+
+- **Adding a stop changes nothing.** A new stop takes the colour the curve
+  already produces where it lands, so a curve can be refined rather than
+  restarted.
+- **The selection follows the stop, not the slot.** Moving a stop past its
+  neighbour re-sorts the list, and the panel re-finds the stop it was editing —
+  otherwise dragging one across another would silently hand you a different
+  stop to edit.
+
+The lower strip goes through `ASCIIToneCurve.color(atTone:)`, which is
+`apply(to:)` — the renderer's own path — rather than a second copy of the
+interpolation. It deliberately does NOT use `Color.quantisedRamp`, which
+repairs a gradient into a monotone one on a 256-colour terminal: a curve is not
+required to be monotone, and a preview that banded differently from the picture
+beside it would be worse than one that bands with it.
+
 ## Still open
 
 - **Should `.grayscale` become `.palette(.shades(24))` internally?** It is 24

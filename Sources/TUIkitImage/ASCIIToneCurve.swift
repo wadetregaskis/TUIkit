@@ -64,6 +64,27 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
             self.from = from
             self.to = to
         }
+
+        /// Where this stop sits on the tone axis: `0` is black, `1` is white.
+        ///
+        /// A curve is a function of LUMINANCE alone — see ``negatesChannels``
+        /// — so this is the whole of what `from` contributes. It answers `nil`
+        /// for a `from` that is still `.semantic`, which has no tone
+        /// until a palette resolves it; see ``ASCIIToneCurve/resolved(with:)``.
+        public var position: Double? {
+            guard let rgb = from.rgbComponents else { return nil }
+            return RGBA(r: rgb.red, g: rgb.green, b: rgb.blue).luminance / 255
+        }
+
+        /// A stop at `position` on the tone axis (`0` black … `1` white).
+        ///
+        /// `from` is written as the grey of that tone, which is not a loss:
+        /// only its luminance is ever read, and stating it as a grey is the
+        /// one spelling that says so.
+        public init(at position: Double, to: Color) {
+            let level = UInt8(clamping: Int((min(max(position, 0), 1) * 255).rounded()))
+            self.init(from: .rgb(level, level, level), to: to)
+        }
     }
 
     /// The curve as it is actually evaluated: sorted by the tone of each
@@ -169,6 +190,19 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
                 green: Self.mix(knots[lower].green, knots[upper].green, position),
                 blue: Self.mix(knots[lower].blue, knots[upper].blue, position)),
             alpha: pixel.a)
+    }
+
+    /// The colour this curve maps `tone` to, where `tone` is `0` (black)
+    /// through `1` (white).
+    ///
+    /// What an editor draws to show the mapping, and it goes through the same
+    /// `apply(to:)` the renderer does rather than repeating the
+    /// interpolation — a preview with maths of its own is a preview that can
+    /// disagree with the picture beside it.
+    public func color(atTone tone: Double) -> Color {
+        let level = UInt8(clamping: Int((min(max(tone, 0), 1) * 255).rounded()))
+        let mapped = apply(to: RGBA(r: level, g: level, b: level, a: 255))
+        return .rgb(mapped.r, mapped.g, mapped.b)
     }
 
     // MARK: - Internals
