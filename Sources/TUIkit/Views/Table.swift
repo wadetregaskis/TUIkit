@@ -929,9 +929,9 @@ where Value.ID: Hashable {
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             colors: ScrollbarColors(
-                thumb: palette.foregroundSecondary, track: palette.foregroundQuaternary,
+                thumb: palette.foregroundSecondary, track: ScrollbarColors.track(in: palette),
                 arrow: palette.foregroundTertiary))
-        let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
+        let emptyCell = ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
 
         // Content-only row lines; the bar cell is merged in at the END, keyed by
         // absolute line index, so an overscroll slide moves the rows and leaves
@@ -1255,7 +1255,7 @@ where Value.ID: Hashable {
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             colors: ScrollbarColors(
-                thumb: palette.foregroundSecondary, track: palette.foregroundQuaternary,
+                thumb: palette.foregroundSecondary, track: ScrollbarColors.track(in: palette),
                 arrow: palette.foregroundTertiary))
     }
 
@@ -1544,7 +1544,7 @@ where Value.ID: Hashable {
         // The bar is the rightmost interior column, merged in by absolute line
         // index so an overscroll slide moves the rows and leaves it where it
         // is (§1.5) — the same composition the single-line path uses.
-        let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
+        let emptyCell = ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
         while lines.count < contentHeight {
             lines.append(String(repeating: " ", count: contentWidth))
         }

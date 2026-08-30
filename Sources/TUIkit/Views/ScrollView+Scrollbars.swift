@@ -146,7 +146,7 @@ extension _ScrollViewCore {
             // accent while focused (see ScrollbarColors.focusIndicating).
             colors: .focusIndicating(
                 isFocused: isFocused, hoveredCell: handler.hoveredBarCell, context: context))
-        let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
+        let emptyCell = ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
         var lines = buffer.lines
         for index in 0..<height {
             let content = index < lines.count ? lines[index] : ""
@@ -200,7 +200,7 @@ extension _ScrollViewCore {
                 context: context))
         let corner =
             hasVerticalBar
-            ? ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
+            ? ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
             : ""
         var lines = buffer.lines
         lines.append(bar + corner)

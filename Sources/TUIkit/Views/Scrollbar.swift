@@ -382,13 +382,13 @@ struct ScrollbarColors {
         guard context.environment.isScrollEnabled else {
             return Self(
                 thumb: palette.foregroundTertiary,
-                track: palette.foregroundQuaternary,
-                arrow: palette.foregroundQuaternary)
+                track: Self.track(in: palette),
+                arrow: Self.track(in: palette))
         }
         guard isFocused else {
             return Self(
                 thumb: palette.foregroundSecondary,
-                track: palette.foregroundQuaternary,
+                track: Self.track(in: palette),
                 arrow: palette.foregroundTertiary,
                 hover: hoveredCell.map {
                     ($0, palette.hoveredForeground(palette.foregroundSecondary))
@@ -401,7 +401,7 @@ struct ScrollbarColors {
         let cycle = context.environment.selectionEmphasis.cycle(true)
         // A focused bar is already breathing the accent; the pointer says so by
         // stepping the cell it is over further, not by starting a second story.
-        let track = palette.foregroundQuaternary.resolve(with: palette)
+        let track = Self.track(in: palette)
         // The dim end strictly — it is the thumb's RESTING state, and a resting
         // thumb quieter than its groove is the hole this all exists to stop.
         // The bright end and every point between are the breath, and are
@@ -414,7 +414,7 @@ struct ScrollbarColors {
             in: palette, standingOffThePage: false)
         return Self(
             thumb: now,
-            track: palette.foregroundQuaternary,
+            track: Self.track(in: palette),
             arrow: now,
             hover: hoveredCell.map { ($0, palette.hoveredForeground(now)) })
     }
@@ -468,6 +468,19 @@ struct ScrollbarColors {
         let extreme: Color =
             renderedRatio(resting, .rgb(255, 255, 255)) >= renderedRatio(resting, .rgb(0, 0, 0))
             ? .rgb(255, 255, 255) : .rgb(0, 0, 0)
+        // The SMALLEST step that can be seen, not a fixed one: a fixed depth
+        // barely moved a colour already near an extreme and flung a mid-tone
+        // one across the range (Man Page measured a 5.50:1 breath, which is a
+        // flash rather than a breath). Largest surviving fraction first, so the
+        // first acceptable answer is the least movement that clears the floor.
+        for surviving in stride(from: 0.98, through: ViewConstants.chromePulseDepth, by: -0.02) {
+            let candidate = separated(
+                resting.compositing(surviving, over: extreme),
+                in: palette, standingOffThePage: false)
+            if renderedRatio(candidate, resting) >= ViewConstants.chromePulseFloor {
+                return candidate
+            }
+        }
         return separated(
             resting.compositing(ViewConstants.chromePulseDepth, over: extreme),
             in: palette, standingOffThePage: false)
@@ -525,7 +538,7 @@ struct ScrollbarColors {
     static func separated(
         _ thumb: Color, in palette: any Palette, standingOffThePage: Bool = true
     ) -> Color {
-        let track = palette.foregroundQuaternary.resolve(with: palette)
+        let track = Self.track(in: palette)
         let page = palette.background.resolve(with: palette)
         let floored = thumb.ensuringRenderedContrast(
             atLeast: ViewConstants.chromeSeparationFloor, against: track)
@@ -539,6 +552,73 @@ struct ScrollbarColors {
         if standsOff(offThePage) { return offThePage }
         let stepped = palette.hoveredForeground(offThePage)
         return standsOff(stepped) ? stepped : floored
+    }
+
+    /// The colour a scroll TRACK is drawn in: the palette's quietest rung,
+    /// moved along its own line until it is tellable from both the accent
+    /// drawn on it and the page it sits on.
+    ///
+    /// Six of the sixteen shipped profiles derive `foregroundQuaternary` within
+    /// the chrome-separation floor of their own accent, and Ocean's lands on
+    /// the SAME 256-colour entry: a groove the colour of its own thumb.
+    /// `separated` then pushes the thumb to an extreme to clear it, where it
+    /// has no room left to breathe — which is why a focused scrollbar did not
+    /// move on those profiles.
+    ///
+    /// Fixed here rather than in the derivation, deliberately. The requirement
+    /// belongs to the scrollbar: it is the one place the accent is drawn ON the
+    /// quietest rung, and constraining the rung itself would have moved a
+    /// colour that spinners, pickers and menu chrome also draw in — measured on
+    /// Grass, it took the quaternary from a muted green to a pale yellow to get
+    /// clear of the amber accent, which is a large change to a theme for one
+    /// control's benefit.
+    ///
+    /// Toward the page first at each step, because a groove wants to be the
+    /// quieter of the two; toward the ink when that direction runs out (Grass's
+    /// page is a teal its track already sits near, so quieting it further
+    /// erases it). Failing both, the palette's own rung stands: a groove too
+    /// close to its thumb is a worse bar than one too close to its page, and an
+    /// INVISIBLE groove is worse than either.
+    @MainActor
+    static func track(in palette: any Palette) -> Color {
+        let base = palette.foregroundQuaternary.resolve(with: palette)
+        let accent = palette.accent.resolve(with: palette)
+        let page = palette.background.resolve(with: palette)
+        let key = TrackKey(base: base, accent: accent, page: page)
+        if let cached = trackCache[key] { return cached }
+        let answer = resolvedTrack(base: base, accent: accent, page: page, ink: palette.foreground.resolve(with: palette))
+        // Sixteen palettes and one entry each; the cap is a backstop against an
+        // app generating palettes per frame, not a working set.
+        if trackCache.count > 64 { trackCache.removeAll(keepingCapacity: true) }
+        trackCache[key] = answer
+        return answer
+    }
+
+    private struct TrackKey: Hashable {
+        let base: Color
+        let accent: Color
+        let page: Color
+    }
+
+    /// Up to 24 quantisations per palette, so it is answered once and kept —
+    /// this is asked per scrollbar per frame.
+    @MainActor private static var trackCache: [TrackKey: Color] = [:]
+
+    private static func resolvedTrack(base: Color, accent: Color, page: Color, ink: Color) -> Color {
+        func acceptable(_ candidate: Color) -> Bool {
+            renderedRatio(candidate, accent) >= ViewConstants.chromeSeparationFloor
+                && renderedRatio(candidate, page) >= ViewConstants.chromeGrooveFloor
+        }
+        guard !acceptable(base) else { return base }
+        for step in 1...12 {
+            let phase = Double(step) / 12
+            for candidate in [
+                Color.lerp(base, page, phase: phase), Color.lerp(base, ink, phase: phase),
+            ] where acceptable(candidate) {
+                return candidate
+            }
+        }
+        return base
     }
 
     /// Two colours' contrast AS DRAWN — through the 256-colour cube, which is
@@ -600,7 +680,7 @@ struct ScrollbarPulse {
         .map { ScrollbarColors.separated($0, in: palette, standingOffThePage: false) }
             .map { accent in
                 ScrollbarColors(
-                    thumb: accent, track: palette.foregroundQuaternary, arrow: accent,
+                    thumb: accent, track: ScrollbarColors.track(in: palette), arrow: accent,
                     // The same step further the live draw takes, so the hovered
                     // cell breathes WITH the bar rather than sitting at a fixed
                     // tone while everything around it moves.

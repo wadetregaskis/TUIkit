@@ -36,7 +36,7 @@ struct ScrollbarPulseSeparationTests {
     func everyFrameIsSeparated() {
         var offenders: [String] = []
         for palette in palettes {
-            let track = palette.foregroundQuaternary.resolve(with: palette)
+            let track = ScrollbarColors.track(in: palette)
             var environment = EnvironmentValues()
             environment.palette = palette
             let cycle = SelectionEmphasisClock(environment: environment).cycle(true)

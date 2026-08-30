@@ -1207,7 +1207,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             colors: ScrollbarColors(
-                thumb: palette.foregroundSecondary, track: palette.foregroundQuaternary,
+                thumb: palette.foregroundSecondary, track: ScrollbarColors.track(in: palette),
                 arrow: palette.foregroundTertiary))
     }
 
@@ -1227,7 +1227,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     ) -> (lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun]) {
         let palette = context.environment.palette
         let contentHeight = bar.count
-        let emptyCell = ANSIRenderer.colorize(" ", background: palette.foregroundQuaternary)
+        let emptyCell = ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
         func barCell(at line: Int) -> String { line < bar.count ? bar[line] : emptyCell }
 
         // Content-only row lines. The bar cell is merged in at the END, keyed by

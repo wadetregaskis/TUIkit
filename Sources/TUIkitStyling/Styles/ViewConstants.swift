@@ -113,6 +113,15 @@ public enum ViewConstants {
     /// a visible change and never more than a breath.
     public static let chromePulseDepth: Double = 0.8
 
+    /// The least contrast a scroll TRACK keeps against the page it sits on.
+    ///
+    /// A groove is meant to be quiet, not absent. 1.45 is just under the
+    /// quietest the shipped profiles derived on their own (Red's 1.49), so
+    /// constraining the track against the ACCENT — which moves it along the
+    /// foreground-to-background line — cannot make any of them fainter than the
+    /// faintest that was already shipping.
+    public static let chromeGrooveFloor: Double = 1.45
+
     /// Accent opacity for selection indicator bullets.
     public static let selectionIndicator: Double = 0.60
 

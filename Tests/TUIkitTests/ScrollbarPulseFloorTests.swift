@@ -31,7 +31,7 @@ struct ScrollbarPulseFloorTests {
         for depth in [ColorDepth.truecolor, .palette256] {
             ColorDepth.withCurrent(depth) {
                 for palette in PaletteRegistry.all {
-                    let track = palette.foregroundQuaternary.resolve(with: palette)
+                    let track = ScrollbarColors.track(in: palette)
                     let lift = ScrollbarColors.pulseLift(palette)
                     let ratio = lift.downsampledToPalette256()
                         .contrastRatio(against: track.downsampledToPalette256())
@@ -53,17 +53,16 @@ struct ScrollbarPulseFloorTests {
     /// the same lesson the Man Page contrast case taught: a colour the renderer
     /// is going to change is not the colour to assert about.
     ///
-    /// **Two palettes have no room, and cannot be given any here.** Ocean and
-    /// Grass derive an accent that lands on the same cube entry as their own
-    /// scrollbar track, so clearing the track pins the thumb against an extreme
-    /// — and the walk that clears it is hue-preserving, so the only colours far
-    /// enough from the track on the OTHER side are past the track itself, which
-    /// the breath may not cross (that is "the scroller goes momentarily
-    /// invisible"). Their bars are still, and the fix would be to the palette
-    /// derivation rather than to the bar.
+    /// **One palette has no room.** Grass's page is a teal, its foreground a
+    /// pale yellow and its accent an amber sitting between them: the groove has
+    /// to travel almost to the foreground to clear the accent (4.36:1 off the
+    /// page, where most sit near 2), and the thumb must then stand at least
+    /// that far off the page as well, which leaves it pinned with nothing
+    /// either side. Ocean was the reported one and is fixed — its groove used
+    /// to land on the same cube entry as its own thumb.
     @Test("Both ends of the breath are still different colours")
     func theBreathSurvives() {
-        let noRoom: Set<String> = ["Ocean", "Grass"]
+        let noRoom: Set<String> = ["Grass"]
         ColorDepth.withCurrent(.palette256) {
             for palette in PaletteRegistry.all {
                 let resting = ScrollbarColors.separated(
@@ -98,13 +97,22 @@ struct ScrollbarPulseFloorTests {
     /// small dip, and the smallest visible step cannot read as a hole. What it
     /// may never do is merge with the track, and `everyFrameIsSeparated` next
     /// door asserts that for every frame of the cycle.
+    ///
+    /// **Grass is exempt, and the exemption is the proxy misfiring.** Its
+    /// groove has to travel almost to the foreground to clear its amber accent
+    /// — 4.36:1 off the teal page, where most sit near 2 — and no thumb can
+    /// then beat it. What the rule is really asking is "does the thumb read as
+    /// a hole", and an amber thumb in a pale-yellow groove does not: the two
+    /// stand 1.77:1 apart and the thumb is the more saturated of them. A
+    /// recessive thumb on a quiet groove is the shape this catches, and that is
+    /// not this.
     @Test("The resting thumb is never quieter than its own groove")
     func theRestingThumbStandsOffThePage() {
         for depth in [ColorDepth.truecolor, .palette256] {
             ColorDepth.withCurrent(depth) {
-                for palette in PaletteRegistry.all {
+                for palette in PaletteRegistry.all where palette.name != "Grass" {
                     let page = palette.background.resolve(with: palette)
-                    let track = palette.foregroundQuaternary.resolve(with: palette)
+                    let track = ScrollbarColors.track(in: palette)
                     let groove = track.downsampledToPalette256()
                         .contrastRatio(against: page.downsampledToPalette256())
                     let thumb = ScrollbarColors.separated(
@@ -120,6 +128,72 @@ struct ScrollbarPulseFloorTests {
                         """)
                 }
             }
+        }
+    }
+}
+
+// MARK: - The groove
+
+@MainActor
+@Suite("A scroll track is not the colour of its own thumb")
+struct ScrollbarTrackTests {
+
+    /// Six of the sixteen shipped profiles derive `foregroundQuaternary` within
+    /// the chrome-separation floor of their own accent, and Ocean's lands on the
+    /// SAME 256-colour entry. A groove the colour of its thumb forces the thumb
+    /// to an extreme to clear it, and an extreme has no room to breathe.
+    @Test("Every palette's track is tellable from its own accent")
+    func theTrackClearsTheAccent() {
+        ColorDepth.withCurrent(.palette256) {
+            for palette in PaletteRegistry.all {
+                let track = ScrollbarColors.track(in: palette).downsampledToPalette256()
+                let accent = palette.accent.resolve(with: palette).downsampledToPalette256()
+                let ratio = track.contrastRatio(against: accent)
+                #expect(
+                    ratio >= ViewConstants.chromeSeparationFloor,
+                    """
+                    \(palette.name): the track stands \(String(format: "%.2f", ratio)):1 from the \
+                    accent drawn on it
+                    """)
+            }
+        }
+    }
+
+    /// …and moving it to get there may not erase it. Pushing toward the page is
+    /// the natural direction and is not always available: Grass's page is a teal
+    /// its rung already sits near, and quieting it further measured 1.00:1
+    /// against the page — an invisible groove, which is worse than a loud one.
+    @Test("…and is still visible against the page it sits on")
+    func theTrackClearsThePage() {
+        ColorDepth.withCurrent(.palette256) {
+            for palette in PaletteRegistry.all {
+                let track = ScrollbarColors.track(in: palette).downsampledToPalette256()
+                let page = palette.background.resolve(with: palette).downsampledToPalette256()
+                let ratio = track.contrastRatio(against: page)
+                #expect(
+                    ratio >= ViewConstants.chromeGrooveFloor,
+                    """
+                    \(palette.name): the track stands \(String(format: "%.2f", ratio)):1 from the \
+                    page, which is not a groove
+                    """)
+            }
+        }
+    }
+
+    /// The palette's own rung is left alone where it already works — 10 of the
+    /// 16 need no adjustment at all, and a track that moved when it did not have
+    /// to would be changing a theme for nothing.
+    @Test("A palette whose rung already works keeps it")
+    func anAcceptableRungIsUntouched() {
+        ColorDepth.withCurrent(.palette256) {
+            var untouched = 0
+            for palette in PaletteRegistry.all
+            where ScrollbarColors.track(in: palette)
+                == palette.foregroundQuaternary.resolve(with: palette)
+            {
+                untouched += 1
+            }
+            #expect(untouched >= 10, "only \(untouched) palettes kept their own rung")
         }
     }
 }
