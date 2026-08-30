@@ -374,15 +374,7 @@ extension RenderLoop {
                 "drag-autoscroll", AnimationRequest(frequency: 18), now: frameNowNanos)
         }
 
-        // A cancelled drag walks its preview home over ~200 ms. Same shape as
-        // the auto-scroll tick above: the loop is demand-driven, so the flight
-        // has to ask for its own frames or it would draw one and freeze.
-        if tuiContext.dragAndDropSession.driveReturnFlight(
-            nowNanos: UInt64(bitPattern: frameNowNanos)) != nil
-        {
-            _ = animationScheduler?.request(
-                "drag-return", AnimationRequest(frequency: 30), now: frameNowNanos)
-        }
+        driveDragFlights(nowNanos: frameNowNanos, scheduler: animationScheduler)
 
         beginRenderPass()
 
@@ -556,6 +548,31 @@ extension RenderLoop {
         return recordActivity(
             usesPulse: (environment.volatileReadTracker?.reads ?? 0) > 0,
             usesCursor: cursorTimer?.didReadThisFrame ?? false)
+    }
+
+    /// Advances the two drag flights and keeps the frames coming while either
+    /// is running.
+    ///
+    /// A drag lifts its preview out of the row it came from over ~120 ms, and a
+    /// cancelled one walks it home over ~200 ms. Same shape as the auto-scroll
+    /// tick beside them: the loop is demand-driven, so each flight has to ask
+    /// for its own frames or it would draw one and freeze.
+    private func driveDragFlights(
+        nowNanos frameNowNanos: Int64, scheduler animationScheduler: AnimationScheduler?
+    ) {
+        if tuiContext.dragAndDropSession.driveLift(
+            nowNanos: UInt64(bitPattern: frameNowNanos))
+        {
+            _ = animationScheduler?.request(
+                "drag-lift", AnimationRequest(frequency: 30), now: frameNowNanos)
+        }
+
+        if tuiContext.dragAndDropSession.driveReturnFlight(
+            nowNanos: UInt64(bitPattern: frameNowNanos)) != nil
+        {
+            _ = animationScheduler?.request(
+                "drag-return", AnimationRequest(frequency: 30), now: frameNowNanos)
+        }
     }
 
     /// Renders the scene into the content area and returns the buffer together

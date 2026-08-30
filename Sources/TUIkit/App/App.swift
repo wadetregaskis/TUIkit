@@ -682,7 +682,11 @@ extension WindowGroup: SceneRenderable {
         // the cursor is the drag's ``DragPreviewAnchor`` (grab-point by
         // default — the pressed cell stays under the cursor, macOS-style),
         // resolved by the session so drops report the same frame.
-        if let drag = dragSession?.active, let frame = dragSession?.previewFrame() {
+        //
+        // The LIFTED frame: for the first ~120 ms the picture is still on its
+        // way out of the row it came from. See `liftedPreviewFrame()` for why
+        // that blend lives at the draw site rather than in the anchor math.
+        if let drag = dragSession?.active, let frame = dragSession?.liftedPreviewFrame() {
             centered.overlays.append(
                 OverlayLayer(
                     offsetX: frame.x,

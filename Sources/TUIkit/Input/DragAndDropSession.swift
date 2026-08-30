@@ -191,6 +191,25 @@ final class DragAndDropSession: @unchecked Sendable {
         /// changed) or not re-register at all (zone removed mid-drag), and
         /// its `isTargeted` observer must still be closed out either way.
         var targeted: Target?
+
+        /// When the lift began — the flight that carries the picture from
+        /// where the row WAS to the cursor. `nil` until the first frame that
+        /// drives it, so the flight is timed from when it is first drawn
+        /// rather than from a `begin` that may have happened a frame earlier.
+        var liftStartNanos: UInt64?
+
+        /// How far through the lift, `0`…`1`. Advanced by ``driveLift(nowNanos:)``
+        /// and read by ``previewFrame()``; `1` is "at the cursor", which is
+        /// where every drag spends all but its first fifth of a second.
+        var liftPhase: Double = 0
+
+        /// How long the picture takes to reach the cursor.
+        ///
+        /// Shorter than ``ReturnFlight/durationNanos``, and deliberately: a
+        /// drag is a gesture in progress and the pointer is already moving, so
+        /// a lift that took as long as the walk home would read as the preview
+        /// lagging the cursor rather than as it being picked up.
+        static let liftDurationNanos: UInt64 = 120_000_000
     }
 
     /// The dispatcher whose composited regions supply target geometry.
@@ -378,6 +397,67 @@ final class DragAndDropSession: @unchecked Sendable {
         guard let drag = active else { return nil }
         let origin = Self.previewOrigin(cursorX: drag.cursorX, cursorY: drag.cursorY, drag: drag)
         return (origin.x, origin.y, drag.preview.width, drag.preview.height)
+    }
+
+    /// Where the preview is actually PAINTED this frame — ``previewFrame()``
+    /// blended out of the row's own place for the first fraction of a second,
+    /// so the picture is seen to leave the row rather than to appear over the
+    /// pointer already carrying it. `originX`/`originY` is where the row sat at
+    /// the PRESS, so at phase 0 this lands exactly on the hole the list has
+    /// just opened where the row was.
+    ///
+    /// Deliberately NOT folded into ``previewFrame()``, which stays the anchor
+    /// math and nothing else. That frame is what a drop reports through
+    /// `DropInfo` and what a cancel measures its walk home from, and both of
+    /// those are questions about where the DRAG is, not about where its picture
+    /// has got to. The one visible consequence is that a cancel inside the
+    /// first 120 ms starts its walk from the cursor rather than from the
+    /// half-lifted picture; the alternative is a second source of truth for
+    /// "where the drag is" reaching the drop path, which is not a trade worth
+    /// making for a window that short.
+    func liftedPreviewFrame() -> (x: Int, y: Int, width: Int, height: Int)? {
+        guard let drag = active, let anchored = previewFrame() else { return nil }
+        let lifted = Self.lerp(
+            from: (drag.originX, drag.originY), to: (anchored.x, anchored.y),
+            phase: drag.liftPhase)
+        return (lifted.x, lifted.y, anchored.width, anchored.height)
+    }
+
+    /// Advances the lift and reports whether it is still running, so the render
+    /// loop can keep asking for frames — the loop is demand-driven, and a
+    /// flight that did not ask would draw one frame and freeze.
+    ///
+    /// The same shape as ``driveReturnFlight(nowNanos:)``: cell-stepped from
+    /// the clock rather than counted in frames, so a slow frame shortens the
+    /// flight instead of stretching it.
+    @discardableResult
+    func driveLift(nowNanos: UInt64) -> Bool {
+        guard var drag = active, drag.liftPhase < 1 else { return false }
+        let start = drag.liftStartNanos ?? nowNanos
+        let elapsed = nowNanos &- start
+        drag.liftStartNanos = start
+        guard elapsed < ActiveDrag.liftDurationNanos else {
+            drag.liftPhase = 1
+            active = drag
+            return false
+        }
+        let progress = Double(elapsed) / Double(ActiveDrag.liftDurationNanos)
+        // Ease out, exactly as the walk home does: most of the distance early,
+        // so the row reads as being picked UP rather than drifting off.
+        drag.liftPhase = 1 - (1 - progress) * (1 - progress)
+        active = drag
+        return true
+    }
+
+    /// A point `phase` of the way from `from` to `to`.
+    private static func lerp(
+        from: (x: Int, y: Int), to: (x: Int, y: Int), phase: Double
+    ) -> (x: Int, y: Int) {
+        guard phase < 1 else { return to }
+        return (
+            from.x + Int((Double(to.x - from.x) * phase).rounded()),
+            from.y + Int((Double(to.y - from.y) * phase).rounded())
+        )
     }
 
     /// Where the preview's top-left sits for a given cursor position — the

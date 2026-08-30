@@ -323,6 +323,18 @@ struct DragAndDropTests {
         let frame = tui.dragAndDropSession.previewFrame()
         #expect(frame?.x == 7 && frame?.y == 2, "cursor (8,2) − grab (1,0): \(String(describing: frame))")
 
+        // Past the lift: for its first ~120 ms the picture is still on its way
+        // out of the chip it came from, and is PAINTED between the two. The
+        // anchor math above is what it is flying to; this is what the scene
+        // draws once it has arrived. (The render loop drives this; a test that
+        // renders a scene by hand has to say so.)
+        // Twice: the first call anchors the flight's start, as
+        // `driveReturnFlight` does, and the second advances it past the end.
+        tui.dragAndDropSession.driveLift(nowNanos: 0)
+        tui.dragAndDropSession.driveLift(nowNanos: DragAndDropSession.ActiveDrag.liftDurationNanos)
+        #expect(
+            tui.dragAndDropSession.liftedPreviewFrame().map { ($0.x, $0.y) } ?? (-1, -1) == (7, 2))
+
         let scene = WindowGroup { self.makeTree(log) }
         let composited = scene.renderScene(context: context)
             .compositingOverlays(maxWidth: 30, maxHeight: 8, palette: context.environment.palette)
