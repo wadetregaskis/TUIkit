@@ -125,7 +125,7 @@ struct CompositePunchTests {
 
         let copied = base.composited(with: popup, at: (x: 3, y: 0))
         #expect(copied.animatedCells.count == 1)
-        let kept = try? #require(copied.animatedCells.first)
+        let kept = copied.animatedCells.first
         #expect(kept?.offsetX == 2)
         #expect(kept?.width == 1)
         #expect(kept?.frames == ["a", "d"], "the cut took the wrong cells")
