@@ -84,6 +84,27 @@ extension FrameBuffer {
             var blended = blend(
                 source: cell, destination: behind, alpha: coverage,
                 surface: surface, defaultForeground: defaultForeground)
+            // A change the display cannot represent is not drawn as a change.
+            // See `settled(_:replacing:)`.
+            if coverage != nil {
+                // Against what the destination SHOWS, not what it names: a
+                // cell with no background of its own is not transparent to the
+                // terminal, it is the surface — which is the whole reason the
+                // arithmetic above reads it that way too. Comparing against
+                // `nil` skipped exactly the cells the fault was reported on.
+                let foreground = Self.settled(
+                    blended.foreground, replacing: behind?.foreground ?? defaultForeground)
+                let background = Self.settled(
+                    blended.background, replacing: behind?.background ?? surface)
+                if foreground != blended.foreground || background != blended.background {
+                    blended.foreground = foreground
+                    blended.background = background
+                    blended.style =
+                        blended.style
+                        .settingForeground(foreground)
+                        .settingBackground(background)
+                }
+            }
             // Inside a span, "no background" cannot be left unsaid. SGR 49 is
             // the TERMINAL's default — white on a light profile — and a span is
             // spliced into a row that opened with the PAGE's, so a cell emitted
@@ -127,6 +148,43 @@ extension FrameBuffer {
         // background would otherwise reach the cell after it.
         span += SGRState().rendered(changingFrom: emitted)
         return span
+    }
+
+    /// A colour the display cannot tell from the one it is replacing, left as
+    /// it was.
+    ///
+    /// A composite at a low alpha lands very close to what is behind it, and on
+    /// a 256-colour terminal "very close" can still quantise to a distant cube
+    /// entry: the cube is sparse, and the nearest entry to a faintly tinted
+    /// near-black may be a saturated one. Reported as a label at 1% opacity
+    /// drawing a visible green band over the demo behind it — the arithmetic was
+    /// right to within three units per channel, and the cube turned three units
+    /// into ninety-five.
+    ///
+    /// The rule is "never round further from the truth than staying put would
+    /// be": if the blended colour is nearer to what was already there than to
+    /// the entry it would otherwise take, it keeps what was already there. That
+    /// makes the composite MONOTONE in the only sense a cell grid can be —
+    /// nothing changes until the change is big enough to be represented — and
+    /// it is why 1% now looks like 1%.
+    ///
+    /// Only where the display quantises. A truecolor terminal draws what it is
+    /// given and the two are never further apart than they are.
+    private static func settled(_ blended: Color?, replacing existing: Color?) -> Color? {
+        guard ColorDepth.current == .palette256, let blended, let existing else { return blended }
+        guard let truth = blended.rgbComponents, let was = existing.rgbComponents,
+            let entry = blended.downsampledToPalette256().rgbComponents
+        else { return blended }
+        func squaredDistance(
+            _ lhs: (red: UInt8, green: UInt8, blue: UInt8),
+            _ rhs: (red: UInt8, green: UInt8, blue: UInt8)
+        ) -> Int {
+            let red = Int(lhs.red) - Int(rhs.red)
+            let green = Int(lhs.green) - Int(rhs.green)
+            let blue = Int(lhs.blue) - Int(rhs.blue)
+            return red * red + green * green + blue * blue
+        }
+        return squaredDistance(truth, was) <= squaredDistance(truth, entry) ? existing : blended
     }
 
     /// The destination's cell with the source's paint composited onto its

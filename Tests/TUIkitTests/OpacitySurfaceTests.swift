@@ -76,4 +76,60 @@ struct OpacitySurfaceTests {
             span.components(separatedBy: named).count - 1 <= 1,
             "an uncovered column was given a background: \(span.debugDescription)")
     }
+
+    @Test("A change the cube cannot represent is not drawn as a change")
+    func imperceptibleChangesSettle() {
+        // 1% of a bright colour over a near-black page lands about three units
+        // per channel away from it — and the 256-colour cube's nearest entry to
+        // a faintly tinted near-black is a SATURATED one, so three units became
+        // ninety-five and 1% opacity drew a visible green band.
+        let band = ANSIRenderer.colorize(String(repeating: "▒", count: 6), foreground: accent)
+        let label = ANSIRenderer.colorize(
+            "  x  ", foreground: surface, background: .rgb(204, 255, 51))
+        func backgrounds(atAlpha alpha: Double) -> Set<String> {
+            let span = FrameBuffer.blendedSpan(
+                source: label, destination: band, columns: 0..<5, destinationShift: 0,
+                alpha: { _ in alpha }, surface: surface, defaultForeground: .rgb(200, 200, 200))
+            return Set(
+                span.components(separatedBy: "\u{1B}[").compactMap { part in
+                    part.contains("48;") ? String(part.prefix(while: { $0 != "m" })) : nil
+                })
+        }
+        ColorDepth.withCurrent(.palette256) {
+            let page = ANSIRenderer.backgroundCodes(for: surface).joined(separator: ";")
+            // At 1% every cell keeps the page: the composite is closer to what
+            // was there than to the entry it would otherwise have taken.
+            let faint = backgrounds(atAlpha: 0.01)
+            #expect(
+                faint.allSatisfy { $0.contains(page) },
+                "1% painted something: \(faint)")
+            // At a strength the cube CAN represent, it is drawn — the rule
+            // settles what cannot be shown, it does not suppress the effect.
+            let real = backgrounds(atAlpha: 0.4)
+            #expect(
+                real.contains(where: { !$0.contains(page) }),
+                "40% painted nothing: \(real)")
+        }
+    }
+
+    @Test("Nothing settles on a terminal that draws what it is given")
+    func truecolorIsUntouched() {
+        // The rule exists because the cube is sparse. A truecolor terminal has
+        // no entries to round to, and rounding toward the backdrop there would
+        // be discarding a difference it could have shown.
+        let band = ANSIRenderer.colorize(String(repeating: "▒", count: 6), foreground: accent)
+        let label = ANSIRenderer.colorize(
+            "  x  ", foreground: surface, background: .rgb(204, 255, 51))
+        ColorDepth.withCurrent(.truecolor) {
+            let span = FrameBuffer.blendedSpan(
+                source: label, destination: band, columns: 0..<5, destinationShift: 0,
+                alpha: { _ in 0.01 }, surface: surface, defaultForeground: .rgb(200, 200, 200))
+            let page = ANSIRenderer.backgroundCodes(for: surface).joined(separator: ";")
+            #expect(
+                !span.components(separatedBy: "\u{1B}[").allSatisfy {
+                    !$0.contains("48;") || $0.contains(page)
+                },
+                "truecolor rounded a difference it could have drawn: \(span.debugDescription)")
+        }
+    }
 }

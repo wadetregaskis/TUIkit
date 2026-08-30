@@ -608,6 +608,35 @@ frame CONTENT, so a repeated frame costs neither a wake nor a write. Measured
 unchanged either way: the Example's breathing fade replays at the same byte
 rate and CPU before and after the refinements.
 
+### 9.9 A change the cube cannot represent is not a change
+
+1% opacity drew a visible band. The arithmetic was right: 1% of a bright colour
+over a near-black page lands about three units per channel away from it. The
+256-colour cube is what turned three units into ninety-five — it is sparse, and
+the nearest entry to a faintly tinted near-black is a SATURATED one, so two
+cells whose true colours differed by three units quantised to entries ninety-five
+apart. It also produced the asymmetry reported alongside it: a space cell (whose
+paint is the source's field) and a glyph cell (whose paint is that field with
+the ink mixed in by its coverage) differ by a few units at any alpha, correctly,
+and the cube separated them visibly at low ones.
+
+The rule is **never round further from the truth than staying put would be**: if
+a blended colour is nearer to what the destination already showed than to the
+entry it would otherwise take, it keeps what was already there. That makes the
+composite monotone in the only sense a cell grid can be — nothing changes until
+the change is large enough to be represented — and it is why 1% now looks like
+1%. Measured across the Layering page's fourth demo: 1% draws nothing, 5%
+`005f00`, 10–15% `5f5f00`, 20–30% `5f8700`, 40% `87af00`.
+
+"Already showed", not "already named": a cell with no background of its own is
+not transparent to the terminal, it is the surface, which is the same reading
+the arithmetic above it uses. Comparing against a `nil` background skipped
+exactly the cells the fault was reported on.
+
+Only where the display quantises. A truecolor terminal draws what it is given,
+and rounding toward the backdrop there would be discarding a difference it could
+have shown.
+
 ### 9.8 A composite may not say SGR 49
 
 A blended span is spliced into a row that `FrameDiffWriter.buildLine` opened
