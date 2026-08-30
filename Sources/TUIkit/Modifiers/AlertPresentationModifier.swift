@@ -216,11 +216,13 @@ extension AlertPresentationModifier: Renderable {
         //
         // Dropped here instead, for both styles, so inertness follows from
         // presenting rather than from a rendering detail that only one style
-        // performs. The runs go with them: the page cannot be seen, so
-        // repainting it on a clock is work with no picture at the end of it,
-        // and it would hold the animation clock open behind a modal.
+        // performs.
+        //
+        // The RUNS stay: an alert always dims, so the page around it is on
+        // screen and has to keep moving. `dimmedAsBackdrop` flattens their
+        // frames with the rows, and `composited` punches out whatever the
+        // alert covers. See the same note on `ModalPresentationModifier`.
         baseBuffer.hitTestRegions = []
-        baseBuffer.animatedCells = []
 
         // Render the alert against the CONTENT AREA (screen minus app header and
         // status bar), not the full terminal height, in the alert section. The

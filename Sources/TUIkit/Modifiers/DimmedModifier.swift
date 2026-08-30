@@ -94,28 +94,86 @@ extension FrameBuffer {
     /// backdrop MUST be fully inert while the modal is up: clicks on dimmed
     /// controls must not fire (the modal intercepts input), and a popover/picker
     /// that was open behind the modal must not keep drawing half-bright on top.
+    ///
+    /// ``FrameBuffer/animatedCells`` are **kept**, each frame flattened by the
+    /// same rule as the lines. Inert is a statement about INPUT: a backdrop the
+    /// user can see is a backdrop that has to keep moving, and a run is the only
+    /// way it can move without a full render per tick. Dropped, an indeterminate
+    /// bar behind a sheet advanced only when something else happened to render —
+    /// which on the Example's Progress page was about 2.5 times a second against
+    /// the 30 it managed with no dialog up, and every one of those ticks a whole
+    /// re-render of page, dim and dialog.
+    ///
+    /// A run whose frames all flatten to the SAME picture is dropped instead:
+    /// the block glyphs an indeterminate bar animates in are ornaments, so a
+    /// `.pulse` bar has nothing left to show once they are spaces, and keeping
+    /// its run alive would hold the clock open to repaint an unchanging row.
     public func dimmedAsBackdrop(foreground: Color, background: Color) -> FrameBuffer {
         guard !isEmpty else { return self }
         let width = self.width
-        let dimmed = lines.map { line -> String in
-            let cleaned = String(line.stripped.map { DimmedOrnaments.characters.contains($0) ? " " : $0 })
-            // Pad in CELLS, not code units: `padding(toLength:)` counts UTF-16
-            // units, so a line with CJK (1 unit, 2 cells) came out too wide and
-            // NFD combining sequences (2 units, 1 cell) too narrow — the
-            // backdrop's right edge then drifted behind every modal over such
-            // content. `padToVisibleWidth` measures like the rest of the layout.
-            let paddedText = cleaned.padToVisibleWidth(width)
-            var style = TextStyle()
-            style.foregroundColor = foreground
-            style.backgroundColor = background
-            style.isDim = true
-            // Terminate the persistent background at the line's edge — left
-            // active it bleeds into whatever is composited to the right (the
-            // same class as the List `.plain` selection bleed).
-            return ANSIRenderer.render(paddedText, with: style)
-                .withPersistentBackground(background) + ANSIRenderer.reset
+        let wrap = Flattening(foreground: foreground, background: background)
+        var result = FrameBuffer(lines: lines.map { wrap($0, toWidth: width) })
+        result.animatedCells = animatedCells.compactMap { run in
+            let dimmed = AnimatedCellRun(
+                offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
+                frames: run.frames.map { wrap($0, toWidth: run.width) },
+                frameDuration: run.frameDuration, clock: run.clock)
+            return dimmed.isAnimating ? dimmed : nil
         }
-        return FrameBuffer(lines: dimmed)
+        return result
+    }
+}
+
+/// The one styling every flattened row and every frame of every flattened run
+/// is wrapped in, derived once.
+///
+/// Every one of them is the same two colours and the same dim, so
+/// `ANSIRenderer.render` was re-deriving one `TextStyle`'s codes, re-joining
+/// them and then re-scanning the result for resets to make the background
+/// persistent — per line, and per frame of every run on the page. A backdrop
+/// carrying a few indeterminate progress bars is several hundred of those a
+/// render. See ``ANSIRenderer/styleSequence(for:)``, which exists for exactly
+/// this and says so.
+private struct Flattening {
+    private let prefix: String
+    private let suffix: String
+
+    init(foreground: Color, background: Color) {
+        var style = TextStyle()
+        style.foregroundColor = foreground
+        style.backgroundColor = background
+        style.isDim = true
+        let backgroundCode = ANSIRenderer.backgroundCode(for: background)
+        // Byte-for-byte what `render(_:with:) + withPersistentBackground(_:)`
+        // produced: the persistent background re-states itself after each
+        // reset, and flattened text is stripped, so the only reset is the one
+        // `render` closes with. The trailing reset terminates the background at
+        // the line's edge — left active it bleeds into whatever is composited
+        // to the right (the same class as the List `.plain` selection bleed).
+        if let sequence = ANSIRenderer.styleSequence(for: style) {
+            prefix = backgroundCode + sequence
+            suffix = ANSIRenderer.reset + backgroundCode + ANSIRenderer.reset
+        } else {
+            prefix = backgroundCode
+            suffix = ANSIRenderer.reset
+        }
+    }
+
+    /// One row — or one frame of a run covering part of a row — stripped of its
+    /// styling and ornaments and re-rendered dim.
+    ///
+    /// Shared so that a run's frames are flattened by exactly the rule its row
+    /// was: the splice puts them into a line that is one uniform dim span, and
+    /// a frame carrying any other styling would show as a bright notch in it.
+    func callAsFunction(_ text: String, toWidth width: Int) -> String {
+        let cleaned = String(
+            text.stripped.map { DimmedOrnaments.characters.contains($0) ? " " : $0 })
+        // Pad in CELLS, not code units: `padding(toLength:)` counts UTF-16
+        // units, so a line with CJK (1 unit, 2 cells) came out too wide and
+        // NFD combining sequences (2 units, 1 cell) too narrow — the
+        // backdrop's right edge then drifted behind every modal over such
+        // content. `padToVisibleWidth` measures like the rest of the layout.
+        return prefix + cleaned.padToVisibleWidth(width) + suffix
     }
 }
 

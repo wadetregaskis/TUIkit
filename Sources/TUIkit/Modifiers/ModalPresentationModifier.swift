@@ -217,11 +217,22 @@ extension ModalPresentationModifier: Renderable {
         //
         // Dropped here instead, for both styles, so inertness follows from
         // presenting rather than from a rendering detail that only one style
-        // performs. The runs go with them: the page cannot be seen, so
-        // repainting it on a clock is work with no picture at the end of it,
-        // and it would hold the animation clock open behind a modal.
+        // performs.
         baseBuffer.hitTestRegions = []
-        baseBuffer.animatedCells = []
+        // The RUNS are a different question, and they used to go with the
+        // regions on the same line of reasoning — "the page cannot be seen".
+        // That is true of a cover and false of a sheet, which shows the whole
+        // dimmed page around a small dialog. Dropped there, an indeterminate
+        // bar behind the dialog had no run to replay, so it advanced only when
+        // something else happened to render: measured on the Example's
+        // Progress page, about 2.5 pictures a second against the 30 it manages
+        // with nothing presented, each one a full re-render of page, dim and
+        // dialog rather than a splice. Kept, `dimmedAsBackdrop` flattens the
+        // frames with the rows and the loop replays them; `composited` punches
+        // out whatever the dialog covers, so nothing repaints through it.
+        if style == .fullScreen {
+            baseBuffer.animatedCells = []
+        }
 
         // Render the modal content against the CONTENT AREA (screen minus app
         // header and status bar), not the full terminal height, in the modal
