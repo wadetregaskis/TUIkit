@@ -16,7 +16,15 @@ import TUIkit
 /// determinate bar should be advanced when its value changes, and no more often.
 private enum DemoProgress {
     static let interval: Duration = .milliseconds(500)
-    static let step: Double = 0.01
+
+    /// How many steps make a full sweep.
+    ///
+    /// A COUNT rather than a `Double` step, because 0.01 is not exact in binary
+    /// and a hundred additions of it come to 1.0000000000000007 — past the wrap
+    /// test, so the demo reset one step early and never once showed 100%. The
+    /// fraction is `Double(step) / Double(steps)` instead, which hits both ends
+    /// exactly.
+    static let steps = 100
 }
 
 /// Progress-view demo page.
@@ -37,7 +45,11 @@ struct ProgressViewPage: View {
     ///
     /// A real app's determinate bar is driven by its data. This is the
     /// demo's data.
-    @State private var demoFraction: Double = 0
+    @State private var demoStep = 0
+
+    /// The demo's value: the step count as a fraction, so 0 and 1 are both
+    /// reachable exactly.
+    private var demoFraction: Double { Double(demoStep) / Double(DemoProgress.steps) }
 
     /// The determinate track styles the top "Determinate" section cycles
     /// through with the `s` shortcut. The "Determinate styles" section below
@@ -96,8 +108,7 @@ struct ProgressViewPage: View {
     private func runDemoProgress() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: DemoProgress.interval)
-            demoFraction += DemoProgress.step
-            if demoFraction > 1 { demoFraction = 0 }
+            demoStep = (demoStep + 1) % (DemoProgress.steps + 1)
         }
     }
 
@@ -165,20 +176,22 @@ struct ProgressViewPage: View {
                     }
                     gaugeRow(label: "accessoryLinear         ", fraction: fraction, style: .accessoryLinear)
                     gaugeRow(label: "accessoryLinearCapacity ", fraction: fraction, style: .accessoryLinearCapacity)
-                    // No percent sign in a ring: its interior is four cells
-                    // and "100%" fills it corner to corner, where the bare
-                    // number sits in the middle of its own circle. The linear
-                    // gauges above keep theirs — they have a column to spare.
+                    // The bare number in the plain ring, whose whole content is
+                    // its read-out and whose four-cell interior "100%" fills
+                    // corner to corner. Its two siblings keep the unit: the
+                    // capacity ring is read as a proportion, which is what a
+                    // percent sign says, and the tiny one puts its text OUTSIDE
+                    // the glyph where there is room for it.
                     HStack(spacing: 3) {
                         circularGauge(
                             label: "accessoryCircular", fraction: fraction,
                             text: percent(fraction), style: .accessoryCircular)
                         circularGauge(
                             label: "…Capacity", fraction: fraction,
-                            text: percent(fraction), style: .accessoryCircularCapacity)
+                            text: "\(percent(fraction))%", style: .accessoryCircularCapacity)
                         circularGauge(
                             label: "…Tiny", fraction: fraction,
-                            text: percent(fraction), style: .accessoryCircularTiny)
+                            text: "\(percent(fraction))%", style: .accessoryCircularTiny)
                     }
 
                     // Non-percentage read-outs: the same gauges over other
