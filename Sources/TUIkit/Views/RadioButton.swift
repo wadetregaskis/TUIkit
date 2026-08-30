@@ -17,15 +17,54 @@ public enum RadioButtonOrientation: Sendable {
 
 // MARK: - Radio Button Item
 
-/// A single option in a radio button group.
+/// A single option in a radio button group: a value, a label, and — optionally
+/// — the controls that configure *that* option.
 ///
-/// Contains a value (for selection binding) and a label view.
+/// ```swift
+/// RadioButtonGroup(selection: $colour) {
+///     RadioButtonItem(.trueColor, "True colour")
+///     RadioButtonItem(.greys, "Greys") {
+///         Slider(value: $levels, in: 2...16, step: 1) { Text("Levels: \(levels)") }
+///     }
+/// }
+/// ```
+///
+/// ```
+///   ◯ True colour
+///   ● Greys
+///     Levels: 4  ├──●─────────┤
+/// ```
+///
+/// ## What the content is for
+///
+/// An option that takes a parameter — how many greys, which two colours, how
+/// wide — has nowhere sensible to put it but under the option it belongs to.
+/// Putting it beside the group instead leaves the reader to work out which
+/// option it configures, and putting each parameterised option in a group of
+/// its own (the other way to draw this) costs the arrow keys that walk the
+/// options.
+///
+/// The content is indented to start under the label, so it reads as part of the
+/// option rather than as the next one.
+///
+/// ## Only the selected option's content is live
+///
+/// A group disables every unselected option's content, exactly as it would be
+/// disabled by ``View/disabled(_:)`` — greyed, and not a focus stop. That is
+/// what makes the keyboard convention unambiguous: whatever is reachable below
+/// the group belongs to the option that is actually chosen. See
+/// ``RadioButtonGroup`` for the keys.
 public struct RadioButtonItem<Value: Hashable> {
     /// The value associated with this option.
     let value: Value
 
     /// The label view builder.
     let labelBuilder: @MainActor () -> AnyView
+
+    /// Builds the option's own controls, shown under it — `nil` for an option
+    /// that takes no parameters. Called only while the group renders, like any
+    /// other view builder.
+    let contentBuilder: (@MainActor () -> AnyView)?
 
     /// Creates a radio button item with a view label.
     ///
@@ -39,6 +78,27 @@ public struct RadioButtonItem<Value: Hashable> {
     ) {
         self.value = value
         self.labelBuilder = { AnyView(label()) }
+        self.contentBuilder = nil
+    }
+
+    /// Creates a radio button item with a view label and controls of its own.
+    ///
+    /// Parameter order follows `DisclosureGroup(content:label:)`, which this is
+    /// the option-list shape of.
+    ///
+    /// - Parameters:
+    ///   - value: The value for this option.
+    ///   - content: The controls that configure this option, shown under it.
+    ///   - label: A view builder closure that returns the label.
+    @MainActor
+    public init<Content: View, Label: View>(
+        _ value: Value,
+        @ViewBuilder content: @escaping () -> Content,
+        @ViewBuilder label: @escaping () -> Label
+    ) {
+        self.value = value
+        self.labelBuilder = { AnyView(label()) }
+        self.contentBuilder = { AnyView(content()) }
     }
 
     /// Creates a radio button item with a localized label.
@@ -57,6 +117,22 @@ public struct RadioButtonItem<Value: Hashable> {
         self.init(value, labelKey.localized)
     }
 
+    /// Creates a radio button item with a localized label and controls of its
+    /// own, shown under it.
+    ///
+    /// - Parameters:
+    ///   - value: The value for this option.
+    ///   - labelKey: The key for the label text.
+    ///   - content: The controls that configure this option.
+    @MainActor
+    public init<Content: View>(
+        _ value: Value,
+        _ labelKey: LocalizedStringKey,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.init(value, labelKey.localized, content: content)
+    }
+
     /// Creates a radio button item with a string label, displayed as written.
     ///
     /// - Parameters:
@@ -70,6 +146,26 @@ public struct RadioButtonItem<Value: Hashable> {
     ) {
         self.value = value
         self.labelBuilder = { AnyView(Text(label)) }
+        self.contentBuilder = nil
+    }
+
+    /// Creates a radio button item with a string label, displayed as written,
+    /// and controls of its own shown under it.
+    ///
+    /// - Parameters:
+    ///   - value: The value for this option.
+    ///   - label: The label text.
+    ///   - content: The controls that configure this option.
+    @MainActor
+    @_disfavoredOverload
+    public init<Content: View>(
+        _ value: Value,
+        _ label: String,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.value = value
+        self.labelBuilder = { AnyView(Text(label)) }
+        self.contentBuilder = { AnyView(content()) }
     }
 }
 
@@ -174,6 +270,50 @@ public enum RadioButtonGroupBuilder<Value: Hashable> {
 ///     RadioButtonItem("option3") { Text("Third Choice") }
 /// }
 /// ```
+///
+/// ## Options that carry their own controls
+///
+/// An option that takes a parameter can carry the control for it — see
+/// ``RadioButtonItem``. The control is drawn under its option, indented to the
+/// label, and it is live only while that option is the selection:
+///
+/// ```
+///   ◯ True colour
+///   ● Greys
+///     Levels: 4  ├──●─────────┤     ← live
+///   ◯ Sampled
+///     Colours: 8 ├────●───────┤     ← drawn, disabled
+/// ```
+///
+/// Every option's content is DRAWN whether or not it is selected, so the rows
+/// an option occupies do not move as the selection does — a list that
+/// rearranged itself while you arrowed down it would be unusable. What changes
+/// is whether the content is enabled.
+///
+/// ## From the keyboard
+///
+/// The same shape as ``DisclosureGroup`` and ``OutlineGroup``, which is what a
+/// group of options with things inside them is: **along** the group's axis to
+/// move between siblings, **Right** to go in, **Left** to come back out.
+///
+/// - The group is ONE Tab stop, however many options it has. **Up** and
+///   **Down** walk a vertical group, **Left** and **Right** a horizontal one;
+///   **Home**, **End** and **Page** jump to its ends, and Shift accelerates the
+///   on-axis arrow. **Return** or **Space** selects the option under the
+///   cursor.
+/// - **Right** (on a vertical group) steps out of the options and into the
+///   selected option's controls, because those are the only controls in the
+///   group that are enabled — an unselected option's are not focus stops at
+///   all, so there is never a question of which option you have stepped into.
+///   **Tab** does the same thing.
+/// - **Left** comes back to the options — as ordinary focus movement, so a
+///   control that wants Left for itself (a `Slider`, a `TextField`) keeps it
+///   and **Shift-Tab** is the way back out of that one.
+/// - The cross-axis arrow still leaves a group whose options carry nothing, as
+///   it always has: there is nothing in that direction to step into, so the key
+///   goes back to being focus movement. See
+///   ``View/radioButtonGroupEdgeBehavior(_:)`` for what the ON-axis arrow does
+///   at the first and last option.
 public struct RadioButtonGroup<Value: Hashable>: View {
     /// The binding to the selected value.
     let selection: Binding<Value>
@@ -369,8 +509,10 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         }
         let itemRegions = rendered.regions
 
-        var buffer = FrameBuffer(lines: rendered.lines)
-        buffer.animatedCells = rendered.animatedCells
+        // The items' own buffer, payload and all: an item's content may carry
+        // hit regions, animated runs and overlays of its own, and a bare
+        // `FrameBuffer(lines:)` here would silently drop every one of them.
+        var buffer = rendered.buffer
 
         // Mouse: a left-button release on an item row selects that item
         // and grants the group focus. Each item gets its own hit-test
@@ -444,13 +586,18 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         return buffer
     }
 
-    /// One orientation's worth of rendered items: the lines to show, the
-    /// per-item hit regions, and any focus indicator that animates itself —
-    /// all three anchored to the same origin, which is why they travel together.
+    /// The items as one buffer, and where each option's own row sits within it.
+    ///
+    /// The buffer rather than a list of lines, because an item's content brings
+    /// hit regions, animated runs, overlays and opacity regions of its own, and
+    /// a bare `FrameBuffer(lines:)` would drop all four.
+    ///
+    /// The regions are the group's click targets, and they cover the OPTION
+    /// rows only: the rows below an option belong to its content, which answers
+    /// the pointer itself.
     private struct RenderedItems {
-        let lines: [String]
+        let buffer: FrameBuffer
         let regions: [(x: Int, y: Int, width: Int)]
-        let animatedCells: [AnimatedCellRun]
     }
 
     private func renderVerticalWithRegions(
@@ -460,30 +607,24 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         hoveredIndex: Int,
         palette: Palette
     ) -> RenderedItems {
-        var lines: [String] = []
+        var buffer = FrameBuffer(lines: [])
         var regions: [(x: Int, y: Int, width: Int)] = []
-        var animatedCells: [AnimatedCellRun] = []
         for (index, item) in items.enumerated() {
-            let isFocused = handler.focusedIndex == index && groupHasFocus
-            let (line, indicator) = renderRadioButton(
+            let rendered = renderItem(
                 index: index,
                 item: item,
-                isFocused: isFocused,
-                groupHasFocus: groupHasFocus,
+                isFocused: handler.focusedIndex == index && groupHasFocus,
                 isSelected: selection.wrappedValue == item.value,
                 isHovered: hoveredIndex == index,
                 context: context,
                 palette: palette
             )
-            lines.append(line)
-            // One full-width row per item.
-            regions.append((x: 0, y: index, width: line.strippedLength))
-            // Each item starts its own row, so the bullet sits at column 0 of it.
-            if let indicator {
-                animatedCells.append(indicator.shifted(byX: 0, y: index))
-            }
+            // Each item starts where the last one ended — which is one row on
+            // for a plain option, and more when it carries content.
+            regions.append((x: 0, y: buffer.lines.count, width: rendered.optionWidth))
+            buffer.appendVertically(rendered.buffer)
         }
-        return RenderedItems(lines: lines, regions: regions, animatedCells: animatedCells)
+        return RenderedItems(buffer: buffer, regions: regions)
     }
 
     private func renderHorizontalWithRegions(
@@ -493,62 +634,52 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         hoveredIndex: Int,
         palette: Palette
     ) -> RenderedItems {
-        let rendered = items.enumerated().map { index, item in
-            let isFocused = handler.focusedIndex == index && groupHasFocus
-            return renderRadioButton(
+        let spacingWidth = 2
+        var buffer = FrameBuffer(lines: [])
+        var regions: [(x: Int, y: Int, width: Int)] = []
+        for (index, item) in items.enumerated() {
+            let rendered = renderItem(
                 index: index,
                 item: item,
-                isFocused: isFocused,
-                groupHasFocus: groupHasFocus,
+                isFocused: handler.focusedIndex == index && groupHasFocus,
                 isSelected: selection.wrappedValue == item.value,
                 isHovered: hoveredIndex == index,
                 context: context,
                 palette: palette
             )
+            // The same predicate `appendHorizontally` uses: a gap is charged
+            // only between two occupied column ranges, so the first item starts
+            // at column 0 whatever it rendered.
+            let originX = buffer.width > 0 ? buffer.width + spacingWidth : 0
+            regions.append((x: originX, y: 0, width: rendered.optionWidth))
+            buffer.appendHorizontally(rendered.buffer, spacing: spacingWidth)
         }
-
-        let spacingWidth = 2
-        var regions: [(x: Int, y: Int, width: Int)] = []
-        var animatedCells: [AnimatedCellRun] = []
-        var xCursor = 0
-        for (i, item) in rendered.enumerated() {
-            let w = item.text.strippedLength
-            regions.append((x: xCursor, y: 0, width: w))
-            // Every item shares the one row, so the bullet's column is wherever
-            // its item begins — the same cursor the hit regions are cut from.
-            if let indicator = item.indicator {
-                animatedCells.append(indicator.shifted(byX: xCursor, y: 0))
-            }
-            xCursor += w
-            if i < rendered.count - 1 {
-                xCursor += spacingWidth
-            }
-        }
-
-        let spacing = String(repeating: " ", count: spacingWidth)
-        return RenderedItems(
-            lines: [rendered.map(\.text).joined(separator: spacing)],
-            regions: regions,
-            animatedCells: animatedCells)
+        return RenderedItems(buffer: buffer, regions: regions)
     }
 
-    /// Renders one item's row.
+    /// One item, drawn: the option row, and under it whatever that option
+    /// carries.
+    private struct RenderedItem {
+        let buffer: FrameBuffer
+        /// The option row's own width — see ``RenderedItems``.
+        let optionWidth: Int
+    }
+
+    /// Renders one item: its indicator and label on the first row, and its
+    /// content — if it has any — indented underneath.
     ///
-    /// - Returns: the styled text, and — when this item holds the focus and its
-    ///   indicator is actually breathing — an ``AnimatedCellRun`` describing
-    ///   that one cell, anchored at the row's own origin for the caller to
-    ///   shift into place. The run is what lets the bullet pulse without the
-    ///   page being rendered again on every tick of the clock.
-    private func renderRadioButton(
+    /// The indent is the indicator plus the space after it, so the content
+    /// starts under the LABEL rather than under the bullet: an option and the
+    /// controls that configure it read as one thing.
+    private func renderItem(
         index: Int,
         item: RadioButtonItem<Value>,
         isFocused: Bool,
-        groupHasFocus: Bool,
         isSelected: Bool,
         isHovered: Bool,
         context: RenderContext,
         palette: Palette
-    ) -> (text: String, indicator: AnimatedCellRun?) {
+    ) -> RenderedItem {
         // Combine own + cascaded disabled (renderToBuffer's shadowing local does
         // not reach this helper).
         let isDisabled = self.isDisabled || !context.environment.isEnabled
@@ -612,10 +743,18 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
 
         let styledIndicator = ANSIRenderer.colorize(indicator, foreground: indicatorColor)
 
+        // Every item renders at its OWN identity, one step off the group's, and
+        // its label and content at one step further apiece. Without that the
+        // items would share the group's storage slots with each other AND with
+        // the group's own handler at index 0 — two sliders under two options
+        // would be one slider.
+        let itemContext = context.withChildIdentity(
+            erasedType: RadioButtonItem<Value>.self, index: index)
+
         // Render label, tagged so its Text resolves `.control(.radioButton)`
         // style entries — but only when not already inside another control (e.g.
         // a Picker's radio-group style, which keeps its `.picker` identity).
-        var labelContext = context
+        var labelContext = itemContext.withChildIdentity(erasedType: AnyView.self, index: 0)
         if labelContext.environment.controlKind == nil {
             labelContext.environment.controlKind = .radioButton
         }
@@ -629,12 +768,44 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
                 ?? palette.foreground
             labelContext.environment.foregroundStyle = palette.hoveredForeground(base)
         }
-        let labelView = item.labelBuilder()
-        let labelBuffer = labelView.renderToBuffer(context: labelContext)
-        let labelText = labelBuffer.lines.first ?? ""
+        let labelBuffer = item.labelBuilder().renderToBuffer(context: labelContext)
 
-        // Combine: indicator + label
-        return (styledIndicator + " " + labelText, indicatorRun)
+        // The indicator is one cell wide by construction — all three glyphs are
+        // — and the space after it makes two.
+        let indentWidth = indicator.strippedLength + 1
+        let indent = String(repeating: " ", count: indentWidth)
+        var lines = labelBuffer.lines.enumerated().map { row, line in
+            row == 0 ? styledIndicator + " " + line : indent + line
+        }
+        if lines.isEmpty { lines = [styledIndicator + " "] }
+
+        var buffer = FrameBuffer(lines: lines)
+        // A label is usually a `Text`, but it is a VIEW, and a view that
+        // rendered a button or an animated run has to keep it.
+        buffer.overlays = labelBuffer.shiftedOverlays(byX: indentWidth, y: 0)
+        buffer.hitTestRegions = labelBuffer.shiftedHitTestRegions(byX: indentWidth, y: 0)
+        buffer.animatedCells = labelBuffer.shiftedAnimatedCells(byX: indentWidth, y: 0)
+        buffer.opacityRegions = labelBuffer.shiftedOpacityRegions(byX: indentWidth, y: 0)
+        if let indicatorRun {
+            buffer.animatedCells.append(indicatorRun)
+        }
+        let optionWidth = lines[0].strippedLength
+
+        if let contentBuilder = item.contentBuilder {
+            // Disabled unless this option is the chosen one — so an unselected
+            // option's controls are neither editable nor focus stops, and
+            // whatever the keyboard reaches below the group belongs to the
+            // option that is actually selected. See ``RadioButtonItem``.
+            let contentView = contentBuilder()
+                .padding(.leading, indentWidth)
+                .disabled(isDisabled || !isSelected)
+            buffer.appendVertically(
+                TUIkitView.renderToBuffer(
+                    contentView,
+                    context: itemContext.withChildIdentity(erasedType: AnyView.self, index: 1)))
+        }
+
+        return RenderedItem(buffer: buffer, optionWidth: optionWidth)
     }
 }
 
