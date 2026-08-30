@@ -12,6 +12,7 @@ import TUIkit
 /// - Vertical layout (default)
 /// - Horizontal layout
 /// - Single-selection with binding
+/// - Options that carry the control that parameterises them
 /// - Disabled radio groups
 /// - Focus navigation with arrow keys
 /// - Live state changes demonstrating `@State` persistence across re-renders
@@ -19,8 +20,10 @@ struct RadioButtonPage: View {
     @State private var colorChoice: String = "blue"
     @State private var sizeChoice: String = "medium"
     @State private var layoutChoice: String = "vertical"
+    @State private var spacingChoice: String = "custom"
+    @State private var customSpacing = 3
 
-    // The five sections, each named once and placed by whichever arrangement
+    // The six sections, each named once and placed by whichever arrangement
     // fits. Extracted rather than duplicated per arrangement: `ViewThatFits`
     // builds every candidate, so a section written out four times would be four
     // separate pieces of state to keep in step.
@@ -60,6 +63,26 @@ struct RadioButtonPage: View {
         }
     }
 
+    /// An option that takes a parameter, carrying the control for it — the
+    /// shape `DisclosureGroup` has for a section and this has for an option.
+    ///
+    /// Every option's content is drawn whether it is selected or not, so the
+    /// rows do not move as the selection does; only the chosen one is live.
+    /// That is also what makes the keyboard unambiguous — Right leaves the
+    /// options for the only enabled control below them.
+    @ViewBuilder
+    private var withControlsGroup: some View {
+        DemoSection("page.radioButton.section.withControls") {
+            RadioButtonGroup(selection: $spacingChoice) {
+                RadioButtonItem("compact", "page.radioButton.spacingCompact")
+                RadioButtonItem("comfortable", "page.radioButton.spacingComfortable")
+                RadioButtonItem("custom", "page.radioButton.spacingCustom") {
+                    Stepper("page.radioButton.spacingCells", value: $customSpacing, in: 1...8)
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private var disabledGroup: some View {
         DemoSection("page.radioButton.section.disabled") {
@@ -89,18 +112,20 @@ struct RadioButtonPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            // Five short groups that used to run straight down the page, using
-            // a third of a wide terminal and none of the rest. Preferred
+            // Short groups that used to run straight down the page, using a
+            // third of a wide terminal and none of the rest. Preferred
             // arrangement first, then progressively narrower ones — the
             // `ViewThatFits(in: .horizontal)` shape the Animation page and the
             // track editor use. The groups are paired by kind: the two plain
-            // vertical groups, then the two that demonstrate a variation
-            // (horizontal orientation, disabled), then the readout.
+            // vertical groups, then the three that demonstrate a variation
+            // (horizontal orientation, per-option controls, disabled), then
+            // the readout.
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 4) {
                     colorGroup
                     sizeGroup
                     layoutGroup
+                    withControlsGroup
                     disabledGroup
                     currentSelections
                 }
@@ -111,6 +136,7 @@ struct RadioButtonPage: View {
                     }
                     VStack(alignment: .leading, spacing: 1) {
                         layoutGroup
+                        withControlsGroup
                         disabledGroup
                     }
                     currentSelections
@@ -122,6 +148,7 @@ struct RadioButtonPage: View {
                         layoutGroup
                     }
                     VStack(alignment: .leading, spacing: 1) {
+                        withControlsGroup
                         disabledGroup
                         currentSelections
                     }
@@ -130,6 +157,7 @@ struct RadioButtonPage: View {
                     colorGroup
                     sizeGroup
                     layoutGroup
+                    withControlsGroup
                     disabledGroup
                     currentSelections
                 }
@@ -143,6 +171,7 @@ struct RadioButtonPage: View {
                     "page.radioButton.help.jump",
                     "page.radioButton.help.fast",
                     "page.radioButton.help.select",
+                    "page.radioButton.help.enterContent",
                 ]
             )
 
