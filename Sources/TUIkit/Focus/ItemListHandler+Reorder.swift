@@ -1053,8 +1053,21 @@ extension ItemListHandler {
             focusedIndex = clampedRowIndex(reorder.grabbedOffset)
             return true
         }
-        focusedIndex = clampedRowIndex(
-            move(reorder.held, to: target) + reorder.primaryRank)
+        let landing = move(reorder.held, to: target)
+        focusedIndex = clampedRowIndex(landing + reorder.primaryRank)
+        // The rows the floating picture is about to BECOME draw blank until it
+        // has finished becoming them — the same rule the rows it walks back to
+        // follow when nothing moved. Without it the same rows are on screen
+        // twice while the cells spread back out into the grid: once in the list
+        // already laid out, and once in the air above it still condensed.
+        //
+        // `syncReturningRows` clears this the moment there is no flight, so a
+        // drop with no picture to settle (`.dimmed`, `.live`, a `List` row,
+        // which has no travel) blanks nothing.
+        let count = reorder.held.count
+        if count > 0 {
+            returningRows = IndexSet(integersIn: landing..<(landing + count))
+        }
         return true
     }
 

@@ -150,24 +150,18 @@ extension DragAndDropSession {
             // already marked them as waiting for the picture to arrive.
             cancelReturningToOrigin()
         } else {
-            // No flight on a successful landing, and not for want of trying:
-            // under `.cursor` the drop slot is placed AT the pointer and the
-            // picture is anchored to the pointer, so the two are the same place
-            // by construction. Aiming a flight at the slot (via the drawn
-            // bands, which is the only honest source) measured as a no-op in
-            // every case reachable by hand — and a flight that can only fire
-            // when the two disagree is a way of turning a geometry bug into
-            // 200 ms of visible motion.
+            // The picture settles where it already is rather than flying
+            // anywhere: under `.cursor` the drop slot is placed AT the pointer
+            // and the picture is anchored to the pointer, so the rows land
+            // exactly where it is. Aiming a flight at the slot was built and
+            // measured as a no-op in every case reachable by hand — and one
+            // that can only fire when those two disagree is a way of turning a
+            // geometry bug into a fifth of a second of visible motion.
             //
-            // What DOES jump at this moment is the cells: the picture is
-            // condensed (each value clipped to its column, joined by two
-            // spaces) and the row it becomes is the grid (every cell padded to
-            // its layout width). Animating that means the preview morphing into
-            // the RENDERED row, which is a different width and carries a
-            // background — and `begin` trims previews precisely so a row padded
-            // to its list's width cannot erase a column of the screen. That is
-            // a change to what a preview IS, not an animation on top of one.
-            end()
+            // What DOES move here is the CELLS. The picture is condensed and
+            // the row it becomes is the grid, and that used to happen between
+            // two frames; now it is the travel played backward.
+            settlePreviewInPlace()
         }
         return true
     }

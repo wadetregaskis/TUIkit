@@ -686,12 +686,14 @@ extension WindowGroup: SceneRenderable {
         // The LIFTED frame: for the first ~120 ms the picture is still on its
         // way out of the row it came from. See `liftedPreviewFrame()` for why
         // that blend lives at the draw site rather than in the anchor math.
-        if let drag = dragSession?.active, let frame = dragSession?.liftedPreviewFrame() {
+        if let frame = dragSession?.liftedPreviewFrame(),
+            let content = dragSession?.liftedPreviewContent()
+        {
             centered.overlays.append(
                 OverlayLayer(
                     offsetX: frame.x,
                     offsetY: frame.y,
-                    content: drag.preview,
+                    content: content,
                     level: .notification,
                     // Pinned to the pointer: clipped at the screen edge, never
                     // slid back onto it. Sliding is what made a wide preview

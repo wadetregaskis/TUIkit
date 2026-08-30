@@ -156,7 +156,28 @@ final class DragAndDropSession: @unchecked Sendable {
         let payload: Any
 
         /// The floating preview drawn at the cursor by the root scene render.
+        ///
+        /// The STEADY state — what the picture looks like for all but the first
+        /// fifth of a second of a drag, and what ``previewFrame()`` reports the
+        /// size of. See ``morph`` for the rest.
         let preview: FrameBuffer
+
+        /// The picture on its way from the row's own layout to ``preview``:
+        /// frame 0 is what the row looked like in place, the last is
+        /// ``preview``, and the ones between are the cells travelling.
+        ///
+        /// A `Table` row is the case this exists for. In the grid every cell is
+        /// padded out to its column's width; in the hand it is not — the values
+        /// are clipped to their columns and joined by two cells, because a row
+        /// you are carrying is not a slice of the grid. That difference is real
+        /// and it used to happen between two frames, so the cells appeared to
+        /// jump. Now they travel: closing up as the picture is lifted, and
+        /// spreading back out as it settles.
+        ///
+        /// Empty for a preview with nothing to travel — a `List` row, a
+        /// `.draggable` chip — and then the picture is simply ``preview``
+        /// throughout.
+        let morph: [FrameBuffer]
 
         /// Where the press landed WITHIN the dragged view (its local space)
         /// — the grab point ``DragPreviewAnchor/grabPoint`` keeps under the
@@ -361,6 +382,7 @@ final class DragAndDropSession: @unchecked Sendable {
     ///     it is in the user's hand.
     func begin(
         payload: Any, preview: FrameBuffer,
+        morph: [FrameBuffer] = [],
         grabX: Int = 0, grabY: Int = 0,
         anchor: DragPreviewAnchor = .grabPoint,
         source: ViewIdentity? = nil
@@ -372,10 +394,14 @@ final class DragAndDropSession: @unchecked Sendable {
         // per blank. Trimmed HERE rather than at each producer, so all three
         // (`.draggable`, and List's and Table's `.cursor` reorder) agree.
         let preview = preview.trimmingTrailingBlankCells()
+        // Every frame of the travel gets the same trim, for the same reason —
+        // the wide end of a Table row's morph is exactly the padded-out row the
+        // trim exists for.
+        let morph = morph.map { $0.trimmingTrailingBlankCells() }
         // Clamped AFTER the trim: a press in the padding must still anchor the
         // image to the cursor, not to a column the preview no longer has.
         active = ActiveDrag(
-            payload: payload, preview: preview,
+            payload: payload, preview: preview, morph: morph,
             grabX: min(max(0, grabX), max(0, preview.width - 1)),
             grabY: min(max(0, grabY), max(0, preview.height - 1)),
             anchor: anchor,
@@ -421,6 +447,26 @@ final class DragAndDropSession: @unchecked Sendable {
             from: (drag.originX, drag.originY), to: (anchored.x, anchored.y),
             phase: drag.liftPhase)
         return (lifted.x, lifted.y, anchored.width, anchored.height)
+    }
+
+    /// The preview as it should be PAINTED this frame: the frame of the travel
+    /// the lift has reached, or the steady picture once it has arrived.
+    ///
+    /// Read together with ``liftedPreviewFrame()``, which says where to put it.
+    func liftedPreviewContent() -> FrameBuffer? {
+        guard let drag = active else { return nil }
+        return Self.morphFrame(drag.morph, phase: drag.liftPhase) ?? drag.preview
+    }
+
+    /// `morph`'s frame at `phase`, or `nil` when there is nothing to travel.
+    ///
+    /// Clamped rather than wrapped: a phase of exactly 1 is the last frame, not
+    /// the first, and a run that indexed modulo its count would snap the
+    /// picture back to the row's layout on its final tick.
+    static func morphFrame(_ morph: [FrameBuffer], phase: Double) -> FrameBuffer? {
+        guard !morph.isEmpty else { return nil }
+        let step = Int((phase * Double(morph.count - 1)).rounded())
+        return morph[min(morph.count - 1, max(0, step))]
     }
 
     /// Advances the lift and reports whether it is still running, so the render
@@ -560,6 +606,12 @@ final class DragAndDropSession: @unchecked Sendable {
     /// contract `Spinner` keeps.
     struct ReturnFlight {
         let preview: FrameBuffer
+
+        /// The travel, in the same order ``ActiveDrag/morph`` holds it — row
+        /// layout first, carried picture last. A flight plays it BACKWARD: the
+        /// picture is in the hand and is going back to being a row.
+        let morph: [FrameBuffer]
+
         let fromX: Int, fromY: Int
         let toX: Int, toY: Int
         var startNanos: UInt64?
@@ -588,14 +640,43 @@ final class DragAndDropSession: @unchecked Sendable {
     /// happened", and a row that disappears mid-air says that far less clearly
     /// than one that walks home.
     func cancelReturningToOrigin() {
+        guard let drag = active else {
+            end()
+            return
+        }
+        flyPreview(to: (x: drag.originX, y: drag.originY))
+    }
+
+    /// Ends the drag by letting the picture SETTLE where it is — the cells
+    /// spreading back out into the row they are about to become — rather than
+    /// vanishing at the cursor.
+    ///
+    /// The destination is deliberately not computed: under `.cursor` the drop
+    /// slot is placed AT the pointer and the picture is anchored TO the
+    /// pointer, so the rows land exactly where the picture already is. Aiming
+    /// the flight anywhere else could only ever be a way of turning a geometry
+    /// bug into a fifth of a second of visible motion. What moves here is the
+    /// CELLS, which is the whole difference between a carried row and a row.
+    func settlePreviewInPlace() {
+        guard let drag = active, !drag.morph.isEmpty, let frame = previewFrame() else {
+            end()
+            return
+        }
+        flyPreview(to: (x: frame.x, y: frame.y))
+    }
+
+    /// Ends the drag by sending the picture to `destination`, playing its
+    /// travel backward on the way — a row again by the time it lands.
+    private func flyPreview(to destination: (x: Int, y: Int)) {
         returnFlightFrame = nil
         if let drag = active, let frame = previewFrame(),
-            frame.x != drag.originX || frame.y != drag.originY
+            frame.x != destination.x || frame.y != destination.y || !drag.morph.isEmpty
         {
             returnFlight = ReturnFlight(
                 preview: drag.preview,
+                morph: drag.morph,
                 fromX: frame.x, fromY: frame.y,
-                toX: drag.originX, toY: drag.originY,
+                toX: destination.x, toY: destination.y,
                 startNanos: nil,
                 // Carried past `end()`, which is what clears `source`: the
                 // whole point is that the view stays gone while the picture
@@ -649,7 +730,10 @@ final class DragAndDropSession: @unchecked Sendable {
         let eased = 1 - (1 - progress) * (1 - progress)
         let x = flight.fromX + Int((Double(flight.toX - flight.fromX) * eased).rounded())
         let y = flight.fromY + Int((Double(flight.toY - flight.fromY) * eased).rounded())
-        returnFlightFrame = (x, y, flight.preview)
+        // Backward through the travel: `morph` runs row-layout-first, and a
+        // flight is the picture on its way back to being a row.
+        let content = Self.morphFrame(flight.morph, phase: 1 - eased) ?? flight.preview
+        returnFlightFrame = (x, y, content)
         return returnFlightFrame
     }
 

@@ -2230,7 +2230,7 @@ where Value.ID: Hashable {
         handler: any RowReorderHosting,
         wasActive: Bool,
         grabX: Int,
-        previewLine: @MainActor (Int) -> String?
+        previewLine: @MainActor (Int) -> [String]?
     ) {
         guard let session, !handler.reorderFloatingRows.isEmpty else { return }
         let carried = handler.reorderFloatingRows.compactMap(previewLine)
@@ -2242,8 +2242,16 @@ where Value.ID: Hashable {
         // they are plain rendered lines. One line per row here, so the grab
         // point moves down the block by however many of its rows sit above the
         // one the pointer took hold of.
+        //
+        // Each row hands back its whole travel, grid layout first; the block's
+        // frame N is every row's frame N, so a block of rows condenses as one
+        // picture rather than as a column of independently-timed ones.
+        let steady = FrameBuffer(lines: carried.map { $0.last ?? "" })
+        let morph = (0..<Self.previewMorphSteps).map { step in
+            FrameBuffer(lines: carried.map { $0[min(step, $0.count - 1)] })
+        }
         session.begin(
-            payload: RowReorderPayload(), preview: FrameBuffer(lines: carried),
+            payload: RowReorderPayload(), preview: steady, morph: morph,
             grabX: grabX, grabY: handler.reorderHeldRowsAboveGrab.count)
     }
 
@@ -2449,11 +2457,11 @@ where Value.ID: Hashable {
         // that actually starts pays for it.
         let palette = context.environment.palette
         let columnWidths = state.columnWidths
-        let previewLine: @MainActor (Int) -> String? = { index in
+        let previewLine: @MainActor (Int) -> [String]? = { index in
             guard data.indices.contains(index), !columnWidths.isEmpty else { return nil }
-            return previewRow(
+            return previewMorphLines(
                 item: data[index], columnWidths: columnWidths,
-                context: context, palette: palette)
+                steps: Self.previewMorphSteps, context: context, palette: palette)
         }
         // Where a ROW LINE's first cell sits in the buffer: past the border and
         // past the container's own padding. Not the same as the first clickable
@@ -2578,7 +2586,7 @@ where Value.ID: Hashable {
         interiorTopY: Int,
         contentColumns: Range<Int>,
         rowContentLeft: Int,
-        previewLine: @escaping @MainActor (Int) -> String?
+        previewLine: @escaping @MainActor (Int) -> [String]?
     ) -> @MainActor (MouseEvent) -> Bool {
         let captureHandler = state.handler
         let captureFocusID = state.focusID
@@ -3048,32 +3056,92 @@ where Value.ID: Hashable {
         var pulseFrames: [[String]]?
     }
 
-    /// The floating row a `.cursor` drag carries: the row's VALUES, condensed.
+    /// How many frames a row's travel is cut into.
+    ///
+    /// The flights ask for 30 fps and run for 120 ms (out) and 200 ms (back),
+    /// so eight frames is more than either can show — which is the right side
+    /// to err on: a frame nobody draws costs one string, and a step nobody
+    /// interpolates is a visible jump.
+    static var previewMorphSteps: Int { 8 }
+
+    /// The selection gutter both layouts open with — the indicator's cell and
+    /// the space after it. A row in the hand keeps it so the grab point,
+    /// measured from the row line's first cell, still lands in the first
+    /// column.
+    static var previewGutter: Int { 2 }
+
+    /// One row's picture on its way from the GRID to the HAND: `steps` lines,
+    /// the first laid out as the table draws the row and the last as a carried
+    /// row is drawn. One step asks for the hand layout alone.
     ///
     /// Not `renderRow`. What makes a grid row as wide as the table is not the
     /// spacing between columns — it is that every cell is padded out to its
-    /// layout width, and a `.flexible` column's width is all the room left over.
-    /// A row in your hand is not a slice of the grid, so it takes each value
-    /// clipped to its column (a pathological value still cannot out-grow the
-    /// row it came from) and joins them with two cells, with no padding and no
-    /// per-column alignment — there is no column to align within.
+    /// layout width, and a `.flexible` column's width is all the room left
+    /// over. A row in your hand is not a slice of the grid, so it takes each
+    /// value clipped to its column (a pathological value still cannot out-grow
+    /// the row it came from) and joins them with two cells, with no padding and
+    /// no per-column alignment — there is no column to align within.
     ///
-    /// It keeps the selection gutter, so the grab point — measured from the row
-    /// line's first cell — still lands in the first column.
-    private func previewRow(
+    /// The two layouts place the SAME clipped text and differ only in where.
+    /// Interpolating the x of each cell's text between them is the whole
+    /// animation — the difference used to happen between two frames, so the
+    /// cells appeared to jump.
+    ///
+    /// Each cell is placed no further left than the end of the one before it,
+    /// which cannot bind for any spacing the table allows but costs one
+    /// comparison to guarantee — two cells overlapping would corrupt the line
+    /// rather than merely look wrong.
+    private func previewMorphLines(
         item: Value,
         columnWidths: [Int],
+        steps: Int,
         context: RenderContext,
         palette: any Palette
-    ) -> String {
+    ) -> [String] {
         let foregroundColor = context.environment.foregroundStyle ?? palette.foreground
-        let cells = zip(columns, columnWidths).map { column, width in
-            ANSIRenderer.colorize(
-                column.value(for: item).truncatedToWidth(width, mode: column.truncationMode),
-                foreground: foregroundColor)
+        let count = min(columns.count, columnWidths.count)
+        let gutter = String(repeating: " ", count: Self.previewGutter)
+        guard count > 0, steps > 0 else { return Array(repeating: gutter, count: max(0, steps)) }
+
+        let clipped = (0..<count).map {
+            columns[$0].value(for: item)
+                .truncatedToWidth(columnWidths[$0], mode: columns[$0].truncationMode)
         }
-        let gap = String(repeating: " ", count: Self.previewColumnSpacing)
-        return "  " + cells.joined(separator: gap)
+        let widths = clipped.map(\.strippedLength)
+
+        var gridX: [Int] = []
+        var cursor = Self.previewGutter
+        for index in 0..<count {
+            gridX.append(
+                cursor
+                    + columns[index].alignment.childOffset(
+                        childWidth: widths[index], in: columnWidths[index]))
+            cursor += columnWidths[index] + columnSpacing
+        }
+        var handX: [Int] = []
+        cursor = Self.previewGutter
+        for index in 0..<count {
+            handX.append(cursor)
+            cursor += widths[index] + Self.previewColumnSpacing
+        }
+
+        return (0..<steps).map { step in
+            // A single step IS the hand layout — that is how `previewRow` asks
+            // for the steady picture.
+            let phase = steps > 1 ? Double(step) / Double(steps - 1) : 1
+            var line = gutter
+            var column = Self.previewGutter
+            for index in 0..<count {
+                let target =
+                    gridX[index]
+                    + Int((Double(handX[index] - gridX[index]) * phase).rounded())
+                let start = max(column, target)
+                line += String(repeating: " ", count: start - column)
+                line += ANSIRenderer.colorize(clipped[index], foreground: foregroundColor)
+                column = start + widths[index]
+            }
+            return line
+        }
     }
 
     /// Determines indicator symbol, indicator color, and background for a table row.
