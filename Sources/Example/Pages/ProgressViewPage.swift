@@ -225,9 +225,18 @@ struct ProgressViewPage: View {
         .appHeader {
             DemoAppHeader("menu.item.progress")
         }
-        // Merges with the page's back / scroll items. Cycles only the top
-        // "Determinate" section's style; the style catalogues below stay put.
+        // A page that declares status items declares the WHOLE bar — the app's
+        // own "⎋ back" is replaced rather than merged with, which is why every
+        // other page that has items of its own re-states it (Containers, Text
+        // Input, both Image pages). This one did not, so its bar was the only
+        // one in the app that did not say how to leave. Informational, with no
+        // action: Escape is still handled above this page, which is why the key
+        // worked all along and only the label was missing.
+        //
+        // Cycles only the top "Determinate" section's style; the style
+        // catalogues below stay put.
         .statusBarItems {
+            StatusBarItem(shortcut: Shortcut.escape, label: "status.back")
             StatusBarItem(shortcut: "s", label: "\(L("page.progressView.styleLabel")): \(current.name)") {
                 determinateStyleIndex =
                     (determinateStyleIndex + 1) % Self.cyclableStyles.count
