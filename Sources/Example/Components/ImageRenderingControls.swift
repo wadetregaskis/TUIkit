@@ -7,10 +7,9 @@
 //  Three things follow from the column. Radio buttons replace the pop-up
 //  menus — every option is readable at once, which is what a demo is for, and
 //  a pop-up that must be opened to see what is in it teaches nothing. Each
-//  parameterised option is followed IMMEDIATELY by the control that
-//  parameterises it, disabled while another option is chosen, so the two read
-//  as one thing (the same shape the Spinners page settled on). And the pane
-//  scrolls, so a short terminal loses none of it.
+//  parameterised option CARRIES the control that parameterises it, as its own
+//  content, so the two read as one thing and the group stays one list to arrow
+//  down. And the pane scrolls, so a short terminal loses none of it.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -75,42 +74,39 @@ struct ImageRenderingControls: View {
     @ViewBuilder private var characters: some View {
         VStack(alignment: .leading, spacing: 0) {
             heading("component.imageControls.characters")
-            // One group per option rather than one group of four, so each
-            // option's own parameter can sit directly under IT — which is what
-            // this pane always meant to do and could only manage for whichever
-            // option happened to be last. The groups share a binding, so
-            // choosing in one clears the others exactly as a single group
-            // would; what it costs is arrow-key travel between options, which
-            // becomes Tab.
+            // One group, and each option carries the control that parameterises
+            // IT — see ``RadioButtonItem``. It was four groups sharing a
+            // binding for a while, which put each control under the right
+            // option at the cost of the arrow keys that walk them: four groups
+            // are four Tab stops where the reader sees one list.
             RadioButtonGroup(selection: $settings.charset) {
-                RadioButtonItem(ImageDemoHelpers.Charset.ascii, "component.imageControls.ascii")
-            }
-            glyphStepper(.ascii, value: $settings.asciiGlyphs)
-            RadioButtonGroup(selection: $settings.charset) {
+                RadioButtonItem(ImageDemoHelpers.Charset.ascii, "component.imageControls.ascii") {
+                    glyphStepper(.ascii, value: $settings.asciiGlyphs)
+                }
                 RadioButtonItem(
-                    ImageDemoHelpers.Charset.unicode, "component.imageControls.unicode")
+                    ImageDemoHelpers.Charset.unicode, "component.imageControls.unicode"
+                ) {
+                    glyphStepper(.unicode, value: $settings.unicodeGlyphs)
+                }
+                RadioButtonItem(ImageDemoHelpers.Charset.blocks, "component.imageControls.blocks") {
+                    // The blocks charset's discrete size. Disabled on its own
+                    // account as well as by the group: shape matching draws
+                    // blocks by ink coverage, and no style is chosen then.
+                    RadioButtonGroup(selection: $settings.blockStyleIndex, orientation: .horizontal)
+                    {
+                        RadioButtonItem(0, ImageDemoHelpers.blockStyleLabel(0))
+                        RadioButtonItem(1, ImageDemoHelpers.blockStyleLabel(1))
+                        RadioButtonItem(2, ImageDemoHelpers.blockStyleLabel(2))
+                        RadioButtonItem(3, ImageDemoHelpers.blockStyleLabel(3))
+                    }
+                    .disabled(
+                        !ImageDemoHelpers.usesBlockStyle(
+                            settings.charset, shapeAware: settings.shapeAware))
+                }
+                RadioButtonItem(ImageDemoHelpers.Charset.custom, "component.imageControls.custom") {
+                    rampField
+                }
             }
-            glyphStepper(.unicode, value: $settings.unicodeGlyphs)
-            RadioButtonGroup(selection: $settings.charset) {
-                RadioButtonItem(ImageDemoHelpers.Charset.blocks, "component.imageControls.blocks")
-            }
-            // The blocks charset's discrete size, under the blocks radio.
-            RadioButtonGroup(selection: $settings.blockStyleIndex, orientation: .horizontal) {
-                RadioButtonItem(0, ImageDemoHelpers.blockStyleLabel(0))
-                RadioButtonItem(1, ImageDemoHelpers.blockStyleLabel(1))
-                RadioButtonItem(2, ImageDemoHelpers.blockStyleLabel(2))
-                RadioButtonItem(3, ImageDemoHelpers.blockStyleLabel(3))
-            }
-            .disabled(
-                !ImageDemoHelpers.usesBlockStyle(
-                    settings.charset, shapeAware: settings.shapeAware))
-            .padding(.leading, 2)
-            RadioButtonGroup(selection: $settings.charset) {
-                RadioButtonItem(ImageDemoHelpers.Charset.custom, "component.imageControls.custom")
-            }
-            rampField
-                .disabled(settings.charset != .custom)
-                .padding(.leading, 2)
             // Off the ramp field and onto its own footing: what follows applies
             // to the charset CHOICE above rather than to the custom ramp it
             // would otherwise appear to continue.
@@ -144,8 +140,10 @@ struct ImageRenderingControls: View {
         }
     }
 
-    /// One charset's glyph-count stepper, under its own radio button and inert
-    /// while another charset is chosen. `0` is the whole repertoire.
+    /// One charset's glyph-count stepper. `0` is the whole repertoire.
+    ///
+    /// It carries no `disabled` of its own: it is an option's content, so the
+    /// group disables it whenever that option is not the one chosen.
     @ViewBuilder private func glyphStepper(
         _ charset: ImageDemoHelpers.Charset, value: Binding<Int>
     ) -> some View {
@@ -159,8 +157,6 @@ struct ImageRenderingControls: View {
                 Text("component.imageControls.allGlyphs").dim()
             }
         }
-        .disabled(settings.charset != charset)
-        .padding(.leading, 2)
     }
 
     // MARK: - Colour
@@ -175,31 +171,29 @@ struct ImageRenderingControls: View {
                     ImageDemoSettings.ColourMode.ansi256, "component.imageControls.colours256")
                 RadioButtonItem(
                     ImageDemoSettings.ColourMode.grayscale, "component.imageControls.greyscale")
-                RadioButtonItem(
-                    ImageDemoSettings.ColourMode.mono, "component.imageControls.mono")
-            }
-            // Mono's own knob. It emits no colour codes, so by default its
-            // cells take the page's — which is the theme's, and is what it has
-            // always drawn in. Off, the two colours are stated outright.
-            Toggle("component.imageControls.monoThemeColours", isOn: $settings.monoThemeColours)
-                .disabled(settings.colour != .mono)
-                .padding(.leading, 2)
-            RadioButtonGroup(selection: $settings.colour) {
+                RadioButtonItem(ImageDemoSettings.ColourMode.mono, "component.imageControls.mono") {
+                    // Mono's own knob. It emits no colour codes, so by default
+                    // its cells take the page's — which is the theme's, and is
+                    // what it has always drawn in. Off, the two are stated.
+                    Toggle(
+                        "component.imageControls.monoThemeColours",
+                        isOn: $settings.monoThemeColours)
+                }
                 RadioButtonItem(
                     ImageDemoSettings.ColourMode.themed, "component.imageControls.themed")
                 RadioButtonItem(
-                    ImageDemoSettings.ColourMode.greys, "component.imageControls.greys")
-            }
-            counted(
-                "component.imageControls.levels", value: $settings.greyLevels, in: 2...16,
-                enabled: settings.colour == .greys)
-            RadioButtonGroup(selection: $settings.colour) {
+                    ImageDemoSettings.ColourMode.greys, "component.imageControls.greys"
+                ) {
+                    counted("component.imageControls.levels", value: $settings.greyLevels, in: 2...16)
+                }
                 RadioButtonItem(
-                    ImageDemoSettings.ColourMode.sampled, "component.imageControls.sampled")
+                    ImageDemoSettings.ColourMode.sampled, "component.imageControls.sampled"
+                ) {
+                    counted(
+                        "component.imageControls.colours", value: $settings.sampledColours,
+                        in: 2...64)
+                }
             }
-            counted(
-                "component.imageControls.colours", value: $settings.sampledColours, in: 2...64,
-                enabled: settings.colour == .sampled)
             Toggle("component.imageControls.dithering", isOn: $settings.dithering)
         }
     }
@@ -242,32 +236,31 @@ struct ImageRenderingControls: View {
                 RadioButtonItem(
                     ImageDemoSettings.Tone.accent, "component.imageControls.toneAccent")
                 RadioButtonItem(
-                    ImageDemoSettings.Tone.duotone, "component.imageControls.toneDuotone")
+                    ImageDemoSettings.Tone.duotone, "component.imageControls.toneDuotone"
+                ) {
+                    // Duotone's two ends.
+                    VStack(alignment: .leading, spacing: 0) {
+                        ColorPicker(
+                            "component.imageControls.shadows", selection: $settings.duotoneShadow
+                        )
+                        .colorPickerChannels(.hidden)
+                        .colorPickerLabelWidth(10)
+                        ColorPicker(
+                            "component.imageControls.highlights",
+                            selection: $settings.duotoneHighlight
+                        )
+                        .colorPickerChannels(.hidden)
+                        .colorPickerLabelWidth(10)
+                    }
+                }
+                RadioButtonItem(ImageDemoSettings.Tone.lut, "component.imageControls.toneLUT") {
+                    // The ramp as it stands, and the way in to editing it.
+                    HStack(spacing: 1) {
+                        lutPreview
+                        Button("component.imageControls.lutEdit") { editingLUT = true }
+                    }
+                }
             }
-            // Duotone's two ends, under its own radio button.
-            VStack(alignment: .leading, spacing: 0) {
-                ColorPicker("component.imageControls.shadows", selection: $settings.duotoneShadow)
-                    .colorPickerChannels(.hidden)
-                    .colorPickerLabelWidth(10)
-                ColorPicker(
-                    "component.imageControls.highlights", selection: $settings.duotoneHighlight
-                )
-                .colorPickerChannels(.hidden)
-                .colorPickerLabelWidth(10)
-            }
-            .disabled(settings.tone != .duotone)
-            .padding(.leading, 2)
-            RadioButtonGroup(selection: $settings.tone) {
-                RadioButtonItem(ImageDemoSettings.Tone.lut, "component.imageControls.toneLUT")
-            }
-            // …and the LUT's, under its own: the ramp as it stands, and the way
-            // in to editing it.
-            HStack(spacing: 1) {
-                lutPreview
-                Button("component.imageControls.lutEdit") { editingLUT = true }
-            }
-            .disabled(settings.tone != .lut)
-            .padding(.leading, 2)
         }
     }
 
@@ -291,10 +284,12 @@ struct ImageRenderingControls: View {
         Text(key).bold().foregroundStyle(.palette.accent)
     }
 
-    /// A "how many" row: a slider and the number it is at, indented under the
-    /// option it belongs to and inert while another option is chosen.
+    /// A "how many" row: a slider and the number it is at.
+    ///
+    /// Neither indented nor disabled here — it is an option's content, and the
+    /// group does both on its behalf.
     private func counted(
-        _ key: LocalizedStringKey, value: Binding<Int>, in range: ClosedRange<Int>, enabled: Bool
+        _ key: LocalizedStringKey, value: Binding<Int>, in range: ClosedRange<Int>
     ) -> some View {
         HStack(spacing: 1) {
             Text(key).dim()
@@ -314,8 +309,6 @@ struct ImageRenderingControls: View {
             .frame(maxWidth: .infinity)
             Text(verbatim: "\(value.wrappedValue)").dim()
         }
-        .disabled(!enabled)
-        .padding(.leading, 2)
     }
 
     /// The custom-ramp combo field: type any ramp (darkest character first), or
@@ -330,9 +323,9 @@ struct ImageRenderingControls: View {
             guard !Self.ramps.contains(settings.customRamp) else { return }
             recentRampsJSON = RecentValues.recording(settings.customRamp, in: recentRampsJSON)
         }
-        VStack(alignment: .leading, spacing: 0) {
-            Text("component.imageControls.customRamp").dim()
-            TextField("component.imageControls.customRamp", text: $settings.customRamp)
+        // No caption of its own: the radio button it sits under already says
+        // "Custom ramp", and repeating it read as two rows about two things.
+        TextField("component.imageControls.customRamp", text: $settings.customRamp)
                 .onSubmit(record)
                 .onEditingChanged { began in
                     if !began { record() }
@@ -344,7 +337,6 @@ struct ImageRenderingControls: View {
                         ForEach(recents, id: \.self) { Text($0) }
                     }
                 }
-                .frame(width: 16)
-        }
+            .frame(width: 16)
     }
 }

@@ -99,16 +99,17 @@ struct ImageDemoSettings: Equatable {
     /// this terminal has" all the way to "these three, and they follow the
     /// theme".
     ///
-    /// The two parameterised entries come LAST so the sliders that configure
-    /// them can sit directly beneath their own radio buttons.
+    /// The order is the ladder itself; nothing about the pane constrains it,
+    /// since an option carries its own control now rather than borrowing the
+    /// row after it.
     enum ColourMode: Int, CaseIterable {
         case trueColor, ansi256, grayscale, mono, themed, greys, sampled
     }
 
     /// The recolourings the demo offers.
     ///
-    /// ``duotone`` and ``lut`` come last, again so their controls sit under
-    /// their own radio buttons.
+    /// In order of how much they ask of you, which is also the order in which
+    /// they stop being a single switch and start being a configuration.
     enum Tone: Int, CaseIterable {
         case off, negative, accent, duotone, lut
     }
