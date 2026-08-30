@@ -24,6 +24,9 @@ struct ImageRenderingControls: View {
     /// Whether the LUT editor is up.
     @State private var editingLUT = false
 
+    /// Whether the per-channel curve editor is up.
+    @State private var editingChannels = false
+
     /// Recently used custom ramps, persisted app-wide (most recent first).
     @AppStorage("imageDemo.recentRamps") private var recentRampsJSON = "[]"
 
@@ -60,6 +63,12 @@ struct ImageRenderingControls: View {
         }
         .onChange(of: settings.unicodeGlyphs) { old, new in
             if new == 1 { settings.unicodeGlyphs = new > old ? 2 : 0 }
+        }
+        .modal(isPresented: $editingChannels) {
+            ChannelCurveEditorPanel(
+                "component.imageControls.toneChannels",
+                channels: $settings.channelCurves,
+                isPresented: $editingChannels)
         }
         .modal(isPresented: $editingLUT) {
             // The curve editor, not the gradient one. A gradient is colours at
@@ -258,23 +267,35 @@ struct ImageRenderingControls: View {
                 RadioButtonItem(ImageDemoSettings.Tone.lut, "component.imageControls.toneLUT") {
                     // The ramp as it stands, and the way in to editing it.
                     HStack(spacing: 1) {
-                        lutPreview
+                        curveStrip(ASCIIToneCurve(settings.lutStops))
                         Button("component.imageControls.lutEdit") { editingLUT = true }
+                    }
+                }
+                RadioButtonItem(
+                    ImageDemoSettings.Tone.channels, "component.imageControls.toneChannels"
+                ) {
+                    // The three curves' effect on the grey ramp — which is
+                    // where a colour cast shows, and the reason to reach for
+                    // channels rather than a tone curve in the first place.
+                    HStack(spacing: 1) {
+                        curveStrip(ASCIIToneCurve(settings.channelCurves))
+                        Button("component.imageControls.lutEdit") { editingChannels = true }
                     }
                 }
             }
         }
     }
 
-    /// The curve's output across the whole tone range, as a strip — the same
-    /// thing the editor's lower strip shows, at a size that fits the pane.
+    /// A recolouring's output across the whole tone range, as a strip — the
+    /// same thing the curve editors' lower strip shows, at a size that fits the
+    /// pane. Shared by the LUT and the channel curves: both answer
+    /// `color(atTone:)`, and both are worth seeing before you open an editor.
     ///
     /// Straight through the curve, cell by cell, rather than through
     /// `Color.quantisedRamp`: that helper repairs a GRADIENT into a monotone
     /// one, and a curve is not required to be monotone.
-    private var lutPreview: some View {
+    private func curveStrip(_ curve: ASCIIToneCurve) -> some View {
         let width = 12
-        let curve = ASCIIToneCurve(settings.lutStops)
         // Over the COLOURS, not over `0..<width`: an `Equatable` element wraps
         // each cell in the element-keyed render memo, which cannot see the
         // curve the cell captured, so the strip freezes at whatever it drew

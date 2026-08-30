@@ -37,23 +37,26 @@ import TUIkitStyling
 /// ``ASCIIConverter/monoInkThreshold(for:)``.
 public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
 
-    /// The pairs, as the caller wrote them. Empty for ``inverted``, which is
-    /// not a mapping from tone to colour — see ``negatesChannels``.
+    /// The pairs, as the caller wrote them. Empty when this is a per-channel
+    /// curve — see ``channels``.
     public let stops: [Stop]
 
-    /// Whether this is the photographic negative rather than a transfer curve.
+    /// The three per-channel transfer functions, when this is a channel curve
+    /// rather than a tone one — `nil` otherwise.
     ///
-    /// A transfer curve is by construction a function of LUMINANCE alone: the
+    /// A **tone** curve is by construction a function of LUMINANCE alone: the
     /// pixel's tone picks a position, and the colour there replaces it. Every
     /// pixel of the same tone therefore comes out the same colour, whatever its
     /// hue was — which is exactly right for a duotone, and exactly wrong for a
-    /// negative. Written as `{black → white, white → black}` it produced a
-    /// grey image from a colour one: correct arithmetic, wrong operation.
+    /// negative, which needs each channel answered on its own terms. `{black →
+    /// white, white → black}` written as a tone curve produced a grey image
+    /// from a colour one: correct arithmetic, wrong operation.
     ///
-    /// A negative complements each channel independently, so red becomes cyan
-    /// and the picture keeps its colour. That cannot be said as a curve at all,
-    /// so it is said here instead.
-    public let negatesChannels: Bool
+    /// So a recolouring here is one of two shapes, and ``inverted`` is the
+    /// second: three descending ramps, red to cyan and the picture's colour
+    /// intact. Both shapes land in the same slot in the pipeline and are told
+    /// apart by which of these two properties is populated.
+    public let channels: Channels?
 
     /// One "this becomes that".
     public struct Stop: Sendable, Equatable {
@@ -87,6 +90,126 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
         }
     }
 
+    // MARK: - Per-channel curves
+
+    /// Three independent transfer functions, one per channel — the shape of a
+    /// photo editor's per-channel Curves tab, and the shape a recolouring has
+    /// to take when the answer depends on the channel rather than on the tone.
+    ///
+    /// ```swift
+    /// .imageToneCurve(.channels(
+    ///     red: [(0, 0.1), (1, 1)],       // lift the shadows toward red
+    ///     green: .identity,
+    ///     blue: [(0, 0), (1, 0.85)]))    // pull the highlights off blue
+    /// ```
+    ///
+    /// What it can say that a tone curve cannot: a colour cast, a
+    /// cross-process, a split tone, and a negative. What neither can say is a
+    /// hue rotation or a change to one colour and not its neighbours — that
+    /// needs a full three-dimensional table, and there is no editing a cube of
+    /// 35,937 entries in a terminal.
+    public struct Channels: Sendable, Equatable {
+        public let red: Ramp
+        public let green: Ramp
+        public let blue: Ramp
+
+        public init(red: Ramp, green: Ramp, blue: Ramp) {
+            self.red = red
+            self.green = green
+            self.blue = blue
+        }
+
+        /// The same ramp on all three channels — a brightness or contrast
+        /// adjustment, which by definition treats the channels alike.
+        public init(_ all: Ramp) {
+            self.init(red: all, green: all, blue: all)
+        }
+
+        /// Changes nothing.
+        public static let identity = Self(.identity)
+
+        /// Every channel complemented: light becomes dark and red becomes
+        /// cyan, with the picture's colour intact.
+        public static let inverted = Self(.inverted)
+
+        /// Whether these would change anything.
+        public var isIdentity: Bool {
+            red.isIdentity && green.isIdentity && blue.isIdentity
+        }
+    }
+
+    /// One channel's transfer function: control points read as "this value
+    /// becomes that one", both `0`…`1`, with everything between two of them
+    /// interpolated and the ends held flat.
+    ///
+    /// The same reading as ``Stop``, one dimension down — an input picks a
+    /// position and the value there replaces it.
+    public struct Ramp: Sendable, Equatable, ExpressibleByArrayLiteral {
+        /// One control point.
+        public struct Point: Sendable, Equatable {
+            public let input: Double
+            public let output: Double
+
+            public init(input: Double, output: Double) {
+                self.input = input
+                self.output = output
+            }
+        }
+
+        /// The points, sorted by input.
+        public let points: [Point]
+
+        public init(_ points: [Point]) {
+            self.points = points.sorted { $0.input < $1.input }
+        }
+
+        public init(_ pairs: [(Double, Double)]) {
+            self.init(pairs.map { Point(input: $0.0, output: $0.1) })
+        }
+
+        public init(arrayLiteral elements: (Double, Double)...) {
+            self.init(elements)
+        }
+
+        /// Changes nothing.
+        public static let identity = Self([(0, 0), (1, 1)])
+
+        /// Complements the channel.
+        public static let inverted = Self([(0, 1), (1, 0)])
+
+        /// Whether this would change anything. Fewer than two points cannot
+        /// define a function and are skipped rather than applied as a
+        /// flattening constant — the same rule ``ASCIIToneCurve/isIdentity``
+        /// applies to knots.
+        public var isIdentity: Bool {
+            guard points.count >= 2 else { return true }
+            return points.allSatisfy { $0.input == $0.output }
+        }
+
+        /// The value this ramp maps `input` to.
+        ///
+        /// Below the first point and above the last the ramp holds its end
+        /// value rather than extrapolating into numbers nobody named — the
+        /// same rule the tone curve's knots follow.
+        public func value(at input: Double) -> Double {
+            guard let first = points.first, let last = points.last, points.count >= 2 else {
+                return input
+            }
+            guard input > first.input else { return first.output }
+            guard input < last.input else { return last.output }
+            var upper = points.count - 1
+            for (index, point) in points.enumerated() where point.input >= input {
+                upper = index
+                break
+            }
+            let lower = max(0, upper - 1)
+            let span = points[upper].input - points[lower].input
+            let position = span > 0 ? (input - points[lower].input) / span : 0
+            return points[lower].output
+                + (points[upper].output - points[lower].output) * position
+        }
+    }
+
     /// The curve as it is actually evaluated: sorted by the tone of each
     /// `from`, with each `to` ready to interpolate between.
     let knots: [Knot]
@@ -100,15 +223,25 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
 
     public init(_ stops: [Stop]) {
         self.stops = stops
-        self.negatesChannels = false
+        self.channels = nil
         self.knots = Self.knots(from: stops)
     }
 
-    /// The photographic negative. Private because ``inverted`` is the spelling.
-    private init(negatingChannels: Bool) {
+    /// A recolouring that answers each channel on its own terms.
+    public init(_ channels: Channels) {
         self.stops = []
-        self.negatesChannels = negatingChannels
+        self.channels = channels
         self.knots = []
+    }
+
+    /// A per-channel recolouring, written channel by channel.
+    ///
+    /// - Parameters:
+    ///   - red: The red channel's transfer function.
+    ///   - green: The green channel's.
+    ///   - blue: The blue channel's.
+    public static func channels(red: Ramp, green: Ramp, blue: Ramp) -> Self {
+        Self(Channels(red: red, green: green, blue: blue))
     }
 
     public init(_ pairs: [(Color, Color)]) {
@@ -120,7 +253,7 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.stops == rhs.stops && lhs.negatesChannels == rhs.negatesChannels
+        lhs.stops == rhs.stops && lhs.channels == rhs.channels
     }
 
     /// A curve that changes nothing — the spelling for "no recolouring", and
@@ -131,16 +264,21 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
     /// A photographic negative: every channel complemented, so light becomes
     /// dark and red becomes cyan, with the picture's colour intact.
     ///
-    /// Not a curve, and it cannot be one — see ``negatesChannels``. Written as
-    /// `{black → white, white → black}` it read each pixel's TONE and replaced
-    /// the pixel with the grey at that position, which inverted a colour
-    /// photograph into a black-and-white one.
-    public static let inverted = Self(negatingChannels: true)
+    /// Not a TONE curve, and it cannot be one — written as `{black → white,
+    /// white → black}` it read each pixel's tone and replaced the pixel with
+    /// the grey at that position, which turned a colour photograph into a
+    /// black-and-white one. It is three descending ``Ramp``s, which is exactly
+    /// what "complement every channel" means, and it used to be a `Bool` on
+    /// this type for want of a way to say that.
+    public static let inverted = Self(Channels.inverted)
 
     /// Whether this curve would change anything. An empty or single-stop curve
     /// cannot define a mapping and is skipped rather than applied as a
     /// flattening constant.
-    var isIdentity: Bool { !negatesChannels && knots.count < 2 }
+    var isIdentity: Bool {
+        if let channels { return channels.isIdentity }
+        return knots.count < 2
+    }
 
     /// `pixel` recoloured by this curve.
     ///
@@ -165,8 +303,18 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
     /// reveal or hide.
     func apply(to pixel: RGBA) -> RGBA {
         guard !isIdentity else { return pixel }
-        if negatesChannels {
-            return RGBA(r: 255 &- pixel.r, g: 255 &- pixel.g, b: 255 &- pixel.b, a: pixel.a)
+        if let channels {
+            // Each channel through its own ramp, in the same gamma-encoded sRGB
+            // the tone branch works in — see below for why that consistency is
+            // the whole design.
+            func level(_ value: UInt8, _ ramp: Ramp) -> UInt8 {
+                UInt8(clamping: Int((ramp.value(at: Double(value) / 255) * 255).rounded()))
+            }
+            return RGBA(
+                r: level(pixel.r, channels.red),
+                g: level(pixel.g, channels.green),
+                b: level(pixel.b, channels.blue),
+                a: pixel.a)
         }
         let tone = pixel.luminance
         // Below the first knot and above the last, the curve holds its end
@@ -234,7 +382,7 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
     /// This curve with every colour it names made concrete, so a stop may be
     /// `.palette.accent` and follow the theme exactly as a palette entry does.
     public func resolved(with palette: any Palette) -> Self {
-        guard !negatesChannels else { return self }  // names no colours
+        guard channels == nil else { return self }  // names no colours
         return Self(
             stops.map { Stop(from: $0.from.resolve(with: palette), to: $0.to.resolve(with: palette)) })
     }

@@ -239,7 +239,7 @@ repairs a gradient into a monotone one on a 256-colour terminal: a curve is not
 required to be monotone, and a preview that banded differently from the picture
 beside it would be worse than one that bands with it.
 
-## Considered: a 3-D LUT
+## Considered: a 3-D LUT (and what was built instead)
 
 A 3-D LUT — the `.cube` file a colour grade ships as — maps *(R, G, B)* to
 *(R, G, B)* through a cube of samples with trilinear interpolation between
@@ -267,22 +267,48 @@ Parsing `.cube` is about sixty lines of text handling and no new dependency.
   braille or half blocks it would survive; on `.ansi256` almost none of it
   would, and the palette machinery already decides what colours are available.
 
-**The middle rung is the interesting one: per-channel curves.** Three transfer
-curves — one for R, one for G, one for B — are three copies of the machinery
-that already exists, edited by three passes of the editor that already exists,
-and they cover most of what "remap the colours" actually means in practice:
-colour casts, cross-processing, split-toning, warm highlights over cool
-shadows. They cannot rotate a hue or touch one colour selectively; only a true
-cube can do that.
+**The middle rung is the interesting one, and it is the one that shipped:
+per-channel curves.** Three transfer functions — `ASCIIToneCurve.Channels`,
+one `Ramp` per channel — cover most of what "remap the colours" actually means
+in practice: colour casts, cross-processing, split-toning, warm highlights over
+cool shadows. They cannot rotate a hue or touch one colour selectively; only a
+true cube can do that.
 
-They would also retire a wart. `.inverted` is a Boolean on the type
-(`negatesChannels`) rather than a curve, and the doc comment says why: a
+They also retired a wart. `.inverted` used to be a Boolean on the type
+(`negatesChannels`) rather than a curve, and the doc comment said why: a
 negative complements each channel independently, which *cannot be said as a
-curve* when the curve is a function of luminance alone. Per-channel curves say
-it directly — three descending ramps — so the special case would stop being one.
+curve* when the curve is a function of luminance alone. It is now three
+descending ramps, which is exactly what "complement every channel" means, and
+the special case stopped being one. The arithmetic had to survive the move —
+the old implementation was `255 &- v` and the new one interpolates through
+`Double` — so there is a test over all 256 levels, beside the existing one that
+a negative is its own inverse.
 
-The recommendation, then: **per-channel curves before a 3-D LUT**, and a 3-D
-LUT only ever as a `.cube` loader, never as an editor.
+`ChannelCurveEditorPanel` edits them. A function of one variable is drawn as
+one: input left to right, output bottom to top, filled height at a column is
+what that input becomes.
+
+```
+                                 ▂▄▆█
+                         ▂▄▆████████
+                 ▂▄▆██████████████
+         ▂▄▆██████████████████
+ ▂▄▆██████████████████████
+     ▲              ▲          ▲
+```
+
+A **fill** rather than a line, because a cell grid draws a fill honestly and a
+line badly: a one-cell-thick diagonal through a 36×8 grid is a staircase with
+gaps in it, and the eye reads the gaps as the data. Eight rows × eight sub-cell
+levels is 64 steps, which is past what anyone reads off a terminal anyway. The
+row builder is a static function rather than inline in the view, so the test
+can assert the claim — filled height equals the ramp's value — without doing
+substring arithmetic on a bordered, centred dialog; a separate test ties the
+function to the view by finding its rows in the rendered buffer.
+
+The remaining recommendation: **a 3-D LUT only ever as a `.cube` loader, never
+as an editor**, and only if someone actually wants to apply a grade authored
+elsewhere.
 
 ## Still open
 

@@ -86,6 +86,9 @@ struct ImageDemoSettings: Equatable {
     var duotoneShadow: Color = .rgb(20, 20, 60)
     var duotoneHighlight: Color = .rgb(255, 215, 130)
 
+    /// ``Tone/channels``' three per-channel transfer functions.
+    var channelCurves: ASCIIToneCurve.Channels = .identity
+
     /// ``Tone/lut``'s stops: each one a tone (`0` black … `1` white) and the
     /// colour it becomes, with everything between two of them interpolated.
     /// Two or more; the editor enforces that.
@@ -120,7 +123,7 @@ struct ImageDemoSettings: Equatable {
     /// In order of how much they ask of you, which is also the order in which
     /// they stop being a single switch and start being a configuration.
     enum Tone: Int, CaseIterable {
-        case off, negative, accent, duotone, lut
+        case off, negative, accent, duotone, lut, channels
     }
 
     // MARK: - What the settings render as
@@ -188,6 +191,8 @@ struct ImageDemoSettings: Equatable {
             ])
         case .lut:
             return lutStops.count >= 2 ? ASCIIToneCurve(lutStops) : nil
+        case .channels:
+            return ASCIIToneCurve(channelCurves)
         }
     }
 
@@ -244,6 +249,7 @@ struct ImageDemoSettings: Equatable {
         case .accent: return "tone:accent"
         case .duotone: return "tone:duotone"
         case .lut: return "tone:LUT(\(lutStops.count))"
+        case .channels: return "tone:channels"
         }
     }
 
