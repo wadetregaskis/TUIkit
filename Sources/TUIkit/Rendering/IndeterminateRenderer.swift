@@ -113,13 +113,15 @@ enum IndeterminateRenderer {
         max(1, Int(Double(width) * max(0, configuration.extent)))
     }
 
-    /// A ramp's stops, from the dim end to the bright end. Fewer than two
-    /// usable ones falls back to the control's own pair.
+    /// A ramp, from the dim end to the bright end. Fewer than two usable
+    /// stops falls back to the control's own pair.
     private static func ramp(
         _ configuration: IndeterminateConfiguration, dim: Color, bright: Color
-    ) -> [Color] {
-        guard let colors = configuration.colors, colors.count >= 2 else { return [dim, bright] }
-        return colors
+    ) -> Gradient {
+        guard let gradient = configuration.gradient, gradient.stops.count >= 2 else {
+            return Gradient(colors: [dim, bright])
+        }
+        return gradient
     }
 }
 
@@ -202,14 +204,14 @@ extension IndeterminateRenderer {
         let head = Int(phase * Double(width))
         let fill = Array(configuration.fill)
         let unlit = Array(configuration.empty)
-        let stops = ramp(configuration, dim: empty, bright: accent)
+        let gradient = ramp(configuration, dim: empty, bright: accent)
         return laid(width: width) { column in
             let behind = (column - head + width) % width
             guard behind < segment else {
                 return (glyph(unlit, at: column), empty)
             }
             let intensity = 1.0 - Double(behind) / Double(segment)
-            return (glyph(fill, at: column), Color.interpolate(stops: stops, phase: intensity))
+            return (glyph(fill, at: column), gradient.color(at: intensity))
         }
     }
 }
@@ -224,8 +226,9 @@ extension IndeterminateRenderer {
         filled: Color, accent: Color, elapsed: Double
     ) -> String {
         let fill = Array(configuration.fill)
-        let stripes = configuration.colors?.isEmpty == false
-            ? configuration.colors! : [accent, filled]
+        let stripes = configuration.gradient.map { $0.stops.map(\.color) }.flatMap {
+            $0.isEmpty ? nil : $0
+        } ?? [accent, filled]
         // A fast-cycling phase so the stripes appear to scroll briskly; the eye
         // reads the built-in `0.6 s` per stripe-pair shift as "moving" rather
         // than "ticking".
@@ -251,8 +254,7 @@ extension IndeterminateRenderer {
         // middle of each period — easier to read as "alive but waiting".
         let raw = phase(elapsed: elapsed, period: configuration.period) * .pi * 2
         let intensity = (1.0 - cos(raw)) / 2.0
-        let colour = Color.interpolate(
-            stops: ramp(configuration, dim: dim, bright: bright), phase: intensity)
+        let colour = ramp(configuration, dim: dim, bright: bright).color(at: intensity)
         let fill = Array(configuration.fill)
         return laid(width: width) { column in (glyph(fill, at: column), colour) }
     }
@@ -276,7 +278,7 @@ extension IndeterminateRenderer {
         let direction = raw < 0.5 ? 1 : -1
         let fill = Array(configuration.fill)
         let unlit = Array(configuration.empty)
-        let stops = ramp(configuration, dim: empty, bright: accent)
+        let gradient = ramp(configuration, dim: empty, bright: accent)
         return laid(width: width) { column in
             // The trail extends *behind* the head — i.e. in the
             // opposite direction of motion — so the leading edge stays
@@ -286,7 +288,7 @@ extension IndeterminateRenderer {
                 return (glyph(unlit, at: column), empty)
             }
             let intensity = 1.0 - Double(offset) / Double(segment)
-            return (glyph(fill, at: column), Color.interpolate(stops: stops, phase: intensity))
+            return (glyph(fill, at: column), gradient.color(at: intensity))
         }
     }
 }
@@ -309,8 +311,8 @@ extension IndeterminateRenderer {
         // Custom stops need resolvable RGB (semantic colours have none until a
         // palette is applied); anything unresolvable is skipped, and fewer
         // than two usable stops falls back to the built-in rainbow.
-        let custom = configuration.colors?.compactMap { color -> (r: UInt8, g: UInt8, b: UInt8)? in
-            guard let components = color.rgbComponents else { return nil }
+        let custom = configuration.gradient?.stops.compactMap { stop -> (r: UInt8, g: UInt8, b: UInt8)? in
+            guard let components = stop.color.rgbComponents else { return nil }
             return (components.red, components.green, components.blue)
         }
         let builtIn: [(r: UInt8, g: UInt8, b: UInt8)] = [

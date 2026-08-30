@@ -173,10 +173,10 @@ public struct GradientEditorPanel: View {
         // and repairs it into a monotone one. Per cell — which this was — a
         // nearest match has no memory of its neighbours, so the editor's own
         // preview banded on a 256-colour terminal while the track it was
-        // configuring did not. See `Color.quantisedRamp(stops:count:depth:)`.
+        // configuring did not. See `Color.quantisedRamp(_:count:depth:)`.
         let cells = (0..<Self.previewWidth).map { index in
             TrackRenderer.gradientColor(
-                stops: list, index: index, span: Self.previewWidth,
+                Gradient(colors: list), index: index, span: Self.previewWidth,
                 fallback: list.first ?? .palette.accent, depth: ColorDepth.current)
         }
         return VStack(spacing: 0) {
@@ -319,7 +319,7 @@ public struct GradientEditorPanel: View {
     private func gradientChip(_ gradient: [Color]) -> some View {
         let cells = (0..<Self.chipStripWidth).map { index in
             TrackRenderer.gradientColor(
-                stops: gradient, index: index, span: Self.chipStripWidth,
+                Gradient(colors: gradient), index: index, span: Self.chipStripWidth,
                 fallback: gradient.first ?? .palette.accent, depth: ColorDepth.current)
         }
         return Button {

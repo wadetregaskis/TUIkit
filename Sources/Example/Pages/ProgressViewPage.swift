@@ -289,11 +289,11 @@ struct ProgressViewPage: View {
                 )
                 determinateRow(
                     label: "shadeRamp(g) ",
-                    style: .shadeRamp(gradient: [
+                    style: .shadeRamp(gradient: Gradient(colors: [
                         .rgb(255, 80, 80),
                         .rgb(255, 200, 80),
                         .rgb(80, 220, 120),
-                    ])
+                    ]))
                 )
                 determinateRow(
                     label: "threeSegment ",
@@ -320,9 +320,9 @@ struct ProgressViewPage: View {
                     label: "threeSeg(gr) ",
                     style: .threeSegment(
                         leading: "Sw", middle: "i", trailing: "ft", emptyFill: "·",
-                        coloring: .gradient([
+                        coloring: .gradient(Gradient(colors: [
                             .rgb(255, 80, 80), .rgb(255, 200, 80), .rgb(80, 220, 120),
-                        ])
+                        ]))
                     )
                 )
                 // A hand-rolled `.custom` recipe: a shade-ramp fill with a
@@ -356,7 +356,7 @@ struct ProgressViewPage: View {
                 // editor below (teal → violet until you change it).
                 indeterminateRow(
                     label: "gradient(c)  ",
-                    style: .gradient(colors: gradientStops))
+                    style: .gradient(Gradient(colors: gradientStops)))
                 HStack(spacing: 1) {
                     ForEach(Array(gradientStops.enumerated()), id: \.offset) { _, stop in
                         Text("██").foregroundStyle(stop)

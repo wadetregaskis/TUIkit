@@ -65,7 +65,7 @@ public enum IndeterminateStyle: Sendable, Equatable {
     /// spelling — uses the built-in rainbow. The same stop model as
     /// ``TrackConfiguration/fillGradient`` and
     /// ``SegmentColoring/gradient(_:)``.
-    case gradient(colors: [Color]? = nil)
+    case gradient(_ gradient: Gradient? = nil)
 
     /// A hand-rolled recipe: any motion, drawn with any glyphs, in any
     /// colours, at any speed.
@@ -89,7 +89,7 @@ extension IndeterminateStyle {
         case .barberPole: .barberPole
         case .pulse: .pulse
         case .knightRider: .knightRider
-        case .gradient(let colors): .gradient(colors: colors)
+        case .gradient(let gradient): .gradient(gradient)
         case .custom(let configuration): configuration
         }
     }

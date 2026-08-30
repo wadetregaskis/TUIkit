@@ -141,11 +141,11 @@ private struct GradientStrip: View, Renderable {
         // Quantised as a RAMP, not cell by cell. On a 256-colour terminal a
         // per-cell nearest match has no memory of its neighbours, and the
         // strip's smoothness is a property of the SEQUENCE — see
-        // `Color.quantisedRamp(stops:count:depth:)`. This demo had its own
+        // `Color.quantisedRamp(_:count:depth:)`. This demo had its own
         // interpolation and got the per-cell answer: "teal → purple" put three
         // out-of-place cells in every strip it drew.
         let ramp = Color.quantisedRamp(
-            stops: stops.map { Color.rgb($0.r, $0.g, $0.b) },
+            Gradient(colors: stops.map { Color.rgb($0.r, $0.g, $0.b) }),
             count: cells, depth: ColorDepth.current)
         var line = ""
         line.reserveCapacity(cells * 20)

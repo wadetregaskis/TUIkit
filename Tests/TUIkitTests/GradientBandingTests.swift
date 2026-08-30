@@ -92,9 +92,9 @@ struct GradientBandingTests {
         for width in [8, 12, 36, 80, 104] {
             for (name, stops) in Self.shipped {
                 let source = (0..<width).map {
-                    Color.interpolate(stops: stops, phase: Double($0) / Double(width - 1))
+                    Gradient(colors: stops).color(at: Double($0) / Double(width - 1))
                 }
-                let ramp = Color.quantisedRamp(stops: stops, count: width, depth: .palette256)
+                let ramp = Color.quantisedRamp(Gradient(colors: stops), count: width, depth: .palette256)
                 #expect(
                     reversals(ramp, along: source) == 0,
                     "\(name) at \(width): \(reversals(ramp, along: source)) reversals")
@@ -107,7 +107,7 @@ struct GradientBandingTests {
     @Test("…and cell by cell, at least one of them does not")
     func theNaiveRouteStillBands() {
         let stops: [Color] = [.rgb(0, 180, 180), .rgb(140, 0, 200)]  // teal → purple
-        let source = (0..<80).map { Color.interpolate(stops: stops, phase: Double($0) / 79) }
+        let source = (0..<80).map { Gradient(colors: stops).color(at: Double($0) / 79) }
         let perCell = source.map { $0.downsampledToPalette256() }
         #expect(reversals(perCell, along: source) > 0, "the naive route is no longer a hazard")
     }
@@ -141,7 +141,7 @@ struct GradientBandingTests {
             renderToBuffer(panel, context: context)
         }
         let width = GradientEditorPanel.previewWidthForTesting
-        let expected = Color.quantisedRamp(stops: stops, count: width, depth: .palette256)
+        let expected = Color.quantisedRamp(Gradient(colors: stops), count: width, depth: .palette256)
             .compactMap { colour -> UInt8? in
                 if case .palette256(let index) = colour.value { return index }
                 return nil

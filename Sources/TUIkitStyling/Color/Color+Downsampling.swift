@@ -100,14 +100,15 @@ extension Color {
     /// and mean OKLab error slightly LOWER on four of the five it changed.
     ///
     /// - Parameters:
-    ///   - stops: The gradient's stops, two or more.
+    ///   - gradient: The ramp to sample. Fewer than two stops is a flat colour
+    ///     and needs no repair.
     ///   - count: How many cells the ramp spans.
     ///   - depth: The terminal's colour depth. Anything but ``ColorDepth/palette256``
     ///     returns the plain interpolation, so a caller never has to branch.
     /// - Returns: `count` colours. Palette entries at 256-colour depth — which
     ///   the ANSI layer passes through untouched — and interpolated RGB
     ///   otherwise.
-    public static func quantisedRamp(stops: [Color], count: Int, depth: ColorDepth) -> [Color] {
+    public static func quantisedRamp(_ gradient: Gradient, count: Int, depth: ColorDepth) -> [Color] {
         // The cache is consulted BEFORE the ramp is sampled, which is the whole
         // point of having one: sampling is the expensive half, and asking after
         // doing it meant a hit cost exactly as much as a miss's first stage.
@@ -119,13 +120,10 @@ extension Color {
         // two guards below that a cached answer implies are equally so:
         // `sampled.count` IS `max(0, count)`, and an entry is only ever stored
         // on the path where both guards passed.
-        let key = RampKey(stops: stops, count: count, depth: depth)
+        let key = RampKey(gradient: gradient, count: count, depth: depth)
         if depth == .palette256, count > 2, let cached = cachedRamp(key) { return cached }
 
-        let sampled = (0..<max(0, count)).map { index -> Color in
-            let phase = count > 1 ? Double(index) / Double(count - 1) : 0
-            return interpolate(stops: stops, phase: phase)
-        }
+        let sampled = gradient.sampled(count: count)
         // Only the 6x6x6 cube bands. A truecolor terminal draws what it is
         // given, and a 16-colour one has so few entries that monotonicity is
         // not the interesting problem.
@@ -182,17 +180,6 @@ extension Color {
             rampCache.removeAll(keepingCapacity: true)
         }
         rampCache[key] = entries
-    }
-
-    /// Piecewise-linear interpolation into `stops` — the one definition of what
-    /// a gradient's colour at `phase` is.
-    public static func interpolate(stops: [Color], phase: Double) -> Color {
-        guard let first = stops.first else { return .rgb(0, 0, 0) }
-        guard stops.count >= 2 else { return first }
-        let segments = Double(stops.count - 1)
-        let scaled = max(0, min(segments, phase * segments))
-        let lower = min(Int(scaled), stops.count - 2)
-        return lerp(stops[lower], stops[lower + 1], phase: scaled - Double(lower))
     }
 
     /// The index of the first run whose entry moves a channel against the way
@@ -269,7 +256,7 @@ extension Color {
     }
 
     private struct RampKey: Hashable {
-        let stops: [Color]
+        let gradient: Gradient
         let count: Int
         let depth: ColorDepth
     }

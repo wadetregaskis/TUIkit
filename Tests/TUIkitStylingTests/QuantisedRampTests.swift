@@ -17,7 +17,7 @@ struct QuantisedRampTests {
     /// The run-length encoding of a ramp's palette indices — the shape the
     /// defect is visible in, and the shape a headless test can see.
     private func runs(_ stops: [Color], count: Int = 40) -> [(index: Int, length: Int)] {
-        let ramp = Color.quantisedRamp(stops: stops, count: count, depth: .palette256)
+        let ramp = Color.quantisedRamp(Gradient(colors: stops), count: count, depth: .palette256)
         var result: [(index: Int, length: Int)] = []
         for colour in ramp {
             guard case .palette256(let index) = colour.value else { continue }
@@ -34,10 +34,9 @@ struct QuantisedRampTests {
     /// Whether every channel moves the way the source ramp moves it — the
     /// property "no out-of-place colours" actually means.
     private func violations(_ stops: [Color], count: Int = 40) -> Int {
-        let ramp = Color.quantisedRamp(stops: stops, count: count, depth: .palette256)
-        let source = (0..<count).map {
-            Color.interpolate(stops: stops, phase: Double($0) / Double(count - 1))
-        }
+        let gradient = Gradient(colors: stops)
+        let ramp = Color.quantisedRamp(gradient, count: count, depth: .palette256)
+        let source = gradient.sampled(count: count)
         var breaks = 0
         for index in 1..<ramp.count {
             guard let a = ramp[index - 1].rgbComponents, let b = ramp[index].rgbComponents,
@@ -83,16 +82,16 @@ struct QuantisedRampTests {
         // Pure red to pure blue crosses the cube diagonally with no lateral
         // excursions; the repair must be a no-op, entry for entry.
         let stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
-        let repaired = Color.quantisedRamp(stops: stops, count: 40, depth: .palette256)
+        let repaired = Color.quantisedRamp(Gradient(colors: stops), count: 40, depth: .palette256)
         let perCell = (0..<40).map {
-            Color.interpolate(stops: stops, phase: Double($0) / 39).downsampledToPalette256()
+            Gradient(colors: stops).color(at: Double($0) / 39).downsampledToPalette256()
         }
         #expect(repaired == perCell, "a clean ramp was rewritten")
     }
 
     @Test("Truecolor is handed the interpolation, untouched")
     func truecolorIsNotQuantised() {
-        let ramp = Color.quantisedRamp(stops: trackDefault, count: 8, depth: .truecolor)
+        let ramp = Color.quantisedRamp(Gradient(colors: trackDefault), count: 8, depth: .truecolor)
         #expect(ramp.allSatisfy { if case .rgb = $0.value { return true } else { return false } })
     }
 
@@ -114,12 +113,12 @@ struct QuantisedRampTests {
     @Test("A cached ramp is the ramp")
     func cacheReturnsTheSameRamp() {
         let stops: [Color] = [.rgb(255, 80, 80), .rgb(80, 160, 255)]
-        let first = Color.quantisedRamp(stops: stops, count: 40, depth: .palette256)
+        let first = Color.quantisedRamp(Gradient(colors: stops), count: 40, depth: .palette256)
         for _ in 0..<3 {
-            #expect(Color.quantisedRamp(stops: stops, count: 40, depth: .palette256) == first)
+            #expect(Color.quantisedRamp(Gradient(colors: stops), count: 40, depth: .palette256) == first)
         }
         // A different width is a different ramp, not the cached one resized.
-        let narrow = Color.quantisedRamp(stops: stops, count: 12, depth: .palette256)
+        let narrow = Color.quantisedRamp(Gradient(colors: stops), count: 12, depth: .palette256)
         #expect(narrow.count == 12)
         #expect(narrow != Array(first.prefix(12)))
     }
@@ -131,12 +130,12 @@ struct QuantisedRampTests {
     @Test("Answers survive a cache turnover")
     func answersSurviveTurnover() {
         let stops: [Color] = [.rgb(20, 200, 120), .rgb(240, 80, 20)]
-        let before = Color.quantisedRamp(stops: stops, count: 33, depth: .palette256)
+        let before = Color.quantisedRamp(Gradient(colors: stops), count: 33, depth: .palette256)
         // Distinct keys by width; 600 crosses the 512-entry generation.
         for width in 3..<603 {
-            _ = Color.quantisedRamp(stops: stops, count: width, depth: .palette256)
+            _ = Color.quantisedRamp(Gradient(colors: stops), count: width, depth: .palette256)
         }
-        #expect(Color.quantisedRamp(stops: stops, count: 33, depth: .palette256) == before)
+        #expect(Color.quantisedRamp(Gradient(colors: stops), count: 33, depth: .palette256) == before)
     }
 
     /// The guards the early lookup skips past have to keep holding: below three
@@ -146,11 +145,11 @@ struct QuantisedRampTests {
     func shortRampsBypassTheCache() {
         let stops: [Color] = [.rgb(0, 0, 0), .rgb(255, 255, 255)]
         for count in 0...2 {
-            let ramp = Color.quantisedRamp(stops: stops, count: count, depth: .palette256)
+            let ramp = Color.quantisedRamp(Gradient(colors: stops), count: count, depth: .palette256)
             #expect(ramp.count == count)
             #expect(ramp.allSatisfy { $0.rgbComponents != nil }, "quantised a ramp too short to repair")
         }
-        let plain = Color.quantisedRamp(stops: stops, count: 40, depth: .truecolor)
+        let plain = Color.quantisedRamp(Gradient(colors: stops), count: 40, depth: .truecolor)
         #expect(plain.allSatisfy { if case .rgb = $0.value { return true } else { return false } })
     }
 }

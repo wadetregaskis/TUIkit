@@ -77,7 +77,7 @@ public struct TrackConfiguration: Sendable, Equatable {
     /// An optional per-cell colour gradient the lit cells fade across (the
     /// filled portion interpolates between the stops regardless of how many
     /// cells are lit). `nil` uses the flat filled colour.
-    public var fillGradient: [Color]?
+    public var fillGradient: Gradient?
 
     /// An optional colour for the UNFILLED region, overriding the one the
     /// control would otherwise use.
@@ -96,7 +96,7 @@ public struct TrackConfiguration: Sendable, Equatable {
     /// bar names, so fill and empty gradients drawn from the same stops are one
     /// continuous ramp interrupted by the boundary. With `.fill` the ramp is
     /// compressed into the unfilled run, which is the decorative reading.
-    public var emptyGradient: [Color]?
+    public var emptyGradient: Gradient?
 
     /// Creates a track configuration.
     ///
@@ -113,9 +113,9 @@ public struct TrackConfiguration: Sendable, Equatable {
         fill: String,
         partialRamp: [Character]? = nil,
         emptyStyle: EmptyStyle,
-        fillGradient: [Color]? = nil,
+        fillGradient: Gradient? = nil,
         emptyColor: Color? = nil,
-        emptyGradient: [Color]? = nil
+        emptyGradient: Gradient? = nil
     ) {
         self.fill = fill
         self.partialRamp = partialRamp
@@ -131,9 +131,9 @@ public struct TrackConfiguration: Sendable, Equatable {
         fullGlyph: Character,
         partialRamp: [Character]? = nil,
         emptyStyle: EmptyStyle,
-        fillGradient: [Color]? = nil,
+        fillGradient: Gradient? = nil,
         emptyColor: Color? = nil,
-        emptyGradient: [Color]? = nil
+        emptyGradient: Gradient? = nil
     ) {
         self.init(
             fill: String(fullGlyph), partialRamp: partialRamp,
@@ -179,7 +179,7 @@ extension TrackConfiguration {
     /// `█` full cells with a shade-ramp fractional boundary (`░▒▓`, 4
     /// steps/cell), `·` empty, and an optional colour gradient. Backs
     /// ``TrackStyle/shadeRamp(gradient:)``.
-    public static func shadeRamp(gradient: [Color]? = nil) -> TrackConfiguration {
+    public static func shadeRamp(gradient: Gradient? = nil) -> TrackConfiguration {
         TrackConfiguration(
             fullGlyph: "█", partialRamp: ["░", "▒", "▓"], emptyStyle: .glyph("·"),
             fillGradient: gradient)

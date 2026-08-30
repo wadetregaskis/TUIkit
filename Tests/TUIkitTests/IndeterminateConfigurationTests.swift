@@ -30,7 +30,7 @@ struct IndeterminateConfigurationTests {
     private static let builtIns: [(name: String, style: IndeterminateStyle)] = [
         ("sweep", .sweep), ("barberPole", .barberPole), ("pulse", .pulse),
         ("knightRider", .knightRider), ("gradient", .gradient()),
-        ("gradient(c)", .gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])),
+        ("gradient(c)", .gradient(Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)]))),
     ]
 
     /// The claim the refactor rests on: a named style is nothing more than a
@@ -144,7 +144,8 @@ struct IndeterminateConfigurationTests {
         let period = 1.6
         let style = IndeterminateStyle.custom(
             IndeterminateConfiguration(
-                motion: .pulse, colors: [.rgb(10, 20, 30), .rgb(240, 230, 220)],
+                motion: .pulse,
+                gradient: Gradient(colors: [.rgb(10, 20, 30), .rgb(240, 230, 220)]),
                 period: period))
         // The two ends are reached at exact points of the cycle, not merely
         // approached: `(1 − cos)/2` is 0 at the start of a period and 1 at its

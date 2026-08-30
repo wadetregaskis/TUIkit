@@ -145,12 +145,12 @@ struct TrackStyleEditor: View {
             fill: fill,
             partialRamp: rampText.isEmpty ? nil : Array(rampText),
             emptyStyle: empty,
-            fillGradient: gradientEnabled ? gradientStops : nil,
+            fillGradient: gradientEnabled ? Gradient(colors: gradientStops) : nil,
             // The unfilled half is stylable too: a flat colour of the style's
             // own, or a ramp across it. Its first stop doubles as the flat
             // colour so the two controls agree about what "tinted" means.
             emptyColor: emptyTinted ? emptyStops.first : nil,
-            emptyGradient: emptyGradientEnabled ? emptyStops : nil)
+            emptyGradient: emptyGradientEnabled ? Gradient(colors: emptyStops) : nil)
     }
 
     /// A slowly-advancing fraction (0→1 over 50 s) for the preview bar.

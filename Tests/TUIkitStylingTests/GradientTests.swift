@@ -121,33 +121,6 @@ struct GradientTests {
         #expect(gradient.color(at: 4) == blue)
     }
 
-    /// The `[Color]` interpolation this replaces is still in the tree while the
-    /// four gradient-taking sites are converted, so the two must not disagree
-    /// visibly in the meantime.
-    ///
-    /// **To within one unit per channel**, and that is not slack for its own
-    /// sake: the two compute the same quantity by different routes —
-    /// `interpolate` scales the phase up by the segment count and subtracts the
-    /// segment index, while a positioned ramp subtracts the segment's own
-    /// location and divides by its span, which reintroduces the rounding the
-    /// first route never made. Three of forty-one sample points differ by one
-    /// in one channel. Below the 6×6×6 cube's resolution, and below a terminal
-    /// cell's, so nothing on screen can tell them apart.
-    @Test("An evenly-spaced gradient agrees with the interpolation it replaces")
-    func agreesWithColorInterpolate() {
-        let colours = [red, green, blue, .rgb(255, 200, 0)]
-        let gradient = Gradient(colors: colours)
-        for step in 0...40 {
-            let phase = Double(step) / 40
-            let mine = rgb(gradient.color(at: phase))
-            let theirs = rgb(Color.interpolate(stops: colours, phase: phase))
-            let apart = max(
-                abs(Int(mine.red) - Int(theirs.red)),
-                max(abs(Int(mine.green) - Int(theirs.green)), abs(Int(mine.blue) - Int(theirs.blue))))
-            #expect(apart <= 1, "at \(phase): \(mine) vs \(theirs)")
-        }
-    }
-
     /// A gradient written in order must not pay for a sort — this is consulted
     /// once per painted cell.
     @Test("Stops already in order are not re-ordered")

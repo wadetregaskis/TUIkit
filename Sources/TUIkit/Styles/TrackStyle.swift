@@ -92,7 +92,7 @@ public enum TrackStyle: Sendable, Equatable {
     /// `gradient` is non-nil, the filled portion interpolates between
     /// the supplied stops, smoothly fading across the track regardless
     /// of how many cells are lit. Empty cells use `·`.
-    case shadeRamp(gradient: [Color]? = nil)
+    case shadeRamp(gradient: Gradient? = nil)
 
     /// Three-segment custom fill, e.g. `("Sw", "i", "ft")` →
     /// `Swiiiiiiift` at a wide track or `Swift` at the narrow end.
@@ -145,7 +145,7 @@ public enum SegmentColoring: Sendable, Equatable {
     /// stops — the same stop model as ``TrackConfiguration/fillGradient`` and
     /// ``TrackStyle/shadeRamp(gradient:)``. Needs at least two stops (fewer
     /// fall back to the control's filled colour).
-    case gradient([Color])
+    case gradient(Gradient)
 }
 
 // MARK: - Backwards Compatibility

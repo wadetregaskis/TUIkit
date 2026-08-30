@@ -188,7 +188,7 @@ source-**identical**.
 | static members `.linearGradient(…)`, `.radialGradient(…)`, `.angularGradient(…)` | same | on `ShapeStyle where Self == …` |
 | `Text.foregroundStyle<S>` returns **`Text`** | same | or `Text("a").foregroundStyle(g) + Text("b")` breaks |
 | `Gradient.ColorSpace` (`.device` / `.perceptual`), `colorSpace(_:)` | **ship** | TUIkit already has an opinion — see §6 |
-| `Color.mix(with:by:in:)` | **ship** | this is `Color.interpolate(stops:phase:)` under a TUIkit-only name |
+| `Color.mix(with:by:in:)` | **ship** | a two-stop `Gradient` evaluated at `by`; note its default space is `.perceptual` |
 | `MeshGradient` | **decline, recorded** | "given a cell, what is t?" generalises to (u,v), so it is not impossible — it is simply not worth it at 80×24 |
 | `Shader` | **decline, recorded** | genuinely impossible |
 
@@ -359,7 +359,7 @@ The rule that actually works:
    bending it where it would otherwise be unreadable is the point.
 
 Everything painted still goes through
-`Color.quantisedRamp(stops:count:depth:)` rather than per-cell
+`Color.quantisedRamp(_:count:depth:)` rather than per-cell
 `downsampledToPalette256()` — per-cell quantisation is what produced the
 out-of-place colours the monotonicity repair was written for, and the underlying
 metric must not be retuned (three attempts, three reverts).

@@ -130,7 +130,7 @@ struct GradientEditorPanelRenderTests {
         // and so does an interior cell computed exactly as the strip does:
         // 36 cells sampled at parameter i/35 (cell 18 here).
         let interior = TrackRenderer.gradientColor(
-            stops: stops, parameter: 18.0 / 35.0, fallback: .rgb(0, 0, 0))
+            Gradient(colors: stops), parameter: 18.0 / 35.0, fallback: .rgb(0, 0, 0))
         let components = interior.rgbComponents!
         #expect(text.contains("38;2;255;0;0"), "the left endpoint is drawn")
         #expect(text.contains("38;2;0;0;255"), "the right endpoint is drawn")

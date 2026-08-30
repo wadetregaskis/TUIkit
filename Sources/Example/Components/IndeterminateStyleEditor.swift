@@ -78,7 +78,7 @@ struct IndeterminateStyleEditor: View {
             motion: motion,
             fill: fillGlyph.isEmpty ? "█" : fillGlyph,
             empty: emptyGlyph == "␣" ? " " : (emptyGlyph.isEmpty ? "░" : emptyGlyph),
-            colors: tinted ? stops : nil,
+            gradient: tinted ? Gradient(colors: stops) : nil,
             period: period,
             extent: extent)
     }

@@ -72,14 +72,14 @@ struct TrackGradientTests {
         // Interpolating between identical stops is the identity — a
         // deterministic probe of the per-cell path (a real gradient's
         // interpolated values depend on cell count).
-        let output = render(.gradient([.rgb(10, 20, 30), .rgb(10, 20, 30)]))
+        let output = render(.gradient(Gradient(colors: [.rgb(10, 20, 30), .rgb(10, 20, 30)])))
         let triples = foregroundTriples(in: output).filter { !$0.hasPrefix("9;9;9") }
         #expect(triples.allSatisfy { $0.hasPrefix("10;20;30") }, "all lit cells: \(triples)")
     }
 
     @Test(".gradient of distinct stops produces multiple colours across the span")
     func gradientVaries() {
-        let output = render(.gradient([.rgb(255, 0, 0), .rgb(0, 0, 255)]))
+        let output = render(.gradient(Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])))
         let lit = foregroundTriples(in: output).filter { !$0.hasPrefix("9;9;9") }
         #expect(lit.count >= 3, "per-cell interpolation yields several colours: \(lit)")
     }
@@ -89,7 +89,7 @@ struct TrackGradientTests {
         // Identical custom stops → every cell must be exactly that colour,
         // regardless of the animation phase.
         let output = IndeterminateRenderer.render(
-            width: 16, style: .gradient(colors: [.rgb(11, 22, 33), .rgb(11, 22, 33)]),
+            width: 16, style: .gradient(Gradient(colors: [.rgb(11, 22, 33), .rgb(11, 22, 33)])),
             filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
             elapsed: 0)
         let triples = foregroundTriples(in: output)
@@ -99,7 +99,7 @@ struct TrackGradientTests {
     @Test("Indeterminate .gradient with fewer than two usable stops falls back to the rainbow")
     func indeterminateFallback() {
         let output = IndeterminateRenderer.render(
-            width: 16, style: .gradient(colors: [.rgb(11, 22, 33)]),
+            width: 16, style: .gradient(Gradient(colors: [.rgb(11, 22, 33)])),
             filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
             elapsed: 0)
         let triples = foregroundTriples(in: output)
@@ -147,7 +147,7 @@ struct TrackEmptyStylingTests {
     @Test("An empty gradient pinned to the bar takes the ramp its position names")
     func emptyGradientIsPositional() {
         var config = TrackConfiguration.bar
-        config.emptyGradient = [.rgb(0, 0, 0), .rgb(255, 0, 0)]
+        config.emptyGradient = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)])
         let output = render(config, .track)
         // Half full, so the unfilled run covers the SECOND half of the ramp:
         // it reaches the last stop and never shows the first.
@@ -158,7 +158,7 @@ struct TrackEmptyStylingTests {
     @Test("Compressed, the same gradient is squeezed into the unfilled run")
     func emptyGradientCompresses() {
         var config = TrackConfiguration.bar
-        config.emptyGradient = [.rgb(0, 0, 0), .rgb(255, 0, 0)]
+        config.emptyGradient = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)])
         let output = render(config, .fill)
         #expect(hasForeground(output, "0;0;0"), "…so it starts at the first stop instead")
         #expect(hasForeground(output, "255;0;0"))
@@ -167,7 +167,7 @@ struct TrackEmptyStylingTests {
     @Test("A solid-background track gradients its background too")
     func backgroundStyleGradients() {
         var config = TrackConfiguration.block
-        config.emptyGradient = [.rgb(0, 0, 0), .rgb(255, 0, 0)]
+        config.emptyGradient = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)])
         let output = render(config, .track)
         #expect(output.contains("48;2;255;0;0"), "the unfilled remainder is a FILL, not a glyph")
     }
@@ -187,7 +187,7 @@ struct TrackGradientScalingTests {
     private func render(_ fraction: Double, _ scaling: TrackGradientScaling) -> String {
         TrackRenderer.render(
             fraction: fraction, width: 10,
-            style: .shadeRamp(gradient: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)]),
+            style: .shadeRamp(gradient: Gradient(colors: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)])),
             filledColor: .rgb(1, 2, 3),
             emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7),
@@ -233,7 +233,7 @@ struct TrackGradientScalingTests {
                 fraction: fraction, width: 10,
                 style: .threeSegment(
                     leading: "[", middle: "=", trailing: "]", emptyFill: "·",
-                    coloring: .gradient([.rgb(0, 0, 0), .rgb(255, 0, 0)])),
+                    coloring: .gradient(Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)]))),
                 filledColor: .rgb(1, 2, 3),
                 emptyColor: .rgb(9, 9, 9),
                 accentColor: .rgb(7, 7, 7),
@@ -257,7 +257,7 @@ struct TrackGradientScalingTests {
         #expect(EnvironmentValues().trackGradientScaling == .track)
         let defaulted = TrackRenderer.render(
             fraction: 0.5, width: 10,
-            style: .shadeRamp(gradient: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)]),
+            style: .shadeRamp(gradient: Gradient(colors: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)])),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7))
         #expect(defaulted == render(0.5, .track))
         #expect(defaulted != render(0.5, .fill), "…and the two really do differ")
