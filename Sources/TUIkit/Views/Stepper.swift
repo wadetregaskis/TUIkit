@@ -529,6 +529,10 @@ private struct _StepperCore: View, Renderable, Layoutable {
         persistedFocusID: String,
         stateStorage: StateStorage
     ) {
+        // Own AND cascaded — `renderToBuffer`'s shadowing local does not reach
+        // this helper, so a stepper disabled by a container rather than by its
+        // own modifier kept every mouse handler it had.
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         guard !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }

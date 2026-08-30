@@ -537,6 +537,13 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         stateStorage: StateStorage,
         trackWidth: Int
     ) {
+        // Own AND cascaded — `renderToBuffer`'s shadowing local does not reach
+        // this helper, so the bare `self.isDisabled` here answered only for a
+        // slider disabled by its own modifier. One inside a `.disabled()`
+        // container, or under an unselected radio option, kept every mouse
+        // handler it had: it dragged, it wheeled, and clicking it took the
+        // focus that the keyboard could not reach.
+        let isDisabled = self.isDisabled || !context.environment.isEnabled
         guard !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
