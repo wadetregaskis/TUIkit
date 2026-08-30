@@ -126,28 +126,38 @@ struct ImageRenderingControls: View {
             // Shape-awareness: match glyphs by their measured in-cell ink
             // distribution instead of overall luminance. Applies to every
             // charset except a custom ramp.
+            //
+            // Edge tracing is nested UNDER it rather than beside it, because it
+            // is not an independent setting and never could be: the edge test
+            // is a Sobel over the six staggered in-cell darkness regions the
+            // shape matcher already sampled (`orientationGlyph`), and the
+            // luminance path takes one sample per cell and so has nothing to
+            // take a gradient of. Drawn as a peer it was a control that greyed
+            // out for no visible reason; drawn as content it says why.
             Toggle("component.imageControls.shapeAware", isOn: $settings.shapeAware)
-                .disabled(!ImageDemoHelpers.usesShape(settings.charset))
-            // Edge tracing applies to the shape-aware ascii/unicode charsets:
-            // cells on a clean light/dark boundary draw as directional line
-            // glyphs; the threshold picks how strong a gradient qualifies — so
-            // the threshold is the toggle's own content, indented to its label
-            // and live only while it is on.
-            Toggle("component.imageControls.edgeLines", isOn: $settings.edgeLines)
                 .toggleContent {
-                    HStack(spacing: 1) {
-                        Text("component.imageControls.edgeThreshold").dim()
-                        // The slider's own `%`-of-range read-out would mislead
-                        // beside the raw threshold value shown after it.
-                        Slider(value: $settings.edgeThreshold, in: 0.3...2.0, step: 0.1)
-                            .sliderShowsValue(false)
-                            .frame(maxWidth: .infinity)
-                        Text(String(format: "%.1f", settings.edgeThreshold)).dim()
-                    }
+                    // Cells on a clean light/dark boundary draw as directional
+                    // line glyphs; the threshold picks how strong a gradient
+                    // qualifies, so it is in turn the edge toggle's content.
+                    Toggle("component.imageControls.edgeLines", isOn: $settings.edgeLines)
+                        .toggleContent {
+                            HStack(spacing: 1) {
+                                Text("component.imageControls.edgeThreshold").dim()
+                                // The slider's own `%`-of-range read-out would
+                                // mislead beside the raw value shown after it.
+                                Slider(value: $settings.edgeThreshold, in: 0.3...2.0, step: 0.1)
+                                    .sliderShowsValue(false)
+                                    .frame(maxWidth: .infinity)
+                                Text(String(format: "%.1f", settings.edgeThreshold)).dim()
+                            }
+                        }
+                        // The block repertoire carries its own directional
+                        // glyphs, so it traces no edges even shape-aware.
+                        .disabled(
+                            !ImageDemoHelpers.usesEdgeTracing(
+                                settings.charset, shapeAware: true))
                 }
-                .disabled(
-                    !ImageDemoHelpers.usesEdgeTracing(
-                        settings.charset, shapeAware: settings.shapeAware))
+                .disabled(!ImageDemoHelpers.usesShape(settings.charset))
         }
     }
 
