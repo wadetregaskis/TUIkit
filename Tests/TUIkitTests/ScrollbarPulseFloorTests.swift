@@ -56,6 +56,49 @@ struct ScrollbarPulseFloorTests {
         }
     }
 
+    /// The same invariant for BOTH ends of the breath, and against the
+    /// separation that produces them rather than against one end's helper.
+    ///
+    /// The resting end used to fail this on **Man Page**, from a different
+    /// cause than the reversed breath: a pale yellow page
+    /// (`rgb(254, 244, 156)`) and a track close enough to the accent that
+    /// ``Color/ensuringRenderedContrast(atLeast:against:)`` cleared the two by
+    /// taking the NEARER direction, which was toward the page — 3.67:1 before,
+    /// 2.21:1 after, against a track at 3.56:1. Contrast does not care which
+    /// side of the groove the thumb is on; the eye does.
+    /// ``ScrollbarColors/separated(_:from:over:)`` now takes the page as well
+    /// and pushes away from it when the nearer answer would be quieter than the
+    /// groove.
+    @Test("Both ends of the breath stand at least as far off the page as the track")
+    func bothEndsStandOffThePage() {
+        for depth in [ColorDepth.truecolor, .palette256] {
+            ColorDepth.withCurrent(depth) {
+                for palette in PaletteRegistry.all {
+                    let page = palette.background.resolve(with: palette)
+                    let track = palette.foregroundQuaternary.resolve(with: palette)
+                    let groove = track.downsampledToPalette256()
+                        .contrastRatio(against: page.downsampledToPalette256())
+                    let ends: [(String, Color)] = [
+                        ("resting", palette.accent.resolve(with: palette)),
+                        ("lifted", palette.hoveredForeground(palette.accent)),
+                    ]
+                    for (name, raw) in ends {
+                        let thumb = ScrollbarColors.separated(raw, in: palette)
+                        let stands = thumb.downsampledToPalette256()
+                            .contrastRatio(against: page.downsampledToPalette256())
+                        #expect(
+                            stands >= groove,
+                            """
+                            \(palette.name) at \(depth): the \(name) end stands \
+                            \(String(format: "%.2f", stands)):1 off the page where its own \
+                            track stands \(String(format: "%.2f", groove)):1
+                            """)
+                    }
+                }
+            }
+        }
+    }
+
     /// The reported fault, as an invariant rather than as one palette's numbers.
     ///
     /// The breath used to run from the accent DOWN toward the page, and on the
@@ -64,16 +107,9 @@ struct ScrollbarPulseFloorTests {
     /// `rgb(5, 10, 5)`. It passed the separation floor above, because contrast
     /// does not care which side of the groove the thumb is on; the eye does.
     ///
-    /// The LIFTED end is what this asserts, that being the end the breath now
-    /// travels to. The resting end is the plain accent and always has been, and
-    /// on one palette it does fail this: **Man Page** has a pale yellow page
-    /// (`rgb(254, 244, 156)`) and a track so close to its accent that
-    /// ``ScrollbarColors/separated(_:from:)`` clears the two by pushing the
-    /// thumb TOWARD the page — 3.67:1 before, 2.21:1 after, against a track at
-    /// 3.56:1. That is the same fault from a different cause (a separation that
-    /// picks its direction by contrast alone, with no opinion about which side
-    /// of the track it lands on) and it predates the breath being reversed, so
-    /// it is left for its own change rather than folded in here.
+    /// The LIFTED end is what this asserts, that being the end the breath
+    /// travels to; ``bothEndsStandOffThePage`` covers the resting end, which
+    /// used to fail on one palette for a second reason — see there.
     @Test("The lifted end of the breath is never quieter than its own track")
     func theLiftNeverSinksBelowItsGroove() {
         for depth in [ColorDepth.truecolor, .palette256] {

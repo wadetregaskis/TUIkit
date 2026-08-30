@@ -403,7 +403,7 @@ struct ScrollbarColors {
         // stepping the cell it is over further, not by starting a second story.
         let track = palette.foregroundQuaternary.resolve(with: palette)
         let now = Self.separated(
-            cycle.colorNow(dim: palette.accent, bright: Self.pulseLift(palette)), from: track)
+            cycle.colorNow(dim: palette.accent, bright: Self.pulseLift(palette)), in: palette)
         return Self(
             thumb: now,
             track: palette.foregroundQuaternary,
@@ -432,9 +432,7 @@ struct ScrollbarColors {
     /// stepping one further from wherever the breath currently is.
     @MainActor
     static func pulseLift(_ palette: any Palette) -> Color {
-        separated(
-            palette.hoveredForeground(palette.accent),
-            from: palette.foregroundQuaternary.resolve(with: palette))
+        separated(palette.hoveredForeground(palette.accent), in: palette)
     }
 
     /// `thumb`, pushed until it is legible against `track`.
@@ -451,10 +449,56 @@ struct ScrollbarColors {
     /// Through the cube (``Color/ensuringRenderedContrast(atLeast:against:)``),
     /// because that is where the collapse happens; measured in sRGB it never
     /// shows up at all.
+    /// The thumb is also never allowed to end up QUIETER against the page than
+    /// its own track. ``Color/ensuringRenderedContrast(atLeast:against:)`` takes
+    /// the NEARER of the two directions that clear the track and has no opinion
+    /// about which side of the page it lands on — and on a palette whose accent
+    /// and track sit close together the nearer direction is toward the page.
+    /// Measured on **Man Page** (a pale yellow page, `rgb(254, 244, 156)`, a
+    /// track at `rgb(157, 151, 96)` and an accent 1.03:1 from it): the accent
+    /// stood 3.67:1 off the page and came back at 2.21:1, against a track at
+    /// 3.56:1 — a hole in its own groove. That is the same fault the breath's
+    /// direction was reversed to fix, arriving from the other end.
+    ///
+    /// Three answers, in order of how little they move the colour:
+    ///
+    /// 1. The plain separation, when it is already at least as loud as the
+    ///    groove — which it is on every palette but one.
+    /// 2. The MINIMAL colour that stands as far off the page as the track does,
+    ///    when that is also clear of the track. It rarely is: standing off the
+    ///    page by exactly the track's own amount tends to land ON the track.
+    /// 3. A step of ``Palette/hoveredForeground(_:)`` — the framework's "one
+    ///    step away from the page, whichever way that is", the same primitive
+    ///    ``pulseLift(_:)`` uses — from there. Man Page clears both on the
+    ///    first step (6.46:1 off the page, 1.81:1 off the track).
+    ///
+    /// One step, not a walk: `hoveredForeground` is not monotone under
+    /// repetition (it bottoms out and comes back), so iterating it wanders
+    /// rather than converges. Failing all three the plain separation stands —
+    /// being tellable from the track is the more important of the two
+    /// properties, and it is the one a caller cannot recover.
     @MainActor
-    static func separated(_ thumb: Color, from track: Color) -> Color {
-        thumb.ensuringRenderedContrast(
+    static func separated(_ thumb: Color, in palette: any Palette) -> Color {
+        let track = palette.foregroundQuaternary.resolve(with: palette)
+        let page = palette.background.resolve(with: palette)
+        let floored = thumb.ensuringRenderedContrast(
             atLeast: ViewConstants.chromeSeparationFloor, against: track)
+        let groove = renderedRatio(track, page)
+        func standsOff(_ color: Color) -> Bool {
+            renderedRatio(color, page) >= groove
+                && renderedRatio(color, track) >= ViewConstants.chromeSeparationFloor
+        }
+        guard !standsOff(floored) else { return floored }
+        let offThePage = floored.ensuringRenderedContrast(atLeast: groove, against: page)
+        if standsOff(offThePage) { return offThePage }
+        let stepped = palette.hoveredForeground(offThePage)
+        return standsOff(stepped) ? stepped : floored
+    }
+
+    /// Two colours' contrast AS DRAWN — through the 256-colour cube, which is
+    /// where chrome this quiet collapses. See ``separated(_:in:)``.
+    private static func renderedRatio(_ lhs: Color, _ rhs: Color) -> Double {
+        lhs.downsampledToPalette256().contrastRatio(against: rhs.downsampledToPalette256())
     }
 
     /// Everything the bar's ANIMATION is coloured from, or nil when nothing
@@ -503,10 +547,9 @@ struct ScrollbarPulse {
     /// One set of colours per point of the cycle, in cycle order.
     @MainActor
     var frames: [ScrollbarColors] {
-        let track = palette.foregroundQuaternary.resolve(with: palette)
-        return cycle.colors(
+        cycle.colors(
             dim: palette.accent, bright: ScrollbarColors.pulseLift(palette))
-            .map { ScrollbarColors.separated($0, from: track) }
+            .map { ScrollbarColors.separated($0, in: palette) }
             .map { accent in
                 ScrollbarColors(
                     thumb: accent, track: palette.foregroundQuaternary, arrow: accent,
