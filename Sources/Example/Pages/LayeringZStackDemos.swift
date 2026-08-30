@@ -77,33 +77,16 @@ extension LayeringPage {
     }
 
     /// The whole section.
-    @ViewBuilder var zstackSection: some View {
-        DemoSection("page.layering.section.zstack") {
-            // One `TimelineView` either way, with a schedule that stops rather
-            // than a branch that swaps the view out: swapping would change the
-            // subtree's IDENTITY every time the toggle moved, and take the
-            // Slider's own state with it.
-            TimelineView(AnimationTimelineSchedule(paused: !zstackAnimates)) { timeline in
-                zstackBody(
-                    travel: zstackAnimates
-                        ? Self.zstackSweep(at: timeline.date) : zstackTravel)
-            }
-        }
-    }
-
-    @ViewBuilder private func zstackBody(travel: Double) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text("page.layering.zstack.explain")
-                .foregroundStyle(.palette.foregroundSecondary)
-
-            // Slide every example's top layer at once: the partial overlaps are
-            // where the "no transparency, no blending" claim above is actually
-            // visible, and they only appear once the layers stop lining up.
+    /// The ZStack demos' own control — where the top layer sits — for the
+    /// controls pane.
+    ///
+    /// Takes the travel being DRAWN rather than reading `zstackTravel`, so the
+    /// thumb sweeps with the demos rather than sitting where it was last
+    /// dropped. Writes still land on the control's own value, which is what the
+    /// sweep hands back to when it stops.
+    @ViewBuilder func zstackTravelControls(travel: Double) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 1) {
-                // Bound to the travel being DRAWN, so the thumb sweeps with
-                // the demos rather than sitting where it was last dropped.
-                // Writes still land on the control's own value, which is what
-                // the sweep hands back to when it stops.
                 Slider(
                     value: Binding(get: { travel }, set: { zstackTravel = $0 }),
                     in: -1...1, step: 0.05
@@ -121,8 +104,21 @@ extension LayeringPage {
                     .frame(width: 5, alignment: .trailing)
                     .bold()
                     .foregroundStyle(.palette.accent)
-                Toggle("page.layering.zstack.animate", isOn: $zstackAnimates)
             }
+            Toggle("page.layering.zstack.animate", isOn: $zstackAnimates)
+        }
+    }
+
+    @ViewBuilder func zstackSection(travel: Double) -> some View {
+        DemoSection("page.layering.section.zstack") {
+            zstackBody(travel: travel)
+        }
+    }
+
+    @ViewBuilder private func zstackBody(travel: Double) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text("page.layering.zstack.explain")
+                .foregroundStyle(.palette.foregroundSecondary)
 
             // 1 — What it does. Children stack back-to-front and alignment
             // positions them within the union of their sizes.

@@ -63,24 +63,65 @@ struct LayeringPage: View {
     var zstackOpacity: Double { opacity }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            controls
-            zstackSection
-            overField
-            throughText
-            nesting
-            containerFill
-            neverEnding
-            KeyboardHelpSection(shortcuts: [
-                "page.layering.help.tab",
-                "page.layering.help.arrows",
-                "page.layering.help.activate",
-            ])
+        // The controls to one side and every demo to the other, because the
+        // controls drive ALL of them: down a single column the sliders scrolled
+        // off the top the moment you looked at anything below the second band,
+        // and a control you cannot see while you watch what it does is not a
+        // control you can learn from.
+        //
+        // One `TimelineView` around BOTH panes, with a schedule that stops
+        // rather than a branch that swaps the view out — swapping would change
+        // the subtree's identity every time the toggle moved and take the
+        // sliders' own state with it. Around both, because the travel slider
+        // lives in one pane and the bands it moves live in the other, and the
+        // thumb sweeps with them.
+        TimelineView(AnimationTimelineSchedule(paused: !zstackAnimates)) { timeline in
+            let travel = zstackAnimates ? Self.zstackSweep(at: timeline.date) : zstackTravel
+            NavigationSplitView {
+                controlsPane(travel: travel)
+            } detail: {
+                demoPane(travel: travel)
+            }
         }
-        .padding(.horizontal, 1)
-        .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("menu.item.layering", subtitle: "page.layering.subtitle")
+        }
+    }
+
+    /// Every knob on the page, in a pane of its own.
+    ///
+    /// Scrollable in its own right: on a short terminal the pane is shorter
+    /// than its own contents, and a control that cannot be reached is worse
+    /// than one that has to be scrolled to.
+    @ViewBuilder private func controlsPane(travel: Double) -> some View {
+        ScrollView {
+            controls(travel: travel)
+                .padding(.horizontal, 1)
+        }
+        // Wide enough for the longest label the sliders carry
+        // ("Outer opacity 100% → 50%") plus a track worth dragging, and no
+        // wider: every cell this pane takes is a cell the demos do not have,
+        // and the demos are what the page is for.
+        .navigationSplitViewColumnWidth(min: 32, ideal: 42, max: 52)
+    }
+
+    /// Every demo, scrolling on its own.
+    @ViewBuilder private func demoPane(travel: Double) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 1) {
+                zstackSection(travel: travel)
+                overField
+                throughText
+                nesting
+                containerFill
+                neverEnding
+                KeyboardHelpSection(shortcuts: [
+                    "page.layering.help.tab",
+                    "page.layering.help.arrows",
+                    "page.layering.help.activate",
+                ])
+            }
+            .padding(.horizontal, 1)
         }
     }
 
@@ -91,7 +132,10 @@ struct LayeringPage: View {
         "\(Int((value * 100).rounded()))%"
     }
 
-    private var controls: some View {
+    /// One section, not two: every knob here drives every demo in the other
+    /// pane, and splitting them by which demo they were introduced with would
+    /// put the same heading on the page twice.
+    private func controls(travel: Double) -> some View {
         DemoSection("page.layering.section.controls") {
             VStack(alignment: .leading, spacing: 0) {
                 Text("page.layering.controls.hint")
@@ -115,6 +159,9 @@ struct LayeringPage: View {
                     Toggle("page.layering.topForeground", isOn: $zstackTopForeground)
                     Toggle("page.layering.topBackground", isOn: $zstackTopBackground)
                 }
+                // Where the ZStack demos' top layer sits, and whether it sweeps
+                // there by itself.
+                zstackTravelControls(travel: travel)
             }
         }
     }
