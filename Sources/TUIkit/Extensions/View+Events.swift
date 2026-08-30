@@ -253,11 +253,18 @@ public struct DragGestureEvent: Sendable, Equatable {
     /// The current phase.
     public let phase: Phase
 
-    /// The cursor's current absolute screen position.
+    /// The cursor's current position, in the view's OWN cells: `(0, 0)` is its
+    /// top-left, not the screen's.
+    ///
+    /// The same convention ``View/onMouseEvent(_:)`` reports in, and it holds
+    /// for the whole gesture — including after the cursor has left the view,
+    /// where the numbers simply go negative or past the view's width. (This
+    /// said "absolute screen position", which it never was: the dispatcher
+    /// subtracts the region's origin before it calls a handler.)
     public let x: Int
     public let y: Int
 
-    /// The absolute screen position where the gesture began.
+    /// Where the gesture began, in the same view-local cells.
     public let startX: Int
     public let startY: Int
 

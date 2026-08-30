@@ -38,6 +38,16 @@ extension DragGestureModifier: Renderable {
             return buffer
         }
 
+        // A drag needs the terminal to report presses and drag motion, and
+        // the app's `mouseSupport(_:)` is not this modifier's to assume: the
+        // default base has both, but an app that narrowed it to clicks and
+        // scrolling would have left every `.onDragGesture` in the tree — its
+        // own and the framework's — receiving a press and then nothing at all.
+        // Per-frame, unioned onto the base, exactly as `.onHover` asks for
+        // motion and `DialogDrag` asks for these two.
+        dispatcher.requestFeature(.clicks)
+        dispatcher.requestFeature(.drag)
+
         // Reference cell so the start position is shared across the
         // press → drag → release call sequence the same handler will
         // receive.
