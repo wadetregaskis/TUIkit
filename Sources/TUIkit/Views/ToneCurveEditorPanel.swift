@@ -208,6 +208,13 @@ public struct ToneCurveEditorPanel: View {
     }
 
     /// A marker under each stop's position, the selected one in the accent.
+    ///
+    /// Over the CELLS rather than over `0..<stripWidth`, and each cell carries
+    /// the colour it draws: an `Equatable` element — a bare column index —
+    /// wraps every cell in the element-keyed render memo, which cannot see
+    /// which stops the loop captured from outside itself, so the row freezes
+    /// at whatever it drew first. `GradientEditorPanel`'s preview shipped that
+    /// bug once; this one had it for the length of one commit.
     private var markerRow: some View {
         let list = ordered
         let selection = clampedSelection
@@ -218,13 +225,15 @@ public struct ToneCurveEditorPanel: View {
             // the one the marker is hiding.
             owner[Self.column(forTone: Self.position(of: stop))] = index
         }
+        let cells: [Color?] = (0..<Self.stripWidth).map { column in
+            guard let index = owner[column] else { return nil }
+            return index == selection ? .palette.accent : .palette.foregroundTertiary
+        }
         return HStack(spacing: 0) {
             Text(verbatim: "").frame(width: Self.gutter, alignment: .leading)
-            ForEach(0..<Self.stripWidth, id: \.self) { column in
-                if let index = owner[column] {
-                    Text(verbatim: TerminalSymbols.toneCurveStop)
-                        .foregroundStyle(
-                            index == selection ? .palette.accent : .palette.foregroundTertiary)
+            ForEach(Array(cells.enumerated()), id: \.offset) { _, color in
+                if let color {
+                    Text(verbatim: TerminalSymbols.toneCurveStop).foregroundStyle(color)
                 } else {
                     Text(verbatim: " ")
                 }

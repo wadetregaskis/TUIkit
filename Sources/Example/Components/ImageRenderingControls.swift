@@ -276,10 +276,15 @@ struct ImageRenderingControls: View {
     private var lutPreview: some View {
         let width = 12
         let curve = ASCIIToneCurve(settings.lutStops)
+        // Over the COLOURS, not over `0..<width`: an `Equatable` element wraps
+        // each cell in the element-keyed render memo, which cannot see the
+        // curve the cell captured, so the strip freezes at whatever it drew
+        // first. (It was `ForEach(ramp.indices, …)` before, with the same
+        // hazard.)
+        let cells = (0..<width).map { curve.color(atTone: Double($0) / Double(width - 1)) }
         return HStack(spacing: 0) {
-            ForEach(0..<width, id: \.self) { cell in
-                Text(verbatim: "\u{2588}")
-                    .foregroundStyle(curve.color(atTone: Double(cell) / Double(width - 1)))
+            ForEach(Array(cells.enumerated()), id: \.offset) { _, color in
+                Text(verbatim: "\u{2588}").foregroundStyle(color)
             }
         }
     }

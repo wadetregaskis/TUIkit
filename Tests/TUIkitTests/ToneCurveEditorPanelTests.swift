@@ -129,6 +129,34 @@ struct ToneCurveEditorPanelTests {
         #expect(offsets == expected)
     }
 
+    @Test("Moving a stop moves its marker, in the same render pass")
+    func markersFollowTheStops() {
+        // The `ForEach`-over-indices trap: an `Equatable` element wraps each
+        // cell in the element-keyed render memo, which cannot see data the
+        // cell captured from outside the loop — so the row freezes at whatever
+        // it drew first. `GradientEditorPanel`'s preview shipped with exactly
+        // that bug once.
+        let context = makeRenderContext(width: 100, height: 60)
+        func markerColumns(_ list: [Stop]) -> [Int] {
+            let panel = ToneCurveEditorPanel(
+                "Tone curve", stops: .constant(list), isPresented: .constant(true))
+            let lines = renderToBuffer(panel, context: context).lines.map(\.stripped)
+            guard let row = lines.first(where: { $0.contains(TerminalSymbols.toneCurveStop) })
+            else { return [] }
+            return row.enumerated()
+                .filter { String($0.element) == TerminalSymbols.toneCurveStop }
+                .map(\.offset)
+        }
+        let before = markerColumns(stops)
+        let after = markerColumns([
+            .init(at: 0, to: .rgb(10, 10, 40)),
+            .init(at: 0.8, to: .rgb(180, 40, 70)),
+            .init(at: 1, to: .rgb(255, 250, 220)),
+        ])
+        #expect(!before.isEmpty && !after.isEmpty)
+        #expect(before != after, "the marker row did not follow the stops: \(before)")
+    }
+
     @Test("The output strip shows the curve, not a gradient of the stop colours")
     func outputStripIsTheCurve() {
         // Two stops crowded into the first third: an evenly-spaced gradient of
