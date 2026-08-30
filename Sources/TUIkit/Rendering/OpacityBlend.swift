@@ -80,9 +80,26 @@ extension FrameBuffer {
             let behindColumn = column + destinationShift
             let behind =
                 behindCells.indices.contains(behindColumn) ? behindCells[behindColumn] : nil
+            let coverage = alpha(column)
             var blended = blend(
-                source: cell, destination: behind, alpha: alpha(column),
+                source: cell, destination: behind, alpha: coverage,
                 surface: surface, defaultForeground: defaultForeground)
+            // Inside a span, "no background" cannot be left unsaid. SGR 49 is
+            // the TERMINAL's default — white on a light profile — and a span is
+            // spliced into a row that opened with the PAGE's, so a cell emitted
+            // as 49 stops inheriting the row and shows the terminal instead.
+            // The arithmetic above already reads a missing background as
+            // `surface` (that is what `behind` is); the answer has to say so
+            // too. Reported as the spaces of a faded label punching white cells
+            // through the band underneath it.
+            //
+            // Only for columns a region actually covers: an uncovered column
+            // passes the source through, and the source is part of a row that
+            // has not been taken apart.
+            if coverage != nil, blended.background == nil {
+                blended.background = surface
+                blended.style = blended.style.settingBackground(surface)
+            }
             // A revealed DESTINATION character can be wide, and the walk
             // advances by what it emits: a two-column character from a
             // one-column decision would swallow the next source column's own

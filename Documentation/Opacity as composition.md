@@ -608,6 +608,31 @@ frame CONTENT, so a repeated frame costs neither a wake nor a write. Measured
 unchanged either way: the Example's breathing fade replays at the same byte
 rate and CPU before and after the refinements.
 
+### 9.8 A composite may not say SGR 49
+
+A blended span is spliced into a row that `FrameDiffWriter.buildLine` opened
+with the PAGE's background. Inside that row, SGR 49 does not mean "the page's" —
+it means the TERMINAL's, which on Apple Terminal's light profile is white.
+
+The blend's arithmetic already reads a missing background as the surface: that
+is exactly what `behind = destination?.background ?? surface` says. The ANSWER
+has to say so too. It did not, and the cells it decided for reached the terminal
+as `ESC[49m`. Captured on the Layering page with a faded label over a band drawn
+in the accent and no background of its own:
+
+```
+ESC[45;20H ESC[38;5;83;48;5;22m ▒▒▒▒▒▒▒▒▒▒▒ ESC[49m ▒ ESC[48;5;22m ▒▒▒ ESC[49m ▒ …
+```
+
+Every `ESC[49m` there is a column where the label's SPACE yielded to the band —
+the destination cell returned verbatim, background and all, and its background
+was nothing. Now they read `ESC[48;5;16m`.
+
+Scoped to columns a region actually covers. A span runs from the leftmost to the
+rightmost covered column and may pass over uncovered ones on the way; those
+belong to a row that was never taken apart, and they reach the terminal
+unaltered.
+
 ## 9.7 α = 1 is not the identity, and treating it as one was visible
 
 Three separate early returns took a fully opaque region to be a no-op: the
