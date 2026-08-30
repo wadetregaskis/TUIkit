@@ -2394,6 +2394,29 @@ here.)
 - `ToggleCharacterSet.automatic` + `SwitchIndicatorGlyphs` — chrome glyph
   selection per host.
 
+#### The animation replay reset to the TERMINAL's background — FIXED 2026-08-29
+
+Every styled fragment ends in `ESC[0m`, and a reset returns the terminal to ITS
+default: white on Apple Terminal's light profile, black on a dark one. A
+rendered row has the page's background put back after every reset by
+`FrameDiffWriter.buildLine`, which is why the Animation page's *fading* text was
+fixed by splitting the collapsed `ESC[0;…m` so the restoration could find it.
+
+The *breathing* text was still white, and by the one path that does not build a
+row: the animation replay splices a run's frame into an already-built line, and
+the frame comes straight from the view having been through neither the
+compensation nor the background restoration. Captured under
+`TERM_PROGRAM=Apple_Terminal`, one tick read
+
+```
+ESC[38;3H ESC[0;38;5;34m Still here, still breathing. ESC[0m
+```
+
+— no background code anywhere in it, so the run's own cells took the terminal's.
+The restoration is now a shared function that `patchingAnimatedRun` applies to
+the frame before compensating it; the same capture now reads
+`ESC[0;38;5;34;48;5;16m`.
+
 #### The animation replay compensates a second time — FIXED 2026-08-29
 
 A row is compensated when it is rendered. When an `AnimatedCellRun` on that row

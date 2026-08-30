@@ -96,7 +96,7 @@ struct ReplayCursorCompensationTests {
         for index in run.frames.indices {
             let patched = writer.patchingAnimatedRun(
                 in: built, with: run.frame(atIndex: index), atColumn: run.offsetX,
-                width: run.width, terminalWidth: 40)
+                width: run.width, terminalWidth: 40, bgCode: "")
             #expect(
                 patched.contains(Self.cursorForward),
                 "frame \(index) reached the terminal with the cluster uncompensated")
@@ -160,5 +160,67 @@ struct ReplayCursorCompensationTests {
             #expect(emitted.unicodeScalars.contains("\u{1F3FB}"))
             #expect(emitted.contains("\u{1B}[2D"), "internal pulled back to the claim")
         }
+    }
+}
+
+// MARK: - The row's background
+
+@MainActor
+@Suite("A replayed run keeps the row's background")
+struct ReplayBackgroundTests {
+
+    /// The reported fault: the Animation page's breathing text drawn on a white
+    /// band under Apple Terminal.
+    ///
+    /// Every styled fragment ends in `ESC[0m`, and a reset returns the terminal
+    /// to ITS default — white on a light profile. A rendered row has the page's
+    /// background put back after every reset by `buildLine`; a run's frame comes
+    /// straight from the view and is spliced into that row having been through
+    /// nothing, so its own cells reset to the terminal's.
+    @Test("A run's frame carries the page background into the row")
+    func theFrameCarriesTheBackground() {
+        let writer = FrameDiffWriter(
+            isAppleTerminal: true, isITerm2: false, isGhostty: false, isWarp: false,
+            isTmux: false)
+        let background = "\u{1B}[48;5;16m"
+        let row = background + "\u{1B}[2K" + "aaaaa" + ANSIRenderer.reset
+        let frame = "\u{1B}[0;38;5;34m" + "bb" + ANSIRenderer.reset
+
+        let bare = writer.patchingAnimatedRun(
+            in: row, with: frame, atColumn: 1, width: 2, terminalWidth: 20, bgCode: "")
+        #expect(!bare.contains("48;5;16m\u{1B}[38;5;34"), "nothing to restore without a bgCode")
+
+        let patched = writer.patchingAnimatedRun(
+            in: row, with: frame, atColumn: 1, width: 2, terminalWidth: 20, bgCode: background)
+        // The run's OWN cells are painted with the page's background: the
+        // collapsed reset the frame opens with is split apart, the background
+        // put between the halves, and the two collapsed together again.
+        #expect(
+            patched.contains("48;5;16"),
+            "the run's frame reached the row with no background: \(patched.debugDescription)")
+        // And it does not move a cell — the whole point of the splice.
+        #expect(patched.strippedLength == row.strippedLength)
+    }
+
+    /// The trailing reset is the other half: whatever follows the run on the row
+    /// must not inherit the terminal's background either.
+    @Test("The row continues in the page's background after the run")
+    func theRowContinuesInTheBackground() {
+        let writer = FrameDiffWriter(
+            isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: false,
+            isTmux: false)
+        let background = "\u{1B}[48;5;16m"
+        let row = background + "\u{1B}[2K" + "aaaaa" + ANSIRenderer.reset
+        let frame = "\u{1B}[38;5;34m" + "bb" + ANSIRenderer.reset
+        let patched = writer.patchingAnimatedRun(
+            in: row, with: frame, atColumn: 1, width: 2, terminalWidth: 20, bgCode: background)
+        guard let end = patched.range(of: "bb") else {
+            Issue.record("the run is not in the row: \(patched.debugDescription)")
+            return
+        }
+        let after = String(patched[end.upperBound...])
+        #expect(
+            after.hasPrefix(ANSIRenderer.reset + background),
+            "the row resumes in the terminal's background: \(after.debugDescription)")
     }
 }

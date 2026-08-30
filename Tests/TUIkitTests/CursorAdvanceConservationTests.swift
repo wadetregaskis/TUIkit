@@ -206,7 +206,7 @@ struct CursorAdvanceConservationTests {
             // colour, which is what a focus pulse is.
             let frame = "\u{1B}[38;5;35m" + glyph + "\u{1B}[0m"
             let patched = writer.patchingAnimatedRun(
-                in: rendered, with: frame, atColumn: 1, width: width, terminalWidth: 40)
+                in: rendered, with: frame, atColumn: 1, width: width, terminalWidth: 40, bgCode: "")
 
             let claim = landing(rendered, on: program)
             #expect(

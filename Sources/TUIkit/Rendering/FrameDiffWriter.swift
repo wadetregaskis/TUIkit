@@ -380,6 +380,36 @@ extension FrameDiffWriter {
     /// What is left of a collapsed reset once its `ESC[0m` has been split off.
     private static let sgrIntroducer = "\u{1B}["
 
+    /// `styled` with the row's background put back after every reset.
+    ///
+    /// A reset returns the terminal to ITS default, which on Apple Terminal's
+    /// light profile is white — so a fragment that ends in one leaves the cells
+    /// after it showing the terminal's background rather than the page's. Every
+    /// styled fragment ends in a reset, so every one needs this.
+    ///
+    /// A collapsed reset (`ESC[0;…m`, the spelling
+    /// ``String/collapsingAdjacentSGR()`` gives a line's first absolute run) is
+    /// split back apart first, so there is one spelling for the restoration to
+    /// find; `collapsingAdjacentSGR()` puts the pieces together again at the end
+    /// of `buildLine`, with the background now between them.
+    ///
+    /// Native Swift `replacing(_:with:)` — NOT Foundation's
+    /// `replacingOccurrences`, which bridges to `NSString` and was ~8% of the
+    /// render loop in a Mode-B (live-app) profile.
+    ///
+    /// Shared with the animation replay, which splices a run's frame into an
+    /// already-built row: the frame comes straight from the view and has never
+    /// been through this, so without it a breathing run painted its own cells in
+    /// the terminal's background. That is the same fault this fixed for rendered
+    /// rows, reaching the screen by the one path that does not build a row.
+
+    static func restoringBackground(in styled: String, bgCode: String, reset: String) -> String {
+        guard !bgCode.isEmpty else { return styled }
+        return styled
+            .replacing(collapsedReset, with: reset + sgrIntroducer)
+            .replacing(reset, with: reset + bgCode)
+    }
+
     /// Builds one terminal-ready output line from a raw buffer line (`nil` marks
     /// an empty row past the buffer's height). Pure given the writer's
     /// `isAppleTerminal`.
@@ -448,12 +478,7 @@ extension FrameDiffWriter {
         // spelling for the restoration to find — and `collapsingAdjacentSGR()`
         // at the end of this function puts the pieces together again, with the
         // background now between them.
-        let separated = compensated.replacing(
-            Self.collapsedReset, with: reset + Self.sgrIntroducer)
-        // Native Swift `replacing(_:with:)` — NOT Foundation's
-        // `replacingOccurrences`, which bridges to `NSString` and was ~8% of the
-        // render loop in a Mode-B (live-app) profile.
-        let mainWithBg = separated.replacing(reset, with: reset + bgCode)
+        let mainWithBg = Self.restoringBackground(in: compensated, bgCode: bgCode, reset: reset)
         let padding = max(0, terminalWidth - clippedWidth)
         let line = bgCode + eraseLine + mainWithBg + String(repeating: " ", count: padding) + reset
         // Last, after every compensation has had the bytes it expects to match
@@ -572,11 +597,20 @@ extension FrameDiffWriter {
     ///     row continues past the run — see `compensatingCursorAdvance`.
     func patchingAnimatedRun(
         in line: String, with frame: String, atColumn column: Int, width: Int,
-        terminalWidth: Int
+        terminalWidth: Int, bgCode: String
     ) -> String {
+        // The row's background put back FIRST, then the compensation: the frame
+        // arrives from the view having been through neither, and the splice
+        // drops it into a row that has been through both. Without the
+        // restoration the run's own cells reset to the TERMINAL's background —
+        // white on Apple Terminal's light profile — which is the Animation
+        // page's breathing text drawn on a white band. See
+        // ``restoringBackground(in:bgCode:reset:)``.
         FrameBuffer.patchingAnimatedCells(
             in: line,
-            with: compensatingCursorAdvance(frame),
+            with: compensatingCursorAdvance(
+                Self.restoringBackground(
+                    in: frame, bgCode: bgCode, reset: ANSIRenderer.reset)),
             atColumn: column, width: width)
     }
 

@@ -147,7 +147,7 @@ extension RenderLoop {
                 let patched = diffWriter.patchingAnimatedRun(
                     in: lines[row], with: run.frame(atElapsed: now),
                     atColumn: run.offsetX, width: run.width,
-                    terminalWidth: frame.terminalWidth)
+                    terminalWidth: frame.terminalWidth, bgCode: frame.backgroundCode)
                 if patched != lines[row] {
                     lines[row] = patched
                     touched = true
