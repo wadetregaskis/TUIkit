@@ -129,4 +129,175 @@ struct ChannelCurveEditorPanelTests {
         #expect(updated[index].input > 0, "landed on top of the first")
         #expect(updated.map(\.input) == updated.map(\.input).sorted())
     }
+
+    // MARK: - The pointer
+
+    /// A frame of the panel driven the way the run loop drives one: render,
+    /// publish the regions the render produced, then dispatch. The buffer is
+    /// the root here, so its region offsets ARE screen coordinates.
+    @MainActor
+    private struct Harness {
+        let panel: ChannelCurveEditorPanel
+        let context: RenderContext
+        let dispatcher: MouseEventDispatcher
+
+        @discardableResult
+        func frame() -> [String] {
+            let buffer = renderToBuffer(panel, context: context)
+            dispatcher.setRegions(buffer.hitTestRegions)
+            return buffer.lines.map(\.stripped)
+        }
+
+        /// The screen position of the plot's `(column, row)` cell, found from
+        /// the rendered picture rather than computed: the panel is centred
+        /// inside a dialog inside whatever the context proposes, and a test
+        /// that did that arithmetic itself would be testing its own copy of it.
+        func plotOrigin(_ lines: [String]) -> (x: Int, y: Int)? {
+            // The identity ramp's top plot row is empty until its very last
+            // cells, so the marker row is the reliable landmark: it is the
+            // first row carrying the stop glyph.
+            guard
+                let markerRow = lines.firstIndex(where: {
+                    $0.contains(TerminalSymbols.toneCurveStop)
+                }),
+                let line = lines.first(where: { $0.contains(TerminalSymbols.toneCurveStop) }),
+                let mark = line.range(of: TerminalSymbols.toneCurveStop)
+            else { return nil }
+            let x = line.distance(from: line.startIndex, to: mark.lowerBound)
+            // The marker row sits directly under the plot's last row.
+            return (x: x, y: markerRow - Panel.plotHeight)
+        }
+    }
+
+    private func harness(_ channels: Binding<ASCIIToneCurve.Channels>) -> Harness {
+        let tui = TUIContext()
+        var environment = EnvironmentValues()
+        environment.focusManager = FocusManager()
+        environment.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 90, availableHeight: 60, environment: environment, tuiContext: tui
+        ).isolatingRenderCache()
+        tui.mouseEventDispatcher.setActiveSupport(.standard)
+        return Harness(
+            panel: ChannelCurveEditorPanel(
+                "Channel curves", channels: channels, isPresented: .constant(true)),
+            context: context,
+            dispatcher: tui.mouseEventDispatcher)
+    }
+
+    /// The gesture the whole thing exists for: press on the chart, drag, and
+    /// the curve follows. Driven through the real dispatcher against the real
+    /// regions, so a wrong offset — the caption gutter, the dialog's border,
+    /// the centring — fails here and not only on screen.
+    @Test("Dragging on the plot moves a point in both axes")
+    func draggingThePlotMovesAPoint() {
+        var channels = ASCIIToneCurve.Channels(red: .identity, green: .identity, blue: .identity)
+        let harness = harness(Binding(get: { channels }, set: { channels = $0 }))
+        let lines = harness.frame()
+        guard let origin = harness.plotOrigin(lines) else {
+            Issue.record("the plot did not render")
+            return
+        }
+        // Grab the identity ramp's first point — input 0, output 0, so the
+        // bottom-left cell — and take it to the top of the plot.
+        let left = origin.x
+        harness.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: left, y: origin.y + Panel.plotHeight - 1))
+        harness.frame()
+        harness.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: left, y: origin.y))
+        #expect(
+            channels.red.points.first?.output == 1,
+            "the point did not follow the drag: \(channels.red.points)")
+        #expect(channels.red.points.first?.input == 0, "it moved sideways too")
+        harness.frame()
+        harness.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: left, y: origin.y))
+        #expect(channels.red.points.count == 2, "the drag added a point instead of moving one")
+    }
+
+    /// The other half: a press where there is no point puts one there, so
+    /// "click the tone you want to change and drag it" is one gesture.
+    @Test("Pressing empty chart adds a point at that input and output")
+    func pressingEmptyChartAddsAPoint() {
+        var channels = ASCIIToneCurve.Channels(red: .identity, green: .identity, blue: .identity)
+        let harness = harness(Binding(get: { channels }, set: { channels = $0 }))
+        let lines = harness.frame()
+        guard let origin = harness.plotOrigin(lines) else {
+            Issue.record("the plot did not render")
+            return
+        }
+        let column = Panel.plotWidth / 2
+        harness.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: origin.x + column, y: origin.y + 1))
+        #expect(channels.red.points.count == 3, "no point was added: \(channels.red.points)")
+        let added = channels.red.points[1]
+        #expect(Panel.column(forInput: added.input) == column)
+        #expect(abs(added.output - Panel.output(atRow: 1)) < 1e-9, "wrong level: \(added.output)")
+    }
+
+    /// The marker row is a handle strip, not a canvas.
+    @Test("Dragging a marker moves its input and leaves its output alone")
+    func draggingAMarkerMovesOneAxis() {
+        var channels = ASCIIToneCurve.Channels(
+            red: [(0, 0), (0.5, 0.25), (1, 1)], green: .identity, blue: .identity)
+        let harness = harness(Binding(get: { channels }, set: { channels = $0 }))
+        let lines = harness.frame()
+        guard let origin = harness.plotOrigin(lines) else {
+            Issue.record("the plot did not render")
+            return
+        }
+        let markerRow = origin.y + Panel.plotHeight
+        let from = origin.x + Panel.column(forInput: 0.5)
+        harness.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: from, y: markerRow))
+        harness.frame()
+        harness.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: from + 5, y: markerRow))
+        let moved = channels.red.points[1]
+        #expect(
+            Panel.column(forInput: moved.input) == Panel.column(forInput: 0.5) + 5,
+            "the marker did not follow: \(channels.red.points)")
+        #expect(moved.output == 0.25, "the drag changed the level as well")
+        #expect(channels.red.points.count == 3, "a marker drag added a point")
+    }
+
+    /// A press on the marker row that lands on nothing must not add one —
+    /// which is what makes the two rows' gestures distinguishable.
+    @Test("Pressing empty marker row does nothing")
+    func pressingEmptyMarkerRowDoesNothing() {
+        var channels = ASCIIToneCurve.Channels(red: .identity, green: .identity, blue: .identity)
+        let harness = harness(Binding(get: { channels }, set: { channels = $0 }))
+        let lines = harness.frame()
+        guard let origin = harness.plotOrigin(lines) else {
+            Issue.record("the plot did not render")
+            return
+        }
+        harness.dispatcher.dispatch(
+            MouseEvent(
+                button: .left, phase: .pressed, x: origin.x + Panel.plotWidth / 2,
+                y: origin.y + Panel.plotHeight))
+        #expect(channels.red == .identity)
+    }
+
+    @Test("A plot row and its output are inverses at the ends")
+    func rowsAndOutputsAgree() {
+        #expect(Panel.output(atRow: 0) == 1, "the top row is not full output")
+        #expect(Panel.output(atRow: Panel.plotHeight - 1) == 0, "the bottom row is not zero")
+        let outputs = (0..<Panel.plotHeight).map(Panel.output(atRow:))
+        #expect(outputs == outputs.sorted(by: >), "the rows are not monotone")
+    }
+
+    @Test("A press grabs the nearest point, and only within reach")
+    func grabbingIsNearestWithinReach() {
+        let points: [Point] = [
+            .init(input: 0, output: 0), .init(input: 0.5, output: 0.5), .init(input: 1, output: 1),
+        ]
+        let middle = Panel.column(forInput: 0.5)
+        #expect(Panel.point(in: points, near: middle)?.input == 0.5)
+        #expect(Panel.point(in: points, near: middle + Panel.grabRadius)?.input == 0.5)
+        #expect(Panel.point(in: points, near: middle + Panel.grabRadius + 1) == nil)
+        // Between two, the nearer one wins.
+        #expect(Panel.point(in: points, near: 1)?.input == 0)
+    }
 }

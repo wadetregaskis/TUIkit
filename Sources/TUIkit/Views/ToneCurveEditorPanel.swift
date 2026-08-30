@@ -43,6 +43,14 @@ import TUIkitStyling
 ///   define a mapping, and ``ASCIIToneCurve`` treats such a curve as inert.
 /// - The embedded colour panel edits what the selected stop becomes.
 ///
+/// With a pointer, the diagram itself is the tone axis: pressing on any of its
+/// four rows grabs the stop under the pointer, or adds one there — coloured
+/// with what the curve already produces at that tone, exactly as **+** does, so
+/// the press changes nothing and the drag that follows is the whole edit.
+/// Dragging moves the stop along the axis, past its neighbours if you take it
+/// that far. All four rows, because they are four readings of the same axis and
+/// a marker is a single cell to aim at.
+///
 /// Every change writes straight through `stops`, so a live consumer updates as
 /// you edit. **Done** keeps the result; **Cancel** — or any other dismissal,
 /// `Esc` included — restores the stops the dialog opened with.
@@ -90,7 +98,7 @@ public struct ToneCurveEditorPanel: View {
     /// The strips' width in cells. ``GradientEditorPanel``'s, deliberately:
     /// the stop strip is laid out by that panel's own row-wrapping helper, and
     /// two budgets would let the chips and their preview disagree.
-    private static let stripWidth = 36
+    static let stripWidth = 36
 
     /// The gutter the `in` / `out` captions sit in, left of the strips.
     private static let gutter = 4
@@ -185,11 +193,33 @@ public struct ToneCurveEditorPanel: View {
         // bright), and a preview that banded differently from the picture
         // beside it would be worse than one that bands with it.
         let outputs = (0..<Self.stripWidth).map { curve.color(atTone: Self.tone(atColumn: $0)) }
+        // One per render, and the drag holds the one from the render it
+        // started on: the dispatcher keeps calling the closure it captured at
+        // the press until the release, so this box is exactly the gesture's
+        // lifetime.
+        let grab = Grab()
         return VStack(alignment: .leading, spacing: 0) {
             strip(caption: "in", cells: inputs)
             markerRow
             strip(caption: "out", cells: outputs)
             strip(caption: "", cells: outputs)
+        }
+        .onDragGesture { event in
+            // The whole diagram is the tone axis — all four rows, because
+            // they are four readings of the same one and a marker is a single
+            // cell to aim at. The gutter is not: `in` and `out` are captions.
+            let column = min(Self.stripWidth - 1, max(0, event.x - Self.gutter))
+            guard event.x >= Self.gutter else { return }
+            if event.phase == .began {
+                // Grab the stop under the pointer, or put one there — coloured
+                // with what the curve already produces at that tone, exactly as
+                // "+" does, so a press adds a stop without changing the
+                // picture and the drag that follows is the whole edit.
+                grab.stop =
+                    Self.stop(in: ordered, near: column) ?? addingStop(atColumn: column)
+            }
+            guard let held = grab.stop else { return }
+            grab.stop = moving(held, toTone: Self.tone(atColumn: column))
         }
     }
 
@@ -299,6 +329,62 @@ public struct ToneCurveEditorPanel: View {
                 .frame(width: 20)
             Text(verbatim: "\(percent)%").dim()
         }
+    }
+
+    // MARK: The pointer
+
+    /// The stop a drag is holding, from the press to the release.
+    ///
+    /// A reference box rather than `@State` because it is the GESTURE's state,
+    /// not the view's: the closure the dispatcher captured at the press keeps
+    /// being called until the release, so the box it captured is alive for
+    /// exactly as long as the drag and is gone afterwards.
+    private final class Grab {
+        var stop: ASCIIToneCurve.Stop?
+    }
+
+    /// How far from a stop a press still counts as grabbing it.
+    ///
+    /// Two cells either side. A marker is one cell wide and a terminal pointer
+    /// lands on whole cells, so the target has to be bigger than the mark or
+    /// the only way to grab a stop is to hit it exactly.
+    static let grabRadius = 2
+
+    /// The stop nearest `column`, if any is within ``grabRadius`` of it.
+    static func stop(in list: [ASCIIToneCurve.Stop], near column: Int) -> ASCIIToneCurve.Stop? {
+        list
+            .map { (stop: $0, distance: abs(Self.column(forTone: Self.position(of: $0)) - column)) }
+            .filter { $0.distance <= grabRadius }
+            .min { $0.distance < $1.distance }?
+            .stop
+    }
+
+    /// Adds a stop where the pointer pressed and returns it, selected.
+    private func addingStop(atColumn column: Int) -> ASCIIToneCurve.Stop {
+        let list = ordered
+        let tone = Self.tone(atColumn: column)
+        let added = ASCIIToneCurve.Stop(at: tone, to: ASCIIToneCurve(list).color(atTone: tone))
+        let updated = Self.sorted(list + [added])
+        stops.wrappedValue = updated
+        selectedStop = updated.firstIndex(of: added) ?? 0
+        return added
+    }
+
+    /// Moves `stop` along the tone axis, and returns where it ended up.
+    ///
+    /// Found by VALUE and returned by value, because the list re-sorts: a drag
+    /// past a neighbour changes the stop's index, and an index remembered
+    /// across that would go on moving whichever stop had taken the slot.
+    @discardableResult
+    private func moving(_ stop: ASCIIToneCurve.Stop, toTone tone: Double) -> ASCIIToneCurve.Stop {
+        var list = ordered
+        guard let index = list.firstIndex(of: stop) else { return stop }
+        let moved = ASCIIToneCurve.Stop(at: tone, to: list[index].to)
+        list[index] = moved
+        let sorted = Self.sorted(list)
+        stops.wrappedValue = sorted
+        selectedStop = sorted.firstIndex(of: moved) ?? index
+        return moved
     }
 
     // MARK: Bindings

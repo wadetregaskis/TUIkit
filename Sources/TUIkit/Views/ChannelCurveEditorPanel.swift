@@ -45,6 +45,20 @@ import TUIkitStyling
 ///   define a function, and ``ASCIIToneCurve/Ramp`` treats such a ramp as
 ///   inert.
 ///
+/// ## With a pointer
+///
+/// The plot is the editor with a mouse too. Pressing on it grabs the control
+/// point under the pointer, or adds one there if the chart is empty at that
+/// column — so clicking the tone you want to change and dragging it up or down
+/// is one gesture rather than a trip to **+** and back. Dragging moves the
+/// point in both axes at once: the column is its input, the row its output.
+/// Eight rows means eight levels; the sliders are still the fine control.
+///
+/// The marker row is a handle strip rather than a canvas: a press there grabs
+/// the nearest marker and does nothing if there is none, and the drag moves the
+/// point along the input axis ALONE — "same level, different tone", which the
+/// plot cannot give you because every cell of it names both.
+///
 /// What this can say that ``ToneCurveEditorPanel`` cannot is anything that
 /// depends on the channel rather than the tone: a colour cast, a
 /// cross-process, a split tone, a negative. What neither can say is a hue
@@ -198,10 +212,32 @@ public struct ChannelCurveEditorPanel: View {
     /// so the plot would freeze at whatever it drew first.
     private var plot: some View {
         let color = channel.color
+        // One per render, and the drag holds the one from the render it
+        // started on: the dispatcher keeps calling the closure it captured at
+        // the press until the release, so this box is exactly the gesture's
+        // lifetime. `@State` would be wrong here — it is not part of the
+        // picture and it must not survive the drag.
+        let grab = Grab()
         return VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(Self.plotRows(for: ramp).enumerated()), id: \.offset) { _, row in
                 Text(verbatim: row).foregroundStyle(color)
             }
+        }
+        .onDragGesture { event in
+            let column = min(Self.plotWidth - 1, max(0, event.x))
+            let row = min(Self.plotHeight - 1, max(0, event.y))
+            if event.phase == .began {
+                // Grab what is under the pointer, or put a point there. Adding
+                // on a press into empty chart is what a curve editor does, and
+                // it is what makes "click the tone you want to change and drag
+                // it" one gesture rather than a trip to the `+` button first.
+                grab.point =
+                    Self.point(in: ramp.points, near: column)
+                    ?? addingPoint(atColumn: column, row: row)
+            }
+            guard let held = grab.point else { return }
+            grab.point = moving(
+                held, toInput: Self.input(atColumn: column), output: Self.output(atRow: row))
         }
     }
 
@@ -239,6 +275,7 @@ public struct ChannelCurveEditorPanel: View {
             guard let index = owner[column] else { return nil }
             return index == selection ? .palette.accent : .palette.foregroundTertiary
         }
+        let grab = Grab()
         return HStack(spacing: 0) {
             ForEach(Array(cells.enumerated()), id: \.offset) { _, color in
                 if let color {
@@ -247,6 +284,17 @@ public struct ChannelCurveEditorPanel: View {
                     Text(verbatim: " ")
                 }
             }
+        }
+        .onDragGesture { event in
+            let column = min(Self.plotWidth - 1, max(0, event.x))
+            // The markers are handles, not a canvas: a press that lands on
+            // nothing does nothing, where the same press on the plot would add
+            // a point. And the drag moves the point along ONE axis, because
+            // this row has only one — which is the gesture for "same level,
+            // different tone" that the plot cannot give you.
+            if event.phase == .began { grab.point = Self.point(in: ramp.points, near: column) }
+            guard let held = grab.point else { return }
+            grab.point = moving(held, toInput: Self.input(atColumn: column), output: nil)
         }
     }
 
@@ -284,6 +332,77 @@ public struct ChannelCurveEditorPanel: View {
             Button("▶") { selectedPoint = selection + 1 }
                 .disabled(selection >= points.count - 1)
         }
+    }
+
+    // MARK: The pointer
+
+    /// The point a drag is holding, from the press to the release.
+    ///
+    /// A reference box rather than `@State` because it is the GESTURE's state,
+    /// not the view's: the closure the dispatcher captured at the press keeps
+    /// being called until the release, so the box it captured is alive for
+    /// exactly as long as the drag and is gone afterwards.
+    private final class Grab {
+        var point: ASCIIToneCurve.Ramp.Point?
+    }
+
+    /// How far from a control point a press still counts as grabbing it.
+    ///
+    /// Two cells either side. A marker is one cell wide and a terminal pointer
+    /// lands on whole cells, so the target has to be bigger than the mark or
+    /// the only way to grab a point is to hit it exactly.
+    static let grabRadius = 2
+
+    /// The output a plot row stands for — the top row is `1`, the bottom `0`.
+    ///
+    /// Eight rows, so a drag resolves eight levels: this is the coarse control
+    /// and the sliders underneath are the fine one. Mapping to each row's
+    /// CENTRE instead would be finer in the middle and put both extremes out
+    /// of reach, and a curve editor you cannot drag to black is not one.
+    static func output(atRow row: Int) -> Double {
+        plotHeight > 1 ? Double(plotHeight - 1 - row) / Double(plotHeight - 1) : 0
+    }
+
+    /// The point nearest `column`, if any is within ``grabRadius`` of it.
+    static func point(in points: [ASCIIToneCurve.Ramp.Point], near column: Int)
+        -> ASCIIToneCurve.Ramp.Point?
+    {
+        points
+            .map { (point: $0, distance: abs(Self.column(forInput: $0.input) - column)) }
+            .filter { $0.distance <= grabRadius }
+            .min { $0.distance < $1.distance }?
+            .point
+    }
+
+    /// Adds a point where the pointer pressed and returns it, selected.
+    private func addingPoint(atColumn column: Int, row: Int) -> ASCIIToneCurve.Ramp.Point {
+        let added = ASCIIToneCurve.Ramp.Point(
+            input: Self.input(atColumn: column), output: Self.output(atRow: row))
+        let updated = ASCIIToneCurve.Ramp(ramp.points + [added])
+        write(updated)
+        selectedPoint = updated.points.firstIndex(of: added) ?? 0
+        return added
+    }
+
+    /// Moves `point`, and returns where it ended up.
+    ///
+    /// Found by VALUE and returned by value, because the ramp re-sorts: a drag
+    /// past a neighbour changes the point's index, and an index remembered
+    /// across that would go on moving whichever point had taken the slot. A
+    /// `nil` output leaves the point's level alone, which is what the marker
+    /// row's one-dimensional drag wants.
+    @discardableResult
+    private func moving(
+        _ point: ASCIIToneCurve.Ramp.Point, toInput input: Double, output: Double?
+    ) -> ASCIIToneCurve.Ramp.Point {
+        var points = ramp.points
+        guard let index = points.firstIndex(of: point) else { return point }
+        let moved = ASCIIToneCurve.Ramp.Point(input: input, output: output ?? point.output)
+        points[index] = moved
+        let updated = ASCIIToneCurve.Ramp(points)
+        write(updated)
+        selectedPoint = updated.points.firstIndex(of: moved) ?? index
+        return moved
     }
 
     // MARK: Bindings
