@@ -191,6 +191,8 @@ struct ImageRenderingControls: View {
                 RadioButtonItem(
                     ImageDemoSettings.ColourMode.ansi256, "component.imageControls.colours256")
                 RadioButtonItem(
+                    ImageDemoSettings.ColourMode.ansi16, "component.imageControls.colours16")
+                RadioButtonItem(
                     ImageDemoSettings.ColourMode.grayscale, "component.imageControls.greyscale")
                 RadioButtonItem(ImageDemoSettings.ColourMode.mono, "component.imageControls.mono") {
                     // Mono's own knob. It emits no colour codes, so by default

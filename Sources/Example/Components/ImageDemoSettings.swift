@@ -115,7 +115,7 @@ struct ImageDemoSettings: Equatable {
     /// since an option carries its own control now rather than borrowing the
     /// row after it.
     enum ColourMode: Int, CaseIterable {
-        case trueColor, ansi256, grayscale, mono, themed, greys, sampled
+        case trueColor, ansi256, ansi16, grayscale, mono, themed, greys, sampled
     }
 
     /// The recolourings the demo offers.
@@ -148,6 +148,7 @@ struct ImageDemoSettings: Equatable {
         switch colour {
         case .trueColor: return .trueColor
         case .ansi256: return .ansi256
+        case .ansi16: return .ansi16
         case .grayscale: return .grayscale
         case .mono:
             // `.mono` proper emits no colour codes at all — a block where the
@@ -234,6 +235,7 @@ struct ImageDemoSettings: Equatable {
         switch colour {
         case .trueColor: return "color:true"
         case .ansi256: return "color:256"
+        case .ansi16: return "color:16"
         case .grayscale: return "color:gray"
         case .mono: return "color:mono"
         case .greys: return "color:\(greyLevels) greys"

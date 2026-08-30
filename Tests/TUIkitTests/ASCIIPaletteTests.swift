@@ -161,9 +161,11 @@ struct ASCIIPaletteTests {
     func paletteDegrades() {
         let palette = ASCIIPalette([.rgb(200, 30, 30), .rgb(30, 30, 200)])
         let mode = ASCIIColorMode.palette(palette)
-        // `.trueColor` has to be abandoned on a 16-colour terminal; a palette
-        // keeps its intent and loses only accuracy.
-        #expect(ASCIIColorMode.trueColor.effective(for: .basic16) == .mono)
+        // `.trueColor` has to be abandoned on a 16-colour terminal — it becomes
+        // "as much colour as there is", which is the sixteen and says nothing
+        // about which of them. A palette keeps its intent and loses only
+        // accuracy: still THESE two colours, quantised.
+        #expect(ASCIIColorMode.trueColor.effective(for: .basic16) == .ansi16)
         guard case .palette(let at16) = mode.effective(for: .basic16) else {
             Issue.record("the palette did not survive")
             return

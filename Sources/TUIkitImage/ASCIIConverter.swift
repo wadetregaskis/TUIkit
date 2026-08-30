@@ -156,6 +156,22 @@ public enum ASCIIColorMode: Sendable, Equatable {
     /// 256-color ANSI palette. Good terminal compatibility.
     case ansi256
 
+    /// The terminal's own sixteen: the 8 standard ANSI colours and their 8
+    /// bright twins, emitted as SGR 30–37 / 90–97 rather than as an index or a
+    /// triple.
+    ///
+    /// The bottom rung of the fidelity ladder that is still colour, and the one
+    /// every terminal that has colour at all can draw. It matters because it is
+    /// where the higher rungs LAND: `TERM=xterm-color` used to take a
+    /// `.trueColor` image all the way down to ``mono``, so a terminal with
+    /// sixteen colours drew none of them.
+    ///
+    /// Worth asking for above 16 colours too, for the same reason ``ansi256``
+    /// is on a truecolor terminal: it is the look of the terminal's own palette,
+    /// and it follows the user's theme, since the sixteen are whatever their
+    /// terminal profile says they are.
+    case ansi16
+
     /// 24 shades of gray.
     case grayscale
 
@@ -294,7 +310,13 @@ extension ASCIIColorMode {
         case (.trueColor, .basic16),
             (.ansi256, .basic16),
             (.grayscale, .basic16):
-            return .mono
+            // Sixteen colours, not none. `.mono` was the old answer, and it
+            // threw away the colour a 16-colour terminal genuinely has:
+            // `TERM=xterm-color` drew every image in one ink whatever mode was
+            // asked for. `.grayscale` lands here too and loses nothing by it —
+            // its pixels are already grey, so the nearest of the sixteen to
+            // each of them is one of the four the terminal has.
+            return .ansi16
         // A chosen palette SURVIVES a downgrade, where a fidelity mode cannot.
         case (.palette(let colors), _):
             return .palette(colors.downsampled(to: depth))

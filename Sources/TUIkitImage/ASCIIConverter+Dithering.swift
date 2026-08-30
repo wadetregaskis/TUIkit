@@ -22,6 +22,9 @@ extension ASCIIConverter {
             let index = quantizeToANSI256(pixel)
             return "\(ANSIEscape.csi)38;5;\(index)m"
 
+        case .ansi16:
+            return codeForANSI16(pixel, background: false)
+
         case .grayscale:
             let gray = Int(pixel.luminance / 255.0 * 23.0)
             let index = 232 + min(max(gray, 0), 23)
@@ -50,6 +53,9 @@ extension ASCIIConverter {
             let index = quantizeToANSI256(pixel)
             return "\(ANSIEscape.csi)48;5;\(index)m"
 
+        case .ansi16:
+            return codeForANSI16(pixel, background: true)
+
         case .grayscale:
             let gray = Int(pixel.luminance / 255.0 * 23.0)
             let index = 232 + min(max(gray, 0), 23)
@@ -62,6 +68,20 @@ extension ASCIIConverter {
             let index = palette.nearestIndex(to: pixel)
             return "\(ANSIEscape.csi)\(palette.sgrParameters(at: index, background: true))m"
         }
+    }
+
+    /// The SGR that selects the nearest of the terminal's sixteen.
+    ///
+    /// Through ``ASCIIPalette/ansi16`` rather than through a table of its own:
+    /// the palette already holds the sixteen as `.standard`/`.bright` colours,
+    /// already maps a pixel to the nearest of them in OKLab — the metric every
+    /// other image mapping uses — and already knows that such a colour is
+    /// spelled `30 + n` / `90 + n` rather than as an index or a triple.
+    private func codeForANSI16(_ pixel: RGBA, background: Bool) -> String {
+        let sixteen = ASCIIPalette.ansi16
+        let parameters = sixteen.sgrParameters(
+            at: sixteen.nearestIndex(to: pixel), background: background)
+        return "\(ANSIEscape.csi)\(parameters)m"
     }
 
     /// Quantizes an RGB pixel to the nearest ANSI 256-color index.
@@ -167,6 +187,10 @@ extension ASCIIConverter {
         case .ansi256:
             let index = quantizeToANSI256(pixel)
             return ansi256ToRGB(index)
+
+        case .ansi16:
+            let sixteen = ASCIIPalette.ansi16
+            return sixteen.rgba(at: sixteen.nearestIndex(to: pixel))
 
         case .grayscale:
             let gray = UInt8(clamping: Int(pixel.luminance))

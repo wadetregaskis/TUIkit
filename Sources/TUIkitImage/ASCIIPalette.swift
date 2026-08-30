@@ -147,6 +147,25 @@ public struct ASCIIPalette: Sendable, Equatable {
             })
     }
 
+    /// The terminal's own sixteen — the 8 standard ANSI colours and their 8
+    /// bright twins.
+    ///
+    /// What ``ASCIIColorMode/ansi16`` maps through, and available in its own
+    /// right for an image that should be drawn in the colours the user's
+    /// terminal profile defines rather than in colours of its own. Every entry
+    /// is a `.standard`/`.bright` ``Color``, so it emits as SGR 30–37 / 90–97
+    /// and FOLLOWS the profile: change the terminal's idea of "red" and the
+    /// image changes with it.
+    ///
+    /// Mapped by nearest colour in OKLab like any other palette. `.default` is
+    /// deliberately absent: it is not one of the sixteen, it is "whatever the
+    /// terminal would have used", and an image cannot be drawn in it.
+    public static let ansi16 = Self([
+        .black, .red, .green, .yellow, .blue, .magenta, .cyan, .white,
+        .brightBlack, .brightRed, .brightGreen, .brightYellow,
+        .brightBlue, .brightMagenta, .brightCyan, .brightWhite,
+    ])
+
     /// `count` colours spread as far apart as they can be, taken from the
     /// terminal's own 256-colour repertoire.
     ///

@@ -351,8 +351,13 @@ struct ASCIIConverterTests {
             // True colour on a 256-color terminal falls back to palette codes —
             // 24-bit codes would corrupt 256-color terminals.
             (RGBA(r: 255, g: 0, b: 0), .trueColor, .palette256, ["38;5;"], ["38;2;"]),
-            // True colour on a basic16 terminal falls back to mono.
-            (RGBA(r: 255, g: 0, b: 0), .trueColor, .basic16, [], ["38;2;", "38;5;"]),
+            // True colour on a basic16 terminal falls back to the terminal's
+            // own sixteen — SGR 30-37/90-97, and NOT a triple or an index.
+            // Bright red is one of the sixteen, so it is emitted as one: `91`.
+            (RGBA(r: 255, g: 0, b: 0), .trueColor, .basic16, ["\u{1B}[91m"], ["38;2;", "38;5;"]),
+            // Asked for directly, at any depth that has colour at all.
+            (RGBA(r: 255, g: 0, b: 0), .ansi16, .truecolor, ["\u{1B}[91m"], ["38;2;", "38;5;"]),
+            (RGBA(r: 255, g: 0, b: 0), .ansi16, .basic16, ["\u{1B}[91m"], ["38;2;", "38;5;"]),
         ])
     func colorModeEscapeCodes(
         pixel: RGBA, mode: ASCIIColorMode, depth: ColorDepth,
@@ -418,7 +423,7 @@ struct ASCIIConverterTests {
         let image = RGBAImage(width: 1, height: 1, pixels: pixels)
 
         withColorDepth(.noColor) {
-            for mode in [ASCIIColorMode.trueColor, .ansi256, .grayscale, .mono] {
+            for mode in [ASCIIColorMode.trueColor, .ansi256, .ansi16, .grayscale, .mono] {
                 let converter = ASCIIConverter(characterSet: .ascii, colorMode: mode, dithering: .none)
                 let lines = converter.convert(image, width: 1, height: 1)
 
@@ -442,18 +447,26 @@ struct ASCIIColorModeEffectiveTests {
             // True color survives only truecolor terminals; 256 → ansi256, below → mono.
             (ASCIIColorMode.trueColor, ColorDepth.truecolor, ASCIIColorMode.trueColor),
             (.trueColor, .palette256, .ansi256),
-            (.trueColor, .basic16, .mono),
+            (.trueColor, .basic16, .ansi16),
             (.trueColor, .noColor, .mono),
-            // ANSI 256 stays through palette256 terminals, drops to mono below.
+            // ANSI 256 stays through palette256 terminals, then the sixteen.
             (.ansi256, .truecolor, .ansi256),
             (.ansi256, .palette256, .ansi256),
-            (.ansi256, .basic16, .mono),
+            (.ansi256, .basic16, .ansi16),
             (.ansi256, .noColor, .mono),
-            // Grayscale stays through palette256 terminals, drops to mono below.
+            // Grayscale stays through palette256 terminals, then the sixteen —
+            // which costs it nothing, since its pixels are grey and the nearest
+            // of the sixteen to a grey is one of the four greys among them.
             (.grayscale, .truecolor, .grayscale),
             (.grayscale, .palette256, .grayscale),
-            (.grayscale, .basic16, .mono),
+            (.grayscale, .basic16, .ansi16),
             (.grayscale, .noColor, .mono),
+            // The sixteen are the floor of colour: kept wherever there is any,
+            // and only `.noColor` takes them away.
+            (.ansi16, .truecolor, .ansi16),
+            (.ansi16, .palette256, .ansi16),
+            (.ansi16, .basic16, .ansi16),
+            (.ansi16, .noColor, .mono),
             // Mono stays mono everywhere.
             (.mono, .truecolor, .mono),
             (.mono, .palette256, .mono),
