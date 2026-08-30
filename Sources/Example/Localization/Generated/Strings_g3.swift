@@ -40,7 +40,6 @@ extension ExampleStrings {
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "Menus",
-            "page.menus.title": "Menus",
             "page.menus.contextSection": "Context Menu · .contextMenu",
             "page.menus.contextInstruction": "Right-click (or Ctrl-click, where a terminal keeps right-click for itself) the box below — or Tab to it, where its border pulses, and press Shift+F10. The items are Buttons, but they draw as menu rows and the pop-up hugs its widest one. Opened by the pointer nothing is highlighted; opened from the keyboard the first item is.",
             "page.menus.contextTarget": "Right-click me",
@@ -271,7 +270,6 @@ extension ExampleStrings {
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "Menüs",
-            "page.menus.title": "Menüs",
             "page.menus.contextSection": "Kontextmenü · .contextMenu",
             "page.menus.contextInstruction": "Rechtsklicke (oder Strg-klicke, wo ein Terminal den Rechtsklick selbst behält) auf das Feld unten — oder springe mit Tab dorthin, wo sein Rahmen pulsiert, und drücke Umschalt+F10. Die Einträge sind Buttons, werden aber als Menüzeilen gezeichnet, und das Menü schmiegt sich an den breitesten an. Per Zeiger geöffnet ist nichts hervorgehoben, per Tastatur der erste Eintrag.",
             "page.menus.contextTarget": "Rechtsklick auf mich",
@@ -502,7 +500,6 @@ extension ExampleStrings {
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "Menus",
-            "page.menus.title": "Menus",
             "page.menus.contextSection": "Menu contextuel · .contextMenu",
             "page.menus.contextInstruction": "Faites un clic droit (ou Ctrl-clic, là où le terminal garde le clic droit pour lui) sur la boîte ci-dessous — ou atteignez-la avec Tab, sa bordure se met alors à pulser, et appuyez sur Maj+F10. Les éléments sont des Buttons, mais s'affichent comme des lignes de menu, et la fenêtre épouse le plus large. Ouvert au pointeur, rien n'est sélectionné ; ouvert au clavier, le premier élément l'est.",
             "page.menus.contextTarget": "Clic droit ici",
@@ -733,7 +730,6 @@ extension ExampleStrings {
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "Menu",
-            "page.menus.title": "Menu",
             "page.menus.contextSection": "Menu contestuale · .contextMenu",
             "page.menus.contextInstruction": "Fai clic destro (o Ctrl-clic, dove il terminale tiene per sé il clic destro) sul riquadro qui sotto — oppure raggiungilo con Tab, il suo bordo pulsa, e premi Maiusc+F10. Le voci sono Button, ma vengono disegnate come righe di menu, e il pop-up si adatta alla più larga. Aperto col puntatore non è evidenziato nulla; aperto da tastiera lo è la prima voce.",
             "page.menus.contextTarget": "Clic destro qui",
@@ -964,7 +960,6 @@ extension ExampleStrings {
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "Menús",
-            "page.menus.title": "Menús",
             "page.menus.contextSection": "Menú contextual · .contextMenu",
             "page.menus.contextInstruction": "Haz clic derecho (o Ctrl-clic, donde el terminal se reserva el clic derecho) en el recuadro de abajo — o llega a él con Tab, su borde late, y pulsa Mayús+F10. Los elementos son Buttons, pero se dibujan como filas de menú, y el menú se ajusta al más ancho. Abierto con el puntero no hay nada resaltado; abierto con el teclado lo está el primer elemento.",
             "page.menus.contextTarget": "Clic derecho aquí",
@@ -1195,7 +1190,6 @@ extension ExampleStrings {
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "菜单",
-            "page.menus.title": "菜单",
             "page.menus.contextSection": "上下文菜单 · .contextMenu",
             "page.menus.contextInstruction": "在下方方框上点击右键（在终端自己占用右键的情况下用 Ctrl+点击）——也可以用 Tab 移动到它（边框会随之脉动）再按 Shift+F10。菜单项本身是 Button，但会绘制成菜单行，弹出框也会贴合最宽的一项。用指针打开时不选中任何一项；用键盘打开时选中第一项。",
             "page.menus.contextTarget": "右键点我",
@@ -1426,7 +1420,6 @@ extension ExampleStrings {
 
             // Menus page (.contextMenu + the Menu combo button)
             "menu.item.menus": "メニュー",
-            "page.menus.title": "メニュー",
             "page.menus.contextSection": "コンテキストメニュー · .contextMenu",
             "page.menus.contextInstruction": "下のボックスを右クリック（端末が右クリックを横取りする場合は Ctrl+クリック）してください。Tab で移動すると枠が脈動し、Shift+F10 でも開けます。項目は Button ですが、メニュー行として描かれ、ポップアップは最も広い項目に合わせて縮みます。ポインタで開いたときは何も選択されず、キーボードで開いたときは先頭が選択されます。",
             "page.menus.contextTarget": "右クリックしてください",

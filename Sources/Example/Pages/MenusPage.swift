@@ -52,7 +52,12 @@ struct MenusPage: View {
         ScrollView {
             content
         }
-        .navigationTitle("page.menus.title")
+        // `.appHeader`, not `.navigationTitle`: this page is not inside a
+        // `NavigationStack`, so the title it set was drawn by nothing at all
+        // and the page was the only one in the app with no header.
+        .appHeader {
+            DemoAppHeader("menu.item.menus")
+        }
     }
 
     /// One row of the sticky menu: a `Button` whose label carries the flag's
