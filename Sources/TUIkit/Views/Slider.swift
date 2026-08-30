@@ -838,14 +838,24 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                 ViewConstants.disabledForeground, over: palette.background)
         }
 
-        // Build track
+        // Build track. Every colour it is drawn from FADES toward the page when
+        // the slider is disabled — the same treatment the arrows and the value
+        // read-out already had, and the same expression. Only the filled colour
+        // used to change, and only some track styles draw with it: `.bar` and
+        // the gradients fill in the ACCENT, which was handed over undimmed, so
+        // a disabled slider on the green palette drew a track indistinguishable
+        // from a live one and only its label said otherwise.
+        func forState(_ color: Color) -> Color {
+            guard isDisabled else { return color }
+            return color.opacity(ViewConstants.disabledForeground, over: palette.background)
+        }
         let track = TrackRenderer.render(
             fraction: fraction,
             width: trackWidth,
             style: trackStyle,
-            filledColor: isDisabled ? palette.foregroundTertiary : palette.foregroundSecondary,
-            emptyColor: palette.foregroundTertiary,
-            accentColor: palette.accent,
+            filledColor: forState(palette.foregroundSecondary),
+            emptyColor: forState(palette.foregroundTertiary),
+            accentColor: forState(palette.accent),
             gradientScaling: gradientScaling
         )
 

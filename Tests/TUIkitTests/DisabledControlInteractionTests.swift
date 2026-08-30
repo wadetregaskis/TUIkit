@@ -99,3 +99,53 @@ struct DisabledControlInteractionTests {
         #expect(!focus.isFocused(id: held[0]), "the focus stayed on a disabled control")
     }
 }
+
+// MARK: - What a disabled control looks like
+
+@MainActor
+@Suite("A disabled track is visibly disabled")
+struct DisabledTrackTests {
+
+    /// The reported fault: on the green palette a disabled slider drew a track
+    /// indistinguishable from a live one, and only its label said otherwise.
+    ///
+    /// Only the FILLED colour used to change, and only some track styles draw
+    /// with it — `.bar` and the gradients fill in the ACCENT, which was handed
+    /// over undimmed whatever the state. So the assertion is about the accent
+    /// specifically: a live track that paints it must have a disabled twin that
+    /// does not, or nothing about the fill has changed.
+    @Test("A disabled track never paints the live accent")
+    func aDisabledTrackDropsTheAccent() {
+        let styles: [(String, TrackStyle)] = [
+            ("block", .block), ("blockFine", .blockFine), ("shade", .shade),
+            ("bar", .bar), ("dot", .dot), ("braille", .braille),
+        ]
+        var sawAnAccentTrack = false
+        for palette in PaletteRegistry.all {
+            // As it reaches the terminal: `38;5;n` or `38;2;r;g;b`, joined the
+            // way an SGR sequence joins its parameters.
+            let accent = ANSIRenderer.foregroundCodes(
+                for: palette.accent.resolve(with: palette)
+            ).joined(separator: ";")
+            guard !accent.isEmpty else { continue }
+            for (name, style) in styles {
+                func draw(_ disabled: Bool) -> String {
+                    var context = makeRenderContext(width: 40, height: 3)
+                    context.environment.palette = palette
+                    let slider = Slider(value: .constant(0.5), in: 0...1).trackStyle(style)
+                    return renderToBuffer(
+                        disabled ? AnyView(slider.disabled()) : AnyView(slider),
+                        context: context
+                    ).lines.joined()
+                }
+                let live = draw(false)
+                guard live.contains(accent) else { continue }
+                sawAnAccentTrack = true
+                #expect(
+                    !draw(true).contains(accent),
+                    "\(palette.name)/\(name): a disabled track still paints the live accent")
+            }
+        }
+        #expect(sawAnAccentTrack, "no track style paints the accent; this test asserts nothing")
+    }
+}
