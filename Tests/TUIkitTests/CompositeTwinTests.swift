@@ -92,7 +92,7 @@ struct CompositePunchTests {
         AnimatedCellRun(offsetX: x, offsetY: y, width: 3, frames: ["abc", "def"], clock: .cursor)
     }
 
-    @Test("A run under the overlay's footprint is dropped, through both paths")
+    @Test("A run wholly under the overlay's footprint is dropped, through both paths")
     func coveredRunsAreDropped() {
         // A run replays its cells over whatever is on screen: left in the
         // buffer, a spinner under a freshly-opened popover repaints itself
@@ -101,14 +101,51 @@ struct CompositePunchTests {
         // overlap — menus, popovers, toasts, ZStack siblings.
         var base = FrameBuffer(lines: ["0123456789"])
         base.animatedCells = [spinner(atX: 2)]
-        let popup = FrameBuffer(lines: ["XXXX"])
+        let popup = FrameBuffer(lines: ["XXXXX"])
 
-        let copied = base.composited(with: popup, at: (x: 3, y: 0))
+        let copied = base.composited(with: popup, at: (x: 1, y: 0))
         #expect(copied.animatedCells.isEmpty, "the copying path replayed a covered run")
 
         var inPlace = base
-        inPlace.composite(with: popup, at: (x: 3, y: 0))
+        inPlace.composite(with: popup, at: (x: 1, y: 0))
         #expect(inPlace.animatedCells.isEmpty, "the in-place path replayed a covered run")
+    }
+
+    @Test("A partly covered run keeps the part still on screen, through both paths")
+    func partlyCoveredRunsAreCut() {
+        // Dropping it whole was the first design, on the grounds that half a
+        // frozen spinner beats half a spinner drawn over a menu. What that
+        // costs is a dialog centred over a page: it lands in the MIDDLE of the
+        // rows either side of it, so every run on those rows was partly
+        // covered and every one of them went — which is what left the dimmed
+        // page behind a sheet moving only when something else caused a render.
+        var base = FrameBuffer(lines: ["0123456789"])
+        base.animatedCells = [spinner(atX: 2)]  // columns 2…4
+        let popup = FrameBuffer(lines: ["XXXX"])  // columns 3…6
+
+        let copied = base.composited(with: popup, at: (x: 3, y: 0))
+        #expect(copied.animatedCells.count == 1)
+        let kept = try? #require(copied.animatedCells.first)
+        #expect(kept?.offsetX == 2)
+        #expect(kept?.width == 1)
+        #expect(kept?.frames == ["a", "d"], "the cut took the wrong cells")
+
+        var inPlace = base
+        inPlace.composite(with: popup, at: (x: 3, y: 0))
+        #expect(inPlace.animatedCells == copied.animatedCells, "the twins disagree about the cut")
+    }
+
+    @Test("A cut leaving nothing that moves is dropped rather than kept still")
+    func staticRemaindersAreDropped() {
+        // A still run is not a cheap animation, it is an open clock: the loop
+        // keeps waking for a picture that cannot change.
+        var base = FrameBuffer(lines: ["0123456789"])
+        base.animatedCells = [
+            AnimatedCellRun(offsetX: 2, offsetY: 0, width: 3, frames: ["abc", "abd"], clock: .cursor)
+        ]
+        let popup = FrameBuffer(lines: ["X"])
+        // Covers only column 4 — the one cell the two frames disagree about.
+        #expect(base.composited(with: popup, at: (x: 4, y: 0)).animatedCells.isEmpty)
     }
 
     @Test("A run beside the footprint survives, and rows are respected")
@@ -117,14 +154,19 @@ struct CompositePunchTests {
         base.animatedCells = [spinner(atX: 0), spinner(atX: 0, y: 1)]
         let popup = FrameBuffer(lines: ["XX"])
 
-        // Covers columns 4-5 of row 0: neither run overlaps it.
+        // Covers columns 4-5 of row 0: neither run overlaps it, so both are
+        // kept as they were rather than re-derived.
         let beside = base.composited(with: popup, at: (x: 4, y: 0))
-        #expect(beside.animatedCells.count == 2)
+        #expect(beside.animatedCells == base.animatedCells)
 
-        // Covers columns 0-1 of row 1 only: the row-0 run survives.
+        // Covers columns 0-1 of row 1 only: the row-0 run is untouched, and
+        // the row-1 run keeps its last cell.
         let below = base.composited(with: popup, at: (x: 0, y: 1))
-        #expect(below.animatedCells.count == 1)
-        #expect(below.animatedCells.first?.offsetY == 0)
+        #expect(below.animatedCells.count == 2)
+        #expect(below.animatedCells.first == base.animatedCells[0])
+        #expect(below.animatedCells.last?.offsetY == 1)
+        #expect(below.animatedCells.last?.offsetX == 2)
+        #expect(below.animatedCells.last?.width == 1)
     }
 
     @Test("A pending opacity region is punched identically through both paths")

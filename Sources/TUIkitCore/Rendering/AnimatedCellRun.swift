@@ -266,6 +266,29 @@ public struct AnimatedCellRun: Sendable, Equatable {
         copy.offsetY += y
         return copy
     }
+
+    /// The part of this run inside `columns`, or `nil` if that is none of it.
+    ///
+    /// Every frame is cut to the same window by ``Swift/String/ansiAwareSlice(visibleStart:visibleCount:)``,
+    /// which carries the styling that was active at the cut and blanks a wide
+    /// glyph straddling either edge — so a slice claims exactly the columns it
+    /// was asked for and can be spliced like any other frame.
+    ///
+    /// What this is for is an overlay landing on part of a run: a dialog
+    /// centred over a page cuts across the rows either side of it, and a run
+    /// dropped whole there takes the visible remainder of the row with it.
+    public func clipped(toColumns columns: Range<Int>) -> Self? {
+        let window = columns.clamped(to: offsetX..<(offsetX + width))
+        guard !window.isEmpty else { return nil }
+        guard window != offsetX..<(offsetX + width) else { return self }
+        return Self(
+            offsetX: window.lowerBound, offsetY: offsetY, width: window.count,
+            frames: frames.map {
+                $0.ansiAwareSlice(
+                    visibleStart: window.lowerBound - offsetX, visibleCount: window.count)
+            },
+            frameDuration: frameDuration, clock: clock)
+    }
 }
 
 extension AnimatedCellRun {
