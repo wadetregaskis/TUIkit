@@ -348,7 +348,7 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         let palette = context.environment.palette
         // Explicit colour > environment foregroundStyle > palette accent.
         let effectiveColor =
-            color ?? context.environment.foregroundStyle ?? palette.accent
+            color ?? context.environment.foregroundStyle?.representative ?? palette.accent
         let resolvedColor = effectiveColor.resolve(with: palette)
 
         /// The whole cycle, already styled — one entry per frame of the STYLE,

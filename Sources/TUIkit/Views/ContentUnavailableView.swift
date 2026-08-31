@@ -206,7 +206,7 @@ private struct _ContentUnavailableViewCore<Label: View, Description: View, Actio
         // Render description with secondary foreground color
         var descContext = context
         if descContext.environment.foregroundStyle == nil {
-            descContext.environment.foregroundStyle = palette.foregroundSecondary
+            descContext.environment.foregroundStyle = .color(palette.foregroundSecondary)
         }
         let descBuffer = TUIkit.renderToBuffer(description, context: descContext)
 

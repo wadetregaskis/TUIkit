@@ -762,11 +762,11 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         // pointer — indicator and label together, the way a `Toggle` does.
         if isHovered, !isDisabled {
             let base =
-                labelContext.environment.foregroundStyle
+                labelContext.environment.foregroundStyle?.representative
                 ?? labelContext.environment.styleCascade
                     .resolve(for: [.all, .text, .control(.radioButton)]).foreground
                 ?? palette.foreground
-            labelContext.environment.foregroundStyle = palette.hoveredForeground(base)
+            labelContext.environment.foregroundStyle = .color(palette.hoveredForeground(base))
         }
         let labelBuffer = item.labelBuilder().renderToBuffer(context: labelContext)
 

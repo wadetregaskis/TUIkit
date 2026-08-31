@@ -404,7 +404,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         var subtitleContext = labelContext
         subtitleContext.environment.controlKind = nil
         if !isDisabled {
-            subtitleContext.environment.foregroundStyle = palette.foregroundSecondary
+            subtitleContext.environment.foregroundStyle = .color(palette.foregroundSecondary)
         }
         let indent = Self.labelIndent(forIndicator: indicator)
         let indentString = String(repeating: " ", count: indent)
@@ -493,9 +493,9 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             // entries (e.g. `.toggleTextStyle { … }`).
             labelContext.environment.controlKind = .toggle
             if isDisabled {
-                labelContext.environment.foregroundStyle =
+                labelContext.environment.foregroundStyle = .color(
                     palette.foregroundTertiary.opacity(
-                        ViewConstants.disabledForeground, over: palette.background)
+                        ViewConstants.disabledForeground, over: palette.background))
             } else if isHovered {
                 // The whole row answers the pointer, not just the indicator: the
                 // whole row is what the click hits. Whatever colour is in force
@@ -503,12 +503,12 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                 // keeps its hue and a colour nobody lifts is a colour that never
                 // answers. Same rule as a plain `Button`'s label.
                 let base =
-                    labelContext.environment.foregroundStyle
+                    labelContext.environment.foregroundStyle?.representative
                     ?? labelContext.environment.styleCascade
                         .resolve(for: [.all, .text, .control(.toggle)]).foreground
                     ?? palette.foreground
-                labelContext.environment.foregroundStyle =
-                    palette.hoveredForeground(base)
+                labelContext.environment.foregroundStyle = .color(
+                    palette.hoveredForeground(base))
             }
 
             let built = builtInStyleBuffer(

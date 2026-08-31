@@ -14,15 +14,23 @@ import TUIkitStyling
 /// down through the view hierarchy. Child views can read it from the
 /// render context to apply the color.
 private struct ForegroundStyleKey: EnvironmentKey {
-    static let defaultValue: Color? = nil
+    static let defaultValue: Paint? = nil
 }
 
 extension EnvironmentValues {
-    /// The foreground style (color) for text and other content.
+    /// What text and other content is painted with.
     ///
-    /// Set via `.foregroundStyle(_:)` modifier on any View.
-    /// Returns `nil` if not explicitly set (use palette default).
-    public var foregroundStyle: Color? {
+    /// Set via `.foregroundStyle(_:)` on any View; `nil` means nothing has
+    /// been stated and the palette default applies.
+    ///
+    /// A ``Paint`` rather than a ``Color`` because a gradient goes here too,
+    /// and it goes in the SAME slot: a leaf reads one key however it was
+    /// styled, and an outer gradient with an inner colour has an unambiguous
+    /// answer rather than two keys and no rule for ordering them. Anything that
+    /// needs one colour — and most chrome does — asks for
+    /// ``Paint/representative``, which makes each collapse visible where it
+    /// happens.
+    public var foregroundStyle: Paint? {
         get { self[ForegroundStyleKey.self] }
         set { self[ForegroundStyleKey.self] = newValue }
     }
@@ -59,7 +67,21 @@ extension View {
     ///
     /// - Parameter style: The color to apply as foreground style.
     /// - Returns: A view with the foreground style set.
-    public func foregroundStyle(_ style: Color?) -> some View {
+    public func foregroundStyle<S: ShapeStyle>(_ style: S) -> some View {
+        _AnimatableForegroundStyleView(content: self, style: style)
+    }
+
+    /// The colour spelling, so `.foregroundStyle(.red)` and
+    /// `.foregroundStyle(.palette.accent)` keep inferring what they always did.
+    ///
+    /// `@_disfavoredOverload` is Apple's own answer to the same problem — see
+    /// `tint`, which ships a generic `<S: ShapeStyle>` and a disfavoured
+    /// `Color?` twin side by side. Without it a leading-dot member has to be
+    /// found on `ShapeStyle` rather than on `Color`, and every static colour in
+    /// the framework would need a `where Self == Color` forwarder to be
+    /// reachable.
+    @_disfavoredOverload
+    public func foregroundStyle(_ style: Color) -> some View {
         _AnimatableForegroundStyleView(content: self, style: style)
     }
 }
@@ -70,9 +92,9 @@ extension View {
 /// A plain `.environment(\.foregroundStyle, _)` would do everything but the
 /// fade; the colour has to be resolved where the palette is, which is here.
 /// See ``ColorAnimation``.
-struct _AnimatableForegroundStyleView<Content: View>: View {
+struct _AnimatableForegroundStyleView<Content: View, S: ShapeStyle>: View {
     let content: Content
-    let style: Color?
+    let style: S
 
     var body: Never {
         fatalError("_AnimatableForegroundStyleView renders via Renderable")
@@ -85,23 +107,31 @@ struct _AnimatableForegroundStyleView<Content: View>: View {
         // this a scoped `.foregroundStyle` change serves a buffer rendered in
         // the old colour. Wrong pixels, not merely stale work — and there is a
         // test that says so.
+        // The PAINT is what is tracked, not the style: a style is not required
+        // to be `Equatable`, and `noteAppliedEnvironment` answers
+        // `.incomparable` for anything that is not — which sets
+        // `hasUncomparableEnvironmentValue` and refuses every memo store in the
+        // subtree. Tracking the resolved paint also means a style that resolves
+        // to the same colour does not count as a change, which is the right
+        // answer as well as the cheap one.
+        var paint = style.paint(in: context.environment)
+        // Only a colour fades. `withAnimation` interpolates one value, and a
+        // ramp's animation is a different question (which stops move, and how
+        // a two-stop ramp becomes a five-stop one) that this deliberately does
+        // not answer yet.
+        if case .color(let colour) = paint {
+            paint = .color(ColorAnimation.resolving(colour, owner: Self.self, context: context))
+        }
         if let cache = context.renderCache,
             case .changed = cache.noteAppliedEnvironment(
-                // `as Any` deliberately: the value tracked here is the
-                // OPTIONAL, because clearing a style is a change the cache has
-                // to notice as much as setting one. Without the cast this is a
-                // warning on every build — the compiler cannot tell a meant
-                // Optional from a forgotten unwrap.
-                style as Any, identity: context.identity,
+                paint, identity: context.identity,
                 keyPath: \EnvironmentValues.foregroundStyle,
                 depth: context.environmentApplicationDepth)
         {
             cache.clearAffected(by: context.identity)
         }
         var childContext = context
-        childContext.environment.foregroundStyle = style.map {
-            ColorAnimation.resolving($0, owner: Self.self, context: context)
-        }
+        childContext.environment.foregroundStyle = paint
         childContext.environmentApplicationDepth += 1
         return childContext
     }

@@ -169,7 +169,8 @@ extension Divider: Renderable, Layoutable {
         // containers draw), rather than shouting in the body-text colour. A
         // `.foregroundStyle(_:)` on or above it takes precedence.
         let palette = context.environment.palette
-        let color = (context.environment.foregroundStyle ?? palette.border).resolve(with: palette)
+        let color = (context.environment.foregroundStyle?.representative ?? palette.border)
+            .resolve(with: palette)
         if vertical {
             let cell = ANSIRenderer.colorize(String(glyph), foreground: color)
             return FrameBuffer(lines: Array(repeating: cell, count: max(1, context.availableHeight)))

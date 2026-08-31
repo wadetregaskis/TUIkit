@@ -1571,7 +1571,7 @@ where Value.ID: Hashable {
         let visual = rowVisualState(
             isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
         let styledIndicator = ANSIRenderer.colorize(visual.indicator, foreground: visual.indicatorColor)
-        let foreground = context.environment.foregroundStyle ?? palette.foreground
+        let foreground = context.environment.foregroundStyle?.representative ?? palette.foreground
         let layout = cellLayout(for: item, columnWidths: columnWidths)
 
         // One SGR introducer for every cell of every line — see ``renderRow``,
@@ -2988,7 +2988,7 @@ where Value.ID: Hashable {
         // re-joining its codes per cell (`ANSIRenderer.render` was 18.1%
         // inclusive of a `tables-scroll` frame, `buildStyleCodes` 6.8%).
         // `sequence + text + reset` is byte-for-byte what `colorize` produces.
-        let foregroundColor = context.environment.foregroundStyle ?? palette.foreground
+        let foregroundColor = context.environment.foregroundStyle?.representative ?? palette.foreground
         var cellStyle = TextStyle()
         cellStyle.foregroundColor = foregroundColor
         let cellSequence = ANSIRenderer.styleSequence(for: cellStyle)
@@ -3098,7 +3098,7 @@ where Value.ID: Hashable {
         context: RenderContext,
         palette: any Palette
     ) -> [String] {
-        let foregroundColor = context.environment.foregroundStyle ?? palette.foreground
+        let foregroundColor = context.environment.foregroundStyle?.representative ?? palette.foreground
         let count = min(columns.count, columnWidths.count)
         let gutter = String(repeating: " ", count: Self.previewGutter)
         guard count > 0, steps > 0 else { return Array(repeating: gutter, count: max(0, steps)) }

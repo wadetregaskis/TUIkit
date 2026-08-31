@@ -709,17 +709,15 @@ extension Text: Renderable, Layoutable {
         // cascade colour > the broad `.foregroundStyle` environment value >
         // palette default fills it. Background: explicit > cascade (Text has no
         // environment background — nil means "no background").
-        if let explicit = style.foregroundColor {
-            if case .semantic(let role) = explicit.value {
-                effectiveStyle.foregroundColor =
-                    cascade.resolve(for: [.semanticColor(role)]).foreground ?? explicit
-            }
-        } else {
-            effectiveStyle.foregroundColor =
-                cascaded.foreground
-                ?? context.environment.foregroundStyle
-                ?? context.environment.palette.foreground
-        }
+        //
+        // A gradient can only arrive by the environment route — the two nearer
+        // sources name one colour each — and only when nothing nearer has
+        // spoken. `effectiveStyle` still takes its representative, so
+        // everything downstream that wants one colour (the measure pass, the
+        // semantic-role lookup, an attributed run) has one.
+        let ramp = Self.resolveForeground(
+            into: &effectiveStyle, stated: style.foregroundColor, cascade: cascade,
+            cascaded: cascaded, context: context)
         if effectiveStyle.backgroundColor == nil {
             effectiveStyle.backgroundColor = cascaded.background
         }
@@ -826,6 +824,16 @@ extension Text: Renderable, Layoutable {
                     .map { ANSIRenderer.render($0.text, with: resolvedRunStyles[$0.run]) }
                     .joined()
             }
+        } else if let ramp, !context.isMeasuring {
+            // The extent is this text's own BLOCK — measured against SwiftUI,
+            // where a two-line `Text` under a horizontal gradient ends its
+            // short first line partway along the ramp rather than at the far
+            // end. Attributed runs take the representative instead (above):
+            // banding a run-split line needs the two splits reconciled cell by
+            // cell, which is its own piece of work.
+            styledLines = PaintRenderer.styled(
+                plainLines, blockWidth: lineWidths.max() ?? 0, paint: ramp,
+                style: resolvedStyle, depth: ColorDepth.current)
         } else {
             styledLines = plainLines.map { ANSIRenderer.render($0, with: resolvedStyle) }
         }
@@ -858,6 +866,44 @@ extension Text: Renderable, Layoutable {
             lineWidths: LineSpacingRows.interleaved(paddedWidths, spacing: spacing, blank: 0))
     }
 
+    /// Fills in `style`'s foreground, and reports a gradient if that is what
+    /// the environment supplied.
+    ///
+    /// Precedence: an explicit *concrete* colour on this Text wins; an explicit
+    /// *semantic* colour may be remapped by a same-role `.semanticColor(role)`
+    /// cascade entry; otherwise a scoped cascade colour > the broad
+    /// `.foregroundStyle` environment value > the palette default.
+    ///
+    /// A ramp comes back separately rather than in the style, because a
+    /// `TextStyle` names one colour and the whole point of a ramp is that it
+    /// does not. The style still gets the ramp's representative so that
+    /// anything asking for one colour has one.
+    private static func resolveForeground(
+        into style: inout TextStyle,
+        stated: Color?,
+        cascade: StyleCascade,
+        cascaded: StyleAttributes,
+        context: RenderContext
+    ) -> Paint? {
+        if let stated {
+            if case .semantic(let role) = stated.value {
+                style.foregroundColor =
+                    cascade.resolve(for: [.semanticColor(role)]).foreground ?? stated
+            }
+            return nil
+        }
+        if let cascadedForeground = cascaded.foreground {
+            style.foregroundColor = cascadedForeground
+            return nil
+        }
+        guard let paint = context.environment.foregroundStyle else {
+            style.foregroundColor = context.environment.palette.foreground
+            return nil
+        }
+        style.foregroundColor = paint.representative
+        return paint.solid == nil ? paint : nil
+    }
+
     /// The palette role this text draws with, used to match `.semanticColor`
     /// style-cascade entries. A `.semantic(...)` foreground (explicit on the
     /// Text, or inherited via `.foregroundStyle`) reports its role; an explicit
@@ -866,8 +912,15 @@ extension Text: Renderable, Layoutable {
     private static func semanticRole(
         explicit: Color?, environment: EnvironmentValues
     ) -> SemanticColor? {
-        guard let color = explicit ?? environment.foregroundStyle else { return .foreground }
-        if case .semantic(let role) = color.value { return role }
+        if let explicit {
+            if case .semantic(let role) = explicit.value { return role }
+            return nil
+        }
+        guard let paint = environment.foregroundStyle else { return .foreground }
+        // A ramp has no palette role: it is not one colour, so it cannot BE the
+        // colour a `.semanticColor` cascade entry is talking about.
+        guard let colour = paint.solid else { return nil }
+        if case .semantic(let role) = colour.value { return role }
         return nil
     }
 
