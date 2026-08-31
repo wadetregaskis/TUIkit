@@ -124,11 +124,24 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// re-resolved against a RESTING cursor.
     private var lastMotionPosition: (x: Int, y: Int)?
 
+    /// A control that was hovered and whose `.exited` still has to reach it.
+    ///
+    /// A named struct rather than the labelled tuple it used to be, and the
+    /// reason is not taste: as a tuple inside an `Optional` it crashes
+    /// `swift-frontend` on the Swift 6.5-dev snapshot of 2026-08-30 — an
+    /// assertion in the `LoadableByAddress` SIL pass, on this property's
+    /// setter, which stops the whole package compiling on that toolchain. A
+    /// struct compiles. It reads no worse either way.
+    private struct PendingHoverExit {
+        let region: HitTestRegion
+        let handler: (MouseEvent) -> Bool
+    }
+
     /// The hovered control's closure, retained across the handler-table
     /// rebuild: if the reshape puts a different control under the resting
     /// cursor, `.exited` must still reach the control that was left — by
     /// then its numeric id belongs to someone else, or to no one.
-    private var pendingHoverExit: (region: HitTestRegion, handler: (MouseEvent) -> Bool)?
+    private var pendingHoverExit: PendingHoverExit?
 
     /// Per-frame feature requests posted by view modifiers that
     /// genuinely need a higher mouse-tracking level than the base
@@ -229,7 +242,7 @@ extension MouseEventDispatcher {
         if let id = lastHoveredHandlerID, let handler = handlers[id],
             let region = lastHoveredRegion
         {
-            pendingHoverExit = (region, handler)
+            pendingHoverExit = PendingHoverExit(region: region, handler: handler)
         }
         handlers.removeAll(keepingCapacity: true)
         regions.removeAll(keepingCapacity: true)
