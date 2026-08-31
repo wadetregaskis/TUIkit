@@ -738,7 +738,7 @@ four-row red→blue ramp under `.gradientExtent(.subtree)`.
 | `LazyVStack`, `LazyHStack` | ❌ every row the ramp's first colour | Fixed |
 | `List`, `OutlineGroup` | ❌ every row the ramp's first colour | Fixed — see below |
 | `Grid`, `LazyVGrid`, `LazyHGrid`, `AnyLayout` | ❌ every row the ramp's first colour | Fixed in one place: every `Layout` places its subviews through `_LayoutCore`, which knows the bounds and each entry's exact position |
-| `Table` | ❌ no `foregroundStyle` at all | **Not fixed, and not the same problem** — see below |
+| `Table` | ⚠️ honours a colour; collapses a ramp to one | Its cells are strings it paints itself — see below |
 
 So the answer to "how many containers?" is: every one that places children,
 and there are seven places that do it. The two calls each one makes —
@@ -751,13 +751,24 @@ Two corrections to the record while measuring this:
   — a plain colour reaches its rows. The probe that said otherwise read the
   first ink of each *line*, which for a bordered list is the border glyph, not
   the row's text. `List`'s real gap was the same one the lazy stacks had.
-  **`Table` is the one that ignores it**, and for a reason no gradient work
-  touches: a `TableColumn`'s content is a `(Value) -> String`, not a view, so
-  the table paints its own cells and never consults
-  `environment.foregroundStyle`. Measured: `.foregroundStyle(.red)` on a
-  `Table` leaves its rows at the palette's foreground. That is a separate gap
-  — "a table's cells take the styling around them" — and wants answering at the
-  colour level before anyone reaches for a ramp.
+  **And then `Table` was reported as ignoring it, which is wrong too** — the
+  same mistake, made twice on the same kind of chrome. That probe read the
+  SECOND ink of each line, which for a table row is the selection gutter, not
+  the cell. Re-measured properly:
+
+  ```
+  .foregroundStyle(.red)   cells at 38;2;255;0;0     (honoured)
+  no style                 cells at 38;2;51;255;51   (palette foreground)
+  .foregroundStyle(ramp)   every row 38;2;127;0;127  (the ramp's midpoint)
+  ```
+
+  So `Table` honours a colour and collapses a ramp to
+  ``Paint/representative``. That collapse is the framework's own rule for
+  where a colour is DERIVED FROM — but a table's cells are being PAINTED, so
+  it is the wrong rule here, and the gap is a ramp rather than styling as a
+  whole. **The lesson for the next probe: read the ink of the cell you mean,
+  not the first or second run on the line.** Both wrong readings came from a
+  helper that counted runs instead of columns.
 - **The ramp is content-pinned, not viewport-pinned** (§4 predicted the
   opposite). An eager `ScrollView { VStack { ForEach(0..<40) } }` in a ten-row
   viewport shows `255;0;0 … 196;0;58` — the first quarter of the ramp, so a row

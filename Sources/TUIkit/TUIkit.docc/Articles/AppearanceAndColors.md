@@ -135,7 +135,8 @@ Every container that places children takes part: the stacks and their lazy
 twins, ``ZStack``, ``ScrollView``, ``Form``, ``List``, ``OutlineGroup``, the
 grids, and any ``Layout`` you write yourself. Swapping one for another does not
 change a colour. ``Table`` is the exception — its columns yield strings rather
-than views, so it paints its own cells and reads no foreground style at all.
+than views, so it paints its own cells: it honours a foreground colour, and
+collapses a gradient to the one colour that stands in for it.
 
 Every colour also carries a gradient of its own — a lighter version of itself at
 the top, the colour at the bottom — for the times you want depth rather than a

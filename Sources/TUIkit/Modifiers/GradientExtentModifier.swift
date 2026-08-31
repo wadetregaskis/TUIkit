@@ -54,10 +54,10 @@ extension View {
     /// Every container that places children participates: the stacks and their
     /// lazy twins, `ZStack`, `ScrollView`, `Form`, `List`, `OutlineGroup`, and
     /// — through one shared placement — `Grid`, the lazy grids and any
-    /// ``Layout`` an app writes for itself. `Table` is the exception, and for a
-    /// reason that has nothing to do with gradients: its columns yield strings
-    /// rather than views, so it paints its own cells and reads no foreground
-    /// style at all, colour or ramp.
+    /// ``Layout`` an app writes for itself. `Table` is the exception: its
+    /// columns yield strings rather than views, so it paints its own cells. It
+    /// honours a foreground COLOUR, and collapses a ramp to one — see
+    /// ``Paint/representative``.
     ///
     /// A container that does not participate hands its children its own
     /// position unchanged. The ramp then resolves as if that subtree were flat:
