@@ -201,12 +201,18 @@ position on the tone axis (`0` black … `1` white) via `Stop.position` and
 `Stop(at:to:)`. A `from` written as any other colour still works; only its tone
 was ever consulted, and a grey is the one spelling that says so.
 
-Those positions are what distinguishes this from a gradient, and the
-distinction is easy to lose. A TUIkit gradient is a list of colours at *even*
-intervals; a curve is a list of colours at tones *you choose*. Four colours
-evenly spaced is a curve, but it is the special case, and an editor that can
-only produce that special case is a gradient editor wearing the wrong label —
-which is exactly what the demo shipped for a while.
+Those positions used to be what distinguished this from a gradient. They are
+not any more: a ``Gradient`` is stops at positions too, and
+``GradientEditorPanel`` edits them. **What still separates the two is the
+AXIS.** A gradient's positions are along the thing being painted — where a cell
+sits in a box — so it answers "given a position, what colour?". A curve's
+positions are on the *tone* axis of what is being sampled, so it answers "given
+this pixel's brightness, what colour?". Same shape, different independent
+variable, and nothing converts one into the other.
+
+(Whether `ASCIIToneCurve` should therefore BE a `Gradient` read with a tone for
+its parameter is a fair question, and not this document's: it would change the
+image pipeline's public vocabulary for a saving that is real but small.)
 
 `ToneCurveEditorPanel` is the editor that can say the general case. It draws
 two aligned strips read **column by column** — the tone arriving above, the

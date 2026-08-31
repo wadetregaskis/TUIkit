@@ -496,7 +496,7 @@ On a branch, merged only if the whole thing lands.
    survey it rests on. **Gated on measuring against the manual N-modifier
    version**, per requirement (b). ✅ — see §11.
 5. **`background(_:)`**, `.in(_:)`, then `RadialGradient` / `AngularGradient` /
-   `EllipticalGradient`.
+   `EllipticalGradient`. ✅ — see §12, including `ShapeStyle.opacity(_:)`.
 6. **The panel.** Not one dialog, but one dialog with two floors:
    `ColorPickerPanel` keeps no gradient affordance because its callers include
    palette slots that cannot store one; `GradientEditorPanel` becomes the union
@@ -507,11 +507,28 @@ On a branch, merged only if the whole thing lands.
    is public API taking `Binding<[Color]>` with an even-spacing assumption, and
    its `@AppStorage` recents format (`;`-separated hex, see
    `Sources/Example/Components/GradientStopsCodec.swift`) cannot represent
-   `Gradient.Stop.location`.
+   `Gradient.Stop.location`. ✅ — and the migration needed no migration code:
+   a stop written without a position reads as evenly spaced, which is exactly
+   what the old format meant, so stored values convert by being read.
 
 Steps 1–3 are each independently useful and revertible. Step 4 is the one that
 can fail, and it fails early: the container survey and the bench tell you before
 any of it is written.
+
+**What is deliberately not built**, decided while step 5 was: the 2- and
+3-argument `foregroundStyle` (the extra styles paint a symbol's extra LAYERS,
+and a glyph in a cell has one), `Text.foregroundStyle<S>` returning `Text` (a
+concatenated run carries one colour, so the spelling that would quietly
+collapse a ramp is the one that must fail), and `HierarchicalShapeStyle` (its
+four names are palette roles here, two of them already spelled on `Color`
+where SwiftUI spells them, so a second type would only make `.secondary`
+ambiguous). Each is recorded in `SwiftUI-compatibility.md` §3.
+
+**Still open**, and neither is a gradient problem: `backgroundStyle(_:)` has
+nothing to read it until there is a zero-argument `background()`, and a
+gradient used as a VIEW (`ZStack { LinearGradient(…) }`) wants the same
+fill machinery `Color: View` would — TUIkit has neither, and adding one
+without the other would be the odd half.
 
 ---
 
