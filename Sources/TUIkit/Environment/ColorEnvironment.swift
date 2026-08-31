@@ -68,7 +68,8 @@ extension View {
     /// - Parameter style: The color to apply as foreground style.
     /// - Returns: A view with the foreground style set.
     public func foregroundStyle<S: ShapeStyle>(_ style: S) -> some View {
-        _AnimatableForegroundStyleView(content: self, style: style)
+        _StyleEnvironmentView(
+            content: self, style: style, slot: \.foregroundStyle, fades: true)
     }
 
     /// The colour spelling, so `.foregroundStyle(.red)` and
@@ -82,22 +83,93 @@ extension View {
     /// reachable.
     @_disfavoredOverload
     public func foregroundStyle(_ style: Color) -> some View {
-        _AnimatableForegroundStyleView(content: self, style: style)
+        _StyleEnvironmentView(
+            content: self, style: style, slot: \.foregroundStyle, fades: true)
     }
 }
 
-/// Publishes a foreground style to its subtree, fading it when it changes
-/// inside ``withAnimation(_:_:)``.
+// MARK: - Background Style Environment
+
+/// Environment key for the default background style.
+private struct BackgroundStyleKey: EnvironmentKey {
+    static let defaultValue: Paint? = nil
+}
+
+extension EnvironmentValues {
+    /// What ``View/background()`` and ``BackgroundStyle`` paint with.
+    ///
+    /// Set via ``View/backgroundStyle(_:)``; `nil` means nothing has been
+    /// stated and the palette's own background applies.
+    ///
+    /// A ``Paint`` rather than SwiftUI's `AnyShapeStyle?`, for the reason
+    /// ``foregroundStyle`` is one: an existential is not `Equatable`, and the
+    /// render memo answers "incomparable" for anything that is not — which
+    /// turns memoization off for the whole subtree beneath it.
+    public var backgroundStyle: Paint? {
+        get { self[BackgroundStyleKey.self] }
+        set { self[BackgroundStyleKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Sets the background style for this view and its children.
+    ///
+    /// It paints nothing by itself: it names what ``View/background()`` and
+    /// the ``ShapeStyle/background`` style will use, the way
+    /// ``View/foregroundStyle(_:)`` names the ink rather than drawing it.
+    ///
+    /// ```swift
+    /// VStack {
+    ///     Text("Total").padding().background()
+    /// }
+    /// .backgroundStyle(LinearGradient(colors: [.rgb(20, 30, 60), .rgb(60, 20, 50)],
+    ///                                 startPoint: .leading, endPoint: .trailing))
+    /// ```
+    ///
+    /// - Parameter style: The style descendants should use as their background.
+    /// - Returns: A view that publishes the style to its descendants.
+    public func backgroundStyle<S: ShapeStyle>(_ style: S) -> some View {
+        _StyleEnvironmentView(
+            content: self, style: style, slot: \.backgroundStyle, fades: false)
+    }
+
+    /// The colour spelling, so `.backgroundStyle(.red)` keeps inferring — the
+    /// same `@_disfavoredOverload` pairing ``foregroundStyle(_:)`` needs, and
+    /// for the same reason.
+    @_disfavoredOverload
+    public func backgroundStyle(_ style: Color) -> some View {
+        _StyleEnvironmentView(
+            content: self, style: style, slot: \.backgroundStyle, fades: false)
+    }
+}
+
+/// Publishes a resolved ``Paint`` into one environment slot for its subtree.
 ///
-/// A plain `.environment(\.foregroundStyle, _)` would do everything but the
-/// fade; the colour has to be resolved where the palette is, which is here.
-/// See ``ColorAnimation``.
-struct _AnimatableForegroundStyleView<Content: View, S: ShapeStyle>: View {
+/// A plain `.environment(\.foregroundStyle, _)` would do neither of the two
+/// things that make this a view rather than a one-liner: a style has to be
+/// resolved where the palette is, and the memo has to be TOLD, or a subtree
+/// below a scoped style change serves a buffer painted in the old one. That
+/// second half is a known bug class — see `RenderContext`'s note on
+/// `setting()` — so both style slots go through this one type rather than
+/// through two copies of the bookkeeping.
+struct _StyleEnvironmentView<Content: View, S: ShapeStyle>: View {
     let content: Content
     let style: S
 
+    /// Which slot to publish into.
+    let slot: WritableKeyPath<EnvironmentValues, Paint?>
+
+    /// Whether a colour change here should FADE under ``withAnimation(_:_:)``.
+    ///
+    /// True for the foreground, which is the last stop before the ink. False
+    /// for a background style, which is a default that something else paints —
+    /// and `BackgroundModifier` already asks the animator when it does, so
+    /// fading here as well would animate toward a moving target and drag the
+    /// transition out.
+    let fades: Bool
+
     var body: Never {
-        fatalError("_AnimatableForegroundStyleView renders via Renderable")
+        fatalError("_StyleEnvironmentView renders via Renderable")
     }
 
     private func childContext(_ context: RenderContext) -> RenderContext {
@@ -119,31 +191,30 @@ struct _AnimatableForegroundStyleView<Content: View, S: ShapeStyle>: View {
         // ramp's animation is a different question (which stops move, and how
         // a two-stop ramp becomes a five-stop one) that this deliberately does
         // not answer yet.
-        if case .color(let colour) = paint {
+        if fades, case .color(let colour) = paint {
             paint = .color(ColorAnimation.resolving(colour, owner: Self.self, context: context))
         }
         if let cache = context.renderCache,
             case .changed = cache.noteAppliedEnvironment(
-                paint, identity: context.identity,
-                keyPath: \EnvironmentValues.foregroundStyle,
+                paint, identity: context.identity, keyPath: slot,
                 depth: context.environmentApplicationDepth)
         {
             cache.clearAffected(by: context.identity)
         }
         var childContext = context
-        childContext.environment.foregroundStyle = paint
+        childContext.environment[keyPath: slot] = paint
         childContext.environmentApplicationDepth += 1
         return childContext
     }
 }
 
-extension _AnimatableForegroundStyleView: Renderable {
+extension _StyleEnvironmentView: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         TUIkitView.renderToBuffer(content, context: childContext(context))
     }
 }
 
-extension _AnimatableForegroundStyleView: Layoutable {
+extension _StyleEnvironmentView: Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureChild(content, proposal: proposal, context: childContext(context))
     }

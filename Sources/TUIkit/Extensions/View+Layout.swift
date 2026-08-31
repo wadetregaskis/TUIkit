@@ -182,7 +182,7 @@ extension View {
 // MARK: - Background
 
 extension View {
-    /// Adds a background color to this view.
+    /// Adds a background to this view — a colour, or any gradient.
     ///
     /// # Example
     ///
@@ -197,10 +197,23 @@ extension View {
     /// .background(.blue)
     /// ```
     ///
-    /// - Parameter color: The background color.
-    /// - Returns: A view with the background color applied.
+    /// - Parameter style: The background style — a colour, or any gradient.
+    /// - Returns: A view with the background applied.
     public func background<S: ShapeStyle>(_ style: S) -> some View {
         modifier(BackgroundModifier(style: style))
+    }
+
+    /// Fills this view's cells with the background style in force — from
+    /// ``View/backgroundStyle(_:)``, or the palette's own background where
+    /// nothing has named one.
+    ///
+    /// SwiftUI's zero-argument `background()`, minus `ignoresSafeAreaEdges:`:
+    /// a terminal has no safe area for an argument to talk about, so the
+    /// spelling that means something is the only one that compiles.
+    ///
+    /// - Returns: A view filled with the environment's background style.
+    public func background() -> some View {
+        background(BackgroundStyle())
     }
 
     /// The colour spelling, so `.background(.red)` and

@@ -173,3 +173,94 @@ struct StyleAsViewTests {
             "either side of the glyphs and not under them: \(lines[1].debugDescription)")
     }
 }
+
+// MARK: - The background style
+
+@MainActor
+@Suite("Background style")
+struct BackgroundStyleTests {
+
+    private func environment() -> EnvironmentValues {
+        var environment = EnvironmentValues()
+        environment.palette = SystemPalette.green
+        return environment
+    }
+
+    private func context(width: Int, height: Int) -> RenderContext {
+        let tui = TUIContext()
+        var values = environment()
+        values.focusManager = FocusManager()
+        values.applyRuntimeServices(from: tui)
+        return RenderContext(
+            availableWidth: width, availableHeight: height, environment: values, tuiContext: tui)
+    }
+
+    /// Nothing named, so the surface is the palette's own — a terminal's
+    /// answer to SwiftUI's system background material.
+    @Test("With nothing named, the background style is the palette's background")
+    func defaultsToThePalette() {
+        let values = environment()
+        #expect(BackgroundStyle().paint(in: values) == .color(values.palette.background))
+        #expect(
+            BackgroundStyle().paint(in: values) == AnyShapeStyle(.background).paint(in: values),
+            "the static member is the same style")
+    }
+
+    @Test("`backgroundStyle(_:)` is what `.background` then resolves to")
+    func namedStyleWins() {
+        var values = environment()
+        values.backgroundStyle = .color(.rgb(9, 8, 7))
+        #expect(BackgroundStyle().paint(in: values) == .color(.rgb(9, 8, 7)))
+
+        let gradient = Gradient(colors: [.rgb(1, 0, 0), .rgb(0, 0, 1)])
+        values.backgroundStyle = .gradient(GradientPaint(gradient, .linear(from: .top, to: .bottom)))
+        #expect(BackgroundStyle().paint(in: values).solid == nil, "a gradient survives the slot")
+    }
+
+    /// The pair, end to end: one modifier names the surface, another paints it,
+    /// and a plain `.background()` a whole subtree away picks it up.
+    @Test("The style set above is the fill drawn below")
+    func publishedStyleReachesTheFill() {
+        let lines = renderToBuffer(
+            VStack(spacing: 0) {
+                Text(verbatim: "ab").background()
+            }
+            .backgroundStyle(Color.rgb(20, 30, 40)),
+            context: context(width: 2, height: 1)
+        ).lines
+        #expect(lines.count == 1)
+        #expect(lines[0].contains("48;2;20;30;40"), "the named surface: \(lines[0].debugDescription)")
+    }
+
+    @Test("A gradient background style paints a ramp under the words")
+    func gradientBackgroundStyle() {
+        let lines = renderToBuffer(
+            Text(verbatim: "abcd").background()
+                .backgroundStyle(
+                    LinearGradient(
+                        colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)], startPoint: .leading,
+                        endPoint: .trailing)),
+            context: context(width: 4, height: 1)
+        ).lines
+        #expect(lines.count == 1)
+        #expect(lines[0].contains("48;2;255;0;0"), "the ramp's start")
+        #expect(lines[0].contains("48;2;0;0;255"), "and its end: \(lines[0].debugDescription)")
+    }
+
+    /// With nothing named it still paints — the palette's background, which is
+    /// what makes `.background()` worth writing over a dimmed backdrop.
+    @Test("`background()` with nothing named paints the palette's background")
+    func bareBackgroundPaints() {
+        let palette = SystemPalette.green
+        let lines = renderToBuffer(
+            Text(verbatim: "x").background(), context: context(width: 1, height: 1)
+        ).lines
+        guard let components = palette.background.resolve(with: palette).rgbComponents else {
+            Issue.record("the palette's background is not concrete")
+            return
+        }
+        #expect(
+            lines[0].contains("48;2;\(components.red);\(components.green);\(components.blue)"),
+            "\(lines[0].debugDescription)")
+    }
+}
