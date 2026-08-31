@@ -97,6 +97,45 @@ let lighter = color.lighter(by: 0.2)  // 20% lighter
 let darker = color.darker(by: 0.3)    // 30% darker
 ```
 
+### Gradients
+
+Anywhere a colour is painted, a gradient goes instead: ``View/foregroundStyle(_:)``
+and ``View/background(_:)`` take any ``ShapeStyle``, and ``LinearGradient``,
+``RadialGradient``, ``EllipticalGradient`` and ``AngularGradient`` are
+SwiftUI's own types with SwiftUI's own initialisers.
+
+```swift
+Text("Gradient text")
+    .foregroundStyle(LinearGradient(colors: [.red, .blue],
+                                    startPoint: .leading, endPoint: .trailing))
+```
+
+By default each view runs the whole ramp inside itself, which is SwiftUI's
+meaning. ``View/gradientExtent(_:)`` is the TUI-specific addition SwiftUI has no
+spelling for — **one ramp across a set of views**, each taking its own slice by
+where it sits:
+
+```swift
+VStack {
+    ForEach(rows) { Text($0.title) }
+}
+.foregroundStyle(LinearGradient(colors: [.red, .blue],
+                                startPoint: .top, endPoint: .bottom))
+.gradientExtent(.subtree)      // first row red, last row blue
+```
+
+That case costs what colouring each row by hand costs: a ramp that does not
+change along a row is one escape per row, exactly what it would have been. A
+ramp that varies *across* a row is a colour change per cell — right for a label
+or a panel, dear for a whole page.
+
+Two deviations from SwiftUI, both because a cell is about twice as tall as it
+is wide: ``RadialGradient``'s radii are `Int` **cells** measured along the
+horizontal axis, with the vertical derived through
+``EnvironmentValues/imageCellAspect`` so a circle looks like one, and
+``AngularGradient``'s angles are corrected the same way.
+``EllipticalGradient`` follows the box's own shape and needs no correction.
+
 ### Fading a Whole View
 
 ``View/opacity(_:)`` fades everything a subtree draws, without

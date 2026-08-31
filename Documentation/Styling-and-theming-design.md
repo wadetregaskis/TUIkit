@@ -184,6 +184,9 @@ Broad (SwiftUI-identical signatures; each appends a `.text`/`.all`-scoped entry)
 ```swift
 extension View {
     func foregroundStyle(_ color: Color?) -> some View       // already exists; feeds the cascade
+    // (since gradients: also `foregroundStyle<S: ShapeStyle>(_:)`, which feeds
+    //  the same cascade entry through `Paint` — a ramp reports its
+    //  representative where one colour is what a rule needs.)
     func bold(_ enabled: Bool = true) -> some View
     func italic(_ enabled: Bool = true) -> some View
     func underline(_ enabled: Bool = true) -> some View
