@@ -405,6 +405,34 @@ extension Color {
         Self.lerp(self, surface, phase: 1 - opacity)
     }
 
+    /// This colour mixed with another — SwiftUI's spelling of ``lerp(_:_:phase:)``.
+    ///
+    /// ```swift
+    /// let halfway = Color.red.mix(with: .blue, by: 0.5)
+    /// ```
+    ///
+    /// Exactly a two-stop gradient evaluated at `fraction`:
+    /// `Gradient(colors: [self, rhs]).color(at: fraction)` is the same colour,
+    /// because both are this one interpolation.
+    ///
+    /// ## The colour space, and why there is no `in:`
+    ///
+    /// SwiftUI's signature ends `in colorSpace: Gradient.ColorSpace = .perceptual`.
+    /// TUIkit interpolates encoded sRGB components — SwiftUI's `.device` — for
+    /// every gradient it draws, and has no perceptual interpolation to offer,
+    /// so the parameter is absent rather than accepted and ignored: asking for
+    /// a space this cannot honour must fail to compile, not quietly do
+    /// something else. If `Gradient.ColorSpace` ever arrives, it arrives for
+    /// gradients and this at once.
+    ///
+    /// - Parameters:
+    ///   - rhs: The colour to mix towards.
+    ///   - fraction: How far towards `rhs` (0–1; clamped).
+    /// - Returns: The mixture, or `self` if either side is semantic.
+    public func mix(with rhs: Color, by fraction: Double) -> Self {
+        Self.lerp(self, rhs, phase: fraction)
+    }
+
     /// Linearly interpolates between two colors.
     ///
     /// Both colors are converted to RGB before interpolation. If either
