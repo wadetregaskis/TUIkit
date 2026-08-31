@@ -90,32 +90,32 @@ struct TrackStyleEditor: View {
 
     /// The fallback gradient (red → amber → green) when the persisted stops
     /// don't decode to at least two colours.
-    private static let defaultGradient: [Color] = [
+    private static let defaultGradient = Gradient(colors: [
         .rgb(255, 80, 80), .rgb(255, 200, 80), .rgb(80, 220, 120),
-    ]
+    ])
 
-    /// The persisted stops decoded to colours.
-    private var gradientStops: [Color] {
+    /// The persisted stops decoded to a gradient.
+    private var gradientStops: Gradient {
         GradientStopsCodec.decode(gradientStopsRaw, fallback: Self.defaultGradient)
     }
 
     /// The fallback unfilled gradient when the persisted stops are unusable.
-    private static let defaultEmptyGradient: [Color] = [
+    private static let defaultEmptyGradient = Gradient(colors: [
         .rgb(32, 48, 80), .rgb(42, 74, 120), .rgb(60, 110, 165),
-    ]
+    ])
 
-    private var emptyStops: [Color] {
+    private var emptyStops: Gradient {
         GradientStopsCodec.decode(emptyStopsRaw, fallback: Self.defaultEmptyGradient)
     }
 
-    private var emptyStopsBinding: Binding<[Color]> {
+    private var emptyStopsBinding: Binding<Gradient> {
         Binding(
             get: { emptyStops },
             set: { emptyStopsRaw = GradientStopsCodec.encode($0) })
     }
 
     /// The gradient editor's binding: decodes on read, re-encodes on write.
-    private var gradientStopsBinding: Binding<[Color]> {
+    private var gradientStopsBinding: Binding<Gradient> {
         Binding(
             get: { gradientStops },
             set: { gradientStopsRaw = GradientStopsCodec.encode($0) })
@@ -145,12 +145,12 @@ struct TrackStyleEditor: View {
             fill: fill,
             partialRamp: rampText.isEmpty ? nil : Array(rampText),
             emptyStyle: empty,
-            fillGradient: gradientEnabled ? Gradient(colors: gradientStops) : nil,
+            fillGradient: gradientEnabled ? gradientStops : nil,
             // The unfilled half is stylable too: a flat colour of the style's
             // own, or a ramp across it. Its first stop doubles as the flat
             // colour so the two controls agree about what "tinted" means.
-            emptyColor: emptyTinted ? emptyStops.first : nil,
-            emptyGradient: emptyGradientEnabled ? Gradient(colors: emptyStops) : nil)
+            emptyColor: emptyTinted ? emptyStops.stops.first?.color : nil,
+            emptyGradient: emptyGradientEnabled ? emptyStops : nil)
     }
 
     /// A slowly-advancing fraction (0→1 over 50 s) for the preview bar.
@@ -238,13 +238,13 @@ struct TrackStyleEditor: View {
         .modal(isPresented: $editingEmptyGradient) {
             GradientEditorPanel(
                 "component.trackEditor.emptyGradientTitle",
-                stops: emptyStopsBinding,
+                gradient: emptyStopsBinding,
                 isPresented: $editingEmptyGradient)
         }
         .modal(isPresented: $editingGradient) {
             GradientEditorPanel(
                 "component.trackEditor.gradientTitle",
-                stops: gradientStopsBinding,
+                gradient: gradientStopsBinding,
                 isPresented: $editingGradient)
         }
         .task {

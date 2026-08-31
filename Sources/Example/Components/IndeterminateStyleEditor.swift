@@ -35,9 +35,9 @@ struct IndeterminateStyleEditor: View {
     @AppStorage("indeterminateEditor.recentFills") private var recentFillsJSON = "[]"
     @AppStorage("indeterminateEditor.recentEmpties") private var recentEmptiesJSON = "[]"
 
-    private static let defaultStops: [Color] = [
+    private static let defaultStops = Gradient(colors: [
         .rgb(60, 200, 190), .rgb(80, 110, 240), .rgb(170, 70, 220),
-    ]
+    ])
 
     /// Pre-defined lit patterns. `◢◤` is here because it is what makes a barber
     /// pole a barber pole — under that motion the pattern IS the stripe.
@@ -54,11 +54,11 @@ struct IndeterminateStyleEditor: View {
         Binding(get: { motion }, set: { motionName = $0.rawValue })
     }
 
-    private var stops: [Color] {
+    private var stops: Gradient {
         GradientStopsCodec.decode(stopsRaw, fallback: Self.defaultStops)
     }
 
-    private var stopsBinding: Binding<[Color]> {
+    private var stopsBinding: Binding<Gradient> {
         Binding(get: { stops }, set: { stopsRaw = GradientStopsCodec.encode($0) })
     }
 
@@ -78,7 +78,7 @@ struct IndeterminateStyleEditor: View {
             motion: motion,
             fill: fillGlyph.isEmpty ? "█" : fillGlyph,
             empty: emptyGlyph == "␣" ? " " : (emptyGlyph.isEmpty ? "░" : emptyGlyph),
-            gradient: tinted ? Gradient(colors: stops) : nil,
+            gradient: tinted ? stops : nil,
             period: period,
             extent: extent)
     }
@@ -128,7 +128,7 @@ struct IndeterminateStyleEditor: View {
         .modal(isPresented: $editingStops) {
             GradientEditorPanel(
                 "component.indeterminateEditor.colorsTitle",
-                stops: stopsBinding,
+                gradient: stopsBinding,
                 isPresented: $editingStops)
         }
     }

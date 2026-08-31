@@ -8,14 +8,15 @@ import TUIkitStyling
 
 // MARK: - Gradient Editor Panel
 
-/// A modal gradient editor — ``ColorPickerPanel``'s sibling for the `[Color]`
-/// stop lists TUIkit's gradients are made of (``TrackConfiguration``'s
-/// `fillGradient`, `.threeSegment`'s ``SegmentColoring/gradient(_:)``, and the
-/// indeterminate `IndeterminateStyle.gradient(colors:period:)` sweep).
+/// A modal gradient editor — ``ColorPickerPanel``'s sibling for the
+/// ``Gradient``s TUIkit paints with (``TrackConfiguration``'s `fillGradient`,
+/// `.threeSegment`'s ``SegmentColoring/gradient(_:)``, the indeterminate
+/// `IndeterminateStyle.gradient(_:)` sweep, and anything given to
+/// ``View/foregroundStyle(_:)``).
 ///
-/// TUIkit gradients are evenly-spaced colour stops interpolated piecewise
-/// (`TrackRenderer.gradientColor`); the editor shows that exact interpolation
-/// live in its preview strip. Below it, the stop strip selects a stop (click
+/// A gradient is colours at positions, interpolated piecewise; the editor
+/// shows that exact interpolation live in its preview strip, positions
+/// included. Below it, the stop strip selects a stop (click
 /// its swatch) and reorders them (drag a swatch — the stop moves through the
 /// strip live, following the cursor), the action row
 /// inserts / removes / reorders stops, preset and
@@ -23,30 +24,39 @@ import TUIkitStyling
 /// colour panel — the same preview-plus-tabs body ``ColorPickerPanel`` wraps —
 /// edits the selected stop in place, rather than nesting a second dialog.
 ///
-/// Every change writes straight through `stops`, so a live consumer updates as
-/// you edit. **Done** keeps the result (and records it in the recents);
+/// Every change writes straight through `gradient`, so a live consumer updates
+/// as you edit. **Done** keeps the result (and records it in the recents);
 /// **Cancel** — or any other dismissal, `Esc` included — restores the stops the
 /// dialog opened with.
 ///
 /// Present it like the colour panel (TUIkit modals are page-hosted):
 ///
 /// ```swift
-/// @State private var stops: [Color] = [.rgb(255, 80, 80), .rgb(80, 160, 255)]
+/// @State private var ramp = Gradient(colors: [.rgb(255, 80, 80), .rgb(80, 160, 255)])
 /// @State private var editing = false
 ///
 /// PageRoot {
 ///     Button("Edit gradient…") { editing = true }
 /// }
 /// .modal(isPresented: $editing) {
-///     GradientEditorPanel(stops: $stops, isPresented: $editing)
+///     GradientEditorPanel(gradient: $ramp, isPresented: $editing)
 /// }
 /// ```
+///
+/// ## Positions are preserved
+///
+/// Editing a colour, or reordering the stops, moves colours between positions
+/// and leaves the positions where they were — so a gradient handed to the
+/// editor with deliberate spacing comes back with it. Adding a stop lands the
+/// copy in the gap beside the selected one, moving nothing else, which is what
+/// every gradient editor does and what "split here" has to mean once a stop
+/// has a position at all.
 ///
 /// A gradient needs at least two stops (fewer render as the consumer's
 /// fallback colour), so "Remove" disables at two.
 public struct GradientEditorPanel: View {
     private let title: String
-    private let stops: Binding<[Color]>
+    private let gradient: Binding<Gradient>
     private let isPresented: Binding<Bool>
 
     /// The index of the stop the embedded colour panel is editing. Clamped on
@@ -60,11 +70,11 @@ public struct GradientEditorPanel: View {
     @State private var session = Session()
 
     /// The last ``recentLimit`` gradients *applied* (Done), most recent first,
-    /// persisted app-wide as `;`-separated stop lists of `,`-separated hex.
+    /// persisted app-wide — see ``encodeRecents(_:)`` for the format.
     @AppStorage("tuikit.gradientEditor.recents") private var recentsRaw = ""
 
     private final class Session {
-        var original: [Color]?
+        var original: Gradient?
         var applied = false
     }
 
@@ -84,34 +94,34 @@ public struct GradientEditorPanel: View {
     ///
     /// - Parameters:
     ///   - titleKey: The key for the dialog title.
-    ///   - stops: The gradient's colour stops, evenly spaced. Rewritten live
-    ///     on every change; restored to the opening value on Cancel / `Esc`.
+    ///   - gradient: The gradient being edited. Rewritten live on every
+    ///     change; restored to the opening value on Cancel / `Esc`.
     ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
     ///     it false.
     public init(
         _ titleKey: LocalizedStringKey,
-        stops: Binding<[Color]>,
+        gradient: Binding<Gradient>,
         isPresented: Binding<Bool>
     ) {
-        self.init(titleKey.localized, stops: stops, isPresented: isPresented)
+        self.init(titleKey.localized, gradient: gradient, isPresented: isPresented)
     }
 
     /// Creates a gradient-editor panel titled as written.
     ///
     /// - Parameters:
     ///   - title: The dialog title (default `"Gradient"`).
-    ///   - stops: The gradient's colour stops, evenly spaced. Rewritten live
-    ///     on every change; restored to the opening value on Cancel / `Esc`.
+    ///   - gradient: The gradient being edited. Rewritten live on every
+    ///     change; restored to the opening value on Cancel / `Esc`.
     ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
     ///     it false.
     @_disfavoredOverload
     public init(
         _ title: String = "Gradient",
-        stops: Binding<[Color]>,
+        gradient: Binding<Gradient>,
         isPresented: Binding<Bool>
     ) {
         self.title = title
-        self.stops = stops
+        self.gradient = gradient
         self.isPresented = isPresented
     }
 
@@ -133,13 +143,13 @@ public struct GradientEditorPanel: View {
                 Divider().frame(width: Self.previewWidth)
                 _ColorPickerBody(selection: selectedStopBinding)
             }
-            .onAppear { session.original = stops.wrappedValue }
+            .onAppear { session.original = gradient.wrappedValue }
             .onDisappear {
                 // ANY dismissal that isn't "Done" — Cancel, Esc, the page
                 // going away — restores what the dialog opened with. Live
                 // edits already wrote through `stops`, so this is the undo.
                 if !session.applied, let original = session.original {
-                    stops.wrappedValue = original
+                    gradient.wrappedValue = original
                 }
             }
         } footer: {
@@ -150,7 +160,8 @@ public struct GradientEditorPanel: View {
                 Button("Done") {
                     session.applied = true
                     recentsRaw = Self.encodeRecents(
-                        Self.recordingRecent(stops.wrappedValue, in: Self.decodeRecents(recentsRaw)))
+                        Self.recordingRecent(
+                            gradient.wrappedValue, in: Self.decodeRecents(recentsRaw)))
                     isPresented.wrappedValue = false
                 }
                 .buttonStyle(.primary)
@@ -168,7 +179,7 @@ public struct GradientEditorPanel: View {
     /// memo, which cannot see the stop colours the row captures — the preview
     /// froze until something else invalidated the cache.
     private var previewStrip: some View {
-        let list = stops.wrappedValue
+        let ramp = gradient.wrappedValue
         // Through the RAMP overload, which quantises the whole strip at once
         // and repairs it into a monotone one. Per cell — which this was — a
         // nearest match has no memory of its neighbours, so the editor's own
@@ -176,8 +187,8 @@ public struct GradientEditorPanel: View {
         // configuring did not. See `Color.quantisedRamp(_:count:depth:)`.
         let cells = (0..<Self.previewWidth).map { index in
             TrackRenderer.gradientColor(
-                Gradient(colors: list), index: index, span: Self.previewWidth,
-                fallback: list.first ?? .palette.accent, depth: ColorDepth.current)
+                ramp, index: index, span: Self.previewWidth,
+                fallback: ramp.stops.first?.color ?? .palette.accent, depth: ColorDepth.current)
         }
         return VStack(spacing: 0) {
             colorCellRow(cells)
@@ -216,14 +227,15 @@ public struct GradientEditorPanel: View {
     /// survives the drag handle because a press released without movement
     /// forwards to the button as an ordinary click.
     private var stopStrip: some View {
-        let list = stops.wrappedValue
+        let list = gradient.wrappedValue.stops
         let selection = clampedSelection
         let rows = Self.chipRows(count: list.count)
         return VStack(alignment: .center, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 1) {
                     ForEach(row, id: \.self) { index in
-                        stopChip(index: index, color: list[index], isSelected: index == selection)
+                        stopChip(
+                            index: index, color: list[index].color, isSelected: index == selection)
                     }
                 }
             }
@@ -235,11 +247,12 @@ public struct GradientEditorPanel: View {
             content: Button("") { selectedStop = index }
                 .buttonStyle(_ColorSwatchButtonStyle(color: color, isSelected: isSelected)),
             index: index,
-            stopCount: stops.wrappedValue.count,
+            stopCount: gradient.wrappedValue.stops.count,
             grab: { selectedStop = index },
             moveStop: { from, to in
-                let (updated, selected) = Self.movingStop(stops.wrappedValue, from: from, to: to)
-                stops.wrappedValue = updated
+                let (updated, selected) = Self.movingStop(
+                    gradient.wrappedValue, from: from, to: to)
+                gradient.wrappedValue = updated
                 selectedStop = selected
             })
     }
@@ -250,32 +263,32 @@ public struct GradientEditorPanel: View {
 
     /// Insert / remove / reorder controls for the selected stop.
     private var actionRow: some View {
-        let list = stops.wrappedValue
+        let ramp = gradient.wrappedValue
         let selection = clampedSelection
         return HStack(spacing: 1) {
             Button("+") {
-                let (updated, selected) = Self.duplicatingStop(list, at: selection)
-                stops.wrappedValue = updated
+                let (updated, selected) = Self.duplicatingStop(ramp, at: selection)
+                gradient.wrappedValue = updated
                 selectedStop = selected
             }
             Button("−") {
-                let (updated, selected) = Self.removingStop(list, at: selection)
-                stops.wrappedValue = updated
+                let (updated, selected) = Self.removingStop(ramp, at: selection)
+                gradient.wrappedValue = updated
                 selectedStop = selected
             }
-            .disabled(list.count <= 2)
+            .disabled(ramp.stops.count <= 2)
             Button("◀") {
-                let (updated, selected) = Self.movingStop(list, at: selection, by: -1)
-                stops.wrappedValue = updated
+                let (updated, selected) = Self.movingStop(ramp, at: selection, by: -1)
+                gradient.wrappedValue = updated
                 selectedStop = selected
             }
             .disabled(selection == 0)
             Button("▶") {
-                let (updated, selected) = Self.movingStop(list, at: selection, by: 1)
-                stops.wrappedValue = updated
+                let (updated, selected) = Self.movingStop(ramp, at: selection, by: 1)
+                gradient.wrappedValue = updated
                 selectedStop = selected
             }
-            .disabled(selection >= list.count - 1)
+            .disabled(selection >= ramp.stops.count - 1)
         }
     }
 
@@ -285,7 +298,7 @@ public struct GradientEditorPanel: View {
     /// the recently *applied* gradients (most recent first), each drawn as a
     /// small strip button. Selecting one replaces the stops (live, and
     /// revertable by Cancel like any other edit).
-    @ViewBuilder private func gradientChips(recents: [[Color]]) -> some View {
+    @ViewBuilder private func gradientChips(recents: [Gradient]) -> some View {
         chipRows(for: Self.presets)
         if !recents.isEmpty {
             // Dashed: a SUB-division within the library, deliberately
@@ -298,7 +311,7 @@ public struct GradientEditorPanel: View {
     }
 
     /// `gradients` as wrapped rows of strip buttons.
-    private func chipRows(for gradients: [[Color]]) -> some View {
+    private func chipRows(for gradients: [Gradient]) -> some View {
         let widths = gradients.map { _ in 2 + Self.chipStripWidth }  // focus prefix + strip
         let rows = Self.wrappedRows(
             itemWidths: widths, spacing: 1, budget: Self.previewWidth)
@@ -316,14 +329,14 @@ public struct GradientEditorPanel: View {
     /// The width of one gradient chip's strip, in cells.
     private static let chipStripWidth = 8
 
-    private func gradientChip(_ gradient: [Color]) -> some View {
+    private func gradientChip(_ ramp: Gradient) -> some View {
         let cells = (0..<Self.chipStripWidth).map { index in
             TrackRenderer.gradientColor(
-                Gradient(colors: gradient), index: index, span: Self.chipStripWidth,
-                fallback: gradient.first ?? .palette.accent, depth: ColorDepth.current)
+                ramp, index: index, span: Self.chipStripWidth,
+                fallback: ramp.stops.first?.color ?? .palette.accent, depth: ColorDepth.current)
         }
         return Button {
-            stops.wrappedValue = gradient
+            gradient.wrappedValue = ramp
             selectedStop = 0
         } label: {
             colorCellRow(cells)
@@ -335,7 +348,7 @@ public struct GradientEditorPanel: View {
 
     /// `selectedStop` clamped into the current stop list.
     private var clampedSelection: Int {
-        max(0, min(selectedStop, stops.wrappedValue.count - 1))
+        max(0, min(selectedStop, gradient.wrappedValue.stops.count - 1))
     }
 
     /// A colour binding onto the selected stop. The embedded panel re-seeds
@@ -344,68 +357,118 @@ public struct GradientEditorPanel: View {
     private var selectedStopBinding: Binding<Color> {
         Binding(
             get: {
-                let list = stops.wrappedValue
+                let list = gradient.wrappedValue.stops
                 guard !list.isEmpty else { return .rgb(0, 0, 0) }
-                return list[max(0, min(selectedStop, list.count - 1))]
+                return list[max(0, min(selectedStop, list.count - 1))].color
             },
             set: { newValue in
-                var list = stops.wrappedValue
+                var list = gradient.wrappedValue.stops
                 guard !list.isEmpty else { return }
-                list[max(0, min(selectedStop, list.count - 1))] = newValue
-                stops.wrappedValue = list
+                // The colour changes; the POSITION does not. That is the whole
+                // of "editing a stop" once a stop has a position.
+                list[max(0, min(selectedStop, list.count - 1))].color = newValue
+                gradient.wrappedValue = Gradient(stops: list)
             })
     }
 }
 
-// MARK: - Stop-list mutations (pure; unit-tested)
+// MARK: - Stop mutations (pure; unit-tested)
 
 extension GradientEditorPanel {
-    /// Inserts a copy of the stop at `index` immediately after it and selects
+    /// Inserts a copy of the stop at `index` in the gap beside it and selects
     /// the copy — duplicating reads as "split here", and editing the copy
     /// diverges it.
-    static func duplicatingStop(_ stops: [Color], at index: Int) -> ([Color], selected: Int) {
-        guard stops.indices.contains(index) else { return (stops, max(0, stops.count - 1)) }
-        var updated = stops
-        updated.insert(stops[index], at: index + 1)
-        return (updated, index + 1)
+    ///
+    /// **Nothing else moves.** The copy lands midway between the stop and its
+    /// neighbour, which is what every gradient editor does and the only thing
+    /// "split here" can mean once a stop has a position. For the LAST stop
+    /// there is no gap after it, so the copy goes in the gap before it — a
+    /// stop stacked exactly on another would be invisible until edited and
+    /// then a hard edge, which is not what the button says.
+    static func duplicatingStop(_ gradient: Gradient, at index: Int) -> (Gradient, selected: Int) {
+        let list = gradient.stops
+        guard list.indices.contains(index) else { return (gradient, max(0, list.count - 1)) }
+        guard list.count > 1 else {
+            // One stop is a solid colour; splitting it is how it becomes a
+            // gradient, and a gradient of one colour spans the whole ramp.
+            return (
+                Gradient(stops: [
+                    Gradient.Stop(color: list[0].color, location: 0),
+                    Gradient.Stop(color: list[0].color, location: 1),
+                ]), 1
+            )
+        }
+        var updated = list
+        let insertion: Int
+        let location: Double
+        if index < list.count - 1 {
+            insertion = index + 1
+            location = (list[index].location + list[index + 1].location) / 2
+        } else {
+            insertion = index
+            location = (list[index - 1].location + list[index].location) / 2
+        }
+        updated.insert(Gradient.Stop(color: list[index].color, location: location), at: insertion)
+        return (Gradient(stops: updated), insertion)
     }
 
     /// Removes the stop at `index`, refusing to go below two stops (fewer is
     /// not a gradient). The selection stays at the same position, clamped.
-    static func removingStop(_ stops: [Color], at index: Int) -> ([Color], selected: Int) {
-        guard stops.count > 2, stops.indices.contains(index) else {
-            return (stops, max(0, min(index, stops.count - 1)))
+    static func removingStop(_ gradient: Gradient, at index: Int) -> (Gradient, selected: Int) {
+        let list = gradient.stops
+        guard list.count > 2, list.indices.contains(index) else {
+            return (gradient, max(0, min(index, list.count - 1)))
         }
-        var updated = stops
+        var updated = list
         updated.remove(at: index)
-        return (updated, min(index, updated.count - 1))
+        return (Gradient(stops: updated), min(index, updated.count - 1))
     }
 
     /// Swaps the stop at `index` with its neighbour `offset` (−1 left, +1
     /// right) and follows it with the selection. Out-of-range moves are no-ops.
-    static func movingStop(_ stops: [Color], at index: Int, by offset: Int) -> ([Color], selected: Int) {
+    ///
+    /// The COLOURS swap and the positions stay: the stops are where they are,
+    /// and what "move this stop left" means on screen is that its colour is
+    /// now the one further left.
+    static func movingStop(
+        _ gradient: Gradient, at index: Int, by offset: Int
+    ) -> (Gradient, selected: Int) {
+        let list = gradient.stops
         let destination = index + offset
-        guard stops.indices.contains(index), stops.indices.contains(destination) else {
-            return (stops, max(0, min(index, stops.count - 1)))
+        guard list.indices.contains(index), list.indices.contains(destination) else {
+            return (gradient, max(0, min(index, list.count - 1)))
         }
-        var updated = stops
-        updated.swapAt(index, destination)
-        return (updated, destination)
+        var colours = list.map(\.color)
+        colours.swapAt(index, destination)
+        return (Gradient(stops: recoloured(list, with: colours)), destination)
     }
 
     /// Moves the stop at `source` to `destination` (remove + insert — the
     /// stops between them shift one place, drag-to-reorder semantics, unlike
     /// the neighbour SWAP of `movingStop(_:at:by:)`) and follows it with the
     /// selection. Out-of-range or same-place moves are no-ops.
-    static func movingStop(_ stops: [Color], from source: Int, to destination: Int) -> ([Color], selected: Int) {
-        guard stops.indices.contains(source), stops.indices.contains(destination),
+    ///
+    /// Colours again, for the same reason: dragging a chip through the strip
+    /// carries its colour past the others, and the ramp keeps its shape.
+    static func movingStop(
+        _ gradient: Gradient, from source: Int, to destination: Int
+    ) -> (Gradient, selected: Int) {
+        let list = gradient.stops
+        guard list.indices.contains(source), list.indices.contains(destination),
             source != destination
         else {
-            return (stops, max(0, min(source, stops.count - 1)))
+            return (gradient, max(0, min(source, list.count - 1)))
         }
-        var updated = stops
-        updated.insert(updated.remove(at: source), at: destination)
-        return (updated, destination)
+        var colours = list.map(\.color)
+        colours.insert(colours.remove(at: source), at: destination)
+        return (Gradient(stops: recoloured(list, with: colours)), destination)
+    }
+
+    /// `stops` with `colours` laid back onto their positions, in order.
+    private static func recoloured(_ stops: [Gradient.Stop], with colours: [Color])
+        -> [Gradient.Stop]
+    {
+        zip(stops, colours).map { Gradient.Stop(color: $1, location: $0.location) }
     }
 }
 
@@ -494,20 +557,22 @@ extension GradientEditorPanel {
 
 extension GradientEditorPanel {
     /// The built-in gradients, offered as one-click chips.
-    static let presets: [[Color]] = [
+    static let presets: [Gradient] = [
         // Rainbow
-        [.rgb(255, 64, 64), .rgb(255, 200, 0), .rgb(64, 192, 64),
-         .rgb(64, 200, 255), .rgb(64, 64, 255), .rgb(192, 64, 255)],
+        Gradient(colors: [
+            .rgb(255, 64, 64), .rgb(255, 200, 0), .rgb(64, 192, 64),
+            .rgb(64, 200, 255), .rgb(64, 64, 255), .rgb(192, 64, 255),
+        ]),
         // Heat
-        [.rgb(120, 0, 0), .rgb(255, 80, 0), .rgb(255, 200, 0), .rgb(255, 255, 220)],
+        Gradient(colors: [.rgb(120, 0, 0), .rgb(255, 80, 0), .rgb(255, 200, 0), .rgb(255, 255, 220)]),
         // Ocean
-        [.rgb(0, 40, 120), .rgb(0, 140, 200), .rgb(120, 230, 255)],
+        Gradient(colors: [.rgb(0, 40, 120), .rgb(0, 140, 200), .rgb(120, 230, 255)]),
         // Sunset
-        [.rgb(255, 120, 60), .rgb(230, 80, 140), .rgb(90, 40, 140)],
+        Gradient(colors: [.rgb(255, 120, 60), .rgb(230, 80, 140), .rgb(90, 40, 140)]),
         // Forest
-        [.rgb(20, 90, 50), .rgb(90, 180, 80), .rgb(210, 230, 120)],
+        Gradient(colors: [.rgb(20, 90, 50), .rgb(90, 180, 80), .rgb(210, 230, 120)]),
         // Greyscale
-        [.rgb(40, 40, 40), .rgb(230, 230, 230)],
+        Gradient(colors: [.rgb(40, 40, 40), .rgb(230, 230, 230)]),
     ]
 
     /// How many applied gradients the recents keep.
@@ -518,28 +583,53 @@ extension GradientEditorPanel {
     /// in descending recency and evicts least-recently-used), the built-in
     /// ``presets`` are never recorded (they already have a home above the
     /// rule), and the list caps at ``recentLimit``.
-    static func recordingRecent(_ gradient: [Color], in recents: [[Color]]) -> [[Color]] {
-        guard gradient.count >= 2, !presets.contains(gradient) else { return recents }
+    static func recordingRecent(_ gradient: Gradient, in recents: [Gradient]) -> [Gradient] {
+        guard gradient.stops.count >= 2, !presets.contains(gradient) else { return recents }
         var updated = recents.filter { $0 != gradient }
         updated.insert(gradient, at: 0)
         return Array(updated.prefix(recentLimit))
     }
 
-    /// Decodes the persisted recents: `;`-separated gradients of `,`-separated
-    /// `RRGGBB` stops. Entries that don't decode to at least two stops drop.
-    static func decodeRecents(_ raw: String) -> [[Color]] {
+    /// Decodes the persisted recents. Entries that don't decode to at least
+    /// two stops drop.
+    ///
+    /// **A stop written without a position is read as evenly spaced**, which is
+    /// exactly what the previous format — bare `RRGGBB` stops, from when a
+    /// gradient WAS an even `[Color]` — meant. So an app's stored recents
+    /// migrate by being read, with no version flag and nothing to convert.
+    static func decodeRecents(_ raw: String) -> [Gradient] {
         raw.split(separator: ";").compactMap { entry in
-            let stops = entry.split(separator: ",").compactMap { Color.hex(String($0)) }
-            return stops.count >= 2 ? stops : nil
+            let fields = entry.split(separator: ",")
+            guard fields.count >= 2 else { return nil }
+            var stops: [Gradient.Stop] = []
+            for (index, field) in fields.enumerated() {
+                let parts = field.split(separator: "@", maxSplits: 1)
+                guard let colour = Color.hex(String(parts[0])) else { continue }
+                let even = Double(index) / Double(fields.count - 1)
+                let location = parts.count > 1 ? Double(parts[1]) ?? even : even
+                stops.append(Gradient.Stop(color: colour, location: location))
+            }
+            return stops.count >= 2 ? Gradient(stops: stops) : nil
         }
     }
 
     /// Encodes recents for persistence — the inverse of ``decodeRecents(_:)``.
-    static func encodeRecents(_ recents: [[Color]]) -> String {
+    ///
+    /// `;`-separated gradients of `,`-separated `RRGGBB@position` stops, the
+    /// position to three decimals. Positions are always written, even when
+    /// even: a reader cannot tell an evenly-spaced gradient from one whose
+    /// spacing happens to look even, and the round trip has to be exact.
+    static func encodeRecents(_ recents: [Gradient]) -> String {
         recents.map { gradient in
-            gradient.map { color in
-                guard let c = color.rgbComponents else { return "000000" }
-                return String(format: "%02X%02X%02X", c.red, c.green, c.blue)
+            gradient.stops.map { stop in
+                let hex: String
+                if let components = stop.color.rgbComponents {
+                    hex = String(
+                        format: "%02X%02X%02X", components.red, components.green, components.blue)
+                } else {
+                    hex = "000000"
+                }
+                return hex + String(format: "@%.3f", stop.location)
             }.joined(separator: ",")
         }.joined(separator: ";")
     }

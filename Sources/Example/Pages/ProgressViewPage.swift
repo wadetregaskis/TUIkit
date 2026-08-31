@@ -82,14 +82,16 @@ struct ProgressViewPage: View {
 
     /// The persisted stops decoded to colours (invalid entries dropped; fewer
     /// than two falls back to the default so the row always shows a gradient).
-    private var gradientStops: [Color] {
+    private var gradientStops: Gradient {
         GradientStopsCodec.decode(
             gradientStopsRaw,
-            fallback: [.rgb(60, 200, 190), .rgb(80, 110, 240), .rgb(170, 70, 220)])
+            fallback: Gradient(colors: [
+                .rgb(60, 200, 190), .rgb(80, 110, 240), .rgb(170, 70, 220),
+            ]))
     }
 
     /// The editor's binding: decodes on read, re-encodes on write.
-    private var gradientStopsBinding: Binding<[Color]> {
+    private var gradientStopsBinding: Binding<Gradient> {
         Binding(
             get: { gradientStops },
             set: { gradientStopsRaw = GradientStopsCodec.encode($0) })
@@ -232,7 +234,7 @@ struct ProgressViewPage: View {
         .modal(isPresented: $editingGradient) {
             GradientEditorPanel(
                 "page.progressView.gradientTitle",
-                stops: gradientStopsBinding,
+                gradient: gradientStopsBinding,
                 isPresented: $editingGradient)
         }
         .appHeader {
@@ -356,10 +358,10 @@ struct ProgressViewPage: View {
                 // editor below (teal → violet until you change it).
                 indeterminateRow(
                     label: "gradient(c)  ",
-                    style: .gradient(Gradient(colors: gradientStops)))
+                    style: .gradient(gradientStops))
                 HStack(spacing: 1) {
-                    ForEach(Array(gradientStops.enumerated()), id: \.offset) { _, stop in
-                        Text("██").foregroundStyle(stop)
+                    ForEach(Array(gradientStops.stops.enumerated()), id: \.offset) { _, stop in
+                        Text("██").foregroundStyle(stop.color)
                     }
                     Button("page.progressView.editGradient") { editingGradient = true }
                 }

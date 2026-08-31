@@ -553,7 +553,7 @@ struct LocalizedTitleTests {
     @Test("Colour and gradient editor panels")
     func editorPanels() {
         let color = Box(Color.red)
-        let stops = Box([Color.red, Color.blue])
+        let stops = Box(Gradient(colors: [Color.red, Color.blue]))
         let presented = Box(true)
         expectLocalized(
             ColorPickerPanel(
@@ -565,10 +565,10 @@ struct LocalizedTitleTests {
             "ColorPickerPanel")
         expectLocalized(
             GradientEditorPanel(
-                "test.title.control", stops: stops.binding,
+                "test.title.control", gradient: stops.binding,
                 isPresented: presented.binding),
             GradientEditorPanel(
-                Self.computedKey, stops: stops.binding,
+                Self.computedKey, gradient: stops.binding,
                 isPresented: presented.binding),
             "GradientEditorPanel")
     }

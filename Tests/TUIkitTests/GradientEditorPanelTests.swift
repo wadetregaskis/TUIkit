@@ -1,10 +1,11 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  GradientEditorPanelTests.swift
 //
-//  The gradient editor's pure stop-list mutations (duplicate / remove / move,
-//  with the ≥2-stop floor and selection follow), plus render smokes proving
-//  the dialog embeds the colour-panel body (no nested dialog) and previews
-//  with the shared gradient interpolation.
+//  The gradient editor's pure stop mutations (duplicate / remove / move, with
+//  the ≥2-stop floor, the selection follow, and what happens to the stops'
+//  POSITIONS), plus render smokes proving the dialog embeds the colour-panel
+//  body (no nested dialog) and previews with the shared gradient
+//  interpolation.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -23,65 +24,130 @@ struct GradientEditorPanelMutationTests {
     private let blue = Color.rgb(80, 110, 240)
     private let violet = Color.rgb(170, 70, 220)
 
-    @Test("Duplicating inserts a copy after the stop and selects it")
+    private func gradient(_ colours: [Color]) -> Gradient { Gradient(colors: colours) }
+    private func colours(_ gradient: Gradient) -> [Color] { gradient.stops.map(\.color) }
+    private func locations(_ gradient: Gradient) -> [Double] { gradient.stops.map(\.location) }
+
+    /// The copy lands in the gap beside the stop and NOTHING ELSE MOVES —
+    /// which is the only thing "split here" can mean once a stop has a
+    /// position, and what every gradient editor does.
+    @Test("Duplicating inserts a copy in the gap beside the stop and selects it")
     func duplicate() {
-        let (updated, selected) = Panel.duplicatingStop([teal, blue], at: 0)
-        #expect(updated == [teal, teal, blue])
+        let (updated, selected) = Panel.duplicatingStop(gradient([teal, blue]), at: 0)
+        #expect(colours(updated) == [teal, teal, blue])
+        #expect(locations(updated) == [0, 0.5, 1], "the copy halves the gap after it")
         #expect(selected == 1)
-        // Editing the copy then diverges it — the original is untouched.
-        let (atEnd, endSelected) = Panel.duplicatingStop([teal, blue], at: 1)
-        #expect(atEnd == [teal, blue, blue])
-        #expect(endSelected == 2)
+
+        // The last stop has no gap after it, so the copy takes the one before
+        // — a stop stacked exactly on another would be invisible until edited
+        // and then a hard edge, which is not what the button says.
+        let (atEnd, endSelected) = Panel.duplicatingStop(gradient([teal, blue]), at: 1)
+        #expect(colours(atEnd) == [teal, blue, blue])
+        #expect(locations(atEnd) == [0, 0.5, 1])
+        #expect(endSelected == 1, "the copy is selected, and it is the one in the gap")
+    }
+
+    /// Uneven spacing is the case the even-`[Color]` version could not have:
+    /// the existing stops must stay exactly where they were put.
+    @Test("Duplicating leaves an uneven gradient's other stops where they are")
+    func duplicatePreservesPositions() {
+        let uneven = Gradient(stops: [
+            .init(color: teal, location: 0), .init(color: blue, location: 0.2),
+            .init(color: violet, location: 1),
+        ])
+        let (updated, _) = Panel.duplicatingStop(uneven, at: 1)
+        #expect(locations(updated) == [0, 0.2, 0.6, 1])
+        #expect(colours(updated) == [teal, blue, blue, violet])
     }
 
     @Test("Removing keeps at least two stops")
     func removeFloor() {
-        let (unchanged, _) = Panel.removingStop([teal, blue], at: 0)
-        #expect(unchanged == [teal, blue], "two stops is the floor — not a gradient below that")
+        let (unchanged, _) = Panel.removingStop(gradient([teal, blue]), at: 0)
+        #expect(colours(unchanged) == [teal, blue], "two stops is the floor")
 
-        let (updated, selected) = Panel.removingStop([teal, blue, violet], at: 2)
-        #expect(updated == [teal, blue])
+        let (updated, selected) = Panel.removingStop(gradient([teal, blue, violet]), at: 2)
+        #expect(colours(updated) == [teal, blue])
+        #expect(locations(updated) == [0, 0.5], "the survivors keep their own positions")
         #expect(selected == 1, "removing the last stop pulls the selection back in range")
     }
 
+    /// Reordering moves COLOURS between positions. The stops are where they
+    /// are; what "move this stop left" means on screen is that its colour is
+    /// now the one further left, and the ramp keeps its shape.
     @Test("Moving swaps with the neighbour and follows the stop")
     func move() {
-        let (right, rightSelected) = Panel.movingStop([teal, blue, violet], at: 0, by: 1)
-        #expect(right == [blue, teal, violet])
+        let (right, rightSelected) = Panel.movingStop(gradient([teal, blue, violet]), at: 0, by: 1)
+        #expect(colours(right) == [blue, teal, violet])
+        #expect(locations(right) == [0, 0.5, 1], "the positions did not move")
         #expect(rightSelected == 1)
 
-        let (left, leftSelected) = Panel.movingStop([teal, blue, violet], at: 2, by: -1)
-        #expect(left == [teal, violet, blue])
+        let (left, leftSelected) = Panel.movingStop(gradient([teal, blue, violet]), at: 2, by: -1)
+        #expect(colours(left) == [teal, violet, blue])
         #expect(leftSelected == 1)
 
         // Edges are no-ops (the buttons are disabled there anyway).
-        let (unmoved, unmovedSelected) = Panel.movingStop([teal, blue], at: 0, by: -1)
-        #expect(unmoved == [teal, blue])
+        let (unmoved, unmovedSelected) = Panel.movingStop(gradient([teal, blue]), at: 0, by: -1)
+        #expect(colours(unmoved) == [teal, blue])
         #expect(unmovedSelected == 0)
     }
 
     @Test("Drag-moving relocates the stop (insert, not swap) and follows it")
     func moveFromTo() {
         let white = Color.rgb(255, 255, 255)
+        let four = gradient([teal, blue, violet, white])
 
         // Forward: the stops between source and destination shift left.
-        let (forward, forwardSelected) = Panel.movingStop(
-            [teal, blue, violet, white], from: 0, to: 2)
-        #expect(forward == [blue, violet, teal, white], "insert semantics, not a swap")
+        let (forward, forwardSelected) = Panel.movingStop(four, from: 0, to: 2)
+        #expect(colours(forward) == [blue, violet, teal, white], "insert semantics, not a swap")
         #expect(forwardSelected == 2)
 
         // Backward: they shift right.
-        let (backward, backwardSelected) = Panel.movingStop(
-            [teal, blue, violet, white], from: 3, to: 1)
-        #expect(backward == [teal, white, blue, violet])
+        let (backward, backwardSelected) = Panel.movingStop(four, from: 3, to: 1)
+        #expect(colours(backward) == [teal, white, blue, violet])
         #expect(backwardSelected == 1)
 
         // Same place and out-of-range are no-ops.
-        let (samePlace, _) = Panel.movingStop([teal, blue], from: 1, to: 1)
-        #expect(samePlace == [teal, blue])
-        let (outOfRange, outSelected) = Panel.movingStop([teal, blue], from: 5, to: 0)
-        #expect(outOfRange == [teal, blue])
+        let (samePlace, _) = Panel.movingStop(gradient([teal, blue]), from: 1, to: 1)
+        #expect(colours(samePlace) == [teal, blue])
+        let (outOfRange, outSelected) = Panel.movingStop(gradient([teal, blue]), from: 5, to: 0)
+        #expect(colours(outOfRange) == [teal, blue])
         #expect(outSelected == 1, "selection clamps into range")
+    }
+
+    // MARK: - Persistence
+
+    /// The migration, and it is the whole of it: a stop written without a
+    /// position reads as evenly spaced, which is what the old bare-hex format
+    /// meant back when a gradient WAS an even `[Color]`.
+    @Test("Recents written in the old format read as evenly-spaced gradients")
+    func recentsMigrateByBeingRead() {
+        let decoded = Panel.decodeRecents("FF0000,00FF00,0000FF;112233,445566")
+        #expect(decoded.count == 2)
+        #expect(colours(decoded[0]) == [.rgb(255, 0, 0), .rgb(0, 255, 0), .rgb(0, 0, 255)])
+        #expect(locations(decoded[0]) == [0, 0.5, 1], "even spacing is what the old format meant")
+        #expect(locations(decoded[1]) == [0, 1])
+    }
+
+    @Test("Positions survive the round trip")
+    func recentsRoundTrip() {
+        let uneven = Gradient(stops: [
+            .init(color: .rgb(255, 0, 0), location: 0),
+            .init(color: .rgb(0, 255, 0), location: 0.125),
+            .init(color: .rgb(0, 0, 255), location: 1),
+        ])
+        let decoded = Panel.decodeRecents(Panel.encodeRecents([uneven]))
+        #expect(decoded.count == 1)
+        #expect(decoded.first == uneven, "encode → decode is not the identity")
+    }
+
+    @Test("A mixed or corrupt entry degrades rather than throwing the list away")
+    func recentsDegrade() {
+        // One unreadable colour inside an otherwise good entry; a whole entry
+        // with too few stops; and a stop with an unparseable position.
+        let decoded = Panel.decodeRecents("FF0000@0.000,zzz,0000FF@1.000;AABBCC;FF0000@x,0000FF@1")
+        #expect(decoded.count == 2, "the one-stop entry drops, the other two survive")
+        #expect(colours(decoded[0]) == [.rgb(255, 0, 0), .rgb(0, 0, 255)])
+        #expect(decoded[1].stops.first?.location == 0, "an unreadable position falls back to even")
     }
 }
 
@@ -91,10 +157,10 @@ struct GradientEditorPanelRenderTests {
 
     @Test("The dialog embeds the colour-panel body (stops, actions, tabs, one Done)")
     func rendersEmbeddedEditor() {
-        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
+        var ramp = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])
         var presented = true
         let panel = GradientEditorPanel(
-            stops: Binding(get: { stops }, set: { stops = $0 }),
+            gradient: Binding(get: { ramp }, set: { ramp = $0 }),
             isPresented: Binding(get: { presented }, set: { presented = $0 }))
         let buffer = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 45))
         let text = buffer.lines.map(\.stripped).joined(separator: "\n")
@@ -118,10 +184,10 @@ struct GradientEditorPanelRenderTests {
 
     @Test("The preview strip uses the shared gradient interpolation")
     func previewUsesSharedInterpolation() {
-        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
+        var ramp = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])
         var presented = true
         let panel = GradientEditorPanel(
-            stops: Binding(get: { stops }, set: { stops = $0 }),
+            gradient: Binding(get: { ramp }, set: { ramp = $0 }),
             isPresented: Binding(get: { presented }, set: { presented = $0 }))
         let buffer = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 45))
         let text = buffer.lines.joined(separator: "\n")
@@ -130,7 +196,7 @@ struct GradientEditorPanelRenderTests {
         // and so does an interior cell computed exactly as the strip does:
         // 36 cells sampled at parameter i/35 (cell 18 here).
         let interior = TrackRenderer.gradientColor(
-            Gradient(colors: stops), parameter: 18.0 / 35.0, fallback: .rgb(0, 0, 0))
+            ramp, parameter: 18.0 / 35.0, fallback: .rgb(0, 0, 0))
         let components = interior.rgbComponents!
         #expect(text.contains("38;2;255;0;0"), "the left endpoint is drawn")
         #expect(text.contains("38;2;0;0;255"), "the right endpoint is drawn")
@@ -145,17 +211,17 @@ struct GradientEditorPanelRenderTests {
         // numbers, so the element-keyed render memo (keyed 0/1) served the old
         // colours until something else invalidated the cache — edits through
         // the embedded colour panel never showed until the selection moved.
-        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
+        var ramp = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])
         var presented = true
         let panel = GradientEditorPanel(
-            stops: Binding(get: { stops }, set: { stops = $0 }),
+            gradient: Binding(get: { ramp }, set: { ramp = $0 }),
             isPresented: Binding(get: { presented }, set: { presented = $0 }))
 
         // ONE context (one render cache) across both renders, like the live
         // render loop between frames.
         let context = makeRenderContext(width: 70, height: 45)
         _ = renderToBuffer(panel, context: context)
-        stops[0] = .rgb(0, 255, 0)  // the edit the colour panel would make
+        ramp.stops[0].color = .rgb(0, 255, 0)  // the edit the colour panel would make
         let after = renderToBuffer(panel, context: context)
 
         // Scope to the PREVIEW rows (the only lines whose stripped content
@@ -174,10 +240,10 @@ struct GradientEditorPanelRenderTests {
 
     @Test("Stop chips are bare 3-cell swatches; the centre cell carries the selection bullet")
     func stopChipGeometry() {
-        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 255, 0), .rgb(0, 0, 255)]
+        var ramp = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 255, 0), .rgb(0, 0, 255)])
         var presented = true
         let panel = GradientEditorPanel(
-            stops: Binding(get: { stops }, set: { stops = $0 }),
+            gradient: Binding(get: { ramp }, set: { ramp = $0 }),
             isPresented: Binding(get: { presented }, set: { presented = $0 }))
         let buffer = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 45))
         let strip = buffer.lines.first { $0.stripped.contains("█●█") }
@@ -200,10 +266,10 @@ struct GradientEditorPanelRenderTests {
 
     @Test("A divider separates the gradient library from the colour editor")
     func libraryDividerPresent() {
-        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
+        var ramp = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])
         var presented = true
         let panel = GradientEditorPanel(
-            stops: Binding(get: { stops }, set: { stops = $0 }),
+            gradient: Binding(get: { ramp }, set: { ramp = $0 }),
             isPresented: Binding(get: { presented }, set: { presented = $0 }))
         let lines = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 45))
             .lines.map(\.stripped)
@@ -225,10 +291,10 @@ struct GradientEditorPanelRenderTests {
 
     @Test("Dragging a chip onto another reorders the stops; a bare click still selects")
     func dragReordersStops() {
-        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 255, 0), .rgb(0, 0, 255)]
+        var ramp = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 255, 0), .rgb(0, 0, 255)])
         var presented = true
         let panel = GradientEditorPanel(
-            stops: Binding(get: { stops }, set: { stops = $0 }),
+            gradient: Binding(get: { ramp }, set: { ramp = $0 }),
             isPresented: Binding(get: { presented }, set: { presented = $0 }))
 
         let tui = TUIContext()
@@ -279,21 +345,23 @@ struct GradientEditorPanelRenderTests {
         (y, columns) = renderFrame()
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: columns[1] + 1, y: y))
         #expect(
-            stops == [.rgb(0, 255, 0), .rgb(255, 0, 0), .rgb(0, 0, 255)],
+            ramp.stops.map(\.color) == [.rgb(0, 255, 0), .rgb(255, 0, 0), .rgb(0, 0, 255)],
             "reaching slot 2 moves the stop immediately, mid-drag")
         (y, columns) = renderFrame()
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: columns[2] + 1, y: y))
         #expect(
-            stops == [.rgb(0, 255, 0), .rgb(0, 0, 255), .rgb(255, 0, 0)],
+            ramp.stops.map(\.color) == [.rgb(0, 255, 0), .rgb(0, 0, 255), .rgb(255, 0, 0)],
             "following the cursor to slot 3, still mid-drag")
         (y, columns) = renderFrame()
         // Dragging far PAST the strip's right edge holds the end slot, and
         // a wild Y is clamped to the (single) row — tolerance by design.
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: columns[2] + 30, y: y + 7))
-        #expect(stops == [.rgb(0, 255, 0), .rgb(0, 0, 255), .rgb(255, 0, 0)], "end slot held")
+        #expect(
+            ramp.stops.map(\.color) == [.rgb(0, 255, 0), .rgb(0, 0, 255), .rgb(255, 0, 0)],
+            "end slot held")
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: columns[2] + 1, y: y))
         #expect(
-            stops == [.rgb(0, 255, 0), .rgb(0, 0, 255), .rgb(255, 0, 0)],
+            ramp.stops.map(\.color) == [.rgb(0, 255, 0), .rgb(0, 0, 255), .rgb(255, 0, 0)],
             "release keeps the live order")
 
         // The selection followed the dragged stop to the end.
@@ -334,10 +402,10 @@ struct GradientEditorPanelRenderTests {
 
     @Test("The footer offers Cancel alongside Done")
     func footerHasCancel() {
-        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
+        var ramp = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])
         var presented = true
         let panel = GradientEditorPanel(
-            stops: Binding(get: { stops }, set: { stops = $0 }),
+            gradient: Binding(get: { ramp }, set: { ramp = $0 }),
             isPresented: Binding(get: { presented }, set: { presented = $0 }))
         let text = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 45))
             .lines.map(\.stripped).joined(separator: "\n")
@@ -384,8 +452,8 @@ struct GradientEditorPanelRecentsTests {
 
     typealias Panel = GradientEditorPanel
 
-    private let a: [Color] = [.rgb(1, 1, 1), .rgb(2, 2, 2)]
-    private let b: [Color] = [.rgb(3, 3, 3), .rgb(4, 4, 4)]
+    private let a = Gradient(colors: [.rgb(1, 1, 1), .rgb(2, 2, 2)])
+    private let b = Gradient(colors: [.rgb(3, 3, 3), .rgb(4, 4, 4)])
 
     @Test("Applying records at the front; re-applying moves to the front (MRU)")
     func mruOrdering() {
@@ -398,9 +466,9 @@ struct GradientEditorPanelRecentsTests {
 
     @Test("The list caps at the limit, evicting the least recently used")
     func lruEviction() {
-        var recents: [[Color]] = []
-        let gradients = (0..<12).map { n -> [Color] in
-            [.rgb(UInt8(n), 0, 0), .rgb(0, UInt8(n), 0)]
+        var recents: [Gradient] = []
+        let gradients = (0..<12).map { n in
+            Gradient(colors: [.rgb(UInt8(n), 0, 0), .rgb(0, UInt8(n), 0)])
         }
         for gradient in gradients {
             recents = Panel.recordingRecent(gradient, in: recents)
@@ -418,8 +486,9 @@ struct GradientEditorPanelRecentsTests {
             #expect(Panel.recordingRecent(preset, in: []).isEmpty,
                     "presets already have a home above the rule")
         }
-        #expect(Panel.recordingRecent([.rgb(1, 1, 1)], in: []).isEmpty,
-                "one stop is not a gradient")
+        #expect(
+            Panel.recordingRecent(Gradient(colors: [.rgb(1, 1, 1)]), in: []).isEmpty,
+            "one stop is a solid colour, and a solid colour is not worth recalling")
     }
 
     @Test("Recents survive an encode/decode round trip; junk entries drop")
@@ -430,15 +499,15 @@ struct GradientEditorPanelRecentsTests {
 
         // Junk: an empty entry, a single-stop entry, and a malformed hex.
         let junk = Panel.decodeRecents(";010101;ZZZZZZ,010101;010101,020202")
-        #expect(junk == [[Color.rgb(1, 1, 1), Color.rgb(2, 2, 2)]])
+        #expect(junk == [Gradient(colors: [.rgb(1, 1, 1), .rgb(2, 2, 2)])])
     }
 
     @Test("The panel renders preset chips (and no rule while recents are empty)")
     func presetsRender() {
-        var stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
+        var ramp = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])
         var presented = true
         let panel = GradientEditorPanel(
-            stops: Binding(get: { stops }, set: { stops = $0 }),
+            gradient: Binding(get: { ramp }, set: { ramp = $0 }),
             isPresented: Binding(get: { presented }, set: { presented = $0 }))
         let raw = renderToBuffer(panel, context: makeRenderContext(width: 70, height: 50))
             .lines.joined(separator: "\n")

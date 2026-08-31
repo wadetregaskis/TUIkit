@@ -39,10 +39,11 @@ struct ModalContentHeightTests {
 
     @Test("A tall gradient editor keeps its Done/Cancel footer above the status bar")
     func gradientEditorFooterSurvives() {
-        let stops = Binding.constant([Color.rgb(255, 80, 80), Color.rgb(80, 160, 255)])
+        let stops = Binding.constant(
+            Gradient(colors: [Color.rgb(255, 80, 80), Color.rgb(80, 160, 255)]))
         let view = Text("base")
             .modal(isPresented: .constant(true)) {
-                GradientEditorPanel(stops: stops, isPresented: .constant(true))
+                GradientEditorPanel(gradient: stops, isPresented: .constant(true))
             }
         // 20-row terminal, 14-row content area (6 rows of header/status chrome).
         // The gradient editor's natural height (~28-30) far exceeds 14, so a

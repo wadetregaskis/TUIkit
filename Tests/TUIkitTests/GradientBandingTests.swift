@@ -124,13 +124,13 @@ struct GradientBandingTests {
     /// monotone by the case above, so containing it is the stronger claim.
     @Test("The gradient editor's preview strip is drawn as a ramp")
     func editorPreviewIsSmooth() {
-        var stops: [Color] = [
+        var ramp = Gradient(colors: [
             .rgb(0xFF, 0x50, 0x50), .rgb(0xFF, 0xC8, 0x50), .rgb(0x50, 0xDC, 0x78),
-        ]
+        ])
         var presented = true
         let panel = GradientEditorPanel(
             "gradient",
-            stops: Binding(get: { stops }, set: { stops = $0 }),
+            gradient: Binding(get: { ramp }, set: { ramp = $0 }),
             isPresented: Binding(get: { presented }, set: { presented = $0 }))
 
         // Pinned to 256 colours for the length of the render: the banding this
@@ -141,7 +141,7 @@ struct GradientBandingTests {
             renderToBuffer(panel, context: context)
         }
         let width = GradientEditorPanel.previewWidthForTesting
-        let expected = Color.quantisedRamp(Gradient(colors: stops), count: width, depth: .palette256)
+        let expected = Color.quantisedRamp(ramp, count: width, depth: .palette256)
             .compactMap { colour -> UInt8? in
                 if case .palette256(let index) = colour.value { return index }
                 return nil

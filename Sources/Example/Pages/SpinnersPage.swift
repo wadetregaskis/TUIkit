@@ -208,7 +208,7 @@ struct SpinnersPage: View {
     private var colorBinding: Binding<Color> {
         Binding(
             get: { Color.hex(editorColorHex) ?? .magenta },
-            set: { editorColorHex = GradientStopsCodec.encode([$0]) })
+            set: { editorColorHex = GradientStopsCodec.encode(Gradient(colors: [$0])) })
     }
 
     /// The frames the custom spinner runs — the field's, unless it is empty, in
