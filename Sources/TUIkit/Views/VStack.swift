@@ -308,7 +308,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         let contentHeight = min(
             context.availableHeight,
             finalHeights.reduce(0, +) + spacing * max(0, finalHeights.count - 1))
-        let gradientFrame = context.gradientFrame?.resolvingExtent(
+        let gradientFrame = context.gradientContentFrame(
             width: contentWidth, height: contentHeight)
         let gradientPlacement = gradientFrame.map { _ in
             Self.gradientOffsets(
@@ -325,8 +325,8 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             } else {
                 var childContext = context
                 if let placement = gradientPlacement {
-                    childContext.gradientFrame = gradientFrame?.offset(
-                        byX: placement[index].x, y: placement[index].y)
+                    childContext = context.placingGradientChild(
+                        gradientFrame, x: placement[index].x, y: placement[index].y)
                 }
                 let buffer = child.render(
                     width: context.availableWidth, height: finalHeights[index],
@@ -383,35 +383,6 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         return result.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
 
-    /// Where each child sits, for a gradient that spans the whole stack.
-    ///
-    /// Vertical from the distribution PASS 1 produced — exact. Horizontal from
-    /// the MEASURED widths, because the rendered ones do not exist yet; exact
-    /// wherever measure and render agree, and a disagreement moves a colour
-    /// rather than a cell.
-    private static func gradientOffsets(
-        heights: [Int], spacing: Int, sizes: [ViewSize], alignment: HorizontalAlignment,
-        extentWidth: Int?
-    ) -> [(x: Int, y: Int)] {
-        let width = extentWidth ?? sizes.map(\.width).max() ?? 0
-        var offsets: [(x: Int, y: Int)] = []
-        offsets.reserveCapacity(heights.count)
-        var y = 0
-        for index in heights.indices {
-            let childWidth = index < sizes.count ? sizes[index].width : 0
-            let slack = max(0, width - childWidth)
-            let x =
-                switch alignment {
-                case .leading: 0
-                case .trailing: slack
-                default: slack / 2
-                }
-            offsets.append((x: x, y: y))
-            y += heights[index] + spacing
-        }
-        return offsets
-    }
-
     /// `.window` render (lazy `LazyVStack`): append whole children top-down while
     /// they fit `availableHeight`, stopping at the first that won't. Items beyond
     /// that first overflow are never rendered (when no Spacer is present).
@@ -447,6 +418,17 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         guard !children.isEmpty else { return FrameBuffer() }
         let availableHeight = context.availableHeight
 
+        // A ramp spanning this stack needs each row's place in it before the
+        // row renders, and this path renders as it walks — so the placement is
+        // measured up front, stopping at the same fold the walk will. Costs
+        // nothing without a `.gradientExtent(.subtree)` above.
+        let (gradientFrame, gradientOffsets) = windowGradientPlacement(children, context: context)
+        func rowContext(_ index: Int) -> RenderContext {
+            guard index < gradientOffsets.count else { return context }
+            return context.placingGradientChild(
+                gradientFrame, x: gradientOffsets[index].x, y: gradientOffsets[index].y)
+        }
+
         // True viewport windowing: when an enclosing vertical `ScrollView`
         // published the visible slice (and this isn't a measure pass, and there's
         // no Spacer forcing a full render), render ONLY the rows intersecting the
@@ -469,11 +451,12 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         var spacerHeight = 0
         var spacerRemainder = 0
         if spacerCount > 0 {
-            eagerBuffers = children.map { child in
+            eagerBuffers = children.enumerated().map { index, child in
                 child.isSpacer
                     ? nil
                     : child.render(
-                        width: context.availableWidth, height: availableHeight, context: context)
+                        width: context.availableWidth, height: availableHeight,
+                        context: rowContext(index))
             }
             let fixedHeight = eagerBuffers.compactMap { $0?.height }.reduce(0, +)
             let totalSpacing = max(0, children.count - 1) * spacing
@@ -517,11 +500,12 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                         child, measuredHeight: measured.height,
                         spacingToApply: spacingToApply, currentHeight: currentHeight,
                         availableHeight: availableHeight, into: &collected,
-                        context: context)
+                        context: rowContext(index))
                     break
                 }
                 let buffer = child.render(
-                    width: context.availableWidth, height: availableHeight, context: context)
+                    width: context.availableWidth, height: availableHeight,
+                    context: rowContext(index))
                 if currentHeight + spacingToApply + buffer.height > availableHeight {
                     break  // a child whose render exceeds its measure still can't overflow the window
                 }
@@ -746,6 +730,14 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             alignment: alignment,
             fixedExtent: width)
 
+        // A ramp spanning this stack runs across the whole CONTENT, not the
+        // viewport: a row keeps its colour as it scrolls, rather than the
+        // column crawling under a stationary ramp. The walk above already
+        // knows every row's true y and the content's full height, so this is
+        // exact — including for the rows outside the window, which render into
+        // the same coordinates.
+        let gradientFrame = context.gradientContentFrame(width: width, height: walkedTotal)
+
         var result = FrameBuffer()
         for (index, slot) in slots.enumerated() {
             let slotHeight = slot.spacingBefore + slot.height
@@ -764,7 +756,14 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             // viewport, so any row TALLER than the viewport had its tail
             // permanently blanked (scrolling to the row's later lines showed
             // empty rows the content height and scrollbar accounted for).
-            let rendered = child.render(width: width, height: slot.height, context: childContext)
+            let rendered = child.render(
+                width: width, height: slot.height,
+                context: childContext.placingGradientChild(
+                    gradientFrame,
+                    x: guideRun.map { $0.offsets[index] }
+                        ?? Self.gradientX(
+                            childWidth: slot.width, extent: width, alignment: alignment),
+                    y: slot.y))
             var slot = FrameBuffer()
             if spacingBefore > 0 {
                 slot.appendVertically(FrameBuffer(emptyWithHeight: spacingBefore), spacing: 0)

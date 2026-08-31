@@ -122,6 +122,39 @@ public struct RenderContext {
     /// Unused, it costs one nil check.
     public var gradientFrame: GradientFrame?
 
+    /// The frame a container publishes to its children: this one, with the
+    /// content size the container has just worked out standing in for the
+    /// modifier's provisional guess.
+    ///
+    /// Call once per container, then ``placingGradientChild(_:x:y:)`` per
+    /// child. Both are `nil`-cheap: with no `.gradientExtent(.subtree)` above,
+    /// this returns `nil` and the placement is the identity.
+    ///
+    /// - Parameters:
+    ///   - width: The container's own content width, in cells.
+    ///   - height: Its content height, in lines.
+    /// - Returns: The settled frame, or `nil` when no gradient spans this
+    ///   subtree.
+    public func gradientContentFrame(width: Int, height: Int) -> GradientFrame? {
+        gradientFrame?.resolvingExtent(width: width, height: height)
+    }
+
+    /// This context as seen by a child the container places at `(x, y)` inside
+    /// the content `frame` describes.
+    ///
+    /// - Parameters:
+    ///   - frame: The container's settled frame, from
+    ///     ``gradientContentFrame(width:height:)``.
+    ///   - x: The child's left edge, relative to the container's content.
+    ///   - y: The child's top edge, likewise.
+    /// - Returns: A context whose ``gradientFrame`` is anchored on the child.
+    public func placingGradientChild(_ frame: GradientFrame?, x: Int, y: Int) -> Self {
+        guard let frame else { return self }
+        var placed = self
+        placed.gradientFrame = frame.offset(byX: x, y: y)
+        return placed
+    }
+
     /// Creates a new RenderContext.
     ///
     /// - Parameters:

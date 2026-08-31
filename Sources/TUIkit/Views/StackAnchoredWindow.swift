@@ -37,6 +37,7 @@ private final class AnchoredWindowFrame {
 
     private(set) var sawSpacer = false
     private var pitchCache: [Int: Int] = [:]
+    private var widthCache: [Int: Int] = [:]
     private var built: [Int: ChildView] = [:]
 
     init(
@@ -70,6 +71,7 @@ private final class AnchoredWindowFrame {
         // the whole tail up one line per spacing unit.
         let value = max(1, measured.height) + (ordinal < children.count - 1 ? spacing : 0)
         pitchCache[ordinal] = value
+        widthCache[ordinal] = measured.width
         built[ordinal] = child
         state.recordMeasuredPitch(value)
         return value
@@ -77,6 +79,16 @@ private final class AnchoredWindowFrame {
 
     func child(at ordinal: Int) -> ChildView {
         built[ordinal] ?? children[ordinal]
+    }
+
+    /// The measured width of a row the pitch walk has already touched.
+    ///
+    /// What a `.gradientExtent(.subtree)` ramp aligns a row by: the RENDERED
+    /// width does not exist until after the render the ramp has to colour, and
+    /// the pitch walk measured this one anyway. `nil` for a row this frame
+    /// never measured — an off-band graft, whose cells are not drawn.
+    func measuredWidth(of ordinal: Int) -> Int? {
+        widthCache[ordinal]
     }
 
     /// Re-binds the persisted anchor ordinal to its stable key (§5f). The
@@ -502,6 +514,19 @@ extension _VStackCore {
 
         // With a reply channel (Stage 6) the buffer is the rendered band
         // only; prefix/suffix become metadata. See the uniform assembly.
+        // A ramp spanning this stack runs across the whole CONTENT. Every
+        // number on this path is an estimate — the rows' positions from the
+        // anchor outward, the height from the running pitch average (§3) — so
+        // the ramp is estimated with them, and converges as the walk learns
+        // the real pitch. Exact would mean the full prefix sum this path
+        // exists in order not to compute.
+        let gradientFrame = context.gradientContentFrame(
+            width: width,
+            height: max(
+                1,
+                frame.children.count * state.estimatedPitch(spacing: spacing)
+                    - (frame.children.count > 1 ? spacing : 0)))
+
         var result = FrameBuffer()
         let sliceOrigin = window.reply != nil ? (sorted.first?.y ?? 0) : 0
         var cursor = sliceOrigin
@@ -522,7 +547,13 @@ extension _VStackCore {
                 result.appendVertically(FrameBuffer(emptyWithHeight: slotY - cursor), spacing: 0)
             }
             var rendered = frame.child(at: ordinal).render(
-                width: width, height: window.viewportHeight, context: context)
+                width: width, height: window.viewportHeight,
+                context: context.placingGradientChild(
+                    gradientFrame,
+                    x: Self.gradientX(
+                        childWidth: frame.measuredWidth(of: ordinal) ?? width,
+                        extent: width, alignment: alignment),
+                    y: slotY))
             rendered = alignBuffer(rendered, toWidth: width, alignment: alignment)
             var slot = FrameBuffer()
             slot.appendVertically(rendered, spacing: 0)
@@ -568,7 +599,13 @@ extension _VStackCore {
             }
             graftOffBandRow(
                 frame.child(at: ordinal), into: &result, bandLocalY: bandLocalY,
-                width: width, viewportHeight: window.viewportHeight, context: context)
+                width: width, viewportHeight: window.viewportHeight,
+                context: context.placingGradientChild(
+                    gradientFrame,
+                    x: Self.gradientX(
+                        childWidth: frame.measuredWidth(of: ordinal) ?? width,
+                        extent: width, alignment: alignment),
+                    y: y))
             if let key = frame.children.key(at: ordinal) { memo[key] = ordinal }
         }
         state.rowOrdinalMemo = memo

@@ -255,6 +255,160 @@ extension GradientExtentTests {
         let rows = lines.prefix(4).map { firstInk($0) }
         #expect(Set(rows.compactMap { $0 }).count == 1, "the subtree extent won: \(rows)")
     }
+
+    // MARK: - Lazy stacks
+
+    /// A `LazyVStack` is the same core as `VStack` under a different overflow
+    /// policy, but a different render path — one that renders as it walks, so
+    /// it cannot learn its own extent on the way and has to measure the rows
+    /// that will fit before it starts. It got no ramp at all until it did.
+    @Test("A vertical ramp spans the rows of a LazyVStack")
+    func lazyVerticalSpansRows() {
+        let lines = renderToBuffer(
+            LazyVStack(alignment: .leading, spacing: 0) {
+                Text(verbatim: "AAAA")
+                Text(verbatim: "BBBB")
+                Text(verbatim: "CCCC")
+                Text(verbatim: "DDDD")
+            }
+            .foregroundStyle(vertical())
+            .gradientExtent(.subtree),
+            context: context()
+        ).lines
+
+        let rows = lines.prefix(4).map { firstInk($0) }
+        #expect(rows[0] == "255;0;0", "the first row is not the ramp's start: \(rows)")
+        #expect(rows[3] == "0;0;255", "the last row is not the ramp's end: \(rows)")
+        #expect(Set(rows.compactMap { $0 }).count == 4, "rows repeat: \(rows)")
+    }
+
+    /// The horizontal twin, through `LazyHStack`'s own append-while-it-fits
+    /// walk.
+    @Test("A horizontal ramp spans the columns of a LazyHStack")
+    func lazyHorizontalSpansColumns() {
+        let lines = renderToBuffer(
+            LazyHStack(spacing: 0) {
+                Text(verbatim: "AA")
+                Text(verbatim: "BB")
+                Text(verbatim: "CC")
+                Text(verbatim: "DD")
+            }
+            .foregroundStyle(horizontal())
+            .gradientExtent(.subtree),
+            context: context()
+        ).lines
+        let cells = inks(lines[0]).prefix(8).compactMap { $0 }
+        #expect(cells.first == "255;0;0", "the first column is not the start: \(cells)")
+        #expect(cells.last == "0;0;255", "the last column is not the end: \(cells)")
+    }
+
+    /// The rule a scrolling list needs: the ramp spans the CONTENT, not the
+    /// viewport. Ten rows of forty are on screen, so they take the first
+    /// quarter of the ramp — a row keeps its colour as it scrolls rather than
+    /// the whole column re-inking under a ramp pinned to the screen.
+    @Test("A ramp over scrolling content spans the content, not the window")
+    func lazyRampSpansContentNotViewport() {
+        let lines = renderToBuffer(
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<40, id: \.self) { index in
+                        Text(verbatim: "row \(index)")
+                    }
+                }
+            }
+            .foregroundStyle(vertical())
+            .gradientExtent(.subtree),
+            context: context(height: 10)
+        ).lines
+
+        let rows = lines.prefix(10).map { firstInk($0) }
+        #expect(rows[0] == "255;0;0", "the first row is not the ramp's start: \(rows)")
+        // Row 9 of 40 is a quarter of the way down a red→blue ramp: still
+        // mostly red. Pinned to the viewport it would be full blue.
+        let last = rows[9]?.split(separator: ";").compactMap { Int($0) }
+        #expect(last?.count == 3, "no ink on the last visible row: \(rows)")
+        if let last, last.count == 3 {
+            #expect(last[0] > last[2], "the window took the whole ramp: \(rows)")
+            #expect(last[0] < 255, "the ramp did not advance down the window: \(rows)")
+        }
+        #expect(Set(rows.compactMap { $0 }).count > 1, "rows repeat: \(rows)")
+    }
+
+    /// Variable-height rows in a scroll window take the exact slot walk rather
+    /// than the arithmetic seek — a third render path, with its own idea of
+    /// where each row is, and the ramp has to agree with it.
+    @Test("A ramp spans content the exact slot walk places")
+    func lazyRampAcrossExactWalk() {
+        let lines = renderToBuffer(
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    Text(verbatim: "AAAA")
+                    Text(verbatim: "BBBB")
+                    Text(verbatim: "CCCC")
+                    Text(verbatim: "DDDD")
+                }
+            }
+            .foregroundStyle(vertical())
+            .gradientExtent(.subtree),
+            context: context(height: 4)
+        ).lines
+
+        let rows = lines.prefix(4).map { firstInk($0) }
+        #expect(rows[0] == "255;0;0", "the first row is not the ramp's start: \(rows)")
+        #expect(rows[3] == "0;0;255", "the last row is not the ramp's end: \(rows)")
+        #expect(Set(rows.compactMap { $0 }).count == 4, "rows repeat: \(rows)")
+    }
+
+    /// Past the anchored threshold with variable-height rows, the stack stops
+    /// walking the content at all and works outward from an anchor on
+    /// estimates. The ramp is estimated with it — approximate by construction,
+    /// and required to still start at the start and advance downward.
+    @Test("A ramp over anchored content advances from the top")
+    func lazyRampAcrossAnchoredWalk() {
+        let lines = renderToBuffer(
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<300, id: \.self) { index in
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(verbatim: "row \(index)")
+                            if index.isMultiple(of: 2) { Text(verbatim: "more") }
+                        }
+                    }
+                }
+            }
+            .foregroundStyle(vertical())
+            .gradientExtent(.subtree),
+            context: context(height: 8)
+        ).lines
+
+        let rows = lines.prefix(8).compactMap { firstInk($0) }
+        #expect(rows.first == "255;0;0", "the first row is not the ramp's start: \(rows)")
+        // Eight lines of three hundred rows: a sliver at the very top of the
+        // ramp, so every visible row is red-dominant and none is the end.
+        for row in rows {
+            let channels = row.split(separator: ";").compactMap { Int($0) }
+            #expect(channels.count == 3, "malformed ink \(row)")
+            if channels.count == 3 {
+                #expect(channels[0] > channels[2], "the ramp ran to its end on screen: \(rows)")
+            }
+        }
+    }
+
+    /// A lazy stack under the default extent is still SwiftUI's meaning.
+    @Test("Without the modifier a LazyVStack row runs its own ramp")
+    func lazyLeafExtentIsTheDefault() {
+        let lines = renderToBuffer(
+            LazyVStack(alignment: .leading, spacing: 0) {
+                Text(verbatim: "AAAA")
+                Text(verbatim: "BBBB")
+                Text(verbatim: "CCCC")
+            }
+            .foregroundStyle(vertical()),
+            context: context()
+        ).lines
+        let rows = lines.prefix(3).map { firstInk($0) }
+        #expect(Set(rows.compactMap { $0 }).count == 1, "the default spanned the stack: \(rows)")
+    }
 }
 
 /// Reports the render context's gradient frame and draws nothing.

@@ -270,18 +270,21 @@ extension _VStackCore {
         // the prefix/suffix become metadata instead of blank lines and the
         // ScrollView clips the band directly. Without one (tests, direct
         // injection), the classic full-height buffer is emitted.
+        let rowContext = uniformRowPlacement(childContext, width: width, pitch: pitch, totalHeight: totalHeight)
+
         var result = FrameBuffer()
         let sliceOrigin = window.reply != nil ? (rows.first.map { $0.ordinal * pitch } ?? 0) : 0
         var cursor = sliceOrigin
         var memo: [String: Int] = [:]
-        for (ordinal, child) in rows {
+        for (ordinal, child, rowWidth) in rows {
             let rowY = ordinal * pitch
             if rowY > cursor {
                 result.appendVertically(FrameBuffer(emptyWithHeight: rowY - cursor), spacing: 0)
             }
             let slot = uniformRowSlot(
                 child, extent: extent, width: width,
-                viewportHeight: window.viewportHeight, context: childContext)
+                viewportHeight: window.viewportHeight,
+                context: rowContext(ordinal, rowWidth))
             result.appendVertically(slot, spacing: 0)
             cursor = rowY + extent
             if let key = children.key(at: ordinal) { memo[key] = ordinal }
@@ -294,10 +297,11 @@ extension _VStackCore {
         } else if cursor < totalHeight {
             result.appendVertically(FrameBuffer(emptyWithHeight: totalHeight - cursor), spacing: 0)
         }
-        for (ordinal, child) in graftRows {
+        for (ordinal, child, rowWidth) in graftRows {
             graftOffBandRow(
                 child, into: &result, bandLocalY: ordinal * pitch - sliceOrigin,
-                width: width, viewportHeight: window.viewportHeight, context: childContext)
+                width: width, viewportHeight: window.viewportHeight,
+                context: rowContext(ordinal, rowWidth))
             if let key = children.key(at: ordinal) { memo[key] = ordinal }
         }
         state.rowOrdinalMemo = memo
@@ -308,6 +312,29 @@ extension _VStackCore {
             window.reply?.seekResolvedOffset = resolved
         }
         return result
+    }
+
+    /// Places a uniform row inside a ramp spanning the whole CONTENT, so a row
+    /// keeps its colour as it scrolls past rather than the band re-inking under
+    /// a ramp pinned to the viewport.
+    ///
+    /// Constant pitch makes every row's absolute y a multiplication, which is
+    /// exactly what the ramp needs and what this path already has. The width is
+    /// the row's MEASURED one, from the hypothesis verification — the rendered
+    /// one does not exist until after the render this colours.
+    ///
+    /// - Returns: `(ordinal, rowWidth) -> RenderContext`, the identity when no
+    ///   `.gradientExtent(.subtree)` spans this stack.
+    private func uniformRowPlacement(
+        _ context: RenderContext, width: Int, pitch: Int, totalHeight: Int
+    ) -> (Int, Int) -> RenderContext {
+        let frame = context.gradientContentFrame(width: width, height: totalHeight)
+        return { ordinal, rowWidth in
+            context.placingGradientChild(
+                frame,
+                x: Self.gradientX(childWidth: rowWidth, extent: width, alignment: alignment),
+                y: ordinal * pitch)
+        }
     }
 
     /// Renders one uniform row into a slot of exactly `extent` lines
@@ -347,8 +374,8 @@ extension _VStackCore {
     private func verifiedUniformRows(
         _ ordinals: [Int], children: ChildViewCollection, extent: Int,
         state: StackWindowState, proposal: ProposedSize, context: RenderContext
-    ) -> [(ordinal: Int, child: ChildView)]? {
-        var result: [(ordinal: Int, child: ChildView)] = []
+    ) -> [(ordinal: Int, child: ChildView, width: Int)]? {
+        var result: [(ordinal: Int, child: ChildView, width: Int)] = []
         result.reserveCapacity(ordinals.count)
         for ordinal in ordinals {
             let child = children[ordinal]
@@ -357,7 +384,9 @@ extension _VStackCore {
             state.hypothesisRowWidth = max(state.hypothesisRowWidth ?? 0, measured.width)
             if measured.isWidthFlexible { state.hypothesisWidthFlexible = true }
             if measured.isHeightFlexible { state.hypothesisHeightFlexible = true }
-            result.append((ordinal, child))
+            // The measured width is kept for the ramp: it is what the row will
+            // be aligned by, and the rendered one does not exist yet.
+            result.append((ordinal, child, measured.width))
         }
         return result
     }

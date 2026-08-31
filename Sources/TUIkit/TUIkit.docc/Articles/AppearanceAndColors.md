@@ -129,6 +129,11 @@ change along a row is one escape per row, exactly what it would have been. A
 ramp that varies *across* a row is a colour change per cell — right for a label
 or a panel, dear for a whole page.
 
+The ramp spans the **content**, not the window — so a row keeps its colour as it
+scrolls, and forty rows in a ten-row viewport show the first quarter of the ramp.
+``LazyVStack`` and ``LazyHStack`` place their rows in the same coordinates as the
+eager stacks, so swapping one for the other does not change a colour.
+
 A colour or a gradient is also a **view**, filling the space it is offered — so
 `ZStack { LinearGradient(…); Text("Title") }` works, and a fill in a stack takes
 the slack the other children leave. One caveat: compositing is opaque per cell,

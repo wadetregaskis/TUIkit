@@ -296,6 +296,13 @@ content-pinned versus viewport-pinned. **Pin it to the viewport** — content-pi
 means every scroll step and every append in a log-tail recolours every visible
 cell, forever.
 
+> **Built content-pinned, not viewport-pinned — see §13.** The prediction above
+> was overturned by the thing itself: `ScrollView` never folds an offset in
+> because its content's coordinates ARE the content's, so the eager path came
+> out content-pinned without anyone choosing it, and the recolouring cost the
+> paragraph feared does not exist (a scroll moves every glyph on every row, so
+> those cells repaint regardless of their colour).
+
 ---
 
 ## 5. Where a gradient cannot be painted
@@ -538,9 +545,10 @@ claims slack and never demands any.
 
 ## 9. Open questions
 
-- **Container coverage for `.subtree`** (§4). How many containers must propagate
-  the origin before the feature reads as correct rather than as approximately
-  correct? This is the step-4 gate.
+- ~~**Container coverage for `.subtree`** (§4). How many containers must
+  propagate the origin before the feature reads as correct rather than as
+  approximately correct? This is the step-4 gate.~~ Answered by building it out:
+  see §13.
 - **`TrackGradientScaling` vs `GradientExtent`.** `TrackGradientScaling`
   (`.track` / `.fill`) is already an extent knob for gradients in one corner of
   the framework. Two vocabularies for "what does the ramp span" is one too many;
@@ -710,3 +718,56 @@ reason — its ramp is sampled at one entry per cell of the longest arc it can
 draw, which is 450 of them, so nearly every cell is its own run. That is the
 same ceiling §11 documented, reached by a different road, and the same answer
 applies: a label or a panel painted this way is normal, a whole page is not.
+
+---
+
+## 13. Container coverage, measured
+
+§4 named the participating set from memory and §9 left "how many containers is
+enough?" open. Both are now answered by probing what the built thing actually
+does, one container at a time, reading the first ink of each row of a
+four-row red→blue ramp under `.gradientExtent(.subtree)`.
+
+| Container | Before | Note |
+|---|---|---|
+| `VStack`, `HStack` | ✅ ramps | Shipped in step 4 |
+| `ZStack` | ✅ ramps | Inherits: its children all sit at its own origin |
+| `ScrollView` | ✅ ramps | Inherits: it wraps one child and moves nothing |
+| `LazyVStack`, `LazyHStack` | ❌ every row the ramp's first colour | Fixed |
+| `List` | ❌ every row the ramp's first colour | See below |
+
+Two corrections to the record while measuring this:
+
+- **`List` was reported as ignoring `.foregroundStyle` entirely.** It does not
+  — a plain colour reaches its rows. The probe that said otherwise read the
+  first ink of each *line*, which for a bordered list is the border glyph, not
+  the row's text. `List`'s real gap was the same one the lazy stacks had.
+- **The ramp is content-pinned, not viewport-pinned** (§4 predicted the
+  opposite). An eager `ScrollView { VStack { ForEach(0..<40) } }` in a ten-row
+  viewport shows `255;0;0 … 196;0;58` — the first quarter of the ramp, so a row
+  keeps its colour as it scrolls. Nobody chose this: a `ScrollView` publishes a
+  window, not a coordinate shift, so the content's own coordinates are what the
+  frame is offset by. The lazy paths were built to match, because eager and
+  lazy disagreeing about a colour is worse than either answer.
+
+### What a windowed stack has to do that an eager one does not
+
+An eager `VStack` measures every child in PASS 1, so it knows its own extent
+and every child's place in it before it renders anything. A lazy stack renders
+*as it walks*, and has four paths that do it differently:
+
+| Path | Row's y | Extent |
+|---|---|---|
+| Append-while-it-fits (no scroll window) | Running total | Measure walk stopped at the fold |
+| Exact slot walk (`renderViewportWindow`) | `slot.y` — exact | `walkedTotal` — exact |
+| Uniform seek | `ordinal × pitch` — arithmetic | `count × pitch` — arithmetic |
+| Anchored outward fill | Estimated from the anchor | Estimated from the running pitch average |
+
+Only the first needed anything new: a measure walk up front, **taken only when
+a ramp is actually in force, and stopped at the same fold the render walk stops
+at** — a lazy stack must not measure past the fold, and this does not. The
+other three already knew both numbers for their own placement.
+
+The anchored path's ramp is therefore an estimate, like everything else on it
+(`sliceTotalIsEstimate` is already set there for the same reason), and
+converges as the walk learns the real pitch.

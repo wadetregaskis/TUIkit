@@ -305,7 +305,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // from the measured ones, which is what they are for.
         // The row's own content size, from the distribution above — the same
         // service `VStack` performs for an enclosing `.gradientExtent(.subtree)`.
-        let gradientFrame = context.gradientFrame?.resolvingExtent(
+        let gradientFrame = context.gradientContentFrame(
             width: min(
                 context.availableWidth,
                 finalWidths.reduce(0, +) + spacing * max(0, finalWidths.count - 1)),
@@ -316,7 +316,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         for (index, child) in children.enumerated() {
             if index > 0 { gradientX += spacing }
             var childContext = context
-            if let frame = gradientFrame {
+            if gradientFrame != nil {
                 let measured = child.measure(
                     proposal: ProposedSize(width: finalWidths[index], height: rowHeight),
                     context: context)
@@ -327,7 +327,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                     case .bottom: slack
                     default: slack / 2
                     }
-                childContext.gradientFrame = frame.offset(byX: gradientX, y: y)
+                childContext = context.placingGradientChild(gradientFrame, x: gradientX, y: y)
             }
             buffers.append(
                 child.isSpacer
@@ -388,6 +388,17 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         guard !children.isEmpty else { return FrameBuffer() }
         let availableWidth = context.availableWidth
 
+        // A ramp spanning this row needs each column's place in it before the
+        // column renders, and this path renders as it walks — so the placement
+        // is measured up front, stopping at the same fold the walk will. Costs
+        // nothing without a `.gradientExtent(.subtree)` above.
+        let (gradientFrame, gradientOffsets) = windowGradientPlacement(children, context: context)
+        func columnContext(_ index: Int) -> RenderContext {
+            guard index < gradientOffsets.count else { return context }
+            return context.placingGradientChild(
+                gradientFrame, x: gradientOffsets[index].x, y: gradientOffsets[index].y)
+        }
+
         // Spacer distribution (same as HStack) needs every non-spacer child's
         // rendered width up front, so the presence of a Spacer forfeits the
         // early-stop: pre-render everything, as the single-pass path always
@@ -397,11 +408,12 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         var spacerWidth = 0
         var spacerRemainder = 0
         if spacerCount > 0 {
-            eagerBuffers = children.map { child in
+            eagerBuffers = children.enumerated().map { index, child in
                 child.isSpacer
                     ? nil
                     : child.render(
-                        width: availableWidth, height: context.availableHeight, context: context)
+                        width: availableWidth, height: context.availableHeight,
+                        context: columnContext(index))
             }
             let fixedWidth = eagerBuffers.compactMap { $0?.width }.reduce(0, +)
             let totalSpacing = max(0, children.count - 1) * spacing
@@ -450,7 +462,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                     if remaining > 0 {
                         let buffer = child.render(
                             width: measured.width, height: context.availableHeight,
-                            context: context)
+                            context: columnContext(index))
                         let clipped = buffer.clamped(toWidth: remaining, height: buffer.height)
                         maxHeight = max(maxHeight, clipped.height)
                         collected.append((clipped, spacingToApply, child))
@@ -468,7 +480,8 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                     break
                 }
                 let buffer = child.render(
-                    width: availableWidth, height: context.availableHeight, context: context)
+                    width: availableWidth, height: context.availableHeight,
+                    context: columnContext(index))
                 if currentWidth + spacingToApply + buffer.width > availableWidth { break }
                 maxHeight = max(maxHeight, buffer.height)
                 collected.append((buffer, spacingToApply, child))

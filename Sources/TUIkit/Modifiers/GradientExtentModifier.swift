@@ -55,6 +55,17 @@ extension View {
     /// position unchanged. The ramp then resolves as if that subtree were flat:
     /// wrong-looking, not corrupt, and it is the reason this is a modifier you
     /// ask for rather than the default.
+    ///
+    /// ## Scrolling content
+    ///
+    /// The ramp spans the **content**, not the viewport, so a row keeps its
+    /// colour as it scrolls past rather than the visible rows re-inking under a
+    /// ramp pinned to the screen. Forty rows in a ten-row window therefore show
+    /// the first quarter of the ramp. Lazy stacks (``LazyVStack``,
+    /// ``LazyHStack``) place their rows in those same content coordinates; on
+    /// the estimating path a very long variable-height list takes past a few
+    /// hundred rows, the positions — and so the colours — are approximate and
+    /// converge as the stack learns its content.
     public func gradientExtent(_ extent: GradientExtent) -> some View {
         GradientExtentModifier(content: self, extent: extent)
     }
