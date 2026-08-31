@@ -295,6 +295,27 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         let hasFlexible = isFlexible.contains(true)
 
         // === PASS 2: Render each child into its allocated height ===
+        //
+        // A `.gradientExtent(.subtree)` ramp needs each child to know where it
+        // sits in the rectangle the ramp spans, and the vertical half of that
+        // is exactly what PASS 1 just worked out. The horizontal half is not —
+        // alignment needs the RENDERED widths, which is PASS 3 — so it is
+        // predicted from the measured ones, which is what they are for.
+        // The stack's own content size, from PASS 1 — which is what an enclosing
+        // `.gradientExtent(.subtree)` needs and what it would otherwise have
+        // paid a second measure pass to learn.
+        let contentWidth = hasFlexible ? context.availableWidth : (childSizes.map(\.width).max() ?? 0)
+        let contentHeight = min(
+            context.availableHeight,
+            finalHeights.reduce(0, +) + spacing * max(0, finalHeights.count - 1))
+        let gradientFrame = context.gradientFrame?.resolvingExtent(
+            width: contentWidth, height: contentHeight)
+        let gradientPlacement = gradientFrame.map { _ in
+            Self.gradientOffsets(
+                heights: finalHeights, spacing: spacing, sizes: childSizes,
+                alignment: alignment,
+                extentWidth: hasFlexible ? context.availableWidth : nil)
+        }
         var buffers: [FrameBuffer?] = []
         buffers.reserveCapacity(children.count)
         var maxChildWidth = 0
@@ -302,8 +323,14 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             if child.isSpacer {
                 buffers.append(nil)
             } else {
+                var childContext = context
+                if let placement = gradientPlacement {
+                    childContext.gradientFrame = gradientFrame?.offset(
+                        byX: placement[index].x, y: placement[index].y)
+                }
                 let buffer = child.render(
-                    width: context.availableWidth, height: finalHeights[index], context: context)
+                    width: context.availableWidth, height: finalHeights[index],
+                    context: childContext)
                 maxChildWidth = max(maxChildWidth, buffer.width)
                 buffers.append(buffer)
             }
@@ -354,6 +381,35 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
         // Final guard against overflow on a terminal smaller than the content.
         return result.clamped(toWidth: context.availableWidth, height: context.availableHeight)
+    }
+
+    /// Where each child sits, for a gradient that spans the whole stack.
+    ///
+    /// Vertical from the distribution PASS 1 produced — exact. Horizontal from
+    /// the MEASURED widths, because the rendered ones do not exist yet; exact
+    /// wherever measure and render agree, and a disagreement moves a colour
+    /// rather than a cell.
+    private static func gradientOffsets(
+        heights: [Int], spacing: Int, sizes: [ViewSize], alignment: HorizontalAlignment,
+        extentWidth: Int?
+    ) -> [(x: Int, y: Int)] {
+        let width = extentWidth ?? sizes.map(\.width).max() ?? 0
+        var offsets: [(x: Int, y: Int)] = []
+        offsets.reserveCapacity(heights.count)
+        var y = 0
+        for index in heights.indices {
+            let childWidth = index < sizes.count ? sizes[index].width : 0
+            let slack = max(0, width - childWidth)
+            let x =
+                switch alignment {
+                case .leading: 0
+                case .trailing: slack
+                default: slack / 2
+                }
+            offsets.append((x: x, y: y))
+            y += heights[index] + spacing
+        }
+        return offsets
     }
 
     /// `.window` render (lazy `LazyVStack`): append whole children top-down while

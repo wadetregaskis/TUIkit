@@ -494,7 +494,7 @@ On a branch, merged only if the whole thing lands.
    with `Text.foregroundStyle` returning `Text`. Bench gates of §7.1.
 4. **`.gradientExtent(.subtree)`** via the propagated origin, and the container
    survey it rests on. **Gated on measuring against the manual N-modifier
-   version**, per requirement (b).
+   version**, per requirement (b). ✅ — see §11.
 5. **`background(_:)`**, `.in(_:)`, then `RadialGradient` / `AngularGradient` /
    `EllipticalGradient`.
 6. **The panel.** Not one dialog, but one dialog with two floors:
@@ -548,3 +548,55 @@ Kept because the pattern is the lesson, not the list.
 
 The common thread: **revision 2's banner was "measured, not recalled", and every
 one of these is something it recalled.** Where it measured, it was right.
+
+
+---
+
+## 11. What step 4 measured
+
+The survey first, because it changed the mechanism. A container knows a child's
+offset **along its own axis** before it renders it — `VStack` distributes
+heights in PASS 1, `HStack` widths — and its **cross-axis** offset only
+afterwards, because alignment needs the rendered sizes
+([VStack.swift:297](../Sources/TUIkit/Views/VStack.swift:297) renders every
+child before PASS 3 computes `alignmentWidth`). So the cross-axis offset is
+predicted from the child's MEASURED size, which is exact wherever measure and
+render agree and shifts a colour rather than a cell when they do not.
+
+The extent has the same problem one level up, and the same answer. Measuring
+for it at the modifier cost **96 µs of a 336 µs frame** on a forty-row list —
+most of the gap to the manual version — so the modifier publishes the space it
+was given as a stand-in and the first placing container settles it from PASS 1,
+for nothing.
+
+Release, 40 rows × 120 cells, per render:
+
+| | µs |
+|---|---|
+| plain, no gradient | 218 |
+| **manual: one `.foregroundStyle(colour)` per row** | **215** |
+| `.gradientExtent(.subtree)`, vertical ramp | **226** |
+| per-leaf gradient | 223 |
+| `.subtree`, ramp along the row, 256 colours | 1700 |
+| `.subtree`, ramp along the row, truecolor | 2570 |
+
+**The asked-for case — a ramp down a list — is indistinguishable from doing it
+by hand**, and from not doing it at all. Requirement (b) met.
+
+A ramp that varies **along a row** is not, and the reason is not fixable by
+tuning: it is one SGR run per cell whose colour differs from its neighbour's,
+which over a full-screen subtree is 4 800 of them. At 256 colours the run count
+collapses to the cube crossings and it is ~7× a plain frame; at truecolor every
+cell is its own run and it is ~12×. A single label painted that way is ~62 µs
+and entirely normal; a whole page is not. **Documented, not hidden.**
+
+Three optimisations were built and reverted for measuring nothing:
+hoisting the affine arithmetic out of the cell loop (3214 → 3214 µs), an
+ASCII byte walk to skip grapheme breaking (2566 → 2549, inside noise), and
+reserving the output for the worst case (2571 → 2517). What *did* pay, in
+order: appending in place instead of `a + b + c` (3214 → 2570), caching the
+sampled ramp at every depth rather than only at `.palette256` (a truecolor
+subtree had been re-interpolating its whole ramp once per leaf), and — the one
+that closed the gap — **not allocating the run table for a ramp that does not
+vary along a row** (336 → 226 µs), which had been one array per leaf to hold a
+single entry.

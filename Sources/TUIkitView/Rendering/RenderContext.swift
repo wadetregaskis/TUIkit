@@ -111,6 +111,17 @@ public struct RenderContext {
     /// note, so they have no slot to disambiguate.
     public var environmentApplicationDepth: Int = 0
 
+    /// The rectangle a `.gradientExtent(.subtree)` gradient spans, and where
+    /// this view sits in it — `nil` when no such gradient is in force, which is
+    /// almost always.
+    ///
+    /// A stored field rather than an environment value: it is read on the leaf
+    /// path and nudged by every container that places children, and
+    /// `EnvironmentValues` is a dictionary whose getter is expensive enough
+    /// that ``renderCache`` and ``stateStorage`` were both hoisted out of it.
+    /// Unused, it costs one nil check.
+    public var gradientFrame: GradientFrame?
+
     /// Creates a new RenderContext.
     ///
     /// - Parameters:

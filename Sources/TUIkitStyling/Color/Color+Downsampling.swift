@@ -121,14 +121,28 @@ extension Color {
         // `sampled.count` IS `max(0, count)`, and an entry is only ever stored
         // on the path where both guards passed.
         let key = RampKey(gradient: gradient, count: count, depth: depth)
-        if depth == .palette256, count > 2, let cached = cachedRamp(key) { return cached }
+        let worthCaching = count > 2
+        if worthCaching, let cached = cachedRamp(key) { return cached }
 
         let sampled = gradient.sampled(count: count)
         // Only the 6x6x6 cube bands. A truecolor terminal draws what it is
         // given, and a 16-colour one has so few entries that monotonicity is
         // not the interesting problem.
-        guard depth == .palette256, sampled.count > 2 else { return sampled }
-        guard sampled.allSatisfy({ $0.rgbComponents != nil }) else { return sampled }
+        //
+        // The SAMPLING is still worth keeping at those depths, and used not to
+        // be: this returned before reaching the store, so a truecolor gradient
+        // re-interpolated its whole ramp for every leaf that painted it. Under
+        // `.gradientExtent(.subtree)` that is once per row of the subtree, for
+        // a ramp that is identical every time — measured at 40 leaves, it was
+        // most of the difference between the subtree case and the manual one.
+        guard depth == .palette256, sampled.count > 2 else {
+            if worthCaching { storeRamp(sampled, for: key) }
+            return sampled
+        }
+        guard sampled.allSatisfy({ $0.rgbComponents != nil }) else {
+            storeRamp(sampled, for: key)
+            return sampled
+        }
 
         var entries = sampled.map { $0.downsampledToPalette256() }
         var banned: Set<UInt8> = []

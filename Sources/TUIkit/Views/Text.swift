@@ -832,8 +832,8 @@ extension Text: Renderable, Layoutable {
             // banding a run-split line needs the two splits reconciled cell by
             // cell, which is its own piece of work.
             styledLines = PaintRenderer.styled(
-                plainLines, blockWidth: lineWidths.max() ?? 0, paint: ramp,
-                style: resolvedStyle, depth: ColorDepth.current)
+                plainLines, blockWidth: lineWidths.max() ?? 0, frame: context.gradientFrame,
+                paint: ramp, style: resolvedStyle, depth: ColorDepth.current)
         } else {
             styledLines = plainLines.map { ANSIRenderer.render($0, with: resolvedStyle) }
         }

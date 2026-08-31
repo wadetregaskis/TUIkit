@@ -298,13 +298,43 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // `.alignmentGuide` is resolved against the size a child actually
         // rendered at, and the row's height can grow past the tallest child
         // when a guide pushes one down.
+        // A `.gradientExtent(.subtree)` ramp needs each child to know where it
+        // sits in the rectangle the ramp spans. Horizontally that is exactly
+        // what `resolvedLayout` just distributed — exact. Vertically it is not:
+        // alignment is applied below, off the rendered heights, so it is taken
+        // from the measured ones, which is what they are for.
+        // The row's own content size, from the distribution above — the same
+        // service `VStack` performs for an enclosing `.gradientExtent(.subtree)`.
+        let gradientFrame = context.gradientFrame?.resolvingExtent(
+            width: min(
+                context.availableWidth,
+                finalWidths.reduce(0, +) + spacing * max(0, finalWidths.count - 1)),
+            height: rowHeight)
+        var gradientX = 0
         var buffers: [FrameBuffer?] = []
         buffers.reserveCapacity(children.count)
         for (index, child) in children.enumerated() {
+            if index > 0 { gradientX += spacing }
+            var childContext = context
+            if let frame = gradientFrame {
+                let measured = child.measure(
+                    proposal: ProposedSize(width: finalWidths[index], height: rowHeight),
+                    context: context)
+                let slack = max(0, rowHeight - measured.height)
+                let y =
+                    switch alignment {
+                    case .top: 0
+                    case .bottom: slack
+                    default: slack / 2
+                    }
+                childContext.gradientFrame = frame.offset(byX: gradientX, y: y)
+            }
             buffers.append(
                 child.isSpacer
                     ? nil
-                    : child.render(width: finalWidths[index], height: rowHeight, context: context))
+                    : child.render(
+                        width: finalWidths[index], height: rowHeight, context: childContext))
+            gradientX += finalWidths[index]
         }
 
         // The guide run came from `resolvedLayout`, off the same measured
