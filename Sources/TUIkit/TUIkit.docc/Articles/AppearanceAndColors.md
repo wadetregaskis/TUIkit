@@ -137,6 +137,19 @@ grids, and any ``Layout`` you write yourself. Swapping one for another does not
 change a colour. ``Table`` is the exception — its columns yield strings rather
 than views, so it paints its own cells and reads no foreground style at all.
 
+Every colour also carries a gradient of its own — a lighter version of itself at
+the top, the colour at the bottom — for the times you want depth rather than a
+palette decision:
+
+```swift
+Text("Total")
+    .foregroundStyle(Color.blue.gradient)
+```
+
+It needs room to run: a one-line ``Text`` is one cell tall, so the ramp resolves
+at its start. And ``Color/mix(with:by:)`` gives the colour partway between two,
+which is that same interpolation asked for one point rather than a whole ramp.
+
 A colour or a gradient is also a **view**, filling the space it is offered — so
 `ZStack { LinearGradient(…); Text("Title") }` works, and a fill in a stack takes
 the slack the other children leave. One caveat: compositing is opaque per cell,
