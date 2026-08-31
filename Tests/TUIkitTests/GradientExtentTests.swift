@@ -189,6 +189,74 @@ struct GradientExtentTests {
     }
 }
 
+// MARK: - `.in(_:)`, the other half
+
+extension GradientExtentTests {
+
+    /// SwiftUI's own extent knob fixes the ramp's SCALE: four cells of a ramp
+    /// told to run over forty only get the first tenth of it, so a text that
+    /// would have ended blue ends barely off red.
+    @Test("`.in(_:)` resolves over the size it names, not the leaf's own")
+    func fixedExtentRescalesTheRamp() {
+        let plain = renderToBuffer(
+            Text(verbatim: "AAAA").foregroundStyle(horizontal()), context: context()
+        ).lines[0]
+        let scaled = renderToBuffer(
+            Text(verbatim: "AAAA")
+                .foregroundStyle(horizontal().in(CellRect(x: 0, y: 0, width: 40, height: 1))),
+            context: context()
+        ).lines[0]
+
+        #expect(inks(plain).compactMap { $0 }.last == "0;0;255", "four cells, the whole ramp")
+        let end = inks(scaled).compactMap { $0 }.last
+        #expect(end != "0;0;255", "the ramp was not rescaled: \(String(describing: end))")
+        let red = end.flatMap { Int($0.split(separator: ";")[0]) } ?? 0
+        #expect(red > 200, "four cells of forty should still be red: \(String(describing: end))")
+    }
+
+    /// And it fixes ONLY the scale. Each leaf still anchors the ramp at
+    /// itself, so four rows told to resolve over eight all take the same early
+    /// slice — measured in SwiftUI, and the reason `.in(_:)` cannot express
+    /// "one ramp across a set" however tempting it looks.
+    @Test("`.in(_:)` re-anchors at every leaf, so it cannot span a set")
+    func fixedExtentReAnchorsPerLeaf() {
+        let lines = renderToBuffer(
+            VStack(alignment: .leading, spacing: 0) {
+                Text(verbatim: "AAAA")
+                Text(verbatim: "BBBB")
+                Text(verbatim: "CCCC")
+                Text(verbatim: "DDDD")
+            }
+            .foregroundStyle(vertical().in(CellRect(x: 0, y: 0, width: 4, height: 8))),
+            context: context()
+        ).lines
+        let rows = lines.prefix(4).map { firstInk($0) }
+        #expect(Set(rows.compactMap { $0 }).count == 1, "rows differ, so it anchored once: \(rows)")
+        // And it did something: a bare one-row leaf takes the ramp's far end,
+        // where a row of eight takes its start.
+        #expect(rows[0] != "0;0;255", "the rescaling did not happen: \(rows)")
+    }
+
+    /// Two knobs, one question, so the order has to be stated: `.in(_:)` names
+    /// the rectangle outright, and outright wins.
+    @Test("`.in(_:)` overrides an enclosing .gradientExtent(.subtree)")
+    func fixedExtentBeatsSubtree() {
+        let lines = renderToBuffer(
+            VStack(alignment: .leading, spacing: 0) {
+                Text(verbatim: "AAAA")
+                Text(verbatim: "BBBB")
+                Text(verbatim: "CCCC")
+                Text(verbatim: "DDDD")
+            }
+            .foregroundStyle(vertical().in(CellRect(x: 0, y: 0, width: 4, height: 8)))
+            .gradientExtent(.subtree),
+            context: context()
+        ).lines
+        let rows = lines.prefix(4).map { firstInk($0) }
+        #expect(Set(rows.compactMap { $0 }).count == 1, "the subtree extent won: \(rows)")
+    }
+}
+
 /// Reports the render context's gradient frame and draws nothing.
 private struct _FrameProbe: View {
     let report: (GradientFrame?) -> Void

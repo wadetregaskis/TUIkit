@@ -103,6 +103,105 @@ extension Gradient: ShapeStyle {
     }
 }
 
+// MARK: - Modifying a style
+
+extension ShapeStyle {
+    /// This style at `opacity`, blended toward the surface it will draw on.
+    ///
+    /// A terminal cell has no alpha channel, so this is a mix rather than a
+    /// composite: every colour the style resolves to — each stop of a gradient,
+    /// not merely its ends — is blended toward
+    /// ``Palette/background``, which is the surface a styled view draws on
+    /// unless something has painted over it. Same shape as
+    /// ``Color/opacity(_:over:)``, and the same reason: mixing toward black
+    /// instead (what ``Color/opacity(_:)`` does) turns every "dim" into a smudge
+    /// on a light palette.
+    ///
+    /// Where the surface is genuinely not the page — a label inside a coloured
+    /// panel — the answer is approximate, and the exact one is
+    /// ``View/opacity(_:)``, which composites the rendered cells against what
+    /// they actually land on. SwiftUI's `ShapeStyle.opacity(_:)` does not
+    /// composite either; it multiplies alpha and lets the drawing sort it out.
+    ///
+    /// ``Color`` has an `opacity(_:)` of its own returning a `Color`, and a
+    /// member on the concrete type beats a protocol extension, so
+    /// `.red.opacity(0.5)` is that one — as it is in SwiftUI, where `Color`
+    /// shadows `ShapeStyle` identically. It mixes toward black, which on the
+    /// dark palettes this framework ships is the same answer as mixing toward
+    /// their background; the two part company only on a light one.
+    ///
+    /// - Parameter opacity: How much of the style survives, `0…1`.
+    public func opacity(_ opacity: Double) -> some ShapeStyle {
+        _OpacityShapeStyle(base: self, opacity: opacity)
+    }
+
+    /// This style resolved over a rectangle of `rect`'s size, whatever the
+    /// thing being painted actually measures.
+    ///
+    /// It fixes the ramp's **scale**, not its **origin**: every leaf still
+    /// anchors the ramp at itself, so three stacked rows under a vertical
+    /// gradient `.in(_:)` a tall rect all render alike. That is measured
+    /// SwiftUI behaviour, not a simplification — see
+    /// `Documentation/Gradients where a colour is accepted.md` §4, where it is
+    /// why `.in(_:)` cannot express "one ramp spanning a set of views".
+    /// ``View/gradientExtent(_:)`` is the modifier that can, and it wins over
+    /// this one because it names an origin as well as a size.
+    ///
+    /// The rectangle's own origin is therefore unused. It is a `CellRect` for
+    /// SwiftUI's spelling, and because a caller usually has one to hand from a
+    /// ``GeometryProxy``.
+    ///
+    /// - Parameter rect: The rectangle to resolve in. Only its size is read.
+    public func `in`(_ rect: CellRect) -> some ShapeStyle {
+        _FixedExtentShapeStyle(base: self, extent: CellSize(width: rect.width, height: rect.height))
+    }
+}
+
+/// ``ShapeStyle/opacity(_:)``'s style. Resolves its base and mixes what comes
+/// back, so it composes with everything — including a gradient, whose every
+/// stop is mixed rather than only the two the eye lands on.
+struct _OpacityShapeStyle<Base: ShapeStyle>: ShapeStyle {
+    let base: Base
+    let opacity: Double
+
+    typealias Resolved = Never
+
+    func paint(in environment: EnvironmentValues) -> Paint {
+        let palette = environment.palette
+        let surface = palette.background
+        func mixed(_ colour: Color) -> Color {
+            colour.resolve(with: palette).opacity(opacity, over: surface)
+        }
+        switch base.paint(in: environment) {
+        case .color(let colour):
+            return .color(mixed(colour))
+        case .gradient(var ramp):
+            ramp.gradient = Gradient(
+                stops: ramp.gradient.stops.map {
+                    Gradient.Stop(color: mixed($0.color), location: $0.location)
+                })
+            return .gradient(ramp)
+        }
+    }
+}
+
+/// ``ShapeStyle/in(_:)``'s style. A colour has no extent to fix, so this is a
+/// gradient's modifier that happens to be spelled on every style — as it is in
+/// SwiftUI.
+struct _FixedExtentShapeStyle<Base: ShapeStyle>: ShapeStyle {
+    let base: Base
+    let extent: CellSize
+
+    typealias Resolved = Never
+
+    func paint(in environment: EnvironmentValues) -> Paint {
+        let paint = base.paint(in: environment)
+        guard case .gradient(var ramp) = paint else { return paint }
+        ramp.extent = extent
+        return .gradient(ramp)
+    }
+}
+
 // MARK: - Erasure
 
 /// A type-erased ``ShapeStyle`` — the idiom for choosing a style at runtime:

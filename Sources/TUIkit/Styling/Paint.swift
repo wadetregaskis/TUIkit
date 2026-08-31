@@ -73,10 +73,18 @@ public struct GradientPaint: Equatable, Sendable {
     /// Where each cell sits along them.
     public var geometry: GradientGeometry
 
+    /// The size to resolve over, from ``ShapeStyle/in(_:)`` — overriding both
+    /// what is being painted and any ``View/gradientExtent(_:)`` around it.
+    ///
+    /// `nil`, the default, is "whatever this is being painted on", which is
+    /// SwiftUI's per-leaf rule.
+    public var extent: CellSize?
+
     /// Creates a paint from stops and a geometry.
-    public init(_ gradient: Gradient, _ geometry: GradientGeometry) {
+    public init(_ gradient: Gradient, _ geometry: GradientGeometry, extent: CellSize? = nil) {
         self.gradient = gradient
         self.geometry = geometry
+        self.extent = extent
     }
 }
 

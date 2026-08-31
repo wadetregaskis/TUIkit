@@ -192,6 +192,12 @@ struct RampSampler {
     ///     circle looks like one.
     init?(paint: Paint, extent: GradientFrame, depth: ColorDepth, cellAspect: Double) {
         guard case .gradient(let ramped) = paint else { return nil }
+        // `.in(_:)` names the rectangle outright, and it re-anchors: a leaf
+        // resolves at its own origin over that size, which is what makes it a
+        // scale knob rather than a second `.gradientExtent(.subtree)`.
+        let extent = ramped.extent.map {
+            GradientFrame(width: $0.width, height: $0.height)
+        } ?? extent
         let width = Double(max(1, extent.width))
         let height = Double(max(1, extent.height))
         let aspect = cellAspect > 0 ? cellAspect : 2

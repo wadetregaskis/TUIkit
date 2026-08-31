@@ -111,6 +111,24 @@ public struct CellRect: Equatable, Sendable {
 
     /// The bottom edge (exclusive).
     public var maxY: Int { y + height }
+
+    /// Creates a rectangle in whole cells.
+    ///
+    /// Public because a `CellRect` is not only something a ``GeometryProxy``
+    /// hands out: ``ShapeStyle/in(_:)`` takes one, and a caller comparing
+    /// against a proxy's frame has to be able to write the value it expects.
+    ///
+    /// - Parameters:
+    ///   - x: The leading edge, in cells.
+    ///   - y: The top edge, in rows.
+    ///   - width: The width in cells.
+    ///   - height: The height in rows.
+    public init(x: Int, y: Int, width: Int, height: Int) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
 }
 
 /// The coordinate space a ``GeometryProxy`` frame is measured in.
