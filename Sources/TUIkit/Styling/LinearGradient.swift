@@ -66,7 +66,7 @@ public struct LinearGradient: ShapeStyle, Equatable, Sendable {
     public typealias Resolved = Never
 
     public func paint(in environment: EnvironmentValues) -> Paint {
-        .linear(gradient, from: startPoint, to: endPoint)
+        .gradient(GradientPaint(gradient, .linear(from: startPoint, to: endPoint)))
     }
 }
 

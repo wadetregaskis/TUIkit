@@ -1,67 +1,14 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ShapeStyle.swift
 //
-//  What a thing is painted with. SwiftUI's protocol, narrowed to the half a
-//  terminal can honour, plus the concrete answer everything downstream works
-//  in.
+//  What a thing is painted with: SwiftUI's protocol, narrowed to the half a
+//  terminal can honour. The concrete answer it resolves to is `Paint`.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
 
 import TUIkitCore
 import TUIkitStyling
-
-// MARK: - Paint
-
-/// A style, resolved: the concrete thing a cell is painted with.
-///
-/// Every ``ShapeStyle`` reduces to one of these before anything is drawn, and
-/// this — not the style — is what travels in the environment. That is
-/// deliberate and load-bearing in two ways:
-///
-/// - **The render memo.** `RenderCache.noteAppliedEnvironment` asks whether a
-///   value `is any Equatable`; an existential answers no, which sets
-///   `hasUncomparableEnvironmentValue` and refuses every memo store in that
-///   subtree. A concrete `Equatable` enum keeps memoization alive under a
-///   styled subtree — an existential would silently turn it off.
-/// - **One slot, not two.** A colour and a gradient share
-///   ``EnvironmentValues/foregroundStyle``, so a leaf reads one dictionary key
-///   however it was styled, and an outer gradient with an inner colour has an
-///   unambiguous answer instead of two keys and no rule for ordering them.
-public enum Paint: Equatable, Sendable {
-    /// One colour, everywhere.
-    case color(Color)
-
-    /// A ramp along the line from `from` to `to`, in the unit space of
-    /// whatever is being painted.
-    ///
-    /// The only gradient geometry so far. Radial, angular and elliptical are
-    /// each a different answer to "given a cell, what is `t`?" and become
-    /// further cases; nothing about the design forbids them.
-    case linear(Gradient, from: UnitPoint, to: UnitPoint)
-}
-
-extension Paint {
-    /// The one colour this paint is, where a gradient cannot go.
-    ///
-    /// A gradient is accepted where a colour is PAINTED and collapses where a
-    /// colour is DERIVED FROM — contrast floors, the button styles' face /
-    /// border / label chain, the scrollbar's separation rules. See
-    /// ``Gradient/representative``.
-    public var representative: Color {
-        switch self {
-        case .color(let colour): colour
-        case .linear(let gradient, _, _): gradient.representative
-        }
-    }
-
-    /// Whether this paint is a single colour — the fast path everything that
-    /// does not yet handle a ramp takes.
-    public var solid: Color? {
-        if case .color(let colour) = self { return colour }
-        return nil
-    }
-}
 
 // MARK: - ShapeStyle
 
@@ -152,7 +99,7 @@ extension Color: ShapeStyle {
 extension Gradient: ShapeStyle {
     public typealias Resolved = Never
     public func paint(in environment: EnvironmentValues) -> Paint {
-        .linear(self, from: .top, to: .bottom)
+        .gradient(GradientPaint(self, .linear(from: .top, to: .bottom)))
     }
 }
 

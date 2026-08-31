@@ -175,9 +175,9 @@ source-**identical**.
 |---|---|---|
 | `Gradient(colors:)` / `(stops:)`, `Gradient.Stop(color:location:)` | same | also `: ShapeStyle`, meaning a **vertical** linear gradient (§1) |
 | `LinearGradient(gradient:startPoint:endPoint:)` and its `colors:` / `stops:` twins | same | ✓ identical |
-| `EllipticalGradient(…startRadiusFraction:endRadiusFraction:)` | same | ✓ already unit-space |
-| `AngularGradient(…startAngle:endAngle:)` / `(…angle:)` | same, `Angle` | ✓ |
-| `RadialGradient(…startRadius:endRadius:)` | radii `Int` cells | deviation — see below |
+| `EllipticalGradient(…startRadiusFraction:endRadiusFraction:)` | same | ✓ already unit-space — **shipped**, §12 |
+| `AngularGradient(…startAngle:endAngle:)` / `(…angle:)` | same, `Angle` | ✓ — **shipped**, and the sweep's outside rule is not what anyone guesses: §12 |
+| `RadialGradient(…startRadius:endRadius:)` | radii `Int` cells | deviation — see below — **shipped**, §12 |
 | `AnyGradient`, `Color.gradient` | same | `AnyGradient` must be `Equatable` by value |
 | `AnyShapeStyle(_:)` | same | required — it is *the* style-switching idiom |
 | `HierarchicalShapeStyle` (`.secondary`…), `style.secondary` | same | maps to the palette's foreground tiers |
@@ -600,3 +600,92 @@ subtree had been re-interpolating its whole ramp once per leaf), and — the one
 that closed the gap — **not allocating the run table for a ramp that does not
 vary along a row** (336 → 226 µs), which had been one array per leaf to hold a
 single entry.
+
+---
+
+## 12. What step 5 measured
+
+The other three geometries, pinned the same way §1 was: `ImageRenderer` over a
+`41 × 41` (and `81 × 41`) frame, read back cell by cell. Three of the five
+answers are not the obvious ones, and every one of them is now a test in
+[GradientGeometryTests.swift](../Tests/TUIkitTests/GradientGeometryTests.swift).
+
+**A radius is absolute, so a circle stays a circle.** `RadialGradient(…,
+startRadius: 5, endRadius: 15)` gave the same colour at `d = 10` horizontally,
+vertically and diagonally, in a square frame and in one twice as wide. That is
+what forces the deviation: TUIkit's "pixels" are cells about twice as tall as
+they are wide, so honouring the radius equally in both axes would draw an
+ellipse. The radius is horizontal cells and the vertical is derived through
+`imageCellAspect` — the divergence keeps the *appearance* SwiftUI has, which is
+the parity that matters.
+
+**`t` clamps at both ends.** Inside the start radius every cell is the first
+stop; past the end radius every cell is the last. The ramp never repeats.
+
+**An elliptical gradient's fractions are of the width and of the height
+separately** — `dx / w` and `dy / h`, so the default `0 … 0.5` reaches the last
+stop at the middle of every edge whatever shape the box is. Confirmed at
+`0.2 … 0.4` too: `dx/w = 0.3` was exactly the ramp's midpoint. No cell-aspect
+correction here, and that is the whole difference from the radial case.
+
+**Angles start at the trailing edge and increase clockwise** (`0°` right, `90°`
+down), because y grows downward. Aspect-corrected as radial is: a `dx = 40,
+dy = 20` corner read `t = 0.0738`, which is `atan2(20, 40)` in true geometry
+rather than the grid's.
+
+**Outside an angular sweep, a cell takes the NEARER end — it does not wrap.**
+A `0°…180°` red→blue sweep is blue from 180° round to *270°* and abruptly red
+from there back to 0°; the seam sits at the midpoint of the arc the sweep does
+not cover. A `90°…270°` sweep confirmed it from the other side, and a
+`45°…45°` one shows the degenerate form: two half-planes, no ramp at all.
+
+**The default `AngularGradient` sweep is that degenerate one.** `startAngle`
+and `endAngle` both default to `.zero`, so the split is what you get;
+`AngularGradient(gradient:center:angle:)` is the full turn, and it means
+`startAngle: angle, endAngle: angle + 360°` (measured: `angle: 90°` put `t = 0`
+just clockwise of 90° and `t = 1` at 90°). The earlier reading that a zero span
+means a full turn was an overload-resolution artefact — `AngularGradient(colors:
+center:)` selects the `angle:` initialiser, not the `startAngle:endAngle:` one.
+
+Two degenerate inputs that must not trap, since both are a number a caller can
+type: equal radii (SwiftUI draws a hard edge — the last stop inside it, the
+first outside) and a zero sweep. The edge is reproduced with a slope steep
+enough to saturate one cell either side rather than an infinity, because an
+infinity makes a cell exactly ON the edge a NaN and NaN is the one value the
+`Int` entry clamp cannot survive.
+
+### What it cost
+
+Nothing on the paths that existed. All four geometries reduce to one affine map
+from `(column, row)` to the geometry's own coordinates plus a `Mapping` to `t`,
+so the linear case still folds entirely into the offsets and its per-cell work
+is the add, multiply and round it already was. The new geometries add a square
+root (radial, elliptical) or an `atan2` (angular), and only they pay it.
+
+The one new cost on an old path is the per-cell `switch` on the mapping.
+Measured directly, 4800 cells: **10.4 µs through the sampler against 4.2 µs for
+the same arithmetic with nothing to dispatch on** — about 1.3 ns a cell, or
+0.3% of what painting that subtree costs. A vertical ramp does not pay even
+that, because it asks once per row rather than once per cell.
+
+Release, 40 rows × 120 cells, truecolor, per render — the same shape as §11 on
+a warmer machine, so read the column against its own `plain`:
+
+| | µs |
+|---|---|
+| plain, no gradient | 263 |
+| manual: one `.foregroundStyle(colour)` per row | 261 |
+| `.subtree` vertical linear | 252 |
+| `.subtree` **elliptical** | 850 |
+| `.subtree` **radial** | 897 |
+| `.subtree` **angular** | 1669 |
+| `.subtree` linear along the row | 1778 |
+
+**Cost tracks colour CHANGES along a row, not the geometry's arithmetic.** The
+two that look most expensive to compute are the two cheapest to draw: a radial
+ramp of 60 entries spread over 120 columns repeats itself, so a row is a few
+dozen SGR runs rather than 120. The angular case is dear for the opposite
+reason — its ramp is sampled at one entry per cell of the longest arc it can
+draw, which is 450 of them, so nearly every cell is its own run. That is the
+same ceiling §11 documented, reached by a different road, and the same answer
+applies: a label or a panel painted this way is normal, a whole page is not.

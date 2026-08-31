@@ -833,7 +833,8 @@ extension Text: Renderable, Layoutable {
             // cell, which is its own piece of work.
             styledLines = PaintRenderer.styled(
                 plainLines, blockWidth: lineWidths.max() ?? 0, frame: context.gradientFrame,
-                paint: ramp, style: resolvedStyle, depth: ColorDepth.current)
+                paint: ramp, style: resolvedStyle, depth: ColorDepth.current,
+                cellAspect: context.environment.imageCellAspect)
         } else {
             styledLines = plainLines.map { ANSIRenderer.render($0, with: resolvedStyle) }
         }

@@ -34,14 +34,14 @@ struct ShapeStyleTests {
     @Test("A bare gradient is a vertical linear gradient")
     func bareGradientIsVertical() {
         let gradient = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])
-        #expect(gradient.paint(in: environment()) == .linear(gradient, from: .top, to: .bottom))
+        #expect(gradient.paint(in: environment()) == .gradient(GradientPaint(gradient, .linear(from: .top, to: .bottom))))
     }
 
     @Test("A LinearGradient keeps the direction it was given")
     func linearKeepsItsAxis() {
         let gradient = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])
         let style = LinearGradient(gradient: gradient, startPoint: .leading, endPoint: .trailing)
-        #expect(style.paint(in: environment()) == .linear(gradient, from: .leading, to: .trailing))
+        #expect(style.paint(in: environment()) == .gradient(GradientPaint(gradient, .linear(from: .leading, to: .trailing))))
         // And the three initialisers agree.
         #expect(
             LinearGradient(
@@ -103,7 +103,7 @@ struct ShapeStyleTests {
         #expect(AnyShapeStyle(Color.rgb(9, 8, 7)).paint(in: values) == .color(.rgb(9, 8, 7)))
         #expect(
             AnyShapeStyle(LinearGradient(gradient: gradient, startPoint: .leading, endPoint: .trailing))
-                .paint(in: values) == .linear(gradient, from: .leading, to: .trailing))
+                .paint(in: values) == .gradient(GradientPaint(gradient, .linear(from: .leading, to: .trailing))))
         // Erasure is what makes the runtime choice spellable at all.
         let chosen = true ? AnyShapeStyle(Color.rgb(1, 0, 0)) : AnyShapeStyle(gradient)
         #expect(chosen.paint(in: values) == .color(.rgb(1, 0, 0)))
@@ -133,7 +133,9 @@ struct ShapeStyleTests {
         #expect(paint == .color(.rgb(1, 2, 3)))
         #expect(paint != .color(.rgb(1, 2, 4)))
         let gradient = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 255, 255)])
-        #expect(Paint.linear(gradient, from: .top, to: .bottom) != .linear(gradient, from: .leading, to: .trailing))
+        #expect(
+            Paint.gradient(GradientPaint(gradient, .linear(from: .top, to: .bottom)))
+                != .gradient(GradientPaint(gradient, .linear(from: .leading, to: .trailing))))
     }
 
     @Test("A paint collapses to one colour where a gradient cannot go")
@@ -141,7 +143,7 @@ struct ShapeStyleTests {
         #expect(Paint.color(.rgb(4, 5, 6)).representative == .rgb(4, 5, 6))
         #expect(Paint.color(.rgb(4, 5, 6)).solid == .rgb(4, 5, 6))
         let gradient = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 255, 255)])
-        let ramp = Paint.linear(gradient, from: .top, to: .bottom)
+        let ramp = Paint.gradient(GradientPaint(gradient, .linear(from: .top, to: .bottom)))
         #expect(ramp.solid == nil, "a ramp is not a solid colour")
         #expect(ramp.representative == gradient.color(at: 0.5))
     }

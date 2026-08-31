@@ -25,7 +25,10 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         // means "not a ramp, or a degenerate one", and both mean paint flat.
         let extent =
             context.gradientFrame ?? GradientFrame(width: width, height: buffer.lines.count)
-        guard let sampler = RampSampler(paint: paint, extent: extent, depth: ColorDepth.current)
+        guard
+            let sampler = RampSampler(
+                paint: paint, extent: extent, depth: ColorDepth.current,
+                cellAspect: context.environment.imageCellAspect)
         else {
             // Through the animator, so a change to the colour inside
             // `withAnimation` fades rather than jumps. Returns the colour
