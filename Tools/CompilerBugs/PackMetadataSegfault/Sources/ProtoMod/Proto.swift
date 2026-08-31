@@ -1,8 +1,8 @@
 /// A marker protocol. It needs no requirements at all.
 public protocol P {}
 
-/// The aggregate: it STORES a parameter pack. (SwiftUI's `TupleView` and
-/// TUIkit's are this shape.) It does not need to conform to `P` itself.
+/// The aggregate: it STORES a parameter pack — the shape SwiftUI's `TupleView`
+/// has. It does not need to conform to `P` itself.
 public struct Pack<each V: P> {
     public let children: (repeat each V)
     public init(_ values: repeat each V) { self.children = (repeat each values) }
