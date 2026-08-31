@@ -54,10 +54,12 @@ extension View {
     /// Every container that places children participates: the stacks and their
     /// lazy twins, `ZStack`, `ScrollView`, `Form`, `List`, `OutlineGroup`, and
     /// — through one shared placement — `Grid`, the lazy grids and any
-    /// ``Layout`` an app writes for itself. `Table` is the exception: its
-    /// columns yield strings rather than views, so it paints its own cells. It
-    /// honours a foreground COLOUR, and collapses a ramp to one — see
-    /// ``Paint/representative``.
+    /// ``Layout`` an app writes for itself — and `Table`, which gets there
+    /// differently: its columns yield strings rather than views, so it paints
+    /// the ramp onto its own cells. A table steps the ramp once per ROW
+    /// whatever a row's height, since nothing inside one can disagree, and it
+    /// is its own extent — `.gradientExtent(.subtree)` changes nothing on a
+    /// table.
     ///
     /// A container that does not participate hands its children its own
     /// position unchanged. The ramp then resolves as if that subtree were flat:

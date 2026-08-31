@@ -738,7 +738,7 @@ four-row red→blue ramp under `.gradientExtent(.subtree)`.
 | `LazyVStack`, `LazyHStack` | ❌ every row the ramp's first colour | Fixed |
 | `List`, `OutlineGroup` | ❌ every row the ramp's first colour | Fixed — see below |
 | `Grid`, `LazyVGrid`, `LazyHGrid`, `AnyLayout` | ❌ every row the ramp's first colour | Fixed in one place: every `Layout` places its subviews through `_LayoutCore`, which knows the bounds and each entry's exact position |
-| `Table` | ⚠️ honours a colour; collapses a ramp to one | Its cells are strings it paints itself — see below |
+| `Table` | ⚠️ honoured a colour; collapsed a ramp to one | Fixed — it paints its own cells, so it paints the ramp too |
 
 So the answer to "how many containers?" is: every one that places children,
 and there are seven places that do it. The two calls each one makes —
@@ -762,13 +762,13 @@ Two corrections to the record while measuring this:
   .foregroundStyle(ramp)   every row 38;2;127;0;127  (the ramp's midpoint)
   ```
 
-  So `Table` honours a colour and collapses a ramp to
+  So `Table` honoured a colour and collapsed a ramp to
   ``Paint/representative``. That collapse is the framework's own rule for
   where a colour is DERIVED FROM — but a table's cells are being PAINTED, so
-  it is the wrong rule here, and the gap is a ramp rather than styling as a
-  whole. **The lesson for the next probe: read the ink of the cell you mean,
-  not the first or second run on the line.** Both wrong readings came from a
-  helper that counted runs instead of columns.
+  it was the wrong rule there. Fixed; see §17. **The lesson for the next probe:
+  read the ink of the cell you mean, not the first or second run on the line.**
+  Both wrong readings came from a helper that counted runs instead of columns,
+  and the test suite's helper now counts columns.
 - **The ramp is content-pinned, not viewport-pinned** (§4 predicted the
   opposite). An eager `ScrollView { VStack { ForEach(0..<40) } }` in a ten-row
   viewport shows `255;0;0 … 196;0;58` — the first quarter of the ramp, so a row
@@ -1034,3 +1034,44 @@ colours, two locations, four geometry numbers) against one for a colour. Both
 frame**, not once per leaf, so this is eight dictionary probes for a whole
 `.foregroundStyle(gradient)` subtree. A paint that is a plain colour still
 costs exactly the one lookup it always did.
+
+---
+
+## 17. The one container that paints its own cells
+
+Every other container in §13 takes part in a ramp by telling its children where
+they are; a `Table` cannot, because it has no children. A `TableColumn`'s
+content is a `(Value) -> String`, so the table assembles and colours each cell
+itself. It had been asking for `foregroundStyle?.representative` — the
+collapse-to-one-colour rule that exists for where a colour is *derived from* —
+and painting every row the ramp's midpoint.
+
+So the table asks the ramp instead, and two decisions fall out of the fact that
+it is doing the painting:
+
+**One step per row, whatever the row's height.** For a `List` that rule was
+wrong: a row hosts a view, and the view offsets its own lines, so a two-line row
+would read the next row's colour (§13). A table has no such inner content — the
+cells are strings it places itself — so the ordinal is safe, and a wrapped row
+takes one colour for all of its lines. It also means a table is **its own
+extent**: `.gradientExtent(.subtree)` changes nothing on one, which no other
+container can say.
+
+**A horizontal ramp bands per cell; everything else keeps one run per row.**
+The single SGR introducer per row is load-bearing — `ANSIRenderer.render` was
+18.1% inclusive of a `tables-scroll` frame before it — so the ramp only gives it
+up when it must, which is exactly when `RampSampler.variesAcrossRow` says the
+colour changes along the row. That path goes through `PaintRenderer.band`, the
+same per-cell walk `Text` uses, so a table row and a line of text cannot
+disagree about where a colour changes.
+
+The sampler is built **once per frame**, not once per row: constructing one
+quantises the ramp into an array, and a row must not allocate. It is hoisted
+above each of the three row loops.
+
+Release A/B, paired, 15 reps, cpu-per-frame:
+
+| scenario | before | after | |
+|---|---|---|---|
+| `table` | 501.0 µs | 496.6 µs | −0.2% (−2.4% … +1.4%) — indistinguishable |
+| `megalist` | 497.3 µs | 495.9 µs | −0.9% (−1.6% … +1.7%) — indistinguishable |

@@ -953,15 +953,20 @@ where Value.ID: Hashable {
         /// settled where those lines actually ended up.
         var pulseRuns: [(y: Int, frames: [String])] = []
         rowLines.reserveCapacity(contentHeight)
+        // One sampler for the frame, not one per row: building it quantises the
+        // ramp, which is an array a row must not allocate.
+        let rowRamp = cellRamp(rowWidth: contentInnerWidth, context: context)
         for entry in drawn {
             switch entry {
             case .row(let rowIndex):
                 let row = renderRow(
-                    item: data[rowIndex], columnWidths: columnWidths,
+                    item: data[rowIndex],
+                    paint: RowPaint(row: rowIndex, ramp: rowRamp, width: contentInnerWidth),
+                    columnWidths: columnWidths,
                     isFocused: handler.isCursorRow(rowIndex) && tableHasFocus,
                     isSelected: handler.isSelected(at: rowIndex),
                     isReturningHome: handler.returningRows.contains(rowIndex),
-                    rowWidth: contentInnerWidth, context: context, palette: palette)
+                    context: context, palette: palette)
                 collect(
                     line: row.line, frames: row.pulseFrames, into: &rowLines,
                     runs: &pulseRuns, transform: padded)
@@ -1475,12 +1480,14 @@ where Value.ID: Hashable {
         /// The breathing row's lines and every frame of each, at their position
         /// among `slidableRows` — see `collect`.
         var pulseRuns: [(y: Int, frames: [String])] = []
+        let rowRamp = cellRamp(rowWidth: contentWidth, context: context)
         for rowIndex in window.range {
             let rendered = renderMultiLineRow(
                 item: data[rowIndex],
+                paint: RowPaint(row: rowIndex, ramp: rowRamp, width: contentWidth),
                 isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
                 isSelected: handler.isSelected(at: rowIndex),
-                columnWidths: columnWidths, rowWidth: contentWidth, context: context, palette: palette)
+                columnWidths: columnWidths, context: context, palette: palette)
             var rowLines = rendered.lines
             // Clipped alongside the lines, so `pulseFrames[i]` stays the frames
             // of `rowLines[i]`.
@@ -1560,18 +1567,23 @@ where Value.ID: Hashable {
     /// blank lines, and the selection/focus background spanning every line.
     private func renderMultiLineRow(
         item: Value,
+        paint: RowPaint,
         isFocused: Bool,
         isSelected: Bool,
         columnWidths: [Int],
-        rowWidth: Int,
         context: RenderContext,
         palette: any Palette
     ) -> RenderedRow {
+        let (row, ramp, rowWidth) = (paint.row, paint.ramp, paint.width)
         let spacing = asciiSpaces(columnSpacing)
         let visual = rowVisualState(
             isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
         let styledIndicator = ANSIRenderer.colorize(visual.indicator, foreground: visual.indicatorColor)
-        let foreground = context.environment.foregroundStyle?.representative ?? palette.foreground
+        // See `renderRow`: one step of the ramp per ROW, so every line of a
+        // wrapped row shares its colour, and a ramp that varies along the row
+        // paints cell by cell instead.
+        let bandsAcrossRow = ramp?.variesAcrossRow ?? false
+        let foreground = cellColour(row: row, ramp: ramp, context: context, palette: palette)
         let layout = cellLayout(for: item, columnWidths: columnWidths)
 
         // One SGR introducer for every cell of every line — see ``renderRow``,
@@ -1581,7 +1593,8 @@ where Value.ID: Hashable {
         // move when `renderRow` was rewritten.
         var cellStyle = TextStyle()
         cellStyle.foregroundColor = foreground
-        let cellSequence = ANSIRenderer.styleSequence(for: cellStyle)
+        let cellSequence = bandsAcrossRow ? nil : ANSIRenderer.styleSequence(for: cellStyle)
+        var rampSequences: [String?] = []
         let cellCount = min(columns.count, columnWidths.count)
 
         var lines: [String] = []
@@ -1598,21 +1611,31 @@ where Value.ID: Hashable {
             var content = lineIndex == 0 ? styledIndicator + " " : "  "
             content.reserveCapacity(rowWidth * 2)
 
+            var cellColumn = 1 + 1
             for index in 0..<cellCount {
-                if index > 0 { content.append(contentsOf: spacing) }
+                if index > 0 {
+                    content.append(contentsOf: spacing)
+                    cellColumn += columnSpacing
+                }
                 let column = columns[index]
                 let cellLines = layout.cells[index]
                 let text = lineIndex < cellLines.count ? cellLines[lineIndex] : ""
                 let aligned = alignText(
                     text, width: columnWidths[index], alignment: column.alignment,
                     truncationMode: column.truncationMode)
-                if let cellSequence {
+                if let ramp, bandsAcrossRow {
+                    var walked = cellColumn
+                    PaintRenderer.band(
+                        aligned, column: &walked, row: row, style: cellStyle,
+                        sampler: ramp, sequences: &rampSequences, into: &content)
+                } else if let cellSequence {
                     content += cellSequence
                     content += aligned
                     content += ANSIRenderer.reset
                 } else {
                     content += aligned
                 }
+                cellColumn += columnWidths[index]
             }
 
             guard case .none = visual.background else {
@@ -1921,16 +1944,18 @@ where Value.ID: Hashable {
         /// The breathing rows' lines and every frame of each, at their position
         /// among `rowLines` — see `collect`.
         var pulseRuns: [(y: Int, frames: [String])] = []
+        // One sampler for the frame — see the twin in the single-line path.
+        let rowRamp = cellRamp(rowWidth: contentWidth, context: context)
         for entry in drawn {
             switch entry {
             case .row(let rowIndex):
                 let row = renderRow(
                     item: data[rowIndex],
+                    paint: RowPaint(row: rowIndex, ramp: rowRamp, width: contentWidth),
                     columnWidths: columnWidths,
                     isFocused: handler.isCursorRow(rowIndex) && tableHasFocus,
                     isSelected: handler.isSelected(at: rowIndex),
                     isReturningHome: handler.returningRows.contains(rowIndex),
-                    rowWidth: contentWidth,
                     context: context,
                     palette: palette
                 )
@@ -2033,11 +2058,13 @@ where Value.ID: Hashable {
         // this a multi-row hold marks no row in particular. `nil` for one row
         // and for every mouse drag: see `reorderPrimaryHeldRow`.
         let primary = handler.reorderPrimaryHeldRow
+        let rowRamp = cellRamp(rowWidth: rowWidth, context: context)
         let rendered = sources.map { source -> (line: String, frames: [String]?) in
             let row = renderRow(
-                item: data[source], columnWidths: columnWidths,
-                isFocused: held, isSelected: held, rowWidth: rowWidth,
-                context: context, palette: palette)
+                item: data[source],
+                paint: RowPaint(row: source, ramp: rowRamp, width: rowWidth),
+                columnWidths: columnWidths,
+                isFocused: held, isSelected: held, context: context, palette: palette)
             let line = row.line
             let frames = row.pulseFrames
             guard source != primary else { return (line, frames) }
@@ -2460,7 +2487,7 @@ where Value.ID: Hashable {
         let previewLine: @MainActor (Int) -> [String]? = { index in
             guard data.indices.contains(index), !columnWidths.isEmpty else { return nil }
             return previewMorphLines(
-                item: data[index], columnWidths: columnWidths,
+                item: data[index], row: index, columnWidths: columnWidths,
                 steps: Self.previewMorphSteps, context: context, palette: palette)
         }
         // Where a ROW LINE's first cell sits in the buffer: past the border and
@@ -2956,14 +2983,15 @@ where Value.ID: Hashable {
 
     private func renderRow(
         item: Value,
+        paint: RowPaint,
         columnWidths: [Int],
         isFocused: Bool,
         isSelected: Bool,
         isReturningHome: Bool = false,
-        rowWidth: Int,
         context: RenderContext,
         palette: any Palette,
     ) -> (line: String, pulseFrames: [String]?) {
+        let (row, ramp, rowWidth) = (paint.row, paint.ramp, paint.width)
         // A row whose picture is still walking back to it keeps its space and
         // draws nothing in it — see ``ItemListHandler/returningRows``, and
         // `_ListCore.renderRow`, which does the same for the same reason.
@@ -2988,10 +3016,17 @@ where Value.ID: Hashable {
         // re-joining its codes per cell (`ANSIRenderer.render` was 18.1%
         // inclusive of a `tables-scroll` frame, `buildStyleCodes` 6.8%).
         // `sequence + text + reset` is byte-for-byte what `colorize` produces.
-        let foregroundColor = context.environment.foregroundStyle?.representative ?? palette.foreground
+        // A ramp that varies ALONG the row cannot have one introducer for the
+        // whole row, so that case paints cell by cell instead — through the
+        // same walk `Text` uses, so the two cannot disagree about where a
+        // colour changes. Every other case, ramp or not, keeps the single
+        // introducer this comment is about.
+        let bandsAcrossRow = ramp?.variesAcrossRow ?? false
         var cellStyle = TextStyle()
-        cellStyle.foregroundColor = foregroundColor
-        let cellSequence = ANSIRenderer.styleSequence(for: cellStyle)
+        cellStyle.foregroundColor = cellColour(
+            row: row, ramp: ramp, context: context, palette: palette)
+        let cellSequence = bandsAcrossRow ? nil : ANSIRenderer.styleSequence(for: cellStyle)
+        var rampSequences: [String?] = []
 
         // One buffer for the whole row. The previous form built a `[String]` of
         // styled cells, `joined` them, and concatenated the indicator and the
@@ -3006,8 +3041,14 @@ where Value.ID: Hashable {
         content += " "
 
         let cellCount = min(columns.count, columnWidths.count)
+        // Where the cells start, for a ramp that varies along the row: the
+        // indicator and the gap after it.
+        var cellColumn = 1 + 1
         for index in 0..<cellCount {
-            if index > 0 { content.append(contentsOf: spacing) }
+            if index > 0 {
+                content.append(contentsOf: spacing)
+                cellColumn += columnSpacing
+            }
             let column = columns[index]
             let aligned = alignText(
                 column.value(for: item),
@@ -3015,13 +3056,19 @@ where Value.ID: Hashable {
                 alignment: column.alignment,
                 truncationMode: column.truncationMode
             )
-            if let cellSequence {
+            if let ramp, bandsAcrossRow {
+                var walked = cellColumn
+                PaintRenderer.band(
+                    aligned, column: &walked, row: row, style: cellStyle,
+                    sampler: ramp, sequences: &rampSequences, into: &content)
+            } else if let cellSequence {
                 content += cellSequence
                 content += aligned
                 content += ANSIRenderer.reset
             } else {
                 content += aligned
             }
+            cellColumn += columnWidths[index]
         }
 
         // The background is applied to the FINISHED line, so a pulse is one
@@ -3093,12 +3140,19 @@ where Value.ID: Hashable {
     /// rather than merely look wrong.
     private func previewMorphLines(
         item: Value,
+        row: Int,
         columnWidths: [Int],
         steps: Int,
         context: RenderContext,
         palette: any Palette
     ) -> [String] {
-        let foregroundColor = context.environment.foregroundStyle?.representative ?? palette.foreground
+        // The morph is a transient animation of ONE row, so it takes that row's
+        // colour from the ramp and does not band along itself — the cells are
+        // sliding, and a colour that moved with them would read as a second
+        // animation.
+        let foregroundColor = cellColour(
+            row: row, ramp: cellRamp(rowWidth: columnWidths.reduce(0, +), context: context),
+            context: context, palette: palette)
         let count = min(columns.count, columnWidths.count)
         let gutter = String(repeating: " ", count: Self.previewGutter)
         guard count > 0, steps > 0 else { return Array(repeating: gutter, count: max(0, steps)) }
@@ -3145,6 +3199,63 @@ where Value.ID: Hashable {
     }
 
     /// Determines indicator symbol, indicator color, and background for a table row.
+    /// Everything a row renderer needs in order to colour its cells: which row
+    /// it is, the ramp running down the table, and how wide the row is.
+    ///
+    /// One value rather than three parameters because they are one question —
+    /// "what colour is this row, and where does it change?" — and because the
+    /// renderers were already at the limit of what a signature should carry.
+    struct RowPaint {
+        /// The row's ordinal in `data`.
+        let row: Int
+
+        /// The ramp, or `nil` to paint flat. See ``Table/cellRamp(rowWidth:context:)``.
+        let ramp: RampSampler?
+
+        /// The row's full width in cells — what the ramp was measured across.
+        let width: Int
+    }
+
+    /// The ramp the cells are painted with, or `nil` when the paint is a plain
+    /// colour — which is the ordinary case, and the one that keeps a table's
+    /// row at a single SGR introducer.
+    ///
+    /// A table's unit is the ROW: the ramp steps once per row, so row *i* sits
+    /// at *i* of `data.count`. Nothing inside a row can disagree with that,
+    /// because a table paints its own cells rather than hosting views — which
+    /// is what makes the ordinal safe here and not in a `List`, where a row's
+    /// content offsets itself by lines. A row that wraps to several lines is
+    /// therefore one step of the ramp.
+    ///
+    /// Built once per frame rather than once per row: the sampler does the
+    /// divisions in its initialiser and answers per cell.
+    ///
+    /// - Parameters:
+    ///   - rowWidth: The width the ramp runs across, for a horizontal one.
+    ///   - context: The render context.
+    /// - Returns: The sampler, or `nil` to paint flat.
+    private func cellRamp(rowWidth: Int, context: RenderContext) -> RampSampler? {
+        guard let paint = context.environment.foregroundStyle else { return nil }
+        let extent =
+            context.gradientContentFrame(width: rowWidth, height: max(1, data.count))
+            ?? GradientFrame(width: rowWidth, height: max(1, data.count))
+        return RampSampler(
+            paint: paint, extent: extent, depth: ColorDepth.current,
+            cellAspect: context.environment.imageCellAspect)
+    }
+
+    /// The colour a row's cells take: the ramp's answer at that row, or the
+    /// flat foreground. Never asks the ramp when it varies ALONG the row —
+    /// that case paints per cell, through ``PaintRenderer/band(_:column:row:style:sampler:sequences:into:)``.
+    private func cellColour(
+        row: Int, ramp: RampSampler?, context: RenderContext, palette: any Palette
+    ) -> Color {
+        guard let ramp else {
+            return context.environment.foregroundStyle?.representative ?? palette.foreground
+        }
+        return ramp.colour(row: row).resolve(with: palette)
+    }
+
     private func rowVisualState(
         isFocused: Bool,
         isSelected: Bool,

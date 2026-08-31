@@ -60,6 +60,22 @@ struct GradientExtentTests {
 
     private func firstInk(_ line: String) -> String? { inks(line).compactMap { $0 }.first }
 
+    /// The ink at a visible COLUMN. Counting cells rather than escape runs is
+    /// the whole point: a probe that took "the second run on the line" read a
+    /// `List`'s border and a `Table`'s selection gutter, and reported both
+    /// containers as ignoring `.foregroundStyle` when neither does.
+    private func ink(_ line: String, atColumn wanted: Int) -> String? {
+        let cells = inks(line)
+        return wanted < cells.count ? cells[wanted] : nil
+    }
+
+    private struct Row: Identifiable, Sendable {
+        let id: Int
+        let name: String
+    }
+
+    private static let rows = (0..<4).map { Row(id: $0, name: "row\($0)") }
+
     private func vertical() -> LinearGradient {
         LinearGradient(colors: [red, blue], startPoint: .top, endPoint: .bottom)
     }
@@ -486,6 +502,84 @@ extension GradientExtentTests {
         let rows = lines.prefix(2).map { firstInk($0) }
         #expect(rows[0] == "255;0;0", "the first grid row is not the start: \(rows)")
         #expect(rows[1] == "0;0;255", "the last grid row is not the end: \(rows)")
+    }
+
+    // MARK: - Table
+
+    /// A `Table` paints its own cells — its columns yield strings, not views —
+    /// so the ramp has to reach them through the table rather than through
+    /// anything inside a row. It used to collapse a gradient to one colour for
+    /// every row.
+    @Test("A vertical ramp spans the rows of a Table")
+    func tableSpansRows() {
+        let lines = renderToBuffer(
+            Table(Self.rows) { TableColumn("Name", value: \.name) }
+                .foregroundStyle(vertical())
+                .gradientExtent(.subtree),
+            context: context()
+        ).lines
+        // Border, header, then the four rows.
+        let cells = lines.dropFirst(2).prefix(4).map { ink($0, atColumn: 4) }
+        #expect(
+            cells == ["255;0;0", "170;0;85", "85;0;170", "0;0;255"],
+            "the ramp did not span the rows: \(cells)")
+    }
+
+    /// …and without the modifier too: a `Table` is ONE leaf, so its own rows
+    /// are the extent either way. `.gradientExtent(.subtree)` changes nothing
+    /// here, which is worth pinning — it is the only container of which that is
+    /// true.
+    @Test("A Table spans its rows with or without the subtree extent")
+    func tableIsItsOwnExtent() {
+        let withModifier = renderToBuffer(
+            Table(Self.rows) { TableColumn("Name", value: \.name) }
+                .foregroundStyle(vertical())
+                .gradientExtent(.subtree),
+            context: context()
+        ).lines
+        let without = renderToBuffer(
+            Table(Self.rows) { TableColumn("Name", value: \.name) }
+                .foregroundStyle(vertical()),
+            context: context()
+        ).lines
+        #expect(withModifier == without, "the two differ")
+    }
+
+    /// A ramp that varies ALONG the row cannot be one colour per row, so the
+    /// cells band — through the same per-cell walk `Text` uses.
+    @Test("A horizontal ramp bands across a Table's cells")
+    func tableBandsAcrossCells() {
+        let lines = renderToBuffer(
+            Table(Self.rows) { TableColumn("Name", value: \.name) }
+                .foregroundStyle(horizontal()),
+            context: context()
+        ).lines
+        let row = lines.dropFirst(2).first ?? ""
+        let cells = (4...12).compactMap { ink(row, atColumn: $0) }
+        #expect(cells.count == 9, "not every cell is inked: \(cells)")
+        #expect(Set(cells).count == cells.count, "the row took one colour: \(cells)")
+        // Left to right, red draining into blue.
+        let reds = cells.compactMap { Int($0.split(separator: ";").first ?? "") }
+        #expect(reds == reds.sorted(by: >), "the ramp did not run leftward-first: \(cells)")
+        // …and every row is the same, a horizontal ramp having no row term.
+        let second = (4...12).compactMap { ink(lines.dropFirst(3).first ?? "", atColumn: $0) }
+        #expect(second == cells, "the rows disagree: \(cells) vs \(second)")
+    }
+
+    /// The flat path is the one every table without a gradient takes, and it
+    /// must be exactly what it was: one SGR introducer for the whole row.
+    @Test("A plain colour still gives a Table one run per row")
+    func tablePlainColourIsOneRun() {
+        let lines = renderToBuffer(
+            Table(Self.rows) { TableColumn("Name", value: \.name) }
+                .foregroundStyle(Color.rgb(9, 9, 9)),
+            context: context()
+        ).lines
+        let row = lines.dropFirst(2).first ?? ""
+        #expect(ink(row, atColumn: 4) == "9;9;9", "\(row.debugDescription)")
+        #expect(
+            row.components(separatedBy: "38;2;9;9;9").count == 2,
+            "more than one run for the row: \(row.debugDescription)")
     }
 
     /// The memo hole: a row's colour is baked into its buffer, so a row that

@@ -135,9 +135,9 @@ enum PaintRenderer {
 
     /// Paints one piece of a row, splitting it at the ramp's own boundaries.
     ///
-    /// The single place the per-cell walk lives, so a plain line and one
-    /// fragment of an attributed line cannot disagree about where a colour
-    /// changes.
+    /// The single place the per-cell walk lives, so a plain line, one fragment
+    /// of an attributed line and one cell of a `Table` row cannot disagree
+    /// about where a colour changes.
     ///
     /// - Parameters:
     ///   - text: The piece, plain (no escapes of its own).
@@ -150,7 +150,7 @@ enum PaintRenderer {
     ///   - painted: The row being assembled; appended to in place, never
     ///     `a + b + c`, which would build two throwaway strings per run — and a
     ///     horizontal ramp at truecolor is one run per CELL.
-    private static func band(
+    static func band(
         _ text: String, column: inout Int, row: Int, style: TextStyle,
         sampler: RampSampler, sequences: inout [String?], into painted: inout String
     ) {
