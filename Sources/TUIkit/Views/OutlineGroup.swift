@@ -433,9 +433,21 @@ extension OutlineGroup: ListRowExtractor {
             rows.append(
                 ListRow(
                     id: rowID,
-                    content: LazyListRowContent(identity: rowContext.identity) {
-                        (TUIkit.renderToBuffer(view, context: rowContext), nil)
-                    }))
+                    content: LazyListRowContent(
+                        identity: rowContext.identity,
+                        measure: {
+                            measureChild(
+                                view,
+                                proposal: ProposedSize(
+                                    width: rowContext.availableWidth, height: nil),
+                                context: rowContext
+                            ).height
+                        },
+                        render: { placement in
+                            var rowContext = rowContext
+                            rowContext.gradientFrame = placement ?? rowContext.gradientFrame
+                            return (TUIkit.renderToBuffer(view, context: rowContext), nil)
+                        })))
         }
         let index = OutlineSubtreeIndex(
             branches: branchElement, idOf: idKeyPath, branchesUnder: subtreeBranchWalk())

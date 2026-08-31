@@ -59,6 +59,15 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// window (or re-read by the compose pass) is built — and rendered — once.
     private var materialized: [Int: SelectableListRow<SelectionValue>] = [:]
 
+    /// The ramp a `.gradientExtent(.subtree)` gradient runs down these rows —
+    /// see ``ListRowRamp`` and ``_ListCore/settleRowRamp(_:context:)``. Inert
+    /// (`frame` nil) unless a gradient actually spans this list.
+    ///
+    /// Handed to each row's content box as the box is built, which is the last
+    /// moment before that row can render and the first at which its index is in
+    /// hand. Its extent is settled after that, which is why it is a reference.
+    let gradientRamp = ListRowRamp()
+
     init(
         count: Int,
         allContent: Bool,
@@ -94,7 +103,10 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// box on first access. Reading the row's `.buffer` renders it once (cached).
     func row(at index: Int) -> SelectableListRow<SelectionValue> {
         if let existing = materialized[index] { return existing }
-        let row = SelectableListRow(type: typeAt(index), content: make(index))
+        let content = make(index)
+        content.gradientRamp = gradientRamp
+        content.rowIndex = index
+        let row = SelectableListRow(type: typeAt(index), content: content)
         materialized[index] = row
         return row
     }
@@ -293,6 +305,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let editRestrictions = RowEditRestrictions()
         rowContext.environment.listRowEditRestrictions = editRestrictions
         let source = extractRows(from: content, context: rowContext)
+        settleRowRamp(source, context: rowContext)
 
         // Vertical chrome around the scrollable content; reserve
         // only what is actually present.
@@ -386,6 +399,29 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             )
         }
         return buffer
+    }
+
+    /// Settles the ramp a `.gradientExtent(.subtree)` gradient runs down this
+    /// list's rows. Does nothing at all when no gradient spans the list, which
+    /// is almost always.
+    ///
+    /// The list has to know how tall a row is before it can decide what colour
+    /// to render one in, and its rows render on demand — so the first row is
+    /// MEASURED (never rendered twice) and answers for the rest, exactly as the
+    /// uniform lazy-stack window seeds its pitch from row 0. Rows of one height
+    /// — a list's ordinary shape — are then placed exactly, at any scroll
+    /// offset, with nothing walked; mixed heights are an estimate, which is what
+    /// the anchored stack window already lives with.
+    ///
+    /// The extent is the rows, not the viewport: a row keeps its colour as the
+    /// list scrolls, and forty rows in a ten-row list show the first quarter of
+    /// the ramp — the same rule the stacks follow.
+    private func settleRowRamp(_ source: RowSource<SelectionValue>, context: RenderContext) {
+        guard context.gradientFrame != nil, !source.isEmpty else { return }
+        let pitch = max(1, source.row(at: 0).content.heightWithoutRendering)
+        source.gradientRamp.pitch = pitch
+        source.gradientRamp.frame = context.gradientContentFrame(
+            width: context.availableWidth, height: source.count * pitch)
     }
 
     // MARK: - Empty-state placeholder
@@ -2208,7 +2244,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Fallback: render as a single content row, carrying its badge
         // (`List { Text("Notifications").badge(5) }`).
         let badge = extractBadgeValue(from: content)
-        let buffer = TUIkit.renderToBuffer(content, context: context)
+        // One row IS the whole list, so a ramp spanning the list spans this row
+        // and nothing else — its own measured height is the extent.
+        var rowRenderContext = context
+        if context.gradientFrame != nil {
+            let measured = measureChild(
+                content, proposal: ProposedSize(width: context.availableWidth, height: nil),
+                context: context)
+            rowRenderContext = context.placingGradientChild(
+                context.gradientContentFrame(
+                    width: context.availableWidth, height: max(1, measured.height)),
+                x: 0, y: 0)
+        }
+        let buffer = TUIkit.renderToBuffer(content, context: rowRenderContext)
         // An `EmptyView` is not a row. This used to fall out of the id cast
         // failing, which meant it depended on the SELECTION type: a list of
         // `EmptyView` was empty with a `String?` selection and a blank row
@@ -2233,8 +2281,28 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         context: RenderContext
     ) -> [SelectableListRow<SelectionValue>] {
         var result: [SelectableListRow<SelectionValue>] = []
+        // These rows render HERE rather than through a deferred box, so this is
+        // where a ramp spanning the list has to place them. There are only ever
+        // a handful and none is deferred, so unlike the windowed path this can
+        // measure them all and place every row exactly — no pitch, no estimate.
+        // Measured only when a ramp is in force.
+        let children = provider.childViews(context: context).filter { !$0.isSpacer }
+        var gradientFrame: GradientFrame?
+        var gradientTops: [Int] = []
+        if context.gradientFrame != nil {
+            var top = 0
+            for child in children {
+                gradientTops.append(top)
+                top += child.measure(
+                    proposal: ProposedSize(width: context.availableWidth, height: nil),
+                    context: context
+                ).height
+            }
+            gradientFrame = context.gradientContentFrame(
+                width: context.availableWidth, height: max(1, top))
+        }
 
-        for child in provider.childViews(context: context) where !child.isSpacer {
+        for child in children {
             // See `extractRows`: an index-identified row is unselectable rather
             // than absent when the selection type cannot hold an index. The
             // count advances only over rows that took an id, so the ids stay
@@ -2243,7 +2311,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 (result.count as? SelectionValue).map { .content(id: $0) } ?? .unselectable
             let badge = extractBadgeValue(from: child.wrappedView)
             let buffer = child.render(
-                width: context.availableWidth, height: context.availableHeight, context: context)
+                width: context.availableWidth, height: context.availableHeight,
+                context: context.placingGradientChild(
+                    gradientFrame, x: 0,
+                    y: result.count < gradientTops.count ? gradientTops[result.count] : 0))
             result.append(SelectableListRow(type: type, content: LazyListRowContent(buffer: buffer, badge: badge)))
         }
 

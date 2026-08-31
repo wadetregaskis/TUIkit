@@ -44,6 +44,35 @@ public enum ListRowType<SelectionValue: Hashable & Sendable>: Sendable, Equatabl
 
 // MARK: - Lazy Row Content
 
+/// Where a list's rows sit inside a ``View/gradientExtent(_:)`` ramp spanning
+/// the whole list.
+///
+/// A list renders its rows on demand, so it does not know how tall a row is
+/// until it has rendered one — and it has to know before it can decide what
+/// colour to render it. So the ramp holds a single row PITCH, seeded from the
+/// first row (measured, not rendered) and applied to every row by ordinal. That
+/// is exact wherever the rows are the same height, which is a list's ordinary
+/// shape, and an estimate otherwise — the same convention the anchored lazy
+/// stack window already lives with, for the same reason.
+///
+/// A class so the list can settle the pitch after the row boxes have been
+/// handed out, and a row can read the settled answer at the moment it renders.
+@MainActor
+final class ListRowRamp {
+    /// The rectangle the ramp runs across. `nil` until the list settles it — a
+    /// row rendering before then takes no placement, which is only ever the
+    /// row the pitch was seeded from, and its place is the origin regardless.
+    var frame: GradientFrame?
+
+    /// One row's height, in lines.
+    var pitch = 1
+
+    /// Where the row at `index` sits in the ramp.
+    func placement(row index: Int) -> GradientFrame? {
+        frame?.offset(byX: 0, y: index * pitch)
+    }
+}
+
 /// A row's rendered buffer and badge, produced on demand and then memoised.
 ///
 /// `List` extraction builds one of these per row but renders *none* up front:
@@ -59,8 +88,28 @@ public enum ListRowType<SelectionValue: Hashable & Sendable>: Sendable, Equatabl
 /// ``SelectableListRow`` remain `Sendable` while carrying deferred content.
 @MainActor
 final class LazyListRowContent {
-    private var thunk: (() -> (buffer: FrameBuffer, badge: BadgeValue?))?
+    private var thunk: ((GradientFrame?) -> (buffer: FrameBuffer, badge: BadgeValue?))?
     private var cached: (buffer: FrameBuffer, badge: BadgeValue?)?
+
+    /// This row's height without rendering it, when the content can answer.
+    ///
+    /// A list spanning a ramp across its rows has to know how tall a row is
+    /// before it can choose the colour to render that row in, which rules out
+    /// asking the render. `nil` where nothing can answer but the render itself.
+    private var measureHeight: (() -> Int)?
+
+    /// The ramp this row is placed in, or `nil` when no
+    /// `.gradientExtent(.subtree)` is in force — which is almost always.
+    ///
+    /// Read at the moment the row renders rather than when the box is built,
+    /// because the list settles the ramp's extent from the first row's height
+    /// and that is not known until the boxes exist. A row whose buffer is
+    /// already in hand (section chrome) ignores it: it has nothing left to
+    /// render, and was placed where it was rendered.
+    var gradientRamp: ListRowRamp?
+
+    /// This row's ordinal, for ``gradientRamp``.
+    var rowIndex = 0
 
     /// The identity the row's content is rendered under, when the row came from
     /// a `ForEach` (`nil` for chrome and the eager fallbacks, which have no
@@ -81,9 +130,11 @@ final class LazyListRowContent {
     /// Defers rendering until the buffer (or badge) is first read.
     init(
         identity: ViewIdentity? = nil,
-        _ render: @escaping () -> (buffer: FrameBuffer, badge: BadgeValue?)
+        measure: (() -> Int)? = nil,
+        render: @escaping (GradientFrame?) -> (buffer: FrameBuffer, badge: BadgeValue?)
     ) {
         self.rowIdentity = identity
+        self.measureHeight = measure
         self.thunk = render
     }
 
@@ -101,7 +152,7 @@ final class LazyListRowContent {
 
     private var resolved: (buffer: FrameBuffer, badge: BadgeValue?) {
         if let cached { return cached }
-        let value = thunk!()
+        let value = thunk!(gradientRamp?.placement(row: rowIndex))
         cached = value
         thunk = nil  // release the captured view / context
         return value
@@ -109,6 +160,13 @@ final class LazyListRowContent {
 
     var buffer: FrameBuffer { resolved.buffer }
     var badge: BadgeValue? { resolved.badge }
+
+    /// The row's height, rendering it only if there is no other way to ask.
+    var heightWithoutRendering: Int {
+        if let cached { return cached.buffer.height }
+        if let measureHeight { return measureHeight() }
+        return buffer.height
+    }
 }
 
 // MARK: - Selectable List Row

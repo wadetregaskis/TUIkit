@@ -733,8 +733,16 @@ four-row red→blue ramp under `.gradientExtent(.subtree)`.
 | `VStack`, `HStack` | ✅ ramps | Shipped in step 4 |
 | `ZStack` | ✅ ramps | Inherits: its children all sit at its own origin |
 | `ScrollView` | ✅ ramps | Inherits: it wraps one child and moves nothing |
+| `Form` | ✅ ramps | Inherits, being a stack underneath |
 | `LazyVStack`, `LazyHStack` | ❌ every row the ramp's first colour | Fixed |
-| `List` | ❌ every row the ramp's first colour | See below |
+| `List`, `OutlineGroup` | ❌ every row the ramp's first colour | Fixed — see below |
+| `Grid`, `LazyVGrid`, `LazyHGrid`, `AnyLayout` | ❌ every row the ramp's first colour | Fixed in one place: every `Layout` places its subviews through `_LayoutCore`, which knows the bounds and each entry's exact position |
+| `Table` | ❌ no `foregroundStyle` at all | **Not fixed, and not the same problem** — see below |
+
+So the answer to "how many containers?" is: every one that places children,
+and there are seven places that do it. The two calls each one makes —
+`RenderContext.gradientContentFrame(width:height:)` then
+`placingGradientChild(_:x:y:)` — are the whole of the participation.
 
 Two corrections to the record while measuring this:
 
@@ -742,6 +750,13 @@ Two corrections to the record while measuring this:
   — a plain colour reaches its rows. The probe that said otherwise read the
   first ink of each *line*, which for a bordered list is the border glyph, not
   the row's text. `List`'s real gap was the same one the lazy stacks had.
+  **`Table` is the one that ignores it**, and for a reason no gradient work
+  touches: a `TableColumn`'s content is a `(Value) -> String`, not a view, so
+  the table paints its own cells and never consults
+  `environment.foregroundStyle`. Measured: `.foregroundStyle(.red)` on a
+  `Table` leaves its rows at the palette's foreground. That is a separate gap
+  — "a table's cells take the styling around them" — and wants answering at the
+  colour level before anyone reaches for a ramp.
 - **The ramp is content-pinned, not viewport-pinned** (§4 predicted the
   opposite). An eager `ScrollView { VStack { ForEach(0..<40) } }` in a ten-row
   viewport shows `255;0;0 … 196;0;58` — the first quarter of the ramp, so a row
@@ -771,3 +786,32 @@ other three already knew both numbers for their own placement.
 The anchored path's ramp is therefore an estimate, like everything else on it
 (`sliceTotalIsEstimate` is already set there for the same reason), and
 converges as the walk learns the real pitch.
+
+### And what a `List` has to do that neither of them does
+
+A `List` renders a row **on demand and only once** — the box is memoised, so
+there is no second render to correct a colour with. The row's place in the ramp
+has to be right the first time, and the ramp's extent has to be known before
+the first row renders. Neither is available: the extent is the total height of
+rows that have not been rendered.
+
+Three answers were tried against each other:
+
+| | Verdict |
+|---|---|
+| Place by **row ordinal**, extent = row count | Wrong for any row taller than a line: the row's own content offsets *within* it by lines, so a two-line row's second line reads the next row's colour and the ramp runs out halfway down |
+| Render the window, learn the heights, **render again** placed | Exact, and doubles every visible row's render — with its focus registration and lifecycle — for a colour |
+| **Measure row 0, seed a pitch, place by ordinal × pitch** | Exact wherever the rows are one height, which is a list's ordinary shape; an estimate otherwise, and the same estimate the anchored stack window already makes |
+
+The third is what shipped, which is also what `renderUniformSeekWindow` does
+one layer down for exactly the same reason. Measuring is side-effect-free and
+the memo answers the render that follows for nothing, so the seed costs a
+measure and no row renders twice.
+
+The eager list spellings — `List { Text(…); Text(…) }`, and a list whose whole
+content is one view — do not defer anything, so they skip the hypothesis
+entirely: they measure every row and place each one exactly.
+
+Section headers and footers are rendered by the time the list sees them and
+take no part in the ramp. They are chrome, and they already draw in their own
+dimmed styling.

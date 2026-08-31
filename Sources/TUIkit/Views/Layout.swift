@@ -201,13 +201,20 @@ public struct _LayoutCore<L: Layout, Content: View>: View, Renderable, Layoutabl
         // that leaves gaps keeps them — and so the measure it just gave its
         // parent is the size it actually occupies.
         var result = FrameBuffer(emptyWithWidth: bounds.width, height: bounds.height)
+        // A `.gradientExtent(.subtree)` ramp spanning this layout: the bounds
+        // are the rectangle it runs across and each entry is exactly where its
+        // subview sits in it, both already worked out above. One answer here
+        // covers `Grid`, the lazy grids, `AnyLayout` and any layout an app
+        // writes for itself.
+        let gradientFrame = context.gradientContentFrame(
+            width: bounds.width, height: bounds.height)
         for entry in placements.entries {
             let child = subviews[entry.index].child
             let childSize = child.measure(proposal: entry.proposal, context: context)
             let rendered = child.render(
                 width: entry.proposal.width ?? childSize.width,
                 height: entry.proposal.height ?? childSize.height,
-                context: context)
+                context: context.placingGradientChild(gradientFrame, x: entry.x, y: entry.y))
             // In place: `composited` rebuilds every line of the canvas per
             // call, so folding n children through it is n × canvas even though
             // each child covers a couple of rows.

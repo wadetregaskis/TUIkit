@@ -51,10 +51,24 @@ extension View {
     /// which is exact wherever measure and render agree (they are required to,
     /// and a disagreement here shifts a colour rather than a layout).
     ///
+    /// Every container that places children participates: the stacks and their
+    /// lazy twins, `ZStack`, `ScrollView`, `Form`, `List`, `OutlineGroup`, and
+    /// — through one shared placement — `Grid`, the lazy grids and any
+    /// ``Layout`` an app writes for itself. `Table` is the exception, and for a
+    /// reason that has nothing to do with gradients: its columns yield strings
+    /// rather than views, so it paints its own cells and reads no foreground
+    /// style at all, colour or ramp.
+    ///
     /// A container that does not participate hands its children its own
     /// position unchanged. The ramp then resolves as if that subtree were flat:
     /// wrong-looking, not corrupt, and it is the reason this is a modifier you
     /// ask for rather than the default.
+    ///
+    /// A ``List`` renders each row once and never again, so it cannot learn how
+    /// tall its rows are and then re-colour them. It measures its first row and
+    /// steps the ramp by that height — exact wherever the rows share a height,
+    /// which is a list's ordinary shape, and approximate where they do not.
+    /// Section headers and footers are chrome and take no part.
     ///
     /// ## Scrolling content
     ///

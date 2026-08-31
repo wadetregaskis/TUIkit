@@ -394,6 +394,100 @@ extension GradientExtentTests {
         }
     }
 
+    // MARK: - List, and everything that lays out by placement
+
+    /// The ink of the first *content* cell on a line — past a bordered
+    /// container's own border glyph, which is the palette's and not the ramp's.
+    private func rowInk(_ line: String) -> String? {
+        inks(line).compactMap { $0 }.dropFirst().first
+    }
+
+    /// The case the whole feature was asked for: one ramp down the rows of a
+    /// `List`. Every row came out the ramp's first colour before, because
+    /// `List` never told its rows where they were.
+    @Test("A vertical ramp spans the rows of a List")
+    func listSpansRows() {
+        let lines = renderToBuffer(
+            List {
+                ForEach(["a", "b", "c", "d"], id: \.self) { Text(verbatim: $0) }
+            }
+            .foregroundStyle(vertical())
+            .gradientExtent(.subtree),
+            context: context()
+        ).lines
+        let rows = lines.dropFirst().prefix(4).map { rowInk($0) }
+        #expect(
+            rows == ["255;0;0", "170;0;85", "85;0;170", "0;0;255"],
+            "the ramp did not span the rows: \(rows)")
+    }
+
+    /// The static spelling renders its rows during extraction rather than
+    /// through a deferred box, so it is a second code path to the same picture.
+    @Test("A ramp spans the rows of a List written out row by row")
+    func listOfStaticRowsSpansRows() {
+        let lines = renderToBuffer(
+            List {
+                Text(verbatim: "a")
+                Text(verbatim: "b")
+                Text(verbatim: "c")
+                Text(verbatim: "d")
+            }
+            .foregroundStyle(vertical())
+            .gradientExtent(.subtree),
+            context: context()
+        ).lines
+        let rows = lines.dropFirst().prefix(4).map { rowInk($0) }
+        #expect(
+            rows == ["255;0;0", "170;0;85", "85;0;170", "0;0;255"],
+            "the ramp did not span the rows: \(rows)")
+    }
+
+    /// A list's rows render on demand, so it seeds its ramp from row 0's
+    /// MEASURED height and steps by that pitch. Two-line rows therefore occupy
+    /// two lines of the ramp each — the same picture the equivalent stack
+    /// draws — rather than one step per row, which would run the ramp out
+    /// halfway down.
+    @Test("A List of two-line rows steps by lines, not by rows")
+    func listStepsByItsRowHeight() {
+        let lines = renderToBuffer(
+            List {
+                ForEach(["a", "b"], id: \.self) { name in
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(verbatim: name)
+                        Text(verbatim: name + "2")
+                    }
+                }
+            }
+            .foregroundStyle(vertical())
+            .gradientExtent(.subtree),
+            context: context()
+        ).lines
+        let rows = lines.dropFirst().prefix(4).map { rowInk($0) }
+        // Four lines of ramp over two two-line rows: the ends are the ends, and
+        // every line is its own step.
+        #expect(rows[0] == "255;0;0", "\(rows)")
+        #expect(rows[3] == "0;0;255", "\(rows)")
+        #expect(Set(rows.compactMap { $0 }).count == 4, "lines repeat: \(rows)")
+    }
+
+    /// Every `Layout`-based container places its subviews through one funnel,
+    /// so one answer covers `Grid`, the lazy grids, `AnyLayout` and anything an
+    /// app writes for itself. The grid is the case that shows it.
+    @Test("A vertical ramp spans the rows of a grid")
+    func gridSpansRows() {
+        let lines = renderToBuffer(
+            LazyVGrid(columns: [GridItem(), GridItem()]) {
+                ForEach(["a", "b", "c", "d"], id: \.self) { Text(verbatim: $0) }
+            }
+            .foregroundStyle(vertical())
+            .gradientExtent(.subtree),
+            context: context()
+        ).lines
+        let rows = lines.prefix(2).map { firstInk($0) }
+        #expect(rows[0] == "255;0;0", "the first grid row is not the start: \(rows)")
+        #expect(rows[1] == "0;0;255", "the last grid row is not the end: \(rows)")
+    }
+
     /// The memo hole: a row's colour is baked into its buffer, so a row that
     /// has MOVED within the ramp has to re-render even though nothing about the
     /// row changed. Keyed only on value and size, the rows below an insertion

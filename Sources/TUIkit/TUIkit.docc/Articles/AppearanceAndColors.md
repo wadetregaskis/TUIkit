@@ -131,8 +131,11 @@ or a panel, dear for a whole page.
 
 The ramp spans the **content**, not the window — so a row keeps its colour as it
 scrolls, and forty rows in a ten-row viewport show the first quarter of the ramp.
-``LazyVStack`` and ``LazyHStack`` place their rows in the same coordinates as the
-eager stacks, so swapping one for the other does not change a colour.
+Every container that places children takes part: the stacks and their lazy
+twins, ``ZStack``, ``ScrollView``, ``Form``, ``List``, ``OutlineGroup``, the
+grids, and any ``Layout`` you write yourself. Swapping one for another does not
+change a colour. ``Table`` is the exception — its columns yield strings rather
+than views, so it paints its own cells and reads no foreground style at all.
 
 A colour or a gradient is also a **view**, filling the space it is offered — so
 `ZStack { LinearGradient(…); Text("Title") }` works, and a fill in a stack takes

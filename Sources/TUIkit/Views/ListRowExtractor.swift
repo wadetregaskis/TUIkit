@@ -137,46 +137,65 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
             key: identityKey(element[keyPath: idKeyPath]))
         // Defer view construction, badge extraction, and rendering until the row
         // enters the visible window (see ``LazyListRowContent``).
-        return LazyListRowContent(identity: rowContext.identity) { [content] in
-            // Which row this is, for anything inside it that needs to name
-            // itself to the enclosing `List` — `deleteDisabled` /
-            // `moveDisabled`. Stamped on the (per-List, per-frame) collector
-            // rather than into the environment: an environment write is a
-            // copy of its whole storage dictionary, and it ran once per
-            // visible row per frame (see `RowEditRestrictions.currentRowIndex`
-            // for the full reasoning). Stamped INSIDE the thunk, immediately
-            // before the render that might report against it.
-            context.environment.listRowEditRestrictions?.currentRowIndex = index
-            // When the element is Equatable, wrap the row in a value-memo keyed
-            // by the element, so an unchanged row is served from the render cache
-            // instead of re-rendered. The wrapper is Renderable (adds no child
-            // identity), so the inner view keeps the same `rowContext` identity
-            // it would have unwrapped — the memo is identity-transparent.
-            // _MemoizedRow's own gate declines to cache interactive / volatile rows.
-            if let equatableElement = element as? any Equatable {
-                // The row view is NOT built here (see `ForEach.makeChild`, which
-                // learned this first): `_MemoizedRow` takes the element and the
-                // content closure and builds the row only if the memo misses —
-                // in steady state, it mostly does not, and building the view
-                // anyway priced every List frame in row views the next cache
-                // hit discarded. The badge is the one thing read off the BUILT
-                // view every frame, so rows whose static type cannot carry one
-                // — all but a `.badge(_:)`-outermost row — skip that build too.
-                let badge: BadgeValue? =
-                    viewTypeCarriesBadge(Content.self)
-                    ? extractBadgeValue(from: content(element)) : nil
-                let buffer = TUIkit.renderToBuffer(
-                    _MemoizedRow(
-                        element: AnyEquatableBox(equatableElement),
-                        source: element, build: content),
-                    context: rowContext)
-                return (buffer, badge)
-            }
-            // Non-equatable elements cannot memoize, so the view is built for
-            // the render regardless; the badge peek reuses it.
-            let view = content(element)
-            return (TUIkit.renderToBuffer(view, context: rowContext), extractBadgeValue(from: view))
-        }
+        return LazyListRowContent(
+            identity: rowContext.identity,
+            // How tall this row is without rendering it — what an enclosing
+            // `List` asks its first row so it can place a ramp down all of
+            // them. Only ever called when one is in force, and the measure memo
+            // answers the render that follows for nothing.
+            measure: { [content] in
+                measureChild(
+                    content(element),
+                    proposal: ProposedSize(width: rowContext.availableWidth, height: nil),
+                    context: rowContext
+                ).height
+            },
+            render: { [content] placement in
+                // Where this row sits in a ramp spanning the whole list (`nil`
+                // unless one is in force). Applied HERE because the render is
+                // here, and the colour is decided by the render it is about to
+                // run.
+                var rowContext = rowContext
+                rowContext.gradientFrame = placement ?? rowContext.gradientFrame
+                // Which row this is, for anything inside it that needs to name
+                // itself to the enclosing `List` — `deleteDisabled` /
+                // `moveDisabled`. Stamped on the (per-List, per-frame) collector
+                // rather than into the environment: an environment write is a
+                // copy of its whole storage dictionary, and it ran once per
+                // visible row per frame (see `RowEditRestrictions.currentRowIndex`
+                // for the full reasoning). Stamped INSIDE the thunk, immediately
+                // before the render that might report against it.
+                context.environment.listRowEditRestrictions?.currentRowIndex = index
+                // When the element is Equatable, wrap the row in a value-memo keyed
+                // by the element, so an unchanged row is served from the render cache
+                // instead of re-rendered. The wrapper is Renderable (adds no child
+                // identity), so the inner view keeps the same `rowContext` identity
+                // it would have unwrapped — the memo is identity-transparent.
+                // _MemoizedRow's own gate declines to cache interactive / volatile rows.
+                if let equatableElement = element as? any Equatable {
+                    // The row view is NOT built here (see `ForEach.makeChild`, which
+                    // learned this first): `_MemoizedRow` takes the element and the
+                    // content closure and builds the row only if the memo misses —
+                    // in steady state, it mostly does not, and building the view
+                    // anyway priced every List frame in row views the next cache
+                    // hit discarded. The badge is the one thing read off the BUILT
+                    // view every frame, so rows whose static type cannot carry one
+                    // — all but a `.badge(_:)`-outermost row — skip that build too.
+                    let badge: BadgeValue? =
+                        viewTypeCarriesBadge(Content.self)
+                        ? extractBadgeValue(from: content(element)) : nil
+                    let buffer = TUIkit.renderToBuffer(
+                        _MemoizedRow(
+                            element: AnyEquatableBox(equatableElement),
+                            source: element, build: content),
+                        context: rowContext)
+                    return (buffer, badge)
+                }
+                // Non-equatable elements cannot memoize, so the view is built for
+                // the render regardless; the badge peek reuses it.
+                let view = content(element)
+                return (TUIkit.renderToBuffer(view, context: rowContext), extractBadgeValue(from: view))
+            })
     }
 
     /// The element at a 0-based offset (O(1) — `Data` is `RandomAccessCollection`).
