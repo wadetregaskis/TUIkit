@@ -144,12 +144,27 @@ public final class RenderCache: @unchecked Sendable {
         /// The available height when this entry was cached.
         public let contextHeight: Int
 
+        /// Where this view sat in a `.gradientExtent(.subtree)` ramp when the
+        /// buffer was rendered — `nil` when no ramp spanned it, which is almost
+        /// always.
+        ///
+        /// Part of the key because the colour is baked into the buffer's escape
+        /// codes. A row keyed only on its value and size served the ink it had
+        /// at its OLD position after something above it changed height:
+        /// inserting a row at the top of a four-row ramp left the rows below it
+        /// wearing the three-row ramp's colours.
+        public let gradientFrame: GradientFrame?
+
         /// Creates a new cache entry.
-        public init(viewSnapshot: Any, buffer: FrameBuffer, contextWidth: Int, contextHeight: Int) {
+        public init(
+            viewSnapshot: Any, buffer: FrameBuffer, contextWidth: Int, contextHeight: Int,
+            gradientFrame: GradientFrame? = nil
+        ) {
             self.viewSnapshot = viewSnapshot
             self.buffer = buffer
             self.contextWidth = contextWidth
             self.contextHeight = contextHeight
+            self.gradientFrame = gradientFrame
         }
     }
 
@@ -378,12 +393,16 @@ extension RenderCache {
     ///   - view: The current view value to compare against the snapshot.
     ///   - contextWidth: The current available width.
     ///   - contextHeight: The current available height.
+    ///   - gradientFrame: Where this view sits in a spanning gradient now.
+    ///     `nil` — the default, and the overwhelmingly common case — means no
+    ///     `.gradientExtent(.subtree)` is in force.
     /// - Returns: The cached ``FrameBuffer`` if valid, or `nil` on miss.
     public func lookup<V: Equatable>(
         identity: ViewIdentity,
         view: V,
         contextWidth: Int,
-        contextHeight: Int
+        contextHeight: Int,
+        gradientFrame: GradientFrame? = nil
     ) -> FrameBuffer? {
         guard let entry = entries[identity] else {
             stats.misses += 1
@@ -400,6 +419,13 @@ extension RenderCache {
         else {
             stats.misses += 1
             logDebug("MISS (size changed) \(identity.path)")
+            return nil
+        }
+        // The ramp's colours are baked into the buffer, so a view that has
+        // MOVED within one must re-render even though nothing about it changed.
+        guard entry.gradientFrame == gradientFrame else {
+            stats.misses += 1
+            logDebug("MISS (gradient moved) \(identity.path)")
             return nil
         }
         guard oldView == view else {
@@ -422,19 +448,23 @@ extension RenderCache {
     ///   - buffer: The rendered output to cache.
     ///   - contextWidth: The available width during rendering.
     ///   - contextHeight: The available height during rendering.
+    ///   - gradientFrame: Where the view sat in a spanning gradient while it
+    ///     rendered, so a later lookup from a different place misses.
     public func store<V: Equatable>(
         identity: ViewIdentity,
         view: V,
         buffer: FrameBuffer,
         contextWidth: Int,
-        contextHeight: Int
+        contextHeight: Int,
+        gradientFrame: GradientFrame? = nil
     ) {
         stats.stores += 1
         entries[identity] = CacheEntry(
             viewSnapshot: view,
             buffer: buffer,
             contextWidth: contextWidth,
-            contextHeight: contextHeight
+            contextHeight: contextHeight,
+            gradientFrame: gradientFrame
         )
         logDebug("STORE \(identity.path)")
     }

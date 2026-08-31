@@ -394,6 +394,44 @@ extension GradientExtentTests {
         }
     }
 
+    /// The memo hole: a row's colour is baked into its buffer, so a row that
+    /// has MOVED within the ramp has to re-render even though nothing about the
+    /// row changed. Keyed only on value and size, the rows below an insertion
+    /// went on wearing the shorter ramp's colours.
+    @Test("A row that moves within the ramp re-inks")
+    func movingWithinTheRampReInks() {
+        let tui = TUIContext()
+        func frame(_ items: [String]) -> [String?] {
+            var environment = EnvironmentValues()
+            environment.palette = SystemPalette.green
+            environment.focusManager = FocusManager()
+            environment.applyRuntimeServices(from: tui)
+            let context = RenderContext(
+                availableWidth: 40, availableHeight: 10, environment: environment, tuiContext: tui)
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            defer {
+                tui.stateStorage.endRenderPass()
+                tui.renderCache.removeInactive()
+            }
+            return renderToBuffer(
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(items, id: \.self) { Text(verbatim: $0) }
+                }
+                .foregroundStyle(vertical())
+                .gradientExtent(.subtree),
+                context: context
+            ).lines.prefix(items.count).map { firstInk($0) }
+        }
+
+        let three = frame(["b", "c", "d"])
+        #expect(three == ["255;0;0", "127;0;127", "0;0;255"], "\(three)")
+        // The same three rows, one row further down a ramp that is now four
+        // rows long. Every one of them has moved.
+        let four = frame(["a", "b", "c", "d"])
+        #expect(four == ["255;0;0", "170;0;85", "85;0;170", "0;0;255"], "stale ink: \(four)")
+    }
+
     /// A lazy stack under the default extent is still SwiftUI's meaning.
     @Test("Without the modifier a LazyVStack row runs its own ramp")
     func lazyLeafExtentIsTheDefault() {

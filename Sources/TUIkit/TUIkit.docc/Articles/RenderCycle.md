@@ -435,6 +435,15 @@ and would hand back the buffer rendered under the old `x`. Detecting the change
 where it is applied costs one comparison per environment modifier per pass
 rather than a fingerprint per memoized view per lookup.
 
+One thing *is* in the key beyond identity + value + size: where the view sits in
+a ``View/gradientExtent(_:)`` ramp. A spanning gradient bakes a different colour
+into a view depending on where it is, and unlike an environment change nothing
+is "applied" at a boundary that could notice — the ramp is the same, the view
+has moved. Inserting a row at the top of a four-row ramp left every row below it
+wearing the three-row ramp's ink until the frame joined the key. It is an
+`Optional` that is `nil` unless a `.subtree` ramp is in force, so an ordinary
+lookup compares one `nil`.
+
 A value that is **not** `Equatable` cannot be compared, so the subtree below it
 declines to cache. Memoization is lost there, which is a performance cost rather
 than a correctness one.
