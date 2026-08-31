@@ -39,6 +39,7 @@
   "label.total": "Total",
   "label.from": "From",
   "label.to": "To",
+  "label.gradient": "Gradient",
 
   "error.invalid_input": "Invalid input",
   "error.required_field": "This field is required",

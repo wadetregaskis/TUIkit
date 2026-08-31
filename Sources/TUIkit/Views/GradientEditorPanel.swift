@@ -52,8 +52,19 @@ import TUIkitStyling
 /// every gradient editor does and what "split here" has to mean once a stop
 /// has a position at all.
 ///
-/// A gradient needs at least two stops (fewer render as the consumer's
-/// fallback colour), so "Remove" disables at two.
+/// ## It edits a solid colour too
+///
+/// A ``Gradient`` of one stop IS a colour — every consumer paints it flat —
+/// so this dialog is the union surface: the **Gradient** switch collapses the
+/// ramp to the selected stop or expands that stop back into two, and in solid
+/// mode the stop strip, the action row and the gradient library are simply not
+/// there, because there is one stop and nothing to order it against.
+///
+/// That is why ``ColorPickerPanel`` gains no gradient affordance in return:
+/// its callers include palette slots that can only store a colour, so widening
+/// it would offer an edit half its callers cannot accept. Present whichever
+/// dialog matches what the binding can hold, and the binding type makes the
+/// wrong choice fail to compile.
 public struct GradientEditorPanel: View {
     private let title: String
     private let gradient: Binding<Gradient>
@@ -129,10 +140,13 @@ public struct GradientEditorPanel: View {
         let recents = Self.decodeRecents(recentsRaw)
         Dialog(title: title, titleColor: .palette.accent, footerAlignment: .center) {
             VStack(alignment: .center, spacing: 1) {
+                modeSwitch
                 previewStrip
-                stopStrip
-                actionRow
-                gradientChips(recents: recents)
+                if isGradient {
+                    stopStrip
+                    actionRow
+                    gradientChips(recents: recents)
+                }
                 // A rule between the gradient LIBRARY above (stops, actions,
                 // presets, recents) and the colour-editing panel below —
                 // without it the recents chips read as part of the editor.
@@ -167,6 +181,36 @@ public struct GradientEditorPanel: View {
                 .buttonStyle(.primary)
             }
         }
+    }
+
+    // MARK: Mode
+
+    /// Whether this is a ramp at all. One stop is a solid colour, and the
+    /// dialog shows the colour editor alone for it.
+    private var isGradient: Bool { gradient.wrappedValue.stops.count > 1 }
+
+    /// Solid ⇄ gradient, which is collapsing to or expanding from one stop —
+    /// the same two edits `−` and `+` make at the floor, so there is one
+    /// mechanism (the stop count) reachable two ways rather than a mode flag
+    /// that could disagree with the stops.
+    private var modeSwitch: some View {
+        Toggle(
+            LocalizedStringKey(LocalizationKey.Label.gradient.rawValue),
+            isOn: Binding(
+                get: { isGradient },
+                set: { wantsGradient in
+                    guard wantsGradient != isGradient else { return }
+                    if wantsGradient {
+                        let (updated, selected) = Self.duplicatingStop(
+                            gradient.wrappedValue, at: clampedSelection)
+                        gradient.wrappedValue = updated
+                        selectedStop = selected
+                    } else {
+                        gradient.wrappedValue = Self.collapsedToSolid(
+                            gradient.wrappedValue, at: clampedSelection)
+                        selectedStop = 0
+                    }
+                }))
     }
 
     // MARK: Preview
@@ -412,11 +456,29 @@ extension GradientEditorPanel {
         return (Gradient(stops: updated), insertion)
     }
 
-    /// Removes the stop at `index`, refusing to go below two stops (fewer is
-    /// not a gradient). The selection stays at the same position, clamped.
+    /// The gradient reduced to the stop at `index` alone — a solid colour.
+    ///
+    /// The survivor moves to 0: a lone stop's position cannot be seen, and
+    /// leaving it where it happened to be would make expanding again start
+    /// from an arbitrary place.
+    static func collapsedToSolid(_ gradient: Gradient, at index: Int) -> Gradient {
+        let list = gradient.stops
+        guard let stop = list.indices.contains(index) ? list[index] : list.first else {
+            return gradient
+        }
+        return Gradient(stops: [Gradient.Stop(color: stop.color, location: 0)])
+    }
+
+    /// Removes the stop at `index`, refusing to empty the gradient. The
+    /// selection stays at the same position, clamped.
+    ///
+    /// The floor is ONE, not two: a one-stop gradient is a solid colour, which
+    /// this dialog can express and every consumer paints. Taking the last of
+    /// two stops is therefore the same edit the **Gradient** switch makes, and
+    /// the switch is where it is spelled out.
     static func removingStop(_ gradient: Gradient, at index: Int) -> (Gradient, selected: Int) {
         let list = gradient.stops
-        guard list.count > 2, list.indices.contains(index) else {
+        guard list.count > 1, list.indices.contains(index) else {
             return (gradient, max(0, min(index, list.count - 1)))
         }
         var updated = list

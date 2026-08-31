@@ -39,6 +39,7 @@
   "label.total": "Gesamt",
   "label.from": "Von",
   "label.to": "Bis",
+  "label.gradient": "Verlauf",
 
   "error.invalid_input": "Ungültige Eingabe",
   "error.required_field": "Dieses Feld ist erforderlich",

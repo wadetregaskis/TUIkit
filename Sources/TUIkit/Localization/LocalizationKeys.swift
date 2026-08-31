@@ -63,6 +63,7 @@ public enum LocalizationKey {
         case total = "label.total"
         case from = "label.from"
         case to = "label.to"
+        case gradient = "label.gradient"
     }
 
     /// Border appearance names, as shown in a settings screen.

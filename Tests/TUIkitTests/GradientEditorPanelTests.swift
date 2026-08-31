@@ -60,10 +60,16 @@ struct GradientEditorPanelMutationTests {
         #expect(colours(updated) == [teal, blue, blue, violet])
     }
 
-    @Test("Removing keeps at least two stops")
+    /// The floor is ONE, because one stop is a solid colour and this dialog
+    /// can express one — the same edit the Gradient switch makes.
+    @Test("Removing stops at one, and one stop is a solid colour")
     func removeFloor() {
-        let (unchanged, _) = Panel.removingStop(gradient([teal, blue]), at: 0)
-        #expect(colours(unchanged) == [teal, blue], "two stops is the floor")
+        let (solid, solidSelected) = Panel.removingStop(gradient([teal, blue]), at: 0)
+        #expect(colours(solid) == [blue], "taking one of two leaves a solid colour")
+        #expect(solidSelected == 0)
+
+        let (unchanged, _) = Panel.removingStop(solid, at: 0)
+        #expect(colours(unchanged) == [blue], "and there is nothing below one")
 
         let (updated, selected) = Panel.removingStop(gradient([teal, blue, violet]), at: 2)
         #expect(colours(updated) == [teal, blue])
@@ -112,6 +118,30 @@ struct GradientEditorPanelMutationTests {
         let (outOfRange, outSelected) = Panel.movingStop(gradient([teal, blue]), from: 5, to: 0)
         #expect(colours(outOfRange) == [teal, blue])
         #expect(outSelected == 1, "selection clamps into range")
+    }
+
+    // MARK: - Solid ⇄ gradient
+
+    /// The switch is the two edits at the floor, so it must agree with them:
+    /// collapsing keeps the SELECTED stop, and expanding a solid gives a
+    /// two-stop ramp spanning the whole range.
+    @Test("Collapsing keeps the selected stop; expanding it spans the range")
+    func solidRoundTrip() {
+        let solid = Panel.collapsedToSolid(gradient([teal, blue, violet]), at: 1)
+        #expect(colours(solid) == [blue], "the selected stop is the one that survives")
+        #expect(locations(solid) == [0], "a lone stop's position cannot be seen, so it is 0")
+
+        let (expanded, selected) = Panel.duplicatingStop(solid, at: 0)
+        #expect(colours(expanded) == [blue, blue])
+        #expect(locations(expanded) == [0, 1], "expanding spans the whole ramp")
+        #expect(selected == 1)
+    }
+
+    @Test("An out-of-range selection still collapses to something drawable")
+    func collapseClamps() {
+        let solid = Panel.collapsedToSolid(gradient([teal, blue]), at: 9)
+        #expect(colours(solid) == [teal], "the first stop stands in")
+        #expect(Panel.collapsedToSolid(Gradient(stops: []), at: 0).stops.isEmpty)
     }
 
     // MARK: - Persistence
@@ -500,6 +530,46 @@ struct GradientEditorPanelRecentsTests {
         // Junk: an empty entry, a single-stop entry, and a malformed hex.
         let junk = Panel.decodeRecents(";010101;ZZZZZZ,010101;010101,020202")
         #expect(junk == [Gradient(colors: [.rgb(1, 1, 1), .rgb(2, 2, 2)])])
+    }
+
+    /// The union surface, on screen: a one-stop gradient IS a colour, so the
+    /// dialog drops the rows that only mean something to a ramp and leaves the
+    /// colour editor — with the switch to expand it again.
+    @Test("A one-stop gradient renders as a colour editor with a Gradient switch")
+    func solidModeHidesTheRampRows() {
+        func render(_ ramp: Gradient) -> String {
+            var stored = ramp
+            var presented = true
+            let panel = GradientEditorPanel(
+                gradient: Binding(get: { stored }, set: { stored = $0 }),
+                isPresented: Binding(get: { presented }, set: { presented = $0 }))
+            return renderToBuffer(panel, context: makeRenderContext(width: 70, height: 50))
+                .lines.map(\.stripped).joined(separator: "\n")
+        }
+
+        let solid = render(Gradient(colors: [.rgb(255, 0, 0)]))
+        let ramp = render(Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)]))
+
+        // The switch is in both, and localized — a raw `label.gradient` on
+        // screen is the failure this catches.
+        for text in [solid, ramp] {
+            #expect(text.contains("Gradient"), "the switch's label")
+            #expect(!text.contains("label.gradient"), "the key leaked instead of its translation")
+        }
+        #expect(solid.contains("□"), "solid: the switch reads off")
+        #expect(ramp.contains("■"), "a ramp: the switch reads on")
+
+        // The ramp-only rows: a stop strip with a selection bullet, and the
+        // action row. Neither means anything with one stop.
+        #expect(ramp.contains("█●█"), "the stop strip")
+        #expect(!solid.contains("█●█"), "no stop strip for a solid")
+        // Matched on the button chrome: a bare ◀ also belongs to the colour
+        // panel's slider arrows, which are in both.
+        #expect(ramp.contains("▐ + ▌") && ramp.contains("▐ ◀ ▌"), "the action row")
+        #expect(!solid.contains("▐ + ▌"), "no action row for a solid")
+
+        // The colour editor is in both — it is what a solid colour IS.
+        #expect(solid.contains("#FF0000") && ramp.contains("#FF0000"))
     }
 
     @Test("The panel renders preset chips (and no rule while recents are empty)")

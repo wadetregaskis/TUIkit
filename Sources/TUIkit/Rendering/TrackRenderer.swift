@@ -152,7 +152,11 @@ enum TrackRenderer {
     /// indeterminate sweep — so "a gradient" always means the same
     /// interpolation. Fewer than two stops yield `fallback`.
     static func gradientColor(_ gradient: Gradient, parameter: Double, fallback: Color) -> Color {
-        guard gradient.stops.count >= 2 else { return fallback }
+        // ONE stop is a solid colour, not a broken gradient: the editor can
+        // collapse a ramp to a single stop, and what that has to mean
+        // everywhere downstream is "this colour". Only an EMPTY gradient has
+        // nothing to say, and that is what the fallback is for.
+        guard !gradient.stops.isEmpty else { return fallback }
         return gradient.color(at: parameter)
     }
 
@@ -170,7 +174,7 @@ enum TrackRenderer {
     static func gradientColor(
         _ gradient: Gradient, index: Int, span: Int, fallback: Color, depth: ColorDepth
     ) -> Color {
-        guard gradient.stops.count >= 2, span > 0 else { return fallback }
+        guard !gradient.stops.isEmpty, span > 0 else { return fallback }
         let ramp = Color.quantisedRamp(gradient, count: span, depth: depth)
         guard !ramp.isEmpty else { return fallback }
         return ramp[max(0, min(ramp.count - 1, index))]

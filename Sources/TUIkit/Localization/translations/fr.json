@@ -39,6 +39,7 @@
   "label.total": "Total",
   "label.from": "De",
   "label.to": "À",
+  "label.gradient": "Dégradé",
 
   "error.invalid_input": "Entrée invalide",
   "error.required_field": "Ce champ est obligatoire",

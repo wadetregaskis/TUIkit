@@ -39,6 +39,7 @@
   "label.total": "合計",
   "label.from": "開始",
   "label.to": "終了",
+  "label.gradient": "グラデーション",
 
   "error.invalid_input": "入力が無効です",
   "error.required_field": "この項目は必須です",

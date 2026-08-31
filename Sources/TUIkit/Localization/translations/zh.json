@@ -39,6 +39,7 @@
   "label.total": "总计",
   "label.from": "从",
   "label.to": "到",
+  "label.gradient": "渐变",
 
   "error.invalid_input": "输入无效",
   "error.required_field": "此字段为必填项",

@@ -39,6 +39,7 @@
   "label.total": "Totale",
   "label.from": "Da",
   "label.to": "A",
+  "label.gradient": "Sfumatura",
 
   "error.invalid_input": "Input non valido",
   "error.required_field": "Questo campo è obbligatorio",

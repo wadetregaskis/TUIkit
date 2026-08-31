@@ -192,6 +192,10 @@ struct RampSampler {
     ///     circle looks like one.
     init?(paint: Paint, extent: GradientFrame, depth: ColorDepth, cellAspect: Double) {
         guard case .gradient(let ramped) = paint else { return nil }
+        // One stop is a solid colour: `nil` sends the caller down the flat
+        // path, which paints the paint's representative — that colour — with
+        // no ramp, no run table and no per-cell walk.
+        guard ramped.gradient.stops.count > 1 else { return nil }
         // `.in(_:)` names the rectangle outright, and it re-anchors: a leaf
         // resolves at its own origin over that size, which is what makes it a
         // scale knob rather than a second `.gradientExtent(.subtree)`.
