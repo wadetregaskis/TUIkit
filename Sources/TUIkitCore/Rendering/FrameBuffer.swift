@@ -586,12 +586,20 @@ extension FrameBuffer {
 
     /// Creates a new buffer with another buffer composited on top at the specified position.
     ///
-    /// Compositing is OPAQUE per cell: every cell of the overlay replaces the
-    /// base cell under it, blanks included. Only a zero-length overlay line is
-    /// skipped. That is deliberate — `ZStack` backgrounds, dialog interiors and
-    /// the modal dim all depend on blank cells painting — so a buffer that
-    /// should not erase what it covers must be trimmed before it gets here (see
-    /// ``trimmingTrailingBlankCells()``).
+    /// Compositing replaces the base cell under every cell of the overlay,
+    /// blanks included — a buffer that should not erase what it covers must be
+    /// trimmed before it gets here (see ``trimmingTrailingBlankCells()``).
+    /// Only a zero-length overlay line is skipped.
+    ///
+    /// The **field** is the exception, and it is not an exception to the rule
+    /// so much as a second statement about the same cell. A glyph and the
+    /// colour behind it are two things, and an overlay cell that names no
+    /// background of its own has said nothing about the field it lands on — so
+    /// it keeps the one that is there. That is what makes
+    /// `ZStack { Color.red; Text("hi") }` draw the letters ON the red instead
+    /// of punching a hole in it, and it costs nothing where the base has no
+    /// background, which is the ordinary case. An overlay that names its own
+    /// background still wins: its escapes are the later statement.
     ///
     /// - Parameters:
     ///   - overlay: The buffer to composite on top.
@@ -1238,6 +1246,17 @@ extension FrameBuffer {
         // after every escape the line has, so the set of SGRs before any column
         // is the same in both. (It used to be passed in separately, which cost a
         // whole extra scan to reach the same answer.)
+
+        // A cell has a glyph AND a field, and an overlay cell that states no
+        // background of its own has said nothing about the field — so it keeps
+        // the one it lands on. `ZStack { Color.red; Text("hi") }` is the case
+        // that wants this: the letters are drawn ON the red rather than
+        // punching a hole in it. An overlay that states its own background
+        // still wins, because its escapes come after this one.
+        //
+        // Nothing to do — and nothing emitted — where the base states no
+        // background, which is the ordinary case.
+        let overlay = overlay.paintedOver(background: split.backgroundUnderOverlay)
 
         // Build: [prefix] + [reset] + [overlay] + [reset + base style restore] + [suffix]
         var result = prefix

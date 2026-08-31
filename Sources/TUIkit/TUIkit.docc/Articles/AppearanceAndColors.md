@@ -152,10 +152,10 @@ which is that same interpolation asked for one point rather than a whole ramp.
 
 A colour or a gradient is also a **view**, filling the space it is offered — so
 `ZStack { LinearGradient(…); Text("Title") }` works, and a fill in a stack takes
-the slack the other children leave. One caveat: compositing is opaque per cell,
-so a sibling drawn over a fill replaces the cells it covers rather than showing
-the fill through its glyphs. Where a glyph needs colour behind it, put the
-colour on the thing that has the glyph — `Text("hi").background(.red)`.
+the slack the other children leave. A sibling drawn over a fill keeps the fill
+behind its glyphs, because a cell's glyph and the colour behind it are two
+separate statements and text that sets only a foreground has said nothing about
+the second. A sibling that names its own background keeps that instead.
 
 ``View/backgroundStyle(_:)`` names a surface for a subtree and
 ``View/background()`` paints whatever is in force, defaulting to the palette's

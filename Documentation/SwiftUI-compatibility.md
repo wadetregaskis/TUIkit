@@ -492,12 +492,12 @@ way). What ships:
 | `backgroundStyle(_:)`, `background()`, `BackgroundStyle` (`.background`) | one names the surface, the other paints it; with nothing named it is the palette's own background, a cell grid's answer to the system background material. `ignoresSafeAreaEdges:` is omitted — a terminal has no safe area for it to talk about |
 | `View.gradientExtent(_:)` | **TUI-specific**, and the reason this was worth doing: SwiftUI has no way to run one ramp across a *set* of views, and a terminal list wants exactly that |
 
-One caveat worth knowing before layering a fill: compositing here is **opaque
-per cell**, so `ZStack { Color.red; Text("hi") }` keeps the red on every side of
-the two letters and not behind them. That rule predates this and is
-load-bearing — dialog interiors and the modal dim depend on blank cells
-painting — so where a glyph needs colour behind it, put the colour on the thing
-that has the glyph: `Text("hi").background(.red)`.
+Layering a fill behaves as it does in SwiftUI: `ZStack { Color.red; Text("hi") }`
+draws the letters on the red. A cell's glyph and the colour behind it are two
+statements, and an overlay cell that names no background has said nothing about
+the field it lands on, so it keeps the one that is there; a cell that names its
+own background keeps that instead. Compositing is otherwise opaque per cell —
+blank cells paint, which is what dialog interiors and the modal dim depend on.
 
 Two deviations, both stated in the API docs. `RadialGradient`'s radii are `Int`
 cells like every other dimension here (§2.1), and — because a cell is about

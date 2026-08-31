@@ -533,18 +533,20 @@ extension String {
     /// - Parameters:
     ///   - prefixColumns: Visible columns to keep at the front.
     ///   - suffixDropColumns: Visible columns to drop before the suffix begins.
-    /// - Returns: The prefix and its width, the suffix and its width, the SGR
-    ///   state active where the suffix begins, and the line's total visible width.
-    func ansiOverlaySplit(prefixColumns: Int, suffixDropColumns: Int) -> (
-        prefix: String, prefixWidth: Int, suffix: String, suffixWidth: Int,
-        styleBeforeSuffix: String, totalWidth: Int
-    ) {
+    /// - Returns: Everything ``FrameBuffer/insertOverlay(base:overlay:atColumn:)``
+    ///   needs from this line, in one scan — see ``ANSIOverlaySplit``.
+    func ansiOverlaySplit(prefixColumns: Int, suffixDropColumns: Int) -> ANSIOverlaySplit {
         var prefix = ""
         var prefixWidth = 0
         var prefixOpen = prefixColumns > 0
         var suffix = ""
         var suffixWidth = 0
         var style = SGRState()
+        // The state where the overlay LANDS, netted the same way — what the
+        // covered cells are painted on, so an overlay cell that states no
+        // background of its own can keep this one. Free: the same walk, one
+        // more accumulator, and only the codes before the overlay's column.
+        var under = SGRState()
         var total = 0
 
         let scalars = unicodeScalars
@@ -603,6 +605,7 @@ extension String {
             }
             let text = String(sequence)
             if prefixOpen { prefix += text }
+            if isSGR, total <= prefixColumns { under.apply(text) }
             if total >= suffixDropColumns {
                 suffix += text
             } else if isSGR {
@@ -611,6 +614,102 @@ extension String {
         }
         flushVisible()
 
-        return (prefix, prefixWidth, suffix, suffixWidth, style.rendered, total)
+        return ANSIOverlaySplit(
+            prefix: prefix, prefixWidth: prefixWidth, suffix: suffix, suffixWidth: suffixWidth,
+            styleBeforeSuffix: style.rendered, backgroundUnderOverlay: under.renderedBackground,
+            totalWidth: total)
+    }
+}
+
+// MARK: - The split itself
+
+/// One line cut for compositing, from a single scan.
+///
+/// A struct rather than a tuple because there are seven answers and they are
+/// not interchangeable; the fields carry the names the call site reads.
+struct ANSIOverlaySplit {
+    /// The visible columns before the overlay, with their styling.
+    let prefix: String
+    /// How wide ``prefix`` actually came out — short of the requested column
+    /// when a wide character straddles it.
+    let prefixWidth: Int
+    /// Everything from the first character at or past the overlay's right edge.
+    let suffix: String
+    /// How wide ``suffix`` is.
+    let suffixWidth: Int
+    /// The NETTED styling where the suffix begins, ready to re-emit.
+    let styleBeforeSuffix: String
+    /// The background in force where the overlay lands (`""` for the
+    /// terminal's own) — what an overlay cell that names none is drawn over.
+    let backgroundUnderOverlay: String
+    /// The line's whole visible width.
+    let totalWidth: Int
+}
+
+// MARK: - Painting a line over a field it did not ask about
+
+extension String {
+    /// This line with `background` in force wherever it states none of its own.
+    ///
+    /// A cell has a glyph and a field, and the two are separate statements: a
+    /// styled string that sets only a foreground has said nothing about the
+    /// field, so it can be drawn over one. That is what lets
+    /// `ZStack { Color.red; Text("hi") }` put the letters ON the red instead of
+    /// punching a hole in it — see ``FrameBuffer/composited(with:at:)``.
+    ///
+    /// The escape is emitted lazily, immediately before the first visible cell
+    /// of each run that would otherwise have no background, so a line that
+    /// states its own background everywhere comes back byte-identical and a
+    /// line that states none takes exactly one escape. Nothing is emitted after
+    /// the last visible character.
+    ///
+    /// - Parameter background: A background escape (`SGRState.renderedBackground`),
+    ///   or `""` to leave the line alone.
+    /// - Returns: The line, painted over that field.
+    func paintedOver(background: String) -> String {
+        guard !background.isEmpty else { return self }
+
+        var state = SGRState()
+        var needsBackground = true
+        var result = ""
+        result.reserveCapacity(utf8.count + background.utf8.count * 2)
+
+        let scalars = unicodeScalars
+        var index = scalars.startIndex
+        while index < scalars.endIndex {
+            guard scalars[index].value == 0x1B else {  // not ESC → visible
+                if needsBackground {
+                    result += background
+                    needsBackground = false
+                }
+                result.unicodeScalars.append(scalars[index])
+                index = scalars.index(after: index)
+                continue
+            }
+            var sequence = Self.UnicodeScalarView()
+            sequence.append(scalars[index])
+            index = scalars.index(after: index)
+            var isSGR = false
+            if index < scalars.endIndex, scalars[index].value == 0x5B {  // '['
+                sequence.append(scalars[index])
+                index = scalars.index(after: index)
+                while index < scalars.endIndex, Self.isCSIBodyByte(scalars[index].value) {
+                    sequence.append(scalars[index])
+                    index = scalars.index(after: index)
+                }
+                if index < scalars.endIndex, Self.isCSIFinalByte(scalars[index].value) {
+                    isSGR = scalars[index].value == 0x6D  // 'm'
+                    sequence.append(scalars[index])
+                    index = scalars.index(after: index)
+                }
+            }
+            let text = String(sequence)
+            result += text
+            if isSGR {
+                state.apply(text)
+                needsBackground = !state.namesBackground
+            }
+        }
+        return result
     }
 }

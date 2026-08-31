@@ -303,6 +303,13 @@ public struct SGRState: Sendable, Equatable {
         !attributes.isDisjoint(with: [4, 5, 6, 9])
     }
 
+    /// Whether this state names a background at all.
+    ///
+    /// The cheap form of `!renderedBackground.isEmpty`, for the composite path,
+    /// which asks it once per escape in an overlay and must not build a string
+    /// to find out.
+    public var namesBackground: Bool { background != nil }
+
     /// Just the BACKGROUND half of ``rendered`` — the escape that re-establishes
     /// this state's background colour and says nothing about anything else, or
     /// `""` when the background is the terminal's own.

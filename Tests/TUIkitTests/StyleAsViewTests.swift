@@ -149,13 +149,12 @@ struct StyleAsViewTests {
     // MARK: - Layering
 
     /// A fill under a sibling in a `ZStack` shows everywhere the sibling draws
-    /// nothing — and NOT under the cells it does draw, because compositing is
-    /// opaque per cell (`FrameBuffer.composited(with:at:)`, where the rule is
-    /// deliberate: dialog interiors and the modal dim depend on blank cells
-    /// painting). So the glyph cells take the sibling's own styling, with no
-    /// background of their own, rather than the fill showing through them.
-    @Test("A fill lies behind its ZStack siblings, opaquely per cell")
-    func layeringIsOpaquePerCell() {
+    /// nothing AND behind the cells it does draw: a glyph and a field are two
+    /// statements, and a `Text` that sets only a foreground has said nothing
+    /// about the field it lands on. This is the whole point of a fill as a
+    /// view, and it did not work — the letters used to punch a hole in the red.
+    @Test("A fill lies behind its ZStack siblings, glyph cells included")
+    func fillShowsThroughGlyphCells() {
         let lines = render(
             ZStack {
                 red
@@ -166,11 +165,35 @@ struct StyleAsViewTests {
             backgrounds(lines[0]) == Array(repeating: "255;0;0", count: 10),
             "the row above the text is all fill")
         #expect(lines[1].contains("hi"), "the sibling drew")
-        // Four filled cells, the two the glyphs took, then four more.
         #expect(
-            backgrounds(lines[1]) == Array(repeating: "255;0;0", count: 4) + [nil, nil]
-                + Array(repeating: "255;0;0", count: 4),
-            "either side of the glyphs and not under them: \(lines[1].debugDescription)")
+            backgrounds(lines[1]) == Array(repeating: "255;0;0", count: 10),
+            "the glyphs punched a hole: \(lines[1].debugDescription)")
+    }
+
+    /// …and the sibling's own background still wins where it states one, since
+    /// its escapes are the later statement about the same cells.
+    ///
+    /// > The fill is wrapped in `AnyView` here, and it is not tidying: a bare
+    ///   `Color` beside a GENERIC view in a `@ViewBuilder` pack segfaults the
+    ///   Swift 6.2.4 **debug** runtime while instantiating the pack's metadata,
+    ///   before any TUIkit code runs (release builds are fine). It is a
+    ///   toolchain bug — reproduced with a conformance on an unrelated type,
+    ///   and absent when the same two views go into a plain generic struct
+    ///   instead of a pack — and `Color: View` is the only conformance in the
+    ///   framework declared in a module that owns neither the type nor the
+    ///   protocol, which is what trips it. See §14 of
+    ///   `Documentation/Gradients where a colour is accepted.md`.
+    @Test("A sibling that names its own background keeps it")
+    func siblingBackgroundWins() {
+        let lines = render(
+            ZStack {
+                AnyView(red)
+                Text(verbatim: "hi").background(Color.rgb(0, 255, 0))
+            }, width: 10, height: 3)
+        let row = backgrounds(lines[1])
+        #expect(row.count == 10)
+        #expect(row[4] == "0;255;0" && row[5] == "0;255;0", "the sibling lost its own: \(row)")
+        #expect(row[0] == "255;0;0" && row[9] == "255;0;0", "the fill stopped: \(row)")
     }
 }
 

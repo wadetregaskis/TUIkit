@@ -51,15 +51,11 @@ extension _StyleFillBlock: Renderable, Layoutable {
 /// The fill is a rectangle of spaces with the colour as their **background**,
 /// which is what `.background(_:)` draws everywhere else in the framework.
 ///
-/// Layering it under something is worth one caveat: compositing in this
-/// framework is **opaque per cell**, so a sibling drawn over a fill replaces
-/// the cells it covers rather than showing the fill through its glyphs. In
-/// `ZStack { Color.red; Text("hi") }` the red survives on every side of the
-/// two letters and not behind them. That rule is deliberate and older than
-/// this — dialog interiors and the modal dim depend on blank cells painting
-/// (see `FrameBuffer.composited(with:at:)`) — so where a glyph needs a colour
-/// behind it, put the colour on the thing that has the glyph:
-/// `Text("hi").background(.red)`.
+/// A sibling drawn over the fill keeps the fill behind its glyphs: a cell's
+/// glyph and its field are two statements, and a `Text` that sets only a
+/// foreground has said nothing about the field it lands on. So
+/// `ZStack { Color.red; Text("hi") }` puts the letters on the red. A sibling
+/// that names its own background keeps that instead.
 ///
 /// The conformance lives here rather than beside `Color` because of where the
 /// pieces are: `Color` is `TUIkitStyling`'s and `View` is `TUIkitView`'s, and
