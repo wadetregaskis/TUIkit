@@ -124,7 +124,7 @@ Code that uses them compiles and behaves the same.
 | Modifiers | `padding`, `frame`, `overlay(alignment:content:)`, `fixedSize`, `foregroundStyle(.color)`, `disabled` (on any `View`), `tint`, `tag`, `zIndex`, `badge`, `listStyle`, `formStyle`, `lineLimit` (on `Text` **and** on any `View`), `truncationMode`, `multilineTextAlignment`, `opacity` | ✓ | units are `Int` → §2.1; `lineLimit`/`truncationMode` on a `View` cascade to every `Text` below, and one written on a `Text` wins there — `.lineLimit(nil)` means *unlimited*, so it is also how a branch opts out of an inherited cap; `disabled` cascades via `\.isEnabled`; `tint` overrides the accent role (§2.5); `frame` default alignment is `.topLeading` → §2.7; `multilineTextAlignment` aligns a wrapped `Text`'s lines within its own block width (single-line text unaffected); **`opacity` is real compositing** — the subtree renders to its own layer and each of its cells is resolved against the cell beneath where the layer lands, so a view fading over a coloured panel moves toward the panel's colour rather than the page's, and nesting multiplies as in SwiftUI (`0.5` inside `0.5` is `0.25`). Hue is preserved (a red heading at `0.5` still reads red), and the view keeps its space and its hit-test regions at every alpha. Colours compose exactly at every alpha; **characters cannot** — two cannot share a cell at half strength each — so alpha is a decision for the glyph, taken only where two characters contest a cell: **over anything blank the subtree's characters draw at every alpha and fade all the way out; where a character sits underneath, the subtree's draws at or above `0.5` and the one behind shows below it**, keeping its own foreground while its field carries the veil (matching characters never snap — they cross-fade exactly). Text over different text therefore swaps characters at the midpoint instead of dissolving, which is the one visible departure from a graphical compositor; in exchange `opacity(0)` genuinely reveals what it covers rather than painting an invisible-coloured rectangle over it. Two rules make fading a container behave: a source SPACE composites its background and keeps what is behind it (so fading a `VStack` does not blank its rectangle), and the destination's foreground is never tinted (a translucent pane over text leaves the text legible). A repeating fade still costs no render passes — the compositor colours every phase of the cycle once and the run loop replays them |
 | App | `App`, `Scene`, `WindowGroup`, `SceneBuilder`, `@main`, `@AppStorage`, `@Environment(\.dismiss)` | ✓ | `@AppStorage` is *enhanced* (pluggable backend). `\.isPresented` says whether a view is inside something presented (a sheet, modal, cover, popover, alert or dialog) — `false` for a pushed `NavigationStack` screen, which was navigated to rather than presented. `\.dismiss` means the nearest thing that can be dismissed: a presentation closes, a pushed `NavigationStack` screen pops, and only at the top level — where a terminal app has nothing enclosing it — does dismissing mean quitting |
 | Text | `Text(_:)` (`LocalizedStringKey` **and** `StringProtocol`), `Text(verbatim:)`, `Text(_:format:)`, `Text + Text` | ✓ | a literal is a localization key, a computed `String` is not — SwiftUI's rule, and §4a records what it took to reproduce. **Every control and modifier that takes a title takes one too** — `Button`, `Toggle`, `TextField`, `Section`, `navigationTitle`, `alert`, … — as does the TUI-specific chrome (`Dialog`, `Alert`, `Card`, `StatusBarItem`, notifications); see §4a |
-| Color values | `Color.red`/`.green`/`.primary`/`.secondary`/… and `.opacity(_:)` | ✓ | *constructing* a Color differs → §3 |
+| Color values | `Color.red`/`.green`/`.primary`/`.secondary`/… and `.opacity(_:)` | ✓ | *constructing* a Color differs → §2.5. `Color.opacity(_:)` mixes toward black and shadows `ShapeStyle.opacity(_:)` for a `Color` receiver, as it does in SwiftUI; the two coincide on a dark palette |
 
 The parity surface above is regression-tested in
 `Tests/TUIkitTests/SwiftUICompatFixesTests.swift`.
@@ -459,17 +459,65 @@ because the places it reaches are load-bearing for everything else that scrolls.
 
 ## 3. Open divergence
 
-One divergence is known and documented but currently kept as-is.
+**None.** The one that stood here is closed, and how it fell is the fifth
+instance of the pattern §4b warns about, so it stays on the record.
 
-### `foregroundStyle` takes `Color?`, not `some ShapeStyle`
+### Closed: `foregroundStyle` takes `some ShapeStyle`
 
-- **TUIkit:** `foregroundStyle(_ style: Color?)`; **SwiftUI:**
-  `foregroundStyle<S: ShapeStyle>(_:)`.
-- **Status — borderline §2, kept.** `.foregroundStyle(.red)` already works. The
-  only thing lost is non-colour `ShapeStyle`s — gradients, materials — which are
-  bitmap concepts that don't render in cells (see §4b). If a terminal-meaningful
-  `ShapeStyle` (e.g. a 2-colour gradient approximated per cell) is ever wanted,
-  widen the signature then. Documented here so the divergence is known.
+The claim was that the only thing a `Color?` parameter lost was "non-colour
+`ShapeStyle`s — gradients, materials — which are bitmap concepts that don't
+render in cells". Half of that is true: `Material` and `Shader` genuinely have
+no meaning in a cell grid, and they are still absent **as types**, which is what
+makes `.foregroundStyle(.thickMaterial)` fail to compile rather than compile and
+do nothing. But a gradient is not a bitmap concept. It is a function from a
+position to a colour, and a cell has a position — so `t` is answerable per cell
+and the ramp is drawable. The row described a real terminal limitation
+accurately and then used it to withhold a spelling that did not depend on it.
+
+`foregroundStyle<S: ShapeStyle>(_:)` and `background<S: ShapeStyle>(_:)` now
+take any style, with `@_disfavoredOverload` `Color` twins so `.foregroundStyle(.red)`
+and `.background(.palette.accent)` still infer (Apple marks `tint` the same
+way). What ships:
+
+| | |
+|---|---|
+| `ShapeStyle` | the protocol, conformable — `resolve(in:)` with public defaults, as since macOS 14. SwiftUI's underscored `_apply`/`_makeView` are omitted: they are over types that exist only inside SwiftUI |
+| `Gradient`, `Gradient.Stop` | source-identical, `location` a `Double`. A bare `Gradient` as a style is a **vertical** linear gradient, measured |
+| `LinearGradient`, `RadialGradient`, `EllipticalGradient`, `AngularGradient` | all four, with their `colors:`/`stops:` twins and the `.linearGradient(…)` static-member spellings |
+| `AnyShapeStyle` | erasure — the runtime style-choice idiom |
+| `ShapeStyle.opacity(_:)`, `.in(_:)` | `.in(_:)` takes a `CellRect` (§2.2) |
+| `View.gradientExtent(_:)` | **TUI-specific**, and the reason this was worth doing: SwiftUI has no way to run one ramp across a *set* of views, and a terminal list wants exactly that |
+
+Two deviations, both stated in the API docs. `RadialGradient`'s radii are `Int`
+cells like every other dimension here (§2.1), and — because a cell is about
+twice as tall as it is wide — a radius is measured along the **horizontal**
+axis with the vertical derived through `imageCellAspect`, so a circle looks
+like one. `EllipticalGradient` is the geometry that follows the box's own
+shape, and takes no such correction for the same reason.
+
+Three spellings stay out, each because a terminal cannot honour them and the
+rule is that what cannot be honoured must not compile:
+
+- **`foregroundStyle(_:_:)` and `(_:_:_:)`.** The second and third styles paint
+  a symbol's second and third *layers*, and a glyph in a cell has one.
+  Accepting them and ignoring them is exactly the silent lie this file
+  otherwise exists to prevent.
+- **`Text.foregroundStyle<S>` returning `Text`.** A gradient on a `Text` works
+  — it returns `some View` through the `View` modifier. What does not compile
+  is `Text("a").foregroundStyle(gradient) + Text("b")`, and that is correct:
+  a concatenation is one `Text` of attributed runs, and a run carries one
+  colour, so a ramp inside one would have to collapse to its representative.
+  The spelling that would quietly lose the gradient is the one that fails.
+- **`HierarchicalShapeStyle`.** Its four names are palette roles here, and two
+  of them — `Color.primary` and `Color.secondary` — are already spelled on
+  `Color`, where SwiftUI spells them too. A second type carrying the same names
+  would make `.foregroundStyle(.secondary)` ambiguous for no gain. `.quinary`
+  has no counterpart: this palette names four foreground tiers, and a fifth
+  spelling painting the fourth's colour would be a lie of a different kind.
+
+`MeshGradient` is declined and recorded: "given a cell, what is `t`?"
+generalises to `(u, v)`, so it is not impossible — it is simply not worth it at
+80×24.
 
 ---
 
@@ -604,8 +652,8 @@ fixed-`frame` alignment, `@Observable`-only state (and with it `.onReceive`,
 whose parameter type is a Combine protocol — §2.3), the `palette`/`appearance`
 theming model, and the absence of fonts/animation/shapes/sub-cell-geometry are
 the honest consequences of rendering to a grid of character cells rather than a
-bitmap. §3 is the one remaining documented divergence (`foregroundStyle`), kept
-deliberately. §4a — additive SwiftUI features a terminal can express — is now
+bitmap. §3 is now empty: the one divergence that stood there —
+`foregroundStyle` taking `Color?` — is closed, and gradients ship. §4a — additive SwiftUI features a terminal can express — is now
 **clear on the API side but for one item**: `pinnedViews:` on the lazy stacks.
 It reads like an init parameter and is not one — see §2.8 for what it actually
 costs.
