@@ -84,7 +84,7 @@ struct DisclosureGroupTests {
                 DisclosureGroup("Advanced") { Text("Secret") },
                 tui: tui, context: context))
         #expect(rendered.count == 1, "a collapsed group is one row: \(rendered)")
-        let header = try? #require(rendered.first)
+        let header = rendered.first
         #expect(header?.contains(TerminalSymbols.disclosureCollapsed) == true, "▶: \(rendered)")
         #expect(header?.contains("Advanced") == true, "the label is drawn: \(rendered)")
         #expect(
