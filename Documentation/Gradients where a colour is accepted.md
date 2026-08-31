@@ -815,3 +815,53 @@ entirely: they measure every row and place each one exactly.
 Section headers and footers are rendered by the time the list sees them and
 take no part in the ramp. They are chrome, and they already draw in their own
 dimmed styling.
+
+---
+
+## 14. A toolchain bug the feature stepped on
+
+`ZStack { Color.red; Text("hi").frame(width: 4) }` **segfaults in a debug
+build** — Swift 6.2.4, before any TUIkit code runs. Not a layout bug and not a
+rendering bug: it dies instantiating the metadata for the `@ViewBuilder` pack,
+so it never reaches `_ZStackCore` (an `fputs` at the top of `renderToBuffer`
+never fires, and neither does the first statement of the test that builds it).
+
+Narrowed by measurement:
+
+| | |
+|---|---|
+| `ZStack { Color.red; Text("hi") }` | fine — the second element is not generic |
+| `ZStack { Color.red; Text("hi").frame(…) }` | **crash** |
+| `ZStack { LinearGradient(…); Text("hi").frame(…) }` | fine |
+| `ZStack { AnyView(Color.red); Text("hi").frame(…) }` | fine |
+| `Pair<Color, FlexibleFrameView<Text>>` (a plain generic struct) | fine |
+| release build, any of the above | fine |
+
+Two properties, both required:
+
+1. **A parameter pack.** The same two views in an ordinary two-parameter
+   generic struct instantiate happily; only `TupleView<each V: View>` dies.
+2. **A conformance declared in a module that owns neither the type nor the
+   protocol.** `Color` is `TUIkitStyling`'s, `View` is `TUIkitView`'s, and
+   `Color: View` is written in `TUIkit` — the only such conformance in the
+   framework. Reproduced from scratch on unrelated types (`BorderStyle: View`,
+   `ContentMode: View`, declared in the test module) with the same crash, and
+   the shape of the `body` makes no difference — opaque, concrete or `Never`
+   all crash.
+
+**And it has a fix**: moving the conformance into `TUIkitView`, the protocol's
+own module, makes it go away — verified by adding `TUIkitStyling` to
+`TUIkitView`'s dependencies and declaring `ContentMode: View` there.
+
+Doing that for `Color` is more than moving a line. `Color.body` is
+`_StyleFillBlock().background(self)`, and `background(_:)`, `ShapeStyle`,
+`Paint` and `EnvironmentValues.palette` are all `TUIkit`'s — so a conformance
+in `TUIkitView` needs a fill it can paint from there, which means the colour →
+escape mapping (`ANSIRenderer.backgroundCodes` and the depth downsampling,
+which depend on nothing above `TUIkitStyling`) and `PaletteEnvironment` moving
+down with it. That is a real architectural change — `TUIkitView` gaining a
+dependency on `TUIkitStyling` — and it is the user's call, not this document's.
+
+Until it is made, `Color` as a view is unusable in a debug build beside any
+generic sibling, which is nearly all of them. The gradients are unaffected:
+they are `TUIkit`'s own types, so their conformances are in their own module.
