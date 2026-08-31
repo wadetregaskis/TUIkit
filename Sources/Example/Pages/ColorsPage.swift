@@ -181,12 +181,11 @@ private struct GeometryBlock: View {
 
 /// A single labelled horizontal gradient strip.
 ///
-/// Renders a row of block glyphs whose colours interpolate smoothly
-/// between an arbitrary list of RGB stops. The strip claims whatever
-/// width the parent gives it (`.frame(maxWidth: .infinity)`) so the
-/// demo fills the page no matter the terminal size, and the actual
-/// painting happens in ``GradientStrip``, a `Renderable` that reads
-/// `context.availableWidth` at draw time.
+/// The strip is a ``LinearGradient`` used as a **view**, which fills the space
+/// the row leaves it — so it claims the width without a `.frame`, and the
+/// painting is the framework's own. This was forty lines of `Renderable` that
+/// rendered a one-cell `Text` per column; the ramp, its quantisation and its
+/// monotonicity repair are all things the style already does.
 private struct GradientLine: View {
     /// The key for the label printed to the left of the gradient strip.
     let label: LocalizedStringKey
@@ -198,52 +197,10 @@ private struct GradientLine: View {
         HStack(spacing: 1) {
             Text(label.localized.padded(to: 22))
                 .foregroundStyle(.palette.foregroundSecondary)
-            GradientStrip(stops: stops)
-                .frame(maxWidth: .infinity)
+            LinearGradient(
+                colors: stops.map { Color.rgb($0.r, $0.g, $0.b) },
+                startPoint: .leading, endPoint: .trailing)
         }
-    }
-}
-
-/// Renderable that paints a smoothly-interpolated horizontal gradient
-/// across the full width its parent gives it.
-///
-/// The view conforms to `Renderable` so it can read `availableWidth`
-/// at draw time and use it to choose the number of glyph cells —
-/// without that we'd have to either bake a fixed width into the demo
-/// (the old `40` constant) or pull in a `GeometryReader`-style helper.
-private struct GradientStrip: View, Renderable {
-    /// Piecewise-linear colour stops.
-    let stops: [(r: UInt8, g: UInt8, b: UInt8)]
-
-    /// The block glyph used to paint each gradient cell. ▇ is solid
-    /// across most terminal fonts and reads as a flat colour band.
-    private static var glyph: String { "▇" }
-
-    var body: Never {
-        fatalError("GradientStrip renders via Renderable")
-    }
-
-    func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let cells = max(0, context.availableWidth)
-        guard cells > 0 else { return FrameBuffer(lines: [""]) }
-
-        // Quantised as a RAMP, not cell by cell. On a 256-colour terminal a
-        // per-cell nearest match has no memory of its neighbours, and the
-        // strip's smoothness is a property of the SEQUENCE — see
-        // `Color.quantisedRamp(_:count:depth:)`. This demo had its own
-        // interpolation and got the per-cell answer: "teal → purple" put three
-        // out-of-place cells in every strip it drew.
-        let ramp = Color.quantisedRamp(
-            Gradient(colors: stops.map { Color.rgb($0.r, $0.g, $0.b) }),
-            count: cells, depth: ColorDepth.current)
-        var line = ""
-        line.reserveCapacity(cells * 20)
-        for colour in ramp {
-            let styled = Text(Self.glyph).foregroundStyle(colour)
-            let buffer = TUIkit.renderToBuffer(styled, context: context)
-            line += buffer.lines.first ?? Self.glyph
-        }
-        return FrameBuffer(lines: [line])
     }
 }
 
