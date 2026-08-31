@@ -129,6 +129,24 @@ change along a row is one escape per row, exactly what it would have been. A
 ramp that varies *across* a row is a colour change per cell — right for a label
 or a panel, dear for a whole page.
 
+A colour or a gradient is also a **view**, filling the space it is offered — so
+`ZStack { LinearGradient(…); Text("Title") }` works, and a fill in a stack takes
+the slack the other children leave. One caveat: compositing is opaque per cell,
+so a sibling drawn over a fill replaces the cells it covers rather than showing
+the fill through its glyphs. Where a glyph needs colour behind it, put the
+colour on the thing that has the glyph — `Text("hi").background(.red)`.
+
+``View/backgroundStyle(_:)`` names a surface for a subtree and
+``View/background()`` paints whatever is in force, defaulting to the palette's
+own background:
+
+```swift
+VStack {
+    Text("Total").padding().background()
+}
+.backgroundStyle(Color.rgb(20, 24, 34))
+```
+
 Two deviations from SwiftUI, both because a cell is about twice as tall as it
 is wide: ``RadialGradient``'s radii are `Int` **cells** measured along the
 horizontal axis, with the vertical derived through
