@@ -79,11 +79,100 @@ struct ColorsPage: View {
                 }
             }
 
+            DemoSection("page.colors.section.gradientStyles") {
+                VStack(alignment: .leading, spacing: 1) {
+                    // A gradient is a `ShapeStyle`, so it goes wherever a
+                    // colour goes. This is SwiftUI's own meaning and the
+                    // default: every leaf runs the whole ramp inside itself.
+                    Text("page.colors.gradientStyle.perLeaf")
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: Self.warm, startPoint: .leading, endPoint: .trailing))
+
+                    // And the TUI-specific extent, which SwiftUI has no way to
+                    // say: ONE ramp across a set of views, each taking its own
+                    // slice by where it sits.
+                    Text("page.colors.gradientStyle.spanning")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(verbatim: "LinearGradient")
+                        Text(verbatim: "RadialGradient")
+                        Text(verbatim: "EllipticalGradient")
+                        Text(verbatim: "AngularGradient")
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: Self.warm, startPoint: .top, endPoint: .bottom)
+                    )
+                    .gradientExtent(.subtree)
+
+                    Text("page.colors.gradientStyle.background")
+                        .background(
+                            LinearGradient(
+                                colors: [.rgb(40, 60, 120), .rgb(120, 40, 90)],
+                                startPoint: .leading, endPoint: .trailing))
+
+                    // The four geometries answer one question differently:
+                    // given a cell, how far along the ramp is it?
+                    HStack(spacing: 2) {
+                        GeometryBlock(
+                            name: "linear",
+                            style: AnyShapeStyle(
+                                LinearGradient(
+                                    colors: Self.warm, startPoint: .topLeading,
+                                    endPoint: .bottomTrailing)))
+                        GeometryBlock(
+                            name: "radial",
+                            style: AnyShapeStyle(
+                                RadialGradient(
+                                    colors: Self.warm, center: .center, startRadius: 0,
+                                    endRadius: 6)))
+                        GeometryBlock(
+                            name: "elliptical",
+                            style: AnyShapeStyle(EllipticalGradient(colors: Self.warm)))
+                        GeometryBlock(
+                            name: "angular",
+                            style: AnyShapeStyle(
+                                AngularGradient(
+                                    gradient: Gradient(colors: Self.warm + [Self.warm[0]]),
+                                    center: .center, angle: .zero)))
+                    }
+                }
+            }
+
             Spacer()
         }
         .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("menu.item.colors")
+        }
+    }
+}
+
+extension ColorsPage {
+    /// The one ramp every style demo above draws with, so what changes between
+    /// them is visibly the GEOMETRY and not the colours.
+    fileprivate static let warm: [Color] = [.rgb(255, 80, 80), .rgb(80, 160, 255)]
+}
+
+/// One geometry, painted over a block and named underneath.
+///
+/// The block is a single multi-line `Text`, which is one leaf — so the ramp
+/// resolves over the whole rectangle rather than per row, which is what makes
+/// a radial gradient round instead of four independent stripes.
+private struct GeometryBlock: View {
+    let name: String
+    let style: AnyShapeStyle
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(
+                verbatim: Array(repeating: String(repeating: "█", count: 12), count: 4)
+                    .joined(separator: "\n")
+            )
+            .foregroundStyle(style)
+            Text(verbatim: name)
+                .foregroundStyle(.palette.foregroundSecondary)
         }
     }
 }

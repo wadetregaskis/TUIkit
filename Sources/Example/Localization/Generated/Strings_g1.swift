@@ -106,6 +106,10 @@ extension ExampleStrings {
             "page.colors.gradient.fire": "fire (red → yellow)",
             "page.colors.gradient.rainbow": "rainbow",
             "page.colors.gradient.grayscale": "grayscale",
+            "page.colors.section.gradientStyles": "Gradients as styles",
+            "page.colors.gradientStyle.perLeaf": "one view runs the whole ramp inside itself",
+            "page.colors.gradientStyle.spanning": "…or one ramp spanning a set of them:",
+            "page.colors.gradientStyle.background": "a gradient behind the words, not in them",
 
             // page.containers
             "page.containers.aCardView": "A Card view",
@@ -370,6 +374,10 @@ extension ExampleStrings {
             "page.colors.gradient.fire": "feuer (rot → gelb)",
             "page.colors.gradient.rainbow": "regenbogen",
             "page.colors.gradient.grayscale": "graustufen",
+            "page.colors.section.gradientStyles": "Verläufe als Stile",
+            "page.colors.gradientStyle.perLeaf": "eine Ansicht durchläuft den ganzen Verlauf in sich",
+            "page.colors.gradientStyle.spanning": "…oder ein Verlauf über mehrere hinweg:",
+            "page.colors.gradientStyle.background": "ein Verlauf hinter den Wörtern, nicht in ihnen",
 
             // page.containers
             "page.containers.aCardView": "Eine Card-Ansicht",
@@ -634,6 +642,10 @@ extension ExampleStrings {
             "page.colors.gradient.fire": "feu (rouge → jaune)",
             "page.colors.gradient.rainbow": "arc-en-ciel",
             "page.colors.gradient.grayscale": "niveaux de gris",
+            "page.colors.section.gradientStyles": "Dégradés comme styles",
+            "page.colors.gradientStyle.perLeaf": "une vue parcourt tout le dégradé en elle-même",
+            "page.colors.gradientStyle.spanning": "…ou un dégradé s'étendant sur plusieurs :",
+            "page.colors.gradientStyle.background": "un dégradé derrière les mots, pas dedans",
 
             // page.containers
             "page.containers.aCardView": "Une vue Card",
@@ -898,6 +910,10 @@ extension ExampleStrings {
             "page.colors.gradient.fire": "fuoco (rosso → giallo)",
             "page.colors.gradient.rainbow": "arcobaleno",
             "page.colors.gradient.grayscale": "scala di grigi",
+            "page.colors.section.gradientStyles": "Sfumature come stili",
+            "page.colors.gradientStyle.perLeaf": "una vista percorre l'intera sfumatura al suo interno",
+            "page.colors.gradientStyle.spanning": "…oppure una sfumatura che ne attraversa diverse:",
+            "page.colors.gradientStyle.background": "una sfumatura dietro le parole, non dentro",
 
             // page.containers
             "page.containers.aCardView": "Una vista Card",
@@ -1162,6 +1178,10 @@ extension ExampleStrings {
             "page.colors.gradient.fire": "fuego (rojo → amarillo)",
             "page.colors.gradient.rainbow": "arcoíris",
             "page.colors.gradient.grayscale": "escala de grises",
+            "page.colors.section.gradientStyles": "Degradados como estilos",
+            "page.colors.gradientStyle.perLeaf": "una vista recorre todo el degradado en sí misma",
+            "page.colors.gradientStyle.spanning": "…o un degradado que abarca varias:",
+            "page.colors.gradientStyle.background": "un degradado detrás de las palabras, no en ellas",
 
             // page.containers
             "page.containers.aCardView": "Una vista Card",
@@ -1426,6 +1446,10 @@ extension ExampleStrings {
             "page.colors.gradient.fire": "火焰（红 → 黄）",
             "page.colors.gradient.rainbow": "彩虹",
             "page.colors.gradient.grayscale": "灰度",
+            "page.colors.section.gradientStyles": "渐变作为样式",
+            "page.colors.gradientStyle.perLeaf": "单个视图内部走完整个渐变",
+            "page.colors.gradientStyle.spanning": "……或让一个渐变横跨多个视图：",
+            "page.colors.gradientStyle.background": "渐变在文字后面，而不是在文字里",
 
             // page.containers
             "page.containers.aCardView": "一个 Card 视图",
@@ -1690,6 +1714,10 @@ extension ExampleStrings {
             "page.colors.gradient.fire": "炎（赤 → 黄）",
             "page.colors.gradient.rainbow": "虹",
             "page.colors.gradient.grayscale": "グレースケール",
+            "page.colors.section.gradientStyles": "スタイルとしてのグラデーション",
+            "page.colors.gradientStyle.perLeaf": "1 つのビューがその中で全体をたどります",
+            "page.colors.gradientStyle.spanning": "…または複数のビューにまたがる 1 つのグラデーション:",
+            "page.colors.gradientStyle.background": "文字の中ではなく、文字の背後のグラデーション",
 
             // page.containers
             "page.containers.aCardView": "Card ビュー",
