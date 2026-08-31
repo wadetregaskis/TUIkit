@@ -187,12 +187,10 @@ struct _StyleEnvironmentView<Content: View, S: ShapeStyle>: View {
         // to the same colour does not count as a change, which is the right
         // answer as well as the cheap one.
         var paint = style.paint(in: context.environment)
-        // Only a colour fades. `withAnimation` interpolates one value, and a
-        // ramp's animation is a different question (which stops move, and how
-        // a two-stop ramp becomes a five-stop one) that this deliberately does
-        // not answer yet.
-        if fades, case .color(let colour) = paint {
-            paint = .color(ColorAnimation.resolving(colour, owner: Self.self, context: context))
+        // A ramp fades as a colour does: every stop and every number of the
+        // geometry moves on its own store entry. See ``PaintAnimation``.
+        if fades {
+            paint = PaintAnimation.resolving(paint, owner: Self.self, context: context)
         }
         if let cache = context.renderCache,
             case .changed = cache.noteAppliedEnvironment(

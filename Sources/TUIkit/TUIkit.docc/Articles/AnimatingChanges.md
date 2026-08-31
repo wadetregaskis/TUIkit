@@ -59,6 +59,7 @@ need no type of your own:
 | ``View/padding(_:_:)`` | The insets, and the layout around them |
 | ``View/frame(width:height:alignment:)`` | A **fixed** width and height |
 | ``View/foregroundStyle(_:)``, ``View/background(_:)``, ``View/border(_:style:width:)-(Color,_,_)`` | The colour |
+| A **gradient** given to ``View/foregroundStyle(_:)`` or ``View/background(_:)`` | Every stop's colour, every stop's location, and the geometry's own numbers |
 
 ```swift
 Text("Saved")
@@ -70,11 +71,20 @@ A `ViewModifier` of your own joins that list by conforming to ``Animatable``
 and naming one property — `ModifiedView` is animatable whenever its modifier
 is, so there is nothing else to learn.
 
-Two boundaries are worth knowing because they look like bugs otherwise. A
+A gradient animates as a handful of independent numbers rather than as one
+value, which is what makes the awkward case fall out for free: growing a
+two-stop ramp into a five-stop one fades the two stops that were already there
+and shows the three that were not at their final colours, because a value the
+animator has never seen appears rather than fades.
+
+Three boundaries are worth knowing because they look like bugs otherwise. A
 **flexible** frame (`maxWidth: .infinity`) has no number to move between, so it
-snaps. And `Text`'s own `foregroundStyle(_:) -> Text` overload carries the
-colour in the view *value* rather than painting it, so a colour set that way
-changes at once; wrap the text to fade it.
+snaps. `Text`'s own `foregroundStyle(_:) -> Text` overload carries the colour in
+the view *value* rather than painting it, so a colour set that way changes at
+once; wrap the text to fade it. And a gradient that changes KIND — a colour
+becoming a ramp, a ``LinearGradient`` becoming a ``RadialGradient`` — snaps,
+because the numbers on either side mean different things and interpolating a
+radius toward an ordinate is not a transition.
 
 ## Saying it at the change, or at the view
 

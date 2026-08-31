@@ -930,3 +930,62 @@ visible in the diff:
 Both are now inside the varying branch, where they belong. The horizontal path
 came out ~7% faster than before, from the reservation counting what is already
 in the buffer.
+
+---
+
+## 16. Animating a ramp
+
+The question that kept this out of the original design was "which stops move,
+and how does a two-stop ramp become a five-stop one?" — and it turns out not to
+need an answer, because it rests on a false premise: that a gradient has to
+animate as ONE value.
+
+It does not. A gradient is a handful of independent numbers — each stop's
+colour, each stop's location, and the geometry's four — and each of them
+animates on **its own animation-store entry**, exactly as a colour does. That
+is the whole of `PaintAnimation`, and everything falls out of it:
+
+- **Different lengths are not a special case.** Growing a two-stop ramp into a
+  five-stop one fades the two that were already there and shows the three that
+  were not at their final colours, because the store's existing rule for a
+  value it has never seen is that *an appearance is not a change*. Nothing had
+  to be invented for it.
+- **Semantic colours work**, because `ColorAnimation` already resolves against
+  the palette at the moment it is asked — which is the reason colours do not go
+  through `Animatable` in the first place.
+- **A stop that slides, slides.** A location is a `Double`, and the store is
+  generic over `VectorArithmetic`.
+- **The geometry moves**, so a ramp can sweep across a view: a `startPoint`
+  travelling from `.leading` to the centre is four numbers moving.
+
+### What snaps, and the slot map that makes it snap
+
+A change of KIND snaps — a colour becoming a ramp, a linear ramp becoming a
+radial one. Every geometry happens to carry exactly four numbers, and that
+coincidence is precisely what must *not* be relied on: a linear geometry's four
+are two points and a radial's are a centre and two radii, so interpolating one
+into the other moves a radius toward an ordinate. So each kind takes its own
+slot range and the store sees the new one as something it has never seen.
+
+| Quantity | Slot |
+|---|---|
+| A flat colour | `0` |
+| Stop *i*'s colour | `1 + 2i` |
+| Stop *i*'s location | `2 + 2i` |
+| Geometry kind *k*, component *c* | `-1 - (4k + c)` |
+
+Slot 0 is left to the flat colour on purpose: sharing it would half-fade a
+ramp's first stop out of the colour that was there, which is a stranger picture
+than a clean snap.
+
+The extent named by `.in(_:)` snaps as well. It is a statement about what the
+ramp is measured against rather than about the ramp.
+
+### What it costs
+
+Eight store lookups per animated gradient per frame (a two-stop ramp: two
+colours, two locations, four geometry numbers) against one for a colour. Both
+`_StyleEnvironmentView` and `BackgroundModifier` run **once per modifier per
+frame**, not once per leaf, so this is eight dictionary probes for a whole
+`.foregroundStyle(gradient)` subtree. A paint that is a plain colour still
+costs exactly the one lookup it always did.

@@ -18,7 +18,11 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
     public func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
         guard !buffer.isEmpty else { return buffer }
         let width = buffer.width
-        let paint = style.paint(in: context.environment)
+        // Through the animator, so a change inside `withAnimation` moves rather
+        // than jumping — a colour and every stop of a ramp alike. Returns the
+        // paint untouched when nothing is moving.
+        let paint = PaintAnimation.resolving(
+            style.paint(in: context.environment), owner: Self.self, context: context)
 
         // A ramp is resolved over the view being filled — its own box, or the
         // rectangle a `.gradientExtent(.subtree)` named. `nil` from the sampler
@@ -30,12 +34,7 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
                 paint: paint, extent: extent, depth: ColorDepth.current,
                 cellAspect: context.environment.imageCellAspect)
         else {
-            // Through the animator, so a change to the colour inside
-            // `withAnimation` fades rather than jumps. Returns the colour
-            // untouched when nothing is moving.
-            let animated = ColorAnimation.resolving(
-                paint.representative, owner: Self.self, context: context)
-            let resolved = animated.resolve(with: context.environment.palette)
+            let resolved = paint.representative.resolve(with: context.environment.palette)
             return buffer.replacingLines(
                 buffer.lines.map { filled($0.padToVisibleWidth(width), with: resolved) })
         }
