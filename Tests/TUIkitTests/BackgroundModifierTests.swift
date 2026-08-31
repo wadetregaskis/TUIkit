@@ -23,7 +23,7 @@ struct BackgroundModifierTests {
 
     @Test("Background modifier applies ANSI background code")
     func backgroundAppliesCode() {
-        let modifier = BackgroundModifier(color: .red)
+        let modifier = BackgroundModifier(style: Color.red)
         let buffer = FrameBuffer(lines: ["Hello"])
         let context = testContext()
 
@@ -40,7 +40,7 @@ struct BackgroundModifierTests {
 
     @Test("Background modifier preserves line count")
     func backgroundPreservesLineCount() {
-        let modifier = BackgroundModifier(color: .blue)
+        let modifier = BackgroundModifier(style: Color.blue)
         let buffer = FrameBuffer(lines: ["Line 1", "Line 2", "Line 3"])
         let context = testContext()
 
@@ -51,7 +51,7 @@ struct BackgroundModifierTests {
 
     @Test("Background modifier on empty buffer returns empty")
     func backgroundEmptyBuffer() {
-        let modifier = BackgroundModifier(color: .green)
+        let modifier = BackgroundModifier(style: Color.green)
         let buffer = FrameBuffer()
         let context = testContext()
 
@@ -62,7 +62,7 @@ struct BackgroundModifierTests {
 
     @Test("Background modifier pads lines to full width")
     func backgroundPadsLines() {
-        let modifier = BackgroundModifier(color: .red)
+        let modifier = BackgroundModifier(style: Color.red)
         let buffer = FrameBuffer(lines: ["Short", "VeryLongLine"])
         let context = testContext()
 
@@ -78,7 +78,7 @@ struct BackgroundModifierTests {
         // reset; the fill must survive it (the old naive wrap left the rest of the
         // line — trailing cells, sub-views — on the terminal default).
         let inner = ANSIRenderer.colorize("AB", foreground: .blue) + "CD"  // <fg>AB<reset>CD
-        let result = BackgroundModifier(color: .red).modify(
+        let result = BackgroundModifier(style: Color.red).modify(
             buffer: FrameBuffer(lines: [inner]), context: testContext())
         let line = result.lines[0]
         let bg = ANSIRenderer.backgroundCode(for: .red)

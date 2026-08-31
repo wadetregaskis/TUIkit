@@ -199,8 +199,17 @@ extension View {
     ///
     /// - Parameter color: The background color.
     /// - Returns: A view with the background color applied.
+    public func background<S: ShapeStyle>(_ style: S) -> some View {
+        modifier(BackgroundModifier(style: style))
+    }
+
+    /// The colour spelling, so `.background(.red)` and
+    /// `.background(.palette.surface)` keep inferring what they always did —
+    /// the same `@_disfavoredOverload` pair `foregroundStyle` uses, and that
+    /// Apple ships for `tint`.
+    @_disfavoredOverload
     public func background(_ color: Color) -> some View {
-        modifier(BackgroundModifier(color: color))
+        modifier(BackgroundModifier(style: color))
     }
 }
 

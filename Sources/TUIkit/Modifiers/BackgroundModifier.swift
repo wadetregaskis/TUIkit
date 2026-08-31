@@ -4,36 +4,60 @@
 //  Created by LAYERED.work
 //  License: MIT
 
-/// A modifier that fills the background of a view with a color.
+import TUIkitCore
+import TUIkitStyling
+
+/// A modifier that fills the background of a view with a ``ShapeStyle``.
 ///
 /// - Important: This is framework infrastructure. Use `.background()` on any
 ///   ``View`` instead of instantiating this type directly.
-public struct BackgroundModifier: ViewModifier {
-    /// The background color.
-    let color: Color
+public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
+    /// What to fill with.
+    let style: S
 
     public func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
         guard !buffer.isEmpty else { return buffer }
-
-        // Through the animator, so a change to the colour inside
-        // `withAnimation` fades rather than jumps. Returns the colour
-        // untouched when nothing is moving.
-        let animated = ColorAnimation.resolving(color, owner: Self.self, context: context)
-        let resolvedColor = animated.resolve(with: context.environment.palette)
         let width = buffer.width
-        var lines: [String] = []
+        let paint = style.paint(in: context.environment)
 
-        for line in buffer.lines {
-            // Pad the line to full width so background covers everything
-            let paddedLine = line.padToVisibleWidth(width)
+        // A ramp is resolved over the view being filled — its own box, or the
+        // rectangle a `.gradientExtent(.subtree)` named. `nil` from the sampler
+        // means "not a ramp, or a degenerate one", and both mean paint flat.
+        let extent =
+            context.gradientFrame ?? GradientFrame(width: width, height: buffer.lines.count)
+        guard let sampler = RampSampler(paint: paint, extent: extent, depth: ColorDepth.current)
+        else {
+            // Through the animator, so a change to the colour inside
+            // `withAnimation` fades rather than jumps. Returns the colour
+            // untouched when nothing is moving.
+            let animated = ColorAnimation.resolving(
+                paint.representative, owner: Self.self, context: context)
+            let resolved = animated.resolve(with: context.environment.palette)
+            return buffer.replacingLines(
+                buffer.lines.map { filled($0.padToVisibleWidth(width), with: resolved) })
+        }
 
-            // Fill the whole line with the background. The child's own ANSI
-            // resets (a Text's trailing reset, a Slider track, a Toggle's `[`)
-            // would otherwise clear our background for the rest of the line —
-            // so re-apply it after every reset (persistent background) and
-            // close with a single reset at the line end to avoid bleed.
-            let colored = applyBackground(to: paddedLine, color: resolvedColor)
-            lines.append(colored)
+        let palette = context.environment.palette
+        let lines = buffer.lines.enumerated().map { row, line -> String in
+            let padded = line.padToVisibleWidth(width)
+            guard sampler.variesAcrossRow else {
+                // One colour for the whole row: the same single persistent-fill
+                // this modifier has always emitted, and no per-cell work at all.
+                return filled(padded, with: sampler.colour(row: row).resolve(with: palette))
+            }
+            // Otherwise the row is cut at the ramp's own boundaries and each
+            // piece filled. `ansiAwareSlice` carries the styling that was in
+            // force at the cut, so the content's own colours survive being
+            // divided; the pieces are joined and closed once at the end.
+            var result = ""
+            result.reserveCapacity(padded.utf8.count * 2 + 16)
+            for run in sampler.runs(row: row, cells: width) {
+                let slice = padded.ansiAwareSlice(
+                    visibleStart: run.columns.lowerBound, visibleCount: run.columns.count)
+                result += ANSIRenderer.applyPersistentBackground(
+                    slice, color: run.colour.resolve(with: palette))
+            }
+            return result + ANSIRenderer.reset
         }
 
         // Background colouring is a styling pass — content stays in
@@ -51,7 +75,7 @@ public struct BackgroundModifier: ViewModifier {
     /// so child content that emits its own ANSI resets — Text, a Slider's track,
     /// a Toggle's brackets — doesn't punch holes in the fill. A final reset
     /// closes the run so the colour doesn't bleed past the line.
-    private func applyBackground(to string: String, color: Color) -> String {
+    private func filled(_ string: String, with color: Color) -> String {
         ANSIRenderer.applyPersistentBackground(string, color: color) + ANSIRenderer.reset
     }
 }
