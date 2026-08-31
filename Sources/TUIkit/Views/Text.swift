@@ -780,57 +780,16 @@ extension Text: Renderable, Layoutable {
         // aligning the column re-`strippedLength`s the (now ANSI-laden) lines.
         let styledLines: [String]
         if let runs {
-            // A concatenation: the wrap ran on the plain text (it must, or a
-            // break either side of a fragment boundary would be chosen blind),
-            // so put the per-fragment styling back by walking the same source
-            // the runs describe. See `TextRunAttribution`.
-            let runTexts = runs.map {
-                Self.displayString($0.text, textCase: effectiveCase, context: context)
-            }
-            var resolvedRunStyles: [TextStyle] = []
-            resolvedRunStyles.reserveCapacity(runs.count)
-            for run in runs {
-                var runStyle: TextStyle
-                if let stated = run.style.font, stated != font {
-                    // A fragment that brought its own font resolves its OWN
-                    // cascade — the font decides both the baseline intensity and
-                    // which `.font(_:)` scope entries match, neither of which
-                    // can be borrowed from the enclosing text. It starts from
-                    // the explicit attributes alone (this text's, with the
-                    // fragment's over them) so that what the cascade fills in is
-                    // the fragment's answer and not the text's.
-                    runStyle = applyingCascadedEmphasis(
-                        to: run.style.merged(over: style),
-                        cascadedAttributes(context: context, font: stated),
-                        context: context)
-                    // The colours were resolved once, at text level (the
-                    // semantic-role remapping below reads this text's own
-                    // foreground); a fragment states its own or takes those.
-                    runStyle.foregroundColor =
-                        runStyle.foregroundColor ?? effectiveStyle.foregroundColor
-                    runStyle.backgroundColor =
-                        runStyle.backgroundColor ?? effectiveStyle.backgroundColor
-                } else {
-                    // The run's own attributes sit above the base this Text
-                    // resolved (its own style + the cascade); anything the run
-                    // left unset falls through to that.
-                    runStyle = run.style.merged(over: effectiveStyle)
-                }
-                resolvedRunStyles.append(runStyle.resolved(with: context.environment.palette))
-            }
-            var cursor = (run: 0, offset: 0)
-            styledLines = plainLines.map { line in
-                TextRunAttribution.fragments(of: line, runTexts: runTexts, cursor: &cursor)
-                    .map { ANSIRenderer.render($0.text, with: resolvedRunStyles[$0.run]) }
-                    .joined()
-            }
+            styledLines = concatenatedLines(
+                plainLines, runs: runs, blockWidth: lineWidths.max() ?? 0,
+                effectiveStyle: effectiveStyle, effectiveCase: effectiveCase,
+                font: font, ramp: ramp, context: context)
         } else if let ramp, !context.isMeasuring {
             // The extent is this text's own BLOCK — measured against SwiftUI,
             // where a two-line `Text` under a horizontal gradient ends its
             // short first line partway along the ramp rather than at the far
-            // end. Attributed runs take the representative instead (above):
-            // banding a run-split line needs the two splits reconciled cell by
-            // cell, which is its own piece of work.
+            // end. A concatenation bands the same way, one fragment at a time
+            // (above).
             styledLines = PaintRenderer.styled(
                 plainLines, blockWidth: lineWidths.max() ?? 0, frame: context.gradientFrame,
                 paint: ramp, style: resolvedStyle, depth: ColorDepth.current,
@@ -865,6 +824,97 @@ extension Text: Renderable, Layoutable {
             lines: LineSpacingRows.interleaved(paddedLines, spacing: spacing, blank: ""),
             width: knownWidth,
             lineWidths: LineSpacingRows.interleaved(paddedWidths, spacing: spacing, blank: 0))
+    }
+
+    /// The styled lines of a CONCATENATION: each fragment in its own run's
+    /// style, with a spanning ramp banded across them.
+    ///
+    /// The wrap ran on the plain text (it must, or a break either side of a
+    /// fragment boundary would be chosen blind), so this puts the per-fragment
+    /// styling back by walking the same source the runs describe — see
+    /// ``TextRunAttribution``.
+    ///
+    /// - Parameters:
+    ///   - plainLines: The laid-out lines, unstyled.
+    ///   - runs: The fragments this text was concatenated from.
+    ///   - blockWidth: The widest line, for a ramp's own rectangle.
+    ///   - effectiveStyle: This text's resolved attributes, cascade included.
+    ///   - effectiveCase: The case transform, so the runs are matched against
+    ///     the same source the wrap saw.
+    ///   - font: This text's font, for deciding which fragments re-cascade.
+    ///   - ramp: The gradient in force, when there is one.
+    ///   - context: The render context.
+    /// - Returns: One styled string per line.
+    private func concatenatedLines(
+        _ plainLines: [String], runs: [Text.Run], blockWidth: Int,
+        effectiveStyle: TextStyle, effectiveCase: Text.Case?, font: Font?, ramp: Paint?,
+        context: RenderContext
+    ) -> [String] {
+        let runTexts = runs.map {
+            Self.displayString($0.text, textCase: effectiveCase, context: context)
+        }
+        var resolvedRunStyles: [TextStyle] = []
+        resolvedRunStyles.reserveCapacity(runs.count)
+        // Which fragments the ramp is entitled to colour: the ones that stated
+        // no colour of their own and so took this text's, which under a ramp is
+        // only the ramp's stand-in.
+        var runTakesRamp: [Bool] = []
+        runTakesRamp.reserveCapacity(runs.count)
+        for run in runs {
+            var runStyle: TextStyle
+            if let stated = run.style.font, stated != font {
+                // A fragment that brought its own font resolves its OWN cascade
+                // — the font decides both the baseline intensity and which
+                // `.font(_:)` scope entries match, neither of which can be
+                // borrowed from the enclosing text. It starts from the explicit
+                // attributes alone (this text's, with the fragment's over them)
+                // so that what the cascade fills in is the fragment's answer and
+                // not the text's.
+                runStyle = applyingCascadedEmphasis(
+                    to: run.style.merged(over: style),
+                    cascadedAttributes(context: context, font: stated),
+                    context: context)
+                // The colours were resolved once, at text level (the
+                // semantic-role remapping there reads this text's own
+                // foreground); a fragment states its own or takes those.
+                runTakesRamp.append(runStyle.foregroundColor == nil)
+                runStyle.foregroundColor =
+                    runStyle.foregroundColor ?? effectiveStyle.foregroundColor
+                runStyle.backgroundColor =
+                    runStyle.backgroundColor ?? effectiveStyle.backgroundColor
+            } else {
+                // The run's own attributes sit above the base this Text resolved
+                // (its own style + the cascade); anything the run left unset
+                // falls through to that.
+                runTakesRamp.append(run.style.foregroundColor == nil)
+                runStyle = run.style.merged(over: effectiveStyle)
+            }
+            resolvedRunStyles.append(runStyle.resolved(with: context.environment.palette))
+        }
+
+        var cursor = (run: 0, offset: 0)
+        let fragments = plainLines.map { line in
+            TextRunAttribution.fragments(of: line, runTexts: runTexts, cursor: &cursor)
+        }
+        guard let ramp, !context.isMeasuring else {
+            return fragments.map { line in
+                line.map { ANSIRenderer.render($0.text, with: resolvedRunStyles[$0.run]) }
+                    .joined()
+            }
+        }
+        // The ramp bands ACROSS the fragments — the cell decides the colour, the
+        // fragment decides everything else about it. A fragment that stated its
+        // own colour keeps it.
+        return PaintRenderer.styled(
+            pieces: fragments.map { line in
+                line.map {
+                    StyledPiece(
+                        text: $0.text, style: resolvedRunStyles[$0.run],
+                        takesRamp: runTakesRamp[$0.run])
+                }
+            },
+            blockWidth: blockWidth, frame: context.gradientFrame, paint: ramp,
+            depth: ColorDepth.current, cellAspect: context.environment.imageCellAspect)
     }
 
     /// Fills in `style`'s foreground, and reports a gradient if that is what

@@ -524,9 +524,10 @@ any of it is written.
 
 **What is deliberately not built**, decided while step 5 was: the 2- and
 3-argument `foregroundStyle` (the extra styles paint a symbol's extra LAYERS,
-and a glyph in a cell has one), `Text.foregroundStyle<S>` returning `Text` (a
-concatenated run carries one colour, so the spelling that would quietly
-collapse a ramp is the one that must fail), and `HierarchicalShapeStyle` (its
+and a glyph in a cell has one), `Text.foregroundStyle<S>` returning `Text` (a ramp on
+one FRAGMENT would need a paint per run, where a run stores a style; a ramp on
+the whole concatenation bands across the fragments and always did have to —
+see §15), and `HierarchicalShapeStyle` (its
 four names are palette roles here, two of them already spelled on `Color`
 where SwiftUI spells them, so a second type would only make `.secondary`
 ambiguous). Each is recorded in `SwiftUI-compatibility.md` §3.
@@ -865,3 +866,67 @@ dependency on `TUIkitStyling` — and it is the user's call, not this document's
 Until it is made, `Color` as a view is unusable in a debug build beside any
 generic sibling, which is nearly all of them. The gradients are unaffected:
 they are `TUIkit`'s own types, so their conformances are in their own module.
+
+---
+
+## 15. Banding a concatenation
+
+`Text("aaa") + Text("bbb")` under a horizontal ramp used to come out one flat
+colour — the ramp's representative for the whole line — because the attributed
+path and the ramp path were two separate branches and only one of them could
+run. §11 recorded that as "its own piece of work"; this is that work.
+
+What it needs is that the cell decides the colour and the fragment decides
+everything else about it, which is one loop rather than two:
+
+```
+band(_ text:column:row:style:sampler:sequences:into:)
+```
+
+is now the only place the per-cell walk lives, and a plain line is one call to
+it while an attributed line is one call per fragment. So the seam is invisible
+by construction — `("aaa" + "bbb")` and `"aaabbb"` produce byte-identical ink,
+which is a test rather than a claim — and a fragment cannot disagree with a
+whole line about where a colour changes.
+
+Three rules fall out of it, all tested:
+
+- **A fragment that states its own colour keeps it.** An explicit colour beats
+  an inherited style here as everywhere else, so
+  `Text("aaa").foregroundStyle(.grey) + Text("bbb")` under a ramp is a grey
+  "aaa" and a banded "bbb".
+- **A fragment's other attributes survive.** The ramp supplies a foreground,
+  not a style, so a bold fragment stays bold through it.
+- **A vertical ramp still costs one run per line.** The fast path
+  (`variesAcrossRow == false`) is inside `band`, so it applies per fragment
+  too, and the cheap case a list actually uses stays cheap.
+
+The SGR introducer cache is per fragment STYLE rather than per line: an
+introducer is only reusable among fragments that agree about bold, underline
+and the background. A concatenation is a handful of fragments, so the lookup is
+a linear scan of an association list rather than a hash of a `TextStyle`.
+
+### What sharing the loop cost, and what it did not
+
+Release, 40 lines × 100 cells, per call, paired runs:
+
+| | before | after |
+|---|---|---|
+| vertical ramp (one run per row) | 26.4, 27.7 µs | 26.3, 25.5 µs |
+| horizontal ramp (a run per cell) | 418.5, 399.7 µs | 372.6, 374.7 µs |
+
+The first draft of the shared loop was **4.5× slower on the vertical path**
+(26 → 118 µs), and both causes are worth writing down because neither is
+visible in the diff:
+
+1. It reserved the varying case's worst case — 25 bytes per cell — on every
+   row, including the rows that emit one run. A 40 × 100 block reserved 100 KB
+   to hold about 4 KB.
+2. It advanced the column cursor by walking every character for its width, on a
+   path where nothing reads the cursor: a row of one colour cannot care where a
+   later piece starts. That grapheme walk is the same one that measured 14.6%
+   of a frame in the width scan.
+
+Both are now inside the varying branch, where they belong. The horizontal path
+came out ~7% faster than before, from the reservation counting what is already
+in the buffer.

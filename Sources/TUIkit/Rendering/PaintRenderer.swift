@@ -47,79 +47,199 @@ enum PaintRenderer {
             return lines.map { ANSIRenderer.render($0, with: flat) }
         }
 
-        let reset = ANSIRenderer.reset
         var sequences: [String?] = []
         var result: [String] = []
         result.reserveCapacity(lines.count)
-
         for (row, line) in lines.enumerated() {
-            guard sampler.variesAcrossRow else {
-                // One colour for the whole row, so no run table and no per-cell
-                // walk — just the wrapping `ANSIRenderer.render` would have
-                // produced. Allocating the table here cost an array per leaf to
-                // hold a single entry, which was the whole difference between
-                // `.gradientExtent(.subtree)` and doing it by hand.
-                var run = style
-                run.foregroundColor = sampler.colour(row: row)
-                let opening = ANSIRenderer.styleSequence(for: run) ?? ""
-                result.append(opening.isEmpty ? line : opening + line + reset)
-                continue
-            }
-
-            // One SGR introducer per ramp entry, built once. `ANSIRenderer.render`
-            // re-derives a `TextStyle`'s codes and re-joins them on every call,
-            // and a ramp that varies along a row changes colour every few cells.
-            // `styleSequence(for:)` exists for exactly this, and its own note
-            // says `sequence + text + reset` is byte-for-byte what `render`
-            // produces.
-            if sequences.isEmpty {
-                sequences = [String?](repeating: nil, count: sampler.ramp.count)
-            }
-            let rowTerm = sampler.rowTerm(row)
-
+            // Deliberately NOT reserved here: the vertical case emits ONE run
+            // for the whole row and reserving the varying case's worst case
+            // for it cost 26 µs → 118 µs on a 40 × 100 block, measured. `band`
+            // reserves where reserving is what the path needs.
             var painted = ""
-            // Reserved for the worst case, which is what this path IS: a run
-            // per cell, each an SGR introducer (up to ~19 bytes for truecolor)
-            // plus a reset.
-            painted.reserveCapacity(line.utf8.count * 25 + 16)
-            var runStart = line.startIndex
-            var runEntry = -1
             var column = 0
-            var cursor = line.startIndex
-
-            // Appended in place, never `a + b + c`: the `+` chain builds two
-            // throwaway strings per run, and a horizontal ramp at truecolor is
-            // one run per CELL.
-            func flush(_ end: String.Index) {
-                guard runEntry >= 0, runStart < end else { return }
-                painted += sequences[runEntry] ?? ""
-                painted += line[runStart..<end]
-                painted += reset
-            }
-
-            while cursor < line.endIndex {
-                // The cell the character STARTS at decides its colour: a wide
-                // glyph is one glyph, and splitting a colour across it is not
-                // something a terminal can draw.
-                let next = sampler.entry(column: column, rowTerm: rowTerm)
-                if next != runEntry {
-                    flush(cursor)
-                    runEntry = next
-                    runStart = cursor
-                    if sequences[next] == nil {
-                        var run = style
-                        run.foregroundColor = sampler.ramp[next]
-                        sequences[next] = ANSIRenderer.styleSequence(for: run) ?? ""
-                    }
-                }
-                column += line[cursor].terminalWidth
-                cursor = line.index(after: cursor)
-            }
-            flush(line.endIndex)
+            band(
+                line, column: &column, row: row, style: style, sampler: sampler,
+                sequences: &sequences, into: &painted)
             result.append(painted)
         }
         return result
     }
+
+    /// The attributed twin: each line already cut into the pieces its
+    /// concatenated `Text` gave it, so a ramp bands ACROSS the pieces instead
+    /// of collapsing to one colour for the whole line.
+    ///
+    /// A piece that stated a colour of its own keeps it and is painted flat —
+    /// `Text("a").foregroundStyle(.red) + Text("b")` under a ramp is a red "a"
+    /// and a ramped "b", which is the precedence every other styling follows.
+    ///
+    /// - Parameters:
+    ///   - lines: The laid-out lines, each in its styled pieces, left to right.
+    ///   - blockWidth: The widest line — the rectangle's width in cells.
+    ///   - frame: The rectangle the ramp runs across, as above.
+    ///   - paint: What is being painted with.
+    ///   - depth: The colour depth to quantise the ramp for.
+    ///   - cellAspect: ``EnvironmentValues/imageCellAspect``.
+    /// - Returns: One styled string per line.
+    static func styled(
+        pieces lines: [[StyledPiece]], blockWidth: Int, frame: GradientFrame? = nil,
+        paint: Paint, depth: ColorDepth, cellAspect: Double
+    ) -> [String] {
+        let extent = frame ?? GradientFrame(width: blockWidth, height: lines.count)
+        guard
+            let sampler = RampSampler(
+                paint: paint, extent: extent, depth: depth, cellAspect: cellAspect)
+        else {
+            // Not a ramp, or a degenerate one — both mean paint flat, each
+            // piece in its own colour or the paint's.
+            return lines.map { pieces in
+                pieces.map { piece in
+                    var flat = piece.style
+                    if piece.takesRamp { flat.foregroundColor = paint.representative }
+                    return ANSIRenderer.render(piece.text, with: flat)
+                }.joined()
+            }
+        }
+
+        // One sequence table per PIECE STYLE, not per line: the table caches an
+        // SGR introducer per ramp entry, and an introducer is only reusable
+        // among pieces that agree about everything else (bold, underline, the
+        // background). Pieces are few — a concatenation is a handful of
+        // fragments — so a small association list beats hashing a `TextStyle`.
+        var tables: [(style: TextStyle, sequences: [String?])] = []
+        var result: [String] = []
+        result.reserveCapacity(lines.count)
+
+        for (row, pieces) in lines.enumerated() {
+            var painted = ""
+            var column = 0
+            for piece in pieces {
+                guard piece.takesRamp else {
+                    painted += ANSIRenderer.render(piece.text, with: piece.style)
+                    column += piece.text.reduce(0) { $0 + $1.terminalWidth }
+                    continue
+                }
+                var index = tables.firstIndex { $0.style == piece.style }
+                if index == nil {
+                    tables.append((piece.style, []))
+                    index = tables.count - 1
+                }
+                band(
+                    piece.text, column: &column, row: row, style: piece.style,
+                    sampler: sampler, sequences: &tables[index!].sequences, into: &painted)
+            }
+            result.append(painted)
+        }
+        return result
+    }
+
+    /// Paints one piece of a row, splitting it at the ramp's own boundaries.
+    ///
+    /// The single place the per-cell walk lives, so a plain line and one
+    /// fragment of an attributed line cannot disagree about where a colour
+    /// changes.
+    ///
+    /// - Parameters:
+    ///   - text: The piece, plain (no escapes of its own).
+    ///   - column: Where the piece starts in the row; advanced past it.
+    ///   - row: The row, for the sampler.
+    ///   - style: Everything except the foreground, which the ramp supplies.
+    ///   - sampler: The ramp over the rectangle.
+    ///   - sequences: One SGR introducer per ramp entry for `style`, built on
+    ///     demand and reused across every row this style paints.
+    ///   - painted: The row being assembled; appended to in place, never
+    ///     `a + b + c`, which would build two throwaway strings per run — and a
+    ///     horizontal ramp at truecolor is one run per CELL.
+    private static func band(
+        _ text: String, column: inout Int, row: Int, style: TextStyle,
+        sampler: RampSampler, sequences: inout [String?], into painted: inout String
+    ) {
+        guard !text.isEmpty else { return }
+        let reset = ANSIRenderer.reset
+
+        guard sampler.variesAcrossRow else {
+            // One colour for the whole row, so no run table and no per-cell
+            // walk — just the wrapping `ANSIRenderer.render` would have
+            // produced. Allocating the table here cost an array per leaf to
+            // hold a single entry, which was the whole difference between
+            // `.gradientExtent(.subtree)` and doing it by hand.
+            var run = style
+            run.foregroundColor = sampler.colour(row: row)
+            let opening = ANSIRenderer.styleSequence(for: run) ?? ""
+            painted += opening.isEmpty ? text : opening + text + reset
+            // `column` is deliberately left where it was. Nothing downstream
+            // reads it on this path — the row has ONE colour, so where a later
+            // piece starts cannot change what it is — and advancing it means a
+            // grapheme walk and a width lookup per character, which is 26 µs →
+            // 108 µs on a 40 × 100 block. Measured.
+            return
+        }
+
+        // Reserved for the worst case, which is what THIS path is: a run per
+        // cell, each an SGR introducer (up to ~19 bytes for truecolor) plus a
+        // reset. The row above it emits one run and reserves nothing.
+        painted.reserveCapacity(painted.utf8.count + text.utf8.count * 25 + 16)
+
+        // One SGR introducer per ramp entry, built once. `ANSIRenderer.render`
+        // re-derives a `TextStyle`'s codes and re-joins them on every call,
+        // and a ramp that varies along a row changes colour every few cells.
+        // `styleSequence(for:)` exists for exactly this, and its own note says
+        // `sequence + text + reset` is byte-for-byte what `render` produces.
+        if sequences.isEmpty {
+            sequences = [String?](repeating: nil, count: sampler.ramp.count)
+        }
+        let rowTerm = sampler.rowTerm(row)
+        var runStart = text.startIndex
+        var runEntry = -1
+        var cursor = text.startIndex
+
+        func flush(_ end: String.Index) {
+            guard runEntry >= 0, runStart < end else { return }
+            painted += sequences[runEntry] ?? ""
+            painted += text[runStart..<end]
+            painted += reset
+        }
+
+        while cursor < text.endIndex {
+            // The cell the character STARTS at decides its colour: a wide
+            // glyph is one glyph, and splitting a colour across it is not
+            // something a terminal can draw.
+            let next = sampler.entry(column: column, rowTerm: rowTerm)
+            if next != runEntry {
+                flush(cursor)
+                runEntry = next
+                runStart = cursor
+                if sequences[next] == nil {
+                    var run = style
+                    run.foregroundColor = sampler.ramp[next]
+                    sequences[next] = ANSIRenderer.styleSequence(for: run) ?? ""
+                }
+            }
+            column += text[cursor].terminalWidth
+            cursor = text.index(after: cursor)
+        }
+        flush(text.endIndex)
+    }
+}
+
+// MARK: - A piece of an attributed line
+
+/// One run of a laid-out line that carries its own styling.
+///
+/// What a concatenated ``Text`` hands the painter: the fragments of one
+/// wrapped line, left to right, each with the style its own `Text` resolved.
+struct StyledPiece {
+    /// The characters, plain — no escapes of its own.
+    let text: String
+
+    /// Everything about the appearance except, perhaps, the foreground.
+    let style: TextStyle
+
+    /// Whether the ramp supplies this piece's foreground.
+    ///
+    /// `false` for a fragment that stated a colour of its own, which keeps it:
+    /// an explicit colour beats an inherited style here as it does everywhere.
+    let takesRamp: Bool
 }
 
 // MARK: - Sampling a ramp over a rectangle

@@ -515,10 +515,13 @@ rule is that what cannot be honoured must not compile:
   otherwise exists to prevent.
 - **`Text.foregroundStyle<S>` returning `Text`.** A gradient on a `Text` works
   — it returns `some View` through the `View` modifier. What does not compile
-  is `Text("a").foregroundStyle(gradient) + Text("b")`, and that is correct:
-  a concatenation is one `Text` of attributed runs, and a run carries one
-  colour, so a ramp inside one would have to collapse to its representative.
-  The spelling that would quietly lose the gradient is the one that fails.
+  is `Text("a").foregroundStyle(gradient) + Text("b")`. A ramp given to the
+  whole concatenation now bands across its fragments, cell by cell, so the
+  original reason ("a run carries one colour") no longer holds; what still
+  does is that a run's stored attributes name ONE colour, and a ramp on one
+  FRAGMENT would need a paint per run rather than a style per run. Until that
+  exists, the spelling that would quietly lose the gradient is the one that
+  fails.
 - **`HierarchicalShapeStyle`.** Its four names are palette roles here, and two
   of them — `Color.primary` and `Color.secondary` — are already spelled on
   `Color`, where SwiftUI spells them too. A second type carrying the same names

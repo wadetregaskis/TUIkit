@@ -195,6 +195,86 @@ struct GradientForegroundTests {
         #expect(cells.first == "255;0;0")
     }
 
+    // MARK: - Concatenated text
+
+    /// A concatenation is ONE `Text`, so a ramp runs across the whole of it —
+    /// the cell decides the colour and the fragment decides everything else.
+    /// It used to take the ramp's representative for the entire line, so a
+    /// concatenated line was one flat middle colour.
+    @Test("A ramp bands across the fragments of a concatenation")
+    func concatenationBands() {
+        let lines = render(
+            (Text(verbatim: "aaa") + Text(verbatim: "bbb"))
+                .foregroundStyle(
+                    LinearGradient(colors: [red, blue], startPoint: .leading, endPoint: .trailing)),
+            width: 6)
+        let cells = painted(lines[0])
+        #expect(cells.count == 6, "\(cells)")
+        #expect(cells.first == "255;0;0", "the ramp did not start at its start: \(cells)")
+        #expect(cells.last == "0;0;255", "the ramp did not reach its end: \(cells)")
+        #expect(Set(cells).count == 6, "the line took one colour: \(cells)")
+    }
+
+    /// …and the ramp does not stop at the seam: the cell three of six is the
+    /// same colour whether or not a fragment boundary happens to fall there.
+    @Test("The fragment boundary is not a boundary of the ramp")
+    func theSeamIsInvisible() {
+        let ramp = LinearGradient(colors: [red, blue], startPoint: .leading, endPoint: .trailing)
+        let split = painted(
+            render((Text(verbatim: "aaa") + Text(verbatim: "bbb")).foregroundStyle(ramp), width: 6)[0])
+        let whole = painted(render(Text(verbatim: "aaabbb").foregroundStyle(ramp), width: 6)[0])
+        #expect(split == whole, "the seam moved a colour: \(split) vs \(whole)")
+    }
+
+    /// A fragment that states its own colour keeps it — an explicit colour
+    /// beats an inherited style here as it does everywhere else.
+    @Test("A fragment with its own colour is not banded")
+    func statedColourWinsOverTheRamp() {
+        let lines = render(
+            (Text(verbatim: "aaa").foregroundStyle(Color.rgb(9, 9, 9)) + Text(verbatim: "bbb"))
+                .foregroundStyle(
+                    LinearGradient(colors: [red, blue], startPoint: .leading, endPoint: .trailing)),
+            width: 6)
+        let cells = painted(lines[0])
+        #expect(cells.count == 6, "\(cells)")
+        #expect(Array(cells.prefix(3)) == ["9;9;9", "9;9;9", "9;9;9"], "\(cells)")
+        #expect(cells.last == "0;0;255", "the rest still bands: \(cells)")
+        #expect(Set(cells.suffix(3)).count == 3, "the rest went flat: \(cells)")
+    }
+
+    /// A fragment's OTHER attributes survive the banding — the ramp supplies a
+    /// foreground, not a whole style.
+    @Test("A bold fragment stays bold through the ramp")
+    func boldFragmentStaysBold() {
+        let lines = render(
+            (Text(verbatim: "aaa").bold() + Text(verbatim: "bbb"))
+                .foregroundStyle(
+                    LinearGradient(colors: [red, blue], startPoint: .leading, endPoint: .trailing)),
+            width: 6)
+        // Every SGR introducer before the seam carries bold; none after does.
+        let head = lines[0].prefix { $0 != "b" }
+        #expect(head.contains("1;38;2;") || head.contains(";1m"), "bold was dropped: \(lines[0].debugDescription)")
+        let cells = painted(lines[0])
+        #expect(cells.first == "255;0;0" && cells.last == "0;0;255", "\(cells)")
+    }
+
+    /// A vertical ramp over a wrapped concatenation still steps per ROW, which
+    /// is the cheap path (one run per line) and must stay that way.
+    @Test("A vertical ramp over a concatenation steps per row")
+    func verticalConcatenationStepsPerRow() {
+        let lines = render(
+            (Text(verbatim: "aaaa ") + Text(verbatim: "bbbb"))
+                .foregroundStyle(
+                    LinearGradient(colors: [red, blue], startPoint: .top, endPoint: .bottom))
+                .frame(width: 5),
+            width: 5)
+        let rows = lines.prefix(2).map { painted($0) }
+        #expect(rows.count == 2, "\(lines)")
+        #expect(Set(rows[0]).count == 1, "row 0 varied along itself: \(rows[0])")
+        #expect(Set(rows[1]).count == 1, "row 1 varied along itself: \(rows[1])")
+        #expect(rows[0].first != rows[1].first, "the rows share a colour: \(rows)")
+    }
+
     // MARK: - Nothing when unused
 
     /// The whole point of the storage being one slot: a page with no gradient
