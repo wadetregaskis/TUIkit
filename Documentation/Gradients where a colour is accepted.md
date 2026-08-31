@@ -524,11 +524,15 @@ four names are palette roles here, two of them already spelled on `Color`
 where SwiftUI spells them, so a second type would only make `.secondary`
 ambiguous). Each is recorded in `SwiftUI-compatibility.md` §3.
 
-**Still open**, and neither is a gradient problem: `backgroundStyle(_:)` has
-nothing to read it until there is a zero-argument `background()`, and a
-gradient used as a VIEW (`ZStack { LinearGradient(…) }`) wants the same
-fill machinery `Color: View` would — TUIkit has neither, and adding one
-without the other would be the odd half.
+**Both remaining items shipped too**, and neither was a gradient problem.
+`backgroundStyle(_:)` now has the zero-argument `background()` to read it, with
+`BackgroundStyle` (`.background`) as the style itself. And a style used where a
+VIEW goes fills the space it is offered — `Color: View` and the four gradient
+types, which wanted one piece of machinery between them: a blank rectangle plus
+`.background(style)`, so that "a style as a view" is literally the same painting
+path as "a style as a background" and the two cannot disagree. The rectangle is
+flexible in both axes with a minimum of zero, which is `Spacer`'s contract: it
+claims slack and never demands any.
 
 ---
 
