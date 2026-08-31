@@ -90,8 +90,7 @@ extension ANSIRenderer {
     /// - Parameter color: The background color.
     /// - Returns: The ANSI escape sequence.
     static func backgroundCode(for color: Color) -> String {
-        let codes = backgroundCodes(for: color)
-        return "\(csi)\(codes.joined(separator: ";"))m"
+        color.backgroundEscape()
     }
 
     /// Applies foreground color to a string using `TextStyle` + `render()`.
@@ -202,115 +201,14 @@ extension ANSIRenderer {
 
         // Foreground color
         if let fgColor = style.foregroundColor {
-            codes.append(contentsOf: foregroundCodes(for: fgColor))
+            codes.append(contentsOf: fgColor.foregroundCodes())
         }
 
         // Background color
         if let bgColor = style.backgroundColor {
-            codes.append(contentsOf: backgroundCodes(for: bgColor))
+            codes.append(contentsOf: bgColor.backgroundCodes())
         }
 
         return codes
-    }
-}
-
-// MARK: - Color Depth Helpers
-
-extension ANSIRenderer {
-    /// Downsample a color to fit within the given color depth, then
-    /// generate the ANSI foreground codes.
-    ///
-    /// At ``ColorDepth/noColor``, returns an empty array (no color output).
-    /// At lower depths, RGB and palette256 colors are quantized to the
-    /// nearest representable value before generating codes.
-    ///
-    /// - Parameters:
-    ///   - color: The color.
-    ///   - depth: The color depth to use (defaults to ``ColorDepth/current``).
-    /// - Returns: The ANSI code strings.
-    static func foregroundCodes(
-        for color: Color,
-        depth: ColorDepth = ColorDepth.current
-    ) -> [String] {
-        if depth == .noColor { return [] }
-
-        let effective = downsampledColor(color, depth: depth)
-
-        switch effective.value {
-        case .standard(let ansi):
-            return ["\(ansi.foregroundCode)"]
-        case .bright(let ansi):
-            return ["\(ansi.brightForegroundCode)"]
-        case .palette256(let index):
-            return ["38", "5", "\(index)"]
-        case .rgb(let red, let green, let blue):
-            return ["38", "2", "\(red)", "\(green)", "\(blue)"]
-        case .semantic:
-            fatalError("Semantic color must be resolved before rendering. Call Color.resolve(with:) first.")
-        }
-    }
-
-    /// Downsample a color to fit within the given color depth, then
-    /// generate the ANSI background codes.
-    ///
-    /// At ``ColorDepth/noColor``, returns an empty array (no color output).
-    /// At lower depths, RGB and palette256 colors are quantized to the
-    /// nearest representable value before generating codes.
-    ///
-    /// - Parameters:
-    ///   - color: The color.
-    ///   - depth: The color depth to use (defaults to ``ColorDepth/current``).
-    /// - Returns: The ANSI code strings.
-    static func backgroundCodes(
-        for color: Color,
-        depth: ColorDepth = ColorDepth.current
-    ) -> [String] {
-        if depth == .noColor { return [] }
-
-        let effective = downsampledColor(color, depth: depth)
-
-        switch effective.value {
-        case .standard(let ansi):
-            return ["\(ansi.backgroundCode)"]
-        case .bright(let ansi):
-            return ["\(ansi.brightBackgroundCode)"]
-        case .palette256(let index):
-            return ["48", "5", "\(index)"]
-        case .rgb(let red, let green, let blue):
-            return ["48", "2", "\(red)", "\(green)", "\(blue)"]
-        case .semantic:
-            fatalError("Semantic color must be resolved before rendering. Call Color.resolve(with:) first.")
-        }
-    }
-
-    /// Downsample a color to fit within the given ``ColorDepth``.
-    ///
-    /// Colors that already fit the depth pass through unchanged.
-    /// Higher-depth colors are quantized to the nearest representable value.
-    ///
-    /// - Parameters:
-    ///   - color: The color to downsample.
-    ///   - depth: The target color depth.
-    /// - Returns: The downsampled color.
-    static func downsample(_ color: Color, to depth: ColorDepth) -> Color {
-        downsampledColor(color, depth: depth)
-    }
-
-    /// Inline-friendly downsampling helper.
-    ///
-    /// Separated from `downsample(_:to:)` so the compiler can inline
-    /// this into `foregroundCodes` / `backgroundCodes` without an extra
-    /// stack frame in debug builds.
-    private static func downsampledColor(_ color: Color, depth: ColorDepth) -> Color {
-        switch (depth, color.value) {
-        case (.truecolor, _), (.noColor, _):
-            return color
-        case (.palette256, .rgb):
-            return color.downsampledToPalette256()
-        case (.basic16, .rgb), (.basic16, .palette256):
-            return color.downsampledToANSI16()
-        default:
-            return color
-        }
     }
 }

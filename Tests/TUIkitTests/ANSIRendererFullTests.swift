@@ -120,13 +120,13 @@ struct ANSIRendererStyleTests {
 
     @Test("RGB foreground uses 38;2;r;g;b format at truecolor depth")
     func rgbForeground() {
-        let codes = ANSIRenderer.foregroundCodes(for: Color.rgb(255, 128, 0), depth: .truecolor)
+        let codes = Color.rgb(255, 128, 0).foregroundCodes(depth: .truecolor)
         #expect(codes == ["38", "2", "255", "128", "0"])
     }
 
     @Test("RGB background uses 48;2;r;g;b format at truecolor depth")
     func rgbBackground() {
-        let codes = ANSIRenderer.backgroundCodes(for: Color.rgb(0, 255, 128), depth: .truecolor)
+        let codes = Color.rgb(0, 255, 128).backgroundCodes(depth: .truecolor)
         #expect(codes == ["48", "2", "0", "255", "128"])
     }
 

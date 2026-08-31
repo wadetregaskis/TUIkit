@@ -130,7 +130,7 @@ struct ColorDepthTests {
 @Suite("ANSIRenderer.downsample")
 struct ANSIRendererDownsampleTests {
 
-    /// `ANSIRenderer.downsample(_:to:)` reduces a color to the given
+    /// `Color.downsampled(to:)` reduces a colour to the given
     /// depth: truecolor and noColor pass everything through (noColor
     /// stripping happens later, in code generation); palette256
     /// downsamples only RGB; basic16 downsamples RGB and palette256.
@@ -155,11 +155,11 @@ struct ANSIRendererDownsampleTests {
             (.rgb(255, 0, 0), .noColor, .rgb(255, 0, 0)),
         ])
     func downsample(_ color: Color, _ depth: ColorDepth, _ expected: Color) {
-        #expect(ANSIRenderer.downsample(color, to: depth) == expected)
+        #expect(color.downsampled(to: depth) == expected)
     }
 }
 
-// MARK: - ANSIRenderer foregroundCodes/backgroundCodes with Explicit Depth
+// MARK: - foregroundCodes/backgroundCodes with Explicit Depth
 
 @MainActor
 @Suite("ANSIRenderer Color Codes with Explicit Depth")
@@ -179,7 +179,7 @@ struct ANSIRendererExplicitDepthTests {
             (.rgb(255, 0, 0), .noColor, []),
         ])
     func foregroundCodes(_ color: Color, _ depth: ColorDepth, _ codes: [String]) {
-        #expect(ANSIRenderer.foregroundCodes(for: color, depth: depth) == codes)
+        #expect(color.foregroundCodes(depth: depth) == codes)
     }
 
     /// SGR background parameter codes for a color at a given depth.
@@ -192,7 +192,7 @@ struct ANSIRendererExplicitDepthTests {
             (.blue, .noColor, []),
         ])
     func backgroundCodes(_ color: Color, _ depth: ColorDepth, _ codes: [String]) {
-        #expect(ANSIRenderer.backgroundCodes(for: color, depth: depth) == codes)
+        #expect(color.backgroundCodes(depth: depth) == codes)
     }
 
     /// Bright colors are already 16-color-representable, so their
@@ -201,14 +201,14 @@ struct ANSIRendererExplicitDepthTests {
         "Bright foreground codes pass through at all color depths",
         arguments: [ColorDepth.truecolor, .palette256, .basic16])
     func brightForegroundPassthrough(_ depth: ColorDepth) {
-        #expect(ANSIRenderer.foregroundCodes(for: .brightCyan, depth: depth) == ["96"])
+        #expect(Color.brightCyan.foregroundCodes(depth: depth) == ["96"])
     }
 
     @Test(
         "Bright background codes pass through at all color depths",
         arguments: [ColorDepth.truecolor, .palette256, .basic16])
     func brightBackgroundPassthrough(_ depth: ColorDepth) {
-        #expect(ANSIRenderer.backgroundCodes(for: .brightBlue, depth: depth) == ["104"])
+        #expect(Color.brightBlue.backgroundCodes(depth: depth) == ["104"])
     }
 }
 

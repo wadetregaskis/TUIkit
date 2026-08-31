@@ -482,14 +482,14 @@ extension SGRState {
     /// so there is one code path for "what colour is in force".
     func settingForeground(_ color: Color?) -> Self {
         var result = self
-        result.apply(Self.sgr(color.map { ANSIRenderer.foregroundCodes(for: $0) } ?? ["39"]))
+        result.apply(Self.sgr(color.map { $0.foregroundCodes() } ?? ["39"]))
         return result
     }
 
     /// This state with its background replaced. `nil` is SGR 49.
     func settingBackground(_ color: Color?) -> Self {
         var result = self
-        result.apply(Self.sgr(color.map { ANSIRenderer.backgroundCodes(for: $0) } ?? ["49"]))
+        result.apply(Self.sgr(color.map { $0.backgroundCodes() } ?? ["49"]))
         return result
     }
 

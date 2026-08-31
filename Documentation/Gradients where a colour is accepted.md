@@ -850,22 +850,45 @@ Two properties, both required:
    the shape of the `body` makes no difference — opaque, concrete or `Never`
    all crash.
 
-**And it has a fix**: moving the conformance into `TUIkitView`, the protocol's
-own module, makes it go away — verified by adding `TUIkitStyling` to
-`TUIkitView`'s dependencies and declaring `ContentMode: View` there.
+### It is not incremental, and it is not fixed upstream
 
-Doing that for `Color` is more than moving a line. `Color.body` is
-`_StyleFillBlock().background(self)`, and `background(_:)`, `ShapeStyle`,
-`Paint` and `EnvironmentValues.palette` are all `TUIkit`'s — so a conformance
-in `TUIkitView` needs a fill it can paint from there, which means the colour →
-escape mapping (`ANSIRenderer.backgroundCodes` and the depth downsampling,
-which depend on nothing above `TUIkitStyling`) and `PaletteEnvironment` moving
-down with it. That is a real architectural change — `TUIkitView` gaining a
-dependency on `TUIkitStyling` — and it is the user's call, not this document's.
+Reproduced after `rm -rf .build` — a from-scratch build of all 1,362 modules —
+and in a plain executable target as well as under the test harness, so it is
+neither a stale-build artefact nor something about `swift-testing`. Rebuilt with
+the **Swift 6.5-dev snapshot of 2026-08-30** and it segfaults there too, in the
+same two cases and no others.
 
-Until it is made, `Color` as a view is unusable in a debug build beside any
-generic sibling, which is nearly all of them. The gradients are unaffected:
-they are `TUIkit`'s own types, so their conformances are in their own module.
+(That snapshot cannot compile TUIkit as it stands, for an unrelated reason: a
+`swift-frontend` crash in the `LoadableByAddress` SIL pass on
+`MouseEventDispatcher.pendingHoverExit`, a tuple-in-an-`Optional` property.
+Rewriting the tuple as a small struct gets past it, which is how the check above
+was run.)
+
+### The fix, and what it cost
+
+Moving the conformance into `TUIkitView`, the module that owns `View`, makes it
+go away — confirmed on both toolchains. That is what shipped, and it is not one
+line:
+
+| Moved | From → To | Why it had to |
+|---|---|---|
+| `Color.foregroundCodes` / `backgroundCodes` / `downsampled(to:)` / `backgroundEscape` | `ANSIRenderer` (`TUIkit`) → `Color+ANSICodes.swift` (`TUIkitStyling`) | The fill has to be painted from `TUIkitView`, which needs a colour's escape. They depend on nothing above `TUIkitStyling`, and reading `colour.backgroundCodes()` is better than `ANSIRenderer.backgroundCodes(for: colour)` anyway |
+| `PaletteEnvironment.swift` | `TUIkit` → `TUIkitView` | A semantic colour is a palette reference; the fill must resolve it |
+| `ColorAnimation.swift` | `TUIkit` → `TUIkitView` | So a `Color` used as a view still FADES under `withAnimation`. Everything it needs was already in `TUIkitCore`/`TUIkitView` |
+| `_StyleFillBlock` + `extension Color: View` | `TUIkit` → `TUIkitView` | The conformance itself, and the body it returns |
+
+`TUIkitView` gains a dependency on `TUIkitStyling` for this and nothing else.
+The four gradient types are unaffected — they are `TUIkit`'s own, so their
+conformances were already in the module that declares them, and they keep
+`_StyleFillBlock().background(self)`.
+
+The one real cost is that a flat `Color` is now painted in `TUIkitView` rather
+than through `.background(_:)`, so there are two paths where there was one.
+`StyleAsViewTests` pins them byte-identical over the same rectangle, semantic
+colours included, so they cannot quietly drift apart.
+
+**If the toolchain fixes this, all of it can move back and the dependency can
+go.** The comment on `extension Color: View` says so, in the file.
 
 ---
 

@@ -47,7 +47,14 @@ let package = Package(
         .target(name: "TUIkitStyling"),
 
         // ── Mid-level ───────────────────────────────────────────────────────────────────────────────────
-        .target(name: "TUIkitView", dependencies: ["TUIkitCore"]),
+        // TUIkitStyling is here for ONE reason: `Color: View` has to be
+        // declared in the module that owns `View`, or a `Color` in a
+        // `@ViewBuilder` pack beside a generic view segfaults the debug
+        // runtime while instantiating the pack's metadata. See §14 of
+        // `Documentation/Gradients where a colour is accepted.md` — it is a
+        // toolchain bug, reproduced on Swift 6.2.4 and still present on the
+        // 6.5-dev snapshot of 2026-08-30.
+        .target(name: "TUIkitView", dependencies: ["TUIkitCore", "TUIkitStyling"]),
         .target(name: "TUIkitImage", dependencies: ["CSTBImage", "TUIkitStyling"]),
 
         // ── High-level (aggregates all) ─────────────────────────────────────────────────────────────────

@@ -148,6 +148,24 @@ struct StyleAsViewTests {
 
     // MARK: - Layering
 
+    /// A flat fill and `.background(_:)` over the same rectangle must produce
+    /// the same bytes.
+    ///
+    /// They are two code paths now — `Color`'s conformance lives in
+    /// `TUIkitView`, which cannot reach `.background(_:)` — and the whole point
+    /// of the original single path was that they could not disagree. This is
+    /// what keeps that true.
+    @Test("A colour fill is byte-identical to the same colour as a background")
+    func fillMatchesTheBackgroundModifier() {
+        for colour in [red, Color.rgb(0, 255, 0), Color.palette.accent] {
+            let asView = render(colour, width: 7, height: 2)
+            let asBackground = render(_StyleFillBlock().background(colour), width: 7, height: 2)
+            #expect(
+                asView == asBackground,
+                "\(colour): \(asView.map(\.debugDescription)) vs \(asBackground.map(\.debugDescription))")
+        }
+    }
+
     /// A fill under a sibling in a `ZStack` shows everywhere the sibling draws
     /// nothing AND behind the cells it does draw: a glyph and a field are two
     /// statements, and a `Text` that sets only a foreground has said nothing
@@ -173,21 +191,14 @@ struct StyleAsViewTests {
     /// …and the sibling's own background still wins where it states one, since
     /// its escapes are the later statement about the same cells.
     ///
-    /// > The fill is wrapped in `AnyView` here, and it is not tidying: a bare
-    ///   `Color` beside a GENERIC view in a `@ViewBuilder` pack segfaults the
-    ///   Swift 6.2.4 **debug** runtime while instantiating the pack's metadata,
-    ///   before any TUIkit code runs (release builds are fine). It is a
-    ///   toolchain bug — reproduced with a conformance on an unrelated type,
-    ///   and absent when the same two views go into a plain generic struct
-    ///   instead of a pack — and `Color: View` is the only conformance in the
-    ///   framework declared in a module that owns neither the type nor the
-    ///   protocol, which is what trips it. See §14 of
-    ///   `Documentation/Gradients where a colour is accepted.md`.
+    /// The bare `Color` beside a generic sibling is also the shape that used to
+    /// segfault the debug runtime, so this doubles as the regression test for
+    /// the conformance living in `TUIkitView` — see `ColorAsView.swift`.
     @Test("A sibling that names its own background keeps it")
     func siblingBackgroundWins() {
         let lines = render(
             ZStack {
-                AnyView(red)
+                red
                 Text(verbatim: "hi").background(Color.rgb(0, 255, 0))
             }, width: 10, height: 3)
         let row = backgrounds(lines[1])

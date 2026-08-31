@@ -124,9 +124,9 @@ struct DisabledTrackTests {
         for palette in PaletteRegistry.all {
             // As it reaches the terminal: `38;5;n` or `38;2;r;g;b`, joined the
             // way an SGR sequence joins its parameters.
-            let accent = ANSIRenderer.foregroundCodes(
-                for: palette.accent.resolve(with: palette)
-            ).joined(separator: ";")
+            let accent = palette.accent.resolve(with: palette)
+                .foregroundCodes()
+                .joined(separator: ";")
             guard !accent.isEmpty else { continue }
             for (name, style) in styles {
                 func draw(_ disabled: Bool) -> String {

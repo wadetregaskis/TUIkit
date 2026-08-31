@@ -31,7 +31,7 @@ private let closeCap = "▌"
 @MainActor
 private func hasCaretCell(_ rawLine: String, palette: (any Palette)? = nil) -> Bool {
     let cursorColor = (palette ?? EnvironmentValues().palette).cursorColor
-    let fragment = ANSIRenderer.backgroundCodes(for: cursorColor).joined(separator: ";") + "m"
+    let fragment = cursorColor.backgroundCodes().joined(separator: ";") + "m"
     return rawLine.contains(fragment)
 }
 

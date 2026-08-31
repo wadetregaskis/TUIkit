@@ -40,7 +40,7 @@ struct OpacitySurfaceTests {
             "the span hands a cell to the terminal's background: \(span.debugDescription)")
         // And it says the page's, which is what the row it is spliced into is
         // painted in.
-        let expected = ANSIRenderer.backgroundCodes(for: surface).joined(separator: ";")
+        let expected = surface.backgroundCodes().joined(separator: ";")
         #expect(
             span.contains(expected),
             "the span does not name the surface: \(span.debugDescription)")
@@ -69,7 +69,7 @@ struct OpacitySurfaceTests {
             source: band, destination: band, columns: 0..<4, destinationShift: 0,
             alpha: { column in column == 0 ? 0.5 : nil },
             surface: surface, defaultForeground: .rgb(200, 200, 200))
-        let named = ANSIRenderer.backgroundCodes(for: surface).joined(separator: ";")
+        let named = surface.backgroundCodes().joined(separator: ";")
         // Exactly one cell was covered, so the surface is named at most once —
         // the three passed-through cells did not gain one.
         #expect(
@@ -96,7 +96,7 @@ struct OpacitySurfaceTests {
                 })
         }
         ColorDepth.withCurrent(.palette256) {
-            let page = ANSIRenderer.backgroundCodes(for: surface).joined(separator: ";")
+            let page = surface.backgroundCodes().joined(separator: ";")
             // At 1% every cell keeps the page: the composite is closer to what
             // was there than to the entry it would otherwise have taken.
             let faint = backgrounds(atAlpha: 0.01)
@@ -124,7 +124,7 @@ struct OpacitySurfaceTests {
             let span = FrameBuffer.blendedSpan(
                 source: label, destination: band, columns: 0..<5, destinationShift: 0,
                 alpha: { _ in 0.01 }, surface: surface, defaultForeground: .rgb(200, 200, 200))
-            let page = ANSIRenderer.backgroundCodes(for: surface).joined(separator: ";")
+            let page = surface.backgroundCodes().joined(separator: ";")
             #expect(
                 !span.components(separatedBy: "\u{1B}[").allSatisfy {
                     !$0.contains("48;") || $0.contains(page)

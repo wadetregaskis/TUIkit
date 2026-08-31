@@ -22,7 +22,7 @@ struct OpacityTests {
     /// The foreground colour the renderer would emit for `color`, as a set of
     /// SGR parameters — the form the buffer actually carries.
     private func codes(_ color: Color) -> String {
-        ANSIRenderer.foregroundCodes(for: color).joined(separator: ";")
+        color.foregroundCodes().joined(separator: ";")
     }
 
     @Test("Full opacity changes nothing at all")
@@ -151,7 +151,7 @@ struct OpacityTests {
         let surface = context.environment.palette.background
         let faded = renderToScreen(
             Text("hi").background(Color.blue).opacity(0.5), context: context)
-        let expected = ANSIRenderer.backgroundCodes(for: Color.blue.compositing(0.5, over: surface))
+        let expected = Color.blue.compositing(0.5, over: surface).backgroundCodes()
             .joined(separator: ";")
         #expect(faded.lines[0].contains(expected))
     }
@@ -308,7 +308,7 @@ struct OpacityTests {
         let faded = OpacityFade.fading(
             "\u{1B}[39mx\u{1B}[49my", by: 0.5, over: surface, defaultForeground: foreground)
         #expect(faded.contains(
-            ANSIRenderer.foregroundCodes(for: foreground.compositing(0.5, over: surface))
+            foreground.compositing(0.5, over: surface).foregroundCodes()
                 .joined(separator: ";")))
         #expect(!faded.contains("[39m"))
         #expect(!faded.contains("[49m"))

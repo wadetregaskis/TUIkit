@@ -72,7 +72,7 @@ struct ImageMonoInkTests {
         let inked = try #require(
             drawn.first { $0.stripped.contains { !$0.isWhitespace } },
             "nothing was drawn: \(drawn.map(\.stripped))")
-        let foreground = ANSIRenderer.foregroundCodes(for: palette.foreground)
+        let foreground = palette.foreground.foregroundCodes()
             .joined(separator: ";")
         #expect(!foreground.isEmpty, "the palette names a foreground")
         #expect(
@@ -88,7 +88,7 @@ struct ImageMonoInkTests {
         let drawn = lines(mode: .trueColor, palette: palette)
         let painted = try #require(
             drawn.first { $0.contains("\u{1B}[") }, "the image drew something")
-        let foreground = ANSIRenderer.foregroundCodes(for: palette.foreground)
+        let foreground = palette.foreground.foregroundCodes()
             .joined(separator: ";")
         #expect(
             !painted.hasPrefix("\u{1B}[\(foreground)"),

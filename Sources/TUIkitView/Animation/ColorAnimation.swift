@@ -6,7 +6,6 @@
 
 import TUIkitCore
 import TUIkitStyling
-import TUIkitView
 
 /// Fades a colour that changed inside ``withAnimation(_:_:)``.
 ///
@@ -33,13 +32,13 @@ import TUIkitView
 /// should move *forever* — a focus pulse, a breathing indicator — use
 /// ``AnimatedColor``, which hands the run loop the whole cycle and costs no
 /// render passes at all. See <doc:AnimatingYourOwnView>.
-enum ColorAnimation {
+package enum ColorAnimation {
     /// A colour's animatable data: its resolved red, green and blue.
     ///
     /// Nested pairs because ``VectorArithmetic`` is a two-method protocol; the
     /// components are `Double` so the interpolation happens at full precision
     /// and only the drawn colour is rounded back to bytes.
-    typealias Data = AnimatablePair<Double, AnimatablePair<Double, Double>>
+    package typealias Data = AnimatablePair<Double, AnimatablePair<Double, Double>>
 
     /// The colour to draw for `target` this frame.
     ///
@@ -55,7 +54,7 @@ enum ColorAnimation {
     /// - Returns: `target` unchanged when nothing is moving; otherwise the
     ///   colour partway between where it was and where it is going.
     @MainActor
-    static func resolving(
+    package static func resolving(
         _ target: Color, owner: Any.Type, slot: Int = 0, context: RenderContext
     ) -> Color {
         let palette = context.environment.palette

@@ -23,7 +23,7 @@ struct TextConcatenationTests {
     /// The SGR parameters the renderer emits for a foreground colour — the
     /// form a rendered line actually carries.
     private func codes(_ color: Color) -> String {
-        ANSIRenderer.foregroundCodes(for: color).joined(separator: ";")
+        color.foregroundCodes().joined(separator: ";")
     }
 
     // MARK: - The property the whole design rests on

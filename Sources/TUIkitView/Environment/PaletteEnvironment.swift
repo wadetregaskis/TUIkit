@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import TUIkitCore
 import TUIkitStyling
 
 // MARK: - Palette Environment Key
@@ -84,7 +85,10 @@ extension EnvironmentValues {
     /// a field inside a `TabView`'s body drew the tab's own tone and vanished
     /// into it. Read it through ``Palette/fieldBackground(on:)`` rather than
     /// directly, so the derivation stays in one place.
-    var surfaceBackground: Color? {
+    ///
+    /// `package` rather than `internal` since this moved down a module: the
+    /// controls that read it are the umbrella module's.
+    package var surfaceBackground: Color? {
         get { self[SurfaceBackgroundKey.self] }
         set { self[SurfaceBackgroundKey.self] = newValue }
     }

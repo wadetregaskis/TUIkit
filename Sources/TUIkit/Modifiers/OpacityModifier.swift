@@ -333,8 +333,8 @@ enum SGRColorRewrite {
                 if let color {
                     let faded = transform(color)
                     rewritten += parameter == 38
-                        ? ANSIRenderer.foregroundCodes(for: faded)
-                        : ANSIRenderer.backgroundCodes(for: faded)
+                        ? faded.foregroundCodes()
+                        : faded.backgroundCodes()
                 } else {
                     rewritten.append(parameters[index])
                 }
@@ -346,9 +346,9 @@ enum SGRColorRewrite {
                 // "Default foreground" — which IS the palette foreground
                 // here, so it transforms rather than snapping back to full
                 // strength.
-                rewritten += ANSIRenderer.foregroundCodes(for: transform(defaultForeground))
+                rewritten += transform(defaultForeground).foregroundCodes()
             case 49:
-                rewritten += ANSIRenderer.backgroundCodes(for: transform(defaultBackground))
+                rewritten += transform(defaultBackground).backgroundCodes()
             default:
                 // 0 (reset), 1 (bold), 2 (dim), 4 (underline), 7 (inverse), …
                 rewritten.append(parameters[index])
@@ -496,8 +496,8 @@ enum SGRColorRewrite {
         let (standard, bright) = Self.basicColors[base]
         let faded = transform(isBright ? bright : standard)
         return isBackground
-            ? ANSIRenderer.backgroundCodes(for: faded)
-            : ANSIRenderer.foregroundCodes(for: faded)
+            ? faded.backgroundCodes()
+            : faded.foregroundCodes()
     }
 }
 

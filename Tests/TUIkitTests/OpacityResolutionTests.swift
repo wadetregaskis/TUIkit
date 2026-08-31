@@ -27,11 +27,11 @@ struct OpacityResolutionTests {
     }
 
     private func codes(_ color: Color) -> String {
-        ANSIRenderer.foregroundCodes(for: color).joined(separator: ";")
+        color.foregroundCodes().joined(separator: ";")
     }
 
     private func backgroundCodes(_ color: Color) -> String {
-        ANSIRenderer.backgroundCodes(for: color).joined(separator: ";")
+        color.backgroundCodes().joined(separator: ";")
     }
 
     /// A one-line buffer carrying one region over the whole of it.
@@ -76,7 +76,7 @@ struct OpacityResolutionTests {
 
         // Whatever spelling this build's renderer picks for the field — truecolor
         // or the 256 cube — the resolved row has to name the same one.
-        let expected = ANSIRenderer.backgroundCodes(for: field).joined(separator: ";")
+        let expected = field.backgroundCodes().joined(separator: ";")
         #expect(resolved.lines.first?.stripped == "hello")
         #expect(
             resolved.lines.first?.contains(expected) == true,
@@ -625,7 +625,7 @@ struct OpacityForeignRunTests {
     }
 
     private func codes(_ color: Color) -> String {
-        ANSIRenderer.foregroundCodes(for: color).joined(separator: ";")
+        color.foregroundCodes().joined(separator: ";")
     }
 
     @Test("A run inside a faded region replays FADED, not dropped")

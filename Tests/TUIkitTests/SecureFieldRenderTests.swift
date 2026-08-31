@@ -30,7 +30,7 @@ private let bullet = "●"
 /// is a background-colour run, not a character.
 @MainActor
 private func hasCaretCell(_ rawLine: String) -> Bool {
-    let fragment = ANSIRenderer.backgroundCodes(for: EnvironmentValues().palette.cursorColor)
+    let fragment = EnvironmentValues().palette.cursorColor.backgroundCodes()
         .joined(separator: ";") + "m"
     return rawLine.contains(fragment)
 }

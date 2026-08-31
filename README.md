@@ -280,6 +280,11 @@ Sources/
 ├── TUIkitStyling/        Color, theme palettes, border styles (Color, Styles, Theme)
 ├── TUIkitView/           View protocol, ViewBuilder, State, Environment, Renderable
 │                         (Core, Environment, Rendering, State)
+│                         Depends on TUIkitStyling for ONE reason: `Color: View`
+│                         has to be declared in the module that owns `View`, or
+│                         a `Color` in a ViewBuilder pack beside a generic view
+│                         segfaults the debug runtime (a toolchain bug — see
+│                         Sources/TUIkitView/Core/ColorAsView.swift)
 ├── TUIkitImage/          ASCII-art converter (braille / fine-blocks / shape / dithering),
 │                         image loading — NSImage on Apple, else stb_image
 │                         (depends on CSTBImage + TUIkitStyling)
