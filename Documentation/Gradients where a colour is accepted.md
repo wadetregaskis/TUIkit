@@ -850,6 +850,16 @@ Two properties, both required:
    the shape of the `body` makes no difference — opaque, concrete or `Never`
    all crash.
 
+> **Reduced to twenty lines, in `Tools/CompilerBugs/PackMetadataSegfault`.**
+> The narrowing below was done against TUIkit; the standalone package is what
+> should be reported upstream, and what to re-run against a new toolchain.
+> Three ingredients, each necessary: a struct that STORES a parameter pack, one
+> element whose conformance is declared in a module owning neither the type nor
+> the protocol, and one element that is an OPAQUE type. The protocol needs no
+> requirements at all — `protocol P {}` is enough — so none of the
+> SwiftUI-shaped machinery (associated types, `Never` conformances, actor
+> isolation, result builders) is involved.
+
 ### It is not incremental, and it is not fixed upstream
 
 Reproduced after `rm -rf .build` — a from-scratch build of all 1,362 modules —
@@ -859,10 +869,11 @@ the **Swift 6.5-dev snapshot of 2026-08-30** and it segfaults there too, in the
 same two cases and no others.
 
 (That snapshot cannot compile TUIkit as it stands, for an unrelated reason: a
-`swift-frontend` crash in the `LoadableByAddress` SIL pass on
+`swift-frontend` assertion in the `LoadableByAddress` SIL pass on
 `MouseEventDispatcher.pendingHoverExit`, a tuple-in-an-`Optional` property.
 Rewriting the tuple as a small struct gets past it, which is how the check above
-was run.)
+was run — and is now the shipped shape. That one is reduced to twelve lines in
+`Tools/CompilerBugs/LoadableByAddressAssertion`.)
 
 ### The fix, and what it cost
 

@@ -106,10 +106,13 @@ extension _StyleFillBlock: Renderable, Layoutable {
 /// of 2026-08-30; release builds are unaffected.
 ///
 /// Declaring it in `View`'s own module is what makes it go away, and that is
-/// the only reason `TUIkitView` depends on `TUIkitStyling` at all. §14 of
-/// `Documentation/Gradients where a colour is accepted.md` has the measurements
-/// and the narrowing. **If the toolchain fixes it, this can move back up beside
-/// the gradients' conformances and the dependency can go.**
+/// the only reason `TUIkitView` depends on `TUIkitStyling` at all.
+/// `Tools/CompilerBugs/PackMetadataSegfault` is the whole thing in twenty
+/// lines, with a case matrix — run it against a new toolchain to find out
+/// whether this is still needed. §14 of
+/// `Documentation/Gradients where a colour is accepted.md` has the narrowing.
+/// **If the toolchain fixes it, this can move back up beside the gradients'
+/// conformances and the dependency can go.**
 extension Color: View {
     public var body: some View {
         _StyleFillBlock(colour: self)

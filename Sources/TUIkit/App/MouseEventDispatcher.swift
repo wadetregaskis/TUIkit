@@ -132,6 +132,10 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// assertion in the `LoadableByAddress` SIL pass, on this property's
     /// setter, which stops the whole package compiling on that toolchain. A
     /// struct compiles. It reads no worse either way.
+    ///
+    /// `Tools/CompilerBugs/LoadableByAddressAssertion` is the bug in twelve
+    /// lines, with the near-misses beside it — including this exact swap, which
+    /// is the last row of its matrix.
     private struct PendingHoverExit {
         let region: HitTestRegion
         let handler: (MouseEvent) -> Bool
