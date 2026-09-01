@@ -196,4 +196,93 @@ struct GradientGeometryTests {
             #expect(sampler?.variesAcrossRow == varies, "\(geometry)")
         }
     }
+
+    // MARK: - Numbers a caller can supply that are not numbers
+
+    /// `UnitPoint`, `Angle` and the radius fractions are public, `Double` and
+    /// unvalidated, and every geometry reaches a step count through arithmetic
+    /// on them. A NaN or an infinity used to reach `Int(_: Double)`, which
+    /// traps — so a `0/0` three view-layers away killed the process on the next
+    /// frame. A caller handing a gradient a NaN has a bug, but a flat fill is a
+    /// far better way to be told about it than a crash.
+    @Test(
+        "A non-finite geometry paints flat instead of trapping",
+        arguments: [
+            GradientGeometry.linear(from: UnitPoint(x: .nan, y: 0), to: .trailing),
+            .linear(from: .leading, to: UnitPoint(x: .infinity, y: 0)),
+            .linear(from: UnitPoint(x: -.infinity, y: .infinity), to: .center),
+            .radial(center: UnitPoint(x: .nan, y: .nan), startRadius: 0, endRadius: 8),
+            .radial(center: .center, startRadius: .min, endRadius: .max),
+            .radial(center: .center, startRadius: .max, endRadius: .min),
+            .elliptical(center: .center, startRadiusFraction: .nan, endRadiusFraction: 1),
+            .elliptical(center: .center, startRadiusFraction: 0, endRadiusFraction: .infinity),
+            .elliptical(
+                center: UnitPoint(x: .infinity, y: 0), startRadiusFraction: 0,
+                endRadiusFraction: 1),
+            .angular(
+                center: .center, startAngle: Angle(radians: .nan), endAngle: Angle(radians: 1)),
+            .angular(
+                center: .center, startAngle: .zero, endAngle: Angle(radians: .infinity)),
+            .angular(center: UnitPoint(x: .nan, y: .nan), startAngle: .zero, endAngle: .degrees(90)),
+        ]
+    )
+    func nonFiniteGeometryDoesNotTrap(_ geometry: GradientGeometry) {
+        let sampler = RampSampler(
+            paint: .gradient(GradientPaint(ramp, geometry)), extent: square,
+            depth: .truecolor, cellAspect: 2)
+        // Either there is no sampler — the caller paints flat, which is what
+        // this file's other degenerate cases already do — or there is one and
+        // every cell of the extent resolves to an entry that exists.
+        guard let sampler else { return }
+        for row in 0..<21 {
+            let term = sampler.rowTerm(row)
+            for column in 0..<21 {
+                let entry = sampler.entry(column: column, rowTerm: term)
+                #expect(sampler.ramp.indices.contains(entry), "\(geometry) at \(column),\(row)")
+            }
+        }
+    }
+
+    /// An extreme but FINITE unit point is not degenerate — it names a ramp
+    /// compressed into a sliver — so it has to paint, and to cost what a ramp
+    /// costs rather than what a million-entry one does. The linear geometry was
+    /// the only one of the four without the ceiling.
+    @Test("An out-of-range unit point is ceilinged, not obeyed")
+    func extremeUnitPointIsCeilinged() {
+        let sampler = RampSampler(
+            paint: .gradient(
+                GradientPaint(
+                    ramp, .linear(from: .leading, to: UnitPoint(x: 100_000, y: 0)))),
+            extent: square, depth: .truecolor, cellAspect: 2)
+        guard let sampler else {
+            Issue.record("a finite geometry should still paint")
+            return
+        }
+        // The ceiling is private; what matters is that it exists at all —
+        // without one this asked for 2.1 million entries and quantised each.
+        #expect(sampler.ramp.count < 10_000, "\(sampler.ramp.count) entries")
+    }
+
+    /// The same at the whole-view level, because the sampler answering safely
+    /// is only half of it — the paint path has to survive too.
+    @Test("A view under a non-finite gradient renders")
+    @MainActor
+    func nonFiniteGradientRenders() {
+        let tui = TUIContext()
+        var environment = EnvironmentValues()
+        environment.palette = SystemPalette.green
+        environment.focusManager = FocusManager()
+        environment.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 12, availableHeight: 3, environment: environment, tuiContext: tui)
+        let lines = renderToBuffer(
+            Text("abcdefghijkl")
+                .foregroundStyle(
+                    AngularGradient(
+                        gradient: ramp, center: UnitPoint(x: .nan, y: .nan),
+                        startAngle: .zero, endAngle: Angle(radians: .infinity))),
+            context: context
+        ).lines
+        #expect(lines.first?.stripped == "abcdefghijkl")
+    }
 }

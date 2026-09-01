@@ -339,7 +339,13 @@ struct RampSampler {
             // term per column and a term per row. Precomputing both halves
             // turns the inner loop — which runs once per CELL of every painted
             // view — into an add, a multiply and a round.
-            steps = max(2, Int((abs(axisX) * width + abs(axisY) * height).rounded()))
+            // Ceilinged like the other three, which it was not: a
+            // `UnitPoint` an order of magnitude out of range asked for a ramp
+            // of millions of entries and quantised every one of them.
+            guard let count = Self.steps(abs(axisX) * width + abs(axisY) * height) else {
+                return nil
+            }
+            steps = count
             mapping = .linear
             variesAcrossRow = axisX != 0
             columnScale = axisX / lengthSquared / width
@@ -354,7 +360,12 @@ struct RampSampler {
         case .radial(let center, let startRadius, let endRadius):
             // A radius is cells along the horizontal axis; a row is `aspect`
             // of those tall, which is what keeps a circle circular.
-            steps = max(2, min(abs(endRadius - startRadius), Self.stepCeiling))
+            // Through `Double`, because `endRadius - startRadius` overflows
+            // for radii at the ends of `Int` and `abs` traps on `Int.min`.
+            guard let count = Self.steps(abs(Double(endRadius) - Double(startRadius))) else {
+                return nil
+            }
+            steps = count
             mapping = Self.distance(from: Double(startRadius), to: Double(endRadius))
             variesAcrossRow = true
             columnScale = 1
@@ -366,7 +377,8 @@ struct RampSampler {
             // Fractions of the box, so the box's own proportions ARE the
             // ellipse and there is no aspect to correct for.
             let span = abs(endFraction - startFraction)
-            steps = max(2, min(Int((span * max(width, height)).rounded()), Self.stepCeiling))
+            guard let count = Self.steps(span * max(width, height)) else { return nil }
+            steps = count
             mapping = Self.distance(from: startFraction, to: endFraction)
             variesAcrossRow = true
             columnScale = 1 / width
@@ -381,7 +393,8 @@ struct RampSampler {
             // One entry per cell of the longest arc the sweep can draw inside
             // the extent: any finer is invisible, any coarser bands.
             let reach = ((width * width) + (height * aspect * height * aspect)).squareRoot() / 2
-            steps = max(2, min(Int((sweep * 2 * .pi * reach).rounded()), Self.stepCeiling))
+            guard let count = Self.steps(sweep * 2 * .pi * reach) else { return nil }
+            steps = count
             mapping = .sweep(
                 base: -direction * startAngle.radians / (2 * .pi),
                 scale: direction / (2 * .pi),
@@ -401,6 +414,25 @@ struct RampSampler {
         ramp = sampled
         stepScale = Double(steps - 1)
         lastEntry = sampled.count - 1
+    }
+
+    /// How many ramp entries a geometry's own arithmetic asks for, or `nil`
+    /// when it has not asked for a number at all.
+    ///
+    /// The four geometries all reach a step count through arithmetic on values
+    /// a caller supplies, and `UnitPoint`, `Angle` and the radius fractions are
+    /// public, unvalidated and `Double`. A NaN or an infinity in any of them
+    /// reaches `Int(_: Double)`, which traps — so this answers `nil` instead
+    /// and `init?` returns `nil`, which is the answer the sampler already has
+    /// for a degenerate ramp: paint flat. A caller handing a gradient a NaN has
+    /// a bug, but a crash three frames later is a worse way to be told about it
+    /// than a flat fill.
+    ///
+    /// - Parameter count: The geometry's own number.
+    /// - Returns: A usable step count, or `nil` when there is not one.
+    private static func steps(_ count: Double) -> Int? {
+        guard count.isFinite else { return nil }
+        return max(2, Int(min(Double(stepCeiling), max(0, count.rounded()))))
     }
 
     /// A ramp of more entries than this cannot be told apart on any terminal
@@ -449,7 +481,14 @@ struct RampSampler {
                 along = span > 0 ? turn / span : 0
             }
         }
-        return min(lastEntry, max(0, Int((along * stepScale).rounded())))
+        // Clamped BEFORE the conversion, not after: `Int(_: Double)` traps on
+        // a NaN or an infinity, so a clamp on the far side of it never runs.
+        // `max(0, .nan)` is 0 — Swift's `max` returns its first argument when
+        // the comparison is false, and every comparison with a NaN is — so a
+        // geometry that has gone non-finite paints the ramp's start rather than
+        // killing the process. Same two comparisons either way; only the order
+        // changed.
+        return Int(min(Double(lastEntry), max(0, (along * stepScale).rounded())))
     }
 
     /// The colour of a whole row, for a ramp that does not vary along one.

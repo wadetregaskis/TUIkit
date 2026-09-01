@@ -1289,3 +1289,45 @@ lands has changed.
 
 The whole thing is behind `gradientContentFrame`'s `nil`, so a grid with no
 ramp above it pays one optional check and takes no extra measure.
+
+---
+
+## 21. Numbers a caller can supply that are not numbers
+
+`UnitPoint`, `Angle` and the elliptical radius fractions are public, `Double`
+and unvalidated — SwiftUI's are too — and all four geometries reach a step count
+through arithmetic on them. `Int(_: Double)` traps on a NaN or an infinity, so
+`UnitPoint(x: .nan, y: 0)` — a `0/0` three view-layers away — killed the process
+on the next frame, from inside `RampSampler`.
+
+The house rule this falls under: **TUIkit must not trap because of TUIkit.** A
+caller handing a gradient a NaN has a bug, and it is defensible for a public API
+to trap on input that is semantically *bad* rather than merely unexpected — but
+the trap here was not the API's judgement about its argument, it was our own
+arithmetic overflowing three layers down, and a crash on a later frame is a far
+worse way to be told than a flat fill.
+
+There are two conversions and they get different answers, both of them total:
+
+- **The step count** goes through one `steps(_:)`, which answers `nil` for
+  anything non-finite. `init?` then returns `nil`, which is the answer the
+  sampler already gives for a degenerate ramp — one stop, a zero-length axis,
+  equal radii — and the caller paints flat. The radial case goes through
+  `Double` on the way, because `endRadius - startRadius` overflows at the ends
+  of `Int` and `abs` traps on `Int.min` besides.
+- **The per-cell entry** clamps *before* it converts rather than after. It used
+  to read `min(lastEntry, max(0, Int((along * stepScale).rounded())))` — a clamp
+  on the far side of the conversion that traps, which is no clamp at all. In
+  `Double` first, `max(0, .nan)` is `0` (Swift's `max` returns its first
+  argument when the comparison is false, and every comparison with a NaN is), so
+  a geometry gone non-finite paints the ramp's start. Same two comparisons; only
+  the order changed, so the inner loop costs exactly what it did.
+
+The linear geometry also gained the `stepCeiling` the other three already had.
+Without it, `UnitPoint(x: 100_000, y: 0)` is not degenerate — it is a perfectly
+meaningful ramp squeezed into a sliver — and it asked for two million entries
+and quantised every one of them.
+
+No public signature changed, so none of this is a source-compatibility question:
+the initialisers still store what they are given, and it is the renderer that
+decides what a number means.
