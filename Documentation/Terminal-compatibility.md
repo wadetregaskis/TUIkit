@@ -717,6 +717,11 @@ before the render loop is built.
 - **Right-edge phantom cells:** rows whose compensation leaves
   advance≠paint at the right edge can leave unpainted phantom cells;
   `FrameDiffWriter.repaintRightEdge` runs a scoped second pass.
+- **Bidi controls are painted, not consumed** (measured 2026-09-01): U+202D
+  and U+202C come out as the missing-glyph box, one cell each, where the
+  other three hosts swallow them at zero width. This is why TUIkit does not
+  wrap right-to-left runs in an override — see
+  [Right-to-left text](#right-to-left-text--measured-2026-09-01-in-part).
 
 ### Input behaviour
 
@@ -2474,39 +2479,55 @@ about. (``SGRState/apply(_:)`` still *honours* both readings when parsing,
 because there the conservative direction is the opposite one — treating an
 off-code as a no-op would leave styling on that the source cleared.)
 
-## Right-to-left text — UNMEASURED
+## Right-to-left text — measured 2026-09-01, in part
 
-Nothing in this document records what any host does with a Hebrew, Arabic or
-other strong right-to-left character, and until it does, TUIkit's behaviour
-there is an assumption rather than a measurement.
+Run in each host with `Tools/TerminalProbes/bidi_card.py`, in the four installs
+this document records elsewhere (no version was re-checked at the time). The
+card prints nine-cell samples as `|<sample>|X` rows, twice: `plain` as TUIkit
+would emit them today, and `forced` with each RTL run wrapped in U+202D LEFT-TO-
+RIGHT OVERRIDE … U+202C POP DIRECTIONAL FORMATTING.
 
-The assumption is that the terminal paints cells in the order they are
-written. TUIkit lays every row out in logical order and places every later
-column relative to that, so a host implementing the Unicode bidirectional
-algorithm reorders a run under it: the cell TUIkit believes is in column 7 is
-painted somewhere else, and every column after it shears. Apple Terminal is
-reported to do this ("using a Hebrew character messes up rendering"); it has
-not been confirmed here, and no other host has been checked at all.
+| Host | `plain` — RTL runs keep their columns | `forced` — the LRO/PDF controls |
+|---|---|---|
+| Apple Terminal.app | ✓ every X aligned | ✗ **painted as the missing-glyph box**, one cell wide, shifting every X one column right |
+| iTerm2 | ✓ | ✓ consumed at zero width — every X still aligned |
+| Ghostty | ✓ | ✓ consumed at zero width |
+| Warp | ✓ | ✓ consumed at zero width |
 
-What IS settled is the arithmetic. The bidi controls — LRM, RLM, ALM, the
+**The decision this settles: TUIkit does not emit the override.** It was the
+candidate fix for RTL, and on Apple Terminal — the one host RTL was reported
+against — it is a visible regression: two junk glyphs per run and a column of
+shear per run, in a host that was already painting the plain row's columns
+correctly. The other three neither need it nor object to it. A per-host quirk
+could apply it to those three only, but nothing measured here asks for one.
+
+**What the card does not answer.** The X column tests *advance*, and a terminal
+implementing the Unicode bidirectional algorithm does not change it: every row
+here begins with ASCII, so the paragraph direction is LTR and an RTL run is
+reversed *within the columns it already occupies*. Reordering therefore garbles
+a run's contents without shearing the layout, which is consistent with the
+original report ("using a Hebrew character messes up rendering") and with this
+card showing every plain X aligned. A copy-paste cannot settle it either, since
+the buffer hands back logical order however it was painted.
+
+One row does expose it to a reader who does not read Hebrew: under the
+algorithm `digits_after_rtl` (`אב 123 ab`) displays as `123 בא ab` — the digits
+jump to the *left* of the Hebrew, hard against the opening `|`. The card now
+says so on the row itself. Until someone reads that row in each host, "does
+this terminal reorder?" stays open, and the answer changes nothing about the
+override, which is refused on Terminal.app either way.
+
+**The arithmetic is settled.** The bidi controls — LRM, RLM, ALM, the
 embeddings and overrides (U+202A…U+202E) and the isolates (U+2066…U+2069) —
-are `Default_Ignorable_Code_Point` with no advance, and TUIkit measured them
-as one cell each until 2026-09-01. A line carrying one, as text pasted from a
+are `Default_Ignorable_Code_Point` with no advance, and TUIkit measured them as
+one cell each until 2026-09-01. A line carrying one, as text pasted from a
 bidirectional document does, measured a cell wider than it drew. They are
-zero-width now (`BidiControlWidthTests`), which is also what makes the
-candidate fix expressible at all.
+zero-width now (`BidiControlWidthTests`).
 
-That candidate is to wrap each RTL run in U+202D LEFT-TO-RIGHT OVERRIDE …
-U+202C POP DIRECTIONAL FORMATTING, asking for logical order explicitly. It is
-NOT implemented, because it would change the bytes every host receives and two
-questions have to be answered first, per host:
-
-1. Does this terminal reorder RTL text at all?
-2. Does it obey the override, or print the control characters as glyphs? On a
-   host that prints them, the wrap is a regression.
-
-`Tools/TerminalProbes/bidi_card.py` answers both in one run. It prints the
-same nine-cell samples twice, plain and wrapped, as `|<sample>|X` rows: rows
-whose `X` moves are being reordered, and if the wrapped rows line up while the
-plain ones do not, the wrap is the fix for that host. Record what you see
-here, under that host's "Output behaviour".
+That leaves **a known divergence on Apple Terminal in the other direction**: it
+paints U+202D and U+202C as a box that occupies a cell TUIkit no longer counts.
+Only those two were measured there; the rest of the family was not tested
+individually, and the box strongly suggests the host treats none of them as
+default-ignorable. Zero is still the right number for three hosts out of four
+and for the standard, and TUIkit emits none of these controls itself — this can
+only arrive in content the user pastes.

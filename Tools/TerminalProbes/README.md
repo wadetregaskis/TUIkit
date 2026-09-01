@@ -28,10 +28,12 @@ when unset), the visual/aspect probes print to the terminal.
   screen). Written by a probe, never by hand. See `data/README.md`.
 - `bidi_card.py` — static `|<sample>|X` alignment card for RIGHT-TO-LEFT
   text, printed twice: plain, and with each RTL run wrapped in
-  U+202D … U+202C. Rows whose `X` moves are reordered by the host; if the
-  wrapped rows line up and the plain ones do not, the override is the fix
-  there. Answers the two questions in Terminal-compatibility.md's
-  "Right-to-left text" section, which is otherwise unmeasured.
+  U+202D … U+202C. Rows whose `X` moves are painted at a width TUIkit did
+  not count; whether the host also REORDERS is read off the
+  `digits_after_rtl` row instead (the X cannot see it — see the card's own
+  closing lines). Run in all four hosts 2026-09-01; the results and what
+  they settled are in Terminal-compatibility.md's "Right-to-left text"
+  section.
 - `visual_card.py` — static `|<c>|<c>|<c>|X` alignment card with a column
   ruler, for screenshot inspection of PAINTED width (which DSR can't see),
   merged-vs-split clusters, seams, and swatches. It answers exactly ONE of a

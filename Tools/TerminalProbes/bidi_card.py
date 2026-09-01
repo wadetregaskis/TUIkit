@@ -8,9 +8,17 @@ thinks is in column 7 is painted somewhere else and every column after it
 shears. Nothing in `Documentation/Terminal-compatibility.md` records which
 hosts do this, because it has never been measured.
 
-This card measures it. Every row is  |<sample>|X  and the X column is the
-answer: rows whose X lines up are painted in logical order, rows whose X
-moves are not.
+This card measures it. Every row is  |<sample>|X  and there are two answers
+in it, one mechanical and one that needs a pair of eyes:
+
+  * The X column tests ADVANCE. A row whose X moves is being painted at a
+    different width than TUIkit counted, and every column after it shears.
+  * The `digits_after_rtl` row tests ORDER, which the X cannot: each row here
+    begins with ASCII, so the paragraph is left-to-right and a terminal
+    applying the bidirectional algorithm reverses an RTL run *inside the
+    columns it already occupies*, moving nothing. In that row the algorithm
+    also drags the digits across, so it displays as `123 בא ab` — digits hard
+    against the opening `|` instead of in the middle. Look for that.
 
   * `plain`     — the sample as TUIkit would emit it today.
   * `forced`    — the same sample with each RTL run wrapped in
@@ -69,9 +77,13 @@ def main():
     for name, sample in SAMPLES:
         print("%-16s|%s|X   (forced)" % (name, forced(sample)))
     print()
-    print("Rows whose X moves are reordered by this terminal.")
-    print("If the 'forced' rows all line up, LRO/PDF is the fix here.")
-    print("If they show boxes or blanks, this terminal prints the controls.")
+    print("A row whose X moves is painted at a width TUIkit did not count.")
+    print("REORDERING is the other question, and the X cannot answer it:")
+    print("look at digits_after_rtl. Logical order puts 123 in the middle;")
+    print("a terminal that reorders puts it first, against the opening |.")
+    print("If the 'forced' rows line up, this host obeys LRO/PDF; if they")
+    print("show boxes or blanks, it prints the controls and the wrap would")
+    print("be a regression here (Apple Terminal does, measured 2026-09-01).")
 
 
 main()
