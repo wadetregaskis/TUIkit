@@ -1331,3 +1331,46 @@ and quantised every one of them.
 No public signature changed, so none of this is a source-compatibility question:
 the initialisers still store what they are given, and it is the renderer that
 decides what a number means.
+
+---
+
+## 22. §7.1's gate, finally run
+
+The "nothing when unused" gate was stated in §7.1 and never actually measured
+against `main`. The two A/Bs in the branch's commit log both compare against the
+*previous branch build*, which prices one commit and says nothing about the
+accumulated forty. Running it properly is what found the compositing regression
+of §20 — it was invisible to every incremental measurement, because it arrived
+in one commit and every later A/B took it as the baseline.
+
+Clean-built `Stress` from a clean `main` checkout and a clean `gradients` one,
+`ab_bench.py`'s default 17-scenario sweep, paired, 15 reps, cpu-per-frame:
+
+| | before §20's fix | after |
+|---|---|---|
+| `customlayout` | **+26.1%** (CI +24.5 … +27.4) | +1.2% |
+| everything else | ≤ +1.3% | ≤ +2.2% |
+
+The largest remaining is `kitchensink` at +2.2%, and no scenario is outside
+±2.2%. That is the gate met — the second time of asking, and only because it was
+asked at all.
+
+**The lesson is about the measurement, not the number.** An incremental A/B is
+the cheap habit and it cannot see a regression that lands in a single commit:
+each one asks "is this commit slower than the last?", which the offending commit
+answers honestly and every commit after it answers "no". Only a
+branch-against-trunk run asks the question anyone cares about. `git bisect run`
+over a threshold then named the commit in six builds.
+
+Still not covered, and worth stating rather than implying:
+
+- **Emission.** `--bench` is a counted `renderToBuffer` loop with no PTY, so a
+  change in how many bytes reach the terminal measures as exactly zero.
+  `emit_bench.py` is the tool, and the `gradients` scenario now in `Sources/Stress` is the first
+  page in the harness it has anything to point at.
+- **Cold.** Everything above is warm. `RenderCache.lookup`'s key and
+  `quantisedRamp`'s cache generations both changed on this branch, which is
+  precisely when `Tools/Profiling/README.md` asks for `--cold`.
+- **256 colours.** Every measurement here is truecolor, where `quantisedRamp`
+  returns the plain interpolation. The monotonicity repair — the expensive half
+  — only runs at `.palette256`.
