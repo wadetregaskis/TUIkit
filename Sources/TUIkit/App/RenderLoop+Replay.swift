@@ -70,12 +70,16 @@ extension RenderLoop {
     /// This is also what makes the quantised pulse cheap on a 256-colour
     /// terminal: the ramp repeats each shade it can actually paint for two or
     /// three frames, and there is no reason to wake for the repeats.
-    func timeUntilNextChange(from elapsed: Double) -> Double {
+    /// - Parameter elapsed: How far each clock has run. Per clock rather than
+    ///   one number, because the clocks no longer share a zero: a run's next
+    ///   change is a question about ITS clock, and asking it in the cursor
+    ///   clock's time would wake a progress bar on the focus's schedule.
+    func timeUntilNextChange(elapsed: (AnimationClock) -> Double) -> Double {
         let interval = AnimationClock.cursor.tickInterval
         guard !lastActivity.usesPulse, !lastActivity.usesCursor else { return interval }
         let runs = replayable?.runs ?? []
         guard !runs.isEmpty else { return interval }
-        return runs.map { $0.timeUntilChange(afterElapsed: elapsed) }.min() ?? interval
+        return runs.map { $0.timeUntilChange(afterElapsed: elapsed($0.clock)) }.min() ?? interval
     }
 
     /// Advances the animated cells of the frame already on screen, without

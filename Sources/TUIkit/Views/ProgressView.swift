@@ -358,7 +358,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
 
         // Where the animation is now. A determinate bar ignores it entirely:
         // its value comes from the caller's data, and it does not animate.
-        let elapsed = context.environment.cursorTimer?.elapsedSeconds ?? 0
+        let elapsed = context.environment.cursorTimer?.elapsed(for: .content) ?? 0
 
         // An indeterminate bar leaves its whole cycle behind, so the loop can
         // splice the next frame over these cells without re-rendering anything.
@@ -423,7 +423,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                 frames: built.frames,
                 run: AnimatedCellRun(
                     offsetX: 0, offsetY: 0, width: width, frames: built.frames,
-                    frameDuration: built.frameDuration, clock: .cursor))
+                    frameDuration: built.frameDuration, clock: .content))
         }
 
         guard let stateStorage = context.stateStorage else { return build() }

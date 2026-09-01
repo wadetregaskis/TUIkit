@@ -16,8 +16,22 @@
 /// cadences now come from one clock and one formula (`CursorTimer`), selected
 /// per element by ``SelectionIndicatorStyle`` rather than by the plumbing.
 public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable {
-    /// The animation clock: blinks and breaths alike (`CursorTimer`).
+    /// The FOCUS-relative clock: the text cursor's blink, and the breath a
+    /// focused control draws itself with.
+    ///
+    /// Its zero is the last time the focus moved, so whatever has just taken
+    /// the focus is at its brightest immediately — a breath caught at its dim
+    /// end leaves a newly focused control looking unfocused for a third of a
+    /// second, which is the moment it least can afford to.
     case cursor
+
+    /// The MONOTONIC clock: everything the app is showing that happens to
+    /// move — an indeterminate bar's sweep, a spinner, a breathing label.
+    ///
+    /// Never restarted. These animations have nothing to do with the focus,
+    /// and pressing Tab used to jump every one of them back to phase zero,
+    /// because there was one clock and the focus reset it.
+    case content
 
     /// How often a view that builds its appearance from the phase AS IT
     /// RENDERS is re-rendered.
@@ -35,7 +49,7 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
     /// timing already assumed.
     public var tickInterval: Double {
         switch self {
-        case .cursor: 0.05
+        case .cursor, .content: 0.05
         }
     }
 

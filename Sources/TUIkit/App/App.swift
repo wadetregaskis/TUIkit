@@ -265,7 +265,7 @@ extension AppRunner {
         // focused control is at its brightest the moment it takes the focus
         // (the phase starts at its bright end — see `CursorTimer.pulsePhase`).
         focusManager.onFocusChange = { [weak cursorTimer, weak appState] in
-            cursorTimer?.reset()
+            cursorTimer?.restartFocusPhase()
             appState?.setNeedsRender()
         }
 
@@ -432,15 +432,14 @@ extension AppRunner {
         guard !ticked.isEmpty else { return true }  // nothing ticked; nothing owed
         var elapsed: [AnimationClock: Double] = [:]
         for clock in ticked where renderer.lastActivity.canReplay(clock) {
-            elapsed[clock] = cursorTimer.elapsedSeconds
+            elapsed[clock] = cursorTimer.elapsed(for: clock)
         }
         guard elapsed.count == ticked.count else { return false }
         let served = renderer.replayAnimations(elapsed: elapsed)
         if served {
             // The runs are unchanged, but the time is not: recompute how long
             // the clock may sleep from where it now is.
-            cursorTimer.advance(
-                by: renderer.timeUntilNextChange(from: cursorTimer.elapsedSeconds))
+            cursorTimer.advance(by: renderer.timeUntilNextChange(elapsed: cursorTimer.elapsed))
         }
         return served
     }
@@ -474,14 +473,15 @@ extension AppRunner {
         // It keeps running while EITHER a view reads it as it renders or the
         // frame left runs on it — the second is the cheap path, and stopping
         // the clock because nobody read the phase would freeze it.
+        // ANY clock: the frame may animate content without anything focused
+        // reading the phase, and stopping the timer then freezes the
+        // indeterminate bars.
         let clockLive =
-            activity.usesPulse || activity.usesCursor
-            || activity.animatedClocks.contains(.cursor)
+            activity.usesPulse || activity.usesCursor || !activity.animatedClocks.isEmpty
         if clockLive {
             // Sleep exactly as long as nothing can change — see
-            // `RenderLoop.timeUntilNextChange(from:)`.
-            cursorTimer.advance(
-                by: renderer.timeUntilNextChange(from: cursorTimer.elapsedSeconds))
+            // `RenderLoop.timeUntilNextChange(elapsed:)`.
+            cursorTimer.advance(by: renderer.timeUntilNextChange(elapsed: cursorTimer.elapsed))
             cursorTimer.start()
         } else {
             cursorTimer.stop()

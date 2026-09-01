@@ -63,12 +63,42 @@ final class CursorTimer {
     /// ``RenderLoop/timeUntilNextChange(from:)``.
     private(set) var elapsedSeconds: Double = 0
 
+    /// Where ``AnimationClock/cursor``'s zero currently sits, in
+    /// ``elapsedSeconds``.
+    ///
+    /// Moved forward to "now" whenever the focus moves, which is how the blink
+    /// and the focus breath restart at their bright end without disturbing
+    /// anything else. This used to be done by zeroing `elapsedSeconds` itself,
+    /// and every animation in the app read that one number: pressing Tab
+    /// restarted every indeterminate progress bar, every spinner and every
+    /// breathing label along with the cursor.
+    private var focusEpoch: Double = 0
+
+    /// How far `clock` has run.
+    ///
+    /// The two clocks share one timer and differ only in where their zero is —
+    /// see ``AnimationClock``.
+    func elapsed(for clock: AnimationClock) -> Double {
+        switch clock {
+        case .cursor: max(0, elapsedSeconds - focusEpoch)
+        case .content: elapsedSeconds
+        }
+    }
+
     /// Elapsed ticks, for the phase formulas that are still defined on a grid.
     ///
     /// Derived rather than counted, so a variable sleep keeps every phase's
     /// wall-clock meaning: a breath is a breath whether the loop woke six times
     /// or sixty on the way through it.
-    var elapsedTicks: Int { Int((elapsedSeconds / Self.tickInterval).rounded(.down)) }
+    ///
+    /// Focus-relative: every formula that reads this is a
+    /// ``AnimationClock/cursor`` one.
+    var elapsedTicks: Int { ticks(for: .cursor) }
+
+    /// ``elapsed(for:)`` on the tick grid the phase formulas are written in.
+    func ticks(for clock: AnimationClock) -> Int {
+        Int((elapsed(for: clock) / Self.tickInterval).rounded(.down))
+    }
 
     /// Whether the cursor clock was read during the current render frame.
     ///
@@ -219,7 +249,11 @@ extension CursorTimer {
                 // cadence — and therefore keeps every phase derived from it
                 // honest.
                 self.elapsedSeconds += seconds
-                self.renderNotifier?.setNeedsAnimationTick(.cursor)
+                // Both clocks, because both advance on this one timer: they
+                // differ in where their zero sits, not in when they tick.
+                for clock in AnimationClock.allCases {
+                    self.renderNotifier?.setNeedsAnimationTick(clock)
+                }
             }
         }
     }
@@ -229,21 +263,25 @@ extension CursorTimer {
         task?.cancel()
         task = nil
         elapsedSeconds = 0
+        focusEpoch = 0
         sleepSeconds = Self.tickInterval
     }
 
-    /// Resets the cursor animation to the visible/bright state.
+    /// Restarts ``AnimationClock/cursor`` at its bright end, leaving
+    /// ``AnimationClock/content`` running.
     ///
-    /// Call this when a text field gains focus to ensure the cursor
-    /// starts in a visible state.
-    func reset() {
-        elapsedSeconds = 0
+    /// Call this when the focus moves, so whatever has just taken it is
+    /// visible at once. It does NOT touch `elapsedSeconds`: a progress bar's
+    /// sweep and a breathing label are not about the focus and must not jump
+    /// when it changes.
+    func restartFocusPhase() {
+        focusEpoch = elapsedSeconds
         sleepSeconds = Self.tickInterval
         // The in-flight sleep was sized for the OLD cadence: leaving it to
-        // finish would add that whole stride to a counter that has just been
-        // zeroed, so a focus change during a long sleep (the quantised pulse
-        // holds a shade for several ticks) jumped the clock past the bright
-        // start the reset exists to give it. Cancelling ends the sleep with a
+        // finish would add that whole stride to a phase that has just been
+        // re-zeroed, so a focus change during a long sleep (the quantised
+        // pulse holds a shade for several ticks) jumped the clock past the
+        // bright start this exists to give it. Cancelling ends the sleep with a
         // CancellationError the loop already returns on; the render that
         // always follows a focus change starts the timer again.
         task?.cancel()

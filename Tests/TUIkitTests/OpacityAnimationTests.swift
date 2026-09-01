@@ -143,7 +143,12 @@ struct RepeatingOpacityTests {
         let run = buffer.animatedCells[0]
         #expect(run.isAnimating)
         #expect(run.frames.count == 16, "got \(run.frames.count) frames")
-        #expect(run.clock == .cursor)
+        // The CONTENT clock, not the cursor one. Both tick at the same rate —
+        // the sixteen frames above are still sixteen — but only the cursor
+        // clock restarts when the focus moves, and a fade the app is running
+        // must not. This used to be `.cursor`, and a Tab anywhere on the page
+        // sent every such fade back to its first frame.
+        #expect(run.clock == .content)
     }
 
     @Test("And the loop then renders nothing for it")

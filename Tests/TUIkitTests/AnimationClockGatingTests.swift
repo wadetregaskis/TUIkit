@@ -111,8 +111,60 @@ struct FocusClockUnityTests {
         #expect(emphasis.phase == seam)
     }
 
-    @Test("There is one animation clock")
-    func exactlyOneClock() {
-        #expect(AnimationClock.allCases == [.cursor])
+    @Test("The clock roster is two, and deliberately so")
+    func theClockRoster() {
+        // This used to assert `[.cursor]`, and the assertion was doing its
+        // job: a second clock should be a decision, not a drift. The decision
+        // was made — `.cursor` is focus-relative and `.content` is monotonic,
+        // and they differ ONLY in where their zero sits (one timer drives
+        // both, see `CursorTimer.elapsed(for:)`). A third still needs a reason
+        // and a producer, and this still fails until someone gives it both.
+        #expect(Set(AnimationClock.allCases) == [.cursor, .content])
+    }
+
+    // MARK: - The two clocks
+
+    @Test("Both clocks start together")
+    func clocksAgreeBeforeAnyFocusChange() async {
+        let timer = CursorTimer(renderNotifier: AppState())
+        timer.start()
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(timer.elapsed(for: .content) > 0, "the timer ran at all")
+        #expect(timer.elapsed(for: .cursor) == timer.elapsed(for: .content))
+        timer.stop()
+    }
+
+    @Test("A focus change restarts the cursor clock and leaves the content clock running")
+    func focusRestartLeavesTheContentClockAlone() async {
+        let timer = CursorTimer(renderNotifier: AppState())
+        timer.start()
+        try? await Task.sleep(for: .milliseconds(150))
+        // Read before restarting, and with no `await` between: this is the
+        // main actor, so the timer's task cannot advance the clock in here.
+        let content = timer.elapsed(for: .content)
+        #expect(content > 0, "the timer ran at all")
+
+        timer.restartFocusPhase()
+
+        // The blink and the focus breath start over, so whatever just took the
+        // focus is at its bright end.
+        #expect(timer.elapsed(for: .cursor) == 0)
+        // Everything else does not. This is the whole point: pressing Tab used
+        // to zero `elapsedSeconds`, which is the number every indeterminate
+        // bar, spinner and breathing label derives its phase from, so they all
+        // jumped back to the start of their cycle.
+        #expect(timer.elapsed(for: .content) == content)
+        timer.stop()
+    }
+
+    @Test("Stopping puts both clocks back to zero")
+    func stopZeroesBoth() async {
+        let timer = CursorTimer(renderNotifier: AppState())
+        timer.start()
+        try? await Task.sleep(for: .milliseconds(150))
+        timer.restartFocusPhase()
+        timer.stop()
+        #expect(timer.elapsed(for: .content) == 0)
+        #expect(timer.elapsed(for: .cursor) == 0)
     }
 }

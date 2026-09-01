@@ -172,7 +172,7 @@ extension _OpacityView: Renderable {
         // bounded: `AnimatedBufferCycle` only declines on a width change, and a
         // re-colouring cannot change a width.
         storage.animations.noteServedByRuns(key)
-        return (OpacityCycle(phases: cycle.values, clock: .cursor), cycle.current)
+        return (OpacityCycle(phases: cycle.values, clock: .content), cycle.current)
     }
 
     /// `regions` multiplied by `factor`, with this view's own rectangle after

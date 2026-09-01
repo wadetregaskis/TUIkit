@@ -365,7 +365,7 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         // The clock, not a per-spinner start time: every spinner of a style is
         // then in phase, and — much more to the point — the frame drawn is the
         // frame the run loop will replay, so the first tick does not jump.
-        let elapsed = context.environment.cursorTimer?.elapsedSeconds ?? 0
+        let elapsed = context.environment.cursorTimer?.elapsed(for: .content) ?? 0
         let step = Int((elapsed / style.interval).rounded(.down))
         let frameIndex = cycle.isEmpty ? 0 : ((step % cycle.count) + cycle.count) % cycle.count
         let coloredSpinner = cycle.isEmpty ? "" : cycle[frameIndex]
@@ -411,7 +411,7 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         buffer.animatedCells = [
             AnimatedCellRun(
                 offsetX: 0, offsetY: 0, width: width, frames: cycle,
-                frameDuration: style.interval, clock: .cursor)
+                frameDuration: style.interval, clock: .content)
         ]
         return buffer
     }

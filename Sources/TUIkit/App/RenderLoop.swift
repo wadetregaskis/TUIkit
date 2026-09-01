@@ -1034,9 +1034,16 @@ extension RenderLoop {
         // re-render, so reading it must not be what stops that. `canAnimate` is
         // false without a scheduler: a one-off render would show an animation's
         // first value and never advance past it.
+        //
+        // The CONTENT tick, not the cursor one. Every `withAnimation` cycle
+        // lays itself out against this, and a fade the app is running has
+        // nothing to do with where the focus is — reading the focus-relative
+        // tick here restarted every such animation whenever the focus moved,
+        // which is what made the Animation page's breathing label jump back to
+        // full opacity on Tab.
         environment.animationFrame = AnimationFrame(
             nowNanos: frameNowNanos,
-            tick: cursorTimer?.elapsedTicks ?? 0,
+            tick: cursorTimer?.ticks(for: .content) ?? 0,
             canAnimate: animationScheduler != nil)
         // Consumed, not merely read, so it applies to exactly one pass: the one
         // that first shows the change. A frame that renders for some other

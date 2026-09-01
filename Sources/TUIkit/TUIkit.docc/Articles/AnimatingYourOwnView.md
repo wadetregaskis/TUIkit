@@ -163,6 +163,26 @@ every tick, until something else forces a full render. And a run that is
 *dropped* looks even better: the CPU graph reads as a total success, because the
 indicator has simply stopped moving.
 
+## Which clock a run belongs to
+
+Every ``AnimatedCellRun`` names an ``AnimationClock``, and there are two. They
+tick together, off one timer, at the same interval; they differ only in where
+their zero sits.
+
+- ``AnimationClock/cursor`` restarts every time the focus moves, so whatever
+  has just taken the focus is at its bright end immediately. A text cursor's
+  blink and a focus breath want this — a breath caught at its dim end leaves a
+  newly focused control looking unfocused.
+- ``AnimationClock/content`` never restarts. An indeterminate progress bar, a
+  spinner, a `repeatForever` fade — anything the app is showing that happens to
+  move — wants this.
+
+Choosing wrongly is quiet in exactly the way the rest of this section warns
+about: a content animation on the cursor clock looks perfect until someone
+presses Tab, at which point it jumps back to its first frame and starts again.
+Ask whether the animation is *about* the focus. If it is not, it is
+``AnimationClock/content``.
+
 Three things are worth asserting in a test, and the framework holds its own
 controls to exactly these:
 
