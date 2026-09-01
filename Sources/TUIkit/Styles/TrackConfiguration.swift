@@ -96,6 +96,11 @@ public struct TrackConfiguration: Sendable, Equatable {
     /// bar names, so fill and empty gradients drawn from the same stops are one
     /// continuous ramp interrupted by the boundary. With `.fill` the ramp is
     /// compressed into the unfilled run, which is the decorative reading.
+    ///
+    /// The fractional boundary cell counts as the unfilled region's FIRST
+    /// cell either way: a ``partialRamp`` glyph covers only the filled part of
+    /// that cell and the unfilled colour shows through the rest, so it is a
+    /// cell the unfilled ramp reaches rather than one it steps over.
     public var emptyGradient: Gradient?
 
     /// Creates a track configuration.

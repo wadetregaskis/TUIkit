@@ -265,7 +265,6 @@ extension TrackRenderer {
         // like. `nil` keeps the control's own recessive colour, which is what
         // every built-in preset does.
         let emptyColor = config.emptyColor ?? emptyColor
-        let trackBackground: Color? = paintsBackground ? emptyColor : nil
 
         // Optional per-cell colour fade. What it is measured across is the
         // caller's choice (``TrackGradientScaling``): the whole bar, so a
@@ -283,6 +282,27 @@ extension TrackRenderer {
                 fallback: filledColor, depth: depth)
         }
 
+        // For COLOUR, the unfilled region starts AT the boundary cell rather
+        // than after it. That cell is genuinely part-empty — the ramp glyph
+        // covers the filled fraction and the unfilled colour shows through the
+        // rest — so it is the unfilled ramp's first cell, not a cell the
+        // unfilled ramp skips. How much of it shows is a property of the
+        // terminal's font, which nothing here can ask about, so assume some
+        // always does: painting it the colour the ramp reaches there is wrong
+        // by at most a fraction of one cell, and painting it a colour from
+        // somewhere else entirely is wrong by however far apart the stops are.
+        //
+        // With no boundary cell `fullCount == litCellCount` and this is the
+        // run that was always drawn.
+        let emptyRegionStart = fullCount
+        let emptySpan = gradientScaling == .track ? width : width - emptyRegionStart
+        func emptyColour(at cell: Int) -> Color {
+            guard let gradient = config.emptyGradient, emptySpan > 1 else { return emptyColor }
+            return gradientColor(
+                gradient, index: gradientScaling == .track ? cell : cell - emptyRegionStart,
+                span: emptySpan, fallback: emptyColor, depth: depth)
+        }
+
         var result = ""
         for index in 0..<fullCount {
             let cellColour = fillColour(at: index)
@@ -296,16 +316,10 @@ extension TrackRenderer {
             // rest of the cell.
             result += ANSIRenderer.colorize(
                 String(ramp[partialStep - 1]), foreground: fillColour(at: fullCount),
-                background: trackBackground)
+                background: paintsBackground ? emptyColour(at: fullCount) : nil)
         }
         let emptyCount = width - litCellCount
         if emptyCount > 0 {
-            // The empty gradient is measured the way the fill's is: pinned to
-            // the bar, an empty cell takes the colour its POSITION names, so
-            // fill and empty ramps drawn from the same stops read as one
-            // continuous ramp with the boundary cutting across it. Compressed,
-            // the ramp is squeezed into the unfilled run instead.
-            let emptySpan = gradientScaling == .track ? width : emptyCount
             // Anchored to the TRACK (cell j always shows the same character),
             // so the texture stays put while the fill sweeps across it.
             func emptyGlyphs() -> String {
@@ -315,12 +329,9 @@ extension TrackRenderer {
                 }
                 return glyphs
             }
-            if let gradient = config.emptyGradient, emptySpan > 1 {
+            if config.emptyGradient != nil, emptySpan > 1 {
                 for cell in litCellCount..<width {
-                    let index = gradientScaling == .track ? cell : cell - litCellCount
-                    let colour = gradientColor(
-                        gradient, index: index, span: emptySpan,
-                        fallback: emptyColor, depth: depth)
+                    let colour = emptyColour(at: cell)
                     result += ANSIRenderer.colorize(
                         paintsBackground ? " " : String(emptyChars[cell % emptyChars.count]),
                         foreground: colour,

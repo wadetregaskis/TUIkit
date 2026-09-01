@@ -330,4 +330,85 @@ struct TrackGradientScalingTests {
         #expect(defaulted == render(0.5, .track))
         #expect(defaulted != render(0.5, .fill), "…and the two really do differ")
     }
+
+    // MARK: - The unfilled gradient under the boundary cell
+
+    /// Black → white, so a cell's background states its own position in the
+    /// ramp and a wrong one is unmistakable.
+    private static let fade = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 255, 255)])
+
+    /// A ten-cell track 55% full: eight sub-cell steps per cell puts five whole
+    /// cells down and leaves the boundary cell at step 4 of 8, so there is
+    /// always a boundary cell to look at.
+    private func fadedTrack(scaling: TrackGradientScaling) -> String {
+        TrackRenderer.render(
+            fraction: 0.55, width: 10,
+            style: .custom(
+                TrackConfiguration(
+                    fullGlyph: "█", partialRamp: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"],
+                    emptyStyle: .background, emptyGradient: Self.fade)),
+            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
+            accentColor: .rgb(7, 7, 7), gradientScaling: scaling,
+            palette: SystemPalette.green)
+    }
+
+    /// The `(text, background)` pair of every coloured run, in order.
+    private func runs(in output: String) -> [(text: String, background: String)] {
+        output.components(separatedBy: "\u{1b}[0m").compactMap { chunk in
+            guard let start = chunk.range(of: "48;2;"),
+                let end = chunk[start.upperBound...].firstIndex(of: "m")
+            else { return nil }
+            return (String(chunk[chunk.index(after: end)...]),
+                String(chunk[start.upperBound..<end]))
+        }
+    }
+
+    /// `colour` as the `r;g;b` it is emitted as, read back from the renderer
+    /// rather than restated — the expectation is then the ramp itself.
+    private func triple(_ colour: Color) -> String {
+        runs(in: ANSIRenderer.colorize(" ", foreground: colour, background: colour))[0].background
+    }
+
+    @Test("The boundary cell takes the unfilled ramp's colour at its own position")
+    func boundaryCellJoinsTheTrackRamp() {
+        let output = fadedTrack(scaling: .track)
+        let ramp = Color.quantisedRamp(Self.fade, count: 10, depth: .truecolor)
+        // Cells 5…9 are the boundary cell and the four unfilled cells after
+        // it, and pinned to the TRACK each takes the colour its position
+        // names. The boundary cell used to take the flat empty colour instead,
+        // which broke the ramp exactly where the eye is drawn to it.
+        let painted = runs(in: output).suffix(5).map(\.background)
+        #expect(painted == (5...9).map { triple(ramp[$0]) })
+        #expect(!painted.contains(triple(.rgb(9, 9, 9))), "no cell falls back to the flat colour")
+    }
+
+    @Test("A compressed unfilled ramp starts AT the boundary cell, not after it")
+    func boundaryCellStartsTheCompressedRamp() {
+        let output = fadedTrack(scaling: .fill)
+        // Five cells are unfilled to any degree — the boundary cell and the
+        // four behind it — so the compressed ramp is five cells long and
+        // begins on the boundary. It used to be squeezed into the four cells
+        // after the boundary, which stretched it across a region a cell
+        // narrower than the one it was describing.
+        let ramp = Color.quantisedRamp(Self.fade, count: 5, depth: .truecolor)
+        let painted = runs(in: output).suffix(5).map(\.background)
+        #expect(painted == ramp.map { triple($0) })
+    }
+
+    @Test("With no boundary cell the unfilled ramp is unchanged")
+    func wholeCellFillLeavesTheRampAlone() {
+        // 50% of ten cells lands exactly on a cell edge, so there is no
+        // boundary cell and the unfilled run is the five cells it always was.
+        let output = TrackRenderer.render(
+            fraction: 0.5, width: 10,
+            style: .custom(
+                TrackConfiguration(
+                    fullGlyph: "█", partialRamp: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"],
+                    emptyStyle: .background, emptyGradient: Self.fade)),
+            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
+            accentColor: .rgb(7, 7, 7), gradientScaling: .fill,
+            palette: SystemPalette.green)
+        let ramp = Color.quantisedRamp(Self.fade, count: 5, depth: .truecolor)
+        #expect(runs(in: output).suffix(5).map(\.background) == ramp.map { triple($0) })
+    }
 }
