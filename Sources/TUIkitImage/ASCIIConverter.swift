@@ -133,6 +133,18 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// explicit factor. An empty ramp falls back to a 10-glyph ASCII ramp.
     /// Always luminance-mapped — custom ramps carry no shape calibration,
     /// so the converter's shape-awareness does not apply.
+    ///
+    /// > Important: every character must occupy ONE cell. The renderer emits
+    /// > one character per column, so a ramp of wide characters makes each row
+    /// > that many times too wide: asked for 20 cells, `"丏丑丟"` produces 40.
+    /// > A ramp MIXING widths is worse than merely wide — how many cells a row
+    /// > takes then depends on which characters that row's pixels chose, so
+    /// > rows of the same picture come out different lengths and shear against
+    /// > each other (`"丏a丑"` gave 34 for one image and would give something
+    /// > else for another). Supporting wide ramps means quantising the grid to
+    /// > the widest character, resampling at `width / quantum` and correcting
+    /// > the aspect for it — the shape ``TrackConfiguration`` takes for the
+    /// > same problem — and is not implemented.
     case customRamp(String)
 
     /// The full ASCII repertoire (`.ascii(glyphs: nil)`).
