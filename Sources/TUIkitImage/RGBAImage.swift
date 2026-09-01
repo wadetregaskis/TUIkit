@@ -254,6 +254,110 @@ extension RGBAImage {
         }
         return RGBAImage(width: targetWidth, height: targetHeight, pixels: result)
     }
+
+    /// This image with its LOCAL contrast raised — an unsharp mask.
+    ///
+    /// Every pixel is pushed away from the average of the area around it by
+    /// `amount` times the difference: `p + amount × (p − blur(p))`. A flat
+    /// region IS its own average and does not move; a pixel on one side of a
+    /// boundary moves further from the pixels on the other side. So it sharpens
+    /// boundaries and leaves smooth expanses alone, which is the opposite of
+    /// what a global contrast curve does — that one moves every pixel of a
+    /// given tone, wherever it sits.
+    ///
+    /// The radii are the caller's because the scale is the point. A picture
+    /// scaled to a render's pixel grid is about to be reduced again to one
+    /// glyph per CELL, so a lift measured in single pixels of a 5×10 sub-cell
+    /// grid averages back out before any character is chosen. Passing the
+    /// sub-cell grid makes the neighbourhood about a cell across whatever the
+    /// renderer's grid is, so the same `amount` means the same thing for a
+    /// luminance ramp, half-blocks, braille and a shape match alike.
+    ///
+    /// Each channel is sharpened on its own, so a boundary between two
+    /// equally-bright colours sharpens too; alpha is left alone, its edges
+    /// being the picture's outline rather than anything inside it.
+    ///
+    /// - Parameters:
+    ///   - amount: How far to push. `0` (or less) returns `self`; around `0.6`
+    ///     is a visible lift and `2` is heavy-handed.
+    ///   - radiusX: Half the neighbourhood's width, in pixels. Clamped to ≥ 1.
+    ///   - radiusY: Half its height. Clamped to ≥ 1.
+    public func sharpened(amount: Double, radiusX: Int = 1, radiusY: Int = 1) -> RGBAImage {
+        guard amount > 0, width > 0, height > 0 else { return self }
+        let spanX = max(1, radiusX)
+        let spanY = max(1, radiusY)
+        let rowBlur = horizontallyAveraged(span: spanX)
+        var result = pixels
+        for x in 0..<width {
+            var running = [Double](repeating: 0, count: 3)
+            for y in 0...min(height - 1, spanY) {
+                for channel in 0..<3 { running[channel] += rowBlur[(y * width + x) * 3 + channel] }
+            }
+            for y in 0..<height {
+                let low = max(0, y - spanY)
+                let high = min(height - 1, y + spanY)
+                let count = Double(high - low + 1)
+                let index = y * width + x
+                let here = pixels[index]
+                let source = [here.r, here.g, here.b]
+                var lifted = source
+                for channel in 0..<3 {
+                    let blurred = running[channel] / count
+                    let value = Double(source[channel])
+                    lifted[channel] = UInt8(
+                        clamping: Int((value + amount * (value - blurred)).rounded()))
+                }
+                result[index] = RGBA(r: lifted[0], g: lifted[1], b: lifted[2], a: here.a)
+                if y - spanY >= 0 {
+                    for channel in 0..<3 {
+                        running[channel] -= rowBlur[((y - spanY) * width + x) * 3 + channel]
+                    }
+                }
+                if y + spanY + 1 < height {
+                    for channel in 0..<3 {
+                        running[channel] += rowBlur[((y + spanY + 1) * width + x) * 3 + channel]
+                    }
+                }
+            }
+        }
+        return RGBAImage(width: width, height: height, pixels: result)
+    }
+
+    /// Each pixel's three colour channels averaged across `2 × span + 1`
+    /// columns, as `[r, g, b]` triples in row-major order — the first half of
+    /// ``sharpened(amount:radiusX:radiusY:)``'s separable box blur.
+    ///
+    /// By a running sum, so the cost is O(pixels) rather than O(pixels × span):
+    /// the shape grid's neighbourhood is 11 × 21 taps, which is not something to
+    /// walk per pixel per channel. The window SHRINKS at the edges rather than
+    /// repeating the border — either is defensible, and averaging only over
+    /// pixels that exist keeps the outermost column from being pulled toward a
+    /// value counted twice.
+    private func horizontallyAveraged(span: Int) -> [Double] {
+        var blurred = [Double](repeating: 0, count: pixels.count * 3)
+        for y in 0..<height {
+            let row = y * width
+            var running = (r: 0.0, g: 0.0, b: 0.0)
+            func take(_ index: Int, _ sign: Double) {
+                let p = pixels[index]
+                running.r += sign * Double(p.r)
+                running.g += sign * Double(p.g)
+                running.b += sign * Double(p.b)
+            }
+            // Prime the window on the first column, then slide it across.
+            for x in 0...min(width - 1, span) { take(row + x, 1) }
+            for x in 0..<width {
+                let count = Double(min(width - 1, x + span) - max(0, x - span) + 1)
+                let slot = (row + x) * 3
+                blurred[slot] = running.r / count
+                blurred[slot + 1] = running.g / count
+                blurred[slot + 2] = running.b / count
+                if x - span >= 0 { take(row + x - span, -1) }
+                if x + span + 1 < width { take(row + x + span + 1, 1) }
+            }
+        }
+        return blurred
+    }
 }
 
 // MARK: - Private Helpers

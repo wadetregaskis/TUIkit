@@ -161,6 +161,22 @@ struct ImageRenderingControls: View {
                 .disabled(
                     !ImageDemoHelpers.usesEdgeTracing(
                         settings.charset, shapeAware: settings.shapeAware))
+
+            // The third of the three, and the only one about the PICTURE: an
+            // unsharp mask run before any character is chosen, so both of the
+            // toggles above read an image whose boundaries have already been
+            // pulled apart. Never disabled — every charset is drawn from
+            // pixels, so every charset can be drawn from sharper ones.
+            Toggle("component.imageControls.edgeContrast", isOn: $settings.edgeContrast)
+                .toggleContent {
+                    HStack(spacing: 1) {
+                        Text("component.imageControls.edgeContrastAmount").dim()
+                        Slider(value: $settings.edgeContrastAmount, in: 0.1...2.0, step: 0.1)
+                            .sliderShowsValue(false)
+                            .frame(maxWidth: .infinity)
+                        Text(String(format: "%.1f", settings.edgeContrastAmount)).dim()
+                    }
+                }
         }
     }
 

@@ -305,6 +305,31 @@ public struct ASCIIConverter: Sendable {
     /// `nil` leaves the image as it is. See ``ASCIIToneCurve``.
     let toneCurve: ASCIIToneCurve?
 
+    /// How hard to push each pixel away from its neighbours before any glyph is
+    /// chosen — an unsharp mask, run at the render's own pixel grid. `0` (the
+    /// default) leaves the picture alone; around `0.6` is a visible lift and `2`
+    /// is heavy-handed.
+    ///
+    /// **The third of three independent questions**, and the one about the
+    /// PICTURE rather than about the characters:
+    ///
+    /// - ``edgeThreshold`` asks *where does the picture have an edge*, and draws
+    ///   the cells that do as directional line glyphs (`╱ ╲ ─ │`).
+    /// - ``shapeAware`` asks *how should a cell's ink be chosen* — by where the
+    ///   darkness sits inside the cell rather than by how much of it there is.
+    /// - This asks *how much separation is there to see in the first place*. It
+    ///   runs before either, on the pixels, so both of them read a picture whose
+    ///   boundaries have already been pulled apart — and it is worth having with
+    ///   neither of them, because a plain luminance ramp gains contrast at the
+    ///   glyph boundaries too.
+    ///
+    /// Distinct from a ``toneCurve``, which is the GLOBAL version of the same
+    /// wish: a curve moves every pixel of a given tone, wherever it sits, so
+    /// steepening it clips the highlights and shadows to buy separation in the
+    /// midtones. This moves a pixel only by how far it differs from its
+    /// neighbours, so a flat region does not move at all.
+    let edgeContrast: Double
+
     /// Creates a converter with the specified options.
     public init(
         characterSet: ASCIICharacterSet = .blocks(.fine),
@@ -313,7 +338,8 @@ public struct ASCIIConverter: Sendable {
         dithering: DitheringMode = .none,
         supersampling: Int? = nil,
         edgeThreshold: Double? = 0.9,
-        toneCurve: ASCIIToneCurve? = nil
+        toneCurve: ASCIIToneCurve? = nil,
+        edgeContrast: Double = 0
     ) {
         self.characterSet = characterSet
         self.shapeAware = shapeAware
@@ -322,6 +348,7 @@ public struct ASCIIConverter: Sendable {
         self.supersampling = supersampling.map { min(4, max(1, $0)) }
         self.edgeThreshold = edgeThreshold
         self.toneCurve = toneCurve
+        self.edgeContrast = max(0, edgeContrast)
     }
 }
 
@@ -406,8 +433,12 @@ extension ASCIIConverter {
         let pixelWidth: Int
         let pixelHeight: Int
         let factor: Int
+        /// The sub-cell pixel grid, kept because ``ASCIIConverter/edgeContrast``
+        /// measures its neighbourhood in cells rather than in pixels.
+        let cellGrid: (x: Int, y: Int)
         if isShapeMatched {
             factor = 1
+            cellGrid = (5, 10)
             pixelWidth = width * 5
             pixelHeight = height * 10
         } else {
@@ -422,6 +453,7 @@ extension ASCIIConverter {
                 grid = (1, 1)
             }
             factor = effectiveSupersampling
+            cellGrid = grid
             pixelWidth = width * grid.x * factor
             pixelHeight = height * grid.y * factor
         }
@@ -442,6 +474,22 @@ extension ASCIIConverter {
         // going to draw. See ``ASCIIToneCurve``.
         if let toneCurve, !toneCurve.isIdentity {
             scaled.mapPixels(toneCurve.apply(to:))
+        }
+
+        // …and the local lift after it, for the same reason in the other
+        // direction: a curve says what a TONE becomes and this says how far a
+        // pixel stands from its neighbours, so sharpening first would then have
+        // the curve flatten some of what it separated. Both run before anything
+        // measures or quantises — the ink/background split below is taken from
+        // the picture the glyphs will actually be chosen from.
+        if edgeContrast > 0 {
+            // Radii of a whole cell, not of a pixel: the picture is about to be
+            // reduced to one glyph per cell, so a lift measured in pixels of a
+            // 5×10 shape grid would average straight back out before a
+            // character was chosen. In cells, the same number means the same
+            // thing for every charset.
+            scaled = scaled.sharpened(
+                amount: edgeContrast, radiusX: cellGrid.x, radiusY: cellGrid.y)
         }
 
         // The split between ink and background, measured from THIS image

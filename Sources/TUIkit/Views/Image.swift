@@ -178,6 +178,11 @@ private struct ImageEdgeThresholdKey: EnvironmentKey {
     static let defaultValue: Double? = 0.9
 }
 
+/// Environment key for the local-contrast lift applied before glyph selection.
+private struct ImageEdgeContrastKey: EnvironmentKey {
+    static let defaultValue: Double = 0
+}
+
 /// Environment key for the placeholder text shown while loading.
 private struct ImagePlaceholderTextKey: EnvironmentKey {
     static let defaultValue: String? = nil
@@ -286,6 +291,13 @@ extension EnvironmentValues {
         set { self[ImageEdgeThresholdKey.self] = newValue }
     }
 
+    /// The local-contrast lift applied before any glyph is chosen — see
+    /// ``View/imageEdgeContrast(_:)``.
+    var imageEdgeContrast: Double {
+        get { self[ImageEdgeContrastKey.self] }
+        set { self[ImageEdgeContrastKey.self] = newValue }
+    }
+
     /// The dithering mode for ASCII art rendering.
     var imageDithering: DitheringMode {
         get { self[ImageDitheringKey.self] }
@@ -380,6 +392,9 @@ extension View {
     /// Applies to the `.ascii`, `.unicode`, and `.blocks` charsets (blocks
     /// shape-match over quadrants / halves / shades / corner triangles
     /// `◢◣◤◥`); a `.customRamp` is always luminance-mapped.
+    ///
+    /// One of three independent questions an image conversion answers — see
+    /// ``imageEdgeContrast(_:)``, which lists all three.
     public func imageShapeAware(_ shapeAware: Bool = true) -> some View {
         environment(\.imageShapeAware, shapeAware)
     }
@@ -431,8 +446,35 @@ extension View {
     /// a cell. Pass `nil` to disable line glyphs entirely (pure coverage
     /// matching). The shape-aware block repertoire carries its own
     /// directional glyphs, so it does not trace edges.
+    /// One of three independent questions an image conversion answers — see
+    /// ``imageEdgeContrast(_:)``, which lists all three.
     public func imageEdgeThreshold(_ threshold: Double?) -> some View {
         environment(\.imageEdgeThreshold, threshold)
+    }
+
+    /// Raises the image's LOCAL contrast before any character is chosen for it
+    /// — an unsharp mask over the render's own pixel grid.
+    ///
+    /// The third of three independent things that can be asked of an image, and
+    /// the only one about the picture rather than about the characters:
+    /// ``imageEdgeThreshold(_:)`` decides *where the picture has an edge* and
+    /// draws those cells as line glyphs, ``imageShapeAware(_:)`` decides *how a
+    /// cell's ink is chosen*, and this decides *how much separation there is to
+    /// see at all*. Any combination of the three is meaningful, this one
+    /// included on its own — a plain luminance ramp gains contrast at the glyph
+    /// boundaries too.
+    ///
+    /// Not a ``imageToneCurve(_:)``, which is the global version of the same
+    /// wish: a curve moves every pixel of a given tone wherever it sits, so
+    /// steepening it clips the ends to buy separation in the middle. This moves
+    /// a pixel only by how far it differs from its neighbours, so flat regions
+    /// stay exactly as they were.
+    ///
+    /// - Parameter amount: `0` (the default) leaves the picture alone; around
+    ///   `0.6` is a visible lift, `2` heavy-handed. Negative values are treated
+    ///   as zero.
+    public func imageEdgeContrast(_ amount: Double) -> some View {
+        environment(\.imageEdgeContrast, amount)
     }
 
     /// Sets the dithering mode for ASCII art image rendering.

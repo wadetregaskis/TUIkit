@@ -156,5 +156,6 @@ extension View {
             .imageDithering(settings.ditheringMode)
             .imageSupersampling(settings.supersampling == 0 ? nil : settings.supersampling)
             .imageEdgeThreshold(settings.edgeLines ? settings.edgeThreshold : nil)
+            .imageEdgeContrast(settings.edgeContrast ? settings.edgeContrastAmount : 0)
     }
 }

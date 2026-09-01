@@ -44,6 +44,7 @@ private struct ImageRenderCache: Equatable {
     var toneCurve: ASCIIToneCurve?
     var supersampling: Int?
     var edgeThreshold: Double?
+    var edgeContrast: Double
     var contentMode: ContentMode
     var aspectRatioOverride: Double?
     var cellAspect: Double
@@ -56,7 +57,7 @@ private struct ImageRenderCache: Equatable {
         width: Int, height: Int,
         characterSet: ASCIICharacterSet, shapeAware: Bool, colorMode: ASCIIColorMode,
         dithering: DitheringMode, toneCurve: ASCIIToneCurve?,
-        supersampling: Int?, edgeThreshold: Double?,
+        supersampling: Int?, edgeThreshold: Double?, edgeContrast: Double,
         contentMode: ContentMode,
         aspectRatioOverride: Double?,
         cellAspect: Double
@@ -72,6 +73,7 @@ private struct ImageRenderCache: Equatable {
             && self.toneCurve == toneCurve
             && self.supersampling == supersampling
             && self.edgeThreshold == edgeThreshold
+            && self.edgeContrast == edgeContrast
             && self.contentMode == contentMode
             && self.aspectRatioOverride == aspectRatioOverride
             && self.cellAspect == cellAspect
@@ -253,6 +255,7 @@ struct _ImageCore: View, Renderable, Layoutable {
                     with: context.environment.palette),
                 supersampling: context.environment.imageSupersampling,
                 edgeThreshold: context.environment.imageEdgeThreshold,
+                edgeContrast: context.environment.imageEdgeContrast,
                 contentMode: contentMode,
                 aspectRatioOverride: aspectRatioOverride,
                 cellAspect: context.environment.imageCellAspect,
@@ -410,6 +413,7 @@ extension _ImageCore {
         toneCurve: ASCIIToneCurve?,
         supersampling: Int?,
         edgeThreshold: Double?,
+        edgeContrast: Double,
         contentMode: ContentMode,
         aspectRatioOverride: Double?,
         cellAspect: Double,
@@ -447,6 +451,7 @@ extension _ImageCore {
             toneCurve: toneCurve,
             supersampling: supersampling,
             edgeThreshold: edgeThreshold,
+            edgeContrast: edgeContrast,
             contentMode: contentMode,
             aspectRatioOverride: aspectRatioOverride,
             cellAspect: cellAspect
@@ -461,7 +466,8 @@ extension _ImageCore {
             dithering: dithering,
             supersampling: supersampling,
             edgeThreshold: edgeThreshold,
-            toneCurve: toneCurve
+            toneCurve: toneCurve,
+            edgeContrast: edgeContrast
         )
         let lines = converter.convert(rawImage, width: targetSize.width, height: targetSize.height)
 
@@ -477,6 +483,7 @@ extension _ImageCore {
             toneCurve: toneCurve,
             supersampling: supersampling,
             edgeThreshold: edgeThreshold,
+            edgeContrast: edgeContrast,
             contentMode: contentMode,
             aspectRatioOverride: aspectRatioOverride,
             cellAspect: cellAspect,

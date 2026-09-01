@@ -50,6 +50,14 @@ struct ImageDemoSettings: Equatable {
     /// The Sobel gradient threshold for edge cells (used while ``edgeLines``).
     var edgeThreshold = 0.9
 
+    /// Whether the picture's local contrast is lifted before any character is
+    /// chosen for it — the third of the three, and the only one that changes
+    /// the PICTURE rather than what is read off it.
+    var edgeContrast = false
+
+    /// The unsharp amount (used while ``edgeContrast``).
+    var edgeContrastAmount = 0.6
+
     /// A custom brightness ramp, darkest character first; applies while the
     /// custom charset is selected.
     var customRamp = ""
