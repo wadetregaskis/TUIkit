@@ -35,6 +35,21 @@ extension Character {
         switch sv {
         case 0x200B, 0x200C, 0x200D, 0xFEFF, 0x00AD:  // ZWSP/ZWNJ/ZWJ/BOM, soft hyphen
             return true
+        // The bidi controls: marks (LRM/RLM/ALM) and the explicit directional
+        // embeddings, overrides and isolates. Every one is
+        // Default_Ignorable_Code_Point with no advance — they tell a renderer
+        // how to ORDER what is around them and occupy nothing themselves.
+        //
+        // They were counted as one cell each, which is why nothing could use
+        // them: a line carrying one measured a cell wider than it drew, so
+        // every column after it was placed wrong. Text pasted from a
+        // bidirectional document already carried them.
+        case 0x200E, 0x200F, 0x061C:  // LRM, RLM, ALM
+            return true
+        case 0x202A...0x202E:  // LRE, RLE, PDF, LRO, RLO
+            return true
+        case 0x2066...0x2069:  // LRI, RLI, FSI, PDI
+            return true
         case 0xFE00...0xFE0F, 0xE0100...0xE01EF:  // variation selectors (+ supplement)
             return true
         case 0x0300...0x036F, 0x1AB0...0x1AFF, 0x1DC0...0x1DFF,  // combining diacriticals (+ ext/supp)

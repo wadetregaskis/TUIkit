@@ -228,3 +228,48 @@ struct PictographicPlaneWidthTests {
         #expect(Character(text).terminalWidth == expected, "\(what)")
     }
 }
+
+// MARK: - Zero-width format controls
+
+/// The bidi controls are `Default_Ignorable_Code_Point` with no advance: they
+/// tell a renderer how to ORDER what is around them and occupy nothing
+/// themselves. They were measured as one cell each, so a line carrying one —
+/// as text pasted from a bidirectional document does — measured a cell wider
+/// than it drew and every column after it was placed wrong.
+@Suite("Bidi controls take no cells")
+struct BidiControlWidthTests {
+
+    /// Every explicit directional formatting character, by name.
+    private static let controls: [(String, UInt32)] = [
+        ("LRM", 0x200E), ("RLM", 0x200F), ("ALM", 0x061C),
+        ("LRE", 0x202A), ("RLE", 0x202B), ("PDF", 0x202C),
+        ("LRO", 0x202D), ("RLO", 0x202E),
+        ("LRI", 0x2066), ("RLI", 0x2067), ("FSI", 0x2068), ("PDI", 0x2069),
+    ]
+
+    @Test("each control on its own measures zero")
+    func controlsAreZeroWidth() {
+        for (name, value) in Self.controls {
+            let text = String(Unicode.Scalar(value)!)
+            #expect(text.strippedLength == 0, "\(name) (U+\(String(value, radix: 16))) measured \(text.strippedLength)")
+        }
+    }
+
+    @Test("a control between letters does not widen the line")
+    func controlsDoNotWidenText() {
+        for (name, value) in Self.controls {
+            let control = String(Unicode.Scalar(value)!)
+            #expect("a\(control)b".strippedLength == 2, "\(name) widened \"ab\"")
+        }
+    }
+
+    /// The case this was found for: forcing a Hebrew letter to lay out
+    /// left-to-right wraps it in LRO … PDF, which must cost nothing. Three
+    /// visible characters, five scalars.
+    @Test("an LTR-forced Hebrew letter measures its one cell")
+    func overriddenHebrewMeasuresOneCell() {
+        let wrapped = "a\u{202D}\u{5D0}\u{202C}b"
+        #expect(wrapped.strippedLength == 3)
+        #expect("\u{5D0}".strippedLength == 1, "the letter itself is one cell")
+    }
+}

@@ -26,6 +26,12 @@ when unset), the visual/aspect probes print to the terminal.
   measurements that follow.
 - `data/` — the committed measurement records, one per (terminal, version,
   screen). Written by a probe, never by hand. See `data/README.md`.
+- `bidi_card.py` — static `|<sample>|X` alignment card for RIGHT-TO-LEFT
+  text, printed twice: plain, and with each RTL run wrapped in
+  U+202D … U+202C. Rows whose `X` moves are reordered by the host; if the
+  wrapped rows line up and the plain ones do not, the override is the fix
+  there. Answers the two questions in Terminal-compatibility.md's
+  "Right-to-left text" section, which is otherwise unmeasured.
 - `visual_card.py` — static `|<c>|<c>|<c>|X` alignment card with a column
   ruler, for screenshot inspection of PAINTED width (which DSR can't see),
   merged-vs-split clusters, seams, and swatches. It answers exactly ONE of a

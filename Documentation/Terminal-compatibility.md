@@ -2473,3 +2473,40 @@ off by delta at all and restates from `ESC[0m`, which every terminal agrees
 about. (``SGRState/apply(_:)`` still *honours* both readings when parsing,
 because there the conservative direction is the opposite one — treating an
 off-code as a no-op would leave styling on that the source cleared.)
+
+## Right-to-left text — UNMEASURED
+
+Nothing in this document records what any host does with a Hebrew, Arabic or
+other strong right-to-left character, and until it does, TUIkit's behaviour
+there is an assumption rather than a measurement.
+
+The assumption is that the terminal paints cells in the order they are
+written. TUIkit lays every row out in logical order and places every later
+column relative to that, so a host implementing the Unicode bidirectional
+algorithm reorders a run under it: the cell TUIkit believes is in column 7 is
+painted somewhere else, and every column after it shears. Apple Terminal is
+reported to do this ("using a Hebrew character messes up rendering"); it has
+not been confirmed here, and no other host has been checked at all.
+
+What IS settled is the arithmetic. The bidi controls — LRM, RLM, ALM, the
+embeddings and overrides (U+202A…U+202E) and the isolates (U+2066…U+2069) —
+are `Default_Ignorable_Code_Point` with no advance, and TUIkit measured them
+as one cell each until 2026-09-01. A line carrying one, as text pasted from a
+bidirectional document does, measured a cell wider than it drew. They are
+zero-width now (`BidiControlWidthTests`), which is also what makes the
+candidate fix expressible at all.
+
+That candidate is to wrap each RTL run in U+202D LEFT-TO-RIGHT OVERRIDE …
+U+202C POP DIRECTIONAL FORMATTING, asking for logical order explicitly. It is
+NOT implemented, because it would change the bytes every host receives and two
+questions have to be answered first, per host:
+
+1. Does this terminal reorder RTL text at all?
+2. Does it obey the override, or print the control characters as glyphs? On a
+   host that prints them, the wrap is a regression.
+
+`Tools/TerminalProbes/bidi_card.py` answers both in one run. It prints the
+same nine-cell samples twice, plain and wrapped, as `|<sample>|X` rows: rows
+whose `X` moves are being reordered, and if the wrapped rows line up while the
+plain ones do not, the wrap is the fix for that host. Record what you see
+here, under that host's "Output behaviour".
