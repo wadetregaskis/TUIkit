@@ -64,6 +64,7 @@ enum Scenarios {
         ChurnUpdateScenario.descriptor,
         AnimatingScenario.descriptor,
         TranslucentScenario.descriptor,
+        GradientsScenario.descriptor,
         KitchenSinkScenario.descriptor,
     ]
 
