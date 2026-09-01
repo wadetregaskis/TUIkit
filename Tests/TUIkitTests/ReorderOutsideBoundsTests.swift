@@ -3,8 +3,12 @@
 //
 //  Where a reorder drag can and cannot land: the rows, and nothing else. A
 //  cursor carried past a control's edge is not pointing at its first or last
-//  row — it is pointing at nothing — so no drop slot follows it out there and
-//  releasing is a cancel, whatever the feedback mode.
+//  row — it is pointing at nothing — so no drop slot follows it out there.
+//
+//  What a release out there DOES depends on whether the rows left with the
+//  pointer. Under `.cursor` they did (a copy rides it), so releasing is a
+//  cancel. Under `.live` and `.dimmed` they did not — both draw the rows
+//  inside the control throughout — so releasing commits to what is on screen.
 //
 //  Both twins, in one file: the rule is one rule, and `List` and `Table` reach
 //  it through their own geometry (a title vs a column header, child buffers vs
@@ -20,7 +24,7 @@ import Testing
 @testable import TUIkitCore
 
 @MainActor
-@Suite("A reorder released off the rows is a cancel")
+@Suite("A reorder released off the rows")
 struct ReorderOutsideBoundsTests {
 
     /// The screen line of a control's bottom border.
@@ -72,23 +76,24 @@ struct ReorderOutsideBoundsTests {
         #expect(fixture.rows == ["a", "b", "c", "d", "e"])
     }
 
-    /// `.dimmed` keeps showing the row at the slot it was last over — it has to,
-    /// since nothing else on screen is holding it — but that is a *drawing*
-    /// decision. The release is still a release over nothing.
-    @Test("Table (.dimmed): releasing below the table leaves the order alone")
-    func tableDimmedReleaseOutsideCancels() {
+    /// `.dimmed` keeps showing the row at the slot it was last over — it has
+    /// to, since nothing else on screen is holding it — and the release
+    /// commits to exactly that. Dragged from "b" through "d" and out, the
+    /// promise on screen was "b after d", so that is what lands.
+    @Test("Table (.dimmed): releasing below the table commits the slot it was showing")
+    func tableDimmedReleaseOutsideCommits() {
         let fixture = TableReorderFixture(feedback: .dimmed)
         _ = dragOut(fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) + 2 })
-        #expect(fixture.rows == ["a", "b", "c", "d", "e"])
+        #expect(fixture.rows == ["a", "c", "d", "b", "e"])
     }
 
-    /// `.live` has been moving the rows all along, so its cancel has something
-    /// to undo: the block goes back to where the gesture picked it up.
-    @Test("Table (.live): releasing below the table puts the rows back")
-    func tableLiveReleaseOutsideRestores() {
+    /// `.live` has been moving the rows all along, so committing is simply not
+    /// undoing them: "a" dragged through "c" is already at index 2 and stays.
+    @Test("Table (.live): releasing below the table leaves the rows where the drag put them")
+    func tableLiveReleaseOutsideCommits() {
         let fixture = TableReorderFixture(feedback: .live)
         _ = dragOut(fixture, from: "a", via: "c", escapeBy: { bottomBorder($0) + 2 })
-        #expect(fixture.rows == ["a", "b", "c", "d", "e"])
+        #expect(fixture.rows == ["b", "c", "a", "d", "e"])
     }
 
     /// The border shares a line with nothing droppable — it is chrome, exactly
@@ -250,18 +255,18 @@ struct ReorderOutsideBoundsTests {
         #expect(fixture.items == ["a", "b", "c", "d", "e"])
     }
 
-    @Test("List (.dimmed): releasing below the list leaves the order alone")
-    func listDimmedReleaseOutsideCancels() {
+    @Test("List (.dimmed): releasing below the list commits the slot it was showing")
+    func listDimmedReleaseOutsideCommits() {
         let fixture = ListReorderFixture(feedback: .dimmed)
         _ = dragOut(fixture, from: "b", via: "d", escapeBy: { bottomBorder($0) + 2 })
-        #expect(fixture.items == ["a", "b", "c", "d", "e"])
+        #expect(fixture.items == ["a", "c", "d", "b", "e"])
     }
 
-    @Test("List (.live): releasing below the list puts the rows back")
-    func listLiveReleaseOutsideRestores() {
+    @Test("List (.live): releasing below the list leaves the rows where the drag put them")
+    func listLiveReleaseOutsideCommits() {
         let fixture = ListReorderFixture(feedback: .live)
         _ = dragOut(fixture, from: "a", via: "c", escapeBy: { bottomBorder($0) + 2 })
-        #expect(fixture.items == ["a", "b", "c", "d", "e"])
+        #expect(fixture.items == ["b", "c", "a", "d", "e"])
     }
 
     @Test("List: the bottom border is not the last row")

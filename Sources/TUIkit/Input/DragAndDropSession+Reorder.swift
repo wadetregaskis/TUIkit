@@ -131,15 +131,36 @@ extension DragAndDropSession {
         }
         guard let contentY = contentY(in: host) else {
             // Released off the rows — outside the control, or on its border.
-            // There is nowhere to land, so the gesture is abandoned outright
-            // under EVERY feedback mode: `.dimmed` would otherwise commit to
-            // the slot it was still holding, and `.live` would leave the rows
-            // wherever the pointer last was inside the list, when what the user
-            // did was carry them out and let go. Releasing over nothing is the
-            // cancel, as it is on macOS.
+            // What that means depends on whether the rows ever left.
+            //
+            // Under `.cursor` they did: a copy rides the pointer, the slot is
+            // dropped the moment it leaves, and out here the rows are held
+            // over nothing. Releasing is the cancel, as it is on macOS.
+            //
+            // Under `.live` and `.dimmed` they did not. Both draw the rows
+            // INSIDE the control for the whole gesture — the list on screen
+            // already is the order a drop would produce — so carrying the
+            // pointer out does not carry the rows out, and letting go commits
+            // to what is shown, which is the top or the bottom of the control.
+            // Abandoning there put the rows back from a picture that never
+            // stopped saying they had moved.
             guard wasReordering else { return false }
-            host.handler.cancelReorder()
-            cancelReturningToOrigin()
+            guard host.handler.commitsReorderReleasedOutside else {
+                host.handler.cancelReorder()
+                cancelReturningToOrigin()
+                return true
+            }
+            // `atContentY: nil` asks exactly the right question of each mode:
+            // `.live` has already moved the data and keeps it, `.dimmed`
+            // commits the slot it is still holding, and a mode holding no slot
+            // moves nothing.
+            let landsNowhere = host.handler.reorderLandsNowhere(atContentY: nil)
+            guard host.handler.dropReorder(atContentY: nil) else { return false }
+            if landsNowhere {
+                cancelReturningToOrigin()
+            } else {
+                settlePreviewInPlace()
+            }
             return true
         }
         // Asked BEFORE the drop, which clears the state it reads.

@@ -304,10 +304,15 @@ rows stream past underneath. It is a place in the list you are aiming at, and
 you have not moved.
 
 *Near* the edge is not the same as *past* it. Auto-scroll engages from a hot
-margin just inside the control, where the pointer is still on a row — and one
-dragged beyond the frame is not on anything, so the slot closes and a release
-there abandons the gesture rather than landing at whichever end it left by.
-Dragging out is how a user changes their mind.
+margin just inside the control, where the pointer is still on a row; dragged
+beyond the frame the pointer is on nothing.
+
+What a release out there does depends on whether the rows left with it — see
+``RowReorderFeedback``. Under `.cursor` they did, so the slot closes and the
+release abandons the gesture; dragging out is how a user changes their mind.
+Under `.live` and `.dimmed` they did not: those draw the rows inside the
+control throughout, so the release commits to what is on screen, which is
+whichever end the pointer left by.
 
 A **row reorder** is carriable in the same way, with one limit that follows from
 what it is: a reorder can only land in the list it came from, so leaving that

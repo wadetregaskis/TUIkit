@@ -1091,6 +1091,18 @@ extension ItemListHandler {
         dragSession?.cancelReorder()
     }
 
+    /// Whether a release off the rows commits rather than abandons.
+    ///
+    /// It does under `.live` and `.dimmed`, and does not under `.cursor`. The
+    /// difference is whether the rows ever left: those two draw them INSIDE
+    /// the control for the whole gesture — the list on screen already IS the
+    /// order a drop would produce — so carrying the pointer out of the control
+    /// does not carry the rows with it, and letting go commits to what is
+    /// shown. `.cursor` floats a copy at the pointer and drops its slot the
+    /// moment the pointer leaves, so out there it is holding the rows over
+    /// nothing and releasing is the cancel, as it is on macOS.
+    var commitsReorderReleasedOutside: Bool { effectiveReorderFeedback != .cursor }
+
     /// Whether a release at `contentY` would put the rows anywhere.
     ///
     /// Not "is the pointer still over the content columns", which is all a `nil`

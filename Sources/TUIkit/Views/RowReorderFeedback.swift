@@ -18,21 +18,33 @@
 /// the trade-offs differ enough to be worth exposing — see
 /// ``TUIkit/View/rowReorderFeedback(_:)``.
 ///
-/// Whichever mode is in force, a release **off the rows** — past the control's
-/// edge, or on its border — abandons the gesture: the rows go back where they
-/// were picked up and the preview walks home. Only a pointer over a row is
-/// pointing at a place to land, and dragging out is how a user changes their
-/// mind — there is no key for it, because a drag has to stay carriable across
-/// the app and that needs the navigation keys to keep navigating.
+/// A release **off the rows** — past the control's edge, or on its border —
+/// means different things in different modes, and the difference is whether the
+/// rows ever left the control.
+///
+/// Under ``live`` and ``dimmed`` they never do: both draw the rows inside the
+/// control for the whole gesture, so what is on screen already IS the order a
+/// drop would produce. Carrying the pointer out does not carry the rows out,
+/// and letting go **commits** to what is shown — which, having dragged past an
+/// edge, is the top or the bottom.
+///
+/// Under ``cursor`` they do: a copy rides the pointer, above every other view,
+/// and its slot is dropped the moment the pointer leaves the rows. Out there it
+/// is holding the rows over nothing, so a release **abandons** the gesture —
+/// the rows go back where they were picked up and the preview walks home.
+/// Dragging out is how a user changes their mind, and there is no key for it,
+/// because a drag has to stay carriable across the app and that needs the
+/// navigation keys to keep navigating.
 public enum RowReorderFeedback: String, Sendable, Hashable, CaseIterable {
     /// The rows reorder **as the cursor moves**, so the list always shows the
     /// result of dropping right here. The default.
     ///
     /// The cost is that `onMove` fires once per slot the row crosses rather
-    /// than once for the whole gesture — and a release off the rows adds one
-    /// more, since undoing a move that has already happened is itself a move.
-    /// Prefer ``dimmed`` or ``cursor`` when each move is expensive or
-    /// separately undoable.
+    /// than once for the whole gesture. Prefer ``dimmed`` or ``cursor`` when
+    /// each move is expensive or separately undoable.
+    ///
+    /// A release off the rows adds no move at all: the data is already where
+    /// the list says it is, so committing is simply not undoing it.
     case live
 
     /// The row leaves its place and reappears **dimmed** in the slot it would
@@ -41,11 +53,9 @@ public enum RowReorderFeedback: String, Sendable, Hashable, CaseIterable {
     ///
     /// The row stays drawn at the slot it was last over even while the pointer
     /// is off the rows — nothing else on screen is holding it, so it has to be
-    /// somewhere — but that is only where it is drawn. A release out there still
-    /// abandons the gesture.
+    /// somewhere — and a release out there commits to exactly that slot.
     ///
-    /// `onMove` fires once, on release, and not at all when released away from
-    /// the rows.
+    /// `onMove` fires once, on release, wherever the release happens.
     case dimmed
 
     /// Like ``dimmed``, but the row rides the **pointer**: a copy of it floats

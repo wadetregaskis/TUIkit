@@ -127,6 +127,10 @@ protocol RowReorderHosting: AnyObject {
     /// Whether a release at `contentY` would put the rows anywhere.
     func reorderLandsNowhere(atContentY contentY: Int?) -> Bool
 
+    /// Whether a release OFF the rows commits the reorder rather than
+    /// abandoning it — see ``RowReorderFeedback``.
+    var commitsReorderReleasedOutside: Bool { get }
+
     /// Drops the gesture without moving anything.
     func cancelReorder()
 }
