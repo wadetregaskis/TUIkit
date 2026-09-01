@@ -542,11 +542,19 @@ extension String {
         var suffix = ""
         var suffixWidth = 0
         var style = SGRState()
-        // The state where the overlay LANDS, netted the same way — what the
-        // covered cells are painted on, so an overlay cell that states no
-        // background of its own can keep this one. Free: the same walk, one
-        // more accumulator, and only the codes before the overlay's column.
-        var under = SGRState()
+        // The state where the overlay LANDS — what the covered cells are
+        // painted on, so an overlay cell that states no background of its own
+        // can keep this one.
+        //
+        // A COPY of `style`, taken at the overlay's column, rather than a
+        // second accumulator netted alongside it. Every sequence before the
+        // overlay is also before the suffix, so `style` has already applied
+        // every one of them, in order — and `SGRState.apply` splits the
+        // parameters and allocates a `String` per code, which is far more than
+        // a struct copy. Netting them twice made compositing a `Layout`'s
+        // children quadratic in escapes all over again, which is the very
+        // thing this one-scan split exists to have fixed.
+        var under: SGRState?
         var total = 0
 
         let scalars = unicodeScalars
@@ -605,18 +613,19 @@ extension String {
             }
             let text = String(sequence)
             if prefixOpen { prefix += text }
-            if isSGR, total <= prefixColumns { under.apply(text) }
             if total >= suffixDropColumns {
                 suffix += text
             } else if isSGR {
                 style.apply(text)
+                if total <= prefixColumns { under = style }
             }
         }
         flushVisible()
 
         return ANSIOverlaySplit(
             prefix: prefix, prefixWidth: prefixWidth, suffix: suffix, suffixWidth: suffixWidth,
-            styleBeforeSuffix: style.rendered, backgroundUnderOverlay: under.renderedBackground,
+            styleBeforeSuffix: style.rendered,
+            backgroundUnderOverlay: under?.renderedBackground ?? "",
             totalWidth: total)
     }
 }
