@@ -79,6 +79,25 @@ public enum ASCIICharacterSet: Sendable, Equatable {
         /// Unicode Braille patterns: 2×4 dots per cell, 256 patterns.
         /// The highest spatial resolution.
         case braille
+
+        /// The fifteen block-element eighths (`▏▁▎▂▍▃▌▄▋▅▊▆▉▇█`) mapped from
+        /// luminance, one image pixel per cell — ``coarse`` with three times
+        /// the levels, and the same lack of any need for colour.
+        ///
+        /// Ordered by ink coverage rather than by code point, which is the
+        /// one thing about it that is not obvious. Listed in code point order
+        /// the eighths run `▁▂▃▄▅▆▇█▉▊▋▌▍▎▏` — bottom-filling from an eighth
+        /// to full, then left-filling from seven eighths back down to one —
+        /// so coverage rises to `█` and falls away again. A luminance ramp
+        /// indexes by brightness, so a ramp that is not monotone in ink paints
+        /// the brightest pixels with the thinnest glyphs. Interleaving the two
+        /// families keeps every step non-decreasing: `▏▁` are both an eighth,
+        /// `▎▂` both a quarter, and so on up to `█`.
+        ///
+        /// Eight distinct densities across fifteen glyphs, so adjacent levels
+        /// differ in the orientation of their ink rather than the amount of
+        /// it — which is the texture this style is for.
+        case ramp
     }
 
     /// Printable ASCII. Works in every terminal.
@@ -379,7 +398,8 @@ extension ASCIIConverter {
                 grid = (1, 2)
             case .blocks(.braille):
                 grid = (2, 4)
-            case .blocks(.solid), .ascii, .unicode, .blocks(.coarse), .customRamp:
+            case .blocks(.solid), .ascii, .unicode, .blocks(.coarse), .blocks(.ramp),
+                .customRamp:
                 grid = (1, 1)
             }
             factor = effectiveSupersampling
@@ -437,7 +457,7 @@ extension ASCIIConverter {
             return convertBlocks(
                 scaled, width: width, height: height, mode: effectiveMode,
                 monoThreshold: monoThreshold)
-        case .ascii, .unicode, .blocks(.coarse), .customRamp:
+        case .ascii, .unicode, .blocks(.coarse), .blocks(.ramp), .customRamp:
             return convertCharacterBased(scaled, width: width, height: height, mode: effectiveMode)
         }
     }
@@ -613,6 +633,9 @@ extension ASCIIConverter {
             return GlyphRepertoire.densityRamp(from: GlyphRepertoire.unicode, count: glyphs)
         case .blocks(.coarse):
             return Array(" ░▒▓█")
+        case .blocks(.ramp):
+            // Ink-coverage order, not code point order — see `BlockStyle.ramp`.
+            return Array("▏▁▎▂▍▃▌▄▋▅▊▆▉▇█")
         case .customRamp(let ramp):
             // Caller-supplied, ordered light → dense by contract; an empty
             // ramp falls back to a 10-level calibrated ASCII ramp.

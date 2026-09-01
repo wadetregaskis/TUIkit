@@ -32,7 +32,7 @@ enum ImageDemoHelpers {
     /// The block charset's discrete styles, in demo order (the framework
     /// default `.fine` first).
     static let blockStyles: [ASCIICharacterSet.BlockStyle] = [
-        .fine, .solid, .coarse, .braille,
+        .fine, .solid, .coarse, .ramp, .braille,
     ]
 
     // MARK: - Labels
@@ -51,6 +51,7 @@ enum ImageDemoHelpers {
         case .fine: return "fine"
         case .solid: return "solid"
         case .coarse: return "coarse"
+        case .ramp: return "ramp"
         case .braille: return "braille"
         }
     }

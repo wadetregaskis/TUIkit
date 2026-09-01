@@ -78,4 +78,40 @@ struct GlyphRampQuantisationTests {
         let darkCells = line.prefix(while: { $0 == " " }).count
         #expect((14...18).contains(darkCells), "≈half the gradient is the dark level: |\(line)|")
     }
+
+    // MARK: - The block-eighths ramp
+
+    /// How much of its cell each block eighth inks, in eighths. A luminance
+    /// ramp is only a ramp if this never goes backwards along it.
+    private static let eighths: [Character: Int] = [
+        "▏": 1, "▎": 2, "▍": 3, "▌": 4, "▋": 5, "▊": 6, "▉": 7, "█": 8,
+        "▁": 1, "▂": 2, "▃": 3, "▄": 4, "▅": 5, "▆": 6, "▇": 7,
+    ]
+
+    @Test(".blocks(.ramp) never gets darker as the image gets brighter")
+    func blockRampIsMonotoneInInk() {
+        let converter = ASCIIConverter(
+            characterSet: .blocks(.ramp), colorMode: .mono, supersampling: 1)
+        let line = plain(converter.convert(gradient(width: 120, height: 2), width: 60, height: 1)[0])
+        let coverage = line.compactMap { Self.eighths[$0] }
+        #expect(coverage.count == line.count, "every glyph is a block eighth: |\(line)|")
+        // Listed in code point order the eighths run ▁▂▃▄▅▆▇█▉▊▋▌▍▎▏, whose
+        // coverage rises to full and falls back to an eighth; used as a ramp
+        // that paints the BRIGHTEST pixels with the thinnest glyphs. This is
+        // the property that ordering by ink buys, and the only one that
+        // distinguishes the two orderings.
+        #expect(zip(coverage, coverage.dropFirst()).allSatisfy { $0 <= $1 },
+                "coverage never decreases across a black → white gradient: \(coverage)")
+        #expect(coverage.first == 1 && coverage.last == 8, "both ends are reached: \(coverage)")
+    }
+
+    @Test(".blocks(.ramp) offers more levels than .coarse")
+    func blockRampIsFinerThanCoarse() {
+        func levels(_ set: ASCIICharacterSet) -> Int {
+            let converter = ASCIIConverter(characterSet: set, colorMode: .mono, supersampling: 1)
+            return distinctGlyphs(converter.convert(gradient(width: 120, height: 2),
+                                                    width: 60, height: 1)).count
+        }
+        #expect(levels(.blocks(.ramp)) > levels(.blocks(.coarse)))
+    }
 }

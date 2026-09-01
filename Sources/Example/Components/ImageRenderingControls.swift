@@ -110,6 +110,7 @@ struct ImageRenderingControls: View {
                         RadioButtonItem(1, ImageDemoHelpers.blockStyleLabel(1))
                         RadioButtonItem(2, ImageDemoHelpers.blockStyleLabel(2))
                         RadioButtonItem(3, ImageDemoHelpers.blockStyleLabel(3))
+                        RadioButtonItem(4, ImageDemoHelpers.blockStyleLabel(4))
                     }
                     .disabled(
                         !ImageDemoHelpers.usesBlockStyle(

@@ -24,7 +24,11 @@ struct ImageDemoLayout<Content: View>: View {
     /// widest row it holds (the block-resolution radio row) *with* the
     /// scrollbar the pane grows on a short terminal, and no wider — every
     /// column past that is one the picture does not get.
-    private static var paneWidth: Int { 44 }
+    ///
+    /// That row is five options wide now rather than four
+    /// (`fine solid coarse ramp braille`), which measures 47 columns with its
+    /// indent; 47 + two borders + the scrollbar is 51 — measured, with the scrollbar present.
+    private static var paneWidth: Int { 51 }
 
     var body: some View {
         HStack(alignment: .top, spacing: 1) {
