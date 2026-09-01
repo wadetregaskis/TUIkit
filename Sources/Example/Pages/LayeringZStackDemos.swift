@@ -227,11 +227,19 @@ extension LayeringPage {
     /// The top layer of case 4: a label painting whichever colours the controls
     /// at the top of the page say it does.
     ///
-    /// Off, the two toggles leave it painting NOTHING — no foreground, no
-    /// background — which is the state that shows what a composite falls back
-    /// to. With a background it is opaque cell for cell at alpha 1; without
-    /// one, the band behind shows through its letters at every alpha, because a
-    /// cell that names no background has none to win with.
+    /// With "own background" off the label paints no background at all, which
+    /// is the state that shows what a composite falls back to: at alpha 1 a
+    /// layer with a background is opaque cell for cell, and one without has
+    /// nothing to win with, so the band shows through its letters at every
+    /// alpha.
+    ///
+    /// "Own foreground" off means it takes the colour it inherits. That has to
+    /// be said with a colour the cascade would NOT have chosen, because a
+    /// `Text` always emits a foreground: nothing in the framework draws ink
+    /// with the colour unset, and a leaf that names none falls through to
+    /// `palette.foreground`. So this used to switch between
+    /// `.foregroundStyle(.palette.foreground)` and nothing at all, which are
+    /// byte-identical renders — the toggle moved and the page did not change.
     @ViewBuilder private func topLayer(_ text: String) -> some View {
         let label = Text(verbatim: text).bold()
         if zstackTopBackground {
@@ -241,7 +249,10 @@ extension LayeringPage {
                 )
                 .background(.palette.warning)
         } else if zstackTopForeground {
-            label.foregroundStyle(.palette.foreground)
+            // Not the cascade's own colour, for the reason above. `.info`
+            // against the band's `.accent` also says which layer is which
+            // while the top one slides across.
+            label.foregroundStyle(.palette.info)
         } else {
             label
         }
