@@ -2524,6 +2524,32 @@ one cell each until 2026-09-01. A line carrying one, as text pasted from a
 bidirectional document does, measured a cell wider than it drew. They are
 zero-width now (`BidiControlWidthTests`).
 
+### RTL characters as image PIXELS — OPEN, probe written 2026-09-01
+
+A `TUIkitImage` `.customRamp` containing Hebrew letters draws a corrupt picture
+on Apple Terminal (reported; not yet measured against the other three). The
+stakes differ from text: reordering a run of letters is arguably the right
+thing and merely looks odd, but in a picture every character is a pixel, so
+moving one is corruption with nothing gained — and the run's *neutrals* go with
+it, which is why a row mirrors in patches rather than in place.
+
+`Tools/TerminalProbes/rtl_image_card.py` prints a STAIRCASE built from one
+Hebrew letter and blanks, so no one has to read Hebrew to judge it: correct
+output is a clean diagonal with every `X` in one column, and a host that
+reorders flips the diagonal to the other side of the row. Four candidate
+renderings, plus an ASCII control that shows what correct looks like on that
+host:
+
+| Block | What it costs | What it would prove |
+|---|---|---|
+| `plain` | nothing | the baseline — does this host reorder a picture at all? |
+| `lrm` | 3 bytes per ink cell | U+200E after each RTL cell ends the run at one character, which cannot be reordered |
+| `isolate` | 6 bytes per ink cell | U+2068 … U+2069 says it more strongly, and may be painted instead of obeyed |
+| `positioned` | one `ESC[nG` per cell, no added characters | whether a host reorders what it is HANDED or what it has STORED — `FrameDiffWriter` already writes partial rows this way |
+
+The override (U+202D … U+202C) is not among them: Apple Terminal paints those
+two, measured above.
+
 That leaves **a known divergence on Apple Terminal in the other direction**: it
 paints U+202D and U+202C as a box that occupies a cell TUIkit no longer counts.
 Only those two were measured there; the rest of the family was not tested

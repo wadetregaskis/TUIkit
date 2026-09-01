@@ -34,6 +34,13 @@ when unset), the visual/aspect probes print to the terminal.
   closing lines). Run in all four hosts 2026-09-01; the results and what
   they settled are in Terminal-compatibility.md's "Right-to-left text"
   section.
+- `rtl_image_card.py` — the same question asked of a PICTURE rather than of a
+  line of text: a staircase built from one Hebrew letter and blanks, printed
+  five ways (an ASCII control, plain, U+200E after each ink cell, U+2068 …
+  U+2069 around each, and every cell written after an `ESC[nG` column move).
+  Correct is a clean diagonal with every `X` in one column; a host that
+  reorders flips the diagonal to the other side of the row. OPEN — see
+  Terminal-compatibility.md's "RTL characters as image PIXELS".
 - `visual_card.py` — static `|<c>|<c>|<c>|X` alignment card with a column
   ruler, for screenshot inspection of PAINTED width (which DSR can't see),
   merged-vs-split clusters, seams, and swatches. It answers exactly ONE of a

@@ -144,6 +144,21 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// > the widest character, resampling at `width / quantum` and correcting
     /// > the aspect for it — the shape ``TrackConfiguration`` takes for the
     /// > same problem — and is not implemented.
+    ///
+    /// > Important: a character the terminal is entitled to MOVE cannot be a
+    /// > pixel. A ramp of right-to-left letters (Hebrew, Arabic) draws a
+    /// > corrupt picture on Apple Terminal — reported, and consistent with the
+    /// > host reordering each run of them within the columns it occupies, which
+    /// > in a picture swaps the ink with the blanks beside it and mirrors the
+    /// > row in patches. In text that reordering is arguably correct and merely
+    /// > looks odd; here every character is a pixel and moving one is
+    /// > corruption with nothing gained.
+    /// >
+    /// > Whether a mark or an isolate around each cell suppresses it is
+    /// > measured by `Tools/TerminalProbes/rtl_image_card.py` and is an open
+    /// > question in `Documentation/Terminal-compatibility.md` — the obvious
+    /// > candidate, U+202D … U+202C, is already ruled out: Apple Terminal
+    /// > paints those two as the missing-glyph box.
     case customRamp(String)
 
     /// The full ASCII repertoire (`.ascii(glyphs: nil)`).
