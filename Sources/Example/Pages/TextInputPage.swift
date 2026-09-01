@@ -282,7 +282,6 @@ struct TextInputPage: View {
 
             Spacer()
         }
-        .padding(.horizontal, 1)
         .textCursor(currentShape, animation: currentAnimation, speed: currentSpeed)
         .statusBarItems(cursorStatusBarItems)
         .scrollableDemoPage()

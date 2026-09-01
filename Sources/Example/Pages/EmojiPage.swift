@@ -117,7 +117,6 @@ struct EmojiPage: View {
                 }
             }
         }
-        .padding(.horizontal, 1)
         // Not wrapped in a page ScrollView: the List below is the scrollable
         // content and is greedy in height (it fills the viewport and scrolls
         // itself). Nesting it in a page ScrollView would defeat both.

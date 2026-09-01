@@ -107,7 +107,6 @@ struct AnimationPage: View {
                 "page.animation.help.arrows",
             ])
         }
-        .padding(.horizontal, 1)
         .scrollableDemoPage()
         .appHeader {
             DemoAppHeader("menu.item.animation", subtitle: "page.animation.subtitle")

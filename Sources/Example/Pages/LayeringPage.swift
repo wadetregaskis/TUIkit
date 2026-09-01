@@ -96,7 +96,11 @@ struct LayeringPage: View {
     @ViewBuilder private func controlsPane(travel: Double) -> some View {
         ScrollView {
             controls(travel: travel)
-                .padding(.horizontal, 1)
+                // Only on the side facing the demos. The page already has a
+                // column of gutter down each outer edge (`ContentView`), so a
+                // pane that pads both sides doubles it — which is what the
+                // left edge of this page used to show.
+                .padding(.trailing, 1)
         }
         // Wide enough for the longest label the sliders carry
         // ("Outer opacity 100% → 50%") plus a track worth dragging, and no
@@ -121,7 +125,9 @@ struct LayeringPage: View {
                     "page.layering.help.activate",
                 ])
             }
-            .padding(.horizontal, 1)
+            // The interior side only, for the same reason the controls pane
+            // pads only its own.
+            .padding(.leading, 1)
         }
     }
 
