@@ -308,24 +308,7 @@ extension IndeterminateRenderer {
     private static func renderGradient(
         width: Int, configuration: IndeterminateConfiguration, elapsed: Double
     ) -> String {
-        // Custom stops need resolvable RGB (semantic colours have none until a
-        // palette is applied); anything unresolvable is skipped, and fewer
-        // than two usable stops falls back to the built-in rainbow.
-        let custom = configuration.gradient?.stops.compactMap { stop -> (r: UInt8, g: UInt8, b: UInt8)? in
-            guard let components = stop.color.rgbComponents else { return nil }
-            return (components.red, components.green, components.blue)
-        }
-        let builtIn: [(r: UInt8, g: UInt8, b: UInt8)] = [
-            // swiftlint:disable comma
-            (180,  30,  80),  // magenta-pink
-            (220, 110,  40),  // amber
-            (220, 220,  60),  // yellow
-            ( 60, 200,  90),  // green
-            ( 50, 140, 220),  // cyan-blue
-            (140,  90, 220),  // violet
-            // swiftlint:enable comma
-        ]
-        let stops = (custom?.count ?? 0) >= 2 ? custom! : builtIn
+        let ramp = cyclic(configuration.gradient)
         let phase = phase(elapsed: elapsed, period: configuration.period)
         let fill = Array(configuration.fill)
         return laid(width: width) { column in
@@ -336,28 +319,80 @@ extension IndeterminateRenderer {
             // `truncatingRemainder` keeps the sign of the dividend).
             let raw = (Double(column) / Double(max(1, width)) - phase + 1.0)
                 .truncatingRemainder(dividingBy: 1.0)
-            let (r, g, b) = sample(stops: stops, at: raw)
-            return (glyph(fill, at: column), .rgb(r, g, b))
+            return (glyph(fill, at: column), ramp.color(at: raw))
         }
     }
 
-    /// Piecewise-linear lookup into a list of RGB stops, wrapped so the
-    /// gradient is cyclic (the final stop interpolates back to the
-    /// first).
-    private static func sample(
-        stops: [(r: UInt8, g: UInt8, b: UInt8)], at parameter: Double
-    ) -> (UInt8, UInt8, UInt8) {
-        let segments = Double(stops.count)
-        let scaled = parameter * segments
-        let lowerIndex = Int(scaled.rounded(.down)) % stops.count
-        let upperIndex = (lowerIndex + 1) % stops.count
-        let mix = scaled - Double(Int(scaled.rounded(.down)))
-        let lower = stops[lowerIndex]
-        let upper = stops[upperIndex]
-        func lerp(_ start: UInt8, _ end: UInt8) -> UInt8 {
-            let blended = Double(start) + (Double(end) - Double(start)) * mix
-            return UInt8(max(0, min(255, Int(blended.rounded()))))
+    /// The rainbow this motion slides when the caller names no colours of
+    /// their own.
+    private static let rainbow = Gradient(colors: [
+        // swiftlint:disable comma
+        .rgb(180,  30,  80),  // magenta-pink
+        .rgb(220, 110,  40),  // amber
+        .rgb(220, 220,  60),  // yellow
+        .rgb( 60, 200,  90),  // green
+        .rgb( 50, 140, 220),  // cyan-blue
+        .rgb(140,  90, 220),  // violet
+        // swiftlint:enable comma
+    ])
+
+    /// `requested` laid out as a CYCLE — a ramp that can be slid across the
+    /// track for ever without a seam.
+    ///
+    /// A cycle has one segment more than the stops describe: the wrap, from
+    /// the last stop back to the first. The stops are squeezed to leave room
+    /// for it, by the average of the gaps they already have — so *n* evenly
+    /// spaced stops come out as *n* equal segments, and unevenly spaced ones
+    /// keep their proportions.
+    ///
+    /// Sampling then goes through ``Gradient/color(at:)`` like every other
+    /// ramp in the framework, which is what makes ``Gradient/colorSpace``
+    /// count here as it does under ``IndeterminateConfiguration/Motion/sweep``
+    /// and its siblings.
+    ///
+    /// - Parameter requested: The caller's stops, or `nil` for the built-in
+    ///   rainbow.
+    /// - Returns: A gradient spanning `0...1` whose ends are the same colour.
+    private static func cyclic(_ requested: Gradient?) -> Gradient {
+        // Stops need resolvable RGB (a semantic colour has none until a
+        // palette is applied); anything unresolvable is skipped, and fewer
+        // than two usable stops falls back to the built-in rainbow.
+        var source = requested ?? rainbow
+        var stops = resolvable(in: source)
+        if stops.count < 2 {
+            source = rainbow
+            stops = rainbow.stops
         }
-        return (lerp(lower.r, upper.r), lerp(lower.g, upper.g), lerp(lower.b, upper.b))
+
+        let count = Double(stops.count)
+        let origin = stops[0].location
+        let span = stops[stops.count - 1].location - origin
+        // The stops occupy this much of the cycle; the wrap gets the rest.
+        let extent = (count - 1) / count
+        var cycled = stops.enumerated().map { index, stop in
+            // Every stop in one place describes no ramp at all, so they fall
+            // back to even spacing — which is what a bare list of colours
+            // means, and what this motion did before it read the locations.
+            Gradient.Stop(
+                color: stop.color,
+                location: span > 0 ? (stop.location - origin) / span * extent : Double(index) / count
+            )
+        }
+        cycled.append(Gradient.Stop(color: stops[0].color, location: 1))
+        // `withStops`, not `Gradient(stops:)`: the layout changes, everything
+        // else the caller's ramp carries — its colour space — does not.
+        return source.withStops(cycled)
+    }
+
+    /// `gradient`'s stops that name a real colour, in location order.
+    private static func resolvable(in gradient: Gradient) -> [Gradient.Stop] {
+        gradient.stops.enumerated()
+            .filter { $0.element.color.rgbComponents != nil }
+            // Ordered by location, ties broken by the order they were given
+            // in — the same rule `Gradient` itself sorts by, so a hard edge
+            // built from two stops in one place stays the way round it was
+            // written.
+            .sorted { ($0.element.location, $0.offset) < ($1.element.location, $1.offset) }
+            .map(\.element)
     }
 }

@@ -96,6 +96,65 @@ struct TrackGradientTests {
         #expect(triples.allSatisfy { $0.hasPrefix("11;22;33") }, "custom stops used: \(triples)")
     }
 
+    @Test("Indeterminate .gradient blends in the ramp's own colour space")
+    func indeterminateColorSpace() {
+        // Blue → yellow is the pair the two spaces disagree about most: a
+        // device blend passes through grey, a perceptual one does not.
+        let stops: [Color] = [.rgb(0, 0, 255), .rgb(255, 255, 0)]
+        func triples(_ space: Gradient.ColorSpace) -> [String] {
+            ordered(
+                in: IndeterminateRenderer.render(
+                    width: 8, style: .gradient(Gradient(colors: stops, colorSpace: space)),
+                    filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2),
+                    accentColor: .rgb(3, 3, 3), elapsed: 0))
+        }
+        let device = triples(.device)
+        let perceptual = triples(.perceptual)
+        #expect(device.contains("127;127;127"), "device blend goes through grey: \(device)")
+        #expect(
+            !perceptual.contains { $0.hasPrefix("127;127;12") },
+            "perceptual blend does not: \(perceptual)")
+    }
+
+    @Test("Indeterminate .gradient honours where the stops sit")
+    func indeterminateStopLocations() {
+        // Green a tenth of the way along, not a third: the cycle squeezes the
+        // stops to leave room for the wrap, but keeps their proportions.
+        let squashed = Gradient(stops: [
+            Gradient.Stop(color: .rgb(255, 0, 0), location: 0),
+            Gradient.Stop(color: .rgb(0, 255, 0), location: 0.1),
+            Gradient.Stop(color: .rgb(0, 0, 255), location: 1),
+        ])
+        let output = IndeterminateRenderer.render(
+            width: 30, style: .gradient(squashed), filledColor: .rgb(1, 1, 1),
+            emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3), elapsed: 0)
+        let cells = ordered(in: output)
+        let greenest = cells.indices.max { greenness(of: cells[$0]) < greenness(of: cells[$1]) }
+        // 0.1 of the ramp × 2/3 of the cycle × 30 cells = column 2.
+        #expect(greenest == 2, "green sits where it was put: \(cells)")
+    }
+
+    /// How green `triple` is, against its other two channels.
+    private func greenness(of triple: String) -> Int {
+        let channels = triple.split(separator: ";").map { Int($0) ?? 0 }
+        guard channels.count == 3 else { return 0 }
+        return channels[1] - max(channels[0], channels[2])
+    }
+
+    /// The `38;2;r;g;b` foreground codes in `output`, in the order they are
+    /// emitted — one per RUN, and this motion lights every cell in a colour of
+    /// its own, so the run index is the column.
+    private func ordered(in output: String) -> [String] {
+        var found: [String] = []
+        var search = output[...]
+        while let range = search.range(of: "38;2;") {
+            let tail = search[range.upperBound...]
+            found.append(String(tail.prefix { $0.isNumber || $0 == ";" }))
+            search = tail
+        }
+        return found
+    }
+
     @Test("Indeterminate .gradient with fewer than two usable stops falls back to the rainbow")
     func indeterminateFallback() {
         let output = IndeterminateRenderer.render(

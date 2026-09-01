@@ -1147,8 +1147,8 @@ thing this design has spent §13 and §17 avoiding.
 
 ### Adding a field to a value type nothing rebuilds carefully
 
-An adversarial review of the change found the same bug in four places, and it is
-worth naming because it is a *class*, not four mistakes: **`Gradient(stops:)`
+An adversarial review of the change found the same bug in five places, and it is
+worth naming because it is a *class*, not five mistakes: **`Gradient(stops:)`
 called on a gradient you already have drops everything that is not a stop.**
 Before this change there was nothing else, so every site that rebuilt a ramp
 from edited stops was correct; adding one field made all of them silently wrong,
@@ -1160,11 +1160,28 @@ and none of them stopped compiling.
 | `GradientEditorPanel`, every site that edits a ramp | nudging a stop, or clicking a preset, silently re-blended the app's ramp |
 | `GradientStopsCodec` | the persisted format has no field for a space, so a reload reverted it |
 | `AnyGradient.derivedSpace` | an `Optional` "not asked for", so `.red.gradient.colorSpace(.device) != .red.gradient` while the two paint identically |
+| `IndeterminateRenderer.renderGradient` | flattened the stops to `(r, g, b)` and ran its own lerp — see below |
 
 The remedy is one method, ``Gradient/withStops(_:)``, and a rule: **a gradient
 derived from a gradient is that gradient wearing new stops.** `Gradient(stops:)`
 survives only where there is no incoming ramp at all — a public initialiser, a
 preset, a decode from text.
+
+### The indeterminate `.gradient` motion
+
+Which had never used `Gradient` at all: it flattened the stops to RGB triples,
+spaced them evenly *whatever their locations said*, and interpolated them with a
+local `lerp` — while its siblings (`.sweep`, `.pulse`, `.knightRider`) all went
+through `Gradient.color(at:)`. So the one motion that takes a whole ramp from
+the caller was the one that read the least of it.
+
+It now builds a cycle and samples it like everything else. A cycle has one
+segment more than the stops describe — the wrap, from the last stop back to the
+first — so the stops are squeezed to make room for it by the average of the gaps
+they already have. *n* evenly spaced stops therefore come out as *n* equal
+segments, which is exactly what the flattened version drew: measured across
+6 widths × 24 phases, the built-in rainbow is unchanged, bar ±1 per channel
+where the old local `lerp` rounded and `Color.lerp` truncates.
 
 Release A/B against the previous build, paired, 15 reps, cpu-per-frame — the
 `.device` path is untouched:

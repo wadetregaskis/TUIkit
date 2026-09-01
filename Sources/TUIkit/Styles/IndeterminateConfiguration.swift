@@ -78,7 +78,9 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     /// - ``Motion/barberPole`` takes them as the stripe colours, one per glyph
     ///   of ``fill`` in turn. `nil` alternates accent and filled.
     /// - ``Motion/gradient`` takes them as CYCLIC stops — the last interpolates
-    ///   back to the first, so the slide is seamless. `nil` uses the built-in
+    ///   back to the first, so the slide is seamless. Where each stop sits
+    ///   counts, and the wrap takes the average of the gaps between them, so
+    ///   evenly spaced stops stay evenly spaced. `nil` uses the built-in
     ///   rainbow. Fewer than two usable stops falls back the same way.
     public var gradient: Gradient?
 
