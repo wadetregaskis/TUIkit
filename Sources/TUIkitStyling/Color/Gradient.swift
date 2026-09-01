@@ -165,6 +165,27 @@ extension Gradient {
         moved.stops = stops
         return moved
     }
+
+    /// This gradient with every stop resolved against `palette`.
+    ///
+    /// A stop may name a palette role — `.accentColor`, `.primary`, an
+    /// app's own ``Palette`` slot — and a role is a *reference*, not a colour:
+    /// it has no channels until there is a palette to look it up in. Everything
+    /// that blends stops asks for those channels and gets `nil`, so an
+    /// unresolved ramp interpolates to nothing and the ANSI layer traps on the
+    /// first stop it is handed.
+    ///
+    /// So a ramp is resolved at the same moment a lone ``Color`` is: when a
+    /// style becomes a ``Paint``, which is the first point the palette is
+    /// known. See `ShapeStyle.paint(in:)`.
+    ///
+    /// - Parameter palette: The palette to look roles up in.
+    /// - Returns: The same ramp, with concrete colours.
+    public func resolvingStops(with palette: any Palette) -> Self {
+        guard stops.contains(where: { $0.color.rgbComponents == nil }) else { return self }
+        return withStops(
+            stops.map { Stop(color: $0.color.resolve(with: palette), location: $0.location) })
+    }
 }
 
 // MARK: - Evaluation

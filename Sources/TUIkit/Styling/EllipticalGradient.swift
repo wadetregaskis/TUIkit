@@ -73,7 +73,7 @@ public struct EllipticalGradient: ShapeStyle, Equatable, Sendable {
     public func paint(in environment: EnvironmentValues) -> Paint {
         .gradient(
             GradientPaint(
-                gradient,
+                gradient.resolvingStops(with: environment.palette),
                 .elliptical(
                     center: center, startRadiusFraction: startRadiusFraction,
                     endRadiusFraction: endRadiusFraction)))

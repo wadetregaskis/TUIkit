@@ -33,10 +33,13 @@ enum IndeterminateRenderer {
         filledColor: Color,
         emptyColor: Color,
         accentColor: Color,
-        elapsed: Double
+        elapsed: Double,
+        palette: any Palette
     ) -> String {
         guard width > 0 else { return "" }
-        let configuration = style.configuration
+        // A motion's own gradient is read straight from the style, so it has
+        // never met the palette. See `StyleGradientResolution.swift`.
+        let configuration = style.configuration.resolvingColours(with: palette)
         switch configuration.motion {
         case .sweep:
             return renderSweep(
@@ -68,7 +71,8 @@ enum IndeterminateRenderer {
     /// straight past them.
     static func cycle(
         width: Int, style: IndeterminateStyle,
-        filledColor: Color, emptyColor: Color, accentColor: Color
+        filledColor: Color, emptyColor: Color, accentColor: Color,
+        palette: any Palette
     ) -> (frames: [String], frameDuration: Double) {
         let period = period(of: style)
         let count = max(2, Int((period * 30).rounded()))
@@ -77,7 +81,7 @@ enum IndeterminateRenderer {
             render(
                 width: width, style: style, filledColor: filledColor,
                 emptyColor: emptyColor, accentColor: accentColor,
-                elapsed: Double(index) * duration)
+                elapsed: Double(index) * duration, palette: palette)
         }
         return (frames, duration)
     }

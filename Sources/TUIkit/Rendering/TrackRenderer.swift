@@ -36,6 +36,9 @@ enum TrackRenderer {
     ///   - accentColor: The color for accent elements (e.g., dot head).
     ///   - gradientScaling: What a fill gradient is measured across — the whole
     ///     bar (the default) or only the lit part. See ``TrackGradientScaling``.
+    ///   - palette: The palette the style's own colours are resolved against.
+    ///     The three colours above arrive resolved; a style read from the
+    ///     environment does not, and a palette role has no channels to emit.
     /// - Returns: An ANSI-styled string representing the track.
     static func render(
         fraction: Double,
@@ -44,8 +47,10 @@ enum TrackRenderer {
         filledColor: Color,
         emptyColor: Color,
         accentColor: Color,
-        gradientScaling: TrackGradientScaling = .track
+        gradientScaling: TrackGradientScaling = .track,
+        palette: any Palette
     ) -> String {
+        let style = style.resolvingColours(with: palette)
         // Read once per render, not once per cell. A gradient can only be
         // quantised as a ramp if it knows what the terminal will do to it; at
         // truecolor every helper below falls through to the plain interpolation.

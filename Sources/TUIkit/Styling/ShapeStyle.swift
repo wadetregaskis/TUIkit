@@ -89,7 +89,9 @@ extension Never: ShapeStyle {
 
 extension Color: ShapeStyle {
     public typealias Resolved = Never
-    public func paint(in environment: EnvironmentValues) -> Paint { .color(self) }
+    public func paint(in environment: EnvironmentValues) -> Paint {
+        .color(resolve(with: environment.palette))
+    }
 }
 
 /// A bare ``Gradient`` used as a style is a **vertical** linear gradient, top
@@ -99,7 +101,9 @@ extension Color: ShapeStyle {
 extension Gradient: ShapeStyle {
     public typealias Resolved = Never
     public func paint(in environment: EnvironmentValues) -> Paint {
-        .gradient(GradientPaint(self, .linear(from: .top, to: .bottom)))
+        .gradient(
+            GradientPaint(
+                resolvingStops(with: environment.palette), .linear(from: .top, to: .bottom)))
     }
 }
 

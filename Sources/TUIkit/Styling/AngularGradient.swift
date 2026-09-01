@@ -102,7 +102,8 @@ public struct AngularGradient: ShapeStyle, Equatable, Sendable {
     public func paint(in environment: EnvironmentValues) -> Paint {
         .gradient(
             GradientPaint(
-                gradient, .angular(center: center, startAngle: startAngle, endAngle: endAngle)))
+                gradient.resolvingStops(with: environment.palette),
+                .angular(center: center, startAngle: startAngle, endAngle: endAngle)))
     }
 }
 

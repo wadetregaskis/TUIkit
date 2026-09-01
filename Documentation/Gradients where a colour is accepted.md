@@ -1191,3 +1191,64 @@ Release A/B against the previous build, paired, 15 reps, cpu-per-frame — the
 | `megalist` | 504.5 µs | 502.8 µs | −0.3% (−1.0% … +0.2%) |
 | `table` | 507.8 µs | 510.7 µs | +0.1% (−0.2% … +0.9%) |
 | `kitchensink` | 624.1 µs | 623.2 µs | +0.3% (−0.2% … +0.7%) |
+
+---
+
+## 19. A stop may name a palette role
+
+Found by a merge-readiness pass, not by any of the 154 gradient tests — because
+every one of them built its stops from `Color.rgb(…)`.
+
+`Color` is not always a colour. `.accentColor`, `.primary`, `.success`, an app's
+own ``Palette`` slot: each is a *reference*, with no channels until there is a
+palette to look it up in. `Color.rgbComponents` answers `nil` for one, and
+everything downstream took that answer at face value:
+
+- `Color.interpolate` and `Color.lerp` both `return from` when either endpoint
+  has no channels, so a ramp with a role in it interpolated to a **flat** field;
+- `quantisedRamp`'s `guard sampled.allSatisfy { $0.rgbComponents != nil }`
+  passed the whole ramp through untouched;
+- and `Color.foregroundCodes()` **traps** — "Semantic color must be resolved
+  before rendering" — because ink is emitted from channels and there was
+  nothing left to do.
+
+So `.foregroundStyle(LinearGradient(gradient: Gradient(colors: [.accentColor,
+.blue]), …))` compiled, type-checked, and killed the process on the first frame.
+In a themed TUI a palette role is the *first* thing anyone reaches for.
+
+### Where the resolve belongs
+
+`_StyleEnvironmentView`'s own doc comment already said it: **a style has to be
+resolved where the palette is**, which is `ShapeStyle.paint(in:)` — the one
+moment a style becomes a ``Paint`` and the environment is in hand. It resolved
+the style and left the ramp inside it alone.
+
+The rule now is that **a `Paint` is concrete by construction**, and the two
+sites that build one (`_StyleEnvironmentView`, `BackgroundModifier`) both come
+through `paint(in:)`. `Color`'s implementation resolves as well, so it holds for
+a lone colour too, not merely for ramps.
+
+The tell that this was the right layer: `_OpacityShapeStyle` already resolved
+what its base returned, so `.opacity(_:)` on a ramp of roles worked while the
+same ramp without it crashed.
+
+### The styles that do not go through a style
+
+A ``TrackStyle`` or an ``IndeterminateStyle`` never meets `paint(in:)`: the
+control reads it straight out of the environment and draws it. There the resolve
+happens at the renderer's door — `TrackRenderer.render` and
+`IndeterminateRenderer.render`/`cycle` each gained a `palette:` parameter and
+call `resolvingColours(with:)` once, rather than seven call sites each
+remembering. Taking a parameter rather than a default is the point: the compiler
+named all five production call sites and there was nowhere to forget.
+
+The indeterminate `.gradient` motion failed differently, and worse than a crash:
+`cyclic()` filtered its stops down to the ones that *had* channels, and fell
+back to the built-in rainbow when fewer than two survived. A caller's ramp was
+silently replaced by a different one — the exact failure this file's §5 exists
+to forbid.
+
+**The general lesson, for the next `Color` field that is a reference rather than
+a value:** `rgbComponents == nil` is not "this colour is uninteresting", it is
+"you are holding a question, not an answer". Every `guard`, `filter` and early
+`return` written against it was a place the question got dropped.

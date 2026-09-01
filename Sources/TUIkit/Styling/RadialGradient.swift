@@ -75,7 +75,8 @@ public struct RadialGradient: ShapeStyle, Equatable, Sendable {
     public func paint(in environment: EnvironmentValues) -> Paint {
         .gradient(
             GradientPaint(
-                gradient, .radial(center: center, startRadius: startRadius, endRadius: endRadius)))
+                gradient.resolvingStops(with: environment.palette),
+                .radial(center: center, startRadius: startRadius, endRadius: endRadius)))
     }
 }
 

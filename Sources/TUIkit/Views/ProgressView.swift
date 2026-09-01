@@ -417,7 +417,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         func build() -> CachedCycle {
             let built = IndeterminateRenderer.cycle(
                 width: width, style: style, filledColor: filled,
-                emptyColor: empty, accentColor: accent)
+                emptyColor: empty, accentColor: accent, palette: palette)
             return CachedCycle(
                 width: width, style: style, filled: filled, empty: empty, accent: accent,
                 frames: built.frames,
@@ -510,7 +510,8 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                 filledColor: palette.foregroundSecondary,
                 emptyColor: palette.foregroundTertiary,
                 accentColor: palette.accent,
-                elapsed: elapsed
+                elapsed: elapsed,
+                palette: palette
             )
         }
         return TrackRenderer.render(
@@ -520,7 +521,8 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
             filledColor: palette.foregroundSecondary,
             emptyColor: palette.foregroundTertiary,
             accentColor: palette.accent,
-            gradientScaling: context.environment.trackGradientScaling
+            gradientScaling: context.environment.trackGradientScaling,
+            palette: palette
         )
     }
 }

@@ -107,7 +107,10 @@ public struct AnyGradient: ShapeStyle, Hashable, Sendable {
     public typealias Resolved = Never
 
     public func paint(in environment: EnvironmentValues) -> Paint {
-        .gradient(GradientPaint(gradient(in: environment), .linear(from: .top, to: .bottom)))
+        .gradient(
+            GradientPaint(
+                gradient(in: environment).resolvingStops(with: environment.palette),
+                .linear(from: .top, to: .bottom)))
     }
 
     /// The two stops ``Color/gradient`` is: the colour lightened, then the

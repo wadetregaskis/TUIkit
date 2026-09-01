@@ -856,7 +856,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             filledColor: forState(palette.foregroundSecondary),
             emptyColor: forState(palette.foregroundTertiary),
             accentColor: forState(palette.accent),
-            gradientScaling: gradientScaling
+            gradientScaling: gradientScaling,
+            palette: palette
         )
 
         // Build arrows

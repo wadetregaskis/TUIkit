@@ -198,10 +198,12 @@ struct ProgressViewStyleTests {
         withColorDepth(.basic16) {
             let blockFine = TrackRenderer.render(
                 fraction: 0.4, width: 10, style: .blockFine,
-                filledColor: .green, emptyColor: .red, accentColor: .blue)
+                filledColor: .green, emptyColor: .red, accentColor: .blue,
+                palette: SystemPalette.green)
             let block = TrackRenderer.render(
                 fraction: 0.4, width: 10, style: .block,
-                filledColor: .green, emptyColor: .red, accentColor: .blue)
+                filledColor: .green, emptyColor: .red, accentColor: .blue,
+                palette: SystemPalette.green)
             #expect(blockFine.contains("41"), "blockFine paints a background: \(blockFine.debugDescription)")
             #expect(block.contains("41"), "block paints the empty region as a background: \(block.debugDescription)")
             #expect(!block.contains("░"), "block draws no shade glyph: \(block.debugDescription)")
@@ -222,7 +224,8 @@ struct ProgressViewStyleTests {
             // 0.45 × 10 cells × 8 eighths = 36 steps → 4 full cells + a ▌.
             let bar = TrackRenderer.render(
                 fraction: 0.45, width: 10, style: .blockFine,
-                filledColor: .green, emptyColor: .red, accentColor: .blue)
+                filledColor: .green, emptyColor: .red, accentColor: .blue,
+                palette: SystemPalette.green)
             #expect(bar.contains("42"), "full cells sit on the fill colour: \(bar.debugDescription)")
             let partialCell = bar.split(separator: "▌").first.map(String.init) ?? ""
             #expect(
@@ -440,7 +443,8 @@ struct TrackRendererClampingTests {
             style: .block,
             filledColor: .white,
             emptyColor: .white,
-            accentColor: .cyan
+            accentColor: .cyan,
+        palette: SystemPalette.green
         )
         #expect(
             track.strippedLength == 10,
@@ -456,7 +460,8 @@ struct TrackRendererClampingTests {
             style: .block,
             filledColor: .white,
             emptyColor: .white,
-            accentColor: .cyan
+            accentColor: .cyan,
+        palette: SystemPalette.green
         )
         #expect(
             track.strippedLength == 10,
@@ -475,7 +480,8 @@ struct TrackRendererClampingTests {
                 style: style,
                 filledColor: .white,
                 emptyColor: .white,
-                accentColor: .cyan
+                accentColor: .cyan,
+            palette: SystemPalette.green
             )
             #expect(
                 overTrack.strippedLength == 10,
@@ -488,7 +494,8 @@ struct TrackRendererClampingTests {
                 style: style,
                 filledColor: .white,
                 emptyColor: .white,
-                accentColor: .cyan
+                accentColor: .cyan,
+            palette: SystemPalette.green
             )
             #expect(
                 underTrack.strippedLength == 10,

@@ -26,7 +26,8 @@ struct TrackGradientTests {
                 coloring: coloring),
             filledColor: .rgb(1, 2, 3),
             emptyColor: .rgb(9, 9, 9),
-            accentColor: .rgb(7, 7, 7))
+            accentColor: .rgb(7, 7, 7),
+            palette: SystemPalette.green)
     }
 
     /// The set of distinct `38;2;r;g;b` foreground codes in `output`.
@@ -91,7 +92,8 @@ struct TrackGradientTests {
         let output = IndeterminateRenderer.render(
             width: 16, style: .gradient(Gradient(colors: [.rgb(11, 22, 33), .rgb(11, 22, 33)])),
             filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
-            elapsed: 0)
+            elapsed: 0,
+            palette: SystemPalette.green)
         let triples = foregroundTriples(in: output)
         #expect(triples.allSatisfy { $0.hasPrefix("11;22;33") }, "custom stops used: \(triples)")
     }
@@ -106,7 +108,8 @@ struct TrackGradientTests {
                 in: IndeterminateRenderer.render(
                     width: 8, style: .gradient(Gradient(colors: stops, colorSpace: space)),
                     filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2),
-                    accentColor: .rgb(3, 3, 3), elapsed: 0))
+                    accentColor: .rgb(3, 3, 3), elapsed: 0,
+                    palette: SystemPalette.green))
         }
         let device = triples(.device)
         let perceptual = triples(.perceptual)
@@ -127,7 +130,8 @@ struct TrackGradientTests {
         ])
         let output = IndeterminateRenderer.render(
             width: 30, style: .gradient(squashed), filledColor: .rgb(1, 1, 1),
-            emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3), elapsed: 0)
+            emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3), elapsed: 0,
+            palette: SystemPalette.green)
         let cells = ordered(in: output)
         let greenest = cells.indices.max { greenness(of: cells[$0]) < greenness(of: cells[$1]) }
         // 0.1 of the ramp × 2/3 of the cycle × 30 cells = column 2.
@@ -160,7 +164,8 @@ struct TrackGradientTests {
         let output = IndeterminateRenderer.render(
             width: 16, style: .gradient(Gradient(colors: [.rgb(11, 22, 33)])),
             filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
-            elapsed: 0)
+            elapsed: 0,
+            palette: SystemPalette.green)
         let triples = foregroundTriples(in: output)
         #expect(triples.count >= 4, "built-in rainbow spans many colours: \(triples)")
     }
@@ -182,7 +187,8 @@ struct TrackEmptyStylingTests {
             filledColor: .rgb(1, 2, 3),
             emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7),
-            gradientScaling: scaling)
+            gradientScaling: scaling,
+            palette: SystemPalette.green)
     }
 
     private func hasForeground(_ output: String, _ code: String) -> Bool {
@@ -250,7 +256,8 @@ struct TrackGradientScalingTests {
             filledColor: .rgb(1, 2, 3),
             emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7),
-            gradientScaling: scaling)
+            gradientScaling: scaling,
+            palette: SystemPalette.green)
     }
 
     private func hasForeground(_ output: String, _ code: String) -> Bool {
@@ -296,7 +303,8 @@ struct TrackGradientScalingTests {
                 filledColor: .rgb(1, 2, 3),
                 emptyColor: .rgb(9, 9, 9),
                 accentColor: .rgb(7, 7, 7),
-                gradientScaling: scaling)
+                gradientScaling: scaling,
+                palette: SystemPalette.green)
         }
         let pinned = segments(0.5, .track)
         #expect(
@@ -317,7 +325,8 @@ struct TrackGradientScalingTests {
         let defaulted = TrackRenderer.render(
             fraction: 0.5, width: 10,
             style: .shadeRamp(gradient: Gradient(colors: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)])),
-            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7))
+            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7),
+            palette: SystemPalette.green)
         #expect(defaulted == render(0.5, .track))
         #expect(defaulted != render(0.5, .fill), "…and the two really do differ")
     }
