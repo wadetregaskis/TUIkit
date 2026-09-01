@@ -105,9 +105,9 @@ struct AnyGradientTests {
     func theDefaultsDiffer() {
         let red = Color.rgb(255, 0, 0)
         let blue = Color.rgb(0, 0, 255)
-        #expect(red.mix(with: blue, by: 0.5, in: .device) == .rgb(127, 0, 127))
+        #expect(red.mix(with: blue, by: 0.5, in: .device) == .rgb(128, 0, 128))
         #expect(red.mix(with: blue, by: 0.5) == .rgb(140, 83, 162))
-        #expect(Gradient(colors: [red, blue]).color(at: 0.5) == .rgb(127, 0, 127))
+        #expect(Gradient(colors: [red, blue]).color(at: 0.5) == .rgb(128, 0, 128))
     }
 
     @Test("Color.mix clamps outside 0…1")

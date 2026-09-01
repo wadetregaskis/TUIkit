@@ -113,4 +113,63 @@ struct ColorTests {
         // Should produce an RGB color (not crash)
         #expect(result.rgbComponents != nil)
     }
+
+    // MARK: - Rounding
+
+    /// To NEAREST, not toward zero. Truncating biased every channel of every
+    /// blend down by half a unit, which made every derived "dim" a shade darker
+    /// than it was asked to be — and disagreed with `encodedChannel`, where the
+    /// perceptual and linear-light paths both come out, which always rounded.
+    @Test("lerp rounds to nearest")
+    func lerpRounds() {
+        // 0…255 halved is 127.5, which truncates to 127 and rounds to 128.
+        #expect(Color.lerp(.rgb(0, 0, 0), .rgb(255, 255, 255), phase: 0.5) == .rgb(128, 128, 128))
+        // …and a value that is already below the halfway point still goes down.
+        #expect(Color.lerp(.rgb(0, 0, 0), .rgb(254, 254, 254), phase: 0.5) == .rgb(127, 127, 127))
+        // The ends stay exact, which truncation could not always promise.
+        #expect(Color.lerp(.rgb(1, 2, 3), .rgb(250, 251, 252), phase: 1) == .rgb(250, 251, 252))
+        #expect(Color.lerp(.rgb(1, 2, 3), .rgb(250, 251, 252), phase: 0) == .rgb(1, 2, 3))
+    }
+
+    /// The mean error over every pair of endpoints and a sweep of phases: half
+    /// a unit smaller than truncation's, which is the whole argument.
+    @Test("Rounding halves the average error against the exact blend")
+    func roundingBeatsTruncation() {
+        var rounded = 0.0
+        var truncated = 0.0
+        var samples = 0.0
+        for start in stride(from: 0, through: 255, by: 5) {
+            for end in stride(from: 0, through: 255, by: 5) {
+                for step in 1..<10 {
+                    let phase = Double(step) / 10
+                    let exact = Double(start) + (Double(end) - Double(start)) * phase
+                    let got = Color.lerp(
+                        .rgb(UInt8(start), 0, 0), .rgb(UInt8(end), 0, 0), phase: phase)
+                    guard let channel = got.rgbComponents?.red else { continue }
+                    rounded += abs(Double(channel) - exact)
+                    truncated += abs(exact.rounded(.down) - exact)
+                    samples += 1
+                }
+            }
+        }
+        // Same samples, same exact values — the only difference is the
+        // conversion. Truncation is never closer and is usually further.
+        #expect(
+            rounded < truncated,
+            "mean error: rounded \(rounded / samples), truncated \(truncated / samples)")
+        #expect(rounded / samples <= 0.25, "rounding should be within half a unit")
+    }
+
+    /// `opacity(_:)` is the shorthand for `opacity(_:over:)` with a black
+    /// surface, so it has to round the same way — and it has to survive a
+    /// caller handing it a number outside `0…1`, because `UInt8(_: Double)`
+    /// traps on one and a trap is not an answer to a rounding question.
+    @Test("opacity clamps its argument rather than trapping")
+    func opacityClamps() {
+        let colour = Color.rgb(100, 150, 200)
+        #expect(colour.opacity(2) == colour)
+        #expect(colour.opacity(-1) == .rgb(0, 0, 0))
+        #expect(colour.opacity(.nan) == .rgb(0, 0, 0))
+        #expect(colour.opacity(0.5) == colour.opacity(0.5, over: .rgb(0, 0, 0)))
+    }
 }

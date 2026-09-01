@@ -373,18 +373,27 @@ extension Color {
     /// the color with black to simulate opacity. Works with all color types
     /// by converting to RGB first.
     ///
-    /// - Parameter opacity: The opacity (0-1).
+    /// Exactly ``opacity(_:over:)`` with a black surface, and rounds the same
+    /// way ``lerp(_:_:phase:)`` does — a test pins the two together, because a
+    /// shorthand that disagrees with the thing it is short for is worse than no
+    /// shorthand.
+    ///
+    /// - Parameter opacity: The opacity (0–1; clamped, and a NaN reads as 0).
     /// - Returns: A color simulating the given opacity, or self if semantic.
     public func opacity(_ opacity: Double) -> Self {
         guard let (red, green, blue) = rgbComponents else {
             return self
         }
 
-        let newRed = UInt8(Double(red) * opacity)
-        let newGreen = UInt8(Double(green) * opacity)
-        let newBlue = UInt8(Double(blue) * opacity)
+        // Clamped, because a caller is allowed to hand this a number out of
+        // range and `UInt8(_: Double)` traps on one. `min`/`max` in this order
+        // also fold a NaN to 0, which is the only answer available.
+        let opacity = min(1, max(0, opacity))
+        func scaled(_ channel: UInt8) -> UInt8 {
+            UInt8(min(255, max(0, (Double(channel) * opacity).rounded())))
+        }
 
-        return .rgb(newRed, newGreen, newBlue)
+        return .rgb(scaled(red), scaled(green), scaled(blue))
     }
 
     /// Returns the color composited at `opacity` over `surface` — true alpha
@@ -476,10 +485,21 @@ extension Color {
     /// Used by the breathing focus indicator to smoothly fade between
     /// a dimmed and a full-brightness accent color.
     ///
+    /// ## Rounding
+    ///
+    /// To nearest, because that is the answer with the smallest average error —
+    /// truncating biases every channel of every blend down by half a unit, and
+    /// a "dim" derived by blending toward the background is therefore always a
+    /// shade darker than it was asked to be. It also agreed with nothing else:
+    /// ``encodedChannel(_:)``, which is where the perceptual path and the
+    /// linear-light compositing path both come out, has always rounded. Two
+    /// answers to the same question was the only reason for the difference.
+    ///
     /// - Parameters:
     ///   - from: The start color (returned when `phase` is 0).
     ///   - to: The end color (returned when `phase` is 1).
-    ///   - phase: The interpolation factor (0–1, clamped).
+    ///   - phase: The interpolation factor (0–1, clamped; a `phase` of NaN
+    ///     reads as 0).
     /// - Returns: The interpolated RGB color.
     public static func lerp(_ from: Color, _ to: Color, phase: Double) -> Color {
         guard let fromRGB = from.rgbComponents,
@@ -489,15 +509,18 @@ extension Color {
         }
 
         let clamped = min(1, max(0, phase))
-        let red = UInt8(Double(fromRGB.red) + (Double(toRGB.red) - Double(fromRGB.red)) * clamped)
-        let green = UInt8(
-            Double(fromRGB.green) + (Double(toRGB.green) - Double(fromRGB.green)) * clamped
-        )
-        let blue = UInt8(
-            Double(fromRGB.blue) + (Double(toRGB.blue) - Double(fromRGB.blue)) * clamped
-        )
+        func blend(_ start: UInt8, _ end: UInt8) -> UInt8 {
+            let value = Double(start) + (Double(end) - Double(start)) * clamped
+            // Clamped as well as rounded: the arithmetic cannot leave 0…255 for
+            // a `clamped` in 0…1, but `UInt8(_: Double)` traps if it ever did,
+            // and a trap is not an acceptable answer to a rounding question.
+            return UInt8(min(255, max(0, value.rounded())))
+        }
 
-        return .rgb(red, green, blue)
+        return .rgb(
+            blend(fromRGB.red, toRGB.red),
+            blend(fromRGB.green, toRGB.green),
+            blend(fromRGB.blue, toRGB.blue))
     }
 }
 

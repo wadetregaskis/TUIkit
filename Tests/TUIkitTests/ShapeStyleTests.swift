@@ -168,7 +168,7 @@ struct ShapeStyleTests {
         // `.rgb` as an implicit member is the assertion that it IS a Color:
         // a `ShapeStyle` wrapper would not compare to one.
         let faded = Color.rgb(255, 0, 0).opacity(0.5)
-        #expect(faded == .rgb(127, 0, 0))
+        #expect(faded == .rgb(128, 0, 0))
         var dark = environment()
         dark.palette = SystemPalette.green
         #expect(

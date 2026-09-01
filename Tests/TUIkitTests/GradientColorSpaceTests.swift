@@ -86,7 +86,7 @@ struct GradientColorSpaceTests {
         // r == g == b, so the colour has no chroma by definition; the measured
         // value is 2.2e-08 rather than a hard zero, which is the transform's
         // own arithmetic and not a property of the colour.
-        #expect(device.color(at: 0.5) == .rgb(127, 127, 127), "\(device.color(at: 0.5))")
+        #expect(device.color(at: 0.5) == .rgb(128, 128, 128), "\(device.color(at: 0.5))")
         #expect(chroma(device.color(at: 0.5)) < 1e-6)
 
         let perceptual = Gradient(colors: [blue, yellow], colorSpace: .perceptual)

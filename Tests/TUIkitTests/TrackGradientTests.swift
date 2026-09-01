@@ -113,7 +113,7 @@ struct TrackGradientTests {
         }
         let device = triples(.device)
         let perceptual = triples(.perceptual)
-        #expect(device.contains("127;127;127"), "device blend goes through grey: \(device)")
+        #expect(device.contains("128;128;128"), "device blend goes through grey: \(device)")
         #expect(
             !perceptual.contains { $0.hasPrefix("127;127;12") },
             "perceptual blend does not: \(perceptual)")

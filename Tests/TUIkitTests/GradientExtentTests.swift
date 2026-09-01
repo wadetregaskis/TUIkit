@@ -525,7 +525,7 @@ extension GradientExtentTests {
         ).lines
         let rows = lines.prefix(3).map { firstInk($0) }
         #expect(rows[0] == "255;0;0", "the first grid row is not the start: \(rows)")
-        #expect(rows[1] == "127;0;127", "the middle grid row is not the middle: \(rows)")
+        #expect(rows[1] == "128;0;128", "the middle grid row is not the middle: \(rows)")
         #expect(rows[2] == "0;0;255", "the last grid row is not the end: \(rows)")
     }
 
@@ -679,7 +679,7 @@ extension GradientExtentTests {
         }
 
         let three = frame(["b", "c", "d"])
-        #expect(three == ["255;0;0", "127;0;127", "0;0;255"], "\(three)")
+        #expect(three == ["255;0;0", "128;0;128", "0;0;255"], "\(three)")
         // The same three rows, one row further down a ramp that is now four
         // rows long. Every one of them has moved.
         let four = frame(["a", "b", "c", "d"])
