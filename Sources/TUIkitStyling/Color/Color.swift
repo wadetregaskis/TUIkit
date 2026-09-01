@@ -415,22 +415,57 @@ extension Color {
     /// `Gradient(colors: [self, rhs]).color(at: fraction)` is the same colour,
     /// because both are this one interpolation.
     ///
-    /// ## The colour space, and why there is no `in:`
+    /// ## The default is `.perceptual`, and a gradient's is not
     ///
-    /// SwiftUI's signature ends `in colorSpace: Gradient.ColorSpace = .perceptual`.
-    /// TUIkit interpolates encoded sRGB components — SwiftUI's `.device` — for
-    /// every gradient it draws, and has no perceptual interpolation to offer,
-    /// so the parameter is absent rather than accepted and ignored: asking for
-    /// a space this cannot honour must fail to compile, not quietly do
-    /// something else. If `Gradient.ColorSpace` ever arrives, it arrives for
-    /// gradients and this at once.
+    /// That asymmetry is SwiftUI's, kept rather than tidied: a bare
+    /// ``Gradient`` interpolates in ``Gradient/ColorSpace/device`` and this
+    /// mixes in ``Gradient/ColorSpace/perceptual``. So
+    /// `Color.red.mix(with: .blue, by: 0.5)` and
+    /// `Gradient(colors: [.red, .blue]).color(at: 0.5)` are NOT the same
+    /// colour unless you say so — the first comes out of OKLab, the second out
+    /// of encoded sRGB. Pass `in: .device`, or build the gradient with
+    /// `colorSpace: .perceptual`, and they agree again.
     ///
     /// - Parameters:
     ///   - rhs: The colour to mix towards.
     ///   - fraction: How far towards `rhs` (0–1; clamped).
+    ///   - colorSpace: Which space to mix in.
     /// - Returns: The mixture, or `self` if either side is semantic.
-    public func mix(with rhs: Color, by fraction: Double) -> Self {
-        Self.lerp(self, rhs, phase: fraction)
+    public func mix(
+        with rhs: Color, by fraction: Double,
+        in colorSpace: Gradient.ColorSpace = .perceptual
+    ) -> Self {
+        Self.interpolate(self, rhs, phase: fraction, in: colorSpace)
+    }
+
+    /// Two colours blended in a named space — the whole of what
+    /// ``Gradient/ColorSpace`` decides.
+    ///
+    /// `.device` is ``lerp(_:_:phase:)`` exactly, so nothing that does not ask
+    /// for a space changes by a byte. `.perceptual` goes through OKLab, where a
+    /// straight line between two colours looks like one: the midpoint of red
+    /// and blue stops being darker than either end, and blue to yellow stops
+    /// passing through grey.
+    ///
+    /// - Parameters:
+    ///   - from: The colour at `0`.
+    ///   - to: The colour at `1`.
+    ///   - phase: How far between them (0–1; clamped).
+    ///   - space: Which space to blend in.
+    /// - Returns: The blend, or `from` if either side is semantic.
+    package static func interpolate(
+        _ from: Color, _ to: Color, phase: Double, in space: Gradient.ColorSpace
+    ) -> Color {
+        guard space.isPerceptual else { return lerp(from, to, phase: phase) }
+        guard let fromRGB = from.rgbComponents, let toRGB = to.rgbComponents else { return from }
+        let clamped = min(1, max(0, phase))
+        let start = oklab(red: fromRGB.red, green: fromRGB.green, blue: fromRGB.blue)
+        let end = oklab(red: toRGB.red, green: toRGB.green, blue: toRGB.blue)
+        let blended = fromOKLab(
+            l: start.l + (end.l - start.l) * clamped,
+            a: start.a + (end.a - start.a) * clamped,
+            b: start.b + (end.b - start.b) * clamped)
+        return .rgb(blended.red, blended.green, blended.blue)
     }
 
     /// Linearly interpolates between two colors.

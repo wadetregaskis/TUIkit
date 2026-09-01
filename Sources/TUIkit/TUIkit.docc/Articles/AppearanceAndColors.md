@@ -148,8 +148,30 @@ Text("Total")
 ```
 
 It needs room to run: a one-line ``Text`` is one cell tall, so the ramp resolves
-at its start. And ``Color/mix(with:by:)`` gives the colour partway between two,
-which is that same interpolation asked for one point rather than a whole ramp.
+at its start. And ``Color/mix(with:by:in:)`` gives the colour partway between
+two, which is that same interpolation asked for one point rather than a whole
+ramp.
+
+### Which space a ramp is blended in
+
+Between two stops, a gradient can interpolate the sRGB components directly or go
+through a perceptually uniform space. The first is the default and the cheaper;
+the second is what you want when a ramp looks wrong in the middle:
+
+```swift
+LinearGradient(gradient: Gradient(colors: [.blue, .yellow], colorSpace: .perceptual),
+               startPoint: .leading, endPoint: .trailing)
+```
+
+Blue to yellow is the case that shows it. Blended directly, the midpoint is
+`rgb(127, 127, 127)` — the ramp goes through grey, because the two colours are
+opposites on both axes at once. Red to blue has a quieter version of the same
+problem: its middle comes out darker than either end. ``Gradient/ColorSpace/perceptual``
+fixes both, and costs about eight times as much per ramp — paid once per view
+that draws one, not once per cell.
+
+``Color/mix(with:by:in:)`` takes the same argument, and — following SwiftUI —
+defaults the other way, to ``Gradient/ColorSpace/perceptual``.
 
 A colour or a gradient is also a **view**, filling the space it is offered — so
 `ZStack { LinearGradient(…); Text("Title") }` works, and a fill in a stack takes

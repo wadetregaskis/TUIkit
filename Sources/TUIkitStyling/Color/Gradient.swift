@@ -65,14 +65,59 @@ public struct Gradient: Sendable, Hashable {
         }
     }
 
+    /// Which space the stops are interpolated in.
+    ///
+    /// SwiftUI's type, with SwiftUI's two members. What it decides is what
+    /// happens BETWEEN two stops, which is where naive interpolation goes
+    /// wrong: red to blue in encoded sRGB passes through a middle darker than
+    /// either end (OKLab lightness 0.628 → 0.395 → 0.452), and blue to yellow
+    /// passes through `rgb(127, 127, 127)` — a grey, no chroma left at all.
+    /// Both are measured, and both are what ``perceptual`` is for.
+    public struct ColorSpace: Sendable, Hashable {
+        /// The encoded sRGB components, blended directly. Cheap, and what a
+        /// gradient does unless told otherwise — SwiftUI's default too.
+        public static let device = Self(isPerceptual: false)
+
+        /// OKLab, where a straight line looks like one.
+        public static let perceptual = Self(isPerceptual: true)
+
+        /// The whole state: there are two spaces and no third.
+        let isPerceptual: Bool
+    }
+
     /// The stops, exactly as the caller wrote them — unsorted if they wrote
     /// them unsorted, because the order is not what the gradient means and
     /// rewriting it would make a round trip lossy.
     public var stops: [Stop]
 
+    /// The space ``color(at:)`` interpolates in.
+    ///
+    /// **A TUI-specific addition, and the reason is a hole in SwiftUI's own
+    /// API.** There, a space can only ride on `AnyGradient` — `Gradient` has
+    /// `colorSpace(_:)` as a method returning one, and no property — so a
+    /// `LinearGradient` cannot be perceptual at all. Measured, not recalled:
+    /// `LinearGradient(gradient:startPoint:endPoint:)` takes a `Gradient` and
+    /// refuses an `AnyGradient`. A terminal's gradients are overwhelmingly
+    /// directional, so the knob has to reach them, and the storage is here.
+    ///
+    /// `colorSpace(_:)` — the SwiftUI spelling, which the umbrella module adds
+    /// because `AnyGradient` is its — still returns one, and sets this on the
+    /// way. (Inline code rather than a doc link: both live a module up.)
+    public var colorSpace: ColorSpace = .device
+
     /// A gradient with these stops.
     public init(stops: [Stop]) {
         self.stops = stops
+    }
+
+    /// A gradient with these stops, interpolated in the given space.
+    ///
+    /// The `colorSpace:` parameter is the TUI-specific half — see
+    /// ``colorSpace``. SwiftUI's `init(stops:)` is above it and
+    /// unchanged.
+    public init(stops: [Stop], colorSpace: ColorSpace) {
+        self.stops = stops
+        self.colorSpace = colorSpace
     }
 
     /// A gradient with these colours, evenly spaced from `0` to `1`.
@@ -88,6 +133,37 @@ public struct Gradient: Sendable, Hashable {
         self.stops = colors.enumerated().map {
             Stop(color: $0.element, location: Double($0.offset) / last)
         }
+    }
+
+    /// A gradient with these colours, interpolated in the given space. See
+    /// ``init(stops:colorSpace:)``.
+    public init(colors: [Color], colorSpace: ColorSpace) {
+        self.init(colors: colors)
+        self.colorSpace = colorSpace
+    }
+}
+
+// MARK: - Editing
+
+extension Gradient {
+    /// This gradient with different stops, and everything else about it kept.
+    ///
+    /// The alternative — `Gradient(stops: newStops)` — silently drops whatever
+    /// else the ramp carries, which is how a perceptual gradient came back
+    /// `.device` from the animator, from `.opacity(_:)`, and from every edit
+    /// the gradient panel makes.
+    ///
+    /// The rule those three now follow: **never spell a rebuild
+    /// `Gradient(stops:)`** — either assign `stops` on a copy you already hold,
+    /// or come through here. Both keep whatever the next field turns out to be;
+    /// the initialiser does not.
+    ///
+    /// - Parameter stops: The new stops.
+    /// - Returns: The same gradient, with those stops.
+    public func withStops(_ stops: [Stop]) -> Self {
+        var moved = self
+        moved.stops = stops
+        return moved
     }
 }
 
@@ -131,12 +207,12 @@ extension Gradient {
     /// ``ASCIIToneCurve`` follows for knots, and the reason locations outside
     /// `0…1` crop the ramp rather than extending it.
     public func color(at phase: Double) -> Color {
-        Self.color(at: phase, in: ordered)
+        Self.color(at: phase, in: ordered, space: colorSpace)
     }
 
     /// The evaluation itself, against a list already known to be in order — so
     /// a caller sampling many cells orders once rather than per cell.
-    private static func color(at phase: Double, in list: [Stop]) -> Color {
+    private static func color(at phase: Double, in list: [Stop], space: ColorSpace) -> Color {
         guard let first = list.first else { return .rgb(0, 0, 0) }
         guard list.count > 1 else { return first.color }
         guard phase > first.location else { return first.color }
@@ -154,7 +230,8 @@ extension Gradient {
         let upper = list[index + 1]
         let span = upper.location - lower.location
         guard span > 0 else { return upper.color }
-        return Color.lerp(lower.color, upper.color, phase: (phase - lower.location) / span)
+        return Color.interpolate(
+            lower.color, upper.color, phase: (phase - lower.location) / span, in: space)
     }
 
     /// `count` colours evenly sampled across `0…1`.
@@ -164,7 +241,9 @@ extension Gradient {
     public func sampled(count: Int) -> [Color] {
         let list = ordered
         return (0..<max(0, count)).map { index in
-            Self.color(at: count > 1 ? Double(index) / Double(count - 1) : 0, in: list)
+            Self.color(
+                at: count > 1 ? Double(index) / Double(count - 1) : 0, in: list,
+                space: colorSpace)
         }
     }
 }

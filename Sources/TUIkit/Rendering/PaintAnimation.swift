@@ -72,15 +72,18 @@ enum PaintAnimation {
         _ target: GradientPaint, owner: Any.Type, context: RenderContext
     ) -> GradientPaint {
         var moved = target
-        moved.gradient = Gradient(
-            stops: target.gradient.stops.enumerated().map { index, stop in
-                Gradient.Stop(
-                    color: ColorAnimation.resolving(
-                        stop.color, owner: owner, slot: Slot.stopColour(index), context: context),
-                    location: scalar(
-                        stop.location, owner: owner, slot: Slot.stopLocation(index),
-                        context: context))
-            })
+        // The STOPS are replaced, not the gradient: rebuilding it with
+        // `Gradient(stops:)` would drop everything else the ramp carries — the
+        // colour space, today — so a perceptual ramp would blend in `.device`
+        // for the length of the animation and snap back at the end.
+        moved.gradient.stops = target.gradient.stops.enumerated().map { index, stop in
+            Gradient.Stop(
+                color: ColorAnimation.resolving(
+                    stop.color, owner: owner, slot: Slot.stopColour(index), context: context),
+                location: scalar(
+                    stop.location, owner: owner, slot: Slot.stopLocation(index),
+                    context: context))
+        }
         moved.geometry = resolving(target.geometry, owner: owner, context: context)
         return moved
     }

@@ -187,7 +187,7 @@ source-**identical**.
 | `ShapeStyle.opacity(_:)`, `.in(_ rect:)` | same, `CellRect` | `.in(_:)` is the portable "fix the ramp's scale" |
 | static members `.linearGradient(…)`, `.radialGradient(…)`, `.angularGradient(…)` | same | on `ShapeStyle where Self == …` |
 | `Text.foregroundStyle<S>` returns **`Text`** | same | or `Text("a").foregroundStyle(g) + Text("b")` breaks |
-| `Gradient.ColorSpace` (`.device` / `.perceptual`), `colorSpace(_:)` | **ship** | TUIkit already has an opinion — see §6 |
+| `Gradient.ColorSpace` (`.device` / `.perceptual`), `colorSpace(_:)` | **shipped** | see §18 |
 | `Color.mix(with:by:in:)` | **ship** | a two-stop `Gradient` evaluated at `by`; note its default space is `.perceptual` |
 | `MeshGradient` | **decline, recorded** | "given a cell, what is t?" generalises to (u,v), so it is not impossible — it is simply not worth it at 80×24 |
 | `Shader` | **decline, recorded** | genuinely impossible |
@@ -1075,3 +1075,102 @@ Release A/B, paired, 15 reps, cpu-per-frame:
 |---|---|---|---|
 | `table` | 501.0 µs | 496.6 µs | −0.2% (−2.4% … +1.4%) — indistinguishable |
 | `megalist` | 497.3 µs | 495.9 µs | −0.9% (−1.6% … +1.7%) — indistinguishable |
+
+---
+
+## 18. Which space the stops are blended in
+
+The last item of §3's ship list, and the one whose absence was visible in every
+test that printed a midpoint: `Gradient(colors: [.red, .blue]).color(at: 0.5)`
+is `rgb(127, 0, 127)`, a muddy purple darker than either end.
+
+Two artefacts, both measured against the framework's own OKLab conversion:
+
+| | |
+|---|---|
+| red → blue, OKLab lightness | 0.628 → 0.512 → **0.419** → 0.395 → 0.452 |
+| blue → yellow, midpoint | `rgb(127, 127, 127)` — no chroma left at all |
+
+The first dips *below both ends* in the middle. The second is the textbook
+failure: the two colours are opposites on both axes, so blending the components
+directly walks through the neutral axis and the ramp goes grey halfway.
+
+### What shipped
+
+`Gradient.ColorSpace` with `.device` and `.perceptual`, SwiftUI's type and
+SwiftUI's two members, and `colorSpace(_:)` on both `Gradient` and
+`AnyGradient` — both returning `AnyGradient`, as SwiftUI's do.
+`Color.mix(with:by:in:)` gains the third argument it shipped without.
+
+**And one addition, because SwiftUI's API has a hole here.** Measured, not
+recalled: in SwiftUI a colour space can only ride on `AnyGradient` — `Gradient`
+has `colorSpace(_:)` as a *method* and no property (`let s: Gradient.ColorSpace
+= g.colorSpace` fails to compile), and `LinearGradient(gradient:…)` takes a
+`Gradient` and refuses an `AnyGradient`. So **a SwiftUI `LinearGradient` cannot
+be perceptual at all.** A terminal's gradients are overwhelmingly directional,
+so the storage is on `Gradient` here — `init(stops:colorSpace:)` and
+`init(colors:colorSpace:)` beside SwiftUI's own initialisers — and the SwiftUI
+spelling sets it on the way past.
+
+SwiftUI's default asymmetry is kept rather than tidied: a bare `Gradient` blends
+in `.device` and `mix` mixes in `.perceptual`, so the two disagree unless told
+otherwise. There is a test that says so, because it looks like a bug.
+
+### The inverse transform
+
+`Color.oklab(red:green:blue:)` was already here for the 256-colour quantiser,
+but **forward only** — comparing distances never needs the way back.
+`Color.fromOKLab(l:a:b:)` is the missing half, Ottosson's inverse of the
+matrices already in the file, sharing the same transfer function. It round-trips
+the whole cube's spacing at **zero bytes of error**, which is a test.
+
+Out-of-gamut results clamp, because a colour between two in-gamut colours can
+leave the gamut on the way and a terminal has no wider one to show it in.
+
+### What it costs
+
+| | per 64-entry ramp |
+|---|---|
+| `.device` | 492 ns |
+| `.perceptual` | 4210 ns |
+
+8.6×, and paid **once per view that paints a ramp** — `RampSampler` quantises
+the ramp once and then answers per cell from the array — so it is roughly 0.7%
+of a 500 µs frame for one perceptual gradient. Nothing in the framework asks for
+it by default, so no shipped path pays it at all.
+
+The obvious optimisation is available and deliberately not taken: `sampled(count:)`
+converts both endpoint colours to OKLab once per *entry* rather than once per
+*segment*, which is most of the 8.6×. Taking it means a second interpolation
+path beside `color(at:)`, and two paths that can disagree about a colour is the
+thing this design has spent §13 and §17 avoiding.
+
+### Adding a field to a value type nothing rebuilds carefully
+
+An adversarial review of the change found the same bug in four places, and it is
+worth naming because it is a *class*, not four mistakes: **`Gradient(stops:)`
+called on a gradient you already have drops everything that is not a stop.**
+Before this change there was nothing else, so every site that rebuilt a ramp
+from edited stops was correct; adding one field made all of them silently wrong,
+and none of them stopped compiling.
+
+| where | what it looked like |
+|---|---|
+| `PaintAnimation` | a ramp mid-animation reverted to `.device` and snapped back at the end — so **every animated `.background` / `.foregroundStyle` painted in the wrong space** |
+| `GradientEditorPanel`, every site that edits a ramp | nudging a stop, or clicking a preset, silently re-blended the app's ramp |
+| `GradientStopsCodec` | the persisted format has no field for a space, so a reload reverted it |
+| `AnyGradient.derivedSpace` | an `Optional` "not asked for", so `.red.gradient.colorSpace(.device) != .red.gradient` while the two paint identically |
+
+The remedy is one method, ``Gradient/withStops(_:)``, and a rule: **a gradient
+derived from a gradient is that gradient wearing new stops.** `Gradient(stops:)`
+survives only where there is no incoming ramp at all — a public initialiser, a
+preset, a decode from text.
+
+Release A/B against the previous build, paired, 15 reps, cpu-per-frame — the
+`.device` path is untouched:
+
+| scenario | before | after | |
+|---|---|---|---|
+| `megalist` | 504.5 µs | 502.8 µs | −0.3% (−1.0% … +0.2%) |
+| `table` | 507.8 µs | 510.7 µs | +0.1% (−0.2% … +0.9%) |
+| `kitchensink` | 624.1 µs | 623.2 µs | +0.3% (−0.2% … +0.7%) |

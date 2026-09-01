@@ -24,6 +24,11 @@ enum GradientStopsCodec {
     /// **A stop written without a position is read as evenly spaced**, which
     /// is what the previous format — bare `RRGGBB` stops, from when a gradient
     /// was an even `[Color]` — meant. Stored values migrate by being read.
+    ///
+    /// The format is colours and positions only. A gradient's colour space is
+    /// therefore taken from `fallback`, which is the caller's own default —
+    /// storing one would be a third format revision for something no editor
+    /// can currently set.
     static func decode(_ raw: String, fallback: Gradient) -> Gradient {
         let fields = raw.split(separator: ",")
         guard !fields.isEmpty else { return fallback }
@@ -38,7 +43,11 @@ enum GradientStopsCodec {
                 Gradient.Stop(
                     color: colour, location: parts.count > 1 ? Double(parts[1]) ?? even : even))
         }
-        return stops.isEmpty ? fallback : Gradient(stops: stops)
+        // `withStops` on the FALLBACK, not `Gradient(stops:)`: the format
+        // stores colours and positions and nothing else, so anything else the
+        // gradient carries — its colour space — comes from what the caller
+        // offered rather than reverting to the default on every reload.
+        return stops.isEmpty ? fallback : fallback.withStops(stops)
     }
 
     /// Encodes a gradient for storage — the inverse of ``decode(_:fallback:)``.

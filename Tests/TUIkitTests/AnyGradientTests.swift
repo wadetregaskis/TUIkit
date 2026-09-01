@@ -79,17 +79,35 @@ struct AnyGradientTests {
         #expect(stops.last?.color == green.palette.accent.resolve(with: green.palette), "\(stops)")
     }
 
-    @Test("Color.mix is a two-stop gradient evaluated at the fraction")
+    /// `mix` is the same interpolation a gradient does — asked for one point
+    /// rather than a whole ramp — once the two are told to use the same space.
+    @Test("Color.mix in .device is a two-stop device gradient at the fraction")
     func mixMatchesTheGradient() {
         let red = Color.rgb(255, 0, 0)
         let blue = Color.rgb(0, 0, 255)
         for fraction in [0.0, 0.25, 0.5, 0.75, 1.0] {
             #expect(
-                red.mix(with: blue, by: fraction)
+                red.mix(with: blue, by: fraction, in: .device)
                     == Gradient(colors: [red, blue]).color(at: fraction),
                 "at \(fraction)")
+            #expect(
+                red.mix(with: blue, by: fraction)
+                    == Gradient(colors: [red, blue], colorSpace: .perceptual)
+                    .color(at: fraction),
+                "the default is perceptual, at \(fraction)")
         }
-        #expect(red.mix(with: blue, by: 0.5) == .rgb(127, 0, 127))
+    }
+
+    /// SwiftUI's own asymmetry, kept rather than tidied: a bare `Gradient`
+    /// interpolates in `.device` and `mix` mixes in `.perceptual`, so the two
+    /// disagree unless told otherwise. Pinned because it looks like a bug.
+    @Test("mix and a bare gradient disagree by default, and that is SwiftUI's")
+    func theDefaultsDiffer() {
+        let red = Color.rgb(255, 0, 0)
+        let blue = Color.rgb(0, 0, 255)
+        #expect(red.mix(with: blue, by: 0.5, in: .device) == .rgb(127, 0, 127))
+        #expect(red.mix(with: blue, by: 0.5) == .rgb(140, 83, 162))
+        #expect(Gradient(colors: [red, blue]).color(at: 0.5) == .rgb(127, 0, 127))
     }
 
     @Test("Color.mix clamps outside 0…1")

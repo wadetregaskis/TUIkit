@@ -176,10 +176,12 @@ struct _OpacityShapeStyle<Base: ShapeStyle>: ShapeStyle {
         case .color(let colour):
             return .color(mixed(colour))
         case .gradient(var ramp):
-            ramp.gradient = Gradient(
-                stops: ramp.gradient.stops.map {
-                    Gradient.Stop(color: mixed($0.color), location: $0.location)
-                })
+            // The stops, not the gradient — see the twin in `PaintAnimation`:
+            // replacing the whole value drops whatever else it carries, which
+            // is how a faded perceptual ramp would come back `.device`.
+            ramp.gradient.stops = ramp.gradient.stops.map {
+                Gradient.Stop(color: mixed($0.color), location: $0.location)
+            }
             return .gradient(ramp)
         }
     }

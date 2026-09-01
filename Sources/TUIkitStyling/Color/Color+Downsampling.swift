@@ -398,6 +398,48 @@ extension Color {
         )
     }
 
+    /// The inverse of ``oklab(red:green:blue:)`` — OKLab back to sRGB bytes.
+    ///
+    /// The quantiser never needed this: it compares distances and never has to
+    /// come back. Perceptual gradient interpolation does, because the point of
+    /// interpolating in OKLab is to end up with a colour again.
+    ///
+    /// Ottosson's inverse of the matrices above, with the same transfer
+    /// function on the way out that ``linearChannel(_:)`` applies on the way
+    /// in. Out-of-gamut results are clamped by ``encodedChannel(_:)``, which is
+    /// the only thing that can be done with them in a cell grid — a colour
+    /// between two in-gamut colours can leave the gamut on the way, and the
+    /// terminal has no wider one to show it in.
+    ///
+    /// - Parameters:
+    ///   - l: Lightness.
+    ///   - a: The green–red axis.
+    ///   - b: The blue–yellow axis.
+    /// - Returns: The sRGB bytes.
+    package static func fromOKLab(l lightness: Double, a: Double, b: Double) -> (
+        red: UInt8, green: UInt8, blue: UInt8
+    ) {
+        // The label is `l` to mirror `oklab`'s own tuple; the binding is spelt
+        // out because a lone `l` is not one of the single letters the style
+        // rules allow (and reads as a 1).
+        let long = lightness + 0.3963377774 * a + 0.2158037573 * b
+        let medium = lightness - 0.1055613458 * a - 0.0638541728 * b
+        let short = lightness - 0.0894841775 * a - 1.2914855480 * b
+
+        let longCubed = long * long * long
+        let mediumCubed = medium * medium * medium
+        let shortCubed = short * short * short
+
+        return (
+            red: encodedChannel(
+                4.0767416621 * longCubed - 3.3077115913 * mediumCubed + 0.2309699292 * shortCubed),
+            green: encodedChannel(
+                -1.2684380046 * longCubed + 2.6097574011 * mediumCubed - 0.3413193965 * shortCubed),
+            blue: encodedChannel(
+                -0.0041960863 * longCubed - 0.7034186147 * mediumCubed + 1.7076147010 * shortCubed)
+        )
+    }
+
     /// OKLab distance with the lightness/chroma/hue components split, hue
     /// weighted ×4, and chroma LOSS weighted ×4 (à la CIEDE2000's spirit:
     /// staying in the right colour family matters more than exact chroma).

@@ -44,9 +44,39 @@ public struct AnyGradient: ShapeStyle, Hashable, Sendable {
 
     private let source: Source
 
+    /// The space a DERIVED gradient's two stops are blended in — the derived
+    /// case cannot carry it on a ``Gradient``, because it has no stops until
+    /// something paints.
+    ///
+    /// Not optional, and it matters that it is not: `AnyGradient` is `Hashable`
+    /// and public, so a "no space asked for" that is distinct from the space it
+    /// resolves to would make `.red.gradient.colorSpace(.device)` unequal to
+    /// `.red.gradient` while the two paint identically.
+    private var derivedSpace = Gradient.ColorSpace.device
+
     /// Creates a directionless gradient from a stop list.
     public init(_ gradient: Gradient) {
         source = .stops(gradient)
+    }
+
+    /// This gradient, interpolated in `space`.
+    ///
+    /// SwiftUI's spelling, and in SwiftUI it is the ONLY place a colour space
+    /// can live — which is why `Gradient` carries one here as well; see
+    /// `Gradient.colorSpace`.
+    ///
+    /// - Parameter space: The space to interpolate the stops in.
+    /// - Returns: The same ramp, blended differently.
+    public func colorSpace(_ space: Gradient.ColorSpace) -> Self {
+        switch source {
+        case .stops(var gradient):
+            gradient.colorSpace = space
+            return Self(gradient)
+        case .derived(let colour):
+            var moved = Self(derivedFrom: colour)
+            moved.derivedSpace = space
+            return moved
+        }
     }
 
     /// The gradient behind ``Color/gradient``.
@@ -67,7 +97,10 @@ public struct AnyGradient: ShapeStyle, Hashable, Sendable {
     public func gradient(in environment: EnvironmentValues) -> Gradient {
         switch source {
         case .stops(let gradient): return gradient
-        case .derived(let color): return Self.derive(from: color, in: environment)
+        case .derived(let color):
+            var derived = Self.derive(from: color, in: environment)
+            derived.colorSpace = derivedSpace
+            return derived
         }
     }
 
@@ -127,5 +160,27 @@ extension Color {
     /// that misses, and a terminal has nothing to show the difference with.
     public var gradient: AnyGradient {
         AnyGradient(derivedFrom: self)
+    }
+}
+
+// MARK: - The SwiftUI spelling on `Gradient`
+
+extension Gradient {
+    /// This gradient as a directionless ``AnyGradient``, interpolated in
+    /// `space`.
+    ///
+    /// SwiftUI's signature exactly, including the return type: there,
+    /// `AnyGradient` is the only thing that can carry a colour space. TUIkit
+    /// additionally lets a ``Gradient`` carry one — see
+    /// `Gradient.colorSpace` — so that a `LinearGradient`, which a
+    /// terminal reaches for far more often than a directionless ramp, can be
+    /// perceptual too.
+    ///
+    /// - Parameter space: The space to interpolate the stops in.
+    /// - Returns: The ramp, erased and blended in that space.
+    public func colorSpace(_ space: ColorSpace) -> AnyGradient {
+        var moved = self
+        moved.colorSpace = space
+        return AnyGradient(moved)
     }
 }

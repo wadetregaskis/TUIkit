@@ -380,7 +380,7 @@ public struct GradientEditorPanel: View {
                 fallback: ramp.stops.first?.color ?? .palette.accent, depth: ColorDepth.current)
         }
         return Button {
-            gradient.wrappedValue = ramp
+            gradient.wrappedValue = Self.applying(ramp, to: gradient.wrappedValue)
             selectedStop = 0
         } label: {
             colorCellRow(cells)
@@ -411,7 +411,8 @@ public struct GradientEditorPanel: View {
                 // The colour changes; the POSITION does not. That is the whole
                 // of "editing a stop" once a stop has a position.
                 list[max(0, min(selectedStop, list.count - 1))].color = newValue
-                gradient.wrappedValue = Gradient(stops: list)
+                // The STOPS are replaced, not the gradient — see `withStops`.
+                gradient.wrappedValue = gradient.wrappedValue.withStops(list)
             })
     }
 }
@@ -436,7 +437,7 @@ extension GradientEditorPanel {
             // One stop is a solid colour; splitting it is how it becomes a
             // gradient, and a gradient of one colour spans the whole ramp.
             return (
-                Gradient(stops: [
+                gradient.withStops([
                     Gradient.Stop(color: list[0].color, location: 0),
                     Gradient.Stop(color: list[0].color, location: 1),
                 ]), 1
@@ -453,7 +454,7 @@ extension GradientEditorPanel {
             location = (list[index - 1].location + list[index].location) / 2
         }
         updated.insert(Gradient.Stop(color: list[index].color, location: location), at: insertion)
-        return (Gradient(stops: updated), insertion)
+        return (gradient.withStops(updated), insertion)
     }
 
     /// The gradient reduced to the stop at `index` alone — a solid colour.
@@ -466,7 +467,7 @@ extension GradientEditorPanel {
         guard let stop = list.indices.contains(index) ? list[index] : list.first else {
             return gradient
         }
-        return Gradient(stops: [Gradient.Stop(color: stop.color, location: 0)])
+        return gradient.withStops([Gradient.Stop(color: stop.color, location: 0)])
     }
 
     /// Removes the stop at `index`, refusing to empty the gradient. The
@@ -483,7 +484,7 @@ extension GradientEditorPanel {
         }
         var updated = list
         updated.remove(at: index)
-        return (Gradient(stops: updated), min(index, updated.count - 1))
+        return (gradient.withStops(updated), min(index, updated.count - 1))
     }
 
     /// Swaps the stop at `index` with its neighbour `offset` (−1 left, +1
@@ -502,7 +503,7 @@ extension GradientEditorPanel {
         }
         var colours = list.map(\.color)
         colours.swapAt(index, destination)
-        return (Gradient(stops: recoloured(list, with: colours)), destination)
+        return (gradient.withStops(recoloured(list, with: colours)), destination)
     }
 
     /// Moves the stop at `source` to `destination` (remove + insert — the
@@ -523,7 +524,7 @@ extension GradientEditorPanel {
         }
         var colours = list.map(\.color)
         colours.insert(colours.remove(at: source), at: destination)
-        return (Gradient(stops: recoloured(list, with: colours)), destination)
+        return (gradient.withStops(recoloured(list, with: colours)), destination)
     }
 
     /// `stops` with `colours` laid back onto their positions, in order.
@@ -637,6 +638,23 @@ extension GradientEditorPanel {
         Gradient(colors: [.rgb(40, 40, 40), .rgb(230, 230, 230)]),
     ]
 
+    /// A library chip applied to `gradient` — the chip's STOPS, laid onto the
+    /// ramp the app bound.
+    ///
+    /// A preset and a stored recent are colours and positions and nothing
+    /// else: neither is a gradient the app configured, and neither format has
+    /// anywhere to put a colour space. So picking one changes which colours
+    /// are painted and leaves how they are blended alone — the same rule every
+    /// edit in this panel follows.
+    ///
+    /// - Parameters:
+    ///   - chip: The library gradient that was picked.
+    ///   - gradient: The gradient being edited.
+    /// - Returns: `gradient` wearing `chip`'s stops.
+    static func applying(_ chip: Gradient, to gradient: Gradient) -> Gradient {
+        gradient.withStops(chip.stops)
+    }
+
     /// How many applied gradients the recents keep.
     static let recentLimit = 10
 
@@ -671,6 +689,11 @@ extension GradientEditorPanel {
                 let location = parts.count > 1 ? Double(parts[1]) ?? even : even
                 stops.append(Gradient.Stop(color: colour, location: location))
             }
+            // `Gradient(stops:)` is right HERE and nowhere else in this file:
+            // a recent is built from stored text, so there is no incoming
+            // gradient whose colour space could be carried — the chip that
+            // applies it lays these stops onto the bound gradient, which has
+            // one. Everything that EDITS a gradient goes through `withStops`.
             return stops.count >= 2 ? Gradient(stops: stops) : nil
         }
     }
