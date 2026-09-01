@@ -150,7 +150,9 @@ struct TrackStyleEditor: View {
             // own, or a ramp across it. Its first stop doubles as the flat
             // colour so the two controls agree about what "tinted" means.
             emptyColor: emptyTinted ? emptyStops.stops.first?.color : nil,
-            emptyGradient: emptyGradientEnabled ? emptyStops : nil)
+            // Gated on the tint as well as on itself, so a persisted "on" from
+            // before the two were paired cannot outlive the toggle above it.
+            emptyGradient: emptyTinted && emptyGradientEnabled ? emptyStops : nil)
     }
 
     /// A slowly-advancing fraction (0→1 over 50 s) for the preview bar.
@@ -207,13 +209,21 @@ struct TrackStyleEditor: View {
                 Button("component.trackEditor.editGradient") { editingGradient = true }
                     .disabled(!gradientEnabled)
                 Toggle("component.trackEditor.gradientSpansTrack", isOn: $gradientSpansTrack)
-                    .disabled(!gradientEnabled && !emptyGradientEnabled)
+                    .disabled(!gradientEnabled && !(emptyTinted && emptyGradientEnabled))
             }
             HStack(spacing: 2) {
                 Toggle("component.trackEditor.emptyTinted", isOn: $emptyTinted)
+                // "…with a gradient" is a refinement of the tint, not a rival
+                // to it — its own label says so — and the renderer gives a
+                // gradient precedence over the flat colour. Left independent,
+                // the pair had a state in which the FIRST toggle did nothing
+                // at all: gradient on, tint off, and flipping "Tint the
+                // unfilled part" changed the bar not at all. So it disables
+                // with its parent, the way "Edit gradient…" does one row up.
                 Toggle("component.trackEditor.emptyGradient", isOn: $emptyGradientEnabled)
+                    .disabled(!emptyTinted)
                 Button("component.trackEditor.editEmptyGradient") { editingEmptyGradient = true }
-                    .disabled(!emptyTinted && !emptyGradientEnabled)
+                    .disabled(!emptyTinted)
             }
             Text("component.trackEditor.comboHint")
                 .foregroundStyle(.palette.foregroundSecondary)
