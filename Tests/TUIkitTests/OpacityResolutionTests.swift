@@ -84,8 +84,8 @@ struct OpacityResolutionTests {
         #expect(resolved.opacityRegions.isEmpty)
     }
 
-    @Test("Below the threshold the destination is untouched, not merely revealed")
-    func belowTheThresholdTheDestinationSurvives() {
+    @Test("Below the threshold the destination keeps its character, not its colour")
+    func belowTheThresholdTheDestinationKeepsItsCharacter() {
         let destination = FrameBuffer(lines: [
             ANSIRenderer.colorize("world", foreground: .red, background: .blue)
         ])
@@ -93,14 +93,14 @@ struct OpacityResolutionTests {
         let resolved = source.resolvingOpacity(
             over: destination, surface: .black, palette: palette())
 
-        // Its character and its foreground stand; the field carries only the
-        // whisper of the source's ink — no background of its own, so the tint
-        // is alpha scaled by the ink's coverage, all but invisible.
+        // The glyph contest goes to the destination, and only the glyph was
+        // ever contested: the ink channel still blends, because colours blend
+        // at every alpha. The field does NOT — the source states no background
+        // of its own, so it composites none and the destination's stands.
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(.red)))
+        #expect(resolved.lines[0].contains(codes(Color.green.compositing(0.2, over: .red))))
         #expect(!resolved.lines[0].contains(codes(.green)))
-        let whisper = Color.green.compositing(0.2 * 0.15, over: .blue)
-        #expect(resolved.lines[0].contains(backgroundCodes(whisper)))
+        #expect(resolved.lines[0].contains(backgroundCodes(.blue)))
     }
 
     @Test("Text fades toward a block swatch's colour, not its background")
@@ -164,12 +164,11 @@ struct OpacityResolutionTests {
         #expect(above.lines[0].contains("[0;1;"))
     }
 
-    @Test("A yielded glyph contest still composites the veil's background")
+    @Test("A yielded glyph contest still takes the veil, in both channels")
     func aContestedCellIsStillTinted() {
-        // To the cell it lost, the source is a pane of background — the same
-        // rule a space follows. Without this a translucent panel over text
-        // would tint every blank cell and skip every character-holding one,
-        // and read as a sieve rather than a veil.
+        // Losing the glyph does not exempt a cell from the fade. Without this
+        // a translucent panel over text would tint every blank cell and skip
+        // every character-holding one, and read as a sieve rather than a veil.
         let destination = FrameBuffer(lines: [
             ANSIRenderer.colorize("world", foreground: .red, background: .rgb(255, 0, 0))
         ])
@@ -179,14 +178,15 @@ struct OpacityResolutionTests {
         let resolved = source.resolvingOpacity(
             over: destination, surface: .black, palette: palette())
 
-        // The text and its colour stand; the field carries the veil — the
-        // source's background with its ink's coverage of foreground mixed in.
+        // The destination's character stands; each channel takes the veil from
+        // its own counterpart — the source's ink over the destination's ink,
+        // its field over the destination's field. Neither is mixed into the
+        // other, so no estimate of how much of a cell a glyph inks is needed.
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(.red)))
+        #expect(resolved.lines[0].contains(codes(Color.green.compositing(0.25, over: .red))))
         #expect(!resolved.lines[0].contains(codes(.green)))
-        let pane = Color.green.compositing(0.15, over: .rgb(0, 0, 255))
-        let expected = pane.compositing(0.25, over: .rgb(255, 0, 0))
-        #expect(resolved.lines[0].contains(backgroundCodes(expected)))
+        let field = Color.rgb(0, 0, 255).compositing(0.25, over: .rgb(255, 0, 0))
+        #expect(resolved.lines[0].contains(backgroundCodes(field)))
         #expect(!resolved.lines[0].contains(backgroundCodes(.rgb(255, 0, 0))))
     }
 
@@ -203,7 +203,10 @@ struct OpacityResolutionTests {
             over: destination, surface: .rgb(0, 0, 0), palette: palette())
 
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(.red)))
+        // A fill has no glyph, so what it shows where one would draw is its
+        // own colour — the same reading on this side of the blend as on the
+        // other. Both channels therefore carry it.
+        #expect(resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).compositing(0.5, over: .red))))
         let expected = Color.rgb(0, 0, 255).compositing(0.5, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
@@ -255,8 +258,9 @@ struct OpacityResolutionTests {
     @Test("A veil over reversed text keeps the ink the viewer saw")
     func aVeilOverReversedTextKeepsItsInk() {
         // Reversed destination: blue fg + red bg displays RED ink on BLUE
-        // field. A translucent pane below ½ keeps the glyph and tints only
-        // the field — the ink must stay red, not revert to the stored blue.
+        // field. A translucent pane keeps the glyph and fades both channels
+        // — and the ink channel must fade from the RED the viewer saw, not
+        // from the blue the cell stored.
         let reversed = "\u{1B}[7;38;2;0;0;255;48;2;255;0;0mhello\u{1B}[0m"
         let destination = FrameBuffer(lines: [reversed])
         let source = faded(
@@ -265,8 +269,10 @@ struct OpacityResolutionTests {
             over: destination, surface: .black, palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
-        #expect(resolved.lines[0].contains(codes(.rgb(255, 0, 0))))
-        #expect(!resolved.lines[0].contains(codes(.rgb(0, 0, 255))))
+        let ink = Color.rgb(0, 200, 0).compositing(0.25, over: .rgb(255, 0, 0))
+        let stored = Color.rgb(0, 200, 0).compositing(0.25, over: .rgb(0, 0, 255))
+        #expect(resolved.lines[0].contains(codes(ink)))
+        #expect(!resolved.lines[0].contains(codes(stored)))
         let expected = Color.rgb(0, 200, 0).compositing(0.25, over: .rgb(0, 0, 255))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
@@ -283,10 +289,13 @@ struct OpacityResolutionTests {
         let resolved = source.resolvingOpacity(
             over: destination, surface: .black, palette: palette())
 
-        // The source's glyphs yield; the underline survives, un-tinted.
+        // The source's glyphs yield and the underline survives — and it is
+        // read as INK on this side too, so the source's ink fades from the
+        // underline's own red rather than from the field behind it.
         #expect(resolved.lines[0].stripped.trimmingCharacters(in: .whitespaces).isEmpty)
         #expect(resolved.lines[0].contains(";4;"))
-        #expect(resolved.lines[0].contains(codes(.rgb(255, 0, 0))))
+        let ink = Color.rgb(0, 255, 0).compositing(0.3, over: .rgb(255, 0, 0))
+        #expect(resolved.lines[0].contains(codes(ink)))
     }
 
     @Test("Zero opacity is the same case, which is the bug being fixed")
@@ -331,7 +340,7 @@ struct OpacityResolutionTests {
         #expect(resolved.lines[0].contains(codes(.red)))
     }
 
-    @Test("A source space WITH a background tints the cell and keeps the text")
+    @Test("A source space WITH a background tints both channels, keeping the text")
     func aSpaceCompositesItsBackground() {
         let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .red)])
         let source = faded(
@@ -339,10 +348,12 @@ struct OpacityResolutionTests {
         let resolved = source.resolvingOpacity(
             over: destination, surface: .rgb(0, 0, 0), palette: palette())
 
-        // The text survives, in its own colour — a translucent pane over text
-        // does not tint the text — on a background half way to blue.
+        // The text survives as a character; both of its colours move half way
+        // to blue. A pane covers the ink under it exactly as much as the field
+        // around it, so the cell fades evenly rather than leaving crisp text
+        // standing on a washed-out field.
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(.red)))
+        #expect(resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).compositing(0.5, over: .red))))
         let expected = Color.rgb(0, 0, 255).compositing(0.5, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
@@ -359,9 +370,44 @@ struct OpacityResolutionTests {
             over: destination, surface: .rgb(0, 0, 0), palette: palette())
 
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(.red)))
+        #expect(
+            resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).compositing(0.25, over: .red))))
         let expected = Color.rgb(0, 0, 255).compositing(0.25, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
+    }
+
+    @Test("A blank column and a lettered one carry the same background")
+    func blanksAndLettersAgreeOnTheField() {
+        // The report the model change came from: with neither layer painting a
+        // background, the cells holding letters picked up a greenish tint that
+        // the blank ones did not, and the difference was visible as stripes.
+        // The old blend averaged the source's ink INTO its field by an
+        // estimated coverage, so a letter contributed to the field and a space
+        // did not. Nothing mixes the channels now, so a layer with no
+        // background composites no background — under a letter exactly as
+        // under a blank.
+        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .red)])
+        let source = faded(ANSIRenderer.colorize("a b c", foreground: .green), 0.43, width: 5)
+        // An off-black surface, so every background this row states is spelled
+        // as an explicit triple and none of them can hide in a named code.
+        let surface = Color.rgb(1, 2, 3)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: surface, palette: palette())
+
+        #expect(resolved.lines[0].stripped == "world")
+        // One background across the row, and it is the surface — which is what
+        // a cell naming none shows anyway. (The span states it rather than
+        // leaving it to SGR 49, which is the terminal's default and not the
+        // page's; see `blendedSpan`.)
+        let fields = Set(resolved.lines[0].matches(of: /48;2;\d+;\d+;\d+/).map { String($0.output) })
+        #expect(fields == [backgroundCodes(surface)], "\(fields)")
+        // The ink channel does differ per column, and honestly so: the source
+        // paints ink where it has a letter and none where it has a space, so
+        // only the lettered columns take its colour. That is emptiness rather
+        // than blankness — the same answer a fully transparent layer gets.
+        #expect(resolved.lines[0].contains(codes(Color.green.compositing(0.43, over: .red))))
+        #expect(resolved.lines[0].contains(codes(.red)))
+        #expect(!resolved.lines[0].contains("49m"), "no cell falls back to the terminal default")
     }
 
     @Test("With nothing behind it, the surface is what is behind it")
@@ -542,7 +588,8 @@ struct OpacityResolutionTests {
 
         #expect(resolved.lines[0].stripped == "中文字")
         #expect(resolved.lines[0].strippedLength == 6)
-        #expect(resolved.lines[0].contains(codes(.red)))
+        #expect(
+            resolved.lines[0].contains(codes(Color.rgb(0, 255, 0).compositing(0.2, over: .red))))
     }
 
     @Test("Compositing punches the covered footprint out of pending regions")

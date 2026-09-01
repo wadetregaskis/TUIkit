@@ -385,6 +385,10 @@ before anything consumes it.
 
 ### 9.2 Both source channels blend; the destination's foreground does not
 
+> **SUPERSEDED 2026-09-01** — the destination's foreground blends too. See
+> §10 rules 3 and 7. The rest of this section stands as the record of what the
+> mapping found.
+
 Worth pinning because the two rules read similarly. The **source's foreground
 and background** both blend toward the destination's background. The
 **destination's foreground** is left alone. Blending only the source's
@@ -508,6 +512,12 @@ organising principle the refinements converge on:
 > **Colours blend at every alpha; only the choice of glyph needs a decision,
 > and only where two glyphs genuinely contest the cell.**
 
+**REVISED 2026-09-01**, and the revision is a simplification: rules 3 and 7
+below were an over-thought answer to "what is behind a glyph", and are now one
+rule — each channel blends with its own counterpart, read the same way on both
+sides. Rule 4 stopped being a rule at all, because it is what the general one
+says. What that supersedes, and why, is under rule 7.
+
 The rules, updated as each lands:
 
 1. **A source space composites its background at every alpha**, not only at or
@@ -526,25 +536,32 @@ The rules, updated as each lands:
    where the destination has a character of its own, which is the case §6a's
    argument was actually about.
 
-3. **A yielded glyph contest still composites the veil's background.** To the
-   cell it lost, the source is a pane of background — exactly what it is to a
-   space — so the destination keeps its character and its foreground, and its
-   field carries the veil at the region's alpha. Without this a translucent
-   panel over text tinted every blank cell and skipped every character-holding
-   one, reading as a sieve rather than a veil; it also shrinks the visible step
-   at the ½ crossing to the glyph swap alone, since the field no longer jumps
-   from half-tinted to untouched. "The destination is UNTOUCHED below the
-   threshold" (§6a) narrows to its foreground and character; exact untouched
-   reveal still holds at 0, where the tint's weight is zero.
+3. **A yielded glyph contest still takes the veil — in both channels.**
+   Losing the glyph does not exempt a cell from the fade: the destination keeps
+   its character, and both of its colours move toward the source's by the
+   region's alpha, under rule 7. Without this a translucent panel over text
+   tinted every blank cell and skipped every character-holding one, reading as
+   a sieve rather than a veil; it also shrinks the visible step at the ½
+   crossing to the glyph swap alone, since neither channel jumps. "The
+   destination is UNTOUCHED below the threshold" (§6a) narrows to its
+   character; exact untouched reveal still holds at 0, where the weight is
+   zero.
 
-4. **Matching characters cross-fade in parallel.** Where both sides hold the
-   same character there is no contest: the source's ink sits exactly where the
-   destination's does, so foreground blends toward foreground and background
-   toward background, continuously through every alpha with no threshold
-   anywhere. A colour change on unchanged text is exact. (This generalises the
-   space rule, which is the same statement for the character " ".) The one
-   thing that cannot blend is weight — bold is on or off — so a matched cell's
-   non-colour styling follows whichever side alpha favours.
+   **REVISED 2026-09-01.** This rule used to end "and its foreground", keeping
+   the destination's ink untouched on the argument that tinting text reads
+   prettily in a GUI and illegibly in a cell grid (§9.2). It reads worse: the
+   field washes out while the text stands at full strength, which is not what
+   a veil does to what is under it. A pane covers the ink it lies over exactly
+   as much as the field around it, and now fades both by the same alpha.
+
+4. **Matching characters cross-fade in parallel** — which since 2026-09-01 is
+   not a rule of its own but an instance of rule 7, and the branch that used to
+   implement it is gone. Where both sides hold the same character the ink
+   channels are each other's counterparts by construction, so the cell
+   cross-fades continuously through every alpha with no threshold anywhere and
+   a colour change on unchanged text is exact. The one thing that cannot blend
+   is weight — bold is on or off — so a cell's non-colour styling follows
+   whichever side drew its glyph.
 
 5. **The blend happens in linear light.** `Color.opacity(_:over:)` (and
    `lerp`, underneath it) interpolates the ENCODED sRGB components. For style
@@ -574,19 +591,47 @@ The rules, updated as each lands:
    `visibleOnBlankCell` minus 7 — one vocabulary for "what is observable on a
    blank cell", used by both consumers.
 
-7. **"Behind" means the average colour a cell displays, estimated by ink
-   coverage.** A drawn glyph covers the whole destination cell — ink included —
-   so what it fades toward is the cell's field and its ink mixed by the ink's
-   fraction of the cell (`Character.inkCoverage`): exact by construction for
-   the geometric glyphs (blocks, halves, quadrants, eighths, shades, Braille —
-   precisely the characters used AS solid colour), an estimate everywhere else
-   (0.15 for text, 0.1 for box lines). One algorithm, varying confidence: an
-   unrecognised character gets the text-shaped estimate, not a different
-   blending cliff. The same number makes a yielded cell's veil honest — the
-   source's paint is its background with its ink mixed in, and a source with
-   ink but no background tints at alpha scaled by coverage. Emoji are a knowing
-   omission: colour bitmaps ignore the foreground colour, so no arithmetic can
-   fade them and the glyph threshold is the only lever a terminal offers.
+7. **Each channel blends with its own counterpart, and the two never mix.**
+   A cell shows its ink where its glyph draws and its FIELD where none does,
+   and that one reading is applied to both sides of the blend: the source's ink
+   composites over the destination's ink, its background over the destination's
+   background. Nothing estimates how much of a cell a glyph covers, because
+   nothing needs to — the question the estimate answered ("what colour is
+   behind this ink?") only arose from mixing the channels together in the first
+   place.
+
+   Three consequences are the point of it. A label thinning out over an empty
+   page fades into that page, because a blank cell's ink channel is its field.
+   Text fading over a `█`-drawn swatch moves toward the swatch's own colour,
+   because a drawn cell's ink channel is its glyph's colour. And a space is not
+   a case of its own anywhere in the blend — it is a cell whose ink colour
+   happens to be its field.
+
+   A channel the source states nothing in composites nothing, and the
+   destination's stands. That is EMPTINESS rather than blankness: a layer with
+   no background of its own tints no field (which is what keeps a faded
+   `VStack`'s padding transparent instead of a rectangle punched through the
+   page), and a blank cell with no background paints no ink either. A faded
+   label's spaces therefore leave what is under them alone while its letters
+   fade — honest, and the same answer a fully transparent layer gets.
+
+   **This replaces `Character.inkCoverage`, deleted 2026-09-01**, and with it
+   the model where a cell's "paint" was its background with its ink averaged in
+   by that estimate. Two faults, one reported and one found looking for it.
+   Reported: with neither layer painting a background, the cells holding
+   letters picked up a tint the blank ones did not, because a letter
+   contributed to the field and a space did not — visible as stripes, and now
+   pinned by `blanksAndLettersAgreeOnTheField` (the old model painted `w r d`
+   on `48;2;1;56;3` and `o l` on `48;2;1;2;3`). Found: a yielded glyph tinted
+   the cell it lost, at alpha × coverage — 0.43 × 0.15 of a bright foreground
+   is a 6.5% wash, which is why a ZStack layer with no background of its own
+   drew a greenish field below ½ and none at or above it. The estimate was only
+   ever load-bearing where a destination was PARTIALLY inked; for the solid
+   glyphs it was exact for (blocks, halves, quadrants, eighths, shades) it
+   agrees with the rule above exactly, which is why the swatch case reads the
+   same before and after. Emoji remain a knowing omission either way: colour
+   bitmaps ignore the foreground colour, so no arithmetic fades them and the
+   glyph threshold is the only lever a terminal offers.
 
 8. **A revealed wide character must own every column it claims.** The span
    walk advances by what it emits, so a two-column 日 revealed by a one-column

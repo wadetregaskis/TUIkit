@@ -187,61 +187,25 @@ extension FrameBuffer {
         return squaredDistance(truth, was) <= squaredDistance(truth, entry) ? existing : blended
     }
 
-    /// The destination's cell with the source's paint composited onto its
-    /// field — the shared shape of every rule where the destination keeps its
-    /// character: a space, and a glyph contest resolved in the destination's
-    /// favour. The veil tints the surface under the text, never the text; a
-    /// source that paints nothing at all tints nothing at all.
+    /// What a cell shows where its glyph draws — its ink where it paints one,
+    /// and its FIELD where it does not, because a cell with no glyph is what
+    /// its field shows. `nil` where it states neither: a blank carrying no
+    /// background of its own paints nothing at all, and so paints nothing into
+    /// this channel either.
     ///
-    /// "Paint" is the source cell's average: its background, with its ink
-    /// mixed in by the ink's coverage — a yielded glyph does not stop being
-    /// light. A source with ink but no background contributes only the ink,
-    /// at `alpha` scaled by its coverage.
-    private static func compositingField(
-        of source: RowCell, onto destination: RowCell?, alpha: Double, behind: Color,
-        defaultForeground: Color
-    ) -> RowCell {
-        let coverage = source.character.inkCoverage
-        let paint: Color?
-        let weight: Double
-        if let background = source.background {
-            paint =
-                coverage > 0
-                ? (source.foreground ?? defaultForeground).compositing(coverage, over: background)
-                : background
-            weight = alpha
-        } else if coverage > 0 {
-            paint = source.foreground ?? defaultForeground
-            weight = alpha * coverage
-        } else {
-            paint = nil
-            weight = 0
+    /// Read the same way on both sides of the blend, which is what keeps a
+    /// space from being a case of its own. A veil's blank cell covers the text
+    /// under it exactly as much as it covers the field around it, so both
+    /// channels move toward the veil's colour by the same alpha and the cell
+    /// fades evenly. The same reading is what lets a label thin out over an
+    /// empty page: the page's blank cells show their field, and that is the
+    /// colour the label fades into.
+    private static func displayedInk(of cell: RowCell?, defaultForeground: Color) -> Color? {
+        guard let cell else { return nil }
+        guard cell.character != " " || cell.style.paintsInkOnBlankCell else {
+            return cell.background
         }
-        guard let paint, weight > 0 else {
-            return destination ?? RowCell(character: " ", style: SGRState())
-        }
-        let faded = paint.compositing(weight, over: behind)
-        var kept = destination ?? RowCell(character: " ", style: SGRState())
-        kept.background = faded
-        kept.style = kept.style.settingBackground(faded)
-        return kept
-    }
-
-    /// The average colour a cell DISPLAYS — its ink and its field mixed by the
-    /// ink's coverage — which is what "behind" means to a glyph drawn over it.
-    ///
-    /// This is the difference between text fading over a `█`-drawn swatch
-    /// blending toward the swatch's colour (its FOREGROUND) and blending
-    /// toward whatever background happened to sit under the blocks. A missing
-    /// cell shows the surface.
-    private static func averageDisplay(
-        of cell: RowCell?, surface: Color, defaultForeground: Color
-    ) -> Color {
-        guard let cell else { return surface }
-        let field = cell.background ?? surface
-        let coverage = cell.character.inkCoverage
-        guard coverage > 0 else { return field }
-        return (cell.foreground ?? defaultForeground).compositing(coverage, over: field)
+        return cell.foreground ?? defaultForeground
     }
 
     /// One cell's answer.
@@ -294,94 +258,48 @@ extension FrameBuffer {
         guard alpha > 0 else {
             return destination ?? RowCell(character: " ", style: SGRState())
         }
-        // What the destination actually shows where it paints nothing of its
-        // own. A cell with no background is not transparent to the terminal —
-        // it is the surface.
-        let behind = destination?.background ?? surface
-        // A space carries no ink, so it yields the character and composites only
-        // its background — and where it has none, it changes nothing at all.
-        // That last part is what makes a faded `VStack`'s padding transparent
-        // instead of a rectangle of blanks punched through the page.
+        // Each channel blends with its own counterpart and nothing else: ink
+        // toward ink, field toward field. This is the whole model — the two
+        // never mix, so nothing has to estimate how much of a cell a glyph
+        // inks. An earlier design averaged a cell's ink into its field by an
+        // estimated coverage and blended that single "paint" value, which made
+        // a yielded glyph tint the cell it lost (0.43 alpha × 0.15 coverage of
+        // a bright foreground is a visible 6.5% wash) and made blank cells and
+        // lettered ones behave differently for no reason a viewer could see.
         //
-        // At EVERY alpha, not only above the glyph threshold: colours can blend
-        // at any strength — the threshold exists because two characters cannot
-        // share a cell, and a space is not a character contest. Gating this on
-        // ½ made a translucent panel vanish whole at the midpoint instead of
-        // fading smoothly to nothing.
-        //
-        // "Space" means NO INK, which is more than the character: an
-        // underlined or struck-through space draws a pattern in its foreground
-        // colour, and falls through to the glyph rules below. (A REVERSED
-        // space never reaches here as one — `cells` normalises it into a
-        // solid fill, background and all.)
-        if source.character == " ", !source.style.paintsInkOnBlankCell {
-            return compositingField(
-                of: source, onto: destination, alpha: alpha, behind: behind,
-                defaultForeground: defaultForeground)
-        }
-        // Matching characters are not a contest at all: the source's ink sits
-        // exactly where the destination's does, so the channels blend in
-        // PARALLEL — foreground toward foreground, background toward
-        // background — and the cell cross-fades continuously through every
-        // alpha with no threshold anywhere. This is what makes a colour
-        // change on unchanged text exact: the same label fading between two
-        // colourings passes through every intermediate, rather than fading
-        // toward the field and popping at ½.
-        if let destination, destination.character == source.character {
-            var result = source
-            let foreground = (source.foreground ?? defaultForeground)
-                .compositing(alpha, over: destination.foreground ?? defaultForeground)
-            let background =
-                source.background.map { $0.compositing(alpha, over: behind) }
-                ?? destination.background
-            // Weight cannot blend: bold, underline and their kin are on or
-            // off, so the glyph's non-colour styling follows whichever side
-            // alpha favours.
-            let style = alpha >= 0.5 ? source.style : destination.style
-            result.foreground = foreground
-            result.background = background
-            result.style = style.settingForeground(foreground).settingBackground(background)
-            return result
-        }
-        // The threshold decides a CONTEST — two glyphs wanting one cell — and
-        // only applies where there is one. Where the destination is blank, the
-        // source's character draws at any alpha, fading toward what is behind
-        // it and reaching invisibility at 0 with nothing to pop: gating it on ½
-        // made text over a plain panel vanish at the midpoint of a fade when
-        // there was never anything to reveal underneath it.
-        //
-        // Where the destination DOES have a character, below ½ the source's
-        // glyph is not drawn and the destination keeps its own — under the
-        // same field composite a space gets, because to the yielded cell the
-        // source IS a pane of background. Without this, a translucent panel
-        // over text would tint every cell around a character and none holding
-        // one, and read as a sieve rather than a veil.
-        //
-        // "Has a character" is the same no-ink question as above, asked of the
-        // destination: an underlined blank underneath is something to reveal.
-        if alpha < 0.5, let destination,
-            destination.character != " " || destination.style.paintsInkOnBlankCell
-        {
-            return compositingField(
-                of: source, onto: destination, alpha: alpha, behind: behind,
-                defaultForeground: defaultForeground)
-        }
-        // A drawn glyph covers the WHOLE destination cell — ink included — so
-        // what it fades toward is the average colour that cell displays, not
-        // its bare field. Text thinning out over a block-drawn swatch moves
-        // toward the swatch's colour; over ordinary text the average is nearly
-        // all field and this reduces to what it always was.
-        let covered = averageDisplay(
-            of: destination, surface: surface, defaultForeground: defaultForeground)
-        let fadedBackground = source.background.map { $0.compositing(alpha, over: covered) }
-        var result = source
-        let foreground = (source.foreground ?? defaultForeground).compositing(alpha, over: covered)
-        // Where neither side paints a background, the cell keeps naming none —
-        // which is the surface, and is what it named before.
-        let background = fadedBackground ?? destination?.background
+        // Both channels are read through the same pair of questions, asked of
+        // both sides, so a space is not a case: what does this cell show where
+        // a glyph draws, and what does it show where none does. A cell that
+        // states nothing in a channel contributes nothing to it and the other
+        // side survives untouched — which is emptiness, not blankness, and is
+        // what keeps a faded `VStack`'s padding transparent instead of a
+        // rectangle punched through the page.
+        let sourceInk = displayedInk(of: source, defaultForeground: defaultForeground)
+        let destinationInk =
+            displayedInk(of: destination, defaultForeground: defaultForeground) ?? surface
+        let destinationField = destination?.background ?? surface
+
+        let foreground =
+            sourceInk.map { $0.compositing(alpha, over: destinationInk) } ?? destination?.foreground
+        let background =
+            source.background.map { $0.compositing(alpha, over: destinationField) }
+            ?? destination?.background
+
+        // Only the glyph needs a DECISION, because a cell can hold one and
+        // the contest is between GLYPHS: the cell shows whichever side paints
+        // one, and where both do, ½ decides. A side painting no glyph is not a
+        // candidate — it has nothing to draw, and "drawing" it would mean
+        // erasing the side that does.
+        let sourcePaintsInk = source.character != " " || source.style.paintsInkOnBlankCell
+        let destinationPaintsInk =
+            destination.map { $0.character != " " || $0.style.paintsInkOnBlankCell } ?? false
+        let sourceDraws = sourcePaintsInk && (!destinationPaintsInk || alpha >= 0.5)
+        // Weight cannot blend — bold, underline and their kin are on or off —
+        // so the non-colour styling comes from whichever side drew the glyph.
+        var result = sourceDraws ? source : (destination ?? RowCell(character: " ", style: SGRState()))
         result.foreground = foreground
         result.background = background
-        result.style = source.style.settingForeground(foreground).settingBackground(background)
+        result.style = result.style.settingForeground(foreground).settingBackground(background)
         return result
     }
 

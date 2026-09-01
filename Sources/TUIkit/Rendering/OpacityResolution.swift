@@ -11,32 +11,30 @@
 //  the reasoning behind picking it, is in `Documentation/Opacity as
 //  composition.md` §6a; in short:
 //
+//  * **each channel blends with its own counterpart, independently**: the
+//    source's ink toward what the destination shows where a glyph draws, and
+//    the source's background toward what it shows where none does. The two
+//    channels never mix, so nothing has to estimate how much of a cell a
+//    glyph inks;
+//  * **both channels are read the same way on both sides**, so a space is not
+//    a case of its own: a cell shows its ink where its glyph draws and its
+//    FIELD where none does. A label thinning out over an empty page fades
+//    into that page; a veil's blank cell covers the text under it exactly as
+//    much as the field around it, so both channels move toward the veil by
+//    the same alpha; over a `█`-drawn swatch the ink channel blends toward the
+//    swatch's own colour;
+//  * **a channel the source states nothing in is left exactly as it was.**
+//    That is emptiness rather than blankness — a layer with no background of
+//    its own tints no field, and a cell that paints nothing at all composites
+//    nothing at all, which is what keeps a faded `VStack`'s padding
+//    transparent instead of a rectangle punched through the page;
 //  * **the ½ threshold decides a glyph CONTEST, and only applies where there
 //    is one**: over a blank destination cell the source's character draws at
-//    any alpha, fading continuously toward what is behind it; where the
-//    destination has a character of its own, at or above ½ the source's
-//    character is drawn and below ½ the destination keeps its own — under the
-//    same field composite a space gets, so the veil tints evenly. At 0 the
-//    source contributes nothing at all, so `opacity(0)` genuinely reveals what
-//    is behind it rather than painting a near-black smudge over it;
-//  * **a drawn source character blends both channels** — foreground AND
-//    background — toward the AVERAGE colour of what is behind it: the
-//    destination cell's field and its ink, mixed by the ink's estimated
-//    coverage (`Character.inkCoverage`). Over text the average is nearly all
-//    field; over a block-drawn swatch it is the swatch's colour;
-//  * **matching characters cross-fade in parallel**: where both sides hold the
-//    same character there is no contest, so foreground blends toward
-//    foreground and background toward background, continuously through every
-//    alpha — a colour change on unchanged text is exact;
-//  * **a source SPACE is not a glyph**: it composites its background — at
-//    EVERY alpha, because colours blend at any strength and only glyphs need
-//    the threshold — and keeps the destination's character. Without this,
-//    fading a `VStack` would blank the whole rectangle it occupies, because
-//    most of what a layer contributes is spaces;
-//  * **the destination's foreground is left alone.** A translucent pane over
-//    text does not tint that text; the text keeps its colour and the surface
-//    behind it changes. That is the deliberate simplification — tinting reads
-//    prettily in a GUI and illegibly in a cell grid.
+//    any alpha; a source space is not a contest either, so the destination
+//    keeps its character at every alpha; where both sides paint ink, at or
+//    above ½ the source's character is drawn and below ½ the destination's is.
+//    At 0 the source contributes nothing at all, so `opacity(0)` genuinely
+//    reveals what is behind it.
 //
 //  Created by Wade Tregaskis
 //  Created by Wade Tregaskis
