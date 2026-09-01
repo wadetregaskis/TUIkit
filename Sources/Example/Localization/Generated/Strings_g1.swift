@@ -109,6 +109,7 @@ extension ExampleStrings {
             "page.colors.section.gradientStyles": "Gradients as styles",
             "page.colors.gradientStyle.perLeaf": "one view runs the whole ramp inside itself",
             "page.colors.gradientStyle.spanning": "…or one ramp spanning a set of them:",
+            "page.colors.gradientStyle.geometries": "the four geometries, each over the same two colours:",
             "page.colors.gradientStyle.background": "a gradient behind the words, not in them",
 
             // page.containers
@@ -377,6 +378,7 @@ extension ExampleStrings {
             "page.colors.section.gradientStyles": "Verläufe als Stile",
             "page.colors.gradientStyle.perLeaf": "eine Ansicht durchläuft den ganzen Verlauf in sich",
             "page.colors.gradientStyle.spanning": "…oder ein Verlauf über mehrere hinweg:",
+            "page.colors.gradientStyle.geometries": "die vier Geometrien, jede über dieselben zwei Farben:",
             "page.colors.gradientStyle.background": "ein Verlauf hinter den Wörtern, nicht in ihnen",
 
             // page.containers
@@ -645,6 +647,7 @@ extension ExampleStrings {
             "page.colors.section.gradientStyles": "Dégradés comme styles",
             "page.colors.gradientStyle.perLeaf": "une vue parcourt tout le dégradé en elle-même",
             "page.colors.gradientStyle.spanning": "…ou un dégradé s'étendant sur plusieurs :",
+            "page.colors.gradientStyle.geometries": "les quatre géométries, chacune sur les deux mêmes couleurs :",
             "page.colors.gradientStyle.background": "un dégradé derrière les mots, pas dedans",
 
             // page.containers
@@ -913,6 +916,7 @@ extension ExampleStrings {
             "page.colors.section.gradientStyles": "Sfumature come stili",
             "page.colors.gradientStyle.perLeaf": "una vista percorre l'intera sfumatura al suo interno",
             "page.colors.gradientStyle.spanning": "…oppure una sfumatura che ne attraversa diverse:",
+            "page.colors.gradientStyle.geometries": "le quattro geometrie, ciascuna sugli stessi due colori:",
             "page.colors.gradientStyle.background": "una sfumatura dietro le parole, non dentro",
 
             // page.containers
@@ -1181,6 +1185,7 @@ extension ExampleStrings {
             "page.colors.section.gradientStyles": "Degradados como estilos",
             "page.colors.gradientStyle.perLeaf": "una vista recorre todo el degradado en sí misma",
             "page.colors.gradientStyle.spanning": "…o un degradado que abarca varias:",
+            "page.colors.gradientStyle.geometries": "las cuatro geometrías, cada una sobre los mismos dos colores:",
             "page.colors.gradientStyle.background": "un degradado detrás de las palabras, no en ellas",
 
             // page.containers
@@ -1449,6 +1454,7 @@ extension ExampleStrings {
             "page.colors.section.gradientStyles": "渐变作为样式",
             "page.colors.gradientStyle.perLeaf": "单个视图内部走完整个渐变",
             "page.colors.gradientStyle.spanning": "……或让一个渐变横跨多个视图：",
+            "page.colors.gradientStyle.geometries": "四种几何形态，都使用相同的两种颜色：",
             "page.colors.gradientStyle.background": "渐变在文字后面，而不是在文字里",
 
             // page.containers
@@ -1717,6 +1723,7 @@ extension ExampleStrings {
             "page.colors.section.gradientStyles": "スタイルとしてのグラデーション",
             "page.colors.gradientStyle.perLeaf": "1 つのビューがその中で全体をたどります",
             "page.colors.gradientStyle.spanning": "…または複数のビューにまたがる 1 つのグラデーション:",
+            "page.colors.gradientStyle.geometries": "4 つのジオメトリ、いずれも同じ 2 色で:",
             "page.colors.gradientStyle.background": "文字の中ではなく、文字の背後のグラデーション",
 
             // page.containers

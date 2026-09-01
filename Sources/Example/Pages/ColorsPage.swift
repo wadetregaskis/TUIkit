@@ -113,29 +113,40 @@ struct ColorsPage: View {
                                 startPoint: .leading, endPoint: .trailing))
 
                     // The four geometries answer one question differently:
-                    // given a cell, how far along the ramp is it?
-                    HStack(spacing: 2) {
-                        GeometryBlock(
-                            name: "linear",
-                            style: AnyShapeStyle(
+                    // given a cell, how far along the ramp is it? Two across
+                    // rather than four, because the answer only becomes
+                    // legible at a size — a sweep across twelve cells by four
+                    // is a smear, and the block has to be big enough that a
+                    // circle looks like one.
+                    Text("page.colors.gradientStyle.geometries")
+                        .foregroundStyle(.palette.foregroundSecondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 2) {
+                            // The direction is in the name because it is the
+                            // point: a linear ramp's axis is any two points,
+                            // and a diagonal one is the case that shows it.
+                            // Unlabelled, the diagonal reads as a mistake.
+                            GeometryBlock(name: "linear ↘") {
                                 LinearGradient(
                                     colors: Self.warm, startPoint: .topLeading,
-                                    endPoint: .bottomTrailing)))
-                        GeometryBlock(
-                            name: "radial",
-                            style: AnyShapeStyle(
+                                    endPoint: .bottomTrailing)
+                            }
+                            GeometryBlock(name: "radial") {
                                 RadialGradient(
                                     colors: Self.warm, center: .center, startRadius: 0,
-                                    endRadius: 6)))
-                        GeometryBlock(
-                            name: "elliptical",
-                            style: AnyShapeStyle(EllipticalGradient(colors: Self.warm)))
-                        GeometryBlock(
-                            name: "angular",
-                            style: AnyShapeStyle(
+                                    endRadius: GeometryBlockSize.width / 2)
+                            }
+                        }
+                        HStack(spacing: 2) {
+                            GeometryBlock(name: "elliptical") {
+                                EllipticalGradient(colors: Self.warm)
+                            }
+                            GeometryBlock(name: "angular") {
                                 AngularGradient(
                                     gradient: Gradient(colors: Self.warm + [Self.warm[0]]),
-                                    center: .center, angle: .zero)))
+                                    center: .center, angle: .zero)
+                            }
+                        }
                     }
                 }
             }
@@ -155,22 +166,34 @@ extension ColorsPage {
     fileprivate static let warm: [Color] = [.rgb(255, 80, 80), .rgb(80, 160, 255)]
 }
 
-/// One geometry, painted over a block and named underneath.
+/// How big a geometry block is, outside the generic so a call site can reach it
+/// from inside its own `@ViewBuilder`.
+private enum GeometryBlockSize {
+    static let width = 25
+    static let height = 11
+}
+
+/// One geometry, painted as a block and named underneath.
 ///
-/// The block is a single multi-line `Text`, which is one leaf — so the ramp
-/// resolves over the whole rectangle rather than per row, which is what makes
-/// a radial gradient round instead of four independent stripes.
-private struct GeometryBlock: View {
+/// The block is the gradient **itself**, used where a view goes — the four
+/// geometries all conform to `View` and fill the space they are offered, so
+/// there is nothing here to draw with. It used to be a wall of `█` under a
+/// `.foregroundStyle`, which painted the same ramp onto glyphs rather than
+/// into the field, and needed the reader to know that the glyphs were scenery.
+///
+/// The size is the demo. A geometry is a rule about where a cell sits in a
+/// rectangle, so a rectangle too small has nothing to say: at twelve cells by
+/// four the sweep and the diagonal were indistinguishable smears. 25 × 11 is
+/// odd in both axes, which puts `.center` exactly on the middle cell, and
+/// about square once the 2:1 cell aspect is counted — so the round geometries
+/// come out round.
+private struct GeometryBlock<Style: View>: View {
     let name: String
-    let style: AnyShapeStyle
+    @ViewBuilder let style: Style
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(
-                verbatim: Array(repeating: String(repeating: "█", count: 12), count: 4)
-                    .joined(separator: "\n")
-            )
-            .foregroundStyle(style)
+            style.frame(width: GeometryBlockSize.width, height: GeometryBlockSize.height)
             Text(verbatim: name)
                 .foregroundStyle(.palette.foregroundSecondary)
         }
