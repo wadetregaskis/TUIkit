@@ -96,6 +96,42 @@ extension ItemListHandler {
         return source
     }
 
+    /// Whether this frame draws a landing slot for a reorder of its own.
+    ///
+    /// Exactly the condition ``reorderDrawnRows(_:excluding:)`` inserts one
+    /// under, asked separately because the SCROLL arithmetic needs it before
+    /// the rows are drawn: a slot occupies a line, and the rows the drag took
+    /// out give their lines back, so a window that counted neither is a window
+    /// that overruns by one entry — and the overrun is clipped away from the
+    /// slot, which means it comes out of a real row.
+    var reorderDrawsSlot: Bool { reorderRemovedRow != nil && reorderPlaceholder != nil }
+
+    /// Whether the landing slot this frame draws needs a line of its OWN.
+    ///
+    /// A reorder takes its rows out of the drawing and their lines pay for the
+    /// slot — but only the rows that are ON SCREEN can pay. Auto-scrolling
+    /// toward the end carries them out of the window, and from there the slot
+    /// is unfunded: the drawing overruns by one entry, the overrun is clipped
+    /// away from the slot (deliberately — it is the only thing on screen saying
+    /// where the rows will land), and so it comes out of a REAL row. The last
+    /// row then vanishes with no indicator saying it is there, and "after the
+    /// last row" cannot be pointed at: the furthest the pointer can aim is the
+    /// second-last line.
+    ///
+    /// `_ListCore.borrowsDropRow` reached the same conclusion by the same route
+    /// for a `.draggable` row of the list's own; this is the reorder twin of
+    /// it, and it lives here because both `List` and `Table` need it.
+    ///
+    /// Asked of ``visibleRange`` — the viewport the last frame settled — because
+    /// the answer FEEDS the budget this frame's window is computed from. The
+    /// two agree except at the boundary, where being one row out costs one
+    /// reserved line, a state the overflow machinery already expresses.
+    var reorderSlotNeedsALine: Bool {
+        guard reorderDrawsSlot else { return false }
+        let window = visibleRange
+        return !reorderRemovedRows.contains(where: window.contains)
+    }
+
     /// EVERY row the drag has taken out of the list — the whole selection when
     /// one was picked up. ``reorderRemovedRow`` is the one of them the pointer
     /// grabbed, which is what the float and the faint copy show; this is what
@@ -753,7 +789,10 @@ extension ItemListHandler {
         defer { retargetForAutoScroll() }
         visibleRowBandsOffset = scrollOffset
         let placeholder = reorderPlaceholder
-        visibleRowBands = bands.map { band in
+        /// The drawn position of the last ROW seen so far — what a slot drawn
+        /// after it can honestly name. See the `.slot` case.
+        var lastRowDrop: Int?
+        visibleRowBands = bands.enumerated().map { index, band in
             switch band.entry {
             case .row(let rowIndex):
                 // A real row means "put it where this row is" — as the row is
@@ -761,21 +800,37 @@ extension ItemListHandler {
                 // closed up behind the dragged row and opened a slot elsewhere,
                 // so the two differ, and it is the drawn position the pointer is
                 // actually resting on.
+                let drop = reorderDrawnPosition(of: rowIndex)
+                lastRowDrop = drop
                 return RowBand(
                     rowIndex: rowIndex, yStart: band.yStart, height: band.height,
-                    isContent: true, dropIndex: reorderDrawnPosition(of: rowIndex))
+                    isContent: true, dropIndex: drop)
             case .slot:
                 // The gap holds the target it already has. It is the line the
                 // pointer rests on after every step, so reading it as "off the
                 // rows" is what made a `.cursor` drag cancel its own gap.
+                //
+                // …but never a target the DRAWING cannot honour. Auto-scroll
+                // carries the target along with the rows
+                // (``carryReorderTargetThroughAutoScroll``) and the retarget's
+                // clamp lands on this very band, so nothing opposes the carry
+                // once the gap is the last entry: the target walks on down the
+                // data while the gap stays where the window ends, and the drop
+                // lands past the row the gap is drawn under. A gap drawn LAST
+                // means "after the row above me", and says so.
+                let honest =
+                    placeholder != nil && index == bands.count - 1
+                    ? lastRowDrop.map { $0 + 1 } : nil
                 return RowBand(
                     rowIndex: Self.reorderSlotRowIndex, yStart: band.yStart,
                     height: band.height, isContent: false,
                     // `externalDropSlot` for a drag from elsewhere: that slot is
                     // where the pointer rests after every step too, and reading
                     // it as "off the rows" sent the gap to the end of the list
-                    // and back on alternate mouse reports.
-                    dropIndex: placeholder?.slot ?? externalDropSlot)
+                    // and back on alternate mouse reports. It carries nothing,
+                    // so it cannot outrun the drawing and takes no correction.
+                    dropIndex: honest.map { min($0, placeholder?.slot ?? $0) }
+                        ?? placeholder?.slot ?? externalDropSlot)
             case .chrome(let rowIndex):
                 return RowBand(
                     rowIndex: rowIndex, yStart: band.yStart, height: band.height,

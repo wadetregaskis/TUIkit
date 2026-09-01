@@ -1098,7 +1098,11 @@ where Value.ID: Hashable {
         // nothing left to make room for, so the rows are budgeted the content
         // area minus it and ``ItemListHandler/extent`` gains the row that lets
         // the viewport reach past the last one.
-        handler.dropSlotAddsRow = handler.externalDropSlot != nil
+        // A landing slot occupies a line whoever opened it. A drag of this
+        // control's OWN rows pays for it with the lines those rows gave up —
+        // but only while they are in the window, so the borrow is asked for
+        // either way and `rowSpan(from:drawing:)` hands the lines back.
+        handler.dropSlotAddsRow = handler.externalDropSlot != nil || handler.reorderSlotNeedsALine
         handler.syncReturningRows(with: context.environment.dragAndDropSession)
         let rowArea = max(1, contentHeight - (handler.dropSlotAddsRow ? 1 : 0))
         // The FULL area, not `rowArea`: `dropSlotAddsRow` is already set above,
@@ -1734,7 +1738,11 @@ where Value.ID: Hashable {
         // nothing left this table to make room for it. `Table` has no
         // same-table case to exclude: its rows are built from `data`, so they
         // cannot be `.draggable`.
-        handler.dropSlotAddsRow = handler.externalDropSlot != nil
+        // A landing slot occupies a line whoever opened it. A drag of this
+        // control's OWN rows pays for it with the lines those rows gave up —
+        // but only while they are in the window, so the borrow is asked for
+        // either way and `rowSpan(from:drawing:)` hands the lines back.
+        handler.dropSlotAddsRow = handler.externalDropSlot != nil || handler.reorderSlotNeedsALine
         handler.syncReturningRows(with: context.environment.dragAndDropSession)
         let overflowing = overflows(handler.dropSlotAddsRow ? 1 : 0)
         // Clamp against the largest possible visible-row count (one

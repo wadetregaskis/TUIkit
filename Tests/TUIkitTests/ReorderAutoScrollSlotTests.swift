@@ -307,4 +307,82 @@ struct ReorderAutoScrollSlotTests {
         let detail = "a landed at \(landed), \(underPointer) (under the pointer) at \(target)"
         #expect(landed == target + 1, "\(detail): \(fixture.rows)")
     }
+
+    // MARK: - The end of the control
+
+    /// The rows the drag is carrying pay for the landing slot with the lines
+    /// they gave up — until auto-scroll carries them off the screen, after
+    /// which the slot needs a line of its own
+    /// (``ItemListHandler/reorderSlotNeedsALine``). Without one the drawing
+    /// overruns by a line, the overrun is clipped away from the slot, and so it
+    /// comes out of a REAL row: the last row of the control vanishes with
+    /// nothing saying it is there, and the position after it — "move this to
+    /// the end", the destination the gesture is most often for — cannot be
+    /// pointed at.
+    ///
+    /// Asserted on all three: the last row is drawn, the gap is below it, and
+    /// the release actually lands there. The first alone passes on a table that
+    /// simply stopped scrolling one row early.
+    @Test("A drag auto-scrolled to the end can still land after the last row")
+    func autoScrollReachesTheEndOfATable() {
+        let names = "abcdefghij".map(String.init)
+        let fixture = Fixture(rows: names, feedback: .cursor)
+
+        var buffer = fixture.render()
+        guard let start = fixture.lineOf(buffer, "a") else {
+            Issue.record("row a is drawn: \(buffer.lines.map(\.stripped))")
+            return
+        }
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: start))
+        buffer = fixture.render()
+        let edge = max(0, buffer.lines.count - 2)
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: edge))
+        buffer = fixture.render()
+        for tick in 0...12 {
+            fixture.session.driveAutoScroll(nowNanos: UInt64(tick) &* 1_000_000_000)
+            buffer = fixture.render()
+        }
+
+        let screen = buffer.lines.map(\.stripped)
+        #expect(fixture.lineOf(buffer, "j") != nil, "the last row is on screen: \(screen)")
+        #expect(
+            fixture.slotLine(buffer) == fixture.lastRowLine(buffer).map { $0 + 1 },
+            "the gap is below the last row: \(screen)")
+
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: edge))
+        fixture.render()
+        #expect(fixture.rows.last == "a", "a landed at the end: \(fixture.rows)")
+    }
+
+    /// The `List` twin — the rule is the handler's, and both views ask it.
+    @Test("A List drag auto-scrolled to the end can still land after the last row")
+    func autoScrollReachesTheEndOfAList() {
+        let names = "abcdefghij".map(String.init)
+        let fixture = ListFixture(rows: names, feedback: .cursor)
+
+        var buffer = fixture.render()
+        guard let start = fixture.lineOf(buffer, "a") else {
+            Issue.record("row a is drawn: \(buffer.lines.map(\.stripped))")
+            return
+        }
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: start))
+        buffer = fixture.render()
+        let edge = max(0, buffer.lines.count - 2)
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: edge))
+        buffer = fixture.render()
+        for tick in 0...12 {
+            fixture.session.driveAutoScroll(nowNanos: UInt64(tick) &* 1_000_000_000)
+            buffer = fixture.render()
+        }
+
+        let screen = buffer.lines.map(\.stripped)
+        #expect(fixture.lineOf(buffer, "j") != nil, "the last row is on screen: \(screen)")
+        #expect(
+            fixture.slotLine(buffer) == fixture.lastRowLine(buffer).map { $0 + 1 },
+            "the gap is below the last row: \(screen)")
+
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: edge))
+        fixture.render()
+        #expect(fixture.rows.last == "a", "a landed at the end: \(fixture.rows)")
+    }
 }

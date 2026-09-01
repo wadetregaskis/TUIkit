@@ -712,7 +712,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         _ source: RowSource<SelectionValue>,
         handler: ItemListHandler<SelectionValue>, context: RenderContext
     ) -> Bool {
-        guard handler.externalDropSlot != nil else { return false }
+        // A reorder of this list's OWN rows asks the same question about the
+        // same line, and answers it the same way — see
+        // ``ItemListHandler/reorderSlotNeedsALine``, which is the twin of the
+        // paragraph below and is shared with `Table`.
+        guard handler.externalDropSlot != nil else { return handler.reorderSlotNeedsALine }
         // A drag that started HERE has already had its row taken out of the
         // drawing (see `decorateForReorder`), so its slot replaces a line
         // rather than adding one.
