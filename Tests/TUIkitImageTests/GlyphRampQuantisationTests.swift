@@ -81,28 +81,38 @@ struct GlyphRampQuantisationTests {
 
     // MARK: - The block-eighths ramp
 
-    /// How much of its cell each block eighth inks, in eighths. A luminance
-    /// ramp is only a ramp if this never goes backwards along it.
+    /// How much of its cell each block eighth inks, in eighths.
     private static let eighths: [Character: Int] = [
         "▏": 1, "▎": 2, "▍": 3, "▌": 4, "▋": 5, "▊": 6, "▉": 7, "█": 8,
         "▁": 1, "▂": 2, "▃": 3, "▄": 4, "▅": 5, "▆": 6, "▇": 7,
     ]
 
-    @Test(".blocks(.ramp) never gets darker as the image gets brighter")
-    func blockRampIsMonotoneInInk() {
+    @Test(".blocks(.ramp) stylises rather than reproduces tone")
+    func blockRampIsStylised() {
         let converter = ASCIIConverter(
             characterSet: .blocks(.ramp), colorMode: .mono, supersampling: 1)
         let line = plain(converter.convert(gradient(width: 120, height: 2), width: 60, height: 1)[0])
         let coverage = line.compactMap { Self.eighths[$0] }
         #expect(coverage.count == line.count, "every glyph is a block eighth: |\(line)|")
-        // Listed in code point order the eighths run ▁▂▃▄▅▆▇█▉▊▋▌▍▎▏, whose
-        // coverage rises to full and falls back to an eighth; used as a ramp
-        // that paints the BRIGHTEST pixels with the thinnest glyphs. This is
-        // the property that ordering by ink buys, and the only one that
-        // distinguishes the two orderings.
-        #expect(zip(coverage, coverage.dropFirst()).allSatisfy { $0 <= $1 },
-                "coverage never decreases across a black → white gradient: \(coverage)")
-        #expect(coverage.first == 1 && coverage.last == 8, "both ends are reached: \(coverage)")
+
+        // The glyphs are in code point order — the bottom eighths filling up
+        // to █, then the left eighths emptying back down to ▏ — so across a
+        // black → white gradient ink rises to full at the middle and falls
+        // away, painting highlights as fine vertical rules. Interleaving the
+        // two families would make this monotone and faithful; the style is
+        // chosen for the effect, so a "fix" that sorts by ink fails here.
+        let peak = coverage.firstIndex(of: 8)
+        #expect(peak != nil, "the ramp reaches full ink: \(coverage)")
+        #expect(coverage.first == 1 && coverage.last == 1,
+                "both ends are an eighth of ink: \(coverage)")
+        if let peak {
+            let rise = coverage[..<peak], fall = coverage[peak...]
+            #expect(zip(rise, rise.dropFirst()).allSatisfy { $0 <= $1 },
+                    "ink rises to the peak: \(Array(rise))")
+            #expect(zip(fall, fall.dropFirst()).allSatisfy { $0 >= $1 },
+                    "ink falls away after it: \(Array(fall))")
+            #expect(peak > 0 && peak < coverage.count - 1, "the peak is interior: \(peak)")
+        }
     }
 
     @Test(".blocks(.ramp) offers more levels than .coarse")

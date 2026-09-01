@@ -80,23 +80,22 @@ public enum ASCIICharacterSet: Sendable, Equatable {
         /// The highest spatial resolution.
         case braille
 
-        /// The fifteen block-element eighths (`▏▁▎▂▍▃▌▄▋▅▊▆▉▇█`) mapped from
+        /// The fifteen block-element eighths (`▁▂▃▄▅▆▇█▉▊▋▌▍▎▏`) mapped from
         /// luminance, one image pixel per cell — ``coarse`` with three times
         /// the levels, and the same lack of any need for colour.
         ///
-        /// Ordered by ink coverage rather than by code point, which is the
-        /// one thing about it that is not obvious. Listed in code point order
-        /// the eighths run `▁▂▃▄▅▆▇█▉▊▋▌▍▎▏` — bottom-filling from an eighth
-        /// to full, then left-filling from seven eighths back down to one —
-        /// so coverage rises to `█` and falls away again. A luminance ramp
-        /// indexes by brightness, so a ramp that is not monotone in ink paints
-        /// the brightest pixels with the thinnest glyphs. Interleaving the two
-        /// families keeps every step non-decreasing: `▏▁` are both an eighth,
-        /// `▎▂` both a quarter, and so on up to `█`.
+        /// In code point order, which is deliberately not ink order: the
+        /// bottom eighths fill upward to `█`, then the left eighths empty back
+        /// down to `▏`. Coverage therefore peaks in the middle of the ramp and
+        /// falls away, and since a luminance ramp indexes by brightness, this
+        /// paints mid-tones solid and returns highlights as fine vertical
+        /// rules. That is the effect the style is for — it stylises the
+        /// picture rather than reproducing its tone.
         ///
-        /// Eight distinct densities across fifteen glyphs, so adjacent levels
-        /// differ in the orientation of their ink rather than the amount of
-        /// it — which is the texture this style is for.
+        /// Interleaving the two families (`▏▁▎▂▍▃▌▄▋▅▊▆▉▇█`) would make
+        /// coverage monotone and reproduce tone faithfully. It is the obvious
+        /// correction to make here and it is not one; `blockRampIsStylised`
+        /// fails if someone makes it.
         case ramp
     }
 
@@ -723,8 +722,9 @@ extension ASCIIConverter {
         case .blocks(.coarse):
             return Array(" ░▒▓█")
         case .blocks(.ramp):
-            // Ink-coverage order, not code point order — see `BlockStyle.ramp`.
-            return Array("▏▁▎▂▍▃▌▄▋▅▊▆▉▇█")
+            // Code point order, not ink order, and deliberately — see
+            // `BlockStyle.ramp`.
+            return Array("▁▂▃▄▅▆▇█▉▊▋▌▍▎▏")
         case .customRamp(let ramp):
             // Caller-supplied, ordered light → dense by contract; an empty
             // ramp falls back to a 10-level calibrated ASCII ramp.
