@@ -12,7 +12,7 @@ import TUIkitStyling
 /// ``Gradient``s TUIkit paints with (``TrackConfiguration``'s `fillGradient`,
 /// `.threeSegment`'s ``SegmentColoring/gradient(_:)``, the indeterminate
 /// `IndeterminateStyle.gradient(_:)` sweep, and anything given to
-/// ``View/foregroundStyle(_:)``).
+/// ``View/foregroundStyle(_:)-(S)``).
 ///
 /// A gradient is colours at positions, interpolated piecewise; the editor
 /// shows that exact interpolation live in its preview strip, positions

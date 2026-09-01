@@ -66,7 +66,7 @@ extension View {
     ///   background of its own has none to paint with, so what is behind it
     ///   shows through at every value including `1` — which is what makes the
     ///   top of the range continuous with the rest of it, and is the same thing
-    ///   ``View/background(_:)`` does one level down. What an opaque layer does
+    ///   ``View/background(_:)-(S)`` does one level down. What an opaque layer does
     ///   win outright is the character: a blank cell *with* a background hides
     ///   what is behind it, where a translucent one would have tinted it.
     ///

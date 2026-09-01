@@ -33,7 +33,7 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
         /// A lit run with a fading trail travels the track and wraps.
         case sweep
         /// The fill pattern shifts one cell per step, its glyphs coloured in
-        /// turn from ``IndeterminateConfiguration/colors`` — diagonal stripes
+        /// turn from ``IndeterminateConfiguration/gradient`` — diagonal stripes
         /// that appear to scroll.
         case barberPole
         /// The whole track breathes between the two ends of the ramp.
@@ -101,8 +101,8 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     ///   - motion: What the animation does.
     ///   - fill: The lit pattern (see ``fill``).
     ///   - empty: The unlit pattern (see ``empty``).
-    ///   - colors: The colours the motion draws from, or `nil` for the
-    ///     control's own.
+    ///   - gradient: The ramp the motion draws from, or `nil` for the
+    ///     control's own colours.
     ///   - period: Seconds for one full pass.
     ///   - extent: The lit run's length as a fraction of the track.
     public init(

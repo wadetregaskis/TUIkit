@@ -26,7 +26,7 @@ import TUIkitStyling
 ///
 /// SwiftUI's radii are `CGFloat` lengths. Here they are `Int` **cells**,
 /// because every other dimension in this framework is
-/// (``View/frame(width:height:)``) and a fractional radius has nothing to
+/// (``View/frame(width:height:alignment:)``) and a fractional radius has nothing to
 /// round to on a character grid.
 ///
 /// A cell is about twice as tall as it is wide, so a radius counted equally in

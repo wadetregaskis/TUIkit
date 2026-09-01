@@ -156,7 +156,7 @@ extension Color {
     ///
     /// `+0.15` in lightness is the single-parameter fit to that set, and hue
     /// and saturation are held — which is what
-    /// ``Color/ensuringContrast(against:minimum:)`` also does when it has to
+    /// ``Color/ensuringContrast(atLeast:against:)`` also does when it has to
     /// move a colour, so the framework moves colours one way rather than two.
     /// SwiftUI additionally moves saturation, by an amount that is not one
     /// number (it rose for the blue and fell for the green); black is the row

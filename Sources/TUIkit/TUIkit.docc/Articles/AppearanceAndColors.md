@@ -99,8 +99,8 @@ let darker = color.darker(by: 0.3)    // 30% darker
 
 ### Gradients
 
-Anywhere a colour is painted, a gradient goes instead: ``View/foregroundStyle(_:)``
-and ``View/background(_:)`` take any ``ShapeStyle``, and ``LinearGradient``,
+Anywhere a colour is painted, a gradient goes instead: ``View/foregroundStyle(_:)-(S)``
+and ``View/background(_:)-(S)`` take any ``ShapeStyle``, and ``LinearGradient``,
 ``RadialGradient``, ``EllipticalGradient`` and ``AngularGradient`` are
 SwiftUI's own types with SwiftUI's own initialisers.
 
@@ -180,7 +180,7 @@ behind its glyphs, because a cell's glyph and the colour behind it are two
 separate statements and text that sets only a foreground has said nothing about
 the second. A sibling that names its own background keeps that instead.
 
-``View/backgroundStyle(_:)`` names a surface for a subtree and
+``View/backgroundStyle(_:)-(S)`` names a surface for a subtree and
 ``View/background()`` paints whatever is in force, defaulting to the palette's
 own background:
 
@@ -298,7 +298,7 @@ func renderToBuffer(context: RenderContext) -> FrameBuffer {
 ## Text Styling
 
 Text emphasis can be applied per-``Text``, or **cascaded** to a whole subtree
-through the environment — exactly like ``View/foregroundStyle(_:)``.
+through the environment — exactly like ``View/foregroundStyle(_:)-(S)``.
 
 ### Per-Text
 

@@ -58,7 +58,7 @@ public struct Spacer: View, Equatable {
 /// SwiftUI's does: a horizontal rule in a column, a vertical one in a row,
 /// and horizontal anywhere that is not a stack. It draws in the palette's
 /// border colour by default — a separator is chrome, not content — and
-/// honours ``View/foregroundStyle(_:)`` when one is set.
+/// honours ``View/foregroundStyle(_:)-(S)`` when one is set.
 ///
 /// # Example
 ///

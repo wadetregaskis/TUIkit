@@ -204,7 +204,7 @@ extension View {
     }
 
     /// Fills this view's cells with the background style in force — from
-    /// ``View/backgroundStyle(_:)``, or the palette's own background where
+    /// ``View/backgroundStyle(_:)-(S)``, or the palette's own background where
     /// nothing has named one.
     ///
     /// SwiftUI's zero-argument `background()`, minus `ignoresSafeAreaEdges:`:

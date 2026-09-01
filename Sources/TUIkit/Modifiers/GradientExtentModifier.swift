@@ -9,7 +9,7 @@ import TUIkitStyling
 
 // MARK: - GradientExtent
 
-/// What a gradient given to ``View/foregroundStyle(_:)`` runs across.
+/// What a gradient given to ``View/foregroundStyle(_:)-(S)`` runs across.
 ///
 /// **TUI-specific.** SwiftUI has only the first of these: a gradient resolves
 /// against each leaf's own bounds, and there is no clean way to say "span this

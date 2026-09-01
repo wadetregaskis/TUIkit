@@ -491,7 +491,7 @@ extension Color {
     /// truncating biases every channel of every blend down by half a unit, and
     /// a "dim" derived by blending toward the background is therefore always a
     /// shade darker than it was asked to be. It also agreed with nothing else:
-    /// ``encodedChannel(_:)``, which is where the perceptual path and the
+    /// `encodedChannel`, which is where the perceptual path and the
     /// linear-light compositing path both come out, has always rounded. Two
     /// answers to the same question was the only reason for the difference.
     ///

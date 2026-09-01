@@ -58,8 +58,8 @@ need no type of your own:
 | ``View/offset(x:y:)`` | The displacement — layout is untouched, so this is the cheapest |
 | ``View/padding(_:_:)`` | The insets, and the layout around them |
 | ``View/frame(width:height:alignment:)`` | A **fixed** width and height |
-| ``View/foregroundStyle(_:)``, ``View/background(_:)``, ``View/border(_:style:width:)-(Color,_,_)`` | The colour |
-| A **gradient** given to ``View/foregroundStyle(_:)`` or ``View/background(_:)`` | Every stop's colour, every stop's location, and the geometry's own numbers |
+| ``View/foregroundStyle(_:)-(Color)``, ``View/background(_:)-(Color)``, ``View/border(_:style:width:)-(Color,_,_)`` | The colour |
+| A **gradient** given to ``View/foregroundStyle(_:)-(S)`` or ``View/background(_:)-(S)`` | Every stop's colour, every stop's location, and the geometry's own numbers |
 
 ```swift
 Text("Saved")

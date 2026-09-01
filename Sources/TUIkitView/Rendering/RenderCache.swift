@@ -123,7 +123,7 @@ public final class RenderCache: @unchecked Sendable {
     }
 
     /// A cached rendering result for a single view identity.
-    /// - Note: A `final class`, not a struct. Every ``lookup(identity:view:contextWidth:contextHeight:)``
+    /// - Note: A `final class`, not a struct. Every ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:)``
     ///   pulls an entry out of the dictionary — including the **reject** paths,
     ///   which discard it immediately — and a struct copy retains every
     ///   refcounted field: the snapshot existential plus the five arrays inside
@@ -316,7 +316,7 @@ public final class RenderCache: @unchecked Sendable {
         }
     }
 
-    /// What ``noteAppliedEnvironment(_:identity:keyPath:)`` found.
+    /// What ``noteAppliedEnvironment(_:identity:keyPath:depth:)`` found.
     public enum EnvironmentChange {
         /// Nothing was applied here before — nothing below can be stale.
         case first
@@ -471,7 +471,7 @@ extension RenderCache {
 
     /// Looks up a memoized *measurement* for an `EquatableView`.
     ///
-    /// The size twin of ``lookup(identity:view:contextWidth:contextHeight:)``:
+    /// The size twin of ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:)``:
     /// returns the cached ``ViewSize`` only when the view value compares equal
     /// and the proposal/available extent match. Value comparison is what makes
     /// this safe where an identity-only key is not — a hit means identical
@@ -516,7 +516,7 @@ extension RenderCache {
     /// The memoized measurement for `key`, or `nil` when there is none or the
     /// view value has changed.
     ///
-    /// The measure-side counterpart to ``lookup(identity:view:contextWidth:contextHeight:)``.
+    /// The measure-side counterpart to ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:)``.
     /// Both the key and the value are checked: `key` covers the identity and
     /// the proposal, and `view` — compared with `==` against the snapshot
     /// taken when the size was stored — covers the content, so a row whose
@@ -525,7 +525,7 @@ extension RenderCache {
     ///
     /// Unlike the buffer cache this is safe to populate from a measure pass:
     /// entries are keyed by proposal, so a measure cannot overwrite what a
-    /// render stored (see ``store(identity:view:buffer:contextWidth:contextHeight:)``,
+    /// render stored (see ``store(identity:view:buffer:contextWidth:contextHeight:gradientFrame:)``,
     /// which must not be called while measuring).
     ///
     /// - Parameters:

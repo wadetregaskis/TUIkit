@@ -98,7 +98,7 @@ private struct BackgroundStyleKey: EnvironmentKey {
 extension EnvironmentValues {
     /// What ``View/background()`` and ``BackgroundStyle`` paint with.
     ///
-    /// Set via ``View/backgroundStyle(_:)``; `nil` means nothing has been
+    /// Set via ``View/backgroundStyle(_:)-(S)``; `nil` means nothing has been
     /// stated and the palette's own background applies.
     ///
     /// A ``Paint`` rather than SwiftUI's `AnyShapeStyle?`, for the reason
@@ -116,7 +116,7 @@ extension View {
     ///
     /// It paints nothing by itself: it names what ``View/background()`` and
     /// the ``ShapeStyle/background`` style will use, the way
-    /// ``View/foregroundStyle(_:)`` names the ink rather than drawing it.
+    /// ``View/foregroundStyle(_:)-(S)`` names the ink rather than drawing it.
     ///
     /// ```swift
     /// VStack {
@@ -134,7 +134,7 @@ extension View {
     }
 
     /// The colour spelling, so `.backgroundStyle(.red)` keeps inferring — the
-    /// same `@_disfavoredOverload` pairing ``foregroundStyle(_:)`` needs, and
+    /// same `@_disfavoredOverload` pairing ``View/foregroundStyle(_:)-(S)`` needs, and
     /// for the same reason.
     @_disfavoredOverload
     public func backgroundStyle(_ style: Color) -> some View {
