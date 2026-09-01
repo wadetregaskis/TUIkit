@@ -132,9 +132,15 @@ struct ColorsPage: View {
                                     endPoint: .bottomTrailing)
                             }
                             GeometryBlock(name: "radial") {
+                                // The height, because a radius is horizontal
+                                // cells and a row is two of them: this is
+                                // exactly half the block's height on screen,
+                                // so the circle touches the top and bottom
+                                // edges and stops well short of the sides —
+                                // round in a box that is not.
                                 RadialGradient(
                                     colors: Self.warm, center: .center, startRadius: 0,
-                                    endRadius: GeometryBlockSize.width / 2)
+                                    endRadius: GeometryBlockSize.height)
                             }
                         }
                         HStack(spacing: 2) {
@@ -170,7 +176,16 @@ extension ColorsPage {
 /// from inside its own `@ViewBuilder`.
 private enum GeometryBlockSize {
     static let width = 25
-    static let height = 11
+
+    /// Deliberately NOT square once the 2:1 cell aspect is counted: 25 × 7 is
+    /// 25 × 14 on screen, a box half again as wide as it is tall.
+    ///
+    /// The block used to be 25 × 11 — visually square — and that made two of
+    /// the four geometries indistinguishable, because in a square box a
+    /// box-proportioned ellipse *is* a circle. Radial and elliptical differ
+    /// only in whether the box's proportions reach the ramp, so a square box
+    /// is precisely the one shape that hides the difference.
+    static let height = 7
 }
 
 /// One geometry, painted as a block and named underneath.
@@ -183,10 +198,10 @@ private enum GeometryBlockSize {
 ///
 /// The size is the demo. A geometry is a rule about where a cell sits in a
 /// rectangle, so a rectangle too small has nothing to say: at twelve cells by
-/// four the sweep and the diagonal were indistinguishable smears. 25 × 11 is
+/// four the sweep and the diagonal were indistinguishable smears. 25 × 7 is
 /// odd in both axes, which puts `.center` exactly on the middle cell, and
-/// about square once the 2:1 cell aspect is counted — so the round geometries
-/// come out round.
+/// oblong on screen rather than square — see ``GeometryBlockSize/height``,
+/// where the shape is the point rather than an accident of fitting.
 private struct GeometryBlock<Style: View>: View {
     let name: String
     @ViewBuilder let style: Style
