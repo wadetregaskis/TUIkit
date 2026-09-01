@@ -235,6 +235,11 @@ struct AnimationPage: View {
                     }
                 }
                 .frame(height: 1)
+                // Under the bar rather than beside it: the bar wants the width,
+                // and a track directly below one reads as driving it.
+                Slider(value: animatedFraction, in: 0...1, step: 0.01) {
+                    caption(L("page.animation.setFraction"))
+                }
                 HStack(spacing: 2) {
                     Button("page.animation.button.empty") {
                         withAnimation(animation) { fraction = 0 }
@@ -254,6 +259,25 @@ struct AnimationPage: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             }
         }
+    }
+
+    /// The bar's fraction, written the way the buttons write it — through
+    /// `withAnimation`, so the picture eases to wherever the pointer put it.
+    ///
+    /// A click on the track therefore animates. So does a drag, one pointer
+    /// cell at a time: each new position re-aims the animation still running
+    /// from the last, which is the one thing on this page you cannot see any
+    /// other way — every other demo here starts from rest.
+    ///
+    /// The thumb is always exact, because it is under the pointer; so the gap
+    /// between the thumb and the bar's end IS the animation, drawn to scale.
+    /// Whether a *press* could animate while a *drag* wrote straight through is
+    /// not something this page can ask: at the moment of the press nothing yet
+    /// knows whether the pointer is about to move.
+    private var animatedFraction: Binding<Double> {
+        Binding(
+            get: { fraction },
+            set: { newValue in withAnimation(animation) { fraction = newValue } })
     }
 
     private var atTheView: some View {
