@@ -124,11 +124,24 @@ struct FocusClockUnityTests {
 
     // MARK: - The two clocks
 
+    /// Waits for the timer to actually tick, rather than sleeping a fixed
+    /// span and hoping.
+    ///
+    /// The clock advances on a `Task` that sleeps 50 ms between ticks, and
+    /// under a full test run the main actor is contended enough that a fixed
+    /// 150 ms wait sometimes saw zero of them — these passed alone and failed
+    /// in the suite, which is the worst way for a test to be wrong.
+    private func awaitFirstTick(_ timer: CursorTimer) async {
+        for _ in 0..<200 where timer.elapsed(for: .content) == 0 {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
     @Test("Both clocks start together")
     func clocksAgreeBeforeAnyFocusChange() async {
         let timer = CursorTimer(renderNotifier: AppState())
         timer.start()
-        try? await Task.sleep(for: .milliseconds(150))
+        await awaitFirstTick(timer)
         #expect(timer.elapsed(for: .content) > 0, "the timer ran at all")
         #expect(timer.elapsed(for: .cursor) == timer.elapsed(for: .content))
         timer.stop()
@@ -138,7 +151,7 @@ struct FocusClockUnityTests {
     func focusRestartLeavesTheContentClockAlone() async {
         let timer = CursorTimer(renderNotifier: AppState())
         timer.start()
-        try? await Task.sleep(for: .milliseconds(150))
+        await awaitFirstTick(timer)
         // Read before restarting, and with no `await` between: this is the
         // main actor, so the timer's task cannot advance the clock in here.
         let content = timer.elapsed(for: .content)
@@ -161,7 +174,7 @@ struct FocusClockUnityTests {
     func stopZeroesBoth() async {
         let timer = CursorTimer(renderNotifier: AppState())
         timer.start()
-        try? await Task.sleep(for: .milliseconds(150))
+        await awaitFirstTick(timer)
         timer.restartFocusPhase()
         timer.stop()
         #expect(timer.elapsed(for: .content) == 0)
