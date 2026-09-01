@@ -130,6 +130,34 @@ extension EnvironmentValues {
     }
 }
 
+// MARK: - Row Selection Indicator Environment Key
+
+/// Environment key for the selected row's `●` marker.
+private struct RowSelectionIndicatorKey: EnvironmentKey {
+    static let defaultValue: Visibility = .automatic
+}
+
+extension EnvironmentValues {
+    /// Whether a `List` or `Table` marks its selected row with a `●` in the
+    /// gutter, in addition to the background highlight.
+    ///
+    /// - `.automatic` (default) and `.visible`: the mark is drawn, subject to
+    ///   ``unfocusedSelectionVisibility``.
+    /// - `.hidden`: it is not, and the highlight alone says which row is
+    ///   selected. For a table of glyphs — where every row already begins with
+    ///   a character the reader is there to look at — a second mark beside it
+    ///   is one mark too many.
+    ///
+    /// The gutter itself is still reserved, so rows stay aligned with the
+    /// header whichever way this is set.
+    ///
+    /// Set via ``View/rowSelectionIndicator(_:)``.
+    var rowSelectionIndicator: Visibility {
+        get { self[RowSelectionIndicatorKey.self] }
+        set { self[RowSelectionIndicatorKey.self] = newValue }
+    }
+}
+
 // MARK: - Unfocused Selection Visibility Environment Key
 
 /// Environment key for unfocused-selection-visibility configuration.

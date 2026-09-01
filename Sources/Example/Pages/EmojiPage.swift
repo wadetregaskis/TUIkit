@@ -161,6 +161,10 @@ struct EmojiPage: View {
                 TableColumn("page.emoji.column.description", value: \EmojiEntry.name)
                     .width(.flexible)
             }
+            // Every row here begins with the glyph the page is about, and a
+            // second mark beside it read as one mark too many. The highlight
+            // says which row is selected on its own.
+            .rowSelectionIndicator(.hidden)
         }
     }
 
@@ -196,6 +200,7 @@ struct EmojiPage: View {
                     TableColumn("page.emoji.column.description", value: \SymbolEntry.name)
                         .width(.flexible)
                 }
+                .rowSelectionIndicator(.hidden)
             }
         } else {
             ContentUnavailableView(

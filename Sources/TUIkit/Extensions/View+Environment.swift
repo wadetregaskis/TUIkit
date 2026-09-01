@@ -199,4 +199,25 @@ extension View {
     public func unfocusedSelectionVisibility(_ visibility: Visibility) -> some View {
         environment(\.unfocusedSelectionVisibility, visibility)
     }
+
+    /// Whether a `List` or `Table` marks the selected row with a `●` beside
+    /// it, or leaves the background highlight to say so on its own.
+    ///
+    /// # Example
+    ///
+    /// ```swift
+    /// Table(glyphs, selection: $selection) { … }
+    ///     .rowSelectionIndicator(.hidden)
+    /// ```
+    ///
+    /// TUI-specific: SwiftUI has no row marker to suppress. The gutter stays
+    /// reserved either way, so hiding the mark does not move the columns.
+    ///
+    /// - Parameter visibility: `.hidden` to leave the mark off; `.automatic`
+    ///   (the default) or `.visible` to draw it.
+    /// - Returns: A view with the row-selection-indicator visibility set on its
+    ///   environment.
+    public func rowSelectionIndicator(_ visibility: Visibility) -> some View {
+        environment(\.rowSelectionIndicator, visibility)
+    }
 }

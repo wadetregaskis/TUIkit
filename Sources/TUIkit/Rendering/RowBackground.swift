@@ -123,6 +123,10 @@ struct RowSelectionIndicator {
     ) -> Self {
         let blank = Self(glyph: " ", color: palette.foregroundTertiary)
         guard isSelected else { return blank }
+        // The caller asked for the highlight alone. Checked before anything
+        // else, because it is a statement about this control rather than about
+        // this row's state.
+        guard context.environment.rowSelectionIndicator != .hidden else { return blank }
         if isFocused { return Self(glyph: "●", color: palette.accent) }
         // Selected while the control itself does not have focus. `.hidden`
         // collapses the row's whole visual state into an unselected one — the

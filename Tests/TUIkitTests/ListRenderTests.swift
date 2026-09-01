@@ -242,6 +242,40 @@ struct ListRenderTests {
         )
     }
 
+    @Test(".rowSelectionIndicator(.hidden) leaves the highlight and drops the mark")
+    func hiddenRowSelectionIndicator() {
+        func render(_ visibility: Visibility) -> FrameBuffer {
+            renderToBuffer(
+                List(selection: .constant("Beta")) {
+                    ForEach(["Alpha", "Beta", "Gamma"], id: \.self) { Text($0) }
+                }
+                .rowSelectionIndicator(visibility),
+                context: listContext())
+        }
+        let shown = render(.automatic)
+        let hidden = render(.hidden)
+        let unselected = renderToBuffer(
+            List(selection: .constant(String?.none)) {
+                ForEach(["Alpha", "Beta", "Gamma"], id: \.self) { Text($0) }
+            },
+            context: listContext())
+
+        #expect(shown.lines[2].stripped.hasPrefix("│●"), "the control still marks by default")
+        #expect(
+            hidden.lines[2].stripped.hasPrefix("│ "),
+            "hidden left a mark: \(hidden.lines[2].stripped)")
+        // The gutter is still reserved, so hiding the mark does not move the
+        // label — which is the whole reason this is a visibility and not a
+        // narrower row.
+        #expect(hidden.lines[2].strippedLength == shown.lines[2].strippedLength)
+        #expect(hidden.lines[2].stripped == unselected.lines[2].stripped, "same glyphs")
+        // …and the row is still visibly the selected one, by its background
+        // alone. That is what makes dropping the mark reasonable.
+        #expect(
+            hidden.lines[2] != unselected.lines[2],
+            "the highlight went with the mark, which is not what was asked for")
+    }
+
     // MARK: Scrolling / overflow
 
     @Test("Overflowing list shows a 'more rows below' scroll indicator")
