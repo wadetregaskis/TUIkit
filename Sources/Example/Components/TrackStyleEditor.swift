@@ -44,7 +44,6 @@ struct TrackStyleEditor: View {
     /// Whether the unfilled half gets a colour of its own.
     @AppStorage("trackEditor.emptyTinted") private var emptyTinted = false
     /// Whether the unfilled half gets a gradient rather than a flat colour.
-    @AppStorage("trackEditor.emptyGradient") private var emptyGradientEnabled = false
     /// The unfilled gradient's stops. Default: a cool ramp, so it reads as the
     /// other half of the bar rather than as more fill.
     @AppStorage("trackEditor.emptyStops") private var emptyStopsRaw = "203050,2A4A78,3C6EA5"
@@ -149,10 +148,11 @@ struct TrackStyleEditor: View {
             // The unfilled half is stylable too: a flat colour of the style's
             // own, or a ramp across it. Its first stop doubles as the flat
             // colour so the two controls agree about what "tinted" means.
+            // Its first stop doubles as the flat colour, for the paths that
+            // take no gradient at all (a coarse multi-cell fill, or a track
+            // one cell wide).
             emptyColor: emptyTinted ? emptyStops.stops.first?.color : nil,
-            // Gated on the tint as well as on itself, so a persisted "on" from
-            // before the two were paired cannot outlive the toggle above it.
-            emptyGradient: emptyTinted && emptyGradientEnabled ? emptyStops : nil)
+            emptyGradient: emptyTinted ? emptyStops : nil)
     }
 
     /// A slowly-advancing fraction (0→1 over 50 s) for the preview bar.
@@ -209,19 +209,19 @@ struct TrackStyleEditor: View {
                 Button("component.trackEditor.editGradient") { editingGradient = true }
                     .disabled(!gradientEnabled)
                 Toggle("component.trackEditor.gradientSpansTrack", isOn: $gradientSpansTrack)
-                    .disabled(!gradientEnabled && !(emptyTinted && emptyGradientEnabled))
+                    .disabled(!gradientEnabled && !emptyTinted)
             }
             HStack(spacing: 2) {
+                // One toggle, not two. There used to be a "…with a gradient"
+                // beside this one, and all it did was choose between the
+                // stops and their FIRST colour — an Example-side gradient →
+                // flat conversion, not a different thing asked of the track.
+                // A one-stop gradient already IS a flat colour, everywhere
+                // from `GradientStopsCodec` to `TrackRenderer.gradientColor`,
+                // so the editor below expresses "flat" by holding one stop and
+                // the toggle has nothing left to say. This side now reads like
+                // the fill's row above it: tint or leave it to the control.
                 Toggle("component.trackEditor.emptyTinted", isOn: $emptyTinted)
-                // "…with a gradient" is a refinement of the tint, not a rival
-                // to it — its own label says so — and the renderer gives a
-                // gradient precedence over the flat colour. Left independent,
-                // the pair had a state in which the FIRST toggle did nothing
-                // at all: gradient on, tint off, and flipping "Tint the
-                // unfilled part" changed the bar not at all. So it disables
-                // with its parent, the way "Edit gradient…" does one row up.
-                Toggle("component.trackEditor.emptyGradient", isOn: $emptyGradientEnabled)
-                    .disabled(!emptyTinted)
                 Button("component.trackEditor.editEmptyGradient") { editingEmptyGradient = true }
                     .disabled(!emptyTinted)
             }
