@@ -811,10 +811,6 @@
       "how": "LabeledContent's body + Form pillar layout",
       "why": "/Users/robot/Documents/TUIkit/Sources/TUIkit/Views/LabeledContent.swift:44-49 (standalone: label leading, content trailing) and the columns/grouped Form layouts (Sources/TUIkit/Views/Form.swift) — the automatic behaviour ships, only unnamed."
     },
-    "BackgroundStyle": {
-      "how": "Palette.background (the ambient background role)",
-      "why": "/Users/robot/Documents/TUIkit/Sources/TUIkitStyling/Theme/Theme.swift:30. TUIkit has no ShapeStyle hierarchy at all, so the \"background material of the current context\" is a palette role read directly — it is also the colour `.opacity(_:)` blends toward (Sources/TUIkit/Modifiers/"
-    },
     "BorderedButtonStyle": {
       "how": "ButtonStyle.default / DefaultButtonStyle",
       "why": "/Users/robot/Documents/TUIkit/Sources/TUIkit/Views/Button.swift:55 — the default style draws the bracketed `▐ Label ▌`, which is the cell-grid form of a bordered button; selected with `.buttonStyle(.default)`."
@@ -887,10 +883,6 @@
       "how": "DragGestureEvent.Phase (.began/.moved/.ended)",
       "why": "/Users/robot/Documents/TUIkit/Sources/TUIkit/Extensions/View+Events.swift:239-260 — the transient per-gesture state a drag needs is held by DragGestureModifier (Sources/TUIkit/Modifiers/DragGestureModifier.swift:11-15) and handed to the closure with its start position and phase, "
     },
-    "Gradient": {
-      "how": "[Color] stops + TrackRenderer.gradientColor(stops:parameter:fallback:)",
-      "why": "TUIkit's gradient model is a plain [Color] interpolated per cell — Sources/TUIkit/Rendering/TrackRenderer.swift:133-145, documented as the single shared meaning of \"a gradient\". Surfaced as TrackConfiguration.fillGradient (Sources/TUIkit/Styles/TrackConfiguration.swift:80), Segme"
-    },
     "GraphicsContext": {
       "how": "FrameBuffer (+ RenderContext)",
       "why": "FrameBuffer is the drawing context: composited(with:at:) (Sources/TUIkitCore/Rendering/FrameBuffer.swift:584), replacingLines (:828), clamped(toWidth:height:) (:761) as the clip, and overlays/hitTestRegions/animatedCells (:135-150) as the layer/interaction/animation channels. DIV"
@@ -906,10 +898,6 @@
     "Image.Interpolation": {
       "how": "Int factor 1...4 on View.imageSupersampling(_:)",
       "why": "SwiftUI's .none/.low/.medium/.high becomes a clamped Int supersampling factor with a nil default that adapts to the ramp length (Sources/TUIkit/Views/Image.swift:336-340), alongside DitheringMode (.floydSteinberg/.none, Sources/TUIkitImage/ASCIIConverter.swift:169-175). The enum "
-    },
-    "LinearGradient": {
-      "how": "TrackConfiguration.fillGradient (the along-the-run fade)",
-      "why": "The per-cell linear fade exists and is computed exactly as a linear gradient: parameter = index / (litCellCount - 1) fed to gradientColor (Sources/TUIkit/Rendering/TrackRenderer.swift:222-236). DIVERGENCES: it is not a ShapeStyle or a View, it runs only along a track's axis (no s"
     },
     "LinearProgressViewStyle": {
       "how": "TrackStyle linear presets (e.g. .block, .blockFine, .shade)",
