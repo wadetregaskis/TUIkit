@@ -85,10 +85,14 @@ enum ImageDemoHelpers {
     }
 
     /// Whether the configuration consumes the edge-tracing knobs — the
-    /// shape-aware ascii/unicode renderers (the block repertoire carries its
-    /// own directional glyphs).
-    static func usesEdgeTracing(_ charset: Charset, shapeAware: Bool) -> Bool {
-        guard shapeAware else { return false }
+    /// ascii and unicode charsets, which have directional line glyphs to draw
+    /// an edge WITH.
+    ///
+    /// Not a question about shape-awareness: both renderers trace edges, from
+    /// whatever gradient each has to hand. The parameter is kept because the
+    /// answer is about the charset in a configuration, and every other
+    /// applicability question here takes both.
+    static func usesEdgeTracing(_ charset: Charset, shapeAware _: Bool) -> Bool {
         switch charset {
         case .ascii, .unicode: return true
         case .blocks, .custom: return false

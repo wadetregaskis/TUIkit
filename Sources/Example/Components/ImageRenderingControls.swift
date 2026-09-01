@@ -127,38 +127,40 @@ struct ImageRenderingControls: View {
             // Shape-awareness: match glyphs by their measured in-cell ink
             // distribution instead of overall luminance. Applies to every
             // charset except a custom ramp.
-            //
-            // Edge tracing is nested UNDER it rather than beside it, because it
-            // is not an independent setting and never could be: the edge test
-            // is a Sobel over the six staggered in-cell darkness regions the
-            // shape matcher already sampled (`orientationGlyph`), and the
-            // luminance path takes one sample per cell and so has nothing to
-            // take a gradient of. Drawn as a peer it was a control that greyed
-            // out for no visible reason; drawn as content it says why.
             Toggle("component.imageControls.shapeAware", isOn: $settings.shapeAware)
+                .disabled(!ImageDemoHelpers.usesShape(settings.charset))
+
+            // Edge tracing sits BESIDE shape-awareness rather than under it.
+            // The two are orthogonal: one asks where the picture has an edge,
+            // the other how a cell's ink is chosen, and either can be had
+            // without the other. Each renderer takes the gradient from what it
+            // already has — the shape one from six regions inside the cell,
+            // the luminance one from the eight cells around it — so the
+            // threshold means the same thing either way.
+            //
+            // It used to be nested inside the shape toggle, because the edge
+            // test could only be asked of the shape sampling.
+            Toggle("component.imageControls.edgeLines", isOn: $settings.edgeLines)
                 .toggleContent {
                     // Cells on a clean light/dark boundary draw as directional
                     // line glyphs; the threshold picks how strong a gradient
-                    // qualifies, so it is in turn the edge toggle's content.
-                    Toggle("component.imageControls.edgeLines", isOn: $settings.edgeLines)
-                        .toggleContent {
-                            HStack(spacing: 1) {
-                                Text("component.imageControls.edgeThreshold").dim()
-                                // The slider's own `%`-of-range read-out would
-                                // mislead beside the raw value shown after it.
-                                Slider(value: $settings.edgeThreshold, in: 0.3...2.0, step: 0.1)
-                                    .sliderShowsValue(false)
-                                    .frame(maxWidth: .infinity)
-                                Text(String(format: "%.1f", settings.edgeThreshold)).dim()
-                            }
-                        }
-                        // The block repertoire carries its own directional
-                        // glyphs, so it traces no edges even shape-aware.
-                        .disabled(
-                            !ImageDemoHelpers.usesEdgeTracing(
-                                settings.charset, shapeAware: true))
+                    // qualifies, so it is the edge toggle's content.
+                    HStack(spacing: 1) {
+                        Text("component.imageControls.edgeThreshold").dim()
+                        // The slider's own `%`-of-range read-out would mislead
+                        // beside the raw value shown after it.
+                        Slider(value: $settings.edgeThreshold, in: 0.3...2.0, step: 0.1)
+                            .sliderShowsValue(false)
+                            .frame(maxWidth: .infinity)
+                        Text(String(format: "%.1f", settings.edgeThreshold)).dim()
+                    }
                 }
-                .disabled(!ImageDemoHelpers.usesShape(settings.charset))
+                // The block repertoire carries its own directional glyphs and a
+                // custom ramp has no vocabulary to borrow, so neither traces
+                // edges — whether or not they shape-match.
+                .disabled(
+                    !ImageDemoHelpers.usesEdgeTracing(
+                        settings.charset, shapeAware: settings.shapeAware))
         }
     }
 

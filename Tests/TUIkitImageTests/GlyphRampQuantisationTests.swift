@@ -115,3 +115,71 @@ struct GlyphRampQuantisationTests {
         #expect(levels(.blocks(.ramp)) > levels(.blocks(.coarse)))
     }
 }
+
+// MARK: - Edge tracing without shape matching
+
+/// Edge tracing and shape matching are orthogonal: one asks where the picture
+/// has an edge, the other how a cell's ink is chosen. Edge tracing used to be
+/// reachable only through the shape renderer, because the gradient was taken
+/// from the six regions that renderer sampled inside each cell. The luminance
+/// renderer takes it from the eight cells around each one instead.
+@Suite("Edge tracing is independent of shape matching")
+struct LuminanceEdgeTracingTests {
+
+    /// A dark square on a light field: four clean edges and four corners.
+    private func box(width: Int, height: Int) -> RGBAImage {
+        var pixels: [RGBA] = []
+        for y in 0..<height {
+            for x in 0..<width {
+                let inside = x > width / 4 && x < 3 * width / 4
+                    && y > height / 4 && y < 3 * height / 4
+                pixels.append(inside ? RGBA(r: 10, g: 10, b: 10) : RGBA(r: 245, g: 245, b: 245))
+            }
+        }
+        return RGBAImage(width: width, height: height, pixels: pixels)
+    }
+
+    private func render(shapeAware: Bool, edgeThreshold: Double?) -> String {
+        let converter = ASCIIConverter(
+            characterSet: .unicode(glyphs: 8), shapeAware: shapeAware, colorMode: .mono,
+            supersampling: 1, edgeThreshold: edgeThreshold)
+        return converter.convert(box(width: 60, height: 60), width: 24, height: 12)
+            .joined(separator: "\n")
+            .replacing(/\u{1B}\[[0-9;]*[A-Za-z]/, with: "")
+    }
+
+    /// The box-drawing line glyphs `.unicode` traces edges with.
+    private static let lines: Set<Character> = ["─", "│", "╲", "╱"]
+
+    @Test("The luminance renderer traces edges")
+    func luminanceTracesEdges() {
+        let traced = render(shapeAware: false, edgeThreshold: 0.9)
+        #expect(traced.contains { Self.lines.contains($0) }, "no line glyphs: \(traced)")
+        // Both axes and both diagonals: a box has all four, and a renderer
+        // that only ever emitted one of them would still pass the check above.
+        for glyph in Self.lines {
+            #expect(traced.contains(glyph), "no \(glyph) around a box: \(traced)")
+        }
+    }
+
+    @Test("…and does not when the threshold is nil")
+    func luminanceWithoutEdgesDrawsNoLines() {
+        let plain = render(shapeAware: false, edgeThreshold: nil)
+        #expect(!plain.contains { Self.lines.contains($0) }, "traced with edges off: \(plain)")
+    }
+
+    @Test("The shape renderer still traces edges too")
+    func shapeStillTracesEdges() {
+        let traced = render(shapeAware: true, edgeThreshold: 0.9)
+        #expect(traced.contains { Self.lines.contains($0) }, "no line glyphs: \(traced)")
+    }
+
+    @Test("A lower threshold traces at least as many edges")
+    func lowerThresholdTracesMore() {
+        func lineCount(_ threshold: Double) -> Int {
+            render(shapeAware: false, edgeThreshold: threshold).count { Self.lines.contains($0) }
+        }
+        #expect(lineCount(0.4) >= lineCount(1.6))
+        #expect(lineCount(0.4) > 0)
+    }
+}

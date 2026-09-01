@@ -252,7 +252,12 @@ extension ASCIIConverter {
     /// perpendicular to the gradient — tangent `(-gy, gx)` — which classifies
     /// into horizontal / vertical / the two diagonals. Reuses the darkness
     /// vector already sampled for the coverage match, so it adds no image reads.
-    fileprivate static func orientationGlyph(
+    ///
+    /// Not `fileprivate`: the LUMINANCE renderer traces edges too, from the
+    /// darkness of the eight cells around each one rather than of six regions
+    /// inside it. Same six slots, same formula, same threshold — see
+    /// ``ASCIIConverter/neighbourhoodSampling(darkness:width:height:x:y:)``.
+    static func orientationGlyph(
         sampling: [Double],
         edge: (horizontal: Character, vertical: Character, backslash: Character, slash: Character)?,
         threshold: Double?

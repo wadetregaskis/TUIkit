@@ -282,16 +282,24 @@ public struct ASCIIConverter: Sendable {
     /// per cell.
     let supersampling: Int?
 
-    /// The minimum Sobel gradient magnitude (in 0…1 region-darkness units,
-    /// practical range roughly 0.3…2) for a shape-aware cell to be drawn
-    /// as a directional line glyph instead of its nearest coverage match.
-    /// Lower values trace more edges; `nil` disables line glyphs entirely
-    /// (pure coverage matching). The default 0.9 triggers on a clean
-    /// light/dark boundary across a cell while flat or lightly-textured
-    /// cells fall through. The line glyphs follow the charset — ASCII uses
-    /// `- | / \`, Unicode the box-drawing `─ │ ╱ ╲`; the shape-aware block
-    /// repertoire carries its own directional glyphs (halves, corner
-    /// triangles), so it does not trace edges.
+    /// The minimum Sobel gradient magnitude (in 0…1 darkness units, practical
+    /// range roughly 0.3…2) for a cell to be drawn as a directional line
+    /// glyph instead of the character it would otherwise get.
+    /// Lower values trace more edges; `nil` disables line glyphs entirely.
+    /// The default 0.9 triggers on a clean light/dark boundary while flat or
+    /// lightly-textured cells fall through. The line glyphs follow the
+    /// charset — ASCII uses `- | / \`, Unicode the box-drawing `─ │ ╱ ╲`; the
+    /// block repertoire carries its own directional glyphs (halves, corner
+    /// triangles) and a custom ramp has no vocabulary to borrow, so neither
+    /// traces edges.
+    ///
+    /// **Independent of ``shapeAware``.** They answer different questions —
+    /// where the image has an edge, and how a cell's ink should be chosen —
+    /// and either can be had without the other. The two renderers take the
+    /// gradient from what each of them has: the shape one from the six
+    /// staggered regions it already sampled INSIDE the cell, the luminance one
+    /// from the eight cells AROUND it. Same six slots, same formula, same
+    /// units, so this number means the same thing in both.
     let edgeThreshold: Double?
 
     /// A recolouring applied to every pixel before anything measures the image.
@@ -498,19 +506,67 @@ extension ASCIIConverter {
         case .ascii(let glyphs):
             return (
                 ShapeTableColumns(GlyphRepertoire.shapeVocabulary(from: GlyphRepertoire.ascii, count: glyphs)),
-                ("-", "|", "\\", "/"))
+                edgeLineGlyphs)
         case .unicode(let glyphs):
             return (
                 ShapeTableColumns(GlyphRepertoire.shapeVocabulary(from: GlyphRepertoire.unicode, count: glyphs)),
-                ("─", "│", "╲", "╱"))
+                edgeLineGlyphs)
         case .blocks:
             return (
                 ShapeTableColumns(GlyphRepertoire.shapeVocabulary(from: GlyphRepertoire.blockShapes)),
-                nil)
+                edgeLineGlyphs)
         case .customRamp:
             // Unreachable: `isShapeMatched` is false for custom ramps.
-            return (ShapeTableColumns([]), nil)
+            return (ShapeTableColumns([]), edgeLineGlyphs)
         }
+    }
+
+    /// The charset's directional line glyphs, or `nil` where it has none.
+    ///
+    /// Separate from ``shapeConfiguration`` because edge tracing is not a
+    /// shape-matching feature: it asks where the image has a strong gradient,
+    /// which is a question about the picture rather than about how glyphs are
+    /// chosen. Both renderers reach it.
+    ///
+    /// A custom ramp has no vocabulary to borrow from — the caller chose those
+    /// characters and a `/` from nowhere would not belong — and the block
+    /// repertoire carries its own directional glyphs (halves, corner
+    /// triangles), so neither traces edges.
+    var edgeLineGlyphs:
+        (horizontal: Character, vertical: Character, backslash: Character, slash: Character)?
+    {
+        switch characterSet {
+        case .ascii: return ("-", "|", "\\", "/")
+        case .unicode: return ("─", "│", "╲", "╱")
+        case .blocks, .customRamp: return nil
+        }
+    }
+
+    /// The six darkness slots ``orientationGlyph`` reads, filled from the
+    /// cells AROUND `(x, y)` rather than from regions inside it.
+    ///
+    /// The shape renderer samples six staggered circles per cell and takes the
+    /// gradient of those; the luminance renderer has one number per cell and
+    /// nothing inside it to differentiate. But it has eight neighbours, and an
+    /// edge in the picture crosses them — so the same six slots are filled
+    /// from the neighbourhood's corners and mid-sides, in the same layout
+    /// (`[0][1]` top, `[2][3]` middle, `[4][5]` bottom). The formula, the
+    /// units and the threshold are then literally the same ones.
+    ///
+    /// Out-of-bounds neighbours clamp to the edge cell, which makes the
+    /// border's gradient zero across the frame rather than an artefact of
+    /// falling off it.
+    static func neighbourhoodSampling(
+        darkness: [Double], width: Int, height: Int, x: Int, y: Int
+    ) -> [Double] {
+        func at(_ column: Int, _ row: Int) -> Double {
+            darkness[min(max(row, 0), height - 1) * width + min(max(column, 0), width - 1)]
+        }
+        return [
+            at(x - 1, y - 1), at(x + 1, y - 1),
+            at(x - 1, y), at(x + 1, y),
+            at(x - 1, y + 1), at(x + 1, y + 1),
+        ]
     }
 
     /// The effective supersampling factor for the non-shape renderers: the
@@ -539,6 +595,17 @@ extension ASCIIConverter {
         mode: ASCIIColorMode
     ) -> [String] {
         let ramp = characterRamp
+        // Edge tracing is independent of shape matching: it asks where the
+        // PICTURE has a strong gradient, which the luminance renderer can
+        // answer as well as the shape one — from the cells around each cell
+        // rather than from regions inside it. Built once, and only when a
+        // threshold and a vocabulary are both in hand.
+        let edge = edgeLineGlyphs
+        let darkness: [Double]? =
+            (edgeThreshold != nil && edge != nil)
+            ? (0..<(width * height)).map { index in
+                1.0 - (image.pixel(at: index % width, index / width).luminance / 255.0)
+            } : nil
 
         var lines = [String]()
         lines.reserveCapacity(height)
@@ -559,7 +626,17 @@ extension ASCIIConverter {
                 // (space), i.e. a blank image.
                 let charIndex = Int((pixel.luminance / 255.0) * Double(ramp.count))
                 let clampedIndex = min(max(charIndex, 0), ramp.count - 1)
-                let char = ramp[clampedIndex]
+                // A strong directional edge overrides the luminance match with
+                // the orientation-matched line glyph, exactly as it overrides
+                // the coverage match in the shape renderer — same six slots,
+                // same formula, same threshold.
+                let char =
+                    darkness.flatMap { grid in
+                        Self.orientationGlyph(
+                            sampling: Self.neighbourhoodSampling(
+                                darkness: grid, width: width, height: height, x: x, y: y),
+                            edge: edge, threshold: edgeThreshold)
+                    } ?? ramp[clampedIndex]
 
                 // Colorize
                 let colorCode = foregroundColorCode(for: pixel, mode: mode)
