@@ -35,6 +35,11 @@
 /// Dragging out is how a user changes their mind, and there is no key for it,
 /// because a drag has to stay carriable across the app and that needs the
 /// navigation keys to keep navigating.
+///
+/// "Off the rows" means off the CONTROL, not off the shortened list the drag
+/// leaves behind. Closing up behind the rows in hand ends the row area in as
+/// many blank lines as they occupied, and those lines are still the control's:
+/// pointing at one aims at the row nearest it, and the gap reopens there.
 public enum RowReorderFeedback: String, Sendable, Hashable, CaseIterable {
     /// The rows reorder **as the cursor moves**, so the list always shows the
     /// result of dropping right here. The default.

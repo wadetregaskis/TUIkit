@@ -105,6 +105,58 @@ struct ReorderOutsideBoundsTests {
         #expect(fixture.rows == ["a", "b", "c", "d", "e"])
     }
 
+    /// The gesture the border rule cost. A `.cursor` drag closes the rows up
+    /// behind the row it is carrying, so once the pointer leaves the rows the
+    /// row area ends in a blank line where the last row used to be drawn — and
+    /// pointing back at that line is what a user does when they meant to drop
+    /// on the last row and dipped below it on the way.
+    ///
+    /// Read as "no band here" it CANCELLED the whole gesture: the row flew home
+    /// and the reorder was lost. Every other row worked, and so did the same
+    /// excursion off the top, which is what made it look like a rule about the
+    /// last row rather than about the line the rows had vacated.
+    @Test("Table: dipping below the last row and back still drops")
+    func tableDipBelowTheLastRowStillDrops() {
+        let fixture = TableReorderFixture(feedback: .cursor)
+        let buffer = fixture.render()
+        let lastRow = fixture.rowY(buffer, "e")
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "b")))
+        fixture.render()
+        // Below the last row, where `.cursor` forgets its gap and the rows
+        // close up under the pointer…
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: bottomBorder(buffer) + 2))
+        fixture.render()
+        // …then back onto the line the last row was drawn on, which by now is
+        // the blank the closing-up left.
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: lastRow))
+        fixture.render()
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: lastRow))
+        fixture.render()
+        #expect(fixture.rows == ["a", "c", "d", "b", "e"], "b landed by the last row")
+    }
+
+    /// The `List` twin — the rule is the handler's, and the geometry that
+    /// exposes it is the same on both sides.
+    @Test("List: dipping below the last row and back still drops")
+    func listDipBelowTheLastRowStillDrops() {
+        let fixture = ListReorderFixture(feedback: .cursor)
+        let buffer = fixture.render()
+        let lastRow = fixture.rowY(buffer, "e")
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "b")))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: bottomBorder(buffer) + 2))
+        fixture.render()
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: lastRow))
+        fixture.render()
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: lastRow))
+        fixture.render()
+        #expect(fixture.items == ["a", "c", "d", "b", "e"], "b landed by the last row")
+    }
+
     /// The guard against over-correcting: an ordinary drag that never leaves the
     /// rows still lands. (The suites next door cover this at length; it is here
     /// so this file fails loudly if the bound is drawn one line too tight.)

@@ -591,6 +591,44 @@ extension ItemListHandler {
         clamped(contentY, onto: visibleRowBands.filter { $0.dropIndex != nil })
     }
 
+    /// `contentY` moved onto the nearest line that can take a drop — but only
+    /// from a line the DRAG emptied, and `nil` from anywhere further down.
+    ///
+    /// A `.cursor` drag closes the rows up behind the rows it is carrying, so
+    /// the row area ends in as many blank lines as they occupied (the views pad
+    /// to keep the control's height — a drag never changes how much is on
+    /// screen). Those lines are still the control's, and pointing at one plainly
+    /// means the row nearest it; read as "no band here" they instead CANCEL the
+    /// gesture, which is what dragging below the last row and back onto the line
+    /// it used to occupy did. The rows had moved up by one the moment the gap
+    /// went, so the line the user was still aiming at was no longer a row.
+    ///
+    /// The bound is what keeps it honest. A control whose rows do not fill its
+    /// content area draws its bottom border on a line that is nonetheless
+    /// inside ``rowSpaceContentY(_:)``, and clamping from THERE would make the
+    /// border a drop target — which it is not, for a drag any more than for a
+    /// click.
+    private func clampedToVacatedRows(_ contentY: Int) -> Int? {
+        let droppable = visibleRowBands.filter { $0.dropIndex != nil }
+        guard let last = droppable.last else { return contentY }
+        guard contentY < last.yStart + last.height + reorderVacatedLines else { return nil }
+        return clamped(contentY, onto: droppable)
+    }
+
+    /// How many lines of this frame's row area the drag emptied and did not
+    /// fill again — the rows it is carrying that were in the window, once no
+    /// gap is drawn to stand in for them.
+    ///
+    /// Zero the moment a gap IS drawn: the gap is exactly as many lines as the
+    /// rows in hand, so the area is whole again.
+    private var reorderVacatedLines: Int {
+        guard !reorderDrawsSlot else { return 0 }
+        let removed = reorderRemovedRows
+        guard !removed.isEmpty else { return 0 }
+        let window = drawnVisibleRange
+        return removed.filter(window.contains).reduce(0) { $0 + max(1, rowHeight?($1) ?? 1) }
+    }
+
     private func clamped(_ contentY: Int, onto bands: [RowBand]) -> Int {
         guard let first = bands.first, let last = bands.last else { return contentY }
         if contentY < first.yStart { return first.yStart }
@@ -1023,10 +1061,14 @@ extension ItemListHandler {
         reorder.active = true
         self.reorder = reorder
 
-        guard let contentY, let target = dropTarget(atContentY: contentY) else {
-            // Off the rows. `.cursor` forgets its slot — the gap disappears and
-            // releasing there is a cancel — while the other modes hold the last
-            // one, since they have nothing that says "nowhere".
+        // CLAMPED onto the rows, over the lines the drag itself emptied — see
+        // ``clampedToVacatedRows(_:)``.
+        guard let contentY, let aimed = clampedToVacatedRows(contentY),
+            let target = dropTarget(atContentY: aimed)
+        else {
+            // Off the rows entirely. `.cursor` forgets its slot — the gap
+            // disappears and releasing there is a cancel — while the other modes
+            // hold the last one, since they have nothing that says "nowhere".
             if effectiveReorderFeedback == .cursor {
                 reorder.targetOffset = nil
                 self.reorder = reorder
