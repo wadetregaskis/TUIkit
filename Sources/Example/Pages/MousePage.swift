@@ -55,11 +55,18 @@ struct MousePage: View {
         let name: String
     }
 
-    /// One live poof: where it plays and which frame it is on.
+    /// One live poof: where it plays, how big the thing that vanished was,
+    /// and which frame it is on.
+    ///
+    /// The size is the drag preview's, so a puff is the size of what it
+    /// replaced. A fixed six-cell puff read as the same small event whether a
+    /// one-word chip or a whole row had gone.
     struct PoofPuff: Identifiable {
         let id: Int
         let x: Int
         let y: Int
+        let width: Int
+        let height: Int
         var frame: Int = 0
     }
 
@@ -122,7 +129,8 @@ struct MousePage: View {
                 removeFromBasket(item)
                 spawnPoof(
                     x: info.previewX + info.previewWidth / 2,
-                    y: info.previewY + info.previewHeight / 2)
+                    y: info.previewY + info.previewHeight / 2,
+                    width: info.previewWidth, height: info.previewHeight)
             }
             return true
         }
@@ -494,10 +502,64 @@ struct MousePage: View {
     /// the drop point (ZStack children paint their full bounding box).
     @ViewBuilder private func poofView(_ poof: PoofPuff) -> some View {
         let frames = poofStyle.frames
-        let frame = frames[min(poof.frame, frames.count - 1)]
-        Text(frame)
-            .foregroundStyle(.palette.foregroundSecondary)
-            .offset(x: max(0, poof.x - frame.strippedLength / 2), y: max(0, poof.y))
+        let index = min(poof.frame, frames.count - 1)
+        // How far through the dispersal this frame is: the puff opens out from
+        // a point to the whole footprint of what vanished.
+        let progress = Double(index + 1) / Double(frames.count)
+        let lines = Self.puffLines(
+            pattern: frames[index], progress: progress,
+            width: poof.width, height: poof.height)
+        let boxWidth = lines.map(\.strippedLength).max() ?? 1
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { row in
+                Text(verbatim: row.element)
+            }
+        }
+        .foregroundStyle(.palette.foregroundSecondary)
+        .offset(
+            x: max(0, poof.x - boxWidth / 2),
+            y: max(0, poof.y - lines.count / 2))
+    }
+
+    /// One frame of a puff, laid out across the footprint of what vanished.
+    ///
+    /// The style's frame string is the vocabulary — which glyphs this moment
+    /// of the dispersal uses — and `progress` is how much of the box they are
+    /// spread over. So the same six frames read as a small puff for a chip and
+    /// a large one for a whole row, without a second set of frames per size.
+    ///
+    /// Widths are counted in CELLS, not characters (`strippedLength`): `💨` is
+    /// two of them, and a puff laid out by character count would drift as it grew.
+    static func puffLines(
+        pattern: String, progress: Double, width: Int, height: Int
+    ) -> [String] {
+        let glyphs = pattern.filter { !$0.isWhitespace }.map(String.init)
+        guard !glyphs.isEmpty else { return [""] }
+        // Half again the footprint at the last frame. Proportionate to what
+        // vanished, and bigger than it — a puff exactly the size of the thing
+        // it replaced reads as a substitution rather than as something
+        // dispersing. Never narrower than the pattern itself, so a one-cell
+        // item still gets a puff rather than a single glyph.
+        let natural = glyphs.reduce(0) { $0 + $1.strippedLength } + glyphs.count - 1
+        let spanWidth = max(
+            Int((Double(natural) * progress).rounded()),
+            Int((Double(width) * 1.5 * progress).rounded()), 1)
+        let spanHeight = max(1, Int((Double(height) * 1.5 * progress).rounded()))
+        return (0..<spanHeight).map { row in
+            // Alternate rows take the glyphs in the other order, so a puff more
+            // than one row tall does not draw the same column twice.
+            let ordered = row.isMultiple(of: 2) ? glyphs : Array(glyphs.reversed())
+            var line = ""
+            for (index, glyph) in ordered.enumerated() {
+                // Evenly spaced CENTRES: glyph i sits at (2i+1)/2n of the span,
+                // which puts one glyph in the middle and never against an edge.
+                let centre = (2 * index + 1) * spanWidth / (2 * ordered.count)
+                let pad = centre - line.strippedLength
+                if pad > 0 { line += String(repeating: " ", count: pad) }
+                line += glyph
+            }
+            return line
+        }
     }
 
     private func removeFromBasket(_ item: BasketFruit) {
@@ -510,8 +572,11 @@ struct MousePage: View {
         }
     }
 
-    private func spawnPoof(x: Int, y: Int) {
-        poofs.append(PoofPuff(id: poofGeneration, x: x, y: y))
+    private func spawnPoof(x: Int, y: Int, width: Int, height: Int) {
+        poofs.append(
+            PoofPuff(
+                id: poofGeneration, x: x, y: y,
+                width: max(1, width), height: max(1, height)))
         poofGeneration += 1
     }
 
