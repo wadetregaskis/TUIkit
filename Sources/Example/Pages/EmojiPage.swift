@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import TUIkit
 
 /// Emoji rendering demo / inspector page.
@@ -27,6 +28,12 @@ struct EmojiPage: View {
     @State private var filter: String = ""
     @State private var selectedID: UInt32?
     @State private var selectedSymbolID: String?
+
+    /// The column sorts, one per table. Each starts in the order its corpus
+    /// is built in — emoji by codepoint, symbols by name — so the first frame
+    /// is the list as it always was and a header click is what changes it.
+    @State private var emojiSort = [KeyPathComparator(\EmojiEntry.codepoint)]
+    @State private var symbolSort = [KeyPathComparator(\SymbolEntry.name)]
 
     /// Below this terminal width the two tables stack instead of sitting side
     /// by side. `terminalWidth` is stable across measure and render (published
@@ -128,15 +135,31 @@ struct EmojiPage: View {
 
     // MARK: - Tables
 
-    /// The emoji browse list — its own selection and scroll position.
+    /// The emoji browse table — its own selection, sort and scroll position.
+    ///
+    /// A `Table` rather than a `List` of hand-built rows: the three fields
+    /// were already a grid drawn by an `HStack` per row, and a grid that
+    /// columns itself can also sort itself. The count line moves above it,
+    /// `Table` having no title of its own.
     private var emojiTable: some View {
-        List(
-            "\(filteredEmoji.count) \(L("page.emoji.ofCount")) \(Self.allEmoji.count) "
-                + L("page.emoji.emojiCountSuffix"),
-            selection: $selectedID
-        ) {
-            ForEach(filteredEmoji) { entry in
-                EmojiRow(entry: entry)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(verbatim:
+                "\(filteredEmoji.count) \(L("page.emoji.ofCount")) \(Self.allEmoji.count) "
+                    + L("page.emoji.emojiCountSuffix"))
+                .foregroundStyle(.palette.foregroundSecondary)
+            Table(sortedEmoji, selection: $selectedID, sortOrder: $emojiSort) {
+                // Two cells: every entry here has emoji presentation, which is
+                // what makes it wide, and the page exists to show that.
+                TableColumn("page.emoji.column.glyph", value: \EmojiEntry.cluster)
+                    .width(.fixed(7))
+                // Sorted by the NUMBER, shown as the label. Sorting the label
+                // would order it as text, which puts U+FE0F before U+1F600.
+                TableColumn("page.emoji.column.code", value: \EmojiEntry.codepoint) {
+                    $0.codepointLabel
+                }
+                .width(.fixed(10))
+                TableColumn("page.emoji.column.description", value: \EmojiEntry.name)
+                    .width(.flexible)
             }
         }
     }
@@ -152,16 +175,28 @@ struct EmojiPage: View {
     /// resolve at all) from an Apple system that just lacks the font.
     @ViewBuilder private var symbolTable: some View {
         if SFSymbol.isFontAvailable {
-            List(
-                "\(filteredSymbols.count) \(L("page.emoji.ofCount")) \(Self.allSymbols.count) "
-                    + L("page.emoji.sfSymbolsCountSuffix"),
-                selection: $selectedSymbolID
-            ) {
-                ForEach(filteredSymbols) { entry in
-                    SymbolRow(entry: entry)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(verbatim:
+                    "\(filteredSymbols.count) \(L("page.emoji.ofCount")) "
+                        + "\(Self.allSymbols.count) "
+                        + L("page.emoji.sfSymbolsCountSuffix"))
+                    .foregroundStyle(.palette.foregroundSecondary)
+                Table(
+                    sortedSymbols, selection: $selectedSymbolID, sortOrder: $symbolSort,
+                    emptyPlaceholder: L("page.emoji.sfSymbolsEmpty")
+                ) {
+                    // Plane-16 Private-Use, two cells wide with Terminal.app
+                    // compensation — a cleanly aligned column is the proof.
+                    TableColumn("page.emoji.column.glyph", value: \SymbolEntry.glyph)
+                        .width(.fixed(7))
+                    TableColumn("page.emoji.column.code", value: \SymbolEntry.codepoint) {
+                        $0.codepointLabel
+                    }
+                    .width(.fixed(10))
+                    TableColumn("page.emoji.column.description", value: \SymbolEntry.name)
+                        .width(.flexible)
                 }
             }
-            .listEmptyPlaceholder("page.emoji.sfSymbolsEmpty")
         } else {
             ContentUnavailableView(
                 "page.emoji.sfSymbolsUnavailableTitle",
@@ -172,6 +207,14 @@ struct EmojiPage: View {
     }
 
     // MARK: - Filtering
+
+    /// The filtered corpus in the order the headers ask for. Sorted here
+    /// rather than in an `onChange` writing back to a `@State` array: the
+    /// corpora are `static let`, so there is nothing to mutate, and a
+    /// derived value cannot fall out of step with what derives it.
+    private var sortedEmoji: [EmojiEntry] { filteredEmoji.sorted(using: emojiSort) }
+
+    private var sortedSymbols: [SymbolEntry] { filteredSymbols.sorted(using: symbolSort) }
 
     private var filteredEmoji: [EmojiEntry] {
         let needle = filter.trimmingWhitespace()
@@ -297,7 +340,7 @@ private struct SymbolRow: View {
 
 // MARK: - Model
 
-private struct EmojiEntry: Identifiable, Equatable {
+private struct EmojiEntry: Identifiable, Equatable, Sendable {
     let codepoint: UInt32
     let cluster: String
     let name: String
@@ -308,7 +351,7 @@ private struct EmojiEntry: Identifiable, Equatable {
     }
 }
 
-private struct SymbolEntry: Identifiable, Equatable {
+private struct SymbolEntry: Identifiable, Equatable, Sendable {
     let name: String
     let glyph: String
     let codepoint: UInt32
