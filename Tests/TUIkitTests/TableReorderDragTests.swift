@@ -719,4 +719,40 @@ struct TableReorderDragTests {
             ahead == aheadOfRow,
             "the slot starts where a focused row does: \(ahead) vs \(aheadOfRow)")
     }
+
+    // MARK: - The control's height
+
+    /// A drag never changes how much is on screen. `.cursor` drops its gap the
+    /// moment the pointer leaves the rows while the rows it carries stay out of
+    /// the drawing, so those frames are a line short unless the row area is
+    /// filled — and a table one line shorter is a table whose bottom border has
+    /// stepped up over its last row, which is then not where the user is
+    /// pointing at it.
+    ///
+    /// The scrollbar path filled its row area already; the "N more" path did
+    /// not, and `List` did. Asserted on the BORDER rather than on the buffer's
+    /// height: the frame around it pads either way, so the buffer is nine lines
+    /// whatever the table draws.
+    @Test("A .cursor drag off the rows does not shorten the table")
+    func dragOffTheRowsKeepsTheHeight() {
+        let fixture = TableReorderFixture(
+            rows: ["a", "b", "c", "d", "e", "f", "g", "h"], feedback: .cursor)
+        func borderLine(_ buffer: FrameBuffer) -> Int? {
+            buffer.lines.lastIndex { $0.stripped.contains("\u{2570}") }
+        }
+        var buffer = fixture.render()
+        let before = borderLine(buffer)
+        #expect(before != nil, "the table has a bottom border: \(buffer.lines.map(\.stripped))")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 2, y: fixture.rowY(buffer, "c")))
+        buffer = fixture.render()
+        // Off the rows: past the bottom border, where `.cursor` forgets its gap.
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 2, y: (before ?? 0) + 1))
+        buffer = fixture.render()
+        #expect(
+            borderLine(buffer) == before,
+            "the border stayed put: \(buffer.lines.map(\.stripped))")
+    }
 }

@@ -2038,6 +2038,20 @@ where Value.ID: Hashable {
         let slide =
             clipOverrun(&rowLines, to: drawnBudget, drawn: drawnHeights)
             - handler.overscrollState.excursion
+        // …and a SHORTFALL is filled, for the same reason the overrun is
+        // clipped: a drag never changes how much is on screen. `.cursor` drops
+        // its gap the moment the pointer leaves the rows while the rows it is
+        // carrying stay out of the drawing, so those frames are a line short —
+        // and a table that is one line shorter is a table whose bottom border
+        // has stepped up over the last row, which is then not where the user is
+        // aiming at it. Dragging below the last row and back onto it therefore
+        // released onto the BORDER, and `.cursor` reads a release off the rows
+        // as a cancel: the row flew home and the reorder was silently lost.
+        // Outside a drag the rows are one line each and this adds nothing.
+        // (The scrollbar path fills to its own `contentHeight` already.)
+        while rowLines.count < drawnBudget {
+            rowLines.append(String(repeating: " ", count: max(0, contentWidth)))
+        }
         let bands = publishRowBands(
             handler: handler, drawn: drawnHeights, slide: slide,
             // Whatever chrome is already in `lines` — which at this point is
