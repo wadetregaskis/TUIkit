@@ -737,7 +737,8 @@ four-row red→blue ramp under `.gradientExtent(.subtree)`.
 | `Form` | ✅ ramps | Inherits, being a stack underneath |
 | `LazyVStack`, `LazyHStack` | ❌ every row the ramp's first colour | Fixed |
 | `List`, `OutlineGroup` | ❌ every row the ramp's first colour | Fixed — see below |
-| `Grid`, `LazyVGrid`, `LazyHGrid`, `AnyLayout` | ❌ every row the ramp's first colour | Fixed in one place: every `Layout` places its subviews through `_LayoutCore`, which knows the bounds and each entry's exact position |
+| `LazyVGrid`, `LazyHGrid`, `AnyLayout` | ❌ every row the ramp's first colour | Fixed in one place: every `Layout` places its subviews through `_LayoutCore`, which knows the bounds and each entry's exact position |
+| `Grid` | ❌ every row the ramp's first colour | **Not** one of the above, and saying so here is what hid it for a month — see §20. A lattice is not something `LayoutSubviews` can describe, so `Grid` is not a `Layout` and needs its own answer |
 | `Table` | ⚠️ honoured a colour; collapsed a ramp to one | Fixed — it paints its own cells, so it paints the ramp too |
 
 So the answer to "how many containers?" is: every one that places children,
@@ -1252,3 +1253,39 @@ to forbid.
 a value:** `rgbComponents == nil` is not "this colour is uninteresting", it is
 "you are holding a question, not an answer". Every `guard`, `filter` and early
 `return` written against it was a place the question got dropped.
+
+
+---
+
+## 20. The container the table said was covered
+
+§13's table listed `Grid` alongside `LazyVGrid`, `LazyHGrid` and `AnyLayout`
+under one remedy — "every `Layout` places its subviews through `_LayoutCore`" —
+and `Layout.swift` and the public doc comment on ``View/gradientExtent(_:)``
+both repeated it. All three were wrong about the same container, and each was
+citing one of the others.
+
+`Grid` is not a `Layout`. It cannot be: `LayoutSubviews` is a flat collection
+and a grid's cells are two-dimensional, which is why `_GridCore` reads the same
+`LayoutValueKey`s through its own accessor rather than through `LayoutSubview`'s
+subscript. So it never reached `_LayoutCore`, and `Grid.swift` contained no
+mention of a gradient at all. Three rows under a subtree ramp all painted the
+first colour; the identical `VStack` ramped correctly, which is what makes it a
+bug rather than a limitation.
+
+The one test in the family, `gridSpansRows`, rendered a **`LazyVGrid`** and its
+comment asserted by argument that the answer therefore "covers `Grid`, the lazy
+grids, `AnyLayout`". A test that covers a claim by arguing for it covers
+nothing. `Grid` proper, `AnyLayout` and both axes are pinned now.
+
+`_GridCore` gives its own answer, in the shape `_LayoutCore` gives its: the
+lattice is already worked out before anything renders, so the grid's content
+size and each cell's seat in it are both to hand. The seat comes from the cell's
+**measured** size, because a `.gradientExtent(.subtree)` anchor is needed a pass
+before the rendered size exists — the same rule, and the same memo hit, that
+`VStack` relies on. `placement` therefore takes a size rather than a buffer, and
+the composite still passes it the rendered one, so nothing about where a cell
+lands has changed.
+
+The whole thing is behind `gradientContentFrame`'s `nil`, so a grid with no
+ramp above it pays one optional check and takes no extra measure.

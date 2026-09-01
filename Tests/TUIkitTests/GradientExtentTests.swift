@@ -486,10 +486,11 @@ extension GradientExtentTests {
         #expect(Set(rows.compactMap { $0 }).count == 4, "lines repeat: \(rows)")
     }
 
-    /// Every `Layout`-based container places its subviews through one funnel,
-    /// so one answer covers `Grid`, the lazy grids, `AnyLayout` and anything an
-    /// app writes for itself. The grid is the case that shows it.
-    @Test("A vertical ramp spans the rows of a grid")
+    /// Every `Layout`-based container places its subviews through one funnel.
+    /// This pins the lazy-grid end of it; `AnyLayout` has its own test, and
+    /// `Grid` — which is NOT a `Layout` — has two, because arguing from this
+    /// one that it must be covered too is precisely what left it broken.
+    @Test("A vertical ramp spans the rows of a lazy grid")
     func gridSpansRows() {
         let lines = renderToBuffer(
             LazyVGrid(columns: [GridItem(), GridItem()]) {
@@ -502,6 +503,71 @@ extension GradientExtentTests {
         let rows = lines.prefix(2).map { firstInk($0) }
         #expect(rows[0] == "255;0;0", "the first grid row is not the start: \(rows)")
         #expect(rows[1] == "0;0;255", "the last grid row is not the end: \(rows)")
+    }
+
+    /// `Grid` is the one container that places children two-dimensionally
+    /// without being a `Layout` — a lattice is not something `LayoutSubviews`
+    /// can describe — so it does NOT inherit `_LayoutCore`'s answer, and used
+    /// not to give one: every row of a three-row grid painted the ramp's first
+    /// colour. The doc comment on ``View/gradientExtent(_:)`` named `Grid` as
+    /// covered while `Grid.swift` contained no mention of a gradient at all.
+    @Test("A vertical ramp spans the rows of a Grid")
+    func gridProperSpansRows() {
+        let lines = renderToBuffer(
+            Grid(horizontalSpacing: 1, verticalSpacing: 0) {
+                GridRow { Text(verbatim: "a") }
+                GridRow { Text(verbatim: "b") }
+                GridRow { Text(verbatim: "c") }
+            }
+            .foregroundStyle(vertical())
+            .gradientExtent(.subtree),
+            context: context()
+        ).lines
+        let rows = lines.prefix(3).map { firstInk($0) }
+        #expect(rows[0] == "255;0;0", "the first grid row is not the start: \(rows)")
+        #expect(rows[1] == "127;0;127", "the middle grid row is not the middle: \(rows)")
+        #expect(rows[2] == "0;0;255", "the last grid row is not the end: \(rows)")
+    }
+
+    /// The other axis, and the column origins that carry it.
+    @Test("A horizontal ramp spans the columns of a Grid")
+    func gridSpansColumns() {
+        let lines = renderToBuffer(
+            Grid(horizontalSpacing: 0, verticalSpacing: 0) {
+                GridRow {
+                    Text(verbatim: "aaaa")
+                    Text(verbatim: "bbbb")
+                }
+            }
+            .foregroundStyle(horizontal())
+            .gradientExtent(.subtree),
+            context: context()
+        ).lines
+        let line = lines.first ?? ""
+        #expect(ink(line, atColumn: 0) == "255;0;0", "the left cell is not the start: \(line.debugDescription)")
+        #expect(
+            ink(line, atColumn: 7) == "0;0;255",
+            "the right cell does not reach the end: \(line.debugDescription)")
+    }
+
+    /// `AnyLayout` and `LazyHGrid` reach the ramp through `_LayoutCore`, which
+    /// the survey claims covers "any `Layout` an app writes for itself" — the
+    /// claim was only ever pinned through `LazyVGrid`.
+    @Test("A vertical ramp spans the rows of an AnyLayout")
+    func anyLayoutSpansRows() {
+        let lines = renderToBuffer(
+            AnyLayout(VStackLayout(spacing: 0)) {
+                Text(verbatim: "a")
+                Text(verbatim: "b")
+                Text(verbatim: "c")
+            }
+            .foregroundStyle(vertical())
+            .gradientExtent(.subtree),
+            context: context()
+        ).lines
+        let rows = lines.prefix(3).map { firstInk($0) }
+        #expect(rows[0] == "255;0;0", "\(rows)")
+        #expect(rows[2] == "0;0;255", "\(rows)")
     }
 
     // MARK: - Table

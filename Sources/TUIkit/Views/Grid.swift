@@ -307,6 +307,17 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
             x += column + horizontalSpacing
         }
 
+        // A `.gradientExtent(.subtree)` ramp spanning this grid. A grid is the
+        // one container that places children two-dimensionally without being a
+        // `Layout` — its cells are a lattice, which `LayoutSubviews` cannot
+        // describe — so it cannot inherit `_LayoutCore`'s answer and has to
+        // give its own. `nil` when nothing above asked for one, and then every
+        // line below is the identity.
+        let rowTops = Self.rowTops(heights, spacing: verticalSpacing)
+        let gradientFrame = context.gradientContentFrame(
+            width: width,
+            height: (rowTops.last ?? 0) + max(1, heights.last ?? 1))
+
         var result = FrameBuffer()
         for (rowIndex, row) in rows.enumerated() {
             let rowHeight = heights[rowIndex]
@@ -318,17 +329,33 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
                     ? width
                     : columns[index..<min(columns.count, index + span)].reduce(0, +)
                         + (span - 1) * horizontalSpacing
-                let rendered = cell.render(
-                    width: max(0, boxWidth), height: max(1, rowHeight), context: context)
                 let box = CellRect(
                     x: row.spansFullWidth ? 0 : origins[index], y: 0,
                     width: max(0, boxWidth), height: max(1, rowHeight))
+                let rowAlignment = row.alignment
+                let columnGuide = row.spansFullWidth ? nil : columnAlignment[index]
+                var childContext = context
+                if let gradientFrame {
+                    // Where the cell will land, from its MEASURED size — the
+                    // rendered one is a pass later, and the modifier's contract
+                    // is that measure and render agree. The measure is the one
+                    // `lattice` already took, so it is a memo hit.
+                    let measured = cell.measure(
+                        proposal: ProposedSize(width: max(0, boxWidth), height: max(1, rowHeight)),
+                        context: context)
+                    let seat = placement(
+                        width: measured.width, height: measured.height, in: box, cell: cell,
+                        rowAlignment: rowAlignment, columnAlignment: columnGuide)
+                    childContext = context.placingGradientChild(
+                        gradientFrame, x: seat.x, y: rowTops[rowIndex] + seat.y)
+                }
+                let rendered = cell.render(
+                    width: max(0, boxWidth), height: max(1, rowHeight), context: childContext)
                 canvas = canvas.composited(
                     with: rendered,
                     at: placement(
-                        of: rendered, in: box, cell: cell,
-                        rowAlignment: row.alignment,
-                        columnAlignment: row.spansFullWidth ? nil : columnAlignment[index]))
+                        width: rendered.width, height: rendered.height, in: box, cell: cell,
+                        rowAlignment: rowAlignment, columnAlignment: columnGuide))
                 index += span
             }
             result.appendVertically(canvas, spacing: rowIndex > 0 ? verticalSpacing : 0)
@@ -336,31 +363,53 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
         return result.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
 
+    /// The y each row starts at within the grid's own content, in cells.
+    ///
+    /// Accumulated rather than multiplied, and clamped the same way the row
+    /// canvases are — a zero-height row still occupies the one line
+    /// `FrameBuffer(emptyWithWidth:height:)` gives it.
+    private static func rowTops(_ heights: [Int], spacing: Int) -> [Int] {
+        var tops: [Int] = []
+        tops.reserveCapacity(heights.count)
+        var y = 0
+        for (index, height) in heights.enumerated() {
+            if index > 0 { y += spacing }
+            tops.append(y)
+            y += max(1, height)
+        }
+        return tops
+    }
+
     /// Where a rendered cell sits inside its box.
     ///
     /// Precedence matches SwiftUI: the cell's own `gridCellAnchor` beats the
     /// column's `gridColumnAlignment`, which beats the row's alignment, which
     /// beats the grid's. Each axis floors exactly once — see ``AlignmentID``.
+    /// Takes a size rather than the buffer, because a
+    /// `.gradientExtent(.subtree)` ramp has to know where a cell will land
+    /// BEFORE the cell renders — and the only size available then is the
+    /// measured one.
     private func placement(
-        of rendered: FrameBuffer,
+        width renderedWidth: Int,
+        height renderedHeight: Int,
         in box: CellRect,
         cell: ChildView,
         rowAlignment: VerticalAlignment?,
         columnAlignment: HorizontalAlignment?
     ) -> (x: Int, y: Int) {
         if let anchor = cell.gridCellAnchor {
-            let dx = Int((anchor.x * Double(box.width - rendered.width)).rounded(.down))
-            let dy = Int((anchor.y * Double(box.height - rendered.height)).rounded(.down))
+            let dx = Int((anchor.x * Double(box.width - renderedWidth)).rounded(.down))
+            let dy = Int((anchor.y * Double(box.height - renderedHeight)).rounded(.down))
             return (
-                x: box.x + min(max(0, dx), max(0, box.width - rendered.width)),
-                y: box.y + min(max(0, dy), max(0, box.height - rendered.height))
+                x: box.x + min(max(0, dx), max(0, box.width - renderedWidth)),
+                y: box.y + min(max(0, dy), max(0, box.height - renderedHeight))
             )
         }
         let horizontal = columnAlignment ?? alignment.horizontal
         let vertical = rowAlignment ?? alignment.vertical
         return (
-            x: box.x + horizontal.childOffset(childWidth: rendered.width, in: box.width),
-            y: box.y + vertical.childOffset(childHeight: rendered.height, in: box.height)
+            x: box.x + horizontal.childOffset(childWidth: renderedWidth, in: box.width),
+            y: box.y + vertical.childOffset(childHeight: renderedHeight, in: box.height)
         )
     }
 }

@@ -204,8 +204,10 @@ public struct _LayoutCore<L: Layout, Content: View>: View, Renderable, Layoutabl
         // A `.gradientExtent(.subtree)` ramp spanning this layout: the bounds
         // are the rectangle it runs across and each entry is exactly where its
         // subview sits in it, both already worked out above. One answer here
-        // covers `Grid`, the lazy grids, `AnyLayout` and any layout an app
-        // writes for itself.
+        // covers the lazy grids, `AnyLayout` and any layout an app writes for
+        // itself. NOT `Grid`, which is not a `Layout` — a lattice is not
+        // something `LayoutSubviews` can describe — and gives its own answer in
+        // `_GridCore`. Saying otherwise here is what hid a bug for a month.
         let gradientFrame = context.gradientContentFrame(
             width: bounds.width, height: bounds.height)
         for entry in placements.entries {
