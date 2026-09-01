@@ -93,6 +93,15 @@ collapses the third row of that table into the fourth — background and mark
 together — for a transient list where an ambient highlight is more noise
 than signal.
 
+A control that can never draw a mark does not keep the cells for one.
+`Table(_:columns:)` (no selection binding) and `.rowSelectionIndicator(.hidden)`
+both give the two cells back, so their rows and header start one cell inside
+the border like any other bordered content. Only the structural conditions
+count: which row is selected, and whether an unfocused selection is shown,
+change while the app runs, and a column that appeared when you clicked would
+shift every value in the table sideways. `List` reserves nothing to give
+back — it draws its mark in the single pad cell its rows already had.
+
 How the pulse animates is a separate setting again:
 `.selectionIndicatorStyle(.none | .blink | .pulse)`, with a speed. It governs
 the emphasis, not which cells carry it.

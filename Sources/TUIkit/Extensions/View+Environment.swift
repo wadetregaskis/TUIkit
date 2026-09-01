@@ -210,8 +210,11 @@ extension View {
     ///     .rowSelectionIndicator(.hidden)
     /// ```
     ///
-    /// TUI-specific: SwiftUI has no row marker to suppress. The gutter stays
-    /// reserved either way, so hiding the mark does not move the columns.
+    /// TUI-specific: SwiftUI has no row marker to suppress. A `Table` told
+    /// `.hidden` also gives back the two cells the mark would have occupied,
+    /// so its columns start where any other bordered content does; a `List`
+    /// draws its mark in the pad cell its rows already had and so has nothing
+    /// to give back.
     ///
     /// - Parameter visibility: `.hidden` to leave the mark off; `.automatic`
     ///   (the default) or `.visible` to draw it.

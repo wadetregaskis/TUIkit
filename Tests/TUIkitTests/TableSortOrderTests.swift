@@ -58,7 +58,8 @@ struct TableSortOrderTests {
             fitFirstColumn: Bool = false,
             width: Int = 40,
             nameTitle: String = "Name",
-            trailingSizeColumn: Bool = false
+            trailingSizeColumn: Bool = false,
+            markHidden: Bool = false
         ) -> FrameBuffer {
             dispatcher.beginRenderPass()
             var env = EnvironmentValues()
@@ -79,7 +80,9 @@ struct TableSortOrderTests {
                 fitFirstColumn ? nameColumn.width(.fit) : nameColumn
                 trailingSizeColumn ? sizeColumn.alignment(.trailing) : sizeColumn
             }
-            buffer = renderToBuffer(table, context: context)
+            buffer = renderToBuffer(
+                markHidden ? AnyView(table.rowSelectionIndicator(.hidden)) : AnyView(table),
+                context: context)
             dispatcher.setRegions(buffer.hitTestRegions)
             return buffer
         }
@@ -344,5 +347,45 @@ struct TableSortOrderTests {
                 \(region.offsetX)..<\(region.offsetX + region.width)
                 """)
         }
+    }
+
+    /// …including when the selection gutter is not there to be skipped.
+    ///
+    /// The regions and the titles are derived from one column-width list, but
+    /// they arrive at the first column by two different routes — `renderHeader`
+    /// writes the indent, `headerColumnRanges` adds it to `originX` — so a
+    /// table that reserves nothing is exactly where the two can disagree by two
+    /// cells and hand every sortable header the column to its left.
+    @Test("Each header region covers its own column with no mark to indent past")
+    func headerRegionsFollowTheGutterAway() {
+        let harness = Harness(sortOrder: [KeyPathComparator(\Row.name)])
+        let buffer = harness.render(markHidden: true)
+        let header = buffer.lines[1].stripped
+        #expect(
+            header.hasPrefix("\u{2502} Name"),
+            "the border, its pad, then the title: \(header.debugDescription)")
+
+        let regions = buffer.hitTestRegions.filter { $0.offsetY == 1 && $0.height == 1 }
+        #expect(regions.count == 2, "one per sortable column: \(regions)")
+        for (title, region) in zip(["Name", "Size"], regions.sorted { $0.offsetX < $1.offsetX }) {
+            guard let found = header.range(of: title) else {
+                Issue.record("\(title) missing from \(header.debugDescription)")
+                continue
+            }
+            let start = header.distance(from: header.startIndex, to: found.lowerBound)
+            #expect(
+                region.offsetX <= start && start < region.offsetX + region.width,
+                """
+                \(title) is drawn at \(start), outside \
+                \(region.offsetX)..<\(region.offsetX + region.width)
+                """)
+        }
+
+        // …and the click that lands there actually sorts, which is the whole
+        // point of the region being in the right place.
+        harness.buffer = buffer
+        harness.dispatcher.setRegions(buffer.hitTestRegions)
+        #expect(harness.clickHeader("Size"))
+        #expect(harness.sortOrder?.first?.keyPath == \Row.size)
     }
 }

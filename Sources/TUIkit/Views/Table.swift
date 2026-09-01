@@ -255,10 +255,28 @@ extension Table {
         emptyPlaceholder: String = "No items",
         @TableColumnBuilder<Value> columns: () -> [TableColumn<Value>]
     ) {
+        self.init(
+            data, single: selection, multi: nil, sortOrder: sortOrder, focusID: focusID,
+            columnSpacing: columnSpacing, emptyPlaceholder: emptyPlaceholder, columns: columns)
+    }
+
+    /// The one initializer that stores anything; the public three differ only
+    /// in which selection binding they hand it, and `nil` for both is the
+    /// no-selection table.
+    private init(
+        _ data: [Value],
+        single: Binding<Value.ID?>?,
+        multi: Binding<Set<Value.ID>>?,
+        sortOrder: Binding<[KeyPathComparator<Value>]>?,
+        focusID: String?,
+        columnSpacing: Int,
+        emptyPlaceholder: String,
+        @TableColumnBuilder<Value> columns: () -> [TableColumn<Value>]
+    ) {
         self.data = data
         self.columns = columns()
-        self.singleSelection = selection
-        self.multiSelection = nil
+        self.singleSelection = single
+        self.multiSelection = multi
         self.sortOrder = sortOrder
         self.focusID = focusID
         self.isDisabled = false
@@ -308,8 +326,13 @@ extension Table {
         emptyPlaceholder: String = "No items",
         @TableColumnBuilder<Value> columns: () -> [TableColumn<Value>]
     ) {
+        // No binding at all, rather than a `.constant` one. A constant binding
+        // reads as a single-selection table whose selection happens to be
+        // empty — which is how the gutter for a mark that can never be drawn
+        // survived, and what `isReserved(hasSelection:environment:)` asks
+        // about.
         self.init(
-            data, selection: .constant(Value.ID?.none), sortOrder: sortOrder,
+            data, single: nil, multi: nil, sortOrder: sortOrder,
             focusID: focusID, columnSpacing: columnSpacing,
             emptyPlaceholder: emptyPlaceholder, columns: columns)
     }
@@ -341,22 +364,9 @@ extension Table {
         emptyPlaceholder: String = "No items",
         @TableColumnBuilder<Value> columns: () -> [TableColumn<Value>]
     ) {
-        self.data = data
-        self.columns = columns()
-        self.singleSelection = nil
-        self.multiSelection = selection
-        self.sortOrder = sortOrder
-        self.focusID = focusID
-        self.isDisabled = false
-
-        // Clamped: spacing reaches `String(repeating:count:)` in three
-        // places, which traps on a negative count. `columnSpacing:` is a
-        // public init parameter with no other validation, so a caller
-        // computing it (or just passing -1) would kill the app. Clamp once
-        // here, at the boundary, so every use downstream is safe by
-        // construction rather than by remembering.
-        self.columnSpacing = max(0, columnSpacing)
-        self.emptyPlaceholder = emptyPlaceholder
+        self.init(
+            data, single: nil, multi: selection, sortOrder: sortOrder, focusID: focusID,
+            columnSpacing: columnSpacing, emptyPlaceholder: emptyPlaceholder, columns: columns)
     }
 }
 
@@ -390,6 +400,16 @@ where Value.ID: Hashable {
     /// The gap between columns in a row that is riding the pointer.
     static var previewColumnSpacing: Int { 2 }
 
+    /// The cells a row spends on its selection mark when it has one: the glyph
+    /// and the gap to the first column.
+    ///
+    /// Everything that places anything on a row line goes through
+    /// ``selectionGutter(_:)`` rather than this — the header indent, the column
+    /// widths, the row content, the ramp's column walk, the header's click
+    /// ranges and the row-in-hand preview — because a table with nothing to
+    /// mark reserves none of it and they would otherwise disagree by two cells.
+    static var selectionGutterWidth: Int { 2 }
+
     let data: [Value]
     let columns: [TableColumn<Value>]
     let singleSelection: Binding<Value.ID?>?
@@ -406,6 +426,18 @@ where Value.ID: Hashable {
 
     var body: Never {
         fatalError("_TableCore renders via Renderable")
+    }
+
+    /// Whether this table has a selection binding — the only thing that can
+    /// ever put a mark in the gutter.
+    private var hasSelection: Bool { singleSelection != nil || multiSelection != nil }
+
+    /// The cells this table's rows open with, before the first column:
+    /// ``selectionGutterWidth`` when a mark could appear there, none when it
+    /// could not. See ``RowSelectionIndicator/isReserved(hasSelection:environment:)``.
+    private func selectionGutter(_ environment: EnvironmentValues) -> Int {
+        RowSelectionIndicator.isReserved(hasSelection: hasSelection, environment: environment)
+            ? Self.selectionGutterWidth : 0
     }
 
     /// Sizes the table analytically rather than by rendering it to measure.
@@ -478,6 +510,7 @@ where Value.ID: Hashable {
     /// paths equal across the configuration matrix.
     private func analyticSingleLineSize(context: RenderContext) -> (width: Int, height: Int) {
         let palette = context.environment.palette
+        let gutter = selectionGutter(context.environment)
         let innerWidth = max(0, context.availableWidth - 4)
         let rowArea = max(1, context.availableHeight - 3)
         let wantsScrollbar =
@@ -487,8 +520,8 @@ where Value.ID: Hashable {
             ).bar
         let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
         let columnWidths = calculateColumnWidths(
-            availableWidth: contentInnerWidth, spacing: columnSpacing)
-        var headerLine = renderHeader(columnWidths: columnWidths, palette: palette)
+            availableWidth: contentInnerWidth, spacing: columnSpacing, gutter: gutter)
+        var headerLine = renderHeader(columnWidths: columnWidths, gutter: gutter, palette: palette)
         if wantsScrollbar {
             headerLine += String(
                 repeating: " ", count: max(0, innerWidth - headerLine.strippedLength))
@@ -508,7 +541,7 @@ where Value.ID: Hashable {
             // exceed it ("▼ N more below" on narrow tables), so the ones the
             // render pass would draw at the current scroll state are built
             // (O(1) each) and folded into the width.
-            let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
+            let contentWidth = tableContentWidth(columnWidths, within: innerWidth, gutter: gutter)
             var widest = contentWidth
             if data.count > rowArea {
                 let persistedFocusID = FocusRegistration.persistFocusID(
@@ -582,18 +615,19 @@ where Value.ID: Hashable {
         // Empty is a placeholder line, not rows — the render's business.
         guard !data.isEmpty else { return nil }
         let palette = context.environment.palette
+        let gutter = selectionGutter(context.environment)
         let innerWidth = max(0, context.availableWidth - 4)
         let rowArea = max(1, context.availableHeight - 3)
         // Decide the bar exactly as `renderToBuffer` does — at the width a bar
         // WOULD leave, where rows wrap taller and so overflow soonest.
-        let overflows = multiLineOverflows(rowArea: rowArea, innerWidth: innerWidth - 1)
+        let overflows = multiLineOverflows(rowArea: rowArea, innerWidth: innerWidth - 1, gutter: gutter)
         let wantsScrollbar = context.environment.verticalScrollIndicators(
             overflowing: overflows
         ).bar
         let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
         let columnWidths = calculateColumnWidths(
-            availableWidth: contentInnerWidth, spacing: columnSpacing)
-        let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
+            availableWidth: contentInnerWidth, spacing: columnSpacing, gutter: gutter)
+        let contentWidth = tableContentWidth(columnWidths, within: innerWidth, gutter: gutter)
 
         let content: (width: Int, height: Int)
         if wantsScrollbar {
@@ -620,7 +654,7 @@ where Value.ID: Hashable {
         // The chrome is then *measured* for real, exactly as the single-line
         // analytic does, so border/padding semantics stay the render path's
         // rather than being duplicated as arithmetic here.
-        var headerLine = renderHeader(columnWidths: columnWidths, palette: palette)
+        var headerLine = renderHeader(columnWidths: columnWidths, gutter: gutter, palette: palette)
         if wantsScrollbar {
             headerLine += String(
                 repeating: " ", count: max(0, innerWidth - headerLine.strippedLength))
@@ -706,6 +740,7 @@ where Value.ID: Hashable {
         }
 
         // Calculate available width inside container (subtract border + padding).
+        let gutter = selectionGutter(context.environment)
         let innerWidth = max(0, context.availableWidth - 4)
 
         // A single-line table decides a scrollbar cheaply (one line per row).
@@ -719,14 +754,14 @@ where Value.ID: Hashable {
             !data.isEmpty
             && context.environment.verticalScrollIndicators(
                 overflowing: isMultiLine
-                    ? multiLineOverflows(rowArea: rowArea, innerWidth: innerWidth - 1)
+                    ? multiLineOverflows(rowArea: rowArea, innerWidth: innerWidth - 1, gutter: gutter)
                     : data.count > rowArea
             ).bar
         let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
 
         let columnWidths = calculateColumnWidths(
-            availableWidth: contentInnerWidth, spacing: columnSpacing)
-        var headerLine = renderHeader(columnWidths: columnWidths, palette: palette)
+            availableWidth: contentInnerWidth, spacing: columnSpacing, gutter: gutter)
+        var headerLine = renderHeader(columnWidths: columnWidths, gutter: gutter, palette: palette)
         if wantsScrollbar {
             // Pad the header to the full inner width so it aligns with the rows
             // (whose last column is the scrollbar); the cell above the bar is blank.
@@ -1031,6 +1066,7 @@ where Value.ID: Hashable {
         showsScrollbar: Bool,
         innerWidth: Int
     ) -> (lines: [String], runs: [AnimatedCellRun], state: PopulatedRenderState) {
+        let gutter = selectionGutter(context.environment)
         // 3 = top border + column header + bottom border.
         let contentHeight = max(1, context.availableHeight - 3)
 
@@ -1208,7 +1244,7 @@ where Value.ID: Hashable {
                 drawnBands: bands,
                 hasScrollbar: showsScrollbar,
                 columnWidths: columnWidths,
-                rowContentWidth: tableContentWidth(columnWidths, within: innerWidth)
+                rowContentWidth: tableContentWidth(columnWidths, within: innerWidth, gutter: gutter)
             )
         )
     }
@@ -1345,9 +1381,9 @@ where Value.ID: Hashable {
     /// overflow soonest: if they don't overflow even there they cannot overflow
     /// at the full width either, so answering "no bar" is final and the real
     /// column widths are then computed without the reservation.
-    private func multiLineOverflows(rowArea: Int, innerWidth: Int) -> Bool {
+    private func multiLineOverflows(rowArea: Int, innerWidth: Int, gutter: Int) -> Bool {
         let widths = calculateColumnWidths(
-            availableWidth: max(1, innerWidth), spacing: columnSpacing)
+            availableWidth: max(1, innerWidth), spacing: columnSpacing, gutter: gutter)
         var lines = 0
         for item in data {
             lines += rowHeight(of: item, columnWidths: widths)
@@ -1429,11 +1465,12 @@ where Value.ID: Hashable {
         context: RenderContext
     ) -> (lines: [String], runs: [AnimatedCellRun]) {
         let palette = context.environment.palette
+        let gutter = selectionGutter(context.environment)
         // Every line — focused-row backgrounds and indicators included — is padded
         // to the *content* width (the columns), not the full interior, so a focused
         // row or a scroll indicator is never wider than the header and rows; that
         // width mismatch is what made the wrapping VStack centre the header.
-        let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
+        let contentWidth = tableContentWidth(columnWidths, within: innerWidth, gutter: gutter)
         let showsBar = !bar.isEmpty
         // Whether the "N more" lines are this table's indicator — false for a
         // bar AND for hidden indicators, which is why it is the handler's
@@ -1575,6 +1612,7 @@ where Value.ID: Hashable {
         palette: any Palette
     ) -> RenderedRow {
         let (row, ramp, rowWidth) = (paint.row, paint.ramp, paint.width)
+        let gutter = selectionGutter(context.environment)
         let spacing = asciiSpaces(columnSpacing)
         let visual = rowVisualState(
             isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
@@ -1607,11 +1645,14 @@ where Value.ID: Hashable {
         var bareLines: [String] = []
         for lineIndex in 0..<layout.height {
             // The indicator shows only on the first line; continuation lines keep
-            // the same two-cell gutter so the columns line up beneath it.
-            var content = lineIndex == 0 ? styledIndicator + " " : "  "
+            // the same gutter so the columns line up beneath it. A table with
+            // nothing to mark has no gutter at all, and both are empty.
+            var content =
+                gutter == 0
+                ? "" : (lineIndex == 0 ? styledIndicator + " " : String(repeating: " ", count: gutter))
             content.reserveCapacity(rowWidth * 2)
 
-            var cellColumn = 1 + 1
+            var cellColumn = gutter
             for index in 0..<cellCount {
                 if index > 0 {
                     content.append(contentsOf: spacing)
@@ -1797,8 +1838,9 @@ where Value.ID: Hashable {
     /// the table neither jumps wider on focus nor centres its header over a lone
     /// full-width row. A `.flexible` column already fills the interior, so there the
     /// two widths coincide and nothing changes.
-    private func tableContentWidth(_ columnWidths: [Int], within innerWidth: Int) -> Int {
-        let gutter = 2  // selection indicator + its trailing space
+    private func tableContentWidth(
+        _ columnWidths: [Int], within innerWidth: Int, gutter: Int
+    ) -> Int {
         let spacing = columnSpacing * max(0, columnWidths.count - 1)
         return min(innerWidth, gutter + columnWidths.reduce(0, +) + spacing)
     }
@@ -1895,7 +1937,8 @@ where Value.ID: Hashable {
         lines: [String], rowLines: [String], runs: [AnimatedCellRun],
         bands: [ItemListHandler<Value.ID>.DrawnBand]
     ) {
-        let contentWidth = tableContentWidth(columnWidths, within: innerWidth)
+        let gutter = selectionGutter(context.environment)
+        let contentWidth = tableContentWidth(columnWidths, within: innerWidth, gutter: gutter)
         // Resolve the emphasis ONLY when an indicator will actually be drawn:
         // resolving consults the cursor clock, and that read is what tells the
         // demand-driven loop the frame consumed it. Asking before knowing
@@ -2407,7 +2450,8 @@ where Value.ID: Hashable {
         let focusID = state.focusID
         let originX = 1 + Self.containerPadding.leading
         for (index, xRange) in headerColumnRanges(
-            columnWidths: state.columnWidths, originX: originX)
+            columnWidths: state.columnWidths, originX: originX,
+            gutter: selectionGutter(context.environment))
         where columns.indices.contains(index) && columns[index].sortComparator != nil {
             let column = columns[index]
             let handlerID = mouseDispatcher.register { event in
@@ -2783,12 +2827,11 @@ where Value.ID: Hashable {
 
     // MARK: - Column Width Calculation
 
-    private func calculateColumnWidths(availableWidth: Int, spacing: Int) -> [Int] {
+    private func calculateColumnWidths(availableWidth: Int, spacing: Int, gutter: Int) -> [Int] {
         guard !columns.isEmpty else { return [] }
 
         let totalSpacing = spacing * (columns.count - 1)
-        let indicatorWidth = 2
-        let contentWidth = max(0, availableWidth - totalSpacing - indicatorWidth)
+        let contentWidth = max(0, availableWidth - totalSpacing - gutter)
 
         // Single-line cells are CLIPPED to their column, so once a `.fit`
         // column's widest-so-far already spans the whole interior, no later
@@ -2858,7 +2901,7 @@ where Value.ID: Hashable {
 
     // MARK: - Header Rendering
 
-    private func renderHeader(columnWidths: [Int], palette: any Palette) -> String {
+    private func renderHeader(columnWidths: [Int], gutter: Int, palette: any Palette) -> String {
         let spacing = String(repeating: " ", count: columnSpacing)
 
         let cells = zip(columns.indices, columnWidths).map { index, width -> String in
@@ -2872,12 +2915,8 @@ where Value.ID: Hashable {
             return ANSIRenderer.colorize(aligned, foreground: palette.foregroundSecondary, bold: true)
         }
 
-        return Self.headerIndent + cells.joined(separator: spacing)
+        return String(repeating: " ", count: gutter) + cells.joined(separator: spacing)
     }
-
-    /// The two cells every row spends on its selection indicator, which the
-    /// header line matches so the titles sit over their columns.
-    static var headerIndent: String { "  " }
 
     /// A column's header text, with the sort indicator when the table sorts.
     ///
@@ -2948,9 +2987,11 @@ where Value.ID: Hashable {
     /// out with, so a click lands on the title it is under. `originX` is where
     /// the header line starts inside the buffer: past the border and the
     /// container's padding, then past the indicator indent.
-    private func headerColumnRanges(columnWidths: [Int], originX: Int) -> [(Int, Range<Int>)] {
+    private func headerColumnRanges(
+        columnWidths: [Int], originX: Int, gutter: Int
+    ) -> [(Int, Range<Int>)] {
         var ranges: [(Int, Range<Int>)] = []
-        var x = originX + Self.headerIndent.strippedLength
+        var x = originX + gutter
         for (index, width) in zip(columnWidths.indices, columnWidths) {
             ranges.append((index, x..<(x + width)))
             x += width + columnSpacing
@@ -3010,6 +3051,7 @@ where Value.ID: Hashable {
             visualState.indicator,
             foreground: visualState.indicatorColor
         )
+        let gutter = selectionGutter(context.environment)
 
         // Every cell of every row is coloured the same, so derive its SGR
         // introducer ONCE rather than rebuilding an identical `TextStyle` and
@@ -3036,14 +3078,14 @@ where Value.ID: Hashable {
         // are the bulk of it. Spacing and padding come from the shared
         // `asciiSpaces` run, so neither allocates either.
         let spacing = asciiSpaces(columnSpacing)
-        var content = styledIndicator
+        var content = gutter == 0 ? "" : styledIndicator
         content.reserveCapacity(rowWidth * 2)
-        content += " "
+        if gutter > 0 { content += " " }
 
         let cellCount = min(columns.count, columnWidths.count)
         // Where the cells start, for a ramp that varies along the row: the
-        // indicator and the gap after it.
-        var cellColumn = 1 + 1
+        // indicator and the gap after it, or column zero when there is neither.
+        var cellColumn = gutter
         for index in 0..<cellCount {
             if index > 0 {
                 content.append(contentsOf: spacing)
@@ -3111,12 +3153,6 @@ where Value.ID: Hashable {
     /// interpolates is a visible jump.
     static var previewMorphSteps: Int { 8 }
 
-    /// The selection gutter both layouts open with — the indicator's cell and
-    /// the space after it. A row in the hand keeps it so the grab point,
-    /// measured from the row line's first cell, still lands in the first
-    /// column.
-    static var previewGutter: Int { 2 }
-
     /// One row's picture on its way from the GRID to the HAND: `steps` lines,
     /// the first laid out as the table draws the row and the last as a carried
     /// row is drawn. One step asks for the hand layout alone.
@@ -3154,8 +3190,12 @@ where Value.ID: Hashable {
             row: row, ramp: cellRamp(rowWidth: columnWidths.reduce(0, +), context: context),
             context: context, palette: palette)
         let count = min(columns.count, columnWidths.count)
-        let gutter = String(repeating: " ", count: Self.previewGutter)
-        guard count > 0, steps > 0 else { return Array(repeating: gutter, count: max(0, steps)) }
+        // The row in the hand keeps whatever gutter the grid gave it, so the
+        // grab point — measured from the row line's first cell — still lands in
+        // the column it was taken from.
+        let gutter = selectionGutter(context.environment)
+        let pad = String(repeating: " ", count: gutter)
+        guard count > 0, steps > 0 else { return Array(repeating: pad, count: max(0, steps)) }
 
         let clipped = (0..<count).map {
             columns[$0].value(for: item)
@@ -3164,7 +3204,7 @@ where Value.ID: Hashable {
         let widths = clipped.map(\.strippedLength)
 
         var gridX: [Int] = []
-        var cursor = Self.previewGutter
+        var cursor = gutter
         for index in 0..<count {
             gridX.append(
                 cursor
@@ -3173,7 +3213,7 @@ where Value.ID: Hashable {
             cursor += columnWidths[index] + columnSpacing
         }
         var handX: [Int] = []
-        cursor = Self.previewGutter
+        cursor = gutter
         for index in 0..<count {
             handX.append(cursor)
             cursor += widths[index] + Self.previewColumnSpacing
@@ -3183,8 +3223,8 @@ where Value.ID: Hashable {
             // A single step IS the hand layout — that is how `previewRow` asks
             // for the steady picture.
             let phase = steps > 1 ? Double(step) / Double(steps - 1) : 1
-            var line = gutter
-            var column = Self.previewGutter
+            var line = pad
+            var column = gutter
             for index in 0..<count {
                 let target =
                     gridX[index]

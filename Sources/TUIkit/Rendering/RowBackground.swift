@@ -110,6 +110,35 @@ struct RowSelectionIndicator {
     /// when the answer is a space.
     var isBlank: Bool { glyph == " " }
 
+    /// Whether a control should set cells aside for the mark at all.
+    ///
+    /// A control with no selection binding has nothing to mark, and one told
+    /// ``View/rowSelectionIndicator(_:)`` `.hidden` has been told not to mark
+    /// it. Either way ``forRow(isFocused:isSelected:context:palette:)`` answers
+    /// a blank for every row for the control's whole life, so cells kept for it
+    /// are an indent nobody asked for — which is what a `Table` with no
+    /// selection was: three cells of air before every value, two of them
+    /// unreachable.
+    ///
+    /// Only ``forRow(isFocused:isSelected:context:palette:)``'s *structural*
+    /// conditions are here. The per-row ones are not: whether THIS row is
+    /// selected, and whether an unfocused selection is shown, both change as
+    /// the app runs, and a column that appeared when you clicked a row would
+    /// shift every value in the table sideways.
+    ///
+    /// `Table` reserves two cells — the glyph and the gap to the first column —
+    /// and gives both back here. `_ListCore` reserves none: it draws its mark
+    /// in the one pad cell its rows already had, so it has nothing to hand
+    /// back, and asks this only so the two twins keep answering one question in
+    /// one place.
+    ///
+    /// - Parameters:
+    ///   - hasSelection: Whether the control has a selection binding at all.
+    ///   - environment: For ``EnvironmentValues/rowSelectionIndicator``.
+    static func isReserved(hasSelection: Bool, environment: EnvironmentValues) -> Bool {
+        hasSelection && environment.rowSelectionIndicator != .hidden
+    }
+
     /// The indicator for a row in the state given.
     ///
     /// - Parameters:

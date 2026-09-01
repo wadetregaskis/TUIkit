@@ -148,8 +148,10 @@ extension EnvironmentValues {
     ///   a character the reader is there to look at — a second mark beside it
     ///   is one mark too many.
     ///
-    /// The gutter itself is still reserved, so rows stay aligned with the
-    /// header whichever way this is set.
+    /// A `Table` told `.hidden` gives the mark's two cells back rather than
+    /// leaving them blank; the header indents by the same amount, so the
+    /// titles stay over their columns either way. A `List` has nothing to give
+    /// back — its mark goes in the one pad cell its rows already had.
     ///
     /// Set via ``View/rowSelectionIndicator(_:)``.
     var rowSelectionIndicator: Visibility {
