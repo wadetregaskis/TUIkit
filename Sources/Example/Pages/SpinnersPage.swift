@@ -203,12 +203,24 @@ struct SpinnersPage: View {
             set: { editorUsesThemeColor = $0 == .theme })
     }
 
+    /// The colour the store holds, however it happens to spell it.
+    ///
+    /// Read through the gradient codec, which takes both a bare `RRGGBB` and a
+    /// positioned `RRGGBB@0.000` stop — the two spellings this key has had.
+    /// `Color.hex` alone rejects the second, which is what broke: the picker's
+    /// setter wrote a one-stop gradient while both readers expected bare hex,
+    /// so touching the picker made the custom colour stop applying and left
+    /// the radio saying "Custom colour" over spinners in the theme accent.
+    private var storedColor: Color {
+        GradientStopsCodec.decode(editorColorHex, fallback: Gradient(colors: [.magenta]))
+            .stops.first?.color ?? .magenta
+    }
+
     /// The edited colour as a binding the `ColorPicker` can drive, hex in the
-    /// persisted store and a `Color` in the control.
+    /// persisted store and a `Color` in the control. One colour, so one stop's
+    /// worth of hex goes back.
     private var colorBinding: Binding<Color> {
-        Binding(
-            get: { Color.hex(editorColorHex) ?? .magenta },
-            set: { editorColorHex = GradientStopsCodec.encode(Gradient(colors: [$0])) })
+        Binding(get: { storedColor }, set: { editorColorHex = GradientStopsCodec.hex($0) })
     }
 
     /// The frames the custom spinner runs — the field's, unless it is empty, in
@@ -220,7 +232,7 @@ struct SpinnersPage: View {
     /// `nil` means "whatever a Spinner does by default", which is the theme's
     /// accent — an absence rather than a copy of it.
     private var editedColor: Color? {
-        editorUsesThemeColor ? nil : Color.hex(editorColorHex)
+        editorUsesThemeColor ? nil : storedColor
     }
 
     private var editedLabel: String? {

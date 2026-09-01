@@ -52,15 +52,18 @@ enum GradientStopsCodec {
 
     /// Encodes a gradient for storage — the inverse of ``decode(_:fallback:)``.
     static func encode(_ gradient: Gradient) -> String {
-        gradient.stops.map { stop in
-            let hex: String
-            if let components = stop.color.rgbComponents {
-                hex = String(
-                    format: "%02X%02X%02X", components.red, components.green, components.blue)
-            } else {
-                hex = "000000"
-            }
-            return hex + String(format: "@%.3f", stop.location)
-        }.joined(separator: ",")
+        gradient.stops.map { hex($0.color) + String(format: "@%.3f", $0.location) }
+            .joined(separator: ",")
+    }
+
+    /// A colour as the bare `RRGGBB` ``Color/hex(_:)-(String)`` reads back.
+    ///
+    /// The one place this app turns a `Color` into text, so a store written
+    /// here can always be read by whatever reads it. A colour with no channels
+    /// to state (a palette role) has no hex, and black is what the gradient
+    /// format has always written for one.
+    static func hex(_ color: Color) -> String {
+        guard let components = color.rgbComponents else { return "000000" }
+        return String(format: "%02X%02X%02X", components.red, components.green, components.blue)
     }
 }
