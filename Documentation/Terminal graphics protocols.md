@@ -407,6 +407,21 @@ of image id 42 and compares the encoder's cells against it. **A constant taken
 from a specification has to be checked against that specification, spelled
 out** — otherwise the tests only prove the code agrees with itself.
 
+The same round found another, which the codepoint bug was hiding:
+
+- **`RGBAImage.scaledBilinear` was dropping the alpha channel.** It
+  interpolated red, green and blue and then built its pixel with
+  `RGBA(r:g:b:)`, whose alpha defaults to opaque. Nothing noticed while its
+  only consumers read luminance to pick a glyph; a renderer that hands the
+  pixels to the terminal notices at once, because the terminal is what
+  composites them.
+- **`RGBAImage.scaledBilinear` was dropping the alpha channel.** It
+  interpolated red, green and blue and then built its pixel with
+  `RGBA(r:g:b:)`, whose alpha defaults to opaque. Nothing noticed while its
+  only consumers read luminance to pick a glyph; a renderer that hands the
+  pixels to the terminal notices at once, because the terminal is what
+  composites them.
+
 ### 8.6 What an image costs
 
 | | Ghostty 1.3.1, 16×34-pixel cells |

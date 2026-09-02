@@ -152,6 +152,9 @@ extension RGBAImage {
 
     /// Returns a scaled copy using bilinear interpolation for smoother results.
     ///
+    /// All four channels are interpolated, alpha included — see the note at
+    /// the assignment, which is where it was being dropped.
+    ///
     /// - Parameters:
     ///   - targetWidth: The desired width.
     ///   - targetHeight: The desired height.
@@ -207,10 +210,27 @@ extension RGBAImage {
                     yFrac
                 )
 
+                // Alpha is interpolated like every other channel. It used to
+                // be dropped here — `RGBA(r:g:b:)` defaults it to opaque — so
+                // this function silently flattened every transparent picture
+                // it touched. Nothing noticed while its only consumers read
+                // luminance or RGB to pick a glyph; a renderer that hands the
+                // pixels to the terminal notices immediately, because the
+                // terminal is what composites them over the page.
+                let alpha = bilinearInterpolate(
+                    Double(p00.a),
+                    Double(p10.a),
+                    Double(p01.a),
+                    Double(p11.a),
+                    xFrac,
+                    yFrac
+                )
+
                 result[y * targetWidth + x] = RGBA(
                     r: UInt8(clamping: Int(r.rounded())),
                     g: UInt8(clamping: Int(g.rounded())),
-                    b: UInt8(clamping: Int(b.rounded()))
+                    b: UInt8(clamping: Int(b.rounded())),
+                    a: UInt8(clamping: Int(alpha.rounded()))
                 )
             }
         }
