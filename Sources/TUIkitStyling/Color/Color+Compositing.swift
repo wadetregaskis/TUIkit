@@ -19,9 +19,22 @@ extension Color {
     /// copy of these constants; `relativeLuminance` and ``oklab(red:green:blue:)``
     /// both decode through here, so the quantiser's metric and the contrast
     /// arithmetic cannot drift apart on what "linear" means.
+    /// A table, because the domain is 256 values and the function is a `pow`.
+    ///
+    /// Bit-exact by construction — the same expression, over every input it can
+    /// be given — and the difference is not marginal on the paths that reach
+    /// here per PIXEL rather than per cell. `oklab(red:green:blue:)` decodes
+    /// three channels, so quantising a megapixel image to a palette was three
+    /// million `pow` calls before it started measuring distances.
     @inlinable
     package static func linearChannel(_ value: UInt8) -> Double {
-        let c = Double(value) / 255.0
+        linearChannelTable[Int(value)]
+    }
+
+    /// `@usableFromInline` so the inlinable accessor above can reach it.
+    @usableFromInline
+    internal static let linearChannelTable: [Double] = (0...255).map { byte in
+        let c = Double(byte) / 255.0
         return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
     }
 

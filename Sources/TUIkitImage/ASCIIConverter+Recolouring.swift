@@ -97,14 +97,28 @@ extension ASCIIConverter {
 
         guard colorMode != .trueColor else { return scaled }
 
+        // One table, built once, for the modes that would otherwise search a
+        // palette per pixel — see `ASCIIPalette.quantisationTable()`. `nil`
+        // for every other mode, and for a palette too large to index with a
+        // byte, in which case the exact search runs as before.
+        let table = colorMode.searchedPalette?.quantisationTable()
+
         if dithering == .floydSteinberg {
             scaled = applyFloydSteinbergDithering(
-                scaled, mode: colorMode, monoThreshold: monoThreshold)
+                scaled, mode: colorMode, monoThreshold: monoThreshold, table: table)
         } else {
             // Without dithering the quantisation still has to happen: the glyph
             // path quantises when it emits each cell's SGR, and there is no SGR
             // here — the pixels ARE the output.
-            scaled.mapPixels { quantizePixel($0, mode: colorMode, monoThreshold: monoThreshold) }
+            //
+            // The mode is switched on ONCE and captured, rather than switched
+            // on per pixel. Per pixel it was an enum dispatch, a static
+            // property access with its one-time-initialisation check, and a
+            // retain of the palette's storage — a million times, for an answer
+            // that could not change between pixels.
+            let mode = colorMode
+            let threshold = monoThreshold
+            scaled.mapPixels { quantizePixel($0, mode: mode, monoThreshold: threshold, table: table) }
         }
 
         // Mono's two values become mono's two COLOURS. Done after the

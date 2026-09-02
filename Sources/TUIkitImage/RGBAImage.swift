@@ -33,7 +33,13 @@ extension RGBA {
     ///
     /// Returns a value in the range 0.0 (black) to 255.0 (white).
     public var luminance: Double {
-        Double(r) * 0.299 + Double(g) * 0.587 + Double(b) * 0.114
+        // `Double(Int(r))` rather than `Double(r)`: there is no
+        // `Double.init(UInt8)`, so the shorter spelling is an unspecialized
+        // generic call through a protocol witness — three of them, on a
+        // property that runs per pixel on the graphics path. The value is
+        // identical; every byte is exactly representable as a Double either
+        // way.
+        Double(Int(r)) * 0.299 + Double(Int(g)) * 0.587 + Double(Int(b)) * 0.114
     }
 }
 
@@ -97,8 +103,14 @@ extension RGBAImage {
     /// runs on the scaled image at conversion time, and an extra allocation the
     /// size of the render grid is the kind of thing that shows up in a profile
     /// of an image redrawn on every spinner tick.
+    /// Through an unsafe buffer rather than an index loop: this runs once per
+    /// non-true-colour conversion and again per mono recolouring, over a
+    /// megapixel, and a debug build charges a bounds check and an exclusivity
+    /// check for every subscript at both ends.
     public mutating func mapPixels(_ transform: (RGBA) -> RGBA) {
-        for index in pixels.indices { pixels[index] = transform(pixels[index]) }
+        pixels.withUnsafeMutableBufferPointer { buffer in
+            for index in 0..<buffer.count { buffer[index] = transform(buffer[index]) }
+        }
     }
 
     /// Adds an error value to the pixel at the given coordinates (for dithering).
@@ -164,78 +176,89 @@ extension RGBAImage {
             return RGBAImage(width: 0, height: 0, pixels: [])
         }
 
-        var result = [RGBA](repeating: RGBA(r: 0, g: 0, b: 0), count: targetWidth * targetHeight)
         let xRatio = Double(width) / Double(targetWidth)
         let yRatio = Double(height) / Double(targetHeight)
+        let sourceWidth = width
+        let sourceHeight = height
 
-        for y in 0..<targetHeight {
-            let srcY = Double(y) * yRatio
-            let y0 = min(Int(srcY), height - 1)
-            let y1 = min(y0 + 1, height - 1)
-            let yFrac = srcY - Double(y0)
+        // Call-free, deliberately, and bit-exact: the same operands in the same
+        // order, only without the machinery around them.
+        //
+        // The arithmetic here was never the cost. Compiled at -Onone the inner
+        // loop made 41 non-inlined calls and about 26 atomic retain/release
+        // pairs PER OUTPUT PIXEL — four `pixel(at:)` calls each retaining and
+        // releasing the array buffer three times, sixteen `Double.init` calls
+        // that do NOT resolve to a concrete initializer (there is no
+        // `Double.init(UInt8)`, so each goes through a protocol witness), and
+        // four calls to a private interpolation helper. A megapixel image is
+        // forty million calls to convert some bytes to Doubles.
+        //
+        // `Double(Int(x))` rather than `Double(x)` is the same value by a
+        // concrete initializer; the interpolation is written out; the reads and
+        // writes go through unsafe buffers. A debug build optimises none of
+        // this away on its own, and a debug build is what the framework is
+        // developed and demoed in.
+        let count = targetWidth * targetHeight
+        let scaled = pixels.withUnsafeBufferPointer { source -> [RGBA] in
+            [RGBA](unsafeUninitializedCapacity: count) { destination, initialized in
+                for y in 0..<targetHeight {
+                    let sourceY = Double(y) * yRatio
+                    var y0 = Int(sourceY)
+                    if y0 > sourceHeight - 1 { y0 = sourceHeight - 1 }
+                    var y1 = y0 + 1
+                    if y1 > sourceHeight - 1 { y1 = sourceHeight - 1 }
+                    let yFrac = sourceY - Double(y0)
+                    let oneMinusY = 1.0 - yFrac
+                    let row0 = y0 * sourceWidth
+                    let row1 = y1 * sourceWidth
+                    let out = y * targetWidth
 
-            for x in 0..<targetWidth {
-                let srcX = Double(x) * xRatio
-                let x0 = min(Int(srcX), width - 1)
-                let x1 = min(x0 + 1, width - 1)
-                let xFrac = srcX - Double(x0)
+                    for x in 0..<targetWidth {
+                        let sourceX = Double(x) * xRatio
+                        var x0 = Int(sourceX)
+                        if x0 > sourceWidth - 1 { x0 = sourceWidth - 1 }
+                        var x1 = x0 + 1
+                        if x1 > sourceWidth - 1 { x1 = sourceWidth - 1 }
+                        let xFrac = sourceX - Double(x0)
+                        let oneMinusX = 1.0 - xFrac
 
-                let p00 = pixel(at: x0, y0)
-                let p10 = pixel(at: x1, y0)
-                let p01 = pixel(at: x0, y1)
-                let p11 = pixel(at: x1, y1)
+                        let p00 = source[row0 + x0]
+                        let p10 = source[row0 + x1]
+                        let p01 = source[row1 + x0]
+                        let p11 = source[row1 + x1]
 
-                let r = bilinearInterpolate(
-                    Double(p00.r),
-                    Double(p10.r),
-                    Double(p01.r),
-                    Double(p11.r),
-                    xFrac,
-                    yFrac
-                )
-                let g = bilinearInterpolate(
-                    Double(p00.g),
-                    Double(p10.g),
-                    Double(p01.g),
-                    Double(p11.g),
-                    xFrac,
-                    yFrac
-                )
-                let b = bilinearInterpolate(
-                    Double(p00.b),
-                    Double(p10.b),
-                    Double(p01.b),
-                    Double(p11.b),
-                    xFrac,
-                    yFrac
-                )
+                        let red =
+                            (Double(Int(p00.r)) * oneMinusX + Double(Int(p10.r)) * xFrac)
+                            * oneMinusY
+                            + (Double(Int(p01.r)) * oneMinusX + Double(Int(p11.r)) * xFrac) * yFrac
+                        let green =
+                            (Double(Int(p00.g)) * oneMinusX + Double(Int(p10.g)) * xFrac)
+                            * oneMinusY
+                            + (Double(Int(p01.g)) * oneMinusX + Double(Int(p11.g)) * xFrac) * yFrac
+                        let blue =
+                            (Double(Int(p00.b)) * oneMinusX + Double(Int(p10.b)) * xFrac)
+                            * oneMinusY
+                            + (Double(Int(p01.b)) * oneMinusX + Double(Int(p11.b)) * xFrac) * yFrac
+                        // Alpha is interpolated like every other channel. It
+                        // used to be dropped — `RGBA(r:g:b:)` defaults it to
+                        // opaque — so this function silently flattened every
+                        // transparent picture it touched.
+                        let alpha =
+                            (Double(Int(p00.a)) * oneMinusX + Double(Int(p10.a)) * xFrac)
+                            * oneMinusY
+                            + (Double(Int(p01.a)) * oneMinusX + Double(Int(p11.a)) * xFrac) * yFrac
 
-                // Alpha is interpolated like every other channel. It used to
-                // be dropped here — `RGBA(r:g:b:)` defaults it to opaque — so
-                // this function silently flattened every transparent picture
-                // it touched. Nothing noticed while its only consumers read
-                // luminance or RGB to pick a glyph; a renderer that hands the
-                // pixels to the terminal notices immediately, because the
-                // terminal is what composites them over the page.
-                let alpha = bilinearInterpolate(
-                    Double(p00.a),
-                    Double(p10.a),
-                    Double(p01.a),
-                    Double(p11.a),
-                    xFrac,
-                    yFrac
-                )
-
-                result[y * targetWidth + x] = RGBA(
-                    r: UInt8(clamping: Int(r.rounded())),
-                    g: UInt8(clamping: Int(g.rounded())),
-                    b: UInt8(clamping: Int(b.rounded())),
-                    a: UInt8(clamping: Int(alpha.rounded()))
-                )
+                        destination[out + x] = RGBA(
+                            r: UInt8(clamping: Int(red.rounded())),
+                            g: UInt8(clamping: Int(green.rounded())),
+                            b: UInt8(clamping: Int(blue.rounded())),
+                            a: UInt8(clamping: Int(alpha.rounded())))
+                    }
+                }
+                initialized = count
             }
         }
-
-        return RGBAImage(width: targetWidth, height: targetHeight, pixels: result)
+        return RGBAImage(width: targetWidth, height: targetHeight, pixels: scaled)
     }
 
     /// Returns a copy with each `factor × factor` block averaged into one
@@ -308,10 +331,19 @@ extension RGBAImage {
         let spanY = max(1, radiusY)
         let rowBlur = horizontallyAveraged(span: spanX)
         var result = pixels
+        // Three scalars, not a three-element array. The arithmetic below is
+        // unchanged and the output is byte-identical; what is gone is two heap
+        // allocations PER PIXEL — `[here.r, here.g, here.b]` and its copy —
+        // which on a megapixel image is two million of them, and which a debug
+        // build does not optimise away. This is the difference between an
+        // unsharp mask being a knob and being a pause.
         for x in 0..<width {
-            var running = [Double](repeating: 0, count: 3)
+            var running = (r: 0.0, g: 0.0, b: 0.0)
             for y in 0...min(height - 1, spanY) {
-                for channel in 0..<3 { running[channel] += rowBlur[(y * width + x) * 3 + channel] }
+                let slot = (y * width + x) * 3
+                running.r += rowBlur[slot]
+                running.g += rowBlur[slot + 1]
+                running.b += rowBlur[slot + 2]
             }
             for y in 0..<height {
                 let low = max(0, y - spanY)
@@ -319,28 +351,33 @@ extension RGBAImage {
                 let count = Double(high - low + 1)
                 let index = y * width + x
                 let here = pixels[index]
-                let source = [here.r, here.g, here.b]
-                var lifted = source
-                for channel in 0..<3 {
-                    let blurred = running[channel] / count
-                    let value = Double(source[channel])
-                    lifted[channel] = UInt8(
-                        clamping: Int((value + amount * (value - blurred)).rounded()))
-                }
-                result[index] = RGBA(r: lifted[0], g: lifted[1], b: lifted[2], a: here.a)
+                result[index] = RGBA(
+                    r: Self.lifted(here.r, blurred: running.r / count, amount: amount),
+                    g: Self.lifted(here.g, blurred: running.g / count, amount: amount),
+                    b: Self.lifted(here.b, blurred: running.b / count, amount: amount),
+                    a: here.a)
                 if y - spanY >= 0 {
-                    for channel in 0..<3 {
-                        running[channel] -= rowBlur[((y - spanY) * width + x) * 3 + channel]
-                    }
+                    let slot = ((y - spanY) * width + x) * 3
+                    running.r -= rowBlur[slot]
+                    running.g -= rowBlur[slot + 1]
+                    running.b -= rowBlur[slot + 2]
                 }
                 if y + spanY + 1 < height {
-                    for channel in 0..<3 {
-                        running[channel] += rowBlur[((y + spanY + 1) * width + x) * 3 + channel]
-                    }
+                    let slot = ((y + spanY + 1) * width + x) * 3
+                    running.r += rowBlur[slot]
+                    running.g += rowBlur[slot + 1]
+                    running.b += rowBlur[slot + 2]
                 }
             }
         }
         return RGBAImage(width: width, height: height, pixels: result)
+    }
+
+    /// One channel pushed away from its neighbourhood's average by `amount`
+    /// times the difference — the unsharp mask, per channel.
+    private static func lifted(_ value: UInt8, blurred: Double, amount: Double) -> UInt8 {
+        let original = Double(value)
+        return UInt8(clamping: Int((original + amount * (original - blurred)).rounded()))
     }
 
     /// Each pixel's three colour channels averaged across `2 × span + 1`

@@ -725,7 +725,15 @@ extension _ImageCore {
                 })
         else { return nil }
 
-        return FrameBuffer(lines: lines, width: target.width)
+        // Every row is exactly `target.width` cells by construction — one
+        // placeholder each, and `KittyGraphics.placeholderRows` builds nothing
+        // else. Saying so costs nothing and saves every consumer of this buffer
+        // re-deriving it EVERY FRAME: measuring a row means walking its scalars
+        // through grapheme segmentation, and an image row is three scalars per
+        // cell with no ASCII fast path to take.
+        return FrameBuffer(
+            lines: lines, width: target.width, uniformWidth: true,
+            lineWidths: [Int](repeating: target.width, count: lines.count))
     }
 
     /// A palette colour as pixels, or `nil` for a semantic colour that has no

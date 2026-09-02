@@ -241,12 +241,24 @@ public struct ASCIIPalette: Sendable, Equatable {
         let target = Color.oklab(red: pixel.r, green: pixel.g, blue: pixel.b)
         var best = 0
         var bestDistance = Double.infinity
-        for (index, entry) in entries.enumerated() {
-            let distance = Self.distanceSquared(
-                target, (l: entry.lightness, a: entry.a, b: entry.b))
-            if distance < bestDistance {
-                bestDistance = distance
-                best = index
+        // A plain index walk with the arithmetic written out, rather than
+        // `enumerated()` and a call to `distanceSquared`. Identical comparisons
+        // in an identical order, so the answer is identical — but this runs
+        // once per PIXEL on the graphics path (about a million times, against
+        // the character renderer's few thousand), and there a tuple built and
+        // a function called per entry per pixel is sixteen million of each.
+        // Measured at 155 ms per palette entry in a debug build.
+        entries.withUnsafeBufferPointer { buffer in
+            for index in 0..<buffer.count {
+                let entry = buffer[index]
+                let deltaL = target.l - entry.lightness
+                let deltaA = target.a - entry.a
+                let deltaB = target.b - entry.b
+                let distance = deltaL * deltaL + deltaA * deltaA + deltaB * deltaB
+                if distance < bestDistance {
+                    bestDistance = distance
+                    best = index
+                }
             }
         }
         return best

@@ -119,14 +119,16 @@ extension ASCIIConverter {
     /// Quantizes against the *effective* color mode so dithering matches
     /// what will actually be emitted. See ``ASCIIColorMode/effective(for:)``.
     func applyFloydSteinbergDithering(
-        _ image: RGBAImage, mode: ASCIIColorMode, monoThreshold: Double
+        _ image: RGBAImage, mode: ASCIIColorMode, monoThreshold: Double,
+        table: ASCIIPalette.QuantisationTable? = nil
     ) -> RGBAImage {
         var result = image
 
         for y in 0..<image.height {
             for x in 0..<image.width {
                 let oldPixel = result.pixel(at: x, y)
-                let newPixel = quantizePixel(oldPixel, mode: mode, monoThreshold: monoThreshold)
+                let newPixel = quantizePixel(
+                    oldPixel, mode: mode, monoThreshold: monoThreshold, table: table)
                 result.setPixel(at: x, y, value: newPixel)
 
                 let rErr = Int16(oldPixel.r) - Int16(newPixel.r)
@@ -187,7 +189,8 @@ extension ASCIIConverter {
     /// `RGBAImage.scaledBilinear` had, in the same shape: `RGBA(r:g:b:)`
     /// defaults alpha to opaque.
     func quantizePixel(
-        _ pixel: RGBA, mode: ASCIIColorMode, monoThreshold: Double
+        _ pixel: RGBA, mode: ASCIIColorMode, monoThreshold: Double,
+        table: ASCIIPalette.QuantisationTable? = nil
     ) -> RGBA {
         switch mode {
         case .trueColor:
@@ -201,7 +204,7 @@ extension ASCIIConverter {
 
         case .ansi16:
             let sixteen = ASCIIPalette.ansi16
-            var quantized = sixteen.rgba(at: sixteen.nearestIndex(to: pixel))
+            var quantized = sixteen.rgba(at: Self.index(of: pixel, in: sixteen, table: table))
             quantized.a = pixel.a
             return quantized
 
@@ -219,10 +222,22 @@ extension ASCIIConverter {
             // The entry this pixel will actually be drawn as — so the error
             // diffused is the error the palette makes, which is what turns a
             // three-colour render from three flat regions into a gradient.
-            var quantized = palette.rgba(at: palette.nearestIndex(to: pixel))
+            var quantized = palette.rgba(at: Self.index(of: pixel, in: palette, table: table))
             quantized.a = pixel.a
             return quantized
         }
+    }
+
+    /// The palette entry for `pixel`: through `table` when the caller built one
+    /// (the pixel renderer, asking a million times), exactly otherwise (the
+    /// character renderer, asking once per cell).
+    private static func index(
+        of pixel: RGBA, in palette: ASCIIPalette, table: ASCIIPalette.QuantisationTable?
+    ) -> Int {
+        guard let table else { return palette.nearestIndex(to: pixel) }
+        let cell = ASCIIPalette.quantisationCell(for: pixel)
+        guard table.trusted[cell] else { return palette.nearestIndex(to: pixel) }
+        return Int(table.answers[cell])
     }
 
     /// Converts an ANSI 256-color index back to approximate RGB.
