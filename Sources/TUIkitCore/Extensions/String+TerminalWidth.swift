@@ -59,6 +59,66 @@ extension Character {
     /// by ``terminalWidth`` to tell a base-plus-accent cluster (width = the
     /// base's) from a genuine multi-glyph sequence like a ZWJ emoji or a flag
     /// (width 2). Mirrors the single-scalar zero-width ranges above.
+    /// Whether `scalar` adds no cells — the range check above, plus the
+    /// general rule it only ever approximated.
+    ///
+    /// Unicode's answer to "does this mark occupy a column" is its general
+    /// category: `Mn` (nonspacing) and `Me` (enclosing) do not, `Mc` (spacing
+    /// combining) does. The ranges above name five blocks; there are dozens,
+    /// and the ones they miss are not exotic — Hebrew points (U+0591…),
+    /// Arabic vowels (U+0610…, U+06D6…), Cyrillic (U+0483…), Devanagari
+    /// (U+0951…), Syriac, Thai, Tibetan, and the CJK tone and kana voicing
+    /// marks that sit INSIDE the East-Asian-Wide ranges and were scored two
+    /// cells each.
+    ///
+    /// A line carrying one measured wider than it painted, so every column
+    /// after it landed short — the same defect the bidi controls had, found
+    /// the same way. This is not a hypothetical script: it is any Hebrew or
+    /// Arabic text with points, which is most religious, pedagogical and
+    /// poetic text in both languages, and it is what
+    /// `Tools/TerminalProbes/bidi_card.py` draws.
+    ///
+    /// The category lookup is not free, which is why the ranges above stay:
+    /// they take ASCII, the selectors and the Latin marks — the overwhelming
+    /// majority of what a terminal UI contains — without one.
+    static func isWidthNeutralExtra(_ scalar: Unicode.Scalar) -> Bool {
+        isWidthNeutralExtraScalar(scalar.value) || isNonAdvancingMark(scalar.value)
+    }
+
+    /// Whether `value` is a nonspacing (`Mn`) or enclosing (`Me`) mark, and so
+    /// occupies no column.
+    ///
+    /// A binary search over `combiningMarkRanges` rather than
+    /// `Unicode.Scalar.Properties.generalCategory`, which is what this
+    /// originally asked. The property is a second standard-library lookup for
+    /// every non-ASCII scalar that the earlier fast paths do not take — in a
+    /// terminal UI that is every arrow, bullet, ellipsis, braille cell and
+    /// spinner frame — and it cost a measured 2–3% on four Stress scenarios
+    /// (`table` +2.0%, `dashboard` +2.8%, `kitchensink` +1.0%, `customlayout`
+    /// +2.6%, all outside the interval). The table is generated FROM that
+    /// property and a test re-derives it, so this is the same answer arrived
+    /// at cheaply rather than a hand-written approximation of it.
+    ///
+    /// The floor and ceiling are the point: the common answer is "no", and it
+    /// costs two comparisons.
+    static func isNonAdvancingMark(_ value: UInt32) -> Bool {
+        guard value >= combiningMarkFloor, value <= combiningMarkCeiling else { return false }
+        var low = 0
+        var high = combiningMarkRanges.count - 1
+        while low <= high {
+            let middle = (low + high) / 2
+            let range = combiningMarkRanges[middle]
+            if value < range.0 {
+                high = middle - 1
+            } else if value > range.1 {
+                low = middle + 1
+            } else {
+                return true
+            }
+        }
+        return false
+    }
+
     static func isWidthNeutralExtraScalar(_ sv: UInt32) -> Bool {
         switch sv {
         case 0x200B, 0x200C, 0x200D, 0xFEFF, 0x00AD:  // ZWSP/ZWNJ/ZWJ/BOM, soft hyphen
@@ -209,7 +269,7 @@ extension Character {
         // it drifts every border and column that renders such text. (A composed
         // "é", U+00E9, is a single scalar and never reaches here.)
         let hasWidthAddingExtras = scalars.dropFirst().contains { scalar in
-            !Self.isWidthNeutralExtraScalar(scalar.value)
+            !Self.isWidthNeutralExtra(scalar)
         }
         if hasWidthAddingExtras {
             // True multi-character sequence (ZWJ, flags, keycaps, skin tones).
@@ -487,6 +547,17 @@ extension Unicode.Scalar {
         // otherwise fall through to the 1-cell default. Pin them explicitly
         // so the width is correct cross-platform. (On Linux the property check
         // already catches them; these ranges are then a harmless no-op.)
+        // Every other non-advancing mark, by its Unicode category rather than
+        // by a block this file happened to list. Placed here, after the two
+        // fast paths and the emoji property that every scalar reaching this
+        // point has already paid for, and BEFORE the East Asian ranges — which
+        // contain marks of their own (U+302A…U+302D CJK tone marks, U+3099 and
+        // U+309A kana voicing) that those ranges were scoring two cells.
+        //
+        // `Mc` — a spacing combining mark, such as a Devanagari matra — is
+        // deliberately not here: it does advance.
+        if Character.isNonAdvancingMark(scalarValue) { return 0 }
+
         if (0x231A...0x231B).contains(scalarValue) { return 2 }  // ⌚ ⌛
         if (0x23E9...0x23EC).contains(scalarValue) { return 2 }  // ⏩ ⏪ ⏫ ⏬
         if scalarValue == 0x23F0 || scalarValue == 0x23F3 { return 2 }  // ⏰ ⏳

@@ -273,3 +273,151 @@ struct BidiControlWidthTests {
         #expect("\u{5D0}".strippedLength == 1, "the letter itself is one cell")
     }
 }
+
+// MARK: - Combining marks
+
+/// The sibling of the bidi-control suite above, found the same way and wrong
+/// for the same reason: a hand-written list of blocks that named five of the
+/// dozens Unicode actually has.
+///
+/// A mark that measures one cell makes its line measure wider than it paints,
+/// so everything after it on the row lands short — and unlike an exotic
+/// codepoint nobody types, these are ordinary text. Hebrew with points and
+/// Arabic with vowels are most religious, pedagogical and poetic writing in
+/// both languages, and `Tools/TerminalProbes/bidi_card.py` draws them.
+@Suite("Combining marks take no cells")
+struct CombiningMarkWidthTests {
+
+    /// One mark per script that the old block list missed, named so a failure
+    /// says which writing system broke.
+    private static let marks: [(String, UInt32)] = [
+        ("Hebrew segol", 0x0592), ("Hebrew sheva", 0x05B0), ("Hebrew dagesh", 0x05BC),
+        ("Arabic fatha", 0x064E), ("Arabic small high seen", 0x06D6),
+        ("Arabic hamza above", 0x0654),
+        ("Cyrillic titlo", 0x0483), ("Cyrillic psili", 0x0486),
+        ("Syriac qushshaya", 0x0741), ("Samaritan", 0x0816),
+        ("Devanagari udatta", 0x0951), ("Bengali candrabindu", 0x0981),
+        ("Thai mai ek", 0x0E48), ("Lao", 0x0EC8),
+        ("Tibetan", 0x0F82), ("Myanmar", 0x1037),
+        ("Ethiopic gemination", 0x135F), ("Khmer", 0x17DD),
+        ("Balinese", 0x1B6B), ("Vedic", 0x1CD0),
+        ("Coptic", 0x2CEF), ("Cyrillic ext-A", 0x2DE0),
+        ("CJK tone mark", 0x302A), ("Kana voicing", 0x3099),
+        ("Greek musical", 0x1D242),
+    ]
+
+    @Test("each mark on its own measures zero")
+    func marksAreZeroWidth() {
+        for (name, value) in Self.marks {
+            guard let scalar = Unicode.Scalar(value) else {
+                Issue.record("\(name) is not a scalar")
+                continue
+            }
+            let width = scalar.loneTerminalWidth
+            #expect(width == 0, "\(name) (U+\(String(value, radix: 16, uppercase: true))) measured \(width)")
+        }
+    }
+
+    /// The two that sit INSIDE the East-Asian-Wide ranges, which is why a
+    /// block list could not have caught them: U+302A…U+302D and U+3099/U+309A
+    /// are surrounded by genuinely two-cell ideographs.
+    @Test("the marks buried in the CJK ranges are not two cells")
+    func cjkMarksAreNotWide() {
+        for value: UInt32 in [0x302A, 0x302B, 0x302C, 0x302D, 0x3099, 0x309A] {
+            #expect(Unicode.Scalar(value)?.loneTerminalWidth == 0)
+        }
+        // Their neighbours still are, so the fix took a mark and not a range.
+        #expect(Unicode.Scalar(0x3029)?.loneTerminalWidth == 2)
+        #expect(Unicode.Scalar(0x309B)?.loneTerminalWidth == 2)
+    }
+
+    /// A **spacing** combining mark does advance, and must not be swept up:
+    /// this is why the rule is `Mn`/`Me` and not "anything Unicode calls a
+    /// mark".
+    @Test("a spacing combining mark still takes its cell")
+    func spacingMarksStillAdvance() {
+        #expect(Unicode.Scalar(0x093E)?.loneTerminalWidth == 1, "Devanagari aa matra")
+        #expect(Unicode.Scalar(0x0BBE)?.loneTerminalWidth == 1, "Tamil aa matra")
+    }
+
+    /// The cluster path, which is a different function and had the same hole:
+    /// a base carrying only non-advancing marks is exactly as wide as the base.
+    @Test("a pointed letter is as wide as the letter")
+    func pointedLettersMeasureTheirBase() {
+        #expect("\u{5D0}\u{05B7}".strippedLength == 1, "aleph with patah")
+        #expect("\u{5D0}\u{05B7}\u{05BC}".strippedLength == 1, "…and a dagesh too")
+        #expect("\u{0628}\u{064E}".strippedLength == 1, "beh with fatha")
+        #expect("\u{3053}\u{3099}".strippedLength == 2, "a kana keeps its two cells")
+    }
+
+    /// The line-level consequence, which is the defect itself: a word of
+    /// pointed Hebrew measured wider than it paints, so a bordered row
+    /// containing one drew its right edge short.
+    @Test("a line of pointed text measures its letters")
+    func pointedLineMeasuresItsLetters() {
+        // בְּרֵאשִׁית — six letters, eleven scalars.
+        let word = "\u{5D1}\u{05B0}\u{05BC}\u{5E8}\u{05B5}\u{5D0}\u{5E9}\u{05B4}\u{05C1}\u{5D9}\u{5EA}"
+        #expect(word.strippedLength == 6)
+    }
+}
+
+/// The generated table against the source it was generated from.
+///
+/// `combiningMarkRanges` exists only because asking
+/// `Unicode.Scalar.Properties.generalCategory` on the width path cost a
+/// measured 2–3% on four Stress scenarios. That makes it an optimisation, and
+/// an optimisation that can disagree with the thing it replaces is a bug
+/// waiting for a toolchain update — Swift ships a new Unicode version and a
+/// newly-assigned mark starts measuring one cell in whatever script got it.
+///
+/// So the table is not trusted: it is checked, against every codepoint.
+@Suite("Combining-mark table")
+struct CombiningMarkRangeTests {
+
+    private static func isMark(_ value: UInt32) -> Bool {
+        guard let scalar = Unicode.Scalar(value) else { return false }
+        switch scalar.properties.generalCategory {
+        case .nonspacingMark, .enclosingMark: return true
+        default: return false
+        }
+    }
+
+    @Test("agrees with the standard library for every codepoint")
+    func tableMatchesUnicode() {
+        var mismatches: [UInt32] = []
+        for value: UInt32 in 0...0x10FFFF where
+            Character.isNonAdvancingMark(value) != Self.isMark(value)
+        {
+            mismatches.append(value)
+            if mismatches.count >= 8 { break }
+        }
+        let listed = mismatches.map { "U+" + String($0, radix: 16, uppercase: true) }
+        #expect(
+            mismatches.isEmpty,
+            "regenerate with Tools/GenerateCombiningMarks/generate.swift — \(listed)")
+    }
+
+    /// The two comparisons that take the common answer. If either bound were
+    /// wrong the search would be skipped for real marks, which the sweep above
+    /// would catch — this says WHY it is safe, so a future edit to the bounds
+    /// has something to fail against.
+    @Test("the floor and ceiling bracket every range")
+    func boundsBracketTheTable() {
+        #expect(combiningMarkRanges.first?.0 == combiningMarkFloor)
+        #expect(combiningMarkRanges.last?.1 == combiningMarkCeiling)
+        #expect(!Character.isNonAdvancingMark(combiningMarkFloor - 1))
+        #expect(Character.isNonAdvancingMark(combiningMarkFloor))
+        #expect(Character.isNonAdvancingMark(combiningMarkCeiling))
+        #expect(!Character.isNonAdvancingMark(combiningMarkCeiling + 1))
+    }
+
+    /// Sorted and disjoint, or the binary search can walk past a range that
+    /// contains the value.
+    @Test("the ranges are sorted and do not overlap")
+    func tableIsSearchable() {
+        for (previous, next) in zip(combiningMarkRanges, combiningMarkRanges.dropFirst()) {
+            #expect(previous.0 <= previous.1)
+            #expect(previous.1 < next.0, "ranges overlap or are out of order")
+        }
+    }
+}
