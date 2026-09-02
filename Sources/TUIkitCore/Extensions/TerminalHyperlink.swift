@@ -140,8 +140,15 @@ public struct TerminalHyperlink: Sendable, Equatable {
 
     /// Whether `sequence` is an OSC 8 introducer at all — the test every
     /// escape walk applies before asking which of the two it is.
+    ///
+    /// Byte-wise rather than `hasPrefix(introducer)`, because this sits in the
+    /// clip walks and the overwhelming majority of what reaches it is an SGR
+    /// sequence, which this rejects on its SECOND byte with no bridging and no
+    /// literal to materialise.
     static func isHyperlink(_ sequence: String) -> Bool {
-        sequence.hasPrefix(introducer)
+        var bytes = sequence.utf8.makeIterator()
+        return bytes.next() == 0x1B && bytes.next() == 0x5D  // ESC ]
+            && bytes.next() == 0x38 && bytes.next() == 0x3B  // 8 ;
     }
 
     /// Whether `sequence` OPENS a link rather than closing one.
@@ -253,6 +260,10 @@ struct HyperlinkScan {
 
     /// Note an escape sequence the walk has just passed. Anything that is not
     /// an OSC 8 introducer leaves the state alone.
+    ///
+    /// Callers that know a sequence is SGR should not call this at all — a
+    /// hyperlink is never SGR, and skipping on a `Bool` the walk already has
+    /// keeps the check off the escape that dominates every styled line.
     mutating func note(_ sequence: String) {
         guard TerminalHyperlink.isHyperlink(sequence) else { return }
         opening = TerminalHyperlink.opensLink(sequence) ? sequence : nil

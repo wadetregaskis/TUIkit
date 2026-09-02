@@ -137,9 +137,11 @@ extension String {
 
         for segment in ansiSegments() {
             switch segment {
-            case .ansi(let sequence, _):
+            case .ansi(let sequence, let isSGR):
                 result += sequence
-                link.note(sequence)
+                // SGR is the escape a styled line is made of and can never be
+                // a hyperlink, so the scan is asked only about the rest.
+                if !isSGR { link.note(sequence) }
             case .visible(let character):
                 let charWidth = character.terminalWidth
                 // A cut, and the only place one happens here — so the only
@@ -208,12 +210,11 @@ extension String {
             switch segment {
             case .ansi(let sequence, let isSGR):
                 if visible < visibleStart {
-                    if isSGR { carriedStyle += sequence }
-                    link.note(sequence)
+                    if isSGR { carriedStyle += sequence } else { link.note(sequence) }
                 } else if visible < end {
                     enterWindow()
                     body += sequence
-                    link.note(sequence)
+                    if !isSGR { link.note(sequence) }
                 }
             case .visible(let character):
                 let charWidth = character.terminalWidth
@@ -295,9 +296,9 @@ extension String {
 
         for segment in ansiSegments() {
             switch segment {
-            case .ansi(let sequence, _):
+            case .ansi(let sequence, let isSGR):
                 result += sequence
-                link.note(sequence)
+                if !isSGR { link.note(sequence) }
             case .visible(let character):
                 let charWidth = character.terminalWidth
                 // The cut, and the only one: see the twin walk's note on why
@@ -399,8 +400,10 @@ extension String {
                     }
                     suffix += sequence
                 } else {
-                    link.note(sequence)
-                    guard isSGR else { continue }
+                    guard isSGR else {
+                        link.note(sequence)
+                        continue
+                    }
                     sgrContext += sequence
                 }
             case .visible(let character):
@@ -433,8 +436,12 @@ extension String {
             // (ANSI included); everything before it is discarded.
             let keeping = visible >= dropCount
             switch segment {
-            case .ansi(let sequence, _):
-                if keeping { result += sequence } else { link.note(sequence) }
+            case .ansi(let sequence, let isSGR):
+                if keeping {
+                    result += sequence
+                } else if !isSGR {
+                    link.note(sequence)
+                }
             case .visible(let character):
                 if keeping {
                     result.append(character)
@@ -650,16 +657,15 @@ extension String {
             index = end
             if prefixOpen {
                 prefix += text
-                prefixLink.note(text)
+                if !isSGR { prefixLink.note(text) }
             }
             if total >= suffixDropColumns {
                 suffix += text
+            } else if isSGR {
+                style.apply(text)
+                if total <= prefixColumns { under = style }
             } else {
                 suffixLink.note(text)
-                if isSGR {
-                    style.apply(text)
-                    if total <= prefixColumns { under = style }
-                }
             }
         }
         flushVisible()
