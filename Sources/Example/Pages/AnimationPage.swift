@@ -60,11 +60,28 @@ struct AnimationPage: View {
 
     private var selectedCurve: Curve { Curve(rawValue: curve) ?? .easeInOut }
 
-    /// The animated fraction as the bar's read-out — two decimals, so a value
-    /// mid-flight is visibly moving rather than snapping between 0.0 and 1.0.
+    /// The animated fraction as the bar's read-out, in the `Slider`'s own
+    /// words — `Int((fraction * 100).rounded())` and a per-cent sign — so the
+    /// two lines below say the same number the same way. Whole per cent is
+    /// coarse for a value mid-flight, and that is the point: the BAR is what
+    /// shows the movement, and a second, finer number beside it read as a
+    /// disagreement with the slider's.
     private static func reading(_ fraction: Double) -> String {
-        String(format: "%.2f", fraction)
+        "\(Int((min(1, max(0, fraction)) * 100).rounded()))%"
     }
+
+    /// What a `Slider` spends on everything that is not its track: `"◀ "`
+    /// before it, `" ▶ "` after it, and a four-cell value field — nine columns,
+    /// fixed, so the track neither moves nor resizes as the value changes
+    /// (`_SliderCore.chromeWidth`).
+    ///
+    /// The bar above the slider is laid out to the same nine so the two BARS
+    /// line up cell for cell, which is the whole reason they sit one above the
+    /// other. Restated here rather than read from the framework because it is
+    /// not public: `chromeWidth` is private to the core, and a demo page
+    /// reaching into it would be worse than a demo page that knows what it is
+    /// drawing beside.
+    private static let sliderChrome = (leading: 2, trailing: 3, valueField: 4)
 
     /// The page's animation, assembled from the controls above it.
     ///
@@ -224,22 +241,26 @@ struct AnimationPage: View {
                 // which made it read as a page-wide state display rather than
                 // as this bar's own number.
                 GeometryReader { proxy in
-                    let readout = "\(L("page.animation.value")): \(Self.reading(fraction))"
-                    HStack(spacing: 1) {
-                        AnimatedBar(
-                            fraction: fraction,
-                            width: max(4, proxy.size.width - 3 - readout.strippedLength)
-                        )
-                        .padding(.leading, 2)
-                        Text(verbatim: readout).dim()
+                    let chrome = Self.sliderChrome
+                    let track = max(
+                        4,
+                        proxy.size.width - chrome.leading - chrome.trailing - chrome.valueField)
+                    // Spacing 0 and the gaps spelled out: the bar has to start
+                    // and end on the same columns the track below it does, and
+                    // an implicit spacing is a second place for that to drift.
+                    HStack(spacing: 0) {
+                        Text(verbatim: String(repeating: " ", count: chrome.leading))
+                        AnimatedBar(fraction: fraction, width: track)
+                        Text(verbatim: String(repeating: " ", count: chrome.trailing))
+                        Text(verbatim: Self.reading(fraction)).dim()
                     }
                 }
                 .frame(height: 1)
-                // Under the bar rather than beside it: the bar wants the width,
-                // and a track directly below one reads as driving it.
-                Slider(value: animatedFraction, in: 0...1, step: 0.01) {
-                    caption(L("page.animation.setFraction"))
-                }
+                // Under the bar rather than beside it, and unlabelled: a label
+                // renders inline to the left of the track and would push it out
+                // from under the bar. What it drives is the row above it, which
+                // needs no caption to say so.
+                Slider(value: animatedFraction, in: 0...1, step: 0.01)
                 HStack(spacing: 2) {
                     Button("page.animation.button.empty") {
                         withAnimation(animation) { fraction = 0 }
