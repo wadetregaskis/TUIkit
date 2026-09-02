@@ -33,12 +33,13 @@ extension RGBA {
     ///
     /// Returns a value in the range 0.0 (black) to 255.0 (white).
     public var luminance: Double {
-        // `Double(Int(r))` rather than `Double(r)`: there is no
-        // `Double.init(UInt8)`, so the shorter spelling is an unspecialized
-        // generic call through a protocol witness — three of them, on a
-        // property that runs per pixel on the graphics path. The value is
-        // identical; every byte is exactly representable as a Double either
-        // way.
+        // `Double(Int(r))`, not `Double(r)`, and not a typo: Swift has no
+        // `Double.init(UInt8)`, so the short spelling binds the generic
+        // `init<T: BinaryInteger>` and — unspecialised, in a debug build —
+        // calls it through a protocol witness. Three of those, on a property
+        // that runs per PIXEL on the graphics path. Going via `Int` picks a
+        // concrete initializer; the value is identical, since every byte is
+        // exactly representable as an Int and as a Double.
         Double(Int(r)) * 0.299 + Double(Int(g)) * 0.587 + Double(Int(b)) * 0.114
     }
 }
@@ -227,6 +228,14 @@ extension RGBAImage {
                         let p01 = source[row1 + x0]
                         let p11 = source[row1 + x1]
 
+                        // `Double(Int(byte))`, not `Double(byte)`, and not a
+                        // typo: Swift has no `Double.init(UInt8)`, so the short
+                        // spelling binds the generic `init<T: BinaryInteger>`
+                        // and — unspecialised, in a debug build — calls it
+                        // through a protocol witness. Going via `Int` picks a
+                        // concrete initializer. Same value, every time: every
+                        // byte is exactly representable as a Double, and as an
+                        // Int on the way. See the note above the loop.
                         let red =
                             (Double(Int(p00.r)) * oneMinusX + Double(Int(p10.r)) * xFrac)
                             * oneMinusY
