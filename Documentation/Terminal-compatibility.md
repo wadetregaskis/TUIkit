@@ -1970,6 +1970,56 @@ it as supporting placements.
 present) while its DA1 advertises Sixel; Ghostty answers `DCS 1 + r 5375 ST` —
 a success flag with no value — while supporting no Sixel at all. Use DA1.
 
+### The image placeholder advances ONE cell, on every host — measured 2026-09-02
+
+U+10EFFF, the Kitty protocol's Unicode image placeholder, sits inside the
+Plane-16 Private Use Area — the range this document records as painted two
+cells and advanced one on every measured host, because that range is where SF
+Symbols live. The placeholder is the exception, and it has to be, because
+`FrameDiffWriter`'s Plane-16 compensation (`ECH` + glyph + `CUF`) applied to a
+picture would move every column of it one cell further right than the last.
+
+Measured with `Tools/TerminalProbes/placement_probe.py`: a row of twelve
+placeholder cells written on a cleared row, with the cursor asked where it
+landed, against twelve `x` characters.
+
+| Host | plain text | placeholders, diacritics on every cell | placeholders, run-length elided |
+|---|---|---|---|
+| Ghostty 1.3.1 | 12 | **12** | **12** |
+| Warp v0.2026.08.26… | 12 | **12** | **12** |
+| Apple Terminal 455.1 | 12 | **12** | **12** |
+
+**Including the two hosts that do not implement the protocol.** No font carries
+the codepoint, so it is not painted two cells the way an SF Symbol is; a host
+that implements placements intercepts it, and one that does not draws nothing
+and moves on. Either way it is one cell, which is why the exemption is by
+codepoint (`Unicode.Scalar.terminalImagePlaceholder`) rather than gated on
+detection.
+
+Three further things that run settled, each of which the encoder would
+otherwise have had to guess:
+
+- **Run-length elision works.** A cell with no diacritics continues the
+  previous one; a 12-cell row costs 67 bytes rather than 111. TUIkit does not
+  use it — see `Documentation/Terminal graphics protocols.md` — because a
+  self-describing cell survives being written out of sequence and an elided
+  one does not.
+- **Both id encodings work** — through the 256-colour foreground (`38;5;n`)
+  and through a direct-colour triple.
+- **Delete by id frees the image**: `a=p,U=1` on a deleted id answers
+  `ENOENT: image not found` where it answered `OK` before. Ghostty
+  acknowledges the delete itself with silence, so the placement request is the
+  only usable evidence.
+
+**Cost, Ghostty at 49×17 cells with 16×34-pixel cells:** a full-screen image is
+1.8 MB of base64, transmitted and acknowledged in 43 ms. One-time per image and
+size, not per frame.
+
+> **`q=2` or the terminal talks back into your keyboard.** Every graphics
+> command is acknowledged with `ESC_G…;OK ESC\` unless suppressed, and in an
+> application those bytes arrive on **stdin**, where the input parser reads
+> them as keystrokes. Anything on a render path sets `q=2`.
+
 ---
 
 ## Measured advance table (divergences and key rows)

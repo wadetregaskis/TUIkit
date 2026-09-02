@@ -270,7 +270,7 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
             return composed
         }
         if planeSixteenPUA, scalars.count == 1, let only = scalars.first,
-            (0x100000...0x10FFFD).contains(only.value)
+            Character.isPlaneSixteenGlyph(only.value)
         {
             return 1
         }

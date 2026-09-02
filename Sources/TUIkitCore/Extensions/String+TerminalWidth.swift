@@ -142,7 +142,14 @@ extension Character {
         case 0x20000...0x3134F:  // CJK unified extensions B-G
             return true
         case 0x100000...0x10FFFD:  // Plane-16 PUA — SF Symbols
-            return true
+            // …but NOT the image placeholder, which is the one codepoint in
+            // that plane that combines: it carries its row and column in
+            // combining diacritics. Answering `true` for it would let the
+            // cell-span differ (``String/ANSIRowCells``) accept an image row
+            // and rewrite part of it, and a placeholder written out of
+            // sequence is a cell that no longer knows which part of the
+            // picture it is.
+            return sv != Unicode.Scalar.terminalImagePlaceholder.value
         default:
             return false
         }
@@ -537,7 +544,12 @@ extension Unicode.Scalar {
         // around by ``withTerminalAppCursorCompensation``. These codepoints are
         // only emitted by the Apple-gated symbol resolver (or pasted literally),
         // so on a terminal without the glyphs they simply never appear.
-        if (0x100000...0x10FFFD).contains(scalarValue) { return 2 }  // Plane-16 PUA — SF Symbols (SF Mono: 2 cells)
+        if Character.isPlaneSixteenGlyph(scalarValue) { return 2 }  // Plane-16 PUA — SF Symbols (SF Mono: 2 cells)
+        // The one Plane-16 codepoint that is not a glyph: no font draws it and
+        // a terminal implementing the graphics protocol paints a piece of a
+        // picture there instead, one cell wide. See
+        // ``Unicode/Scalar/terminalImagePlaceholder``.
+        if scalarValue == Unicode.Scalar.terminalImagePlaceholder.value { return 1 }
 
         return 1
     }

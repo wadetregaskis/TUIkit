@@ -98,7 +98,7 @@ extension Character {
         // under-advance as a VS-16 pictographic emoji, so
         // ``withTerminalAppCursorCompensation`` injects a CUF(1) after it.
         if scalars.count == 1, let only = scalars.first,
-            (0x100000...0x10FFFD).contains(only.value)
+            Self.isPlaneSixteenGlyph(only.value)
         {
             return 1
         }
@@ -472,7 +472,7 @@ extension Character {
             return 1
         }
         if scalars.count == 1, let only = scalars.first,
-            (0x100000...0x10FFFD).contains(only.value)
+            Self.isPlaneSixteenGlyph(only.value)
         {
             return 1
         }
@@ -552,7 +552,7 @@ extension Character {
         }
         let scalars = unicodeScalars
         if scalars.count == 1, let only = scalars.first,
-            (0x100000...0x10FFFD).contains(only.value)
+            Self.isPlaneSixteenGlyph(only.value)
         {
             return 1
         }
@@ -607,7 +607,7 @@ extension Character {
         // and a row claimed at 20 cells measured 16 — short by exactly one per
         // symbol.
         if unicodeScalars.count == 1, let only = unicodeScalars.first,
-            (0x100000...0x10FFFD).contains(only.value)
+            Self.isPlaneSixteenGlyph(only.value)
         {
             return 1
         }
@@ -736,7 +736,7 @@ extension Character {
         let scalars = unicodeScalars
         if scalars.count == 1, let only = scalars.first {
             // Plane-16 PUA — SF Symbols.
-            if (0x100000...0x10FFFD).contains(only.value) { return 1 }
+            if Self.isPlaneSixteenGlyph(only.value) { return 1 }
         }
         // Bare pictographs. This rule used to be broader — any lone
         // non-emoji-presentation SMP pictograph, dominoes and cards included —
