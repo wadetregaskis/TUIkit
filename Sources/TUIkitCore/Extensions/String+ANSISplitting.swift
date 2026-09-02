@@ -133,14 +133,24 @@ extension String {
 
         var result = ""
         var visible = 0
+        var link = HyperlinkScan()
 
         for segment in ansiSegments() {
             switch segment {
             case .ansi(let sequence, _):
                 result += sequence
+                link.note(sequence)
             case .visible(let character):
                 let charWidth = character.terminalWidth
-                if visible + charWidth > visibleCount { return (result, visible) }
+                // A cut, and the only place one happens here — so the only
+                // place a hyperlink can be left open. The natural end of the
+                // walk deliberately does NOT close: there the result is the
+                // caller's own string reassembled, and adding a sequence it
+                // did not contain would break the identity the fast path in
+                // front of this relies on (it returns `self` untouched).
+                if visible + charWidth > visibleCount {
+                    return (result + link.closingIfOpen, visible)
+                }
                 result.append(character)
                 visible += charWidth
             }
@@ -176,22 +186,44 @@ extension String {
         var carriedStyle = ""  // SGR history replayed so the slice starts correctly styled
         var body = ""
         var visible = 0
+        // A hyperlink is carried across the left edge for the same reason the
+        // styling is — it is state the dropped columns established and the
+        // window's cells are still inside — and closed at the right edge for a
+        // stronger one: a window that keeps an opening sequence and drops the
+        // closing one hands the link to every cell drawn after it.
+        //
+        // It cannot ride along in `carriedStyle`, which accumulates: a link
+        // opened and closed before the window would be replayed as an open.
+        // The scan holds the state instead, and the sequence is restated ONCE,
+        // as the window is entered.
+        var link = HyperlinkScan()
+        var enteredWindow = false
+        func enterWindow() {
+            guard !enteredWindow else { return }
+            enteredWindow = true
+            body += link.reopening
+        }
 
         for segment in ansiSegments() {
             switch segment {
             case .ansi(let sequence, let isSGR):
                 if visible < visibleStart {
                     if isSGR { carriedStyle += sequence }
+                    link.note(sequence)
                 } else if visible < end {
+                    enterWindow()
                     body += sequence
+                    link.note(sequence)
                 }
             case .visible(let character):
                 let charWidth = character.terminalWidth
                 let charEnd = visible + charWidth
                 if visible >= visibleStart && charEnd <= end {
+                    enterWindow()
                     body.append(character)
                 } else if charEnd > visibleStart && visible < end {
                     // Straddles an edge: blank its in-window cells.
+                    enterWindow()
                     body += String(
                         repeating: " ",
                         count: min(charEnd, end) - max(visible, visibleStart))
@@ -199,7 +231,7 @@ extension String {
                 visible = charEnd
             }
         }
-        return carriedStyle + body
+        return carriedStyle + body + link.closingIfOpen
     }
 
     /// Like ``ansiAwarePrefix(visibleCount:)`` but cursor-aware — clips so
@@ -259,14 +291,20 @@ extension String {
 
         var result = ""
         var visible = 0
+        var link = HyperlinkScan()
 
         for segment in ansiSegments() {
             switch segment {
             case .ansi(let sequence, _):
                 result += sequence
+                link.note(sequence)
             case .visible(let character):
                 let charWidth = character.terminalWidth
-                if visible + charWidth > visibleCount { return (result, visible) }
+                // The cut, and the only one: see the twin walk's note on why
+                // the natural end of the string does not close.
+                if visible + charWidth > visibleCount {
+                    return (result + link.closingIfOpen, visible)
+                }
                 // The walk nets every emitted cluster back to its claim (the
                 // conservation law: under-advancers are CUF'd up, over-
                 // advancers CUB'd back, rewrites land there by construction),
@@ -336,6 +374,12 @@ extension String {
         var sgrContext = ""
         var suffix = ""
         var visible = 0
+        // A hyperlink is entry state exactly as the colour is — the cells being
+        // re-emitted are inside it — but it is not SGR, so it needs saying
+        // separately. It is also cursor-neutral, which is the property this
+        // function's suffix filter is really testing, so the suffix keeps its
+        // sequences alongside the `ECH`.
+        var link = HyperlinkScan()
 
         for segment in ansiSegments() {
             // Before the offset is reached we're accumulating the entry
@@ -350,9 +394,12 @@ extension String {
                     // positions the cursor explicitly.
                     let isECH = sequence.last == "X" && sequence.hasPrefix("\u{1B}[")
                         && sequence.dropFirst(2).dropLast().allSatisfy(\.isNumber)
-                    guard isSGR || isECH else { continue }
+                    guard isSGR || isECH || TerminalHyperlink.isHyperlink(sequence) else {
+                        continue
+                    }
                     suffix += sequence
                 } else {
+                    link.note(sequence)
                     guard isSGR else { continue }
                     sgrContext += sequence
                 }
@@ -366,7 +413,7 @@ extension String {
         }
 
         guard visible >= visibleOffset else { return nil }
-        return sgrContext + suffix
+        return sgrContext + link.reopening + suffix
     }
 
     /// Returns everything after the first `dropCount` terminal cells of visible characters,
@@ -379,6 +426,7 @@ extension String {
     public func ansiAwareSuffix(droppingVisible dropCount: Int) -> String {
         var visible = 0
         var result = ""
+        var link = HyperlinkScan()
 
         for segment in ansiSegments() {
             // Everything at or after the drop boundary is kept verbatim
@@ -386,7 +434,7 @@ extension String {
             let keeping = visible >= dropCount
             switch segment {
             case .ansi(let sequence, _):
-                if keeping { result += sequence }
+                if keeping { result += sequence } else { link.note(sequence) }
             case .visible(let character):
                 if keeping {
                     result.append(character)
@@ -396,7 +444,11 @@ extension String {
             }
         }
 
-        return result
+        // The dropped columns may have opened a hyperlink these cells are
+        // inside. Restating it is the quiet obligation of the pair — nothing
+        // looks broken when it is missed, the link is simply shorter than the
+        // label it belongs to.
+        return link.reopening + result
     }
 
     // MARK: - ANSI State Extraction
@@ -548,6 +600,12 @@ extension String {
         // thing this one-scan split exists to have fixed.
         var under: SGRState?
         var total = 0
+        // Two scans, because the two halves are cut at different columns: the
+        // prefix ends at `prefixColumns` and owes a close there, the suffix
+        // begins at `suffixDropColumns` and owes the opening sequence. One
+        // scan could only ever be right about one of them.
+        var prefixLink = HyperlinkScan()
+        var suffixLink = HyperlinkScan()
 
         let scalars = unicodeScalars
         var index = scalars.startIndex
@@ -562,6 +620,9 @@ extension String {
                 let keeping = total >= suffixDropColumns
                 if prefixOpen {
                     if prefixWidth + width > prefixColumns {
+                        // The cut. An overlay is composited straight after
+                        // this, so a link left open would run underneath it.
+                        prefix += prefixLink.closingIfOpen
                         prefixOpen = false
                     } else {
                         prefix.append(character)
@@ -587,18 +648,34 @@ extension String {
             let (end, isSGR) = Self.escapeSequenceEnd(startingAt: index, in: scalars)
             let text = String(scalars[index..<end])
             index = end
-            if prefixOpen { prefix += text }
+            if prefixOpen {
+                prefix += text
+                prefixLink.note(text)
+            }
             if total >= suffixDropColumns {
                 suffix += text
-            } else if isSGR {
-                style.apply(text)
-                if total <= prefixColumns { under = style }
+            } else {
+                suffixLink.note(text)
+                if isSGR {
+                    style.apply(text)
+                    if total <= prefixColumns { under = style }
+                }
             }
         }
         flushVisible()
 
+        // A line SHORTER than the overlay's column never reaches the cut in
+        // `flushVisible`, so its link is still open here — and the overlay is
+        // composited straight after it either way.
+        prefix += prefixLink.closingIfOpen
+        // The suffix begins inside whatever link the dropped columns opened,
+        // and carries no width, so it goes in front of the content rather than
+        // into a field of its own: `suffixWidth` is unchanged by construction.
+        let resumedSuffix = suffixLink.reopening + suffix
+
         return ANSIOverlaySplit(
-            prefix: prefix, prefixWidth: prefixWidth, suffix: suffix, suffixWidth: suffixWidth,
+            prefix: prefix, prefixWidth: prefixWidth, suffix: resumedSuffix,
+            suffixWidth: suffixWidth,
             styleBeforeSuffix: style.rendered,
             backgroundUnderOverlay: under?.renderedBackground ?? "",
             totalWidth: total)
