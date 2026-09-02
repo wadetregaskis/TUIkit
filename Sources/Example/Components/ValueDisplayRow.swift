@@ -39,8 +39,8 @@ struct ValueDisplayRow: View {
     ///   - label: The row's label.
     ///   - value: The value to display.
     @_disfavoredOverload
-    init(_ label: String, _ value: String) {
-        self.label = label
+    init<S: StringProtocol>(_ label: S, _ value: String) {
+        self.label = String(label)
         self.value = value
     }
 

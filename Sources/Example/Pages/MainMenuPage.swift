@@ -26,9 +26,9 @@ struct FeatureBox: View, Equatable {
 
     /// Creates a box shown as written.
     @_disfavoredOverload
-    init(_ title: String, _ subtitle: String) {
-        self.title = title
-        self.subtitle = subtitle
+    init<S1: StringProtocol, S2: StringProtocol>(_ title: S1, _ subtitle: S2) {
+        self.title = String(title)
+        self.subtitle = String(subtitle)
     }
 
     var body: some View {
