@@ -409,8 +409,26 @@ struct ImageRenderingControls: View {
             // a 14-cell track gave two greys per cell of travel where the row
             // has room for one.
             .frame(maxWidth: .infinity)
-            Text(verbatim: "\(value.wrappedValue)").dim()
+            Text(verbatim: "\(value.wrappedValue)")
+                .dim()
+                // A field as wide as the widest count this range can reach,
+                // because the slider beside it takes whatever width is left:
+                // an unpadded read-out going 9 → 10 stole a column from the
+                // track and walked the right arrow sideways under the cursor
+                // that had just clicked it. Left-aligned so the digits stay
+                // against the slider and the slack falls on the outside —
+                // TUIkit's own value read-out pads the same way, and for the
+                // same reason (see `_SliderCore.valueLabelText`).
+                .frame(width: Self.valueFieldWidth(for: range), alignment: .topLeading)
         }
+    }
+
+    /// Columns to reserve for any value in `range`.
+    ///
+    /// The bounds are the only candidates: an integer's width grows with its
+    /// magnitude, and a minus sign only ever appears on the low end.
+    private static func valueFieldWidth(for range: ClosedRange<Int>) -> Int {
+        max("\(range.lowerBound)".count, "\(range.upperBound)".count)
     }
 
     /// The custom-ramp combo field: type any ramp (darkest character first), or
