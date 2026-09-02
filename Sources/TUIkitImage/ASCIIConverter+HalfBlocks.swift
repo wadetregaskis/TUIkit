@@ -42,6 +42,31 @@ extension ASCIIConverter {
 
     /// Colour variant: top pixel → background, bottom pixel → foreground of `▄`.
     ///
+    /// **A cell whose two pixels paint the same colour is emitted as a SPACE
+    /// with only a background**, not as a block wearing one colour twice. Most
+    /// of a picture is such cells — 41.8% of the demo photograph's at true
+    /// colour, 73.6% at 256, **86.5% at sixteen**, because the coarser the
+    /// palette the more often two neighbouring pixels land on one entry — and
+    /// spelling them as a glyph costs three ways:
+    ///
+    /// - It states a foreground the cell does not use, which is bytes, and on
+    ///   Warp it is worse than bytes: `enforce_minimum_contrast` defaults to
+    ///   `only_named_colors`, so a foreground NAMED as one of the sixteen and
+    ///   unreadable against its background gets lightened for legibility. A
+    ///   half block with foreground == background is the most unreadable text
+    ///   there is, so every such cell had its lower half lifted to grey while
+    ///   its upper half stayed put: the picture came out banded at cell pitch.
+    ///   A space has no text to make readable.
+    /// - It asks the font for a glyph whose shape cannot matter, which is
+    ///   rasterisation work per cell and the rasterisation gap below.
+    /// - It is not what the cell means. One colour is a field, not a shape.
+    ///
+    /// The comparison is of the two halves' BACKGROUND codes, so both are
+    /// asked the same question in the same spelling: this is about the colour
+    /// that will be PAINTED, and neighbouring pixels differ far more often
+    /// than the colours they quantise to. The foreground is then computed only
+    /// for the cells that turn out to need one.
+    ///
     /// The `▄` glyph is emitted **bold** (SGR 1) — but only where bold is a
     /// weight and nothing else. At some SF Mono sizes in Terminal.app (incl.
     /// the default 11 pt) the regular-weight lower-half block is rasterised a
@@ -80,19 +105,22 @@ extension ASCIIConverter {
                 let topPixel = image.pixel(at: cellX, 2 * cellY)
                 let bottomPixel = image.pixel(at: cellX, 2 * cellY + 1)
 
-                let fgCode = foregroundColorCode(for: bottomPixel, mode: mode)
                 let bgCode = backgroundColorCode(for: topPixel, mode: mode)
+                let bottomCode = backgroundColorCode(for: bottomPixel, mode: mode)
+                let uniform = bgCode == bottomCode
+                let fgCode = uniform ? "" : foregroundColorCode(for: bottomPixel, mode: mode)
 
                 if fgCode != lastFg || bgCode != lastBg {
                     // The reset clears bold too, so re-assert it with each colour
                     // run (bold persists across cells that reuse the same colours).
-                    // `bold` is empty in the modes that cannot afford it.
+                    // `bold` is empty in the modes that cannot afford it, and a
+                    // uniform cell draws no glyph for it to weigh.
                     line += ANSIEscape.reset
-                    line += bold + fgCode + bgCode
+                    line += (uniform ? "" : bold) + fgCode + bgCode
                     lastFg = fgCode
                     lastBg = bgCode
                 }
-                line.append(lowerHalfBlock)
+                line.append(uniform ? " " : lowerHalfBlock)
             }
 
             if !lastFg.isEmpty || !lastBg.isEmpty {

@@ -18,11 +18,21 @@ colour asked for while its upper half (the background, which bold never
 touches) stayed correct — horizontal stripes at cell pitch across the whole
 picture. Measured on the Example's demo photograph: 5724 cells, all bold.
 
-One question, answered by eye: each row shows one colour drawn three ways —
-PLAIN, BOLD, and the explicit BRIGHT twin. If the middle swatch matches the
-right one rather than the left, this host brightens bold. The second block
-then shows what that does to an image cell, which is the defect itself at two
-lines instead of five thousand.
+Two hosts banded a 16-colour image and they did it for two different reasons,
+so the card asks two questions.
+
+**Does bold brighten?** Each row shows one colour drawn three ways — PLAIN,
+BOLD, and the explicit BRIGHT twin. If the middle swatch matches the right one
+rather than the left, this host brightens bold. iTerm2 does; Ghostty and
+Terminal.app do not.
+
+**Does anything else recolour a foreground?** The second block draws one flat
+colour as a space, as a block with foreground == background, and as that block
+emboldened. A host that bands the plain block as well as the bold one is not
+brightening bold at all — it is enforcing a minimum contrast on a foreground it
+considers unreadable, which a foreground equal to its background certainly is.
+Warp does this by default (`enforce_minimum_contrast` = `only_named_colors`),
+and it is why TUIkit now emits a space for a cell that has nothing to draw.
 
 `palette_probe.py` is the companion for the other half of a 16-colour image:
 which colours this host actually has.
@@ -34,7 +44,8 @@ Documentation/Terminal-compatibility.md.
 CSI = "\x1b["
 RESET = CSI + "0m"
 BAR = "█" * 12          # FULL BLOCK, so the swatch is pure colour
-HALF = "▄" * 24    # LOWER HALF BLOCK — every cell of a 16-colour image
+HALF = "▄" * 24    # LOWER HALF BLOCK — a cell with a shape in it
+SPACE = " " * 24        # …and one without, which is most of a picture
 
 NAMES = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
 
@@ -55,12 +66,24 @@ def card():
     print("  Middle matches RIGHT  -> this host brightens bold.")
     print("  Middle matches LEFT   -> bold is a weight here, nothing more.")
     print()
-    print("2. The defect it made, drawn twice: a 16-colour image cell is")
-    print("   U+2584 with foreground == background, so it must be FLAT.")
+    print("2. An image cell with nothing in it, spelled three ways. All three")
+    print("   are one colour top to bottom, so all three must be FLAT BARS.")
     print()
-    print("   plain " + f"{CSI}30m{CSI}40m{HALF}{RESET}" + "  <- correct: one dark bar")
-    print("   bold  " + f"{CSI}1m{CSI}30m{CSI}40m{HALF}{RESET}"
-          + "  <- striped wherever bold brightens")
+    print("   space " + f"{CSI}40m{SPACE}{RESET}" + "  <- what TUIkit emits now")
+    print("   block " + f"{CSI}30m{CSI}40m{HALF}{RESET}" + "  <- a block, foreground == background")
+    print("   bold  " + f"{CSI}1m{CSI}30m{CSI}40m{HALF}{RESET}" + "  <- the same, emboldened")
+    print()
+    print("   Which of them bands names the host's behaviour:")
+    print("     none            -> neither adaptation applies here.")
+    print("     bold only       -> bold is a colour (see 1). iTerm2.")
+    print("     block AND bold  -> the host is enforcing a minimum contrast on")
+    print("                        a NAMED foreground and lightening it, since")
+    print("                        foreground == background is unreadable text.")
+    print("                        Warp: `enforce_minimum_contrast` defaults to")
+    print("                        `only_named_colors`.")
+    print("     space           -> should never band. If it does, the host is")
+    print("                        not painting a cell background across the")
+    print("                        whole cell, and nothing TUIkit emits can help.")
     print()
 
 

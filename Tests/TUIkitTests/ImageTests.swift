@@ -238,10 +238,18 @@ struct ASCIIConverterTests {
 
     @Test("Fine-block conversion uses two vertical pixels per cell")
     func halfBlocksUsesTwoPixelsPerCell() {
-        // Solid red image. With .blocks(.fine) the converter scales to
-        // (width, height*2) pixels and emits ▄ with a foreground = bottom
-        // pixel and a background = top pixel for each cell.
-        let pixels = [RGBA](repeating: RGBA(r: 200, g: 50, b: 80), count: 64)
+        // Rows that ALTERNATE, so each cell's two source pixels differ and the
+        // doubled vertical resolution is the thing under test. A solid image
+        // cannot show it: with nothing to distinguish the halves the cell has
+        // no shape, and the converter says so with a space — which is the next
+        // case, and which used to pass here for the wrong reason.
+        var pixels = [RGBA]()
+        for row in 0..<8 {
+            let colour =
+                row.isMultiple(of: 2)
+                ? RGBA(r: 200, g: 50, b: 80) : RGBA(r: 20, g: 180, b: 90)
+            pixels.append(contentsOf: [RGBA](repeating: colour, count: 8))
+        }
         let image = RGBAImage(width: 8, height: 8, pixels: pixels)
         let converter = ASCIIConverter(
             characterSet: .blocks(.fine), colorMode: .trueColor, dithering: .none)
@@ -254,6 +262,26 @@ struct ASCIIConverterTests {
             // what makes the half-block effectively double the vertical resolution.
             #expect(lines[0].contains("38;2;"), "Foreground colour is emitted")
             #expect(lines[0].contains("48;2;"), "Background colour is emitted (top pixel)")
+        }
+    }
+
+    /// The complement, and the common case in a photograph: where both source
+    /// pixels are the same colour there is no shape to draw, so the cell is a
+    /// space with only a background and states no foreground at all. See
+    /// `HalfBlockUniformCellTests` for why that matters to Warp.
+    @Test("A fine-block cell of one colour states no foreground")
+    func halfBlocksCollapseAUniformCell() {
+        let pixels = [RGBA](repeating: RGBA(r: 200, g: 50, b: 80), count: 64)
+        let image = RGBAImage(width: 8, height: 8, pixels: pixels)
+        let converter = ASCIIConverter(
+            characterSet: .blocks(.fine), colorMode: .trueColor, dithering: .none)
+
+        withColorDepth(.truecolor) {
+            let lines = converter.convert(image, width: 8, height: 4)
+            #expect(lines.count == 4)
+            #expect(!lines[0].contains("\u{2584}"), "nothing to draw, so no glyph")
+            #expect(!lines[0].contains("38;2;"), "and no foreground to draw it in")
+            #expect(lines[0].contains("48;2;200;50;80"), "the colour is the field")
         }
     }
 

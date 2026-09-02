@@ -1036,9 +1036,11 @@ have NOT been re-run, so they still name it.
 Warp is the mirror image of Ghostty: it gets the *selector* classes right
 and the *composed* classes wrong.
 
-**Bold brightens a named colour here too** — reported, not yet read out of a
-settings file. See "Bold is a COLOUR on some hosts": it ruined every 16-colour
-image until 2026-09-01.
+**Warp does NOT brighten bold** — measured on the card 2026-09-01, its bold
+palette is identical to its plain one. What it does instead is
+`enforce_minimum_contrast` = `only_named_colors` by default, which lightens a
+named foreground it judges illegible; that banded every 16-colour image until
+2026-09-01. See "A host may recolour a foreground it cannot read".
 
 > **Version drift check (2026-08-28).** Warp self-updated to
 > `v0.2026.08.26.17.59.stable_01`; the full advance battery re-run on that
@@ -1628,6 +1630,48 @@ Two consequences for a 16-colour image, and neither is a defect:
 Default background `#282c34` and foreground `#ffffff` — but a TUIkit app paints
 its own page, so those reach nothing an image draws.
 
+### A host may recolour a foreground it cannot read — measured 2026-09-01
+
+**Status: the framework no longer emits the sequence that provokes it.**
+
+Warp has `appearance.text.enforce_minimum_contrast`, and it defaults to
+**`only_named_colors`** — "FG color can be changed, but only if the FG is
+specified with default colors" (its own settings schema, read from
+`Warp.app/Contents/Resources/settings_schema.json` on 2026-09-01; the three
+values are `never`, `only_named_colors`, `always`). So a foreground stated as
+one of the sixteen and judged illegible against its background is LIGHTENED.
+
+That is a reasonable thing for a terminal to do to text and a ruinous thing to
+do to a picture. A half block whose two pixels quantise to the same colour is
+emitted with foreground == background, which is the most unreadable text there
+is; Warp lifted the foreground of every such cell, so the lower half of the
+cell went grey while the upper half — the background, which the feature does
+not touch — stayed put. **The picture banded at cell pitch**, exactly as it did
+on iTerm2, and for an unrelated reason: Warp does not brighten bold at all.
+
+Two hosts, two causes, one symptom. The card separates them:
+`bold_bright_card.py` draws a flat colour as a space, as a block with
+foreground == background, and as that block emboldened.
+
+| what bands | cause | hosts |
+|---|---|---|
+| the bold block only | bold is read as a colour | iTerm2 |
+| the plain block AND the bold one | a named foreground is being made legible | Warp |
+| neither | no adaptation applies | Ghostty, Terminal.app |
+| the space | the host is not painting a cell background across the whole cell — nothing TUIkit emits can help | none seen |
+
+**The fix** is not to state a foreground the cell does not use: a cell whose two
+pixels paint the same colour is emitted as a SPACE with only a background. It
+is also the honest spelling — one colour is a field, not a shape — and most of
+a picture is such cells: 41.8% at true colour, 73.6% at 256, **86.5% at
+sixteen**, since the coarser the palette the more often two neighbours land on
+one entry. Measured on the Example's demo photograph at 183×60.
+
+`enforce_minimum_contrast` reaches only NAMED foregrounds at its default, which
+is why the report was about 16-colour mode: a `38;2` triple was never touched.
+Set to `always` it would reach those too, and there is nothing an application
+can do about that — nor should there be.
+
 ### Bold is a COLOUR on some hosts — measured 2026-09-01
 
 **Status: the framework no longer relies on it. Per-host readings still wanted;
@@ -1644,21 +1688,24 @@ Each host spells the choice differently, and they do not agree:
 | host | setting | this machine's value | brightens bold? |
 |---|---|---|---|
 | iTerm2 | `Use Bright Bold` (profile) | `True` — the default | yes |
-| Warp | no exposed setting | — | yes (reported) |
+| Warp | none | — | **no** — measured on the card 2026-09-01 |
 | Ghostty | bold is weight-only; `bold-color` overrides the colour explicitly | unset | no |
 | Apple Terminal.app | "Use bright colors for bold text" (profile) | absent from `Basic`, so off | no |
 
 Read from `com.googlecode.iterm2.plist`, `ghostty +show-config --default` and
-`com.apple.Terminal.plist` on 2026-09-01; the Warp row is from the report that
-prompted this and has not been read out of a settings file.
+`com.apple.Terminal.plist` on 2026-09-01, and confirmed by eye on the card in
+all four. Warp was assumed to brighten when this was first written, because it
+banded; it does not, and the section above is what it actually does. **Two
+hosts can produce one symptom for two causes — measure each rather than
+generalising from the first one solved.**
 
 **What it cost.** `ASCIIConverter+HalfBlocks` emboldened every `▄` it emitted,
 to close a rasterisation gap under SF Mono in Terminal.app (see the advance
 table below). In `.trueColor` that is free. In ``ASCIIColorMode/ansi16`` the
-foreground is `30`–`37` / `90`–`97`, so on iTerm2 and Warp **every cell's lower
-half was painted in the bright twin of the colour asked for** while its upper
-half — the background — stayed correct. A picture drawn entirely out of half
-blocks therefore came out in horizontal stripes at cell pitch. Measured on the
+foreground is `30`–`37` / `90`–`97`, so on iTerm2 **every cell's lower half was
+painted in the bright twin of the colour asked for** while its upper half — the
+background — stayed correct. A picture drawn entirely out of half blocks
+therefore came out in horizontal stripes at cell pitch. Measured on the
 Example's demo photograph at 183×60: 5724 cells, all bold, and 86.5% of them
 with foreground == background, which is precisely where a stripe is most
 visible because the cell should be flat.
