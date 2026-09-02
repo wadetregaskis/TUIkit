@@ -50,6 +50,18 @@ struct AutoRepeatTimerTests {
         }
     }
 
+    /// A scrollbar arrow and a slider arrow are the same gesture, and the two
+    /// auto-repeats are separate implementations — the scrollbar's is driven
+    /// from the render pass, this one from a task. They must still agree about
+    /// where a click ends, or the same press means different things one control
+    /// apart.
+    @Test("The two auto-repeats agree on how long a click may be")
+    func initialDelayMatchesTheScrollbar() {
+        #expect(
+            AutoRepeatTimer().initialDelayMs * 1_000_000
+                == Int(ScrollbarRenderer.autoRepeatInitialDelayNanos))
+    }
+
     @Test("A tap fires exactly once")
     func tapFiresOnce() async {
         var fires = 0

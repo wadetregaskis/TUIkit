@@ -39,10 +39,19 @@ import Dispatch
 @MainActor
 public final class AutoRepeatTimer {
     /// Milliseconds between the initial action and the first
-    /// repeat. Tuned to feel like a typical OS press-and-hold:
+    /// repeat. Long enough that a brief tap fires only once,
     /// short enough that a held press starts repeating without
-    /// feeling stuck, long enough that a brief tap fires only
-    /// once.
+    /// feeling stuck.
+    ///
+    /// The default is 700, not the 400 it was: a careful click on a one-cell
+    /// arrow commonly holds the button for 400–600 ms, so at 400 a deliberate
+    /// click stepped twice and a slightly slower one stepped four times —
+    /// timing-dependent, so it read as flaky rather than as a rule. The
+    /// scrollbar's own auto-repeat measured the same span and landed on the
+    /// same number first; the two are pinned together by a test, because a
+    /// scrollbar arrow and a slider arrow are the same gesture and must not
+    /// disagree about where a click ends. See
+    /// ``ScrollbarRenderer/autoRepeatInitialDelayNanos``.
     public let initialDelayMs: Int
 
     /// Milliseconds between successive repeats once the
@@ -63,7 +72,7 @@ public final class AutoRepeatTimer {
     /// - Parameters:
     ///   - initialDelayMs: See ``initialDelayMs``.
     ///   - repeatIntervalMs: See ``repeatIntervalMs``.
-    public init(initialDelayMs: Int = 400, repeatIntervalMs: Int = 80) {
+    public init(initialDelayMs: Int = 700, repeatIntervalMs: Int = 80) {
         self.initialDelayMs = initialDelayMs
         self.repeatIntervalMs = repeatIntervalMs
     }
