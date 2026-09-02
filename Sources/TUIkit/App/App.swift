@@ -218,6 +218,10 @@ extension AppRunner {
         // The host's width traits, published before anything measures a view:
         // the claim follows the host now, so layout must see it from frame one.
         TerminalClient.applyWidthTraits()
+        // And whether it honours OSC 8 hyperlinks, for the same reason: a
+        // `Link` decides whether to emit one while rendering, and the render
+        // path cannot ask a main-actor question.
+        TerminalClient.applyHyperlinkSupport()
 
         let renderer = RenderLoop(
             app: app,

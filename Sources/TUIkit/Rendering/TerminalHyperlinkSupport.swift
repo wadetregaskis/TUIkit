@@ -95,7 +95,27 @@ extension TerminalClient {
     /// `TUIKIT_HYPERLINKS` is set in the environment — `1` for on, `0` for off
     /// — which is how a user turns links on for their own terminal without the
     /// application knowing anything about it.
-    @MainActor public static var hyperlinkSupport: Bool?
+    @MainActor public static var hyperlinkSupport: Bool? {
+        didSet {
+            guard hyperlinkSupport != oldValue else { return }
+            applyHyperlinkSupport()
+        }
+    }
+
+    /// Publishes ``hyperlinksSupported`` to
+    /// ``TUIkitCore/TerminalHyperlink/isSupported``, which is what the render
+    /// path actually reads.
+    ///
+    /// The twin of ``applyWidthTraits()``, and for the same reason: the
+    /// question is answered here, where the host is identified and the process
+    /// environment is readable, and the answer is read from a render path that
+    /// is not main-actor isolated and could not ask. Called once at startup —
+    /// before anything renders — and again from the diagnostic setters, whose
+    /// whole point is changing it.
+    @MainActor
+    public static func applyHyperlinkSupport() {
+        TerminalHyperlink.isSupported = hyperlinksSupported
+    }
 
     /// Whether the terminal painting this app's output honours OSC 8 — the
     /// override, then the environment, then the measured table.

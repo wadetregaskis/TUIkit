@@ -30,10 +30,17 @@ import Foundation
 /// > deviation — a hyperlink in a terminal has no hover/pointer affordance, so
 /// > the underline is what marks it as a link. Opt out with `.linkUnderline(false)`.
 ///
-/// > Note: The link does not emit an OSC 8 terminal-hyperlink escape — TUIkit's
-/// > width/clip pipeline is CSI-only, and an embedded OSC sequence would corrupt
-/// > layout. Activation is by keyboard and mouse click instead, which works in
-/// > every terminal (including Terminal.app).
+/// > Note: On a terminal measured to honour them, the label also carries a real
+/// > **OSC 8 hyperlink** (see ``TUIkitCore/TerminalHyperlink``), so the terminal's
+/// > own affordances work on it too: hover shows the destination, ⌘-click opens
+/// > it, right-click offers to copy it. Those gestures are handled above the
+/// > mouse-reporting protocol, so they work while the app is reading the mouse
+/// > for its own purposes — and they give a link a way to be COPIED, which
+/// > keyboard activation cannot. Everything else still works everywhere,
+/// > Terminal.app included. Turn the escape off with
+/// > ``View/terminalHyperlinks(_:)``, which an app that intercepts its own URL
+/// > scheme in ``OpenURLAction`` may well want: a terminal-owned ⌘-click
+/// > bypasses that handler entirely.
 public struct Link<Label: View>: View {
     let destination: URL
     let label: Label
@@ -121,6 +128,90 @@ extension View {
     }
 }
 
+// MARK: - Terminal hyperlinks
+
+private struct TerminalHyperlinksKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    /// Whether ``Link`` also emits an OSC 8 terminal hyperlink. Set via
+    /// ``View/terminalHyperlinks(_:)``. Default: `true` — which still emits
+    /// nothing on a host not measured to honour them, because the two
+    /// conditions are ANDed (see ``TUIkitCore/TerminalHyperlink/isSupported``).
+    public var terminalHyperlinks: Bool {
+        get { self[TerminalHyperlinksKey.self] }
+        set { self[TerminalHyperlinksKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Sets whether ``Link`` views within this view attach a real terminal
+    /// hyperlink to their labels.
+    ///
+    /// The escape gives a link the affordances the TERMINAL owns and an
+    /// application cannot reach — hover to see the destination, ⌘-click to
+    /// open it, right-click to copy it — and that last part is the reason an
+    /// app might want it off. A terminal-owned ⌘-click goes to the system
+    /// opener, over the top of ``OpenURLAction``, so an app that intercepts its
+    /// own URL scheme would find those links handled by somebody else:
+    ///
+    /// ```swift
+    /// VStack {
+    ///     Link("Open ticket", destination: URL(string: "myapp://ticket/42")!)
+    /// }
+    /// .terminalHyperlinks(false)   // this scheme is ours to open
+    /// ```
+    ///
+    /// - Parameter enabled: Whether links carry the escape (default `true`).
+    /// - Returns: A view whose links honour the setting.
+    public func terminalHyperlinks(_ enabled: Bool = true) -> some View {
+        environment(\.terminalHyperlinks, enabled)
+    }
+}
+
+/// Attaches an OSC 8 hyperlink to every line of the content's rendered buffer.
+///
+/// **One balanced pair per LINE**, rather than one spanning the whole buffer,
+/// and that is the load-bearing choice. A hyperlink is a property of cells,
+/// and a buffer's lines are laid out and clipped independently — so a pair
+/// that opened on the first row and closed on the last would be split by any
+/// container that clipped between them, leaving the link open at a row's end
+/// and running under everything drawn after it. Per line, every row is
+/// self-contained: the pair survives compositing, padding and alignment
+/// because none of those can put anything between an opening sequence and its
+/// close on the same row, and the clip walks close it at the cut
+/// (`HyperlinkScan`).
+///
+/// The cost is that a label spanning several rows becomes several links, which
+/// is what the `id` parameter is for — a host that implements it treats runs
+/// sharing an id as one link and highlights them together. It is emitted only
+/// when there IS more than one row: a single-run link needs no identity, and
+/// the parameter is bytes on every frame.
+private struct TerminalHyperlinkModifier: ViewModifier {
+    let destination: URL
+    let enabled: Bool
+
+    func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
+        guard enabled, TerminalHyperlink.isSupported, !buffer.lines.isEmpty else { return buffer }
+        let link = TerminalHyperlink(
+            destination: destination.absoluteString,
+            id: buffer.lines.count > 1 ? context.identity.path : nil)
+        let opening = link.opening
+        let lines = buffer.lines.map { line in
+            // An empty row has no cells to carry the link, so it gets no
+            // sequences: they would be bytes on every frame saying nothing.
+            line.isEmpty ? line : opening + line + TerminalHyperlink.closing
+        }
+        // The widths are unchanged by construction — every scan in this
+        // framework counts an escape as the zero cells it paints — so they are
+        // carried across rather than re-measured.
+        return buffer.replacingLines(
+            lines, width: buffer.width, uniformWidth: buffer.linesAreUniformWidth,
+            lineWidths: buffer.lineWidths)
+    }
+}
+
 // MARK: - Internal
 
 /// Reads ``OpenURLAction`` from the environment and drives a plain, accent-tinted
@@ -132,6 +223,7 @@ private struct _Link<Label: View>: View {
 
     @Environment(\.openURL) private var openURL
     @Environment(\.linkUnderline) private var underline
+    @Environment(\.terminalHyperlinks) private var terminalHyperlinks
 
     var body: some View {
         // Resolve the action and destination NOW, during render, and capture the
@@ -154,5 +246,11 @@ private struct _Link<Label: View>: View {
         })
         .buttonStyle(.plain)
         .buttonTextStyle { $0.foreground = .palette.accent }
+        // Outermost, so the link covers everything the button style drew —
+        // its hover prefix included. The control IS the link; a hyperlink over
+        // only the letters would leave the cells beside them inert while
+        // looking identical.
+        .modifier(
+            TerminalHyperlinkModifier(destination: destination, enabled: terminalHyperlinks))
     }
 }

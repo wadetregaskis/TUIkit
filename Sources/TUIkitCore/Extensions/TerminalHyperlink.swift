@@ -151,6 +151,49 @@ public struct TerminalHyperlink: Sendable, Equatable {
     }
 }
 
+// MARK: - Whether to emit them at all
+
+extension TerminalHyperlink {
+
+    /// Whether the terminal painting this app's output honours OSC 8 — the
+    /// answer the render path reads, published from
+    /// `TerminalClient.applyHyperlinkSupport()`.
+    ///
+    /// The same shape as ``TerminalWidthTraits/current``, and for the same
+    /// reason: the question is answered once, up in the umbrella module where
+    /// the host is identified, and READ from a render path that is not
+    /// main-actor isolated and cannot ask. Splitting the two keeps the
+    /// measured table and its overrides in one place while leaving this a
+    /// `Bool` load.
+    ///
+    /// **Defaults to `false`.** A capability is not a defect: emitting a
+    /// sequence the host ignores costs a link that does nothing, so the safe
+    /// answer before anybody has published one is "no links", not "links".
+    public static var isSupported: Bool {
+        get { taskSupported ?? processSupported }
+        set { processSupported = newValue }
+    }
+
+    /// `nonisolated(unsafe)` for the reason ``ColorDepth/current`` gives: set
+    /// during startup, before the render loop exists, and only read after.
+    nonisolated(unsafe) private static var processSupported = false
+
+    /// A task-scoped pin, bound by ``withSupport(_:operation:)``.
+    @TaskLocal private static var taskSupported: Bool?
+
+    /// Runs `operation` with ``isSupported`` pinned on this task only.
+    ///
+    /// Task-local rather than a mutate-and-restore global because Swift
+    /// Testing runs suites in parallel: a test that pinned the flag globally
+    /// would put links into another test's rendering.
+    @discardableResult
+    public static func withSupport<T>(
+        _ supported: Bool, operation: () throws -> T
+    ) rethrows -> T {
+        try $taskSupported.withValue(supported, operation: operation)
+    }
+}
+
 // MARK: - Applying one
 
 extension String {

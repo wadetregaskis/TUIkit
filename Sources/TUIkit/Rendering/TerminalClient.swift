@@ -203,6 +203,10 @@ public struct TerminalClient: Sendable, Equatable {
             // half-applied.
             guard simulated != oldValue else { return }
             applyWidthTraits()
+            // Hyperlinks follow the host too — simulating a terminal that does
+            // not honour them has to stop them being emitted, or the picker is
+            // half-applied in the other direction.
+            applyHyperlinkSupport()
         }
     }
 
