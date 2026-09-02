@@ -38,6 +38,15 @@ struct TerminalImageSignature: Equatable {
     var toneCurve: ASCIIToneCurve?
     var edgeContrast: Double
     var dithering: DitheringMode
+
+    /// The two colours ``ASCIIColorMode/mono`` is painted in, which for pixels
+    /// are baked into the picture rather than stated around it — so a theme
+    /// change makes a mono image a genuinely different picture, and has to
+    /// re-transmit. Ignored by every other mode, and carried anyway: a field
+    /// that is sometimes irrelevant costs a comparison, and a field that is
+    /// sometimes MISSING costs a picture that will not update.
+    var monoInk: RGBA
+    var monoPaper: RGBA
 }
 
 // MARK: - The images this app has put in the terminal

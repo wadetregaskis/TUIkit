@@ -40,13 +40,34 @@ extension ASCIIConverter {
     ///   chosen. Here the pixels survive, so the radius is the conventional
     ///   one for an unsharp mask.
     ///
+    /// ## Mono has to be given its two colours
+    ///
+    /// ``ASCIIColorMode/mono`` emits no colour at all — that is the point of
+    /// it — and the character renderer relies on that: its cells take whatever
+    /// the page is already painted in, and `_ImageCore.inked(_:mode:palette:)`
+    /// states the theme's ink and paper *after* the render cache, so a theme
+    /// change re-colours a cached conversion for free.
+    ///
+    /// Pixels have no such inheritance. A pixel is a colour or it is nothing,
+    /// so mono here means "these two colours", and they must be named. The
+    /// defaults are literal black and white, which is what mono means with no
+    /// theme in the conversation; ``Image`` passes the palette's foreground
+    /// and background, which is what `inked` puts on the character rendering
+    /// of the same picture.
+    ///
     /// - Parameters:
     ///   - image: The decoded picture.
     ///   - width: Target width in pixels.
     ///   - height: Target height in pixels.
+    ///   - monoInk: What ``ASCIIColorMode/mono`` paints its subject in.
+    ///   - monoPaper: …and what it paints the rest in.
     /// - Returns: The recoloured picture, or an empty image for a
     ///   non-positive size.
-    public func recoloured(_ image: RGBAImage, width: Int, height: Int) -> RGBAImage {
+    public func recoloured(
+        _ image: RGBAImage, width: Int, height: Int,
+        monoInk: RGBA = RGBA(r: 255, g: 255, b: 255),
+        monoPaper: RGBA = RGBA(r: 0, g: 0, b: 0)
+    ) -> RGBAImage {
         guard width > 0, height > 0, image.width > 0, image.height > 0 else {
             return RGBAImage(width: 0, height: 0, pixels: [])
         }
@@ -77,14 +98,29 @@ extension ASCIIConverter {
         guard colorMode != .trueColor else { return scaled }
 
         if dithering == .floydSteinberg {
-            return applyFloydSteinbergDithering(
+            scaled = applyFloydSteinbergDithering(
                 scaled, mode: colorMode, monoThreshold: monoThreshold)
+        } else {
+            // Without dithering the quantisation still has to happen: the glyph
+            // path quantises when it emits each cell's SGR, and there is no SGR
+            // here — the pixels ARE the output.
+            scaled.mapPixels { quantizePixel($0, mode: colorMode, monoThreshold: monoThreshold) }
         }
 
-        // Without dithering the quantisation still has to happen: the glyph
-        // path quantises when it emits each cell's SGR, and there is no SGR
-        // here — the pixels ARE the output.
-        scaled.mapPixels { quantizePixel($0, mode: colorMode, monoThreshold: monoThreshold) }
+        // Mono's two values become mono's two COLOURS. Done after the
+        // quantisation rather than inside it so the dither, when there is one,
+        // diffuses its error in the black-and-white space it was designed in:
+        // what a mono dither produces is a PATTERN, and the pattern is the same
+        // whichever two colours it is finally drawn in.
+        if colorMode == .mono, monoInk != RGBA(r: 255, g: 255, b: 255)
+            || monoPaper != RGBA(r: 0, g: 0, b: 0)
+        {
+            scaled.mapPixels { pixel in
+                var painted = pixel.r == 0 ? monoPaper : monoInk
+                painted.a = pixel.a
+                return painted
+            }
+        }
         return scaled
     }
 }

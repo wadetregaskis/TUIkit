@@ -29,7 +29,8 @@ struct TerminalImageStoreTests {
         TerminalImageSignature(
             source: .file(label), rawWidth: 8, rawHeight: 8,
             columns: columns, rows: rows, cellWidth: 2, cellHeight: 4,
-            colorMode: .trueColor, toneCurve: nil, edgeContrast: 0, dithering: .none)
+            colorMode: .trueColor, toneCurve: nil, edgeContrast: 0, dithering: .none,
+            monoInk: RGBA(r: 255, g: 255, b: 255), monoPaper: RGBA(r: 0, g: 0, b: 0))
     }
 
     @Test("A first draw transmits the image and places it")

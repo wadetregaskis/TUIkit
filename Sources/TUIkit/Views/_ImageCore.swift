@@ -686,6 +686,16 @@ extension _ImageCore {
             with: context.environment.palette)
         let edgeContrast = context.environment.imageEdgeContrast
         let dithering = context.environment.imageDithering
+        // Mono's two colours, which pixels have to be TOLD. The character
+        // renderer states them after the fact — `inked(_:mode:palette:)`, run
+        // after the render cache so a theme change re-colours a cached
+        // conversion — and pixels have nothing to state them onto: a pixel is a
+        // colour or it is nothing. So they are baked in, and therefore they are
+        // in the signature: change the theme and the picture is genuinely a
+        // different picture.
+        let palette = context.environment.palette
+        let ink = Self.rgba(palette.foreground, in: palette) ?? RGBA(r: 255, g: 255, b: 255)
+        let paper = Self.rgba(palette.background, in: palette) ?? RGBA(r: 0, g: 0, b: 0)
 
         let signature = TerminalImageSignature(
             source: source,
@@ -693,7 +703,8 @@ extension _ImageCore {
             columns: target.width, rows: target.height,
             cellWidth: cell.width, cellHeight: cell.height,
             colorMode: colorMode, toneCurve: toneCurve,
-            edgeContrast: edgeContrast, dithering: dithering)
+            edgeContrast: edgeContrast, dithering: dithering,
+            monoInk: ink, monoPaper: paper)
 
         guard
             let lines = store.placeholderRows(
@@ -708,11 +719,20 @@ extension _ImageCore {
                         colorMode: colorMode, dithering: dithering,
                         toneCurve: toneCurve, edgeContrast: edgeContrast)
                     return Self.pixelBytes(
-                        converter.recoloured(rawImage, width: pixelWidth, height: pixelHeight))
+                        converter.recoloured(
+                            rawImage, width: pixelWidth, height: pixelHeight,
+                            monoInk: ink, monoPaper: paper))
                 })
         else { return nil }
 
         return FrameBuffer(lines: lines, width: target.width)
+    }
+
+    /// A palette colour as pixels, or `nil` for a semantic colour that has no
+    /// RGB even after resolution.
+    fileprivate static func rgba(_ color: Color, in palette: any Palette) -> RGBA? {
+        guard let components = color.resolve(with: palette).rgbComponents else { return nil }
+        return RGBA(r: components.red, g: components.green, b: components.blue)
     }
 
     /// An ``RGBAImage`` as the flat byte run the protocol wants, in the
