@@ -119,7 +119,24 @@ jobs:
   # of the toolchain as much as of the code: run this on two SDKs and the two
   # reports disagree for reasons that have nothing to do with TUIkit. The
   # baseline records the toolchain it was taken on, and the tool says so when
-  # they differ — but pinning the lane is what stops that ever mattering.
+  # they differ.
+  #
+  # This used to end "— but pinning the lane is what stops that ever mattering."
+  # It does not, and saying so cost a red build nobody could act on. The pin is
+  # the Xcode MAJOR, which floats across point releases on purpose (see the
+  # matrix note at the top of this file), so `macos-26` + `xcode-version: "26"`
+  # rode 6.2.4 → 6.3.3 and the 6.3 SwiftUI SDK arrived carrying three
+  # `View.task` task-naming overloads TUIkit does not have. Three new gaps, no
+  # code change.
+  #
+  # So: expect this lane to drift on any Xcode 26.x that moves the SwiftUI SDK,
+  # and treat re-recording as routine maintenance rather than a regression —
+  # which is exactly what the toolchain stamp is FOR. Read the stamp first when
+  # this job goes red: if it disagrees with the runner's `swift --version`, the
+  # gaps are the SDK's and the fix is `--accept` with the delta in the commit
+  # message. Pinning a full version instead would trade this drift for a
+  # different chore — a manual bump every time GitHub retires an image — and
+  # would hide genuine SDK movement rather than reporting it.
   parity:
     name: "SwiftUI API parity"
     needs: lint
