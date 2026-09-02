@@ -2533,22 +2533,39 @@ thing and merely looks odd, but in a picture every character is a pixel, so
 moving one is corruption with nothing gained — and the run's *neutrals* go with
 it, which is why a row mirrors in patches rather than in place.
 
-`Tools/TerminalProbes/rtl_image_card.py` prints a STAIRCASE built from one
-Hebrew letter and blanks, so no one has to read Hebrew to judge it: correct
-output is a clean diagonal with every `X` in one column, and a host that
-reorders flips the diagonal to the other side of the row. Four candidate
-renderings, plus an ASCII control that shows what correct looks like on that
-host:
+**The first version of the probe measured nothing, and why is the useful part.**
+It drew a staircase out of ONE repeated Hebrew letter and blanks. A run of
+identical characters looks exactly the same reversed, and the blanks are
+neutrals which at end-of-line take the paragraph's own direction and do not
+move — so a host doing precisely what is suspected would have drawn that card
+correctly, and Apple Terminal did. A real image render never looks like that: a
+ramp maps each luminance to a DIFFERENT glyph, so a row is a run of distinct
+letters, and reversing those scrambles the picture. **A card about ordering has
+to be made of things that can be told apart.**
+
+`Tools/TerminalProbes/rtl_image_card.py` now draws a gradient from a ten-letter
+ramp, with a FLAT RUN of one repeated glyph growing along the left edge row by
+row. Reversal leaves each block of identical letters looking as it was and puts
+the blocks in the opposite order, so the flat end moves to the right — legible
+without reading a word of Hebrew, against an ASCII control that shows which side
+is correct on that host. Five blocks:
 
 | Block | What it costs | What it would prove |
 |---|---|---|
-| `plain` | nothing | the baseline — does this host reorder a picture at all? |
-| `lrm` | 3 bytes per ink cell | U+200E after each RTL cell ends the run at one character, which cannot be reordered |
-| `isolate` | 6 bytes per ink cell | U+2068 … U+2069 says it more strongly, and may be painted instead of obeyed |
+| `control` | — | what correct looks like here (an ASCII ramp, same picture) |
+| `hebrew` | nothing | the baseline — does this host reorder a picture at all? |
+| `coloured` | — | the same with an SGR change per cell, as a render emits: if it differs from `hebrew`, it is not the finished line being reordered |
+| `lrm` | 3 bytes per cell | U+200E after each RTL cell ends the run at one character, and a run of one cannot be reversed |
 | `positioned` | one `ESC[nG` per cell, no added characters | whether a host reorders what it is HANDED or what it has STORED — `FrameDiffWriter` already writes partial rows this way |
 
-The override (U+202D … U+202C) is not among them: Apple Terminal paints those
-two, measured above.
+There is deliberately no column ruler. Digits would move under the algorithm's
+own rule for numbers after an RTL letter even on a host doing everything right,
+so a ruler would report every compliant terminal as broken; what is wanted is
+narrower and harder — whether the picture comes out mirrored.
+
+U+2068 … U+2069 is dropped from the card as well: it is a stronger statement of
+what `lrm` already asks, and the override (U+202D … U+202C) is ruled out
+outright — Apple Terminal paints those two, measured above.
 
 That leaves **a known divergence on Apple Terminal in the other direction**: it
 paints U+202D and U+202C as a box that occupies a cell TUIkit no longer counts.

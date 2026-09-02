@@ -35,12 +35,16 @@ when unset), the visual/aspect probes print to the terminal.
   they settled are in Terminal-compatibility.md's "Right-to-left text"
   section.
 - `rtl_image_card.py` — the same question asked of a PICTURE rather than of a
-  line of text: a staircase built from one Hebrew letter and blanks, printed
-  five ways (an ASCII control, plain, U+200E after each ink cell, U+2068 …
-  U+2069 around each, and every cell written after an `ESC[nG` column move).
-  Correct is a clean diagonal with every `X` in one column; a host that
-  reorders flips the diagonal to the other side of the row. OPEN — see
-  Terminal-compatibility.md's "RTL characters as image PIXELS".
+  line of text: a gradient drawn from a ten-letter Hebrew ramp, printed five
+  ways (an ASCII control, plain, a colour change per cell as a render emits,
+  U+200E after each cell, and every cell written after an `ESC[nG` column
+  move). Every row has a FLAT RUN of one repeated glyph at its left; reversing
+  a row moves it to the right, which is legible without reading Hebrew.
+  **Its first version measured nothing** — it drew the staircase from ONE
+  repeated letter, and a run of identical characters looks the same reversed —
+  which is the lesson: a card about ordering has to be made of things that can
+  be told apart. OPEN — see Terminal-compatibility.md's "RTL characters as
+  image PIXELS".
 - `visual_card.py` — static `|<c>|<c>|<c>|X` alignment card with a column
   ruler, for screenshot inspection of PAINTED width (which DSR can't see),
   merged-vs-split clusters, seams, and swatches. It answers exactly ONE of a
