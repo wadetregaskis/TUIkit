@@ -387,7 +387,9 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         // Return submits, when the caller gave it something to submit to.
-        let submitVerb = onSubmitAction != nil ? "submit" : nil
+        let submitVerb =
+            onSubmitAction != nil
+            ? LocalizationService.shared.string(for: LocalizationKey.StatusBar.submit) : nil
         FocusRegistration.publishActivationLabel(submitVerb, context: context, isFocused: isFocused)
 
         // Hover state persists across renders; the dispatcher

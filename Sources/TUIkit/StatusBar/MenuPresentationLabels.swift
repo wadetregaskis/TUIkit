@@ -22,14 +22,35 @@ struct MenuPresentationLabels {
     /// What Escape does while the menu is up.
     let close: String
 
-    private init(noun: String) {
-        self.open = "open \(noun)"
-        self.close = "close \(noun)"
+    /// Composes the pair from the localized verb and the localized noun.
+    ///
+    /// A verb template with `%@` rather than two whole phrases per menu kind,
+    /// which keeps the pairing this type exists for AND lets a translation put
+    /// the noun where its own grammar wants it — German trails the verb
+    /// (`"%@ öffnen"`) and Japanese needs a particle (`"%@を開く"`), so building
+    /// `"open " + noun` in Swift would have been English word order wearing a
+    /// translation. Substitution goes through ``LocalizedStringKey`` rather
+    /// than a local `replacingOccurrences`, so these read `%@` exactly as every
+    /// other interpolated key does, positional `%1$@` included.
+    private init(noun: LocalizationKey.StatusBar) {
+        let service = LocalizationService.shared
+        let name = [service.string(for: noun)]
+        self.open = LocalizedStringKey.substituting(name, into: service.string(for: .openMenu))
+        self.close = LocalizedStringKey.substituting(name, into: service.string(for: .closeMenu))
     }
 
+    // Computed, not `static let`. These used to be constants, which was right
+    // while they were English literals and wrong the moment they became
+    // lookups: a `static let` resolves once, so an app that switched language
+    // at runtime would keep the menu verbs it started with while every other
+    // string followed. The tree is rebuilt every frame, so resolving per access
+    // is what makes the switch land on the next one — the same eagerness rule
+    // the controls follow. Two lookups per focused menu per frame, each a
+    // dictionary hit under a lock already taken for every other label.
+
     /// A `Picker`'s list of options, which drops out of the collapsed control.
-    static let dropDown = Self(noun: "drop-down menu")
+    static var dropDown: Self { Self(noun: .menuDropDown) }
 
     /// A `Menu`'s pop-up, which is a menu and nothing more specific.
-    static let popUp = Self(noun: "menu")
+    static var popUp: Self { Self(noun: .menuPopUp) }
 }

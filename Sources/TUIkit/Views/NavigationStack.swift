@@ -372,7 +372,8 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         // already posted its own close label — and this write clobbered it,
         // showing "⎋ go back" under an open menu whose ESC closes the menu.
         if !context.isMeasuring, barContext.environment.statusBar?.escapeLabelOverride == nil {
-            barContext.environment.statusBar?.escapeLabelOverride = "go back"
+            barContext.environment.statusBar?.escapeLabelOverride =
+                LocalizationService.shared.string(for: LocalizationKey.StatusBar.goBack)
             barContext.environment.statusBar?.escapeClaimGrabsInput = false
             barContext.environment.keyEventDispatcher?.addHandler(
                 sectionID: barContext.environment.activeFocusSectionID

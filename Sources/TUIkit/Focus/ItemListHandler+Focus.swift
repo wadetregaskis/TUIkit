@@ -51,7 +51,10 @@ extension ItemListHandler {
         // What Return does to the focused row: run the row's action where the
         // list has one, and otherwise settle the selection on it.
         FocusRegistration.publishActivationLabel(
-            primaryAction != nil ? "open" : "select", context: context, isFocused: hasFocus)
+            primaryAction != nil
+                ? LocalizationService.shared.string(for: LocalizationKey.StatusBar.open)
+                : LocalizationService.shared.string(for: LocalizationKey.StatusBar.select),
+            context: context, isFocused: hasFocus)
         // The Bottom follow carries the cursor only for the control that owns it.
         isFocusEngaged = hasFocus
         return hasFocus
@@ -78,17 +81,22 @@ extension ItemListHandler {
         // the page, so a row can be picked up here, carried to another subpage,
         // and dropped there. (See ``cancelMouseDragReorder()``.)
         if isKeyboardMove {
-            context.environment.statusBar?.escapeLabelOverride = "cancel move"
+            context.environment.statusBar?.escapeLabelOverride =
+                LocalizationService.shared.string(for: LocalizationKey.StatusBar.cancelMove)
             context.environment.statusBar?.escapeClaimGrabsInput = false
             return
         }
 
         guard selectionMode == .multi else { return }
         if isExtendingSelection {
-            context.environment.statusBar?.escapeLabelOverride = "stop extending selection"
+            context.environment.statusBar?.escapeLabelOverride =
+                LocalizationService.shared.string(
+                    for: LocalizationKey.StatusBar.stopExtendingSelection)
             context.environment.statusBar?.escapeClaimGrabsInput = false
         } else if let selection = multiSelection?.wrappedValue, !selection.isEmpty {
-            context.environment.statusBar?.escapeLabelOverride = "clear selection"
+            context.environment.statusBar?.escapeLabelOverride =
+                LocalizationService.shared.string(
+                    for: LocalizationKey.StatusBar.clearSelection)
             context.environment.statusBar?.escapeClaimGrabsInput = false
         }
     }

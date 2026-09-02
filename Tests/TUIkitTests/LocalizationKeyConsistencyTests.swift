@@ -257,6 +257,37 @@ final class LocalizationKeyConsistencyTests {
         }
     }
 
+    @Test("All status bar keys exist in translations")
+    func allStatusBarKeysExist() {
+        // `allCases` rather than a written-out list, so a key added to the enum
+        // is covered here the moment it exists rather than the moment somebody
+        // remembers to add it. This group is the framework's OWN words — the
+        // verbs it publishes for Return and Escape — so a missing entry shows
+        // up as English in a translated app, which is what it did.
+        for key in LocalizationKey.StatusBar.allCases {
+            #expect(
+                englishTranslations[key.rawValue] != nil,
+                "Status bar key '\(key.rawValue)' not found in translations")
+        }
+    }
+
+    /// The two menu verbs are templates, and a translation that drops the
+    /// placeholder loses the noun entirely rather than misplacing it.
+    @Test("The menu verb templates keep their placeholder in every language")
+    func menuTemplatesKeepPlaceholder() {
+        for language in LocalizationService.Language.allCases {
+            let table = Self.loadTranslations(language: language.rawValue)
+            for key in [
+                LocalizationKey.StatusBar.openMenu, LocalizationKey.StatusBar.closeMenu,
+            ] {
+                let template = table[key.rawValue]
+                #expect(
+                    template?.contains("%@") == true,
+                    "\(language.rawValue).json '\(key.rawValue)' must carry %@, got \(template ?? "nil")")
+            }
+        }
+    }
+
     // MARK: - Coverage Tests
 
     @Test("No extraneous keys in translations")
@@ -362,10 +393,12 @@ final class LocalizationKeyConsistencyTests {
         enumKeys.insert(LocalizationKey.Appearance.block.rawValue)
         enumKeys.insert(LocalizationKey.Appearance.blank.rawValue)
 
-        // Status bar keys
-        enumKeys.insert(LocalizationKey.StatusBar.quit.rawValue)
-        enumKeys.insert(LocalizationKey.StatusBar.appearance.rawValue)
-        enumKeys.insert(LocalizationKey.StatusBar.theme.rawValue)
+        // Status bar keys — enumerated, not restated. The hand-written list
+        // here covered three of them and silently stopped covering the rest as
+        // the group grew.
+        for key in LocalizationKey.StatusBar.allCases {
+            enumKeys.insert(key.rawValue)
+        }
 
         // Check for extraneous keys
         let translationKeys = Set(englishTranslations.keys)
@@ -378,7 +411,8 @@ final class LocalizationKeyConsistencyTests {
     func allEnumKeysCovered() {
         // button + label + error + placeholder + menu + dialog + validation
         //   + statusbar + appearance
-        let expectedKeyCount = 21 + 19 + 11 + 6 + 8 + 7 + 4 + 3 + 6
+        let expectedKeyCount =
+            21 + 19 + 11 + 6 + 8 + 7 + 4 + LocalizationKey.StatusBar.allCases.count + 6
         #expect(
             englishTranslations.count == expectedKeyCount,
             "Expected \(expectedKeyCount) keys in translations, but got \(englishTranslations.count)"

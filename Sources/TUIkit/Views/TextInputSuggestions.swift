@@ -333,7 +333,9 @@ enum TextFieldSuggestions {
             // The menu's Escape (close) takes precedence over any page-level
             // ESC handler while open — surface that in the status bar, as the
             // picker's drop-down does.
-            context.environment.statusBar?.escapeLabelOverride = "close suggestions"
+            context.environment.statusBar?.escapeLabelOverride =
+                LocalizationService.shared.string(
+                    for: LocalizationKey.StatusBar.closeSuggestions)
         }
         return Menu(entries: menuEntries, isOpen: isOpen)
     }
