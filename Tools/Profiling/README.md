@@ -65,6 +65,24 @@ Tools/Profiling/record.sh list 15 24 80   # List page in an 80x24 terminal
 
 Traces land in `profiling-traces/` (git-ignored).
 
+## What a page costs to ARRIVE — `page_open.py`
+
+`drive.py` measures a scenario running; this measures a page arriving, which is
+what "slow to open" means. It resets the menu cursor, opens item *i*, and reads
+until the output has been quiet, reporting wall time and bytes per round — in
+ONE process, so a cost paid once per page per session shows up as round 0 and
+nowhere else.
+
+```bash
+Tools/Profiling/page_open.py .build/release/Example 1,13,20 --rounds 4 --cols 200 --rows 50
+PROBE_HOST=Apple_Terminal Tools/Profiling/page_open.py .build/release/Example 1
+```
+
+`PROBE_HOST` sets `TERM_PROGRAM`, which selects the per-host compensation walks
+in `FrameDiffWriter` — those run only in emission, so `Stress --bench` cannot
+see them. An animated page never goes quiet and reads as the `--quiet` cap;
+that is a limit of the oracle, not a measurement.
+
 ## Deciding whether a change actually helped — `ab_bench.py`
 
 Profiling says *where* the time goes. Deciding whether a change moved it is a
