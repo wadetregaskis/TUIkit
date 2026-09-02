@@ -106,11 +106,20 @@ public struct LocalizedStringKey: Equatable, Hashable, Sendable {
     ///     init(_ labelKey: LocalizedStringKey) { self.init(labelKey.localized) }
     ///
     ///     @_disfavoredOverload
-    ///     init(_ label: String) { self.label = label }
+    ///     init<S: StringProtocol>(_ label: S) { self.label = String(label) }
     ///
     ///     var body: some View { Text(label.padded(to: 20)) }
     /// }
     /// ```
+    ///
+    /// > Important: Write the disfavoured twin **generic over `StringProtocol`**,
+    ///   as SwiftUI does, not as a concrete `String`. `@_disfavoredOverload`
+    ///   alone is not enough: Swift 6.3 ranks a concrete `String` parameter
+    ///   above `LocalizedStringKey` for a literal anyway once the initializer
+    ///   takes another required argument, so the literal stops being a key with
+    ///   no diagnostic. Swift 6.2 did not, which is how the concrete spelling
+    ///   shipped working and later broke — see `SwiftUI-compatibility.md` §4a.
+    ///   The generic spelling is correct on both.
     ///
     /// SwiftUI has no equivalent — its `LocalizedStringKey` is opaque, and a
     /// component is expected to hand it straight to a `Text`. A terminal UI
