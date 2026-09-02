@@ -32,6 +32,14 @@ struct ReorderOutsideBoundsTests {
         buffer.lines.lastIndex { $0.stripped.contains("╰") } ?? -1
     }
 
+    /// The one blank line among a control's drawn content — the landing gap.
+    private func gapLine(_ buffer: FrameBuffer) -> Int? {
+        buffer.lines.indices.first { line in
+            let content = buffer.lines[line].stripped.filter { !" │\u{2502}".contains($0) }
+            return content.isEmpty && line > 0 && line < bottomBorder(buffer)
+        }
+    }
+
     // MARK: - Table
 
     /// Presses `source`, drags through `via`, then out to `escape` — one render
@@ -115,6 +123,12 @@ struct ReorderOutsideBoundsTests {
     /// and the reorder was lost. Every other row worked, and so did the same
     /// excursion off the top, which is what made it look like a rule about the
     /// last row rather than about the line the rows had vacated.
+    ///
+    /// It lands AFTER the last row, not before it. A vacated line below the
+    /// rows means the position past them; clamping onto the last row's own band
+    /// instead names the position that row occupies, which opens the gap one
+    /// line ABOVE the pointer — visibly wrong, and self-correcting on the next
+    /// movement, which is exactly how that half was reported.
     @Test("Table: dipping below the last row and back still drops")
     func tableDipBelowTheLastRowStillDrops() {
         let fixture = TableReorderFixture(feedback: .cursor)
@@ -131,10 +145,13 @@ struct ReorderOutsideBoundsTests {
         // …then back onto the line the last row was drawn on, which by now is
         // the blank the closing-up left.
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: lastRow))
-        fixture.render()
+        let aimed = fixture.render()
+        #expect(
+            gapLine(aimed) == lastRow,
+            "the gap is under the pointer, not above it: \(aimed.lines.map(\.stripped))")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: lastRow))
         fixture.render()
-        #expect(fixture.rows == ["a", "c", "d", "b", "e"], "b landed by the last row")
+        #expect(fixture.rows == ["a", "c", "d", "e", "b"], "b landed after the last row")
     }
 
     /// The `List` twin — the rule is the handler's, and the geometry that
@@ -151,10 +168,13 @@ struct ReorderOutsideBoundsTests {
             MouseEvent(button: .left, phase: .dragged, x: 2, y: bottomBorder(buffer) + 2))
         fixture.render()
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: lastRow))
-        fixture.render()
+        let aimed = fixture.render()
+        #expect(
+            gapLine(aimed) == lastRow,
+            "the gap is under the pointer, not above it: \(aimed.lines.map(\.stripped))")
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: lastRow))
         fixture.render()
-        #expect(fixture.items == ["a", "c", "d", "b", "e"], "b landed by the last row")
+        #expect(fixture.items == ["a", "c", "d", "e", "b"], "b landed after the last row")
     }
 
     /// The guard against over-correcting: an ordinary drag that never leaves the

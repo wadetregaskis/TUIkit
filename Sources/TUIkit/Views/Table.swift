@@ -551,25 +551,30 @@ where Value.ID: Hashable {
                     persistedFocusID: persistedFocusID,
                     stateStorage: context.stateStorage!,
                     context: context, contentHeight: rowArea, overflows: { _ in true })
-                reserveIndicatorLines(handler: handler, contentHeight: rowArea)
+                let window = reserveIndicatorLines(
+                    handler: handler, contentHeight: rowArea, context: context)
                 // Measure with the SAME locale the display path uses, or a
                 // grouped "12,000" would be measured as "12000" and the column
                 // sized one cell short.
                 let measureLocale = context.environment.locale
-                if handler.hasContentAbove {
+                // From the pair just computed, NOT from the handler: this is a
+                // measure pass and it no longer publishes them there.
+                let rowsAbove = window.origin
+                let rowsBelow = max(0, data.count - (window.origin + window.viewport))
+                if rowsAbove > 0 {
                     widest = max(
                         widest,
                         renderScrollIndicator(
-                            direction: .up, count: handler.rowsAbove,
+                            direction: .up, count: rowsAbove,
                             unit: .rows,
                             width: contentWidth, palette: palette, locale: measureLocale
                         ).strippedLength)
                 }
-                if handler.hasContentBelow {
+                if rowsBelow > 0 {
                     widest = max(
                         widest,
                         renderScrollIndicator(
-                            direction: .down, count: handler.rowsBelow,
+                            direction: .down, count: rowsBelow,
                             unit: .rows,
                             width: contentWidth, palette: palette, locale: measureLocale
                         ).strippedLength)
@@ -880,7 +885,8 @@ where Value.ID: Hashable {
             // lines, so the rows are budgeted the content area minus it.
             reserveIndicatorLines(
                 handler: handler,
-                contentHeight: contentHeight - (handler.dropSlotAddsRow ? 1 : 0))
+                contentHeight: contentHeight - (handler.dropSlotAddsRow ? 1 : 0),
+                context: context)
         }
 
         let composed = composeRowLines(
@@ -939,12 +945,15 @@ where Value.ID: Hashable {
         // The whole row area is visible — the bar, not a text indicator, marks the
         // off-screen rows — so the viewport is the full content height, less the
         // line a hovering drag's landing slot takes from the rows.
-        handler.viewportHeight = max(1, contentHeight - (handler.dropSlotAddsRow ? 1 : 0))
-        // A bar spends no indicator line, so this path absorbs nothing: the
-        // rows are drawn from the offset itself. Published anyway, so a frame
-        // that took another path cannot leave a stale origin behind.
-        handler.drawnOffset = handler.scrollOffset
         if !context.isMeasuring {
+            // Render only, for the reason `reserveIndicatorLines` gives at
+            // length: a measure pass is offered a different height and would
+            // leave a later clamp reading another proposal's viewport.
+            handler.viewportHeight = max(1, contentHeight - (handler.dropSlotAddsRow ? 1 : 0))
+            // A bar spends no indicator line, so this path absorbs nothing: the
+            // rows are drawn from the offset itself. Published anyway, so a
+            // frame that took another path cannot leave a stale origin behind.
+            handler.drawnOffset = handler.scrollOffset
             handler.clampScrollOffset()
         }
         // Drawing only — see `RenderContext.indicatesFocus(_:)`. `engageFocus`
@@ -1100,8 +1109,8 @@ where Value.ID: Hashable {
         // the viewport reach past the last one.
         // A landing slot occupies a line whoever opened it. A drag of this
         // control's OWN rows pays for it with the lines those rows gave up —
-        // but only while they are in the window, so the borrow is asked for
-        // either way and `rowSpan(from:drawing:)` hands the lines back.
+        // but only while those rows are still in the window, which is the
+        // question ``ItemListHandler/reorderSlotNeedsALine`` answers.
         handler.dropSlotAddsRow = handler.externalDropSlot != nil || handler.reorderSlotNeedsALine
         handler.syncReturningRows(with: context.environment.dragAndDropSession)
         let rowArea = max(1, contentHeight - (handler.dropSlotAddsRow ? 1 : 0))
@@ -1740,16 +1749,25 @@ where Value.ID: Hashable {
         // cannot be `.draggable`.
         // A landing slot occupies a line whoever opened it. A drag of this
         // control's OWN rows pays for it with the lines those rows gave up —
-        // but only while they are in the window, so the borrow is asked for
-        // either way and `rowSpan(from:drawing:)` hands the lines back.
+        // but only while those rows are still in the window, which is the
+        // question ``ItemListHandler/reorderSlotNeedsALine`` answers.
         handler.dropSlotAddsRow = handler.externalDropSlot != nil || handler.reorderSlotNeedsALine
         handler.syncReturningRows(with: context.environment.dragAndDropSession)
         let overflowing = overflows(handler.dropSlotAddsRow ? 1 : 0)
         // Clamp against the largest possible visible-row count (one
         // indicator, at an end); the exact viewport is finalised by
         // the caller once the offset is known.
+        //
+        // ROWS, like the exact one — minus the landing slot's line, which the
+        // content height still contains. Without that subtraction the two
+        // writes to `viewportHeight` mean different things (this one an entry
+        // capacity, `reserveIndicatorLines`' a row count) and the bound taken
+        // from this one is a row too TIGHT: `clampScrollOffset` then ejected
+        // the offset auto-scroll had just reached, every frame, and the drag
+        // stopped one row short of the end for ever.
         let provisionalViewport =
-            overflowing ? max(1, contentHeight - 1) : contentHeight
+            max(1, (overflowing ? contentHeight - 1 : contentHeight)
+                - (handler.dropSlotAddsRow ? 1 : 0))
         handler.contentHeight = contentHeight
         // A scrollbar reserves no indicator line, so the focus-reveal / offset
         // arithmetic must claim the full content height (matches the List path).
@@ -1759,7 +1777,10 @@ where Value.ID: Hashable {
         // the "N more" answer for both.
         handler.drawsScrollIndicators =
             overflowing && drawsTextIndicators(showsScrollbar, context)
-        handler.viewportHeight = provisionalViewport
+        // Provisional, and RENDER-ONLY for the reason `reserveIndicatorLines`
+        // spells out: a measure pass is handed a height the frame may not get,
+        // and this value outlives the pass that wrote it.
+        if !context.isMeasuring { handler.viewportHeight = provisionalViewport }
         handler.canBeFocused = !isDisabled(in: context)
         handler.primaryAction = primaryAction
         handler.onMove = moveAction
@@ -1859,9 +1880,10 @@ where Value.ID: Hashable {
     /// indicator one row too high), no overflow in the middle. Mirrors
     /// _ListCore. Shared by the render pass and the analytic measure (both
     /// must agree on which indicators show).
+    @discardableResult
     private func reserveIndicatorLines(
-        handler: ItemListHandler<Value.ID>, contentHeight: Int
-    ) {
+        handler: ItemListHandler<Value.ID>, contentHeight: Int, context: RenderContext
+    ) -> (viewport: Int, origin: Int) {
         // Nothing is set aside when the "N more" lines are not what this table
         // draws — hidden indicators cost nothing, and the bar path never calls
         // this at all.
@@ -1886,10 +1908,24 @@ where Value.ID: Hashable {
             belowShown && drawsText
             ? max(1, contentHeight - aboveLines - 1)
             : rowsWithoutBelow
-        handler.viewportHeight = max(1, min(visibleRowCount, remaining))
-        // Published for the same reason the scrollbar path does — and the
-        // indicators and the row window below count from it.
-        handler.drawnOffset = origin
+        let viewport = max(1, min(visibleRowCount, remaining))
+        // A MEASURE pass must not publish either of these. It is offered a
+        // different height than the frame is finally drawn into — the analytic
+        // path measures at the full row area while the render subtracts the
+        // landing slot's line — so a measure that wrote `viewportHeight` left
+        // the NEXT render's `clampScrollOffset` (which asks `maxOffset`, which
+        // asks the viewport) working from a viewport belonging to another
+        // proposal. Symptom: auto-scroll advanced a row per tick and the very
+        // next frame pulled it straight back, so a drag stopped one row short
+        // of the end for ever. It is the measure-side-effect class, and it was
+        // invisible until the borrowed slot line made the two viewports differ.
+        if !context.isMeasuring {
+            handler.viewportHeight = viewport
+            // Published for the same reason the scrollbar path does — and the
+            // indicators and the row window below count from it.
+            handler.drawnOffset = origin
+        }
+        return (viewport, origin)
     }
 
     /// The interaction state of a table with no rows: a real handler (its

@@ -591,28 +591,36 @@ extension ItemListHandler {
         clamped(contentY, onto: visibleRowBands.filter { $0.dropIndex != nil })
     }
 
-    /// `contentY` moved onto the nearest line that can take a drop — but only
-    /// from a line the DRAG emptied, and `nil` from anywhere further down.
+    /// The drop position `contentY` names, reaching over the lines the DRAG
+    /// itself emptied — and `nil` from anywhere further out.
     ///
     /// A `.cursor` drag closes the rows up behind the rows it is carrying, so
     /// the row area ends in as many blank lines as they occupied (the views pad
     /// to keep the control's height — a drag never changes how much is on
     /// screen). Those lines are still the control's, and pointing at one plainly
-    /// means the row nearest it; read as "no band here" they instead CANCEL the
-    /// gesture, which is what dragging below the last row and back onto the line
-    /// it used to occupy did. The rows had moved up by one the moment the gap
-    /// went, so the line the user was still aiming at was no longer a row.
+    /// means somewhere; read as "no band here" they instead CANCEL the gesture,
+    /// which is what dragging below the last row and back onto the line it used
+    /// to occupy did. The rows had moved up by one the moment the gap went, so
+    /// the line the user was still aiming at was no longer a row.
     ///
-    /// The bound is what keeps it honest. A control whose rows do not fill its
-    /// content area draws its bottom border on a line that is nonetheless
-    /// inside ``rowSpaceContentY(_:)``, and clamping from THERE would make the
-    /// border a drop target — which it is not, for a drag any more than for a
-    /// click.
-    private func clampedToVacatedRows(_ contentY: Int) -> Int? {
+    /// What such a line means depends on which side it is. Below the last row it
+    /// is AFTER it, not at it: clamping onto the last row's band instead names
+    /// the position that row occupies, which opens the gap one line ABOVE the
+    /// pointer — visibly wrong, and self-correcting on the next movement, which
+    /// is exactly how it was reported.
+    ///
+    /// The bound is what keeps this honest. A control whose rows do not fill its
+    /// content area draws its bottom border on a line that is nonetheless inside
+    /// ``rowSpaceContentY(_:)``, and reaching from THERE would make the border a
+    /// drop target — which it is not, for a drag any more than for a click.
+    private func vacatedRowsTarget(atContentY contentY: Int) -> Int? {
+        if let target = dropTarget(atContentY: contentY) { return target }
         let droppable = visibleRowBands.filter { $0.dropIndex != nil }
-        guard let last = droppable.last else { return contentY }
-        guard contentY < last.yStart + last.height + reorderVacatedLines else { return nil }
-        return clamped(contentY, onto: droppable)
+        guard let first = droppable.first, let last = droppable.last else { return nil }
+        if contentY < first.yStart { return first.dropIndex }
+        let end = last.yStart + last.height
+        guard contentY >= end, contentY < end + reorderVacatedLines else { return nil }
+        return last.dropIndex.map { $0 + 1 }
     }
 
     /// How many lines of this frame's row area the drag emptied and did not
@@ -1061,11 +1069,9 @@ extension ItemListHandler {
         reorder.active = true
         self.reorder = reorder
 
-        // CLAMPED onto the rows, over the lines the drag itself emptied — see
-        // ``clampedToVacatedRows(_:)``.
-        guard let contentY, let aimed = clampedToVacatedRows(contentY),
-            let target = dropTarget(atContentY: aimed)
-        else {
+        // Over the lines the drag itself emptied as well as the rows — see
+        // ``vacatedRowsTarget(atContentY:)``.
+        guard let contentY, let target = vacatedRowsTarget(atContentY: contentY) else {
             // Off the rows entirely. `.cursor` forgets its slot — the gap
             // disappears and releasing there is a cancel — while the other modes
             // hold the last one, since they have nothing that says "nowhere".

@@ -45,13 +45,14 @@ struct ReorderAutoScrollSlotTests {
         let tui = TUIContext()
         var env = EnvironmentValues()
 
-        init(rows: [String], feedback: RowReorderFeedback) {
+        init(rows: [String], feedback: RowReorderFeedback, bar: Bool = false) {
             self.rows = rows
             env.focusManager = FocusManager()
             // Predates the visibility/style split (#555): these assertions are written
             // against the "N more above / below" lines, which are now a style. The
             // shipped default is a scrollbar; cases about THAT ask for it by name.
-            env.scrollIndicatorStyle = .text
+            env.scrollIndicatorStyle = bar ? .scrollbar : .text
+            if bar { env.verticalScrollIndicatorVisibility = .visible }
             env.rowReorderFeedback = feedback
             env.applyRuntimeServices(from: tui)
             tui.mouseEventDispatcher.setActiveSupport(.full)
@@ -95,9 +96,14 @@ struct ReorderAutoScrollSlotTests {
         }
 
         /// The landing slot: the one blank line among the drawn content.
-        func slotLine(_ buffer: FrameBuffer) -> Int? {
-            buffer.lines.indices.first { line in
-                let content = buffer.lines[line].stripped.filter { !" │".contains($0) }
+        func slotLine(_ buffer: FrameBuffer) -> Int? { slotLines(buffer).first }
+
+        /// EVERY blank line among the drawn content. There must be exactly one:
+        /// a second is a line the rows should have filled and did not.
+        func slotLines(_ buffer: FrameBuffer) -> [Int] {
+            buffer.lines.indices.filter { line in
+                let content = buffer.lines[line].stripped
+                    .filter { !" │\u{2502}\u{2502}▲▼█▁▂▃▄▅▆▇".contains($0) }
                 return content.isEmpty && line > 0 && line < buffer.lines.count - 1
             }
         }
@@ -348,6 +354,48 @@ struct ReorderAutoScrollSlotTests {
         #expect(
             fixture.slotLine(buffer) == fixture.lastRowLine(buffer).map { $0 + 1 },
             "the gap is below the last row: \(screen)")
+        #expect(fixture.slotLines(buffer).count == 1, "exactly one gap: \(screen)")
+
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: edge))
+        fixture.render()
+        #expect(fixture.rows.last == "a", "a landed at the end: \(fixture.rows)")
+    }
+
+    /// The same, with a SCROLLBAR — which is the shipped default, and where the
+    /// second gap showed itself.
+    ///
+    /// The bound the offset is clamped against is taken from `viewportHeight`,
+    /// and that is written twice per frame: provisionally in `resolveHandler`
+    /// and exactly in `reserveIndicatorLines`. The provisional one counted the
+    /// landing slot's line as a ROW while the exact one did not, so the clamp
+    /// was a row tighter than the window that followed it. Auto-scroll then
+    /// advanced a row per tick and the very next frame put it back, which is
+    /// the "jiggle, two blank lines, jiggle, the last row falls off, repeat"
+    /// this asserts against: the last row drawn, exactly one gap, and it under
+    /// the pointer.
+    @Test("A scrollbar's drag auto-scrolled to the end lands after the last row too")
+    func autoScrollReachesTheEndWithAScrollbar() {
+        let names = "abcdefghij".map(String.init)
+        let fixture = Fixture(rows: names, feedback: .cursor, bar: true)
+
+        var buffer = fixture.render()
+        guard let start = fixture.lineOf(buffer, "a") else {
+            Issue.record("row a is drawn: \(buffer.lines.map(\.stripped))")
+            return
+        }
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: start))
+        buffer = fixture.render()
+        let edge = max(0, buffer.lines.count - 2)
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .dragged, x: 2, y: edge))
+        buffer = fixture.render()
+        for tick in 0...12 {
+            fixture.session.driveAutoScroll(nowNanos: UInt64(tick) &* 1_000_000_000)
+            buffer = fixture.render()
+        }
+
+        let screen = buffer.lines.map(\.stripped)
+        #expect(fixture.lineOf(buffer, "j") != nil, "the last row is on screen: \(screen)")
+        #expect(fixture.slotLines(buffer) == [edge], "one gap, under the pointer: \(screen)")
 
         fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: edge))
         fixture.render()

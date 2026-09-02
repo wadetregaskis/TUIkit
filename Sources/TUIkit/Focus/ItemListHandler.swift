@@ -210,6 +210,19 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// lines/rows of context stay visible beyond the cursor.
     var followMargin: ScrollFollowMargin = .none
 
+    /// How many DRAWABLE entries the row area holds this frame.
+    ///
+    /// ``viewportHeight`` counts ROWS, and the owning view has already taken
+    /// the landing slot's line out of it (`contentHeight - dropSlotAddsRow`).
+    /// ``extent`` counts ENTRIES, and has already added that same line in. A
+    /// bound taken as `extent - viewportHeight` therefore counts one line
+    /// twice, in opposite directions, and lands one offset past the end: the
+    /// window there holds a row fewer than the area has lines for, so the
+    /// frame draws the slot AND a blank the rows should have filled — the
+    /// "two blank lines, one of them nowhere near the pointer" report. Adding
+    /// the line back here is what makes the two sides speak the same units.
+    var viewportEntries: Int { viewportHeight + (dropSlotAddsRow ? 1 : 0) }
+
     /// The largest valid scroll offset, in rows, **as it applies to where the
     /// viewport currently sits** — see ``resolvedMaxOffset(reaching:)``, which
     /// this asks with ``scrollOffset``. A mover that wants to go somewhere else
@@ -241,7 +254,7 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// ``settledMaxOffset`` and the `offset`-driven clamps exist to prevent.
     func resolvedMaxOffset(reaching offset: Int) -> Int {
         guard let rowHeight, let contentHeight, contentHeight > 0 else {
-            return max(0, extent - viewportHeight)
+            return max(0, extent - viewportEntries)
         }
         // Every row is at least one line, so at most `contentHeight` rows fit:
         // the true bound is never below this floor, and an offset short of it
