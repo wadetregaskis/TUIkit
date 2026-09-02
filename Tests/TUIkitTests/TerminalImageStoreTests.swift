@@ -25,7 +25,7 @@ struct TerminalImageStoreTests {
         let store = TerminalImageStore()
         let rows = store.placeholderRows(
             token: "a", signature: "one", columns: 4, rows: 2,
-            pixelWidth: 8, pixelHeight: 8, pixels: { pixels(64) })
+            pixelWidth: 8, pixelHeight: 8, pixels: { (pixels(64), .rgba) })
         #expect(rows?.count == 2)
         #expect(rows?.first?.strippedLength == 4)
 
@@ -51,7 +51,7 @@ struct TerminalImageStoreTests {
                 pixelWidth: 8, pixelHeight: 8,
                 pixels: {
                     built += 1
-                    return pixels(64)
+                    return (pixels(64), .rgba)
                 })
         }
         _ = store.takePending()
@@ -67,12 +67,12 @@ struct TerminalImageStoreTests {
         let store = TerminalImageStore()
         _ = store.placeholderRows(
             token: "a", signature: "4x2", columns: 4, rows: 2,
-            pixelWidth: 8, pixelHeight: 8, pixels: { pixels(64) })
+            pixelWidth: 8, pixelHeight: 8, pixels: { (pixels(64), .rgba) })
         _ = store.takePending()
 
         _ = store.placeholderRows(
             token: "a", signature: "8x4", columns: 8, rows: 4,
-            pixelWidth: 16, pixelHeight: 16, pixels: { pixels(256) })
+            pixelWidth: 16, pixelHeight: 16, pixels: { (pixels(256), .rgba) })
         let pending = store.takePending()
         #expect(pending.contains("a=d,d=I"), "the old bytes are freed")
         #expect(pending.contains("s=16,v=16"), "…and the new ones sent")
@@ -89,7 +89,7 @@ struct TerminalImageStoreTests {
         let store = TerminalImageStore()
         _ = store.placeholderRows(
             token: "a", signature: "one", columns: 2, rows: 1,
-            pixelWidth: 4, pixelHeight: 4, pixels: { pixels(16) })
+            pixelWidth: 4, pixelHeight: 4, pixels: { (pixels(16), .rgba) })
         _ = store.takePending()
 
         store.release(token: "a")
@@ -107,7 +107,7 @@ struct TerminalImageStoreTests {
         for token in ["a", "b"] {
             _ = store.placeholderRows(
                 token: token, signature: token, columns: 2, rows: 1,
-                pixelWidth: 4, pixelHeight: 4, pixels: { pixels(16) })
+                pixelWidth: 4, pixelHeight: 4, pixels: { (pixels(16), .rgba) })
         }
         let pending = store.takePending()
         #expect(pending.contains("i=1"))
@@ -130,7 +130,7 @@ struct TerminalImageStoreTests {
         for index in 0..<8 {
             _ = store.placeholderRows(
                 token: "t\(index)", signature: "s", columns: 1, rows: 1,
-                pixelWidth: 1, pixelHeight: 1, pixels: { [0, 0, 0, 255] })
+                pixelWidth: 1, pixelHeight: 1, pixels: { ([0, 0, 0, 255], .rgba) })
         }
         let pending = store.takePending()
         #expect(!pending.contains("i=\(TerminalGraphicsQuery.probeID)"))
@@ -149,7 +149,7 @@ struct TerminalImageStoreTests {
             pixelWidth: 4, pixelHeight: 4,
             pixels: {
                 built = true
-                return pixels(16)
+                return (pixels(16), .rgba)
             })
         #expect(rows == nil)
         #expect(!built, "and nothing was resampled for it")

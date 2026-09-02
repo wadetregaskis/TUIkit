@@ -82,9 +82,10 @@ final class TerminalImageStore: @unchecked Sendable {
     ///   - rows: Height of the placement, in cells.
     ///   - pixelWidth: Width of `pixels`.
     ///   - pixelHeight: Height of `pixels`.
-    ///   - pixels: 8-bit RGBA, row-major. **Only evaluated on a miss** — it is
-    ///     a resample of the decoded image and megabytes of it, and the common
-    ///     case by a wide margin is that nothing has changed since last frame.
+    ///   - pixels: 8-bit pixel bytes and their format, row-major. **Only
+    ///     evaluated on a miss** — it is a resample of the decoded image and
+    ///     megabytes of it, and the common case by a wide margin is that
+    ///     nothing has changed since last frame.
     /// - Returns: the rows, or `nil` for a request the protocol cannot express
     ///   — at which point the caller draws the picture out of glyphs, as it
     ///   always has.
@@ -92,7 +93,7 @@ final class TerminalImageStore: @unchecked Sendable {
         token: String, signature: String,
         columns: Int, rows: Int,
         pixelWidth: Int, pixelHeight: Int,
-        pixels: () -> [UInt8]
+        pixels: () -> (bytes: [UInt8], format: KittyGraphics.PixelFormat)
     ) -> [String]? {
         guard columns > 0, rows > 0, pixelWidth > 0, pixelHeight > 0,
             columns <= KittyGraphics.maximumCellExtent,
@@ -109,7 +110,8 @@ final class TerminalImageStore: @unchecked Sendable {
 
         let payload = pixels()
         let transmit = KittyGraphics.transmit(
-            rgba: payload, width: pixelWidth, height: pixelHeight, id: id)
+            pixels: payload.bytes, format: payload.format,
+            width: pixelWidth, height: pixelHeight, id: id)
         guard !transmit.isEmpty else { return nil }
 
         // Delete first, on the same id. Re-transmitting over a live id is

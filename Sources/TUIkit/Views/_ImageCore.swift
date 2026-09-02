@@ -654,9 +654,25 @@ extension _ImageCore {
             cellAspect: context.environment.imageCellAspect)
         guard target.width > 0, target.height > 0 else { return nil }
 
+        // Never transmit more pixels than the picture HAS. The terminal fits
+        // the image to the placement rectangle, so upscaling before
+        // transmission buys nothing and costs everything: on a 135x48 grid of
+        // 16x34-pixel cells at zoom 2 the unclamped size is 4320x3264, which
+        // is 56 MB of RGBA resampled UP from a 1101x1080 source. Zoom is what
+        // makes this reachable, and zoom is exactly when an app feels slow.
+        //
+        // Clamped by a single factor rather than per axis, so a source whose
+        // aspect differs from the box is not stretched on the way out.
         let cell = context.environment.imageCellPixels
-        let pixelWidth = target.width * cell.width
-        let pixelHeight = target.height * cell.height
+        let wantedWidth = target.width * cell.width
+        let wantedHeight = target.height * cell.height
+        let shrink = min(
+            1.0,
+            min(
+                Double(rawImage.width) / Double(max(1, wantedWidth)),
+                Double(rawImage.height) / Double(max(1, wantedHeight))))
+        let pixelWidth = max(1, Int((Double(wantedWidth) * shrink).rounded()))
+        let pixelHeight = max(1, Int((Double(wantedHeight) * shrink).rounded()))
 
         // Everything that decides the picture. The source and the decoded
         // dimensions identify the image (a source change resets the phase, so
@@ -677,31 +693,45 @@ extension _ImageCore {
                     // Only on a miss: this resamples the decoded image and can
                     // be megabytes. The common case, by a wide margin, is that
                     // nothing has changed since last frame.
-                    Self.rgbaBytes(rawImage.scaledBilinear(to: pixelWidth, pixelHeight))
+                    Self.pixelBytes(rawImage.scaledBilinear(to: pixelWidth, pixelHeight))
                 })
         else { return nil }
 
         return FrameBuffer(lines: lines, width: target.width)
     }
 
-    /// An ``RGBAImage`` as the flat RGBA byte run the protocol's `f=32` wants.
+    /// An ``RGBAImage`` as the flat byte run the protocol wants, in the
+    /// narrowest format that says everything the picture has to say.
     ///
-    /// Written through `unsafeUninitializedCapacity` rather than four appends
-    /// a pixel: a full-screen image at a Retina cell is over two million
-    /// pixels, and eight million bounds-checked appends is a visible pause on
-    /// the frame that first shows a picture.
-    fileprivate static func rgbaBytes(_ image: RGBAImage) -> [UInt8] {
+    /// A photograph has no transparency, and three bytes a pixel rather than
+    /// four is a quarter off a multi-megabyte transmission — which is a
+    /// quarter off the pause on the frame that first shows it. The scan for an
+    /// alpha channel costs one pass over pixels that are about to be copied
+    /// anyway.
+    ///
+    /// Written through `unsafeUninitializedCapacity` rather than an append a
+    /// channel: a full-screen image at a Retina cell is over two million
+    /// pixels, and eight million bounds-checked appends is a visible pause of
+    /// its own.
+    fileprivate static func pixelBytes(
+        _ image: RGBAImage
+    ) -> (bytes: [UInt8], format: KittyGraphics.PixelFormat) {
         let pixels = image.pixels
-        return [UInt8](unsafeUninitializedCapacity: pixels.count * 4) { buffer, initialized in
+        let format: KittyGraphics.PixelFormat =
+            pixels.contains { $0.a != .max } ? .rgba : .rgb
+        let stride = format.stride
+        let capacity = pixels.count * stride
+        let bytes = [UInt8](unsafeUninitializedCapacity: capacity) { buffer, initialized in
             var index = 0
             for pixel in pixels {
                 buffer[index] = pixel.r
                 buffer[index + 1] = pixel.g
                 buffer[index + 2] = pixel.b
-                buffer[index + 3] = pixel.a
-                index += 4
+                if stride == 4 { buffer[index + 3] = pixel.a }
+                index += stride
             }
             initialized = index
         }
+        return (bytes, format)
     }
 }

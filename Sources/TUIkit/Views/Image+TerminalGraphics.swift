@@ -89,6 +89,24 @@ extension View {
     ///     .terminalGraphics(false)   // the ramp IS the design
     /// ```
     ///
+    /// ## The picture is still made of cells, and that is visible when it is small
+    ///
+    /// A virtual placement declares its size in **cells** — `c=` columns by
+    /// `r=` rows — so an image always occupies a whole number of them. That is
+    /// not a limitation working around something: it is the property that lets
+    /// the picture be clipped, scrolled, composited and diffed by the code
+    /// that already does those things to text.
+    ///
+    /// The cost shows at small sizes, where rounding to whole cells is a large
+    /// fraction of the picture. Shrink an image far enough and it snaps to
+    /// 2 cells, then 1, and stops: **one cell is the floor**, because there is
+    /// no such thing as half a placement. Between those steps the cell box's
+    /// own proportions can differ noticeably from the image's, since a cell is
+    /// roughly twice as tall as it is wide and the box is whole cells either
+    /// way. The glyph renderer quantises identically — it has always drawn
+    /// into whole cells — so this is not a difference between the two
+    /// renderers, only one that a real picture makes easy to see.
+    ///
     /// - Parameter enabled: Whether images use the terminal's graphics
     ///   protocol where it has one (default `true`).
     /// - Returns: A view whose images honour the setting.

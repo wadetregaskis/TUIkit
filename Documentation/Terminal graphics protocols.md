@@ -155,7 +155,7 @@ it, and the diff writer cannot tell whether it is still there.
 Kitty's **Unicode placeholders** dissolve that problem rather than working
 around it. The image is transmitted once with an id; a *virtual* placement
 (`a=p,U=1,i=<id>,c=<cols>,r=<rows>`) declares its size in cells; and it is then
-drawn by writing **ordinary cells** containing U+10EFFF, with the image id in
+drawn by writing **ordinary cells** containing U+10EEEE, with the image id in
 the cell's foreground colour and the row/column of the image encoded in
 combining diacritics. The terminal composites the image over exactly those
 cells.
@@ -184,7 +184,7 @@ spec:
 1. **The placeholder is Plane-16 PUA, and this framework compensates that whole
    plane.** `TerminalQuirks.planeSixteenPUA` records that every measured host
    paints a Plane-16 codepoint two cells wide and advances one — it is how SF
-   Symbols behave — so the walks emit `ECH` + glyph + `CUF` for them. U+10EFFF
+   Symbols behave — so the walks emit `ECH` + glyph + `CUF` for them. U+10EEEE
    is not a glyph; the terminal intercepts it and advances one. Left in the
    general rule, every placeholder cell would be erased and CUF'd and the
    placement would shear. The character must be exempted **by codepoint**, and
@@ -347,7 +347,7 @@ measurements that decided each piece are in `Terminal-compatibility.md` under
 
 | §4.1 hazard | Verdict | What was done |
 |---|---|---|
-| Plane-16 PUA compensation catches U+10EFFF | **real, and worse than stated** — the width table claimed 2 cells AND five host advance models claimed an under-advance | Exempted by codepoint through one predicate every Plane-16 test in the module now goes through. Measured: the placeholder advances **one column on all three hosts that answered**, the two that do not implement the protocol included. |
+| Plane-16 PUA compensation catches U+10EEEE | **real, and worse than stated** — the width table claimed 2 cells AND five host advance models claimed an under-advance | Exempted by codepoint through one predicate every Plane-16 test in the module now goes through. Measured: the placeholder advances **one column on all three hosts that answered**, the two that do not implement the protocol included. |
 | A placeholder row declines the cell-span diff | **real, and now deliberate** | The placeholder answers `false` to `isStandaloneClusterScalar`, so the decline does not depend on the encoder emitting diacritics. That in turn is why the **run-length elision is not used** despite working and saving a third of a row's bytes: a diffing writer writes runs after a cursor jump, and a cell that means "the one after the last one" is meaningless there. |
 | The id in the foreground colour could be netted away | **not real, and still safe** | SGR collapsing merges *adjacent* escapes and nets them by value, so the foreground survives; and the depth downgrade happens at `Color`→ANSI time, not as a pass over emitted strings, so a 256-colour terminal cannot quantise an id. Pinned by a test that reads the id back out of every row. |
 
@@ -391,6 +391,19 @@ The table is an optimisation, so it is checked against the thing it optimises
 rather than trusted; a toolchain shipping a newer Unicode is caught rather than
 silently mis-measuring whatever script gained a mark.
 
+### 8.4 What it looks like, and the one thing that surprises
+
+**The picture is made of cells, and at small sizes you can see it.** A virtual
+placement declares its size in `c=` columns by `r=` rows, so an image always
+occupies a whole number of them — which is exactly the property §4 is about.
+Shrinking one far enough snaps it to 2 cells, then 1, and stops there: one cell
+is the floor, because there is no half a placement. Between those steps the
+cell box's proportions can differ visibly from the image's, a cell being
+roughly twice as tall as it is wide.
+
+The glyph renderer quantises identically and always has. The difference is that
+a photograph makes it obvious and a field of `▄` does not.
+
 ### 8.5 The bug that shipped, and the test that would have caught it
 
 The first version used **U+10EFFF**. The placeholder is **U+10EEEE**. Every
@@ -415,13 +428,6 @@ The same round found two more, both of which the codepoint bug was hiding:
   only consumers read luminance to pick a glyph; a renderer that hands the
   pixels to the terminal notices at once, because the terminal is what
   composites them.
-- **`RGBAImage.scaledBilinear` was dropping the alpha channel.** It
-  interpolated red, green and blue and then built its pixel with
-  `RGBA(r:g:b:)`, whose alpha defaults to opaque. Nothing noticed while its
-  only consumers read luminance to pick a glyph; a renderer that hands the
-  pixels to the terminal notices at once, because the terminal is what
-  composites them.
-
 - **A terminal reply was being read as typing.** `ESC _ G i=7;OK ESC \`
   reached the input parser as Alt+underscore followed by the keystrokes
   `G i = 7 ; O K`, and `=` is the zoom-in shortcut on the image pages — so an
@@ -439,7 +445,12 @@ The same round found two more, both of which the codepoint bug was hiding:
 
 One-time per image and per size, not per frame: the image is *retained* by the
 terminal under an id, and `TerminalImageStore` re-transmits only when the
-picture or the cell box changes. It also deletes by id when the view goes away,
+picture or the cell box changes. **Never larger than the source**: the terminal
+fits the image to the placement rectangle, so upscaling before transmission
+buys nothing — and at zoom 2 on a 135x48 grid of Retina cells the unclamped
+size is 56 MB of RGBA resampled up from a 1101x1080 photograph, which is what
+"super slow to load" turned out to mean. An opaque picture is sent as `f=24`,
+three bytes a pixel instead of four. It also deletes by id when the view goes away,
 which is the one genuinely new resource TUIkit now owns — nothing in the
 terminal will free it otherwise.
 

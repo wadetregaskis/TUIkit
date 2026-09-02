@@ -84,9 +84,12 @@ struct ImageTerminalGraphicsTests {
             #expect(line.strippedLength == drawn.buffer.width)
         }
         // And the terminal was told about the image before the frame that
-        // names it.
+        // names it — in the NARROW format, because the fixture is a BMP and
+        // has no alpha channel. Three bytes a pixel rather than four is a
+        // quarter off a transmission that can be megabytes.
         let pending = drawn.store.takePending()
-        #expect(pending.contains("a=t,q=2,f=32"))
+        #expect(pending.contains("a=t,q=2,f=24"))
+        #expect(!pending.contains("f=32"), "nothing here is transparent")
         #expect(pending.contains("a=p,U=1,q=2"))
     }
 
@@ -138,6 +141,39 @@ struct ImageTerminalGraphicsTests {
         #expect(drawn.store.takePending().isEmpty)
         #expect(drawn.store.imageCount == 0)
         #expect(placeholderCells(in: drawn.buffer) == 0, "it measured the glyphs instead")
+    }
+
+    /// An image WITH transparency keeps its alpha, because the terminal
+    /// composites it over the cells' background — which is the only way a
+    /// picture with a transparent corner can sit on a themed page.
+    @Test("A transparent image is sent with its alpha channel")
+    func transparentImageKeepsItsAlpha() throws {
+        let (opaque, path) = try load(width: 20, height: 20)
+        var pixels = opaque.pixels
+        pixels[0] = RGBA(r: 0, g: 0, b: 0, a: 0)
+        let translucent = RGBAImage(width: opaque.width, height: opaque.height, pixels: pixels)
+        let drawn = KittyGraphics.withSupport(true) {
+            rendered(translucent, path: path, width: 10, height: 10)
+        }
+        #expect(drawn.store.takePending().contains("a=t,q=2,f=32"))
+    }
+
+    /// Zoom is what makes the pathological case reachable: the cell box grows
+    /// with it, and the pixels grow with its square. Upscaling past the
+    /// source's own resolution buys nothing — the terminal fits the image to
+    /// the placement rectangle — and costs everything.
+    @Test("An image is never transmitted larger than it is")
+    func transmissionIsClampedToTheSource() throws {
+        let (image, path) = try load(width: 40, height: 40)
+        let drawn = KittyGraphics.withSupport(true) {
+            rendered(image, path: path, width: 60, height: 60)
+        }
+        let pending = drawn.store.takePending()
+        // The cell box would ask for 60 x 16 = 960 pixels across; the picture
+        // has 40. It is sent at its own size, and the placement — which is
+        // what decides how big it LOOKS — is unaffected.
+        #expect(pending.contains("s=40,v=40"), "sent at the source's own resolution")
+        #expect(pending.contains("a=p,U=1,q=2"), "and still placed at the full cell box")
     }
 
     /// The id has to survive into the cells, or the terminal has an image and

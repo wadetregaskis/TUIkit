@@ -70,7 +70,7 @@ enum TerminalGraphicsQuery {
     /// placement speaking, the first APC reply IS the answer.
     static var request: String {
         "\u{1B}[s"  // save the cursor, in case the payload is printed
-            + KittyGraphics.transmit(rgba: onePixel, width: 1, height: 1, id: probeID)
+            + KittyGraphics.transmit(pixels: onePixel, width: 1, height: 1, id: probeID)
             + "\u{1B}_Ga=p,U=1,q=0,i=\(probeID),c=1,r=1\u{1B}\\"
             + KittyGraphics.delete(id: probeID)
             + "\u{1B}[u\u{1B}[J"  // …and wipe it if it was
