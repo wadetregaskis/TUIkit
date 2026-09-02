@@ -1,13 +1,21 @@
 # Gradients where a colour is accepted
 
-**Status: proposal, revision 3. No code.**
+**Status: SHIPPED.** Every item on §8's list is built and on `main` (merged
+2026-09-01, 53 commits, fast-forwarded). Nothing here is outstanding work; what
+remains is one thing this document cannot do anything about — **CI has never run
+on it**, so Linux and Windows have not compiled a line — plus the two curiosities
+in §9, neither of which blocks anything.
 
-Revision 1 asserted a resolution model from recollection; it was wrong.
-Revision 2 measured that, and then made its own central decision — not to adopt
-`ShapeStyle` — from recollection, which was also wrong. Revision 3 is what
-survived three adversarial reviews (mechanism, parity, performance), with every
-claim below either measured or cited to a line of code. §10 records what the
-reviews overturned, because the pattern in it is worth keeping.
+This began as a proposal and became the build log, which is why it reads as one.
+§1–§9 are the design as it was decided; §10 onward is what each step actually
+measured, in the order the steps were taken, and they are kept because the
+numbers in them are expensive to re-derive.
+
+The design went through three revisions and three adversarial reviews before a
+line was written. Revision 1 asserted a resolution model from recollection; it
+was wrong. Revision 2 measured that, and then made its own central decision —
+not to adopt `ShapeStyle` — from recollection, which was also wrong. §10 records
+what the reviews overturned, because the pattern in it is worth keeping.
 
 ---
 
@@ -518,9 +526,11 @@ On a branch, merged only if the whole thing lands.
    a stop written without a position reads as evenly spaced, which is exactly
    what the old format meant, so stored values convert by being read.
 
-Steps 1–3 are each independently useful and revertible. Step 4 is the one that
-can fail, and it fails early: the container survey and the bench tell you before
-any of it is written.
+**All six shipped.** Steps 4, 5 and 6 carry a ✅ because each was gated on
+something that could have stopped it; 1–3 are the foundations the rest stands
+on and landed without incident. Steps 1–3 were each independently useful and
+revertible, and step 4 was the one that could fail — early, because the
+container survey and the bench tell you before any of it is written.
 
 **What is deliberately not built**, decided while step 5 was: the 2- and
 3-argument `foregroundStyle` (the extra styles paint a symbol's extra LAYERS,
@@ -532,8 +542,9 @@ four names are palette roles here, two of them already spelled on `Color`
 where SwiftUI spells them, so a second type would only make `.secondary`
 ambiguous). Each is recorded in `SwiftUI-compatibility.md` §3.
 
-**Both remaining items shipped too**, and neither was a gradient problem.
-`backgroundStyle(_:)` now has the zero-argument `background()` to read it, with
+**The two loose ends of step 5 shipped as well**, and neither was a gradient
+problem. `backgroundStyle(_:)` now has the zero-argument `background()` to read
+it, with
 `BackgroundStyle` (`.background`) as the style itself. And a style used where a
 VIEW goes fills the space it is offered — `Color: View` and the four gradient
 types, which wanted one piece of machinery between them: a blank rectangle plus
@@ -550,10 +561,12 @@ claims slack and never demands any.
   propagate the origin before the feature reads as correct rather than as
   approximately correct? This is the step-4 gate.~~ Answered by building it out:
   see §13.
-- **`TrackGradientScaling` vs `GradientExtent`.** `TrackGradientScaling`
-  (`.track` / `.fill`) is already an extent knob for gradients in one corner of
-  the framework. Two vocabularies for "what does the ramp span" is one too many;
-  `.in(_:)` may unify them.
+- ~~**`TrackGradientScaling` vs `GradientExtent`.** Two vocabularies for "what
+  does the ramp span" is one too many; `.in(_:)` may unify them.~~ Resolved as
+  **not the same question**: `GradientExtent` says how many VIEWS a ramp spans,
+  while `TrackGradientScaling.fill` re-measures against a VALUE-dependent
+  sub-rectangle that changes every frame — which neither `GradientExtent` nor
+  `.in(_:)` can express. Two knobs, two questions.
 - **What a real AppKit control does with `.tint(gradient)`** (§1). Blocks
   nothing — the §5 rule stands on TUIkit's own needs — but it would be good to
   know.
@@ -1362,12 +1375,12 @@ answers honestly and every commit after it answers "no". Only a
 branch-against-trunk run asks the question anyone cares about. `git bisect run`
 over a threshold then named the commit in six builds.
 
-Still not covered, and worth stating rather than implying:
+Three surfaces this gate does not reach, stated rather than implied:
 
 - **Emission.** `--bench` is a counted `renderToBuffer` loop with no PTY, so a
   change in how many bytes reach the terminal measures as exactly zero.
-  `emit_bench.py` is the tool, and the `gradients` scenario now in `Sources/Stress` is the first
-  page in the harness it has anything to point at.
+  `emit_bench.py` is the tool, and the `gradients` scenario now in
+  `Sources/Stress` is the first page in the harness it has anything to point at.
 - **Cold.** Everything above is warm. `RenderCache.lookup`'s key and
   `quantisedRamp`'s cache generations both changed on this branch, which is
   precisely when `Tools/Profiling/README.md` asks for `--cold`.
@@ -1375,142 +1388,11 @@ Still not covered, and worth stating rather than implying:
   returns the plain interpolation. The monotonicity repair — the expensive half
   — only runs at `.palette256`.
 
-## 23. §22's three uncovered surfaces, measured — and gradients are not the cost
-
-Reported: the Colors, Sliders, and Progress & Gauges pages are noticeably
-slower to open the first time and quick on every later visit, and the one thing
-they have in common is gradients. §22 left exactly the three surfaces that
-would have to explain that — emission, cold, and 256 colours — untested. All
-three are measured now, and none of them names a gradient.
-
-### Cold is real, universal, and not about gradients
-
-`Stress --bench --cold` builds a fresh context per frame, so every memo is
-cold. Release, 120×40, 40–60 iterations:
-
-| scenario | cold µs/frame | warm | ratio |
-|---|---|---|---|
-| `gradients` | 40,843 | 3,883 | 10.5× |
-| `modifiers` | 44,665 | 961 | 46× |
-| `textwall` | 10,635 | 2,298 | 4.6× |
-| `kitchensink` | 6,969 | 657 | 10.6× |
-| `dashboard` | 7,013 | 174 | 40× |
-
-Every scenario pays it and the two dearest ratios are not the gradient one.
-`gradients` does have the highest WARM cost of any scenario in the harness
-(3.9 ms against 0.17–2.4 ms) — but that is a cost paid on every frame, not a
-first-visit one.
-
-### The warm gradient frame contains no gradient code
-
-`sample(1)` for 8 s over `Stress --bench --scenario gradients` (release, warm),
-self time: `IdentityNode.structurallyEqual` 6.1%, retain/release 10.5%,
-dictionary find + resize + hashing 12.9%, generic metadata ~8%. **No `Color`,
-`Gradient`, `quantisedRamp` or `oklab` appears in the top 28 at all.** The
-scenario is dear because its view tree is large, not because it paints ramps.
-
-The same holds in the app: `sample(1)` for 12 s over `Example` while the Colors
-page is opened and closed on a loop gives `renderResolved` 2.4%,
-`renderToBuffer` 2.1%, `measureChild` 1.9%, `measureChildUncached` 1.7%,
-`measureResolved` 1.5% — the pipeline, and again nothing gradient-shaped in the
-top 22.
-
-### The first open is not dearer than the second
-
-`Tools/Profiling/page_open.py`, release, 200×50, four rounds each, timing from
-the Enter keystroke to 120 ms of silence:
-
-| page | round 0 | 1 | 2 | 3 | bytes (every round) |
-|---|---|---|---|---|---|
-| Colors | 78 ms | 80 | 71 | 81 | 7,681 |
-| Sliders | 49 | 45 | 47 | 42 | 10,418 |
-| Text Styles | 46 | 43 | 38 | 40 | 8,921 |
-| Toggles | 36 | 33 | 32 | 32 | 6,261 |
-
-No round-0 premium, and the output is byte-identical on every round. The debug
-build shows a ~15% round-0 premium on *all four* pages, gradient or not. What
-the pages do differ in is steady cost — Colors is 2.4× Toggles — so "the
-gradient pages are slower to open" is measurable and "the first time" is not.
-
-### 256 colours is the CHEAP case, not the dear one
-
-Same page opens with and without `COLORTERM=truecolor` (release, 1.5 s window,
-process CPU): at `.palette256` Colors costs 60 ms and Progress 90 ms; at
-truecolor Colors costs 370–440 ms and its first paint is 17.4 KB against
-3.9 KB. Quantising is cheaper than not quantising, because the ramp collapses
-to about ten distinct indices and the diff writer then has almost nothing to
-repaint. Apple Terminal is `TERM=xterm-256color` with no `COLORTERM`, so it
-gets the cheap path; iTerm2 gets the expensive one and is the host reported as
-fast.
-
-### Emission carries no redundancy
-
-`analyze_stream.py` over live PTY captures of six pages' first paint:
-**0.0% redundant SGR on five of them and 0.3% on `progress`** (one escape, 20
-bytes). A slider drag of 1,020 steps: plain track 72,355 bytes, gradient
-spanning the track 65,454, gradient scaled to the fill 166,810 — the same CPU
-(7.2–7.3 s) in all three. The scaled-to-fill case is the dear one because
-rescaling the ramp changes every filled cell; spanning the track (the default)
-holds each column's colour still and costs less than a plain track.
-
-One pattern in that stream is avoidable and was not implemented. Of its 608 SGR
-escapes, 228 are a bare `ESC[0m` and 213 more are `0;`-prefixed restates
-(`ESC[0;38;5;40;48;5;16m`) — together about 20% of the bytes, spent making each
-span independent of what precedes it. `FrameDiffWriter.CellCache` already knows
-what it wrote, so the state in force is knowable. It is left alone deliberately:
-20% of a stream that is ~70 bytes per drag step cannot be what makes a host feel
-sluggish, and the writer is the wrong place to speculate in.
-
-### The first open IS dearer — in the DEBUG build, by 3.4×
-
-The measurements above were release, where the premium is ~13 ms and the report
-does not reproduce. Asked to look harder, and measured again in debug:
-
-| page | first open | later opens | to first byte, first |
-|---|---|---|---|
-| Colors | 620 ms | 183 ms | 590 ms |
-| Sliders | 150 | 135 | 39 |
-| Progress & Gauges | 230 | 224 | 103 |
-| Toggles | 90 | 80 | 27 |
-| Text Styles | 120 | 90 | 34 |
-
-Six hundred milliseconds before anything appears is emphatically noticeable,
-and it is **page-specific rather than process-wide**: opening Toggles, Text
-Styles, Sliders and Progress & Gauges first and only then Colors gives 650 ms
-against 620 — no help at all.
-
-The same effect isolated headlessly, one view tree rendered six times into one
-context:
-
-    pass 1: 4,946µs      pass 2: 148µs      pass 3: 135µs …
-
-A 35× premium, and it is the RENDER memo: the measure memo records 312 misses
-on the first pass and is not consulted again, so what serves passes 2+ is the
-whole-subtree buffer. A *different* tree of the same shape, in the same warm
-process and context, still costs 2,706 µs on its first pass — so a little under
-half of it is shared first-touch and the rest is genuinely per-subtree.
-
-That is the whole of it: the first render of a page's subtree does work that
-every later one is served from a cache, the pages named are the dearest to
-render (Progress 69 ms, Colors 57, Sliders 36.5, against Toggles 27 and Text
-Styles 17 in release), and the two multiply. Not content HEIGHT — `lists`
-scrolls twice as far as `colors` and costs less — but how much work each view
-does.
-
-### What this says about the report
-
-Gradients are not the cost. Colour work is 0.5% of the Colors page's own
-profile (`nearestPalette256Index` 0.23%, `downsampledToPalette256` 0.16%,
-`hueWeightedDistanceSquared` 0.07%); the rest is the measure/render pipeline
-(~25%), the allocator (~16%) and refcounting (~7%), with no hot spot to remove.
-The pages named are simply the dearest, and they are dearer on every visit as
-well as the first.
-
-The single actionable thing is the BUILD: the same first open is 70 ms in
-release against 620 in debug. Beyond that the lever is the cold-render path
-itself — a flat profile whose largest identifiable share is allocation, which
-is the `lines: [String]` question §22 already names as the next one.
-
-And on the second report: on the host reported as slow the framework emits
-*fewer* bytes than on the host reported as fast, and since 589b557e ~20% fewer
-again. What is left is Apple Terminal's own per-colour-change painting.
+All three were measured afterwards, prompted by a report that the gradient
+pages were slow to open. They are in
+**`Documentation/What makes a page slow to open.md`**, and they exonerate this
+feature: colour work is half a per cent of the profile of the page the report
+named, and on the host reported as slow the framework emits fewer bytes than on
+the host reported as fast. The answer turned out to be about the render memo
+and the build, which is why it lives in its own document rather than this
+one.

@@ -380,4 +380,6 @@ to start from every time.
 - **The remaining bytes.** The frame still spends most of itself on styling
   (49% after this pass, down from 58% and 69% before that), and the next lever
   is genuinely the renderer: a cell grid rather than `lines: [String]`, which is
-  the API break described above.
+  the API break described above. `What makes a page slow to open.md` reaches the
+  same conclusion from the other end — allocation is the largest identifiable
+  share of a cold render, and `lines: [String]` is where it comes from.
