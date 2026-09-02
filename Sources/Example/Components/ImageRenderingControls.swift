@@ -83,6 +83,24 @@ struct ImageRenderingControls: View {
 
     // MARK: - Characters
 
+    /// Whether the picture is being drawn out of CHARACTERS at all.
+    ///
+    /// When the terminal is drawing real pixels, everything that chooses a
+    /// character — the charset and its size, shape matching, edge tracing, the
+    /// supersampling that feeds them — is inert. Those controls are disabled
+    /// rather than hidden, because their absence would be a puzzle and their
+    /// presence, greyed, is the answer: they are what the OTHER renderer uses.
+    ///
+    /// They are deliberately NOT snapped to a default the way a genuinely
+    /// dependent knob is (`ImageDemoSettings.snap()`). Snapping exists so a
+    /// displayed value is never a lie about what is on screen; a charset while
+    /// pixels are being drawn is not a lie, it is simply unused — and throwing
+    /// it away would lose the user's choice every time they compared the two
+    /// renderings, which is the one thing this page is for.
+    private var drawsGlyphs: Bool {
+        !(settings.terminalGraphics && KittyGraphics.isSupported)
+    }
+
     @ViewBuilder private var characters: some View {
         VStack(alignment: .leading, spacing: 0) {
             heading("component.imageControls.characters")
@@ -120,6 +138,10 @@ struct ImageRenderingControls: View {
                     rampField
                 }
             }
+            // The whole vocabulary, greyed as one, when the terminal is drawing
+            // the picture itself: no character is being chosen, so no charset
+            // is in use — see `drawsGlyphs`.
+            .disabled(!drawsGlyphs)
             // Off the ramp field and onto its own footing: what follows applies
             // to the charset CHOICE above rather than to the custom ramp it
             // would otherwise appear to continue.
@@ -128,7 +150,7 @@ struct ImageRenderingControls: View {
             // distribution instead of overall luminance. Applies to every
             // charset except a custom ramp.
             Toggle("component.imageControls.shapeAware", isOn: $settings.shapeAware)
-                .disabled(!ImageDemoHelpers.usesShape(settings.charset))
+                .disabled(!drawsGlyphs || !ImageDemoHelpers.usesShape(settings.charset))
 
             // Above every glyph knob in importance and below them on the page,
             // because it is the one switch that decides whether any of them
@@ -152,7 +174,12 @@ struct ImageRenderingControls: View {
             //
             // It used to be nested inside the shape toggle, because the edge
             // test could only be asked of the shape sampling.
+            // Edge TRACING draws directional line glyphs, so it goes with the
+            // glyphs. Edge CONTRAST below it does not: it changes the picture,
+            // which is a thing a picture has whether or not a character is
+            // ever chosen for it.
             Toggle("component.imageControls.edgeLines", isOn: $settings.edgeLines)
+                .disabled(!drawsGlyphs)
                 .toggleContent {
                     // Cells on a clean light/dark boundary draw as directional
                     // line glyphs; the threshold picks how strong a gradient
@@ -271,8 +298,9 @@ struct ImageRenderingControls: View {
                 RadioButtonItem(4, "4\u{D7}")
             }
             .disabled(
-                !ImageDemoHelpers.usesSupersampling(
-                    settings.charset, shapeAware: settings.shapeAware))
+                !drawsGlyphs
+                    || !ImageDemoHelpers.usesSupersampling(
+                        settings.charset, shapeAware: settings.shapeAware))
         }
     }
 

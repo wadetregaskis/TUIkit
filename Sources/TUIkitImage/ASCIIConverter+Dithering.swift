@@ -176,8 +176,17 @@ extension ASCIIConverter {
         return result
     }
 
-    /// Quantizes a pixel to its nearest representative value for the given color mode.
-    private func quantizePixel(
+    /// Quantizes a pixel to its nearest representative value for the given
+    /// color mode, keeping its alpha.
+    ///
+    /// Alpha is carried rather than defaulted. A glyph has no transparency to
+    /// be wrong about, so this was invisible while the only consumer was the
+    /// character renderer — and it stops being invisible the moment the same
+    /// quantisation is applied to pixels that go to the TERMINAL, which is
+    /// what composites them over the page. Same defect as the one
+    /// `RGBAImage.scaledBilinear` had, in the same shape: `RGBA(r:g:b:)`
+    /// defaults alpha to opaque.
+    func quantizePixel(
         _ pixel: RGBA, mode: ASCIIColorMode, monoThreshold: Double
     ) -> RGBA {
         switch mode {
@@ -186,27 +195,33 @@ extension ASCIIConverter {
 
         case .ansi256:
             let index = quantizeToANSI256(pixel)
-            return ansi256ToRGB(index)
+            var quantized = ansi256ToRGB(index)
+            quantized.a = pixel.a
+            return quantized
 
         case .ansi16:
             let sixteen = ASCIIPalette.ansi16
-            return sixteen.rgba(at: sixteen.nearestIndex(to: pixel))
+            var quantized = sixteen.rgba(at: sixteen.nearestIndex(to: pixel))
+            quantized.a = pixel.a
+            return quantized
 
         case .grayscale:
             let gray = UInt8(clamping: Int(pixel.luminance))
-            return RGBA(r: gray, g: gray, b: gray)
+            return RGBA(r: gray, g: gray, b: gray, a: pixel.a)
 
         case .mono:
             // The same split the mono renderers threshold on, so the error the
             // dither diffuses is the error they will actually make.
             let val: UInt8 = ASCIIConverter.isMonoInk(pixel, threshold: monoThreshold) ? 255 : 0
-            return RGBA(r: val, g: val, b: val)
+            return RGBA(r: val, g: val, b: val, a: pixel.a)
 
         case .palette(let palette):
             // The entry this pixel will actually be drawn as — so the error
             // diffused is the error the palette makes, which is what turns a
             // three-colour render from three flat regions into a gradient.
-            return palette.rgba(at: palette.nearestIndex(to: pixel))
+            var quantized = palette.rgba(at: palette.nearestIndex(to: pixel))
+            quantized.a = pixel.a
+            return quantized
         }
     }
 

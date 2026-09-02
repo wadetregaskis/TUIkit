@@ -239,3 +239,92 @@ struct ImageOpacityTests {
         #expect(resolved.lines != buffer.lines, "text fades")
     }
 }
+
+/// Which settings reach a picture the TERMINAL draws.
+///
+/// The colour half of the renderer applies to real pixels as much as to a
+/// field of glyphs — more so, since there is no character in the way. The
+/// glyph half does not apply at all. Getting the split wrong is invisible in
+/// one direction and unmissable in the other: a setting missing from the
+/// signature means turning that knob changes nothing on screen, because the
+/// store believes it already sent this picture.
+@MainActor
+@Suite("Image settings that reach real pixels")
+struct ImageGraphicsSettingsTests {
+
+    private static func snapshotContext() -> TUIContext {
+        TUIContext(
+            lifecycle: LifecycleManager(firesEffects: false),
+            keyEventDispatcher: KeyEventDispatcher(),
+            preferences: PreferenceStorage(),
+            stateStorage: StateStorage())
+    }
+
+    /// Renders twice into ONE store, with `first` then `second` applied, and
+    /// reports whether the second render re-transmitted.
+    private func retransmits(
+        _ first: @escaping (inout EnvironmentValues) -> Void,
+        _ second: @escaping (inout EnvironmentValues) -> Void
+    ) throws -> Bool {
+        let fixture = try BitmapFixture(width: 40, height: 20)
+        let image = try PlatformImageLoader().loadImage(from: fixture.path)
+        let tui = Self.snapshotContext()
+
+        func draw(_ configure: (inout EnvironmentValues) -> Void) {
+            var environment = EnvironmentValues()
+            environment.focusManager = FocusManager()
+            environment.applyRuntimeServices(from: tui)
+            environment.imageCellAspect = 2.0
+            environment.imageCellPixels = TerminalCellPixels(width: 8, height: 16)
+            configure(&environment)
+            let context = RenderContext(
+                availableWidth: 20, availableHeight: 20, environment: environment,
+                tuiContext: tui, identity: ViewIdentity(path: "Root"))
+            let phase: StateBox<ImageLoadingPhase> = tui.stateStorage.storage(
+                for: StateStorage.StateKey(identity: context.identity, propertyIndex: 0),
+                default: .loading)
+            phase.value = .success(image)
+            tui.stateStorage.beginRenderPass()
+            _ = renderToBuffer(_ImageCore(source: .file(fixture.path)), context: context)
+            tui.stateStorage.endRenderPass()
+        }
+
+        return KittyGraphics.withSupport(true) {
+            draw(first)
+            _ = tui.terminalImageStore.takePending()
+            draw(second)
+            return tui.terminalImageStore.takePending().contains("a=t,")
+        }
+    }
+
+    @Test("A colour setting changes the picture, so it is sent again")
+    func colourSettingsRetransmit() throws {
+        #expect(try retransmits({ _ in }, { $0.imageColorMode = .grayscale }), "colour mode")
+        #expect(try retransmits({ _ in }, { $0.imageEdgeContrast = 0.8 }), "edge contrast")
+        #expect(try retransmits({ _ in }, { $0.imageToneCurve = .inverted }), "tone curve")
+        #expect(
+            try retransmits(
+                { $0.imageColorMode = .ansi16 },
+                {
+                    $0.imageColorMode = .ansi16
+                    $0.imageDithering = .floydSteinberg
+                }), "dithering")
+    }
+
+    /// …and the other half must NOT, or every one of these would re-resample
+    /// and re-send megabytes to change a character nobody is drawing.
+    @Test("A glyph setting changes nothing, so nothing is sent")
+    func glyphSettingsDoNotRetransmit() throws {
+        #expect(try !retransmits({ _ in }, { $0.imageCharacterSet = .blocks(.braille) }), "charset")
+        #expect(try !retransmits({ _ in }, { $0.imageShapeAware = true }), "shape matching")
+        #expect(try !retransmits({ _ in }, { $0.imageSupersampling = 4 }), "supersampling")
+        #expect(try !retransmits({ _ in }, { $0.imageEdgeThreshold = 0.5 }), "edge tracing")
+    }
+
+    /// Nothing changing sends nothing — the control against which both of the
+    /// above are read.
+    @Test("An unchanged render sends nothing")
+    func unchangedSendsNothing() throws {
+        #expect(try !retransmits({ _ in }, { _ in }))
+    }
+}

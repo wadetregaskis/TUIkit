@@ -404,6 +404,43 @@ roughly twice as tall as it is wide.
 The glyph renderer quantises identically and always has. The difference is that
 a photograph makes it obvious and a field of `▄` does not.
 
+### 8.4a Which settings still mean something
+
+`Image`'s rendering controls split cleanly in two, and the split is not a
+compromise — it is what the two halves always were.
+
+| Setting | Real pixels | Why |
+|---|---|---|
+| `.imageColorMode` | **applies** | a quantisation of colour, and pixels have colour |
+| `.imageToneCurve` | **applies** | says what a TONE becomes; nothing about characters |
+| `.imageEdgeContrast` | **applies** | an unsharp mask on the picture itself |
+| `.imageDithering` | **applies** | diffuses the error of the quantisation above it |
+| `.imageCharacterSet` | inert | there is no character to choose |
+| `.imageShapeAware` | inert | chooses a character by its ink distribution |
+| `.imageEdgeThreshold` | inert | draws directional line *glyphs* at edges |
+| `.imageSupersampling` | inert | how many pixels feed one glyph's sample |
+
+`ASCIIConverter.recoloured(_:width:height:)` is the applying half, and both
+renderers go through it — so the two drawings of one picture agree about what
+the picture is, rather than agreeing by coincidence. Two deliberate
+differences from the glyph path:
+
+- **The colour depth cap does not apply.** `ColorDepth` exists because SGR
+  cannot express more than the terminal has; a transmitted image is not SGR, so
+  a 256-colour terminal that draws images draws them in full colour. Asking for
+  `.ansi256` still gets 256 — it is a look, and looks are honoured.
+- **Local contrast is measured in pixels, not cells.** The glyph path uses a
+  radius of one cell because a cell is its resolution and a finer lift would
+  average straight back out before a character was chosen. Here the pixels
+  survive.
+
+The Example greys the inert half rather than hiding it: their absence would be
+a puzzle, and their presence, greyed, is the answer. They are deliberately not
+*snapped* to a default the way a genuinely dependent knob is — a charset while
+pixels are being drawn is not a lie about the screen, it is simply unused, and
+discarding it would lose the user's choice every time they compared the two
+renderings.
+
 ### 8.5 The bug that shipped, and the test that would have caught it
 
 The first version used **U+10EFFF**. The placeholder is **U+10EEEE**. Every

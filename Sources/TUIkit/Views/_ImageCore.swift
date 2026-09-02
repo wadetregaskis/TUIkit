@@ -674,15 +674,26 @@ extension _ImageCore {
         let pixelWidth = max(1, Int((Double(wantedWidth) * shrink).rounded()))
         let pixelHeight = max(1, Int((Double(wantedHeight) * shrink).rounded()))
 
-        // Everything that decides the picture. The source and the decoded
-        // dimensions identify the image (a source change resets the phase, so
-        // within one view they cannot disagree); the cell box and the cell's
-        // pixel size decide what it was resampled to. Equal signature, and the
-        // terminal already holds exactly these bytes.
-        let signature = """
-            \(source)|\(rawImage.width)x\(rawImage.height)\
-            |\(target.width)x\(target.height)|\(cell.width)x\(cell.height)
-            """
+        // The colour settings apply to a real picture as much as to a field of
+        // glyphs — more so, since there is no character in the way — and they
+        // come from the same converter the glyph path builds, so the two
+        // renderings of one picture agree about what the picture IS. The
+        // settings that only decide which CHARACTER to draw are not consulted;
+        // see `ASCIIConverter.recoloured(_:width:height:)`.
+        let colorMode = context.environment.imageColorMode.resolved(
+            with: context.environment.palette)
+        let toneCurve = context.environment.imageToneCurve?.resolved(
+            with: context.environment.palette)
+        let edgeContrast = context.environment.imageEdgeContrast
+        let dithering = context.environment.imageDithering
+
+        let signature = TerminalImageSignature(
+            source: source,
+            rawWidth: rawImage.width, rawHeight: rawImage.height,
+            columns: target.width, rows: target.height,
+            cellWidth: cell.width, cellHeight: cell.height,
+            colorMode: colorMode, toneCurve: toneCurve,
+            edgeContrast: edgeContrast, dithering: dithering)
 
         guard
             let lines = store.placeholderRows(
@@ -690,10 +701,14 @@ extension _ImageCore {
                 columns: target.width, rows: target.height,
                 pixelWidth: pixelWidth, pixelHeight: pixelHeight,
                 pixels: {
-                    // Only on a miss: this resamples the decoded image and can
-                    // be megabytes. The common case, by a wide margin, is that
-                    // nothing has changed since last frame.
-                    Self.pixelBytes(rawImage.scaledBilinear(to: pixelWidth, pixelHeight))
+                    // Only on a miss: this resamples and recolours the decoded
+                    // image and can be megabytes. The common case, by a wide
+                    // margin, is that nothing has changed since last frame.
+                    let converter = ASCIIConverter(
+                        colorMode: colorMode, dithering: dithering,
+                        toneCurve: toneCurve, edgeContrast: edgeContrast)
+                    return Self.pixelBytes(
+                        converter.recoloured(rawImage, width: pixelWidth, height: pixelHeight))
                 })
         else { return nil }
 

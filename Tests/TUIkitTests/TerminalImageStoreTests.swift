@@ -20,11 +20,23 @@ struct TerminalImageStoreTests {
         [UInt8](repeating: 0x80, count: count * 4)
     }
 
+    /// A signature that differs only where a test says it does. The fields are
+    /// compared, not parsed, so anything unique will do for "a different
+    /// picture" — `label` is the knob each test turns.
+    private func signature(_ label: String, columns: Int = 4, rows: Int = 2)
+        -> TerminalImageSignature
+    {
+        TerminalImageSignature(
+            source: .file(label), rawWidth: 8, rawHeight: 8,
+            columns: columns, rows: rows, cellWidth: 2, cellHeight: 4,
+            colorMode: .trueColor, toneCurve: nil, edgeContrast: 0, dithering: .none)
+    }
+
     @Test("A first draw transmits the image and places it")
     func firstDrawTransmitsAndPlaces() {
         let store = TerminalImageStore()
         let rows = store.placeholderRows(
-            token: "a", signature: "one", columns: 4, rows: 2,
+            token: "a", signature: signature("one"), columns: 4, rows: 2,
             pixelWidth: 8, pixelHeight: 8, pixels: { (pixels(64), .rgba) })
         #expect(rows?.count == 2)
         #expect(rows?.first?.strippedLength == 4)
@@ -47,7 +59,7 @@ struct TerminalImageStoreTests {
         var built = 0
         for _ in 0..<5 {
             _ = store.placeholderRows(
-                token: "a", signature: "one", columns: 4, rows: 2,
+                token: "a", signature: signature("one"), columns: 4, rows: 2,
                 pixelWidth: 8, pixelHeight: 8,
                 pixels: {
                     built += 1
@@ -66,12 +78,12 @@ struct TerminalImageStoreTests {
     func resizeReplacesRatherThanAccumulates() {
         let store = TerminalImageStore()
         _ = store.placeholderRows(
-            token: "a", signature: "4x2", columns: 4, rows: 2,
+            token: "a", signature: signature("a", columns: 4, rows: 2), columns: 4, rows: 2,
             pixelWidth: 8, pixelHeight: 8, pixels: { (pixels(64), .rgba) })
         _ = store.takePending()
 
         _ = store.placeholderRows(
-            token: "a", signature: "8x4", columns: 8, rows: 4,
+            token: "a", signature: signature("a", columns: 8, rows: 4), columns: 8, rows: 4,
             pixelWidth: 16, pixelHeight: 16, pixels: { (pixels(256), .rgba) })
         let pending = store.takePending()
         #expect(pending.contains("a=d,d=I"), "the old bytes are freed")
@@ -88,7 +100,7 @@ struct TerminalImageStoreTests {
     func releaseDeletes() {
         let store = TerminalImageStore()
         _ = store.placeholderRows(
-            token: "a", signature: "one", columns: 2, rows: 1,
+            token: "a", signature: signature("one"), columns: 2, rows: 1,
             pixelWidth: 4, pixelHeight: 4, pixels: { (pixels(16), .rgba) })
         _ = store.takePending()
 
@@ -106,7 +118,7 @@ struct TerminalImageStoreTests {
         let store = TerminalImageStore()
         for token in ["a", "b"] {
             _ = store.placeholderRows(
-                token: token, signature: token, columns: 2, rows: 1,
+                token: token, signature: signature(token), columns: 2, rows: 1,
                 pixelWidth: 4, pixelHeight: 4, pixels: { (pixels(16), .rgba) })
         }
         let pending = store.takePending()
@@ -129,7 +141,7 @@ struct TerminalImageStoreTests {
         let store = TerminalImageStore()
         for index in 0..<8 {
             _ = store.placeholderRows(
-                token: "t\(index)", signature: "s", columns: 1, rows: 1,
+                token: "t\(index)", signature: signature("s", columns: 1, rows: 1), columns: 1, rows: 1,
                 pixelWidth: 1, pixelHeight: 1, pixels: { ([0, 0, 0, 255], .rgba) })
         }
         let pending = store.takePending()
@@ -144,7 +156,7 @@ struct TerminalImageStoreTests {
         let store = TerminalImageStore()
         var built = false
         let rows = store.placeholderRows(
-            token: "a", signature: "huge",
+            token: "a", signature: signature("huge", columns: 1, rows: 1),
             columns: KittyGraphics.maximumCellExtent + 1, rows: 1,
             pixelWidth: 4, pixelHeight: 4,
             pixels: {

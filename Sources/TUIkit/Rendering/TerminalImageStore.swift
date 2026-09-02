@@ -6,6 +6,40 @@
 
 import TUIkitCore
 
+// MARK: - What decides whether a picture has changed
+
+/// Everything about a request that, if it changed, means the terminal is
+/// holding the wrong picture.
+///
+/// A typed value rather than a formatted string: the fields are already
+/// `Equatable`, and comparing them directly cannot go stale the way a
+/// hand-written description does when somebody adds a knob and forgets to put
+/// it in the format. Getting this wrong is invisible in the good direction and
+/// unmissable in the bad one — a missing field means turning a knob changes
+/// nothing on screen, because the store believes it already sent this picture.
+struct TerminalImageSignature: Equatable {
+    /// Which picture, and at what decoded size — a source change resets the
+    /// loading phase, so within one view these cannot disagree.
+    var source: ImageSource
+    var rawWidth: Int
+    var rawHeight: Int
+
+    /// The cell box the placement covers, and what a cell is in pixels.
+    var columns: Int
+    var rows: Int
+    var cellWidth: Int
+    var cellHeight: Int
+
+    /// The settings `ASCIIConverter.recoloured(_:width:height:)` consults —
+    /// and only those. A charset or a supersampling factor changes which
+    /// GLYPH would be chosen, and there are no glyphs here, so re-transmitting
+    /// megabytes for one would be work with no effect.
+    var colorMode: ASCIIColorMode
+    var toneCurve: ASCIIToneCurve?
+    var edgeContrast: Double
+    var dithering: DitheringMode
+}
+
 // MARK: - The images this app has put in the terminal
 
 /// Owns every image TUIkit has transmitted to the terminal, and is the only
@@ -49,10 +83,7 @@ final class TerminalImageStore: @unchecked Sendable {
     /// One image in the terminal, and the cells that draw it.
     private struct Entry {
         var id: KittyGraphics.ImageID
-        /// Everything about the request that, if changed, means a different
-        /// picture: the source, the decoded size, the cell box, and the cell's
-        /// pixel size. Equal signature, same bytes already in the terminal.
-        var signature: String
+        var signature: TerminalImageSignature
         var rows: [String]
     }
 
@@ -76,8 +107,7 @@ final class TerminalImageStore: @unchecked Sendable {
     ///     call with a different `signature` replaces the first rather than
     ///     adding to it, which is what stops a resize leaking an image a
     ///     frame.
-    ///   - signature: Everything that decides the picture's content. Compared,
-    ///     not parsed.
+    ///   - signature: Everything that decides the picture's content.
     ///   - columns: Width of the placement, in cells.
     ///   - rows: Height of the placement, in cells.
     ///   - pixelWidth: Width of `pixels`.
@@ -90,7 +120,7 @@ final class TerminalImageStore: @unchecked Sendable {
     ///   — at which point the caller draws the picture out of glyphs, as it
     ///   always has.
     func placeholderRows(
-        token: String, signature: String,
+        token: String, signature: TerminalImageSignature,
         columns: Int, rows: Int,
         pixelWidth: Int, pixelHeight: Int,
         pixels: () -> (bytes: [UInt8], format: KittyGraphics.PixelFormat)
