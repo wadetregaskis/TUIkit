@@ -1,6 +1,6 @@
 {
   "probe": "placement_probe",
-  "measured": "2026-09-02T11:19:51-07:00",
+  "measured": "2026-09-02T14:28:53-07:00",
   "screen": "primary",
   "os": "macOS 15.7.9",
   "machine": "arm64",
@@ -62,12 +62,12 @@
     "transmitted_base64": 104448,
     "row_explicit": 111,
     "row_elided": 67,
-    "full_screen_base64": 1812608
+    "full_screen_base64": 20067072
   },
   "transmit_seconds": {
-    "card_image": 0.0019043329999999942,
-    "full_screen": 0.043027499999999996,
-    "full_screen_cells": "49x17"
+    "card_image": 0.002947667000000015,
+    "full_screen": 0.5177503750000003,
+    "full_screen_cells": "174x53"
   },
-  "rendered": "unmeasured — see the card; fill this in by hand"
+  "rendered": "CONFIRMED 2026-09-02 by a person: the card draws, and the shipped Example draws a photograph on its image page. This is the host the recommendation rests on."
 }

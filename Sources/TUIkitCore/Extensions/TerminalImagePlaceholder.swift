@@ -8,7 +8,7 @@
 
 extension Unicode.Scalar {
 
-    /// U+10EFFF — the Kitty graphics protocol's **image placeholder**: the
+    /// U+10EEEE — the Kitty graphics protocol's **image placeholder**: the
     /// character a terminal replaces with part of a picture.
     ///
     /// An image transmitted to a terminal and given a *virtual* placement is
@@ -41,7 +41,7 @@ extension Unicode.Scalar {
     /// and pushed past, and an image would shear one cell further right on
     /// each column — which reads as a picture in the wrong place rather than
     /// as a bug, and is why the exemption is by codepoint and tested.
-    public static let terminalImagePlaceholder: Unicode.Scalar = "\u{10EFFF}"
+    public static let terminalImagePlaceholder: Unicode.Scalar = "\u{10EEEE}"
 }
 
 // MARK: - Distinguishing the two

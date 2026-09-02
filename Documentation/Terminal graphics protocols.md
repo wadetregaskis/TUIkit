@@ -391,7 +391,23 @@ The table is an optimisation, so it is checked against the thing it optimises
 rather than trusted; a toolchain shipping a newer Unicode is caught rather than
 silently mis-measuring whatever script gained a mark.
 
-### 8.4 What an image costs
+### 8.5 The bug that shipped, and the test that would have caught it
+
+The first version used **U+10EFFF**. The placeholder is **U+10EEEE**. Every
+test passed, because every test compared the encoder against the encoder's own
+constant; the DSR advance measurements were all still valid, because any
+unassigned Plane-16 codepoint advances one column; and the four hosts agreed
+with each other, because they agreed about a character none of them had ever
+heard of. What a terminal showed was a grid of missing-glyph boxes, in the
+near-black of the image id.
+
+`KittyGraphicsDiacriticTests.matchesTheSpecificationsExample` is the test that
+was missing: it transcribes kitty's own two-line `printf` for a 2x2 placeholder
+of image id 42 and compares the encoder's cells against it. **A constant taken
+from a specification has to be checked against that specification, spelled
+out** — otherwise the tests only prove the code agrees with itself.
+
+### 8.6 What an image costs
 
 | | Ghostty 1.3.1, 16×34-pixel cells |
 |---|---|

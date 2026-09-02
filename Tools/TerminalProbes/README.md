@@ -94,7 +94,7 @@ when unset), the visual/aspect probes print to the terminal.
   rests on: with a *virtual* placement and Unicode placeholders, does a Kitty
   image behave like **cells**? It transmits a hue-ramp image, places it, writes
   the placeholder rows, and asks DSR how far the cursor moved — because
-  U+10EFFF sits inside the Plane-16 PUA that this framework paints two cells
+  U+10EEEE sits inside the Plane-16 PUA that this framework paints two cells
   wide and compensates for, and an image that inherited that rule would shear.
   Measured 2026-09-02: **one column per cell on all three hosts that answered**,
   Apple Terminal included. Also measures the run-length elision, both id

@@ -1972,7 +1972,7 @@ a success flag with no value — while supporting no Sixel at all. Use DA1.
 
 ### The image placeholder advances ONE cell, on every host — measured 2026-09-02
 
-U+10EFFF, the Kitty protocol's Unicode image placeholder, sits inside the
+U+10EEEE, the Kitty protocol's Unicode image placeholder, sits inside the
 Plane-16 Private Use Area — the range this document records as painted two
 cells and advanced one on every measured host, because that range is where SF
 Symbols live. The placeholder is the exception, and it has to be, because

@@ -18,7 +18,7 @@ does treat a placeholder cell as one cell.
 Five questions, and the first is the one everything else rests on:
 
 1. **Does a placeholder cell advance the cursor exactly one column?**
-   U+10EFFF sits inside the Plane-16 Private Use Area, and every host this
+   U+10EEEE sits inside the Plane-16 Private Use Area, and every host this
    project has measured paints a Plane-16 codepoint two cells wide while
    advancing one — it is how SF Symbols behave, and TUIkit compensates for it
    by erasing under the glyph and pushing the cursor on. If the placeholder
@@ -62,7 +62,7 @@ IMAGE_TIMEOUT = 4.0
 
 # The placeholder character. Not a glyph the terminal draws: it is intercepted
 # and replaced by whatever part of the image the cell's diacritics name.
-PLACEHOLDER = "\U0010EFFF"
+PLACEHOLDER = "\U0010EEEE"
 
 # Kitty's row/column diacritics, verbatim from `gen/rowcolumn-diacritics.txt`
 # in the kitty repository — combining marks of class 230 from Unicode 6.0.0

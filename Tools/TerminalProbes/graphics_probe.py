@@ -197,7 +197,7 @@ def main():
             "XTGETTCAP_Su": ask(fd, b"\x1bP+q5375\x1b\\"),
             # UNICODE PLACEHOLDERS, the feature a TUI actually needs: transmit
             # an image with an id, then make a VIRTUAL placement of it, and the
-            # image is drawn wherever cells containing U+10EFFF carry that id.
+            # image is drawn wherever cells containing U+10EEEE carry that id.
             # An image placed that way lives in the CELL GRID — it scrolls with
             # the rows, it is clipped by whatever clips them, and a row-diffing
             # writer can emit it as text. Every other placement mode puts pixels

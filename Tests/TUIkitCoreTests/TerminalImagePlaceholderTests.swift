@@ -8,7 +8,7 @@ import Testing
 
 @testable import TUIkitCore
 
-/// U+10EFFF sits inside the Plane-16 Private Use Area, which this framework
+/// U+10EEEE sits inside the Plane-16 Private Use Area, which this framework
 /// treats as SF Symbols — painted two cells, advanced one, compensated with
 /// `ECH` + glyph + `CUF`. The placeholder is not a glyph and must escape all
 /// of that.
@@ -22,7 +22,7 @@ struct TerminalImagePlaceholderWidthTests {
 
     /// The codepoint, spelled once so a typo in the tests cannot agree with a
     /// typo in the source.
-    static let placeholder: Character = "\u{10EFFF}"
+    static let placeholder: Character = "\u{10EEEE}"
 
     /// An SF Symbol, for the arm that must NOT change.
     static let symbol: Character = "\u{100001}"
@@ -37,7 +37,7 @@ struct TerminalImagePlaceholderWidthTests {
     /// is never a lone scalar — and a cluster is measured by its own path.
     @Test("Still one cell carrying its row and column")
     func clusterWithDiacriticsIsOne() {
-        let cell = "\u{10EFFF}\u{0305}\u{030D}"
+        let cell = "\u{10EEEE}\u{0305}\u{030D}"
         #expect(cell.strippedLength == 1)
         // A whole row of them measures its cell count, which is what every
         // layout, pad and clip decision in the framework will ask.
@@ -92,7 +92,7 @@ struct TerminalImagePlaceholderWidthTests {
     /// must come out unchanged.
     @Test("The compensation walks pass a placeholder row through")
     func walksLeaveTheRowAlone() {
-        let row = String(repeating: "\u{10EFFF}\u{0305}\u{030D}", count: 4)
+        let row = String(repeating: "\u{10EEEE}\u{0305}\u{030D}", count: 4)
         #expect(row.withTerminalAppCursorCompensation() == row)
         #expect(row.withITerm2CursorCompensation() == row)
         #expect(row.withGhosttyCursorCompensation() == row)
@@ -113,12 +113,12 @@ struct TerminalImagePlaceholderWidthTests {
     /// the picture it stands for.
     @Test("An image row declines the cell-span diff")
     func imageRowDeclinesSpanDiff() {
-        let row = String(repeating: "\u{10EFFF}\u{0305}\u{030D}", count: 4)
+        let row = String(repeating: "\u{10EEEE}\u{0305}\u{030D}", count: 4)
         #expect(ANSIRowCells(decomposing: row, width: 4) == nil)
         // Bare placeholders — the run-length form — decline for the same
         // reason, and this is the arm that would silently pass if the
         // exemption lived only in the width table.
-        #expect(ANSIRowCells(decomposing: String(repeating: "\u{10EFFF}", count: 4), width: 4) == nil)
+        #expect(ANSIRowCells(decomposing: String(repeating: "\u{10EEEE}", count: 4), width: 4) == nil)
         // A plain row still decomposes, so the assertions above are measuring
         // the placeholder rather than a differ that declines everything.
         #expect(ANSIRowCells(decomposing: "abcd", width: 4) != nil)
