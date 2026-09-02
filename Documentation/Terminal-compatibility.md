@@ -3,8 +3,8 @@
 The canonical record of how each terminal emulator behaves on every axis
 TUIkit cares about — input encodings (keys, mouse, trackpad) and output
 behaviour (cursor advance vs painted width, emoji handling, glyph cell
-coverage, colour depth) — plus the environment variables each one defines
-and the exact versions the observations were made against.
+coverage, colour depth, OSC 8 hyperlinks) — plus the environment variables
+each one defines and the exact versions the observations were made against.
 
 **Maintenance contract:** whenever anything new is observed or learned
 about any terminal's behaviour — a new quirk, a version that changes one,
@@ -1767,6 +1767,123 @@ explicitly the user's. Naming `Color.blue` and hoping is the one option with no
 defensible reading. (This is the reasoning that re-pointed
 ``Color/primary``/``Color/secondary``/``Color/accentColor`` at palette roles;
 see `Documentation/Parity-decisions-pending.md` §1–2 for the decision.)
+
+---
+
+## OSC 8 hyperlinks — measured 2026-09-02
+
+`ESC ] 8 ; <params> ; <URI> ST` attaches a destination to the cells that
+follow, until `ESC ] 8 ; ; ST` ends it. Hover shows the URI, ⌘-click opens
+it, right-click offers to copy it — and all three arrive **above the
+mouse-reporting protocol**, so they work while the application is reading
+the mouse for its own purposes, which is what makes the sequence worth
+emitting at all in a framework that already handles clicks itself.
+
+Measured with `Tools/TerminalProbes/hyperlink_probe.py`, which asks two
+different questions and can only answer one of them from inside.
+
+### Safe: measurable, and it is the question that licenses emitting
+
+A terminal with an OSC parser consumes the whole sequence whether or not it
+implements the command — costing nothing, painting nothing. A terminal
+**without** one prints the payload: the URI sprayed across the row, the
+cursor left wherever that ended, and every later write on the row landing in
+the wrong column. DSR sees that difference. Print a known-width label wrapped
+in OSC 8, ask where the cursor is, and compare against the same label bare.
+
+| Host | version | plain | with `id=` | BEL-terminated | bare close | unknown OSC command |
+|---|---|---|---|---|---|---|
+| Apple Terminal | 455.1 | swallowed | swallowed | swallowed | swallowed | swallowed |
+| iTerm2 | 3.6.11 | swallowed | swallowed | swallowed | swallowed | swallowed |
+| Ghostty | 1.3.1 | swallowed | swallowed | swallowed | swallowed | swallowed |
+| Warp | v0.2026.08.26.17.59.stable_01 | swallowed | swallowed | swallowed | swallowed | swallowed |
+
+Both screen buffers, every host, every spelling: the cursor lands exactly
+where the bare label leaves it. The `unknown OSC command` column is the
+control — a command number nothing implements — and it is the reason the
+result generalises: these hosts swallow **any** OSC, so the answer is a
+property of their parsers rather than of this one sequence.
+
+**So being wrong about the second question costs a link that does nothing,
+not a corrupted row.** That asymmetry is what lets the capability table be
+generous, and it is the opposite of how the cursor-advance quirks work,
+where being wrong corrupts output that was fine. See
+`TerminalClient.honoursHyperlinks(_:)`, which says so at the code.
+
+### Honoured: not measurable from inside, and no query reports it
+
+There is no escape sequence that asks. DA1, DA2 and XTVERSION say nothing
+about it, no reply distinguishes a terminal that stored the URI from one
+that discarded it, and the affordance itself is a mouse gesture the
+application never sees. The probe therefore prints a card for a human and
+records the answer beside the measurement rather than pretending to have
+derived it. What the table below rests on instead:
+
+| Host | Honours | Evidence |
+|---|---|---|
+| iTerm2 | **yes** | its own setting, `Drawing: Underline OSC 8 hyperlinks` (`underlineHyperlinks`); and tmux gives it the `hyperlinks` feature |
+| Ghostty | **yes** | per-page hyperlink storage in its cell model (`cell_hyperlink`, "Maps cell positions to hyperlink IDs"); `link-previews` has an explicit `osc8` mode |
+| tmux | **yes** | stores links in its grid, and `capture-pane -H` reads them back — the one machine-checkable oracle here |
+| Apple Terminal | **no** | the app names no hyperlink handling at all; the sequence is swallowed and nothing is kept |
+| Warp | **no** — deliberately, see below | the only hyperlink handling its binary names is bounded by `HighlightedLink is not within the alt screen` |
+
+**Warp is a decided `false`, not an unknown.** It swallows the sequence like
+the others, so emitting there would be safe; the reason not to is that the
+alternate screen is the only buffer a TUIkit app ever draws into, and the
+one string in Warp that bounds its link handling excludes exactly that.
+Claiming a capability this framework's own users could not reach is worse
+than claiming none — it turns "this terminal does not do that" into "this
+framework is broken here". `TerminalClient.hyperlinkSupport = true`
+(or `TUIKIT_HYPERLINKS=1`) overrides it for anyone who finds otherwise.
+
+### tmux honours it, and then decides who else may see it
+
+`capture-pane -H` is the oracle: a pane sent `ESC]8;;https://example.com ST`
+reports that URI back, and `capture-pane -F` flags the row `H`. The link is
+stored whether or not any client is attached.
+
+Forwarding is a separate decision. tmux sends hyperlinks only to clients
+whose `terminal-features` include `hyperlinks`, which it derives from its own
+table keyed on XTVERSION. Measured with tmux 3.7c, `-f /dev/null`, one
+server per host:
+
+| Client | `#{client_termtype}` | `hyperlinks`? |
+|---|---|---|
+| iTerm2 3.6.11 | `iTerm2 3.6.11` | **yes** |
+| Ghostty 1.3.1 | `ghostty 1.3.1` | no — identified, and still given nothing |
+| Warp | `Warp(v0.2026.08.26.17.59.stable_01)` | no |
+| Apple Terminal | *(empty — answers no XTVERSION)* | no |
+
+So a link inside tmux inside Ghostty is stored and never shown, until the
+user says `set -ga terminal-features "*:hyperlinks"`. That is tmux's
+decision and not one an application can override, which is why TUIkit emits
+regardless: the link costs nothing where it is dropped and works wherever
+the user has told tmux it can.
+
+> **Measurement artefact worth knowing.** tmux's feature detection is
+> asynchronous — it probes the client with XTVERSION after the attach. Asking
+> `#{client_termfeatures}` immediately reports the terminfo-derived set and an
+> EMPTY termtype, which is indistinguishable from a terminal that answers no
+> XTVERSION. The first run of this measurement recorded iTerm2 that way. Sleep
+> a few seconds after attaching before asking. (The same shape as the July
+> reading in "Identifying the client terminal": an empty termtype is not
+> evidence of anything.)
+
+### Which terminator, and why the URI is re-encoded
+
+`ST` (`ESC \`), not the `BEL` xterm also accepts. It is the form the
+specification gives, it is what tmux writes, both were measured to be
+swallowed everywhere above — and `BEL` would put a C0 control inside every
+link, which `String.sanitizedForTerminalRow()` then has to reason about in
+exchange for nothing.
+
+The sequence **ends** at an `ESC` or a `BEL`, so a destination containing
+either does not render oddly: it terminates the sequence, and the rest is
+text the terminal draws. A URL is exactly the kind of value an application
+builds out of data it did not author, so `TerminalHyperlink` percent-encodes
+every byte that is not a printable non-blank ASCII character rather than
+assuming the caller did. Same reasoning as `String.sanitizedForTerminal`:
+the gate belongs where the escape is written.
 
 ---
 

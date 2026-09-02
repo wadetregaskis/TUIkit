@@ -1,0 +1,121 @@
+{
+  "probe": "hyperlink_probe",
+  "measured": "2026-09-02T06:34:04-07:00",
+  "screen": "both",
+  "os": "macOS 15.7.9",
+  "machine": "arm64",
+  "env": {
+    "TERM": "xterm-256color",
+    "TERM_PROGRAM": "Apple_Terminal",
+    "TERM_PROGRAM_VERSION": "455.1",
+    "TERM_SESSION_ID": "92D4A6AC-5594-40CC-BA1F-66C2D2C91A15",
+    "__CFBundleIdentifier": "com.apple.Terminal"
+  },
+  "mode_2027_grapheme_clustering": "not asked (Apple Terminal prints this query's final byte)",
+  "method": "DSR cursor report — confirm any disagreement with visual_card.py",
+  "terminal_app_build": "455.1",
+  "url": "https://example.com/tuikit",
+  "measurements": {
+    "primary": {
+      "control": {
+        "what": "the label alone — the column every other row is compared against",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "LINK"
+      },
+      "bel": {
+        "what": "OSC 8 terminated with BEL (xterm's older, more widely accepted form)",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "<ESC>]8;;https://example.com/tuikit<BEL>LINK<ESC>]8;;<BEL>"
+      },
+      "st": {
+        "what": "OSC 8 terminated with ST (ESC \\) — the form the specification gives",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "<ESC>]8;;https://example.com/tuikit<ESC>\\LINK<ESC>]8;;<ESC>\\"
+      },
+      "st_id": {
+        "what": "…with an id= parameter, which is how one link spans several rows",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "<ESC>]8;id=tuikit-1;https://example.com/tuikit<ESC>\\LINK<ESC>]8;;<ESC>\\"
+      },
+      "close_only": {
+        "what": "a bare close with no link open — what a clipped row could emit",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "<ESC>]8;;<ESC>\\LINK"
+      },
+      "unknown_osc": {
+        "what": "an OSC command NO terminal implements: does this host swallow any OSC?",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "<ESC>]987;nothing-implements-this<ESC>\\LINK"
+      }
+    },
+    "alternate": {
+      "control": {
+        "what": "the label alone — the column every other row is compared against",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "LINK"
+      },
+      "bel": {
+        "what": "OSC 8 terminated with BEL (xterm's older, more widely accepted form)",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "<ESC>]8;;https://example.com/tuikit<BEL>LINK<ESC>]8;;<BEL>"
+      },
+      "st": {
+        "what": "OSC 8 terminated with ST (ESC \\) — the form the specification gives",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "<ESC>]8;;https://example.com/tuikit<ESC>\\LINK<ESC>]8;;<ESC>\\"
+      },
+      "st_id": {
+        "what": "…with an id= parameter, which is how one link spans several rows",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "<ESC>]8;id=tuikit-1;https://example.com/tuikit<ESC>\\LINK<ESC>]8;;<ESC>\\"
+      },
+      "close_only": {
+        "what": "a bare close with no link open — what a clipped row could emit",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "<ESC>]8;;<ESC>\\LINK"
+      },
+      "unknown_osc": {
+        "what": "an OSC command NO terminal implements: does this host swallow any OSC?",
+        "visible_cells": 4,
+        "expected_column_if_swallowed": 5,
+        "measured_column": 5,
+        "swallowed": true,
+        "bytes": "<ESC>]987;nothing-implements-this<ESC>\\LINK"
+      }
+    }
+  },
+  "honoured": "unmeasured — see the card; fill this in by hand"
+}

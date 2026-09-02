@@ -19,6 +19,15 @@ conditions. Four kinds of file live here:
   corpus row no landing record has yet measured must be listed in the
   suite's `awaitingLandingMeasurement` set, so its absence cannot read as
   a pass.
+- **`<terminal>-<version>-hyperlinks.json`** — OSC 8 SAFETY records
+  (`hyperlink_probe.py`): the DSR column after a known-width label wrapped
+  in each spelling of the sequence, on both screen buffers, against the same
+  label bare. These say whether emitting the sequence is safe, which is a
+  different question from whether the host honours it — no query answers
+  that second one, so the `honoured` field is filled in by a person or left
+  saying so. Every file carries an `unknown_osc` row: a command number
+  nothing implements, which is what makes a "swallowed" result a property of
+  the host's OSC parser rather than of this one sequence.
 - **`tmux-3.7b-tonebases.json`** — the full Emoji_Modifier_Base sweep
   (`advance_probe.py --modifier-bases`): which of the 134 bases tmux merges
   with a following tone (70) and which it detaches (64). The source of

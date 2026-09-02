@@ -70,6 +70,16 @@ when unset), the visual/aspect probes print to the terminal.
   (DA1/DA2/DA3, XTVERSION, XTGETTCAP), DSR-fenced so a silent terminal
   cannot stall it. This is the measurement behind identifying a host over
   ssh, where `TERM_PROGRAM` does not survive the hop.
+- `hyperlink_probe.py` — is OSC 8 SAFE to emit here? A terminal with an OSC
+  parser swallows the whole sequence whether or not it implements the
+  command; one without prints the URI as text and leaves the cursor
+  wherever that ended. DSR sees the difference: a known-width label wrapped
+  in OSC 8, against the same label bare. Both screen buffers every run, and
+  an `unknown_osc` control so a "swallowed" result reads as a property of
+  the host's parser rather than of this one sequence. Whether the host
+  HONOURS the link — hover, ⌘-click — no query reports, so the probe prints
+  a card for a person and records their answer beside the measurement
+  instead of pretending to have derived it.
 - `cell_aspect_probe.py` — the terminal cell's height:width ratio (what
   `Image` needs to render undistorted), via `TIOCGWINSZ` pixel fields and
   the `CSI 14t`/`18t` escape queries. Report to `$PROBE_OUT` (default
