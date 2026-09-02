@@ -173,7 +173,7 @@ extension String {
                 continue
             }
             let start = index
-            index = csiSequenceEnd(from: index)
+            index = escapeSequenceEnd(from: index)
             let sequence = self[start..<index]
             // CSI Ps C / CSI Ps D — the only two escapes any walk here emits
             // that move the cursor. The parameter defaults to 1 when omitted,
@@ -216,11 +216,11 @@ extension String {
         var index = startIndex
         while index < endIndex {
             if self[index] == "\u{1B}" {
-                // Skip ANSI escape sequences — `csiSequenceEnd(from:)`, shared by every escape walk. The
+                // Skip ANSI escape sequences — `escapeSequenceEnd(from:)`, shared by every escape walk. The
                 // copies that used to sit in this file accepted only digits
                 // and `;` between the `[` and the terminator, which stops at
                 // the `?` of `ESC[?25l` and counts the rest as visible text.
-                index = csiSequenceEnd(from: index)
+                index = escapeSequenceEnd(from: index)
                 continue
             }
             let c = self[index]
@@ -402,7 +402,7 @@ extension String {
             if c == "\u{1B}" {
                 // Preserve an entire ANSI escape sequence: ESC [ params letter
                 let seqStart = index
-                index = csiSequenceEnd(from: index)
+                index = escapeSequenceEnd(from: index)
                 result += self[seqStart..<index]
                 continue
             }
@@ -495,7 +495,7 @@ extension String {
             if c == "\u{1B}" {
                 // Preserve an entire ANSI escape sequence: ESC [ params letter
                 let seqStart = index
-                index = csiSequenceEnd(from: index)
+                index = escapeSequenceEnd(from: index)
                 result += self[seqStart..<index]
                 continue
             }
@@ -680,7 +680,7 @@ extension String {
 
             if c == "\u{1B}" {
                 let seqStart = index
-                index = csiSequenceEnd(from: index)
+                index = escapeSequenceEnd(from: index)
                 result += self[seqStart..<index]
                 continue
             }
@@ -781,7 +781,7 @@ extension String {
                 continue
             }
             let start = index
-            index = csiSequenceEnd(from: index)
+            index = escapeSequenceEnd(from: index)
             let sequence = self[start..<index]
             let final = sequence.last
             let drop =

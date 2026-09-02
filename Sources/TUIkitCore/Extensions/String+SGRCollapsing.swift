@@ -214,10 +214,38 @@ extension String {
     }
 
     /// The index just past the escape sequence starting at `start`, or `nil`
-    /// when it is not a complete CSI sequence.
+    /// when it is neither a complete CSI nor a string-terminated sequence.
+    ///
+    /// Not ``Swift/String/escapeSequenceEnd(from:)``, which is otherwise the
+    /// walker for exactly this: that one classifies a final byte by the whole
+    /// `Character`'s single scalar and so refuses to consume a terminator that
+    /// has FUSED with a following combining mark, while this one must consume
+    /// it — the caller peels the fused scalars back off as content, and a
+    /// sequence stopped short of its own terminator would take the barrier
+    /// branch and never reach the SGR model. See the peeling code above.
     private func escapeEnd(from start: Index) -> Index? {
         var index = self.index(after: start)
-        guard index < endIndex, self[index] == "[" else { return nil }
+        guard index < endIndex else { return nil }
+        // A string-terminated sequence — the OSC 8 hyperlink among them — runs
+        // to its `BEL` or `ST`, with an arbitrary payload in between. Left
+        // unrecognised it is not merely copied wrong: the payload's characters
+        // reach the reconciler one at a time, so a pending `ESC[…m` gets
+        // emitted INSIDE the URI, and both the styling and the link are lost.
+        if let scalar = self[index].unicodeScalars.first, self[index].unicodeScalars.count == 1,
+            String.isStringFamilyIntroducer(scalar.value)
+        {
+            index = self.index(after: index)
+            while index < endIndex {
+                let character = self[index]
+                index = self.index(after: index)
+                if character == "\u{07}" { return index }  // BEL terminates
+                if character == "\u{1B}", index < endIndex, self[index] == "\\" {
+                    return self.index(after: index)  // ESC \ — ST
+                }
+            }
+            return index  // unterminated: the payload runs to the end
+        }
+        guard self[index] == "[" else { return nil }
         index = self.index(after: index)
         while index < endIndex {
             let character = self[index]

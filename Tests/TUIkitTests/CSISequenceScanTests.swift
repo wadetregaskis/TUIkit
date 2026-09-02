@@ -18,7 +18,7 @@ import Testing
 struct CSISequenceScanTests {
 
     private func end(of text: String) -> Int {
-        let index = text.csiSequenceEnd(from: text.startIndex)
+        let index = text.escapeSequenceEnd(from: text.startIndex)
         return text.distance(from: text.startIndex, to: index)
     }
 

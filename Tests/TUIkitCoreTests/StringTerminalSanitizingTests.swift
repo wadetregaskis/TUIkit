@@ -136,15 +136,43 @@ struct StringTerminalSanitizingTests {
 
     // MARK: - Its relationship to `stripped`
 
-    /// `stripped` measures what framework-generated output paints, on the hot
-    /// path of every layout pass, and stays CSI-only on purpose. The two are
-    /// deliberately different, and this pins that: widening `stripped` to match
-    /// would be a separate decision with a much larger blast radius.
-    @Test("stripped stays CSI-only; the sanitiser does not")
-    func strippedRemainsNarrower() {
-        let osc = "\u{1B}]0;title\u{07}visible"
-        #expect(osc.sanitizedForTerminal == "visible")
-        #expect(osc.stripped != "visible", "stripped is not the untrusted-input gate")
+    /// The two agree about **7-bit escape families** and always must: OSC 8
+    /// hyperlinks put a string-terminated sequence into output this framework
+    /// generates, so a measure that took the URI for text would budget columns
+    /// nothing paints. This pinned the opposite until 2026-09-02, when the two
+    /// were given one shared rule for where a sequence ends
+    /// (`String.escapeBodyScan(_:on:)`).
+    @Test("stripped and the sanitiser agree about where a 7-bit escape ends")
+    func strippedAgreesAboutEscapeFamilies() {
+        for escaped in [
+            "\u{1B}]0;title\u{07}visible",  // OSC, BEL-terminated
+            "\u{1B}]8;;https://example.com\u{1B}\\visible",  // OSC 8, ST-terminated
+            "\u{1B}P+q544e\u{1B}\\visible",  // DCS
+            "\u{1B}(Bvisible",  // an nF escape and its final byte
+        ] {
+            #expect(escaped.sanitizedForTerminal == "visible")
+            #expect(escaped.stripped == "visible")
+            #expect(escaped.strippedLength == 7)
+        }
         #expect("\u{1B}[31mred\u{1B}[0m".stripped == "red", "and it still handles CSI")
+    }
+
+    /// Where they still part company, and why each is right for its own job.
+    ///
+    /// The sanitiser is the untrusted-input gate: it assumes hostility, so it
+    /// takes the 8-bit C1 spellings and the two-byte escapes as well. `stripped`
+    /// runs on the hot path of every layout pass over output this framework
+    /// generated — which contains neither — so recognising them would cost every
+    /// measure to catch a sequence that cannot be there. The gap is closed by
+    /// the gate, not by the measure.
+    @Test("the sanitiser still reaches two things a measure does not")
+    func sanitiserRemainsWider() {
+        let c1 = "\u{9B}31mvisible"  // CSI in its 8-bit spelling
+        #expect(c1.sanitizedForTerminal == "visible")
+        #expect(c1.stripped != "visible", "stripped is not the untrusted-input gate")
+
+        let twoByte = "\u{1B}cvisible"  // RIS — ESC and one following byte
+        #expect(twoByte.sanitizedForTerminal == "visible")
+        #expect(twoByte.stripped == "cvisible", "the ESC is dropped, the byte is text")
     }
 }

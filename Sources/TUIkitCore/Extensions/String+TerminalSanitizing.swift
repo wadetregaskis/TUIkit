@@ -4,26 +4,6 @@
 //  Created by LAYERED.work
 //  License: MIT
 
-/// The state of the escape-sequence scanner in ``Swift/String/sanitizedForTerminal``.
-///
-/// At file scope rather than nested in the property so ``Swift/String/escapeState(openedByC1:)``
-/// can be a plain lookup returning one of these.
-private enum EscapeScanState {
-    /// Inside (or about to start) a visible run.
-    case normal
-    /// Just saw `ESC`; the next byte selects the family.
-    case sawESC
-    /// Inside an nF escape's run of intermediate bytes (`ESC ( B`, `ESC % G`),
-    /// which ends at the first final byte.
-    case escIntermediate
-    /// Inside `ESC [ … final`.
-    case csi
-    /// Inside a string-terminated family (OSC / DCS / APC / PM / SOS).
-    case string
-    /// Inside such a family, having just seen an `ESC` that may open `ST`.
-    case stringSawESC
-}
-
 // MARK: - Escape-sequence sanitising for untrusted content
 
 extension String {
@@ -69,11 +49,20 @@ extension String {
     /// ## Why this is not ``Swift/String/stripped``
     ///
     /// ``Swift/String/stripped`` answers a different question — "what does this
-    /// paint?" — for width arithmetic, on output *this framework generated*,
-    /// where the only escapes present are the SGR and cursor codes it emitted
-    /// itself. It is on the hot path of every measure, so it recognises exactly
-    /// CSI and nothing more. This one is the untrusted-input gate: it runs once,
-    /// at the app boundary, and has to assume hostility.
+    /// paint?" — for width arithmetic, on output *this framework generated*.
+    /// The two now share one rule for where a 7-bit sequence ends
+    /// (``Swift/String/escapeBodyScan(_:on:)``), because they must: OSC 8
+    /// hyperlinks put a string-terminated sequence into that output, and a
+    /// measure that took the URI for text would budget columns nothing paints.
+    ///
+    /// Two things this still reaches that a measure does not, and the asymmetry
+    /// is the point. The **8-bit C1 spellings** and the **two-byte escapes**
+    /// (`ESC c`, `ESC 7`) cannot occur in output this framework generated, so
+    /// recognising them would cost every measure — and every measure runs on
+    /// the hot path of every layout pass — to catch a sequence that is not
+    /// there. They can certainly occur in what a user pastes, which is what
+    /// this is for: it runs once, at the app boundary, and has to assume
+    /// hostility.
     ///
     /// - Returns: The string with all escape sequences removed; `self`
     ///   unchanged, without allocating, when there are none — the common case.
@@ -151,13 +140,6 @@ extension String {
                     state = .normal
                 }
 
-            case .escIntermediate:
-                // Intermediates run until a final byte (0x30…0x7E) closes the
-                // sequence; anything else is malformed and ends it here.
-                if !(0x20...0x2F).contains(value) {
-                    state = .normal
-                }
-
             case .csi:
                 if Self.isCSIBodyByte(value) {
                     break
@@ -174,19 +156,16 @@ extension String {
                     state = .normal
                 }
 
-            case .string:
-                if value == 0x07 || value == 0x9C {  // BEL, or 8-bit ST
-                    state = .normal
-                } else if value == 0x1B {
-                    state = .stringSawESC
-                }
-
-            case .stringSawESC:
-                // `ESC \` is ST and closes the sequence; anything else was an
-                // embedded ESC and the string continues. An introducer opened
-                // inside an unterminated string is still inside it as far as
-                // the terminal is concerned.
-                state = value == 0x5C ? .normal : .string
+            case .escIntermediate, .string, .stringSawESC:
+                // An introducer opened inside an unterminated string is still
+                // inside it as far as the terminal is concerned, so there is
+                // nothing to dispatch on here — the shared body rule
+                // (``Swift/String/escapeBodyScan(_:on:)``) says when the
+                // sequence ends, and it is the same rule the width scanners
+                // use. That is the point of sharing it: a sanitizer that
+                // stopped in a different place from the measurer would leave
+                // exactly the bytes the measurer had already discounted.
+                state = Self.escapeBodyScan(state, on: value)
             }
             index = scalars.index(after: index)
         }

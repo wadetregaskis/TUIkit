@@ -493,7 +493,7 @@ extension String {
             let character = stripped[index]
             if character == "\u{1B}" {
                 let sequenceStart = index
-                index = stripped.csiSequenceEnd(from: index)
+                index = stripped.escapeSequenceEnd(from: index)
                 result += stripped[sequenceStart..<index]
                 continue
             }

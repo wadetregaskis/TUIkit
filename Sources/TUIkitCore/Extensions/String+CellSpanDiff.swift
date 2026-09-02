@@ -229,6 +229,22 @@ public struct ANSIRowCells: Sendable {
             sequence.append(scalars[index])
             index = scalars.index(after: index)
             var final: UInt32 = 0
+            // A string-terminated sequence — an OSC 8 hyperlink is the one this
+            // framework emits — declines the row outright, and the `nil` is
+            // deliberate rather than the fall-through it would otherwise be.
+            // A hyperlink is state that spans cells, and a span write lands the
+            // cursor in the MIDDLE of a row: writing three changed cells out of
+            // a linked run would put them on screen outside the link that
+            // covers them, so the run would have to be re-opened per span and
+            // closed after it, and the previous frame's link state consulted
+            // for every span that is not one. Declining costs a whole-row
+            // rewrite on the rows that carry a link and only when they change;
+            // `computeChangedRows` still skips a row whose bytes did not move.
+            if index < scalars.endIndex,
+                String.isStringFamilyIntroducer(scalars[index].value)
+            {
+                return nil
+            }
             if index < scalars.endIndex, scalars[index].value == 0x5B {  // '['
                 sequence.append(scalars[index])
                 index = scalars.index(after: index)

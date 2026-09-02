@@ -434,24 +434,16 @@ extension String {
         var index = scalars.startIndex
 
         while index < scalars.endIndex, scalars[index] == "\u{1B}" {
-            // Consume the ANSI sequence (ESC [ params letter). Parameters and
-            // terminators are ASCII by construction — these are our own
-            // machine-generated SGRs, never text.
-            var probe = scalars.index(after: index)
-            if probe < scalars.endIndex, scalars[probe] == "[" {
-                probe = scalars.index(after: probe)
-                while probe < scalars.endIndex,
-                    ("0"..."9").contains(scalars[probe]) || scalars[probe] == ";"
-                {
-                    probe = scalars.index(after: probe)
-                }
-                if probe < scalars.endIndex, scalars[probe].properties.isAlphabetic,
-                    scalars[probe].isASCII
-                {
-                    probe = scalars.index(after: probe)
-                }
-            }
-            index = probe
+            // The shared walker, so this agrees with every other scan about
+            // where a sequence ends. It hand-rolled the CSI rule as "digits and
+            // `;` then a letter", which stops at the `?` of `ESC[?25l` and — far
+            // worse here — at the `]` of an OSC 8 hyperlink: the split then fell
+            // between the ESC and its own introducer, handing the caller a
+            // bare ESC to replay as "styling" and a remainder beginning inside
+            // a sequence. A link opening a line is exactly where that happens.
+            let (end, _) = Self.escapeSequenceEnd(startingAt: index, in: scalars)
+            guard end > index else { break }
+            index = end
         }
 
         return (String(scalars[scalars.startIndex..<index]), String(scalars[index...]))
@@ -592,26 +584,9 @@ extension String {
                 continue
             }
             flushVisible()
-            var sequence = Self.UnicodeScalarView()
-            sequence.append(scalars[index])
-            index = scalars.index(after: index)
-            var isSGR = false
-            if index < scalars.endIndex, scalars[index].value == 0x5B {  // '['
-                sequence.append(scalars[index])
-                index = scalars.index(after: index)
-                while index < scalars.endIndex, Self.isCSIBodyByte(scalars[index].value) {
-                    sequence.append(scalars[index])
-                    index = scalars.index(after: index)
-                }
-                // One scalar for the final byte, so a trailing Extend scalar
-                // stays visible rather than being swallowed by the escape.
-                if index < scalars.endIndex, Self.isCSIFinalByte(scalars[index].value) {
-                    isSGR = scalars[index].value == 0x6D  // 'm'
-                    sequence.append(scalars[index])
-                    index = scalars.index(after: index)
-                }
-            }
-            let text = String(sequence)
+            let (end, isSGR) = Self.escapeSequenceEnd(startingAt: index, in: scalars)
+            let text = String(scalars[index..<end])
+            index = end
             if prefixOpen { prefix += text }
             if total >= suffixDropColumns {
                 suffix += text
@@ -695,24 +670,9 @@ extension String {
                 index = scalars.index(after: index)
                 continue
             }
-            var sequence = Self.UnicodeScalarView()
-            sequence.append(scalars[index])
-            index = scalars.index(after: index)
-            var isSGR = false
-            if index < scalars.endIndex, scalars[index].value == 0x5B {  // '['
-                sequence.append(scalars[index])
-                index = scalars.index(after: index)
-                while index < scalars.endIndex, Self.isCSIBodyByte(scalars[index].value) {
-                    sequence.append(scalars[index])
-                    index = scalars.index(after: index)
-                }
-                if index < scalars.endIndex, Self.isCSIFinalByte(scalars[index].value) {
-                    isSGR = scalars[index].value == 0x6D  // 'm'
-                    sequence.append(scalars[index])
-                    index = scalars.index(after: index)
-                }
-            }
-            let text = String(sequence)
+            let (end, isSGR) = Self.escapeSequenceEnd(startingAt: index, in: scalars)
+            let text = String(scalars[index..<end])
+            index = end
             result += text
             if isSGR {
                 state.apply(text)

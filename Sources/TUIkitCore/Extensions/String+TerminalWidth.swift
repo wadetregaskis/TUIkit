@@ -17,6 +17,34 @@ public enum ANSISegment {
     case visible(Character)
 }
 
+// MARK: - Escape scanning
+
+/// Where a streaming escape scan sits.
+///
+/// Shared by the three scanners that stream rather than index —
+/// ``Swift/String/asciiStrippedLength()`` over bytes,
+/// ``Swift/String/forEachVisibleANSIRun(_:)`` over scalars, and
+/// ``Swift/String/sanitizedForTerminal`` — so the one thing they must agree
+/// about, where a sequence ends, has one vocabulary. They do not all reach
+/// every state: only the sanitizer enters ``escIntermediate``, because only it
+/// has to account for escape families this framework never emits. What matters
+/// is that where two of them DO handle a family, they handle it identically.
+enum EscapeScanState {
+    /// Inside (or about to start) a visible run.
+    case normal
+    /// Just saw `ESC`; the next byte selects the family.
+    case sawESC
+    /// Inside an nF escape's run of intermediate bytes (`ESC ( B`, `ESC % G`),
+    /// which ends at the first final byte.
+    case escIntermediate
+    /// Inside `ESC [ … final`.
+    case csi
+    /// Inside a string-terminated family (OSC / DCS / APC / PM / SOS).
+    case string
+    /// Inside such a family, having just seen an `ESC` that may open `ST`.
+    case stringSawESC
+}
+
 // MARK: - Terminal Character Width
 
 extension Character {
@@ -757,6 +785,53 @@ extension String {
         }
     }
 
+    /// The state after `value` when a scan has just seen an `ESC`, and whether
+    /// `value` is visible text rather than part of a sequence.
+    ///
+    /// Shared by the two MEASURING scanners, and not by
+    /// ``sanitizedForTerminal``, which parts company here on purpose: it reads
+    /// `ESC c` and `ESC 7` as two-byte escapes and drops both bytes, while a
+    /// measure treats a bare `ESC` as dropped and the byte after it as visible.
+    /// A measure runs on output this framework generated, which contains no
+    /// two-byte escape, so widening the rule would change only what a STRAY
+    /// `ESC` measures — for no sequence that needs it.
+    static func escapeIntroducerScan(on value: UInt32) -> (state: EscapeScanState, visible: Bool) {
+        if value == 0x5B { return (.csi, false) }  // '[' → CSI introducer
+        if isStringFamilyIntroducer(value) { return (.string, false) }
+        if (0x20...0x2F).contains(value) { return (.escIntermediate, false) }  // `ESC ( B`
+        if value == 0x1B { return (.sawESC, false) }  // ESC ESC → drop the first, restart
+        return (.normal, true)
+    }
+
+    /// The state after `value`, for a scan already inside an escape sequence
+    /// that is **not** a CSI — an nF escape's run of intermediates, or a
+    /// string-terminated family's payload.
+    ///
+    /// One rule, called from all three streaming scanners. An `ESC ]` payload
+    /// is arbitrary text: two scanners disagreeing by a byte about where it
+    /// stops is a width that does not match the bytes that produced it, and a
+    /// sanitizer that stops in a different place from the measurer is a leak.
+    ///
+    /// A string family ends at `BEL` (xterm's older spelling, still the one
+    /// several hosts prefer), at an 8-bit `ST`, or at `ESC \`; any other `ESC`
+    /// was inside the payload and the string continues. An nF escape's
+    /// intermediates end at the first byte that is not one, and that byte is
+    /// the sequence's final byte — part of it, not visible text.
+    static func escapeBodyScan(_ state: EscapeScanState, on value: UInt32) -> EscapeScanState {
+        switch state {
+        case .escIntermediate:
+            (0x20...0x2F).contains(value) ? .escIntermediate : .normal
+        case .string:
+            if value == 0x07 || value == 0x9C {  // BEL, or 8-bit ST
+                .normal
+            } else {
+                value == 0x1B ? .stringSawESC : .string
+            }
+        default:
+            value == 0x5C ? .normal : .string  // `ESC \` is ST
+        }
+    }
+
     /// The visible width of the string in terminal cells, excluding ANSI escape codes.
     ///
     /// Accounts for wide characters (emoji, CJK) that occupy 2 terminal cells
@@ -802,8 +877,7 @@ extension String {
     /// Not `private`: the tests call it directly, so that "the fast path and
     /// the general path agree" is asserted rather than assumed.
     func asciiStrippedLength() -> Int? {
-        enum ScanState { case normal, sawESC, inCSI }
-        var state = ScanState.normal
+        var state = EscapeScanState.normal
         var width = 0
         for byte in utf8 {
             if byte >= 0x80 { return nil }
@@ -812,14 +886,11 @@ extension String {
                 if byte == 0x1B { state = .sawESC } else { width += 1 }
 
             case .sawESC:
-                if byte == 0x5B {  // '[' → CSI introducer
-                    state = .inCSI
-                } else if byte != 0x1B {  // a bare ESC is dropped; this byte is visible
-                    width += 1
-                    state = .normal
-                }
+                let seen = Self.escapeIntroducerScan(on: UInt32(byte))
+                state = seen.state
+                if seen.visible { width += 1 }
 
-            case .inCSI:
+            case .csi:
                 let value = UInt32(byte)
                 if Self.isCSIBodyByte(value) { continue }  // parameter or intermediate
                 if Self.isCSIFinalByte(value) {
@@ -830,6 +901,14 @@ extension String {
                     width += 1
                     state = .normal
                 }
+
+            case .escIntermediate, .string, .stringSawESC:
+                // The payload is arbitrary text and none of it is visible. A
+                // hyperlink's URI is percent-encoded, hence ASCII, hence it
+                // reaches this path rather than falling to the general one —
+                // which is why the fast path has to know the family too, not
+                // merely tolerate it.
+                state = Self.escapeBodyScan(state, on: UInt32(byte))
             }
         }
         return width
@@ -898,8 +977,7 @@ extension String {
         var runStart = index
         var hasRun = false  // whether [runStart, index) holds visible scalars
 
-        enum ScanState { case normal, sawESC, inCSI }
-        var state = ScanState.normal
+        var state = EscapeScanState.normal
 
         while index < scalars.endIndex {
             let value = scalars[index].value
@@ -914,17 +992,17 @@ extension String {
                 }
 
             case .sawESC:
-                if value == 0x5B {  // '[' → CSI introducer
-                    state = .inCSI
-                } else if value == 0x1B {  // ESC ESC → drop the first, restart
-                    state = .sawESC
-                } else {  // a bare ESC: it is dropped, this scalar starts a run
+                let seen = Self.escapeIntroducerScan(on: value)
+                state = seen.state
+                if seen.visible {  // the ESC is dropped; this scalar starts a run
                     runStart = index
                     hasRun = true
-                    state = .normal
                 }
 
-            case .inCSI:
+            case .escIntermediate, .string, .stringSawESC:
+                state = Self.escapeBodyScan(state, on: value)
+
+            case .csi:
                 if Self.isCSIBodyByte(value) {
                     break  // parameter or intermediate byte — stay in CSI
                 }
@@ -965,6 +1043,91 @@ extension String {
         (0x40...0x7E).contains(value)
     }
 
+    /// Whether `value` introduces a **string-terminated** escape family — OSC
+    /// (`ESC ]`), DCS (`ESC P`), APC (`ESC _`), PM (`ESC ^`), SOS (`ESC X`).
+    ///
+    /// These do not end at a final byte the way a CSI does. They carry an
+    /// arbitrary payload and run to a `BEL` or an `ST` (`ESC \`), which is why
+    /// a scanner that knows only CSI does not merely fail to skip one: it takes
+    /// the payload for TEXT. `ESC]8;;https://example.com` measures 22 cells and
+    /// paints none, so a line carrying a hyperlink is budgeted 22 columns it
+    /// does not occupy, and everything sharing its row is laid out around the
+    /// gap.
+    ///
+    /// TUIkit emits exactly one member of the family — OSC 8, the hyperlink
+    /// (``TerminalHyperlink``) — and every scanner recognises all five, because
+    /// the skipping rule is the same for all five and a rule written for one
+    /// sequence is the kind that gets found again by the next.
+    public static func isStringFamilyIntroducer(_ value: UInt32) -> Bool {
+        switch value {
+        case 0x5D, 0x50, 0x5F, 0x5E, 0x58: true  // ] P _ ^ X
+        default: false
+        }
+    }
+
+    /// The index just past the complete escape sequence beginning at `index`
+    /// — which must address an `ESC` in `scalars` — and whether it was SGR.
+    ///
+    /// The one scalar-level escape walker. Four copies of this loop had grown
+    /// (here, both splitters in `String+ANSISplitting.swift`, and the row
+    /// decomposer), which is how a class of sequence comes to be understood in
+    /// some of them and not others — the same way the CSI parameter rule was
+    /// wrong in five of six walkers before ``escapeSequenceEnd(from:)`` collected
+    /// them. Its counterpart on `String.Index` is that function; this one works
+    /// in scalars because its callers do.
+    ///
+    /// Three shapes, and the third is the one worth stating:
+    ///
+    /// - `ESC [ … final` — a CSI, ending at its final byte. `isSGR` is true
+    ///   when that byte is `m`.
+    /// - `ESC ] … ST` — a string-terminated family (see
+    ///   ``isStringFamilyIntroducer(_:)``), ending at a `BEL` or an `ST`, both
+    ///   consumed. **Unterminated, it runs to the end of the string**: the
+    ///   payload is inside the sequence as far as the terminal is concerned, so
+    ///   treating the tail as visible would be a width for cells nothing paints.
+    /// - `ESC` followed by anything else — the ESC ALONE is the sequence, and
+    ///   the byte after it stays visible. That is what every caller did before
+    ///   this walker existed and it is left alone deliberately: `ESC 7` and its
+    ///   two-byte siblings are not emitted here, and widening the rule to
+    ///   swallow the following byte would change what existing callers measure
+    ///   for a stray ESC without any sequence needing it.
+    ///
+    /// Exactly one scalar is consumed for a CSI's final byte, so a following
+    /// `Extend` scalar — a lone skin-tone modifier, VS-16, a combining mark —
+    /// stays visible instead of fusing onto the terminator; see
+    /// ``ansiSegments()``.
+    static func escapeSequenceEnd(
+        startingAt index: UnicodeScalarView.Index, in scalars: UnicodeScalarView
+    ) -> (end: UnicodeScalarView.Index, isSGR: Bool) {
+        var cursor = scalars.index(after: index)
+        guard cursor < scalars.endIndex else { return (cursor, false) }
+        let introducer = scalars[cursor].value
+
+        if introducer == 0x5B {  // '[' — CSI
+            cursor = scalars.index(after: cursor)
+            while cursor < scalars.endIndex, isCSIBodyByte(scalars[cursor].value) {
+                cursor = scalars.index(after: cursor)
+            }
+            guard cursor < scalars.endIndex, isCSIFinalByte(scalars[cursor].value) else {
+                return (cursor, false)
+            }
+            let isSGR = scalars[cursor].value == 0x6D  // 'm'
+            return (scalars.index(after: cursor), isSGR)
+        }
+
+        guard isStringFamilyIntroducer(introducer) else { return (cursor, false) }
+        cursor = scalars.index(after: cursor)
+        while cursor < scalars.endIndex {
+            let value = scalars[cursor].value
+            cursor = scalars.index(after: cursor)
+            if value == 0x07 { return (cursor, false) }  // BEL terminates
+            if value == 0x1B, cursor < scalars.endIndex, scalars[cursor].value == 0x5C {
+                return (scalars.index(after: cursor), false)  // ESC \ — ST
+            }
+        }
+        return (cursor, false)  // unterminated: the payload runs to the end
+    }
+
     /// The index just past the CSI escape sequence beginning at `index`, which
     /// must address the ESC.
     ///
@@ -975,27 +1138,55 @@ extension String {
     /// above are the ECMA-48 ones, and everything that skips an escape should
     /// go through them.
     ///
-    /// A lone ESC, or an ESC followed by something that is not `[`, yields the
+    /// A string-terminated introducer (`ESC ]` and its siblings — see
+    /// ``isStringFamilyIntroducer(_:)``) is followed to its `BEL` or `ST`, and
+    /// to the end of the string if it has neither. That matters most to the
+    /// cursor-compensation walks, which are this function's callers: they copy
+    /// escapes through and PRICE everything else as a grapheme cluster, so an
+    /// OSC 8 URI walked as text would be measured, erased and `CUF`-repaired
+    /// character by character.
+    ///
+    /// A lone ESC, or an ESC followed by something that is neither, yields the
     /// index just past the ESC — the callers all treat the remainder as
     /// ordinary content, which is the safe reading for a byte we cannot
     /// account for.
-    func csiSequenceEnd(from index: Index) -> Index {
+    func escapeSequenceEnd(from index: Index) -> Index {
         var cursor = self.index(after: index)
-        guard cursor < endIndex, self[cursor] == "[" else { return cursor }
-        cursor = self.index(after: cursor)
+        guard cursor < endIndex else { return cursor }
         func classify(_ test: (UInt32) -> Bool) -> Bool {
             guard cursor < endIndex else { return false }
             let scalars = self[cursor].unicodeScalars
             guard scalars.count == 1, let value = scalars.first?.value else { return false }
             return test(value)
         }
+        if classify(Self.isStringFamilyIntroducer) {
+            cursor = self.index(after: cursor)
+            while cursor < endIndex {
+                let character = self[cursor]
+                cursor = self.index(after: cursor)
+                if character == "\u{07}" { return cursor }  // BEL terminates
+                if character == "\u{1B}", cursor < endIndex, self[cursor] == "\\" {
+                    return self.index(after: cursor)  // ESC \ — ST
+                }
+            }
+            return cursor  // unterminated: the payload runs to the end
+        }
+        guard self[cursor] == "[" else { return cursor }
+        cursor = self.index(after: cursor)
         while classify(Self.isCSIBodyByte) { cursor = self.index(after: cursor) }
         if classify(Self.isCSIFinalByte) { cursor = self.index(after: cursor) }
         return cursor
     }
 
     /// Splits the string into ordered segments — each either a complete
-    /// ANSI (CSI) escape sequence or a single visible grapheme cluster.
+    /// ANSI escape sequence or a single visible grapheme cluster.
+    ///
+    /// "Complete" includes a string-terminated sequence such as an OSC 8
+    /// hyperlink, which ends at its `ST` rather than at a final byte: see
+    /// ``escapeSequenceEnd(startingAt:in:)``. Every splitter in
+    /// `String+ANSISplitting.swift` is built on these segments and copies an
+    /// `.ansi` one through untouched, so recognising the family here is what
+    /// carries a hyperlink across a cut rather than shredding it.
     ///
     /// The scan runs at the Unicode-scalar level so an escape's terminator
     /// byte (e.g. the `m` of an SGR colour code) never fuses with a
@@ -1025,31 +1216,15 @@ extension String {
                 continue
             }
             flushVisible()
-            var sequence = Self.UnicodeScalarView()
-            sequence.append(scalars[index])
-            index = scalars.index(after: index)
-            var isSGR = false
-            if index < scalars.endIndex, scalars[index].value == 0x5B {  // '['
-                sequence.append(scalars[index])
-                index = scalars.index(after: index)
-                while index < scalars.endIndex, Self.isCSIBodyByte(scalars[index].value) {
-                    sequence.append(scalars[index])
-                    index = scalars.index(after: index)
-                }
-                // Final byte, consumed by exactly one scalar so a trailing
-                // Extend scalar stays a visible segment.
-                if index < scalars.endIndex, Self.isCSIFinalByte(scalars[index].value) {
-                    isSGR = scalars[index].value == 0x6D  // 'm'
-                    sequence.append(scalars[index])
-                    index = scalars.index(after: index)
-                }
-            }
-            segments.append(.ansi(String(sequence), isSGR: isSGR))
+            let (end, isSGR) = Self.escapeSequenceEnd(startingAt: index, in: scalars)
+            segments.append(.ansi(String(scalars[index..<end]), isSGR: isSGR))
+            index = end
         }
         flushVisible()
         return segments
     }
-    /// The string with all ANSI (CSI) escape codes removed.
+    /// The string with all ANSI escape codes removed — CSI and the
+    /// string-terminated families alike.
     public var stripped: String {
         // Fast path: no ESC byte → nothing to strip, return self (no scan, no
         // copy). Otherwise append each visible run (a borrowed scalar slice)
