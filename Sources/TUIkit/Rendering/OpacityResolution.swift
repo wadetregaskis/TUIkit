@@ -119,7 +119,7 @@ extension FrameBuffer {
             guard !covering.isEmpty else { return nil }
             // A row drawing an image is left alone. Its FOREGROUND is not a
             // colour, it is the image's id (see
-            // ``TUIkitCore/KittyGraphics``), and blending it toward a surface
+            // `KittyGraphics`), and blending it toward a surface
             // produces a number naming no image — so a faded picture would not
             // dim, it would vanish. Left unblended it stays at full strength
             // inside a fade, which is wrong in a way anyone can see and

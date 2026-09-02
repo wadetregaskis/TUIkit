@@ -9,7 +9,7 @@
 extension KittyGraphics {
 
     /// The largest image, in cells, that placeholders can address on either
-    /// axis — the length of ``rowColumnDiacritics``.
+    /// axis — the length of `rowColumnDiacritics`.
     ///
     /// A hard limit of the protocol rather than a policy: row and column are
     /// carried as one combining mark each, drawn from a fixed table, so cell
@@ -23,7 +23,7 @@ extension KittyGraphics {
     /// carrying the foreground that names it.
     ///
     /// This is the output the renderer puts in a ``FrameBuffer``, and it is
-    /// ordinary text: `columns` cells wide by ``Swift/StringProtocol/strippedLength``,
+    /// ordinary text: `columns` cells wide by `strippedLength`,
     /// clipped by whatever clips cells, scrolled by whatever scrolls them.
     ///
     /// ## Every cell names itself

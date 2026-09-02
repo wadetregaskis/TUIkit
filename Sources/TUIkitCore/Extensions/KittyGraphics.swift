@@ -77,7 +77,7 @@ public enum KittyGraphics {
     /// the image over whatever the cells' background is, which is the only
     /// way a picture with transparency can sit on a themed page.
     ///
-    /// Chunked at ``chunkSize``, because one escape cannot carry a whole
+    /// Chunked at `chunkSize`, because one escape cannot carry a whole
     /// image: `m=1` says another chunk follows and `m=0` ends the run, with
     /// the control keys on the first chunk only. A payload that fits in one
     /// escape omits `m` entirely — the protocol reads its absence as "not

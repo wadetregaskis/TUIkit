@@ -14,8 +14,8 @@ extension TerminalClient {
     /// What the startup handshake was told, or `nil` if it never ran — no
     /// terminal, an answer already forced, or a host measured to print APC.
     ///
-    /// The counterpart of ``TerminalHost/startupIdentity`` for graphics, and
-    /// deliberately not a host table. See ``TerminalGraphicsQuery``.
+    /// The counterpart of `TerminalHost.startupIdentity` for graphics, and
+    /// deliberately not a host table. See `TerminalGraphicsQuery`.
     ///
     /// Public because "never asked" and "asked, and told no" are different
     /// facts about a terminal and a diagnostic has to be able to tell them
@@ -47,7 +47,7 @@ extension TerminalClient {
     }
 
     /// Publishes ``graphicsSupported`` to
-    /// ``TUIkitCore/KittyGraphics/isSupported``, which is what the render path
+    /// ``KittyGraphics/isSupported``, which is what the render path
     /// actually reads.
     ///
     /// The twin of ``applyHyperlinkSupport()``, for the same reason: the

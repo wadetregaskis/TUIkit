@@ -614,7 +614,7 @@ extension _ImageCore {
     /// placeholders that the terminal replaces with parts of the picture. It
     /// measures, clips, scrolls, composites and diffs exactly like the glyph
     /// rendering it replaces, so nothing downstream of here knows the
-    /// difference. See ``TUIkitCore/KittyGraphics``.
+    /// difference. See ``KittyGraphics``.
     ///
     /// ## The five gates, and why each is separate
     ///

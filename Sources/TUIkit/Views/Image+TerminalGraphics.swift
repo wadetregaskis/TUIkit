@@ -58,7 +58,7 @@ extension EnvironmentValues {
     /// one is available. Set via ``View/terminalGraphics(_:)``. Default:
     /// `true` — which still draws glyphs on every terminal that did not answer
     /// the startup handshake, because the two conditions are ANDed (see
-    /// ``TUIkitCore/KittyGraphics/isSupported``).
+    /// ``KittyGraphics/isSupported``).
     public var terminalGraphics: Bool {
         get { self[TerminalGraphicsKey.self] }
         set { self[TerminalGraphicsKey.self] = newValue }

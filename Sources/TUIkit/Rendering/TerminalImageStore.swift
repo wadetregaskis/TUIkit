@@ -39,7 +39,7 @@ import TUIkitCore
 /// cell) transmits nothing, because it never asks.
 /// ## Isolation
 ///
-/// `@unchecked Sendable`, exactly as ``LifecycleManager`` is, and for the same
+/// `@unchecked Sendable`, exactly as `LifecycleManager` is, and for the same
 /// reason: it is reached from `Renderable.renderToBuffer`, which is not
 /// actor-isolated, and from the run loop, which is — but both run on the run
 /// loop's own thread, one render pass at a time. There is no concurrency here
