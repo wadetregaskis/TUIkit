@@ -514,6 +514,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         attachMouseHandlers(
             to: &buffer,
             context: context,
+            handler: handler,
             hoverBox: hoverBox,
             persistedFocusID: persistedFocusID,
             stateStorage: stateStorage,
@@ -532,6 +533,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     private func attachMouseHandlers(
         to buffer: inout FrameBuffer,
         context: RenderContext,
+        handler: SliderHandler<Double>,
         hoverBox: StateBox<Bool>,
         persistedFocusID: String,
         stateStorage: StateStorage,
@@ -550,8 +552,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         mouseDispatcher.requestFeature(.motion)
 
         let focusManager = context.environment.focusManager
-        let trackLeft = 2  // "◀ "
-        let trackRight = trackLeft + trackWidth  // exclusive
+        let track = TrackGeometry(left: 2, width: trackWidth)  // 2 = "◀ "
 
         let leftArrowTimer = autoRepeatTimer(
             stateStorage: stateStorage,
@@ -566,14 +567,13 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
 
         let handlerID = mouseDispatcher.register(
             mouseHandler(
+                handler: handler,
                 hoverBox: hoverBox,
                 focusManager: focusManager,
                 focusID: persistedFocusID,
                 leftArrowTimer: leftArrowTimer,
                 rightArrowTimer: rightArrowTimer,
-                trackLeft: trackLeft,
-                trackRight: trackRight,
-                trackWidth: trackWidth
+                track: track
             )
         )
         buffer.hitTestRegions.append(
@@ -594,15 +594,36 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// than a method so the captures (which include the
     /// `value` and `bounds` from the surrounding view) are
     /// fixed at the moment of registration.
+    /// Where the track sits in the slider's own buffer: the three numbers the
+    /// arrow zones and the drag mapping are all measured from.
+    ///
+    /// One value because they are one fact and always travel together — and
+    /// because carrying them separately is what pushed this closure's
+    /// signature past what the linter will accept, which is the linter being
+    /// right about it.
+    private struct TrackGeometry {
+        /// The track's first column. `"◀ "` precedes it.
+        let left: Int
+        /// One past its last column; from here on is `" ▶ "` and the value.
+        let right: Int
+        /// `right - left`.
+        let width: Int
+
+        init(left: Int, width: Int) {
+            self.left = left
+            self.width = width
+            self.right = left + width
+        }
+    }
+
     private func mouseHandler(
+        handler: SliderHandler<Double>,
         hoverBox: StateBox<Bool>,
         focusManager: FocusManager?,
         focusID: String,
         leftArrowTimer: AutoRepeatTimer,
         rightArrowTimer: AutoRepeatTimer,
-        trackLeft: Int,
-        trackRight: Int,
-        trackWidth: Int
+        track: TrackGeometry
     ) -> @MainActor (MouseEvent) -> Bool {
         let value = self.value
         let bounds = self.bounds
@@ -640,22 +661,27 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                 // advances. Matches Stepper, Menu, List and ScrollView — the
                 // slider previously had this inverted, so a horizontal slider
                 // adjusted the opposite way from every other wheel control.
+                //
+                // A notch is a discrete adjustment like an arrow KEY, not a
+                // drag: it begins the edit and, like a key, leaves the end to
+                // focus loss. There is no release to end it on.
+                handler.beginEditingIfNeeded()
                 decrementOnce()
                 focusManager?.focus(id: focusID)
                 return true
             case .scrollDown:
+                handler.beginEditingIfNeeded()
                 incrementOnce()
                 focusManager?.focus(id: focusID)
                 return true
             case .left:
                 return Self.handleLeftButton(
                     event: event,
+                    handler: handler,
                     value: value,
                     bounds: bounds,
                     step: step,
-                    trackLeft: trackLeft,
-                    trackRight: trackRight,
-                    trackWidth: trackWidth,
+                    track: track,
                     leftArrowTimer: leftArrowTimer,
                     rightArrowTimer: rightArrowTimer,
                     decrementOnce: decrementOnce,
@@ -677,12 +703,11 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// closure.
     private static func handleLeftButton( // swiftlint:disable:this function_parameter_count
         event: MouseEvent,
+        handler: SliderHandler<Double>,
         value: Binding<Double>,
         bounds: ClosedRange<Double>,
         step: Double,
-        trackLeft: Int,
-        trackRight: Int,
-        trackWidth: Int,
+        track: TrackGeometry,
         leftArrowTimer: AutoRepeatTimer,
         rightArrowTimer: AutoRepeatTimer,
         decrementOnce: @escaping @MainActor () -> Void,
@@ -693,7 +718,13 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     ) -> Bool {
         switch event.phase {
         case .pressed, .dragged:
-            if event.x < trackLeft {
+            // The gesture `onEditingChanged` was designed around — SwiftUI:
+            // "editing begins when the user starts to drag the thumb along the
+            // slider's track". `.dragged` as well as `.pressed` because a drag
+            // can arrive here having begun outside the track; the guard inside
+            // makes the second and later reports free.
+            handler.beginEditingIfNeeded()
+            if event.x < track.left {
                 // Left arrow.
                 if event.phase == .pressed {
                     stopArrowTimers()
@@ -704,7 +735,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                     // the auto-repeat.
                     stopArrowTimers()
                 }
-            } else if event.x >= trackRight {
+            } else if event.x >= track.right {
                 // Right arrow.
                 if event.phase == .pressed {
                     stopArrowTimers()
@@ -719,14 +750,14 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                     value: value,
                     bounds: bounds,
                     step: step,
-                    trackLeft: trackLeft,
-                    trackWidth: trackWidth
+                    track: track
                 )
             }
             focusManager?.focus(id: focusID)
             return true
         case .released:
             stopArrowTimers()
+            handler.endEditingIfNeeded()
             return true
         default:
             return false
@@ -743,13 +774,12 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         value: Binding<Double>,
         bounds: ClosedRange<Double>,
         step: Double,
-        trackLeft: Int,
-        trackWidth: Int
+        track: TrackGeometry
     ) {
-        let pos = max(0, min(trackWidth - 1, eventX - trackLeft))
+        let pos = max(0, min(track.width - 1, eventX - track.left))
         let range = bounds.upperBound - bounds.lowerBound
-        let raw = bounds.lowerBound + (trackWidth > 1
-            ? Double(pos) / Double(trackWidth - 1)
+        let raw = bounds.lowerBound + (track.width > 1
+            ? Double(pos) / Double(track.width - 1)
             : 0) * range
         let snapped: Double
         if step > 0 {

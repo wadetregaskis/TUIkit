@@ -53,6 +53,12 @@ final class SliderHandler<V: BinaryFloatingPoint>: Focusable where V.Stride: Bin
     var canBeFocused: Bool
 
     /// Callback triggered when editing begins or ends.
+    ///
+    /// A span, not an event: a pointer DRAG of the track (press to release), a wheel notch, or an
+    /// arrow key. The pointer's span ends with its
+    /// release; a wheel notch and a key have no release, so theirs ends when
+    /// the control loses focus. Idempotent at both edges — see
+    /// ``beginEditingIfNeeded()``.
     var onEditingChanged: ((Bool) -> Void)?
 
     /// Whether the slider is currently being edited.
@@ -154,14 +160,23 @@ extension SliderHandler {
 
 extension SliderHandler {
     /// Begins editing if not already editing.
-    private func beginEditingIfNeeded() {
+    ///
+    /// Internal rather than private because the POINTER path has to reach it,
+    /// and the pointer is the gesture `onEditingChanged` was designed around:
+    /// SwiftUI's own wording is "editing begins when the user starts to drag
+    /// the thumb along the slider's track". `Slider` writes the value straight
+    /// from its mouse closure — it does not go through this handler — so
+    /// without this the one gesture the callback exists for reported nothing,
+    /// while the keyboard, which SwiftUI has no equivalent of, reported
+    /// everything.
+    func beginEditingIfNeeded() {
         guard !isEditing else { return }
         isEditing = true
         onEditingChanged?(true)
     }
 
     /// Ends editing if currently editing.
-    private func endEditingIfNeeded() {
+    func endEditingIfNeeded() {
         guard isEditing else { return }
         isEditing = false
         onEditingChanged?(false)

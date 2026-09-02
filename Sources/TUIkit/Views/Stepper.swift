@@ -583,6 +583,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         // unapplied method reference isn't Sendable on its own.
         let incrementID = mouseDispatcher.register(
             arrowHandler(
+                handler: handler,
                 timer: incrementTimer,
                 hoverBox: hoverBox,
                 focusManager: focusManager,
@@ -601,6 +602,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         // Left-arrow region — single cell at x = 0.
         let decrementID = mouseDispatcher.register(
             arrowHandler(
+                handler: handler,
                 timer: decrementTimer,
                 hoverBox: hoverBox,
                 focusManager: focusManager,
@@ -640,10 +642,15 @@ private struct _StepperCore: View, Renderable, Layoutable {
             case .scrollUp:
                 // Wheel up matches "scrolling up through the
                 // values" — towards smaller / earlier.
+                // A notch is a discrete adjustment like an arrow KEY, not a
+                // hold: it begins the edit and, like a key, leaves the end to
+                // focus loss. There is no release to end it on.
+                handler.beginEditingIfNeeded()
                 handler.decrement(times: 1)
                 focusManager?.focus(id: focusID)
                 return true
             case .scrollDown:
+                handler.beginEditingIfNeeded()
                 handler.increment(times: 1)
                 focusManager?.focus(id: focusID)
                 return true
@@ -671,6 +678,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
     /// the pointer reached the thing it was aiming for. Each arrow keeps the
     /// row's hover flag in step.
     private func arrowHandler(
+        handler: any StepperDriving,
         timer: AutoRepeatTimer,
         hoverBox: StateBox<Bool>,
         focusManager: FocusManager?,
@@ -692,10 +700,15 @@ private struct _StepperCore: View, Renderable, Layoutable {
             switch event.phase {
             case .pressed:
                 focusManager?.focus(id: focusID)
+                // SwiftUI: "the user may touch and hold the increment or
+                // decrement button" — that hold IS the edit, so it begins here
+                // and ends with the release, exactly as the auto-repeat does.
+                handler.beginEditingIfNeeded()
                 timer.start(action: action)
                 return true
             case .released, .dragged:
                 timer.stop()
+                handler.endEditingIfNeeded()
                 return true
             default:
                 return false

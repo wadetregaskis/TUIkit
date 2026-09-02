@@ -20,6 +20,11 @@ protocol StepperDriving: Focusable {
     func increment(times: Int)
     func decrement(times: Int)
     func clampValue()
+    /// See ``StepperHandler/beginEditingIfNeeded()`` — a requirement so the
+    /// view's mouse closure, which holds this existential rather than the
+    /// concrete handler, can report the gesture it is driving.
+    func beginEditingIfNeeded()
+    func endEditingIfNeeded()
 }
 
 /// A focus handler for stepper components.
@@ -74,6 +79,12 @@ final class StepperHandler<V: Strideable>: Focusable where V.Stride: SignedNumer
     var onDecrement: (() -> Void)?
 
     /// Callback triggered when editing begins or ends.
+    ///
+    /// A span, not an event: a pointer HOLD on an arrow (press to release), a wheel notch, or an
+    /// arrow key. The pointer's span ends with its
+    /// release; a wheel notch and a key have no release, so theirs ends when
+    /// the control loses focus. Idempotent at both edges — see
+    /// ``beginEditingIfNeeded()``.
     var onEditingChanged: ((Bool) -> Void)?
 
     /// Whether the stepper is currently being edited.
@@ -258,14 +269,20 @@ extension StepperHandler {
 
 extension StepperHandler {
     /// Begins editing if not already editing.
-    private func beginEditingIfNeeded() {
+    ///
+    /// Internal rather than private because the POINTER path has to reach it —
+    /// see the twin note on ``SliderHandler/beginEditingIfNeeded()``. SwiftUI's
+    /// wording for a `Stepper` is "the user may touch and hold the increment or
+    /// decrement button", which is a press and a release, and `Stepper` drives
+    /// those from its own mouse closure rather than through here.
+    func beginEditingIfNeeded() {
         guard !isEditing else { return }
         isEditing = true
         onEditingChanged?(true)
     }
 
     /// Ends editing if currently editing.
-    private func endEditingIfNeeded() {
+    func endEditingIfNeeded() {
         guard isEditing else { return }
         isEditing = false
         onEditingChanged?(false)
