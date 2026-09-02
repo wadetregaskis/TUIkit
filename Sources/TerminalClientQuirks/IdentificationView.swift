@@ -23,6 +23,7 @@ struct IdentificationView: View {
             verdict
             signals
             deviceAttributes
+            HyperlinkCheckView(client: client)
             if client.program == .unidentified { advice }
         }
     }

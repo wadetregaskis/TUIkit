@@ -22,6 +22,16 @@ locally arrives anonymous. The screen shows every signal, what each holds, and
 how far each reaches, plus whatever the terminal answered when asked directly
 (DA1, DA2, XTVERSION).
 
+The Identity screen also answers a question that is *not* a quirk: whether this
+terminal honours **OSC 8 hyperlinks**, what TUIkit decided and why, and two
+links that look identical — one carrying the escape, one with it turned off —
+so hovering them settles it. Nothing else can: no escape sequence asks a
+terminal whether it implements OSC 8, and the affordance is a gesture the
+terminal handles above the mouse-reporting protocol, which is both why it is
+worth having and why the application cannot observe it. Emitting the sequence
+is safe on every host measured, so `TUIKIT_HYPERLINKS=1` is a reasonable thing
+to try on a terminal TUIkit has never seen.
+
 **Render as** — apply another terminal's workarounds, live, to the whole app.
 Picking your own terminal should leave the Alignment screen straight; picking a
 different one should visibly break it.
