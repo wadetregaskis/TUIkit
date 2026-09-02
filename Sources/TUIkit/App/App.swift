@@ -222,6 +222,14 @@ extension AppRunner {
         // `Link` decides whether to emit one while rendering, and the render
         // path cannot ask a main-actor question.
         TerminalClient.applyHyperlinkSupport()
+        // And whether it will draw a real picture. Unlike the two above, this
+        // one is ASKED rather than looked up — see ``TerminalGraphicsQuery``,
+        // which is also why it comes after identification: the exchange is an
+        // APC sequence, and Apple Terminal prints those instead of consuming
+        // them, so it has to know which host this is before it can decide not
+        // to ask. Costs one terminal round trip at startup, and only when
+        // nothing has already answered.
+        TerminalClient.detectGraphics(using: terminal)
 
         let renderer = RenderLoop(
             app: app,
