@@ -2524,20 +2524,19 @@ one cell each until 2026-09-01. A line carrying one, as text pasted from a
 bidirectional document does, measured a cell wider than it drew. They are
 zero-width now (`BidiControlWidthTests`).
 
-### RTL characters as image PIXELS — measured 2026-09-01, and fixed
+### RTL characters as image PIXELS — measured 2026-09-01, still OPEN
 
 **Apple Terminal mirrors a picture made of right-to-left glyphs.** A
 `TUIkitImage` `.customRamp` of Hebrew letters draws a gradient whose flat end
 comes out at the wrong side of every row. The stakes differ from text:
 reordering a run of letters is arguably the right thing there and merely looks
 odd, but in a picture every character is a pixel, so moving one is corruption
-with nothing gained — and the run drags its neutrals along, which is why a row
-mirrors rather than shuffles.
+with nothing gained.
 
-Measured with `Tools/TerminalProbes/rtl_image_card.py`, which draws a gradient
-whose flat run of one repeated glyph grows along the LEFT edge row by row, so
-the reading needs no Hebrew — reversal moves that block to the right, against an
-ASCII control drawing the same picture:
+`Tools/TerminalProbes/rtl_image_card.py` draws a gradient whose flat run of one
+repeated glyph grows along the LEFT edge row by row, so the reading needs no
+Hebrew — reversal moves that block to the right, against an ASCII control
+drawing the same picture. Read on Apple Terminal:
 
 | Block | Apple Terminal |
 |---|---|
@@ -2547,35 +2546,42 @@ ASCII control drawing the same picture:
 | `lrm` (U+200E after each cell) | flat run back on the **left**, and every `X` still in one column |
 | `positioned` (`ESC[nG` per cell) | mirrored, identical to `hebrew` |
 
-Three things fall out of that table:
+Two of those are settled and one is not:
 
-- **U+200E is the fix**, and it is free of charge: the alignment column does not
-  move, so this host paints nothing for the mark and counts no cell for it —
-  unlike U+202D/U+202C, which it paints as the missing-glyph box (above).
 - **The host reorders what it has STORED, not what it is handed.** Cursor-
-  addressing every cell changes nothing, so `FrameDiffWriter`'s existing
-  span machinery could never have been the answer.
-- **It is not the finished line's SGR structure**, since interleaving a colour
-  change per cell leaves the result identical.
+  addressing every cell changes nothing, so `FrameDiffWriter`'s span machinery
+  was never going to be the answer.
+- **It is not the finished line's SGR structure**, since a colour change per
+  cell leaves the result identical.
+- **U+200E is NOT (yet) the fix, whatever that table says.** Emitting it from
+  `ASCIIConverter` for every RTL glyph was tried (171c39c4) and REVERTED
+  (this commit): in the Example's Image page it does not merely fail to help,
+  it destroys the page — the controls panel is drawn tens of columns left of
+  where it belongs and the right of the screen goes unpainted.
 
-`ASCIIConverter.convertCharacterBased` now writes a mark after each strong-RTL
-glyph, which ends every such run at one character — and a run of one cannot be
-reversed. Three bytes per RTL cell, nothing at all for a ramp without any. The
-one cost worth recording: a zero-width scalar belongs to no column, so the
-intra-line span diff declines those rows and they are rewritten whole.
+**What the card's `lrm` block does not cover, and what the real render adds.**
+The card's rows are plain text, about forty cells wide, and stand alone. An
+image row is full width, carries a foreground change per cell, and sits inside a
+composed layout with a panel beside it. Somewhere in that difference the mark
+stops being free. It is not TUIkit's arithmetic: captured from the running app
+with `TERM_PROGRAM=Apple_Terminal`, every emitted row is exactly the terminal's
+width in cells with the marks costing nothing, no cursor compensation fires, no
+right-edge repaint fires, and `strippedLength`, `ansiAwarePrefix` and
+`ansiAwareSlice` all measure a marked row as its cell count and not its scalar
+count.
+
+The card now has two more blocks — `lrm+coloured` and `lrm+wide` — which are
+exactly the two axes the working block lacked. Until those are read, the mark
+is not emitted.
 
 **The first version of the probe measured nothing, and why is the useful part.**
 It drew a staircase out of ONE repeated Hebrew letter and blanks. A run of
 identical characters looks exactly the same reversed, and the blanks are
 neutrals which at end-of-line take the paragraph's own direction and do not
 move — so a host doing precisely what is suspected drew that card correctly, and
-Apple Terminal did. A real render never looks like that: a ramp maps each
-luminance to a DIFFERENT glyph. **A card about ordering has to be made of things
-that can be told apart.**
-
-Not yet asked of iTerm2, Ghostty or Warp. Any host implementing the algorithm
-should mirror it the same way and take the same fix, so the mark is emitted
-unconditionally rather than behind a quirk.
+Apple Terminal did. **A card about ordering has to be made of things that can be
+told apart** — and, this round's lesson, a card about a rendered PAGE has to be
+made of rows like the page's.
 
 That leaves **a known divergence on Apple Terminal in the other direction**: it
 paints U+202D and U+202C as a box that occupies a cell TUIkit no longer counts.

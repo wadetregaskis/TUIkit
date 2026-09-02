@@ -54,6 +54,17 @@ The blocks:
                    reorders what it is HANDED or what it has STORED, and those
                    have opposite consequences: the first is already TUIkit's
                    mechanism and costs no glyphs, the second closes that route.
+  * `lrm+coloured` and `lrm+wide` — the two things the working `lrm` block
+                   does NOT have, and the reason it is not trusted. Emitting
+                   the mark from `ASCIIConverter` for every RTL glyph was
+                   tried and reverted: in the Example's Image page it does not
+                   merely fail to help, it destroys the page. The card's rows
+                   are plain text about forty cells wide and stand alone; an
+                   image row is FULL WIDTH and carries a colour change per
+                   cell. These two blocks add one axis each, so a single
+                   reading says which one costs the mark its freedom — or that
+                   neither does, and the difference is the composed layout
+                   around it.
 
 U+202D … U+202C is not among them: Apple Terminal paints those two as the
 missing-glyph box (measured 2026-09-01, in `Terminal-compatibility.md`).
@@ -116,6 +127,21 @@ def coloured(cells: list) -> str:
     return "".join(out) + "\x1b[0m"
 
 
+def wide_row(cells: list) -> list:
+    """The row repeated out to the terminal's width, less the four-space indent.
+
+    An image fills the space it is given, and the `lrm` block's forty-cell rows
+    do not. Whether that matters is the point of asking.
+    """
+    try:
+        import shutil
+
+        width = max(20, shutil.get_terminal_size((80, 24)).columns - 4)
+    except Exception:  # pragma: no cover - a pipe has no size
+        width = 76
+    return [cells[index % len(cells)] for index in range(width)]
+
+
 def positioned(cells: list) -> str:
     """Every cell after an absolute column move, adding no characters."""
     return "".join(
@@ -154,6 +180,16 @@ def main() -> int:
         "positioned — the same, every cell after an ESC[nG column move",
         [positioned(row) for row in hebrew],
         "correct here = the host reorders what it is handed, not what it stored",
+    )
+    block(
+        "lrm+coloured — marks AND a colour change per cell, which `lrm` lacks",
+        [coloured([cell + LRM for cell in row]) for row in hebrew],
+        "still correct? then colour is not what costs the mark its freedom",
+    )
+    block(
+        "lrm+wide   — marks on a row run out to the terminal's right edge",
+        ["".join(cell + LRM for cell in wide_row(row)) for row in hebrew],
+        "no |X here: the row IS the width. Still a picture, or is the screen torn?",
     )
     return 0
 
