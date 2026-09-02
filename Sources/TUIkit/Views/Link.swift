@@ -31,16 +31,17 @@ import Foundation
 /// > the underline is what marks it as a link. Opt out with `.linkUnderline(false)`.
 ///
 /// > Note: On a terminal measured to honour them, the label also carries a real
-/// > **OSC 8 hyperlink** (see ``TUIkitCore/TerminalHyperlink``), so the terminal's
-/// > own affordances work on it too: hover shows the destination, ⌘-click opens
-/// > it, right-click offers to copy it. Those gestures are handled above the
-/// > mouse-reporting protocol, so they work while the app is reading the mouse
-/// > for its own purposes — and they give a link a way to be COPIED, which
-/// > keyboard activation cannot. Everything else still works everywhere,
+/// > **OSC 8 hyperlink** (see ``TUIkitCore/TerminalHyperlink``), which tells the
+/// > terminal where those cells point — so the URL can be shown on hover and
+/// > copied, even though the label says "Documentation" and the destination is
+/// > nowhere on screen. That is the part keyboard and mouse activation cannot
+/// > give a link. Whether the terminal will also OPEN it on a modified click
+/// > depends on the host, because a TUIkit app holds mouse reporting open and
+/// > iTerm2 is measured to forward ⌘-click to the application instead — see
+/// > ``TUIkitCore/TerminalHyperlink``. Everything else still works everywhere,
 /// > Terminal.app included. Turn the escape off with
 /// > ``View/terminalHyperlinks(_:)``, which an app that intercepts its own URL
-/// > scheme in ``OpenURLAction`` may well want: a terminal-owned ⌘-click
-/// > bypasses that handler entirely.
+/// > scheme in ``OpenURLAction`` may well want.
 public struct Link<Label: View>: View {
     let destination: URL
     let label: Label
@@ -149,12 +150,12 @@ extension View {
     /// Sets whether ``Link`` views within this view attach a real terminal
     /// hyperlink to their labels.
     ///
-    /// The escape gives a link the affordances the TERMINAL owns and an
-    /// application cannot reach — hover to see the destination, ⌘-click to
-    /// open it, right-click to copy it — and that last part is the reason an
-    /// app might want it off. A terminal-owned ⌘-click goes to the system
-    /// opener, over the top of ``OpenURLAction``, so an app that intercepts its
-    /// own URL scheme would find those links handled by somebody else:
+    /// The escape tells the TERMINAL where a label points, which is how a URL
+    /// nobody can see becomes one anybody can copy — and the reason an app
+    /// might still want it off is the other half: wherever the terminal opens
+    /// a link itself, it does so over the top of ``OpenURLAction``, so an app
+    /// that intercepts its own URL scheme would find those links handled by
+    /// somebody else:
     ///
     /// ```swift
     /// VStack {

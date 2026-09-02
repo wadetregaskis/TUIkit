@@ -1773,11 +1773,12 @@ see `Documentation/Parity-decisions-pending.md` §1–2 for the decision.)
 ## OSC 8 hyperlinks — measured 2026-09-02
 
 `ESC ] 8 ; <params> ; <URI> ST` attaches a destination to the cells that
-follow, until `ESC ] 8 ; ; ST` ends it. Hover shows the URI, ⌘-click opens
-it, right-click offers to copy it — and all three arrive **above the
-mouse-reporting protocol**, so they work while the application is reading
-the mouse for its own purposes, which is what makes the sequence worth
-emitting at all in a framework that already handles clicks itself.
+follow, until `ESC ] 8 ; ; ST` ends it. What that buys a framework which
+already handles clicks itself is that **the terminal now knows where those
+cells point**, so the URI becomes something it can show and offer to copy
+even though the label reads "Documentation" and the destination appears
+nowhere on screen. No application can produce that; a click it handles
+itself leaves the URL as invisible as it was.
 
 Measured with `Tools/TerminalProbes/hyperlink_probe.py`, which asks two
 different questions and can only answer one of them from inside.
@@ -1809,6 +1810,32 @@ not a corrupted row.** That asymmetry is what lets the capability table be
 generous, and it is the opposite of how the cursor-advance quirks work,
 where being wrong corrupts output that was fine. See
 `TerminalClient.honoursHyperlinks(_:)`, which says so at the code.
+
+### Which gestures actually reach it — partly OPEN
+
+Not all of the terminal's affordances are independent of the application,
+and the split matters because a TUIkit app holds mouse reporting open for
+its whole run.
+
+- **Hover previews and right-click → Copy Link** are the terminal's own
+  chrome, drawn from the cell's stored URI. Nothing routes them through the
+  application.
+- **Click-to-open is contested.** A terminal that forwards a modified click
+  to the application cannot also act on it, and iTerm2 is measured to
+  forward exactly the one people reach for: ⌘-click arrives as the
+  protocol's meta bit (see iTerm2's Input behaviour, and "Keyboard
+  modifiers on key events"). So ⌘-click in iTerm2 goes to the app, not to
+  the link. Apple Terminal strips ⌘ instead and has no OSC 8 anyway;
+  Ghostty's modifier-clicks are **not yet captured at all** (its Input
+  section already says so).
+
+Shift is the conventional bypass — xterm-family terminals reserve
+shift-click to mean "do not report this, handle it yourself" — so
+shift-click, or ⌘-shift-click, is what to try. **Unverified here.** It needs
+a real click in a real terminal with a TUIkit app running, which is a
+gesture no probe in this directory can perform; `hyperlink_probe.py`'s card
+asks for it. Until then the claim this document supports is the storage and
+what follows from it, not the opening.
 
 ### Honoured: not measurable from inside, and no query reports it
 

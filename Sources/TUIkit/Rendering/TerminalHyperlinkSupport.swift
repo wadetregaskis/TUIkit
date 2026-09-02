@@ -11,8 +11,9 @@ import TUIkitCore
 
 extension TerminalClient {
 
-    /// Whether `program` was measured to **honour** OSC 8 hyperlinks — hover
-    /// shows the destination, ⌘-click opens it, right-click offers to copy it.
+    /// Whether `program` was measured to **honour** OSC 8 hyperlinks — the
+    /// terminal stores the destination against those cells, so it can show it
+    /// on hover and offer to copy it.
     ///
     /// ## This is a capability, not a quirk — and the difference decides the default
     ///
@@ -87,9 +88,10 @@ extension TerminalClient {
     /// has models for five terminals and there are a great many more, most of
     /// which do support OSC 8. `true` turns links on for a host with no
     /// measurement; `false` turns them off — which an app may genuinely want
-    /// even on a host that honours them, because a terminal-owned ⌘-click
-    /// bypasses ``OpenURLAction``, so an app that intercepts its own URL scheme
-    /// would find the system opener handling links it meant to keep.
+    /// even on a host that honours them, because wherever the terminal DOES
+    /// open a link itself it does so over the top of ``OpenURLAction``, and an
+    /// app that intercepts its own URL scheme would find the system opener
+    /// handling links it meant to keep.
     ///
     /// `nil` (the default) means "use the measured table", unless
     /// `TUIKIT_HYPERLINKS` is set in the environment — `1` for on, `0` for off

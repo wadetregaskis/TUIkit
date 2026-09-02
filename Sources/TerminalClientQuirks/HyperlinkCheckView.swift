@@ -19,10 +19,9 @@ import TUIkit
 /// **The check needs your eyes, and that is not a shortcoming of this screen.**
 /// No escape sequence asks a terminal whether it implements OSC 8: DA1, DA2 and
 /// XTVERSION say nothing about it, and no reply distinguishes a host that
-/// stored the URI from one that discarded it. The affordance itself — hover,
-/// ⌘-click — is a gesture the terminal handles above the mouse-reporting
-/// protocol, which is exactly why it is worth having and exactly why the
-/// application cannot observe it.
+/// stored the URI from one that discarded it. The affordance is the terminal's
+/// own chrome — a hover preview, a right-click menu — which is exactly why it
+/// is worth having and exactly why the application cannot observe it.
 struct HyperlinkCheckView: View {
     let client: TerminalClient
 
@@ -82,8 +81,10 @@ struct HyperlinkCheckView: View {
             }
             Text(
                 "Hover each. On a host that honours OSC 8 the first shows "
-                    + "https://swift.org and the second does not; ⌘-click (or ctrl-click) "
-                    + "opens the first without the app ever seeing the gesture."
+                    + "https://swift.org and the second does not. Whether a modified click "
+                    + "OPENS it is a separate question: this app holds mouse reporting, and "
+                    + "iTerm2 is measured to forward ⌘-click here rather than act on it, so "
+                    + "shift-click is the gesture to try. Report what works."
             )
             .foregroundStyle(.palette.foregroundTertiary)
         }

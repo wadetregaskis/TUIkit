@@ -18,12 +18,25 @@
 ///
 /// A ``Link`` is focusable and clickable without any of this: Tab to it and
 /// press Return, or click it, and the app opens the URL. What the escape adds
-/// is the affordances the TERMINAL owns and an application cannot reach —
-/// hover the label and the host shows the destination, ⌘-click (or ctrl-click)
-/// and the host opens it, right-click and the host offers to copy it. Those
-/// gestures arrive above the mouse-reporting protocol, so they work while the
-/// application is reading the mouse for its own purposes, and they still work
-/// when the label says "Documentation" and the URL is nowhere on screen.
+/// is that **the terminal now knows where those cells point** — so the URL
+/// becomes something the terminal can show and offer to copy even though the
+/// label says "Documentation" and the destination appears nowhere on screen.
+/// Nothing an application can do gives it that; a click it handles itself
+/// leaves the URL as invisible as it was.
+///
+/// What a person can then DO with it is the terminal's business, and only some
+/// of it is independent of the application. Hover previews (Ghostty's
+/// `link-previews`, iTerm2's underline-on-hover) and right-click → Copy Link
+/// are the terminal's own chrome. **Click-to-open is not**: a TUIkit app holds
+/// mouse reporting open, and a terminal that forwards the modified click to
+/// the application cannot also act on it. iTerm2 is measured to do exactly
+/// that — ⌘-click arrives as the protocol's meta bit
+/// (`Documentation/Terminal-compatibility.md`, iTerm2 Input behaviour) — so
+/// ⌘-click there reaches the app rather than the link. Shift is the
+/// conventional bypass for mouse reporting and is the gesture to try, but it
+/// is UNVERIFIED here and Ghostty's modifier-clicks are not captured at all.
+/// The visible-and-copyable half is what this is for; treat opening as a
+/// bonus that varies by host.
 ///
 /// ## The shape of the sequence
 ///
