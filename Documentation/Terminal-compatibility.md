@@ -1533,9 +1533,11 @@ never touch a real session or the user's preferences.
 ## What an ANSI colour actually paints
 
 **Status: MEASURED for Apple Terminal.app 455.1 (default "Basic" profile),
-2026-08-24. Other hosts pending.** `Tools/TerminalProbes/palette_probe.py` asks
-a terminal directly (OSC 4 / OSC 10 / OSC 11) and writes the answer as JSON;
-run it in each host and record the results below.
+2026-08-24. Ghostty 1.3.1 read from its own configuration 2026-09-01 but not
+yet confirmed live. iTerm2 and Warp pending.**
+`Tools/TerminalProbes/palette_probe.py` asks a terminal directly (OSC 4 /
+OSC 10 / OSC 11) and writes the answer as JSON; run it in each host and record
+the results below.
 
 ### Apple Terminal.app 455.1, "Basic" — measured
 
@@ -1591,6 +1593,40 @@ toward legibility, never away). Two things still follow:
 
 None of this reaches colours TUIkit chooses itself: those are palette roles,
 which resolve to RGB and are stated exactly.
+
+### Ghostty 1.3.1, default theme — read from its own configuration
+
+**Provenance: `ghostty +show-config --default`, 2026-09-01, with the user's
+`config.ghostty` empty (0 bytes) so the defaults are what runs. NOT yet
+confirmed over OSC 4 in a live window — run `palette_probe.py` there to
+promote this from "what it ships" to "what it paints".**
+
+Ghostty's stock scheme is Tomorrow Night, and it is muted on purpose. **Slot 0
+is not black**, which is the whole of why a near-black photograph renders
+visibly lighter here than in Terminal.app:
+
+| slot | Ghostty | Apple Terminal (measured) | xterm (assumed) |
+|---|---|---|---|
+| 0 black | `#1d1f21` (29, 31, 33) | 0, 0, 0 | 0, 0, 0 |
+| 4 blue | `#81a2be` (129, 162, 190) | 0, 0, 179 | 0, 0, 238 |
+| 6 cyan | `#8abeb7` (138, 190, 183) | 0, 166, 179 | 0, 205, 205 |
+| 7 white | `#c5c8c6` (197, 200, 198) | 191, 191, 191 | 229, 229, 229 |
+| 8 br.black | `#666666` (102, 102, 102) | 102, 102, 102 | 127, 127, 127 |
+| 12 br.blue | `#7aa6da` (122, 166, 218) | 0, 0, 255 | 92, 92, 255 |
+| 14 br.cyan | `#70c0b1` (112, 192, 177) | 0, 230, 230 | 0, 255, 255 |
+| 15 br.white | `#eaeaea` (234, 234, 234) | 230, 230, 230 | 255, 255, 255 |
+
+Two consequences for a 16-colour image, and neither is a defect:
+
+- **`#1d1f21` is the darkest colour Ghostty has.** A black pixel cannot paint
+  darker, whatever the quantiser picks, so "the background came out lighter"
+  is the answer and not a symptom.
+- **The blues and cyans are desaturated steel and sage**, so a picture whose
+  subject is saturated blue reads as teal. Terminal.app's slot 4 is a pure
+  `(0, 0, 179)`; Ghostty's is a grey-blue two thirds of the way to neutral.
+
+Default background `#282c34` and foreground `#ffffff` — but a TUIkit app paints
+its own page, so those reach nothing an image draws.
 
 ### Bold is a COLOUR on some hosts — measured 2026-09-01
 
@@ -1662,6 +1698,12 @@ says so. Two things derive real decisions from it:
 - **Quantisation.** Downsampling a truecolor value for a 256-colour terminal
   searches for the nearest entry by RGB distance. If the first sixteen entries
   are not where the table thinks, the "nearest" one may not look nearest.
+  **Measured, 2026-09-01:** quantising against Ghostty's real sixteen instead
+  of xterm's table changes the slot chosen for **66.8%** of the RGB cube, and
+  the colour actually painted lands **24% closer** in OKLab — the same 24% over
+  the cube as over dark pixels alone. So the approximation costs about a
+  quarter of the accuracy the mode is capable of. Asking `OSC 4` once at
+  startup and quantising against the answer is the fix, and is not built.
 
 Both degrade rather than break: they are approximations against an unknown
 palette, and they are the best available, because **an app cannot know the
