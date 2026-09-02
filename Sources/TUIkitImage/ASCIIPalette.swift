@@ -298,6 +298,28 @@ public struct ASCIIPalette: Sendable, Equatable {
         }
     }
 
+    /// Whether SGR 1 leaves every colour in this palette alone.
+    ///
+    /// See ``ASCIIColorMode/foregroundSurvivesBold``: a colour named as one of
+    /// the sixteen has a bright twin that bold may be swapped for, and one
+    /// stated as a triple or as a 256-cube index at 16 or above does not. A
+    /// palette is only as safe as its least safe entry, because the image
+    /// picks per pixel and cannot embolden some cells and not others without
+    /// making the weight itself part of the picture.
+    ///
+    /// `.semantic` cannot survive ``resolved(with:)``, and where one somehow
+    /// does ``sgrParameters(at:background:)`` spells it as a triple, so it is
+    /// safe by the same rule as ``Color/rgb``.
+    var foregroundSurvivesBold: Bool {
+        colors.allSatisfy { color in
+            switch color.value {
+            case .rgb, .semantic: return true
+            case .palette256(let index): return index >= 16
+            case .standard, .bright: return false
+            }
+        }
+    }
+
     /// This palette with every colour replaced by the nearest one `depth` can
     /// render exactly.
     ///

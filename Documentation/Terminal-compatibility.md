@@ -784,6 +784,9 @@ measure differently — re-run `advance_probe.py` before trusting a
 non-default setup.
 
 - **Colour:** truecolor (24-bit) — gradients render smoothly.
+- **Bold brightens a named colour** (`Use Bright Bold`, on by default), so
+  `SGR 1` over `30`–`37` paints the bright twin. See "Bold is a COLOUR on some
+  hosts"; it ruined every 16-colour image until 2026-09-01.
 - **VS-16 pictographic emoji — SCREEN-MODE DEPENDENT:** on the primary
   screen paints 2 / advances 2; on the **alternate screen** (where TUIkit
   apps run) paints 2 / **advances 1** — the same under-advance as
@@ -1032,6 +1035,10 @@ have NOT been re-run, so they still name it.
 
 Warp is the mirror image of Ghostty: it gets the *selector* classes right
 and the *composed* classes wrong.
+
+**Bold brightens a named colour here too** — reported, not yet read out of a
+settings file. See "Bold is a COLOUR on some hosts": it ruined every 16-colour
+image until 2026-09-01.
 
 > **Version drift check (2026-08-28).** Warp self-updated to
 > `v0.2026.08.26.17.59.stable_01`; the full advance battery re-run on that
@@ -1584,6 +1591,56 @@ toward legibility, never away). Two things still follow:
 
 None of this reaches colours TUIkit chooses itself: those are palette roles,
 which resolve to RGB and are stated exactly.
+
+### Bold is a COLOUR on some hosts — measured 2026-09-01
+
+**Status: the framework no longer relies on it. Per-host readings still wanted;
+run `Tools/TerminalProbes/bold_bright_card.py` in each.**
+
+`SGR 1` is documented as a weight. xterm and most of its descendants also treat
+it as a colour: with bold in force, a foreground named as one of the standard
+eight (`SGR 30`–`37`) is painted in its BRIGHT twin. Backgrounds are never
+brightened, and an explicit `38;2;r;g;b` triple has no twin to be swapped for,
+so the reinterpretation reaches exactly the sixteen NAMES.
+
+Each host spells the choice differently, and they do not agree:
+
+| host | setting | this machine's value | brightens bold? |
+|---|---|---|---|
+| iTerm2 | `Use Bright Bold` (profile) | `True` — the default | yes |
+| Warp | no exposed setting | — | yes (reported) |
+| Ghostty | bold is weight-only; `bold-color` overrides the colour explicitly | unset | no |
+| Apple Terminal.app | "Use bright colors for bold text" (profile) | absent from `Basic`, so off | no |
+
+Read from `com.googlecode.iterm2.plist`, `ghostty +show-config --default` and
+`com.apple.Terminal.plist` on 2026-09-01; the Warp row is from the report that
+prompted this and has not been read out of a settings file.
+
+**What it cost.** `ASCIIConverter+HalfBlocks` emboldened every `▄` it emitted,
+to close a rasterisation gap under SF Mono in Terminal.app (see the advance
+table below). In `.trueColor` that is free. In ``ASCIIColorMode/ansi16`` the
+foreground is `30`–`37` / `90`–`97`, so on iTerm2 and Warp **every cell's lower
+half was painted in the bright twin of the colour asked for** while its upper
+half — the background — stayed correct. A picture drawn entirely out of half
+blocks therefore came out in horizontal stripes at cell pitch. Measured on the
+Example's demo photograph at 183×60: 5724 cells, all bold, and 86.5% of them
+with foreground == background, which is precisely where a stripe is most
+visible because the cell should be flat.
+
+The emission was identical under every `TERM_PROGRAM` — this was never a
+per-host code path, just a per-host reading of one universal sequence.
+
+**The fix** is ``ASCIIColorMode/foregroundSurvivesBold``: spend the weight only
+where the foreground has no bright twin — a `38;2` triple, or `38;5;n` where
+*n* ≥ 16, which is every index the 256-colour quantiser can produce. A palette
+is only as safe as its least safe entry, and ``ASCIIPalette/downsampled(to:)``
+turns any palette into unsafe names at `.basic16`. Where the weight is refused
+the Terminal.app hairline returns, which is the lesser evil: a hairline on one
+host beats a ruined image on two.
+
+**The general rule for the framework**: any attribute that a host may read as a
+colour must not be used decoratively over a colour stated as one of the sixteen.
+Bold is the one that exists today; `SGR 2` (faint) is the same shape of hazard.
 
 ### The three colour spellings are not equally literal
 

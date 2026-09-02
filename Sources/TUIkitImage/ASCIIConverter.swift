@@ -236,6 +236,41 @@ public enum ASCIIColorMode: Sendable, Equatable {
         guard case .palette(let colors) = self else { return self }
         return .palette(colors.resolved(with: palette))
     }
+
+    /// Whether SGR 1 changes only a glyph's WEIGHT in this mode, or its COLOUR
+    /// as well.
+    ///
+    /// Bold is not only a weight. xterm and most of its descendants implement
+    /// "bold means bright": under SGR 1 a foreground named as one of the
+    /// standard eight is painted in its BRIGHT twin instead. Hosts differ, and
+    /// each spells the choice its own way — iTerm2's "Use Bright Bold" (on by
+    /// default), Terminal.app's "Use bright colors for bold text", Ghostty's
+    /// weight-only bold — so the same sequence is a weight change on one and a
+    /// colour change on the next.
+    ///
+    /// It is safe exactly where the foreground is stated in a form that has no
+    /// bright twin to be swapped for:
+    /// - ``trueColor`` is `38;2;r;g;b`, a triple and not a name.
+    /// - ``ansi256`` and ``grayscale`` are `38;5;n`, and **n is never below
+    ///   16**: `quantizeToANSI256` returns 16…231 from the colour cube and
+    ///   232…255 from the grey ramp, never one of the sixteen. That is what
+    ///   makes them safe, so it is load-bearing rather than incidental.
+    /// - ``mono`` states no colour at all.
+    /// - ``ansi16`` is `30`–`37` / `90`–`97`: the very names bold reinterprets.
+    /// - ``palette(_:)`` is safe only if no entry of it is one of the sixteen,
+    ///   which ``ASCIIPalette/foregroundSurvivesBold`` answers — note that
+    ///   ``ASCIIPalette/downsampled(to:)`` turns any palette into unsafe
+    ///   entries on a 16-colour terminal.
+    ///
+    /// Used by `convertHalfBlocksColor`, which emboldens `▄` to close a
+    /// rasterisation gap and must not do so at the cost of the colour.
+    var foregroundSurvivesBold: Bool {
+        switch self {
+        case .trueColor, .ansi256, .grayscale, .mono: return true
+        case .ansi16: return false
+        case .palette(let palette): return palette.foregroundSurvivesBold
+        }
+    }
 }
 
 // MARK: - Dithering Mode

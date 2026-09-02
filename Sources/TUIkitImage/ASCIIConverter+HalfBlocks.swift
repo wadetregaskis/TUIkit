@@ -42,13 +42,22 @@ extension ASCIIConverter {
 
     /// Colour variant: top pixel → background, bottom pixel → foreground of `▄`.
     ///
-    /// The `▄` glyph is emitted **bold** (SGR 1). At some SF Mono sizes in
-    /// Terminal.app (incl. the default 11 pt) the regular-weight lower-half
-    /// block is rasterised a hair short of the cell's bottom edge, so the cell
-    /// background (the *top* pixel's colour) bleeds through as a thin band along
-    /// each row's bottom. Bold selects a heavier glyph that fills to the edge on
-    /// the affected sizes; in true colour the fill colour is explicit RGB, so
-    /// bold changes only the glyph weight, not the colour, and never the width.
+    /// The `▄` glyph is emitted **bold** (SGR 1) — but only where bold is a
+    /// weight and nothing else. At some SF Mono sizes in Terminal.app (incl.
+    /// the default 11 pt) the regular-weight lower-half block is rasterised a
+    /// hair short of the cell's bottom edge, so the cell background (the *top*
+    /// pixel's colour) bleeds through as a thin band along each row's bottom.
+    /// Bold selects a heavier glyph that fills to the edge on the affected
+    /// sizes, and against an explicit RGB triple it can do nothing else.
+    ///
+    /// Against one of the terminal's sixteen it can, and does: a host that
+    /// implements "bold means bright" paints SGR 1 + `30`–`37` in the BRIGHT
+    /// twin. Every cell's lower half then comes out the wrong colour while its
+    /// upper half — the background, which bold never touches — stays right,
+    /// which draws the whole picture in horizontal stripes at cell pitch. So
+    /// the weight is spent only where ``ASCIIColorMode/foregroundSurvivesBold``
+    /// says it costs nothing; elsewhere the hairline is the lesser evil, and
+    /// it is a hairline on one host rather than a ruined image on several.
     private func convertHalfBlocksColor(
         _ image: RGBAImage,
         width: Int,
@@ -56,7 +65,7 @@ extension ASCIIConverter {
         mode: ASCIIColorMode
     ) -> [String] {
         let lowerHalfBlock: Character = "▄"
-        let bold = "\(ANSIEscape.csi)1m"
+        let bold = mode.foregroundSurvivesBold ? "\(ANSIEscape.csi)1m" : ""
 
         var lines = [String]()
         lines.reserveCapacity(height)
@@ -77,6 +86,7 @@ extension ASCIIConverter {
                 if fgCode != lastFg || bgCode != lastBg {
                     // The reset clears bold too, so re-assert it with each colour
                     // run (bold persists across cells that reuse the same colours).
+                    // `bold` is empty in the modes that cannot afford it.
                     line += ANSIEscape.reset
                     line += bold + fgCode + bgCode
                     lastFg = fgCode
