@@ -1461,11 +1461,56 @@ what it wrote, so the state in force is knowable. It is left alone deliberately:
 20% of a stream that is ~70 bytes per drag step cannot be what makes a host feel
 sluggish, and the writer is the wrong place to speculate in.
 
+### The first open IS dearer — in the DEBUG build, by 3.4×
+
+The measurements above were release, where the premium is ~13 ms and the report
+does not reproduce. Asked to look harder, and measured again in debug:
+
+| page | first open | later opens | to first byte, first |
+|---|---|---|---|
+| Colors | 620 ms | 183 ms | 590 ms |
+| Sliders | 150 | 135 | 39 |
+| Progress & Gauges | 230 | 224 | 103 |
+| Toggles | 90 | 80 | 27 |
+| Text Styles | 120 | 90 | 34 |
+
+Six hundred milliseconds before anything appears is emphatically noticeable,
+and it is **page-specific rather than process-wide**: opening Toggles, Text
+Styles, Sliders and Progress & Gauges first and only then Colors gives 650 ms
+against 620 — no help at all.
+
+The same effect isolated headlessly, one view tree rendered six times into one
+context:
+
+    pass 1: 4,946µs      pass 2: 148µs      pass 3: 135µs …
+
+A 35× premium, and it is the RENDER memo: the measure memo records 312 misses
+on the first pass and is not consulted again, so what serves passes 2+ is the
+whole-subtree buffer. A *different* tree of the same shape, in the same warm
+process and context, still costs 2,706 µs on its first pass — so a little under
+half of it is shared first-touch and the rest is genuinely per-subtree.
+
+That is the whole of it: the first render of a page's subtree does work that
+every later one is served from a cache, the pages named are the dearest to
+render (Progress 69 ms, Colors 57, Sliders 36.5, against Toggles 27 and Text
+Styles 17 in release), and the two multiply. Not content HEIGHT — `lists`
+scrolls twice as far as `colors` and costs less — but how much work each view
+does.
+
 ### What this says about the report
 
-Gradients are not the cost. The pages named are among the densest, they are
-dearer on every visit rather than only the first, and on the host reported as
-slow the framework emits *fewer* bytes than on the host reported as fast. That
-leaves the per-colour-change painting cost of Apple Terminal itself, which no
-amount of work here reaches — and the general cold-render premium, which is a
-framework-wide question about the memos and not a gradient one.
+Gradients are not the cost. Colour work is 0.5% of the Colors page's own
+profile (`nearestPalette256Index` 0.23%, `downsampledToPalette256` 0.16%,
+`hueWeightedDistanceSquared` 0.07%); the rest is the measure/render pipeline
+(~25%), the allocator (~16%) and refcounting (~7%), with no hot spot to remove.
+The pages named are simply the dearest, and they are dearer on every visit as
+well as the first.
+
+The single actionable thing is the BUILD: the same first open is 70 ms in
+release against 620 in debug. Beyond that the lever is the cold-render path
+itself — a flat profile whose largest identifiable share is allocation, which
+is the `lines: [String]` question §22 already names as the next one.
+
+And on the second report: on the host reported as slow the framework emits
+*fewer* bytes than on the host reported as fast, and since 589b557e ~20% fewer
+again. What is left is Apple Terminal's own per-colour-change painting.
