@@ -24,6 +24,7 @@ struct IdentificationView: View {
             signals
             deviceAttributes
             HyperlinkCheckView(client: client)
+            GraphicsCheckView()
             if client.program == .unidentified { advice }
         }
     }

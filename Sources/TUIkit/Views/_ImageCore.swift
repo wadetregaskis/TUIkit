@@ -210,7 +210,8 @@ struct _ImageCore: View, Renderable, Layoutable {
             manageLoadLifecycle(
                 lifecycle: lifecycle, token: token,
                 phaseBox: phaseBox, lastSourceBox: lastSourceBox,
-                maxPixelCount: maxPixelCount, urlTimeout: urlTimeout)
+                maxPixelCount: maxPixelCount, urlTimeout: urlTimeout,
+                imageStore: context.environment.terminalImageStore)
         }
 
         // The image renders into the fit box scaled by zoom — mirroring
@@ -243,6 +244,17 @@ struct _ImageCore: View, Renderable, Layoutable {
             )
 
         case .success(let rawImage):
+            // Real pixels first, where the terminal will take them. Falls
+            // through to the glyph renderer for every terminal that did not
+            // answer the startup handshake, every subtree that asked for
+            // glyphs, and every request the protocol cannot express — which is
+            // why this is an `if let` and not a branch: the fallback is not an
+            // error path, it is the path this framework has always taken.
+            if let drawn = renderWithTerminalGraphics(
+                rawImage, width: renderWidth, height: renderHeight, context: context)
+            {
+                return drawn
+            }
             return renderImage(
                 rawImage,
                 width: renderWidth,
@@ -285,7 +297,8 @@ extension _ImageCore {
         phaseBox: StateBox<ImageLoadingPhase>,
         lastSourceBox: StateBox<ImageSource?>,
         maxPixelCount: Int?,
-        urlTimeout: Double
+        urlTimeout: Double,
+        imageStore: TerminalImageStore?
     ) {
         // Detect source change and force reload
         if let lastSource = lastSourceBox.value, lastSource != source {
@@ -343,9 +356,13 @@ extension _ImageCore {
             _ = lifecycle.recordAppear(token: token) {}
         }
 
-        // Cancel loading task on disappear
+        // Cancel loading task on disappear — and give the terminal its
+        // memory back. A transmitted image is retained by the terminal until
+        // something deletes it, and this is the only moment anything knows
+        // the picture is not coming back.
         lifecycle.registerDisappear(token: token) { [lifecycle] in
             lifecycle.cancelTask(token: token)
+            imageStore?.release(token: token)
         }
     }
 
@@ -583,5 +600,108 @@ extension _ImageCore {
         }
 
         return FrameBuffer(lines: lines, width: width)
+    }
+}
+
+// MARK: - Drawing with the terminal's own graphics
+
+extension _ImageCore {
+
+    /// The image as **real pixels**, if this terminal will place one in its
+    /// cell grid — or `nil`, which means "draw it out of glyphs, as always".
+    ///
+    /// What comes back is ordinary text: `columns` × `rows` cells of Unicode
+    /// placeholders that the terminal replaces with parts of the picture. It
+    /// measures, clips, scrolls, composites and diffs exactly like the glyph
+    /// rendering it replaces, so nothing downstream of here knows the
+    /// difference. See ``TUIkitCore/KittyGraphics``.
+    ///
+    /// ## The five gates, and why each is separate
+    ///
+    /// - **`isSupported`** — the startup handshake's answer. Default `false`,
+    ///   so a terminal nobody asked draws glyphs.
+    /// - **`terminalGraphics`** — the app's preference. The glyph renderer is
+    ///   a look and not only a fallback; see ``View/terminalGraphics(_:)``.
+    /// - **`!isMeasuring`** — transmitting is a side effect, and a measure
+    ///   pass that renders (a Card sizing its container, a Table probing a
+    ///   multi-line cell) must not put an image in the terminal for a branch
+    ///   that may never be drawn. The measured SIZE is unaffected: both paths
+    ///   produce the same cell box, because both ask
+    ///   ``ASCIIConverter/targetSize(imageWidth:imageHeight:maxWidth:maxHeight:contentMode:overrideAspectRatio:cellAspect:)``.
+    /// - **a store** — `nil` in a headless render, where there is no terminal
+    ///   to transmit to.
+    /// - **the store's own answer** — `nil` for an extent past what
+    ///   placeholders can address (297 cells; there is no combining mark for
+    ///   the 298th column).
+    fileprivate func renderWithTerminalGraphics(
+        _ rawImage: RGBAImage, width: Int, height: Int, context: RenderContext
+    ) -> FrameBuffer? {
+        guard KittyGraphics.isSupported,
+            context.environment.terminalGraphics,
+            !context.isMeasuring,
+            let store = context.environment.terminalImageStore,
+            rawImage.width > 0, rawImage.height > 0
+        else { return nil }
+
+        // The same cell box the glyph renderer would fill, from the same
+        // function — so switching renderers cannot move the image or change
+        // what the layout around it was told.
+        let target = ASCIIConverter.targetSize(
+            imageWidth: rawImage.width, imageHeight: rawImage.height,
+            maxWidth: width, maxHeight: height,
+            contentMode: context.environment.imageContentMode,
+            overrideAspectRatio: context.environment.imageAspectRatio,
+            cellAspect: context.environment.imageCellAspect)
+        guard target.width > 0, target.height > 0 else { return nil }
+
+        let cell = context.environment.imageCellPixels
+        let pixelWidth = target.width * cell.width
+        let pixelHeight = target.height * cell.height
+
+        // Everything that decides the picture. The source and the decoded
+        // dimensions identify the image (a source change resets the phase, so
+        // within one view they cannot disagree); the cell box and the cell's
+        // pixel size decide what it was resampled to. Equal signature, and the
+        // terminal already holds exactly these bytes.
+        let signature = """
+            \(source)|\(rawImage.width)x\(rawImage.height)\
+            |\(target.width)x\(target.height)|\(cell.width)x\(cell.height)
+            """
+
+        guard
+            let lines = store.placeholderRows(
+                token: "image-\(context.identity.path)", signature: signature,
+                columns: target.width, rows: target.height,
+                pixelWidth: pixelWidth, pixelHeight: pixelHeight,
+                pixels: {
+                    // Only on a miss: this resamples the decoded image and can
+                    // be megabytes. The common case, by a wide margin, is that
+                    // nothing has changed since last frame.
+                    Self.rgbaBytes(rawImage.scaledBilinear(to: pixelWidth, pixelHeight))
+                })
+        else { return nil }
+
+        return FrameBuffer(lines: lines, width: target.width)
+    }
+
+    /// An ``RGBAImage`` as the flat RGBA byte run the protocol's `f=32` wants.
+    ///
+    /// Written through `unsafeUninitializedCapacity` rather than four appends
+    /// a pixel: a full-screen image at a Retina cell is over two million
+    /// pixels, and eight million bounds-checked appends is a visible pause on
+    /// the frame that first shows a picture.
+    fileprivate static func rgbaBytes(_ image: RGBAImage) -> [UInt8] {
+        let pixels = image.pixels
+        return [UInt8](unsafeUninitializedCapacity: pixels.count * 4) { buffer, initialized in
+            var index = 0
+            for pixel in pixels {
+                buffer[index] = pixel.r
+                buffer[index + 1] = pixel.g
+                buffer[index + 2] = pixel.b
+                buffer[index + 3] = pixel.a
+                index += 4
+            }
+            initialized = index
+        }
     }
 }

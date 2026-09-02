@@ -157,5 +157,9 @@ extension View {
             .imageSupersampling(settings.supersampling == 0 ? nil : settings.supersampling)
             .imageEdgeThreshold(settings.edgeLines ? settings.edgeThreshold : nil)
             .imageEdgeContrast(settings.edgeContrast ? settings.edgeContrastAmount : 0)
+            // Last, and orthogonal to every line above it: those choose how a
+            // picture becomes CHARACTERS, and this chooses whether it becomes
+            // characters at all.
+            .terminalGraphics(settings.terminalGraphics)
     }
 }

@@ -609,6 +609,11 @@ extension RenderLoop {
         if let cellAspect = (terminal as? Terminal)?.cellPixelAspect() {
             environment.imageCellAspect = cellAspect
         }
+        // …and the undivided version, which is what an image transmitted to
+        // the terminal's own graphics protocol is resampled to.
+        if let cellPixels = (terminal as? Terminal)?.cellPixelSize() {
+            environment.imageCellPixels = cellPixels
+        }
         // Determine header height. On the first frame, we perform a measurement
         // pass to discover the actual header height before outputting anything.
         // This prevents visible content jumping.
@@ -953,6 +958,14 @@ extension RenderLoop {
         )
 
         terminal.beginFrame()
+
+        // Images owed to the terminal, before any cell that names one. A
+        // placeholder pointing at an image the terminal has not been given yet
+        // draws nothing, and would go on drawing nothing until something
+        // happened to make that row dirty again. Inside `beginFrame` so it
+        // joins this frame's single write rather than issuing one of its own.
+        let graphics = tuiContext.terminalImageStore.takePending()
+        if !graphics.isEmpty { terminal.write(graphics) }
 
         if let appHeaderBuffer {
             writeAppHeaderBuffer(

@@ -628,6 +628,16 @@ extension AppRunner {
         if TerminalHost.isTmux {
             TerminalHost.removeTmuxClientChangeHooks()
         }
+        // Give the terminal back the images this app put in it, while there is
+        // still a terminal to write to. A transmitted image is retained under
+        // its id for as long as the TERMINAL runs, which outlives the app —
+        // quitting without this leaves a tab holding megabytes for a picture
+        // nobody can see. Written directly rather than queued: there is no
+        // further frame to drain it.
+        tuiContext.terminalImageStore.releaseAll()
+        let farewell = tuiContext.terminalImageStore.takePending()
+        if !farewell.isEmpty { terminal.write(farewell) }
+
         // See the twin in `suspendUntilContinued`.
         renderer.restoreTerminalStyling()
         terminal.disableRawMode()

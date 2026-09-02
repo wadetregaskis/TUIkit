@@ -16,7 +16,13 @@ extension TerminalClient {
     ///
     /// The counterpart of ``TerminalHost/startupIdentity`` for graphics, and
     /// deliberately not a host table. See ``TerminalGraphicsQuery``.
-    @MainActor private(set) static var detectedGraphics: Bool?
+    ///
+    /// Public because "never asked" and "asked, and told no" are different
+    /// facts about a terminal and a diagnostic has to be able to tell them
+    /// apart — ``graphicsSupported`` collapses both to `false`, which is right
+    /// for rendering and useless for reporting. Read-only: the way to change
+    /// the answer is ``graphicsSupport``.
+    @MainActor public private(set) static var detectedGraphics: Bool?
 
     /// Force the answer for the terminal in front of you, whatever was
     /// detected.

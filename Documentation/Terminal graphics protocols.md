@@ -260,9 +260,19 @@ With that fixed, each idea sorts cleanly:
    the placement query would be recorded as "supports Kitty" by any table
    somebody wrote from a feature list.
 2. **`Image` through Unicode placeholders**, behind that detection, with half
-   blocks as the fallback and the default. Handle §4.1's three hazards
-   explicitly and test each: the PUA exemption by codepoint, the span-diff
-   decline as a stated decision, the id-in-foreground as a pinned invariant.
+   blocks as the fallback. Handle §4.1's three hazards explicitly and test
+   each: the PUA exemption by codepoint, the span-diff decline as a stated
+   decision, the id-in-foreground as a pinned invariant.
+
+   > **Corrected while building it.** This item originally read "with half
+   > blocks as the fallback *and the default*". That was the wrong call, and
+   > the reason is the detection in item 1: a capability that is asked for and
+   > positively answered cannot be wrong about a host, so "on where detected"
+   > costs nothing it does not buy. Off by default would mean a feature nobody
+   > finds behind a modifier nobody knows to write. Shipped as
+   > `\.terminalGraphics`, defaulting `true`, ANDed with the handshake's
+   > answer — the same shape `\.terminalHyperlinks` already had, and the same
+   > reasoning.
 3. **Image lifetime** — delete by id when a view goes away; one owner, tested
    the way the render caches are.
 
@@ -294,10 +304,18 @@ had to be measured host by host and re-measured on every release.
 ## 7. What is not measured, and should be
 
 - **iTerm2's virtual placements.** iTerm2 answers `OK` to the Kitty protocol
-  query; whether it supports Unicode placeholders was not captured, because the
-  app stopped accepting new windows partway through the session. It is the
-  single most load-bearing gap here: it decides whether the recommendation
-  covers two hosts or three. `graphics_probe.py` answers it in one run.
+  query; whether it supports Unicode placeholders is still not captured. It is
+  the single most load-bearing gap here: it decides whether this covers two
+  hosts or three. Two attempts, two different walls — `open -a iTerm <file>`
+  does nothing (the app is running and answers neither it nor `open -a iTerm`
+  alone), and AppleScript reaches iTerm2's standard suite (`get version`
+  answers `3.6.11`) but is refused for anything touching its object model:
+  `create window with default profile` returns `-1743`, errAEEventNotPermitted,
+  which is iTerm2's own authorisation rather than the system's. `placement_probe.py`
+  answers it in one run from inside an iTerm2 window.
+
+  Being wrong about iTerm2 costs nothing while it stands: the handshake is
+  positive-evidence-only, so an unanswered iTerm2 draws glyphs.
 - **iTerm2's cursor behaviour after an image.** Its DSR went unanswered inside
   one second after both image payloads. The probe now waits four (`IMAGE_TIMEOUT`),
   but the number has not been re-taken. A terminal that takes measurable time to
@@ -318,14 +336,89 @@ had to be measured host by host and re-measured on every release.
 
 ---
 
-## 8. Reproducing all of it
+## 8. What shipped, and what it measured
+
+Built on the `kitty-graphics` branch, in the order §6 recommends. The
+measurements that decided each piece are in `Terminal-compatibility.md` under
+"The image placeholder advances ONE cell"; the raw records are
+`Tools/TerminalProbes/data/*-placement.json`.
+
+### 8.1 The hazards, and what each turned out to be
+
+| §4.1 hazard | Verdict | What was done |
+|---|---|---|
+| Plane-16 PUA compensation catches U+10EFFF | **real, and worse than stated** — the width table claimed 2 cells AND five host advance models claimed an under-advance | Exempted by codepoint through one predicate every Plane-16 test in the module now goes through. Measured: the placeholder advances **one column on all three hosts that answered**, the two that do not implement the protocol included. |
+| A placeholder row declines the cell-span diff | **real, and now deliberate** | The placeholder answers `false` to `isStandaloneClusterScalar`, so the decline does not depend on the encoder emitting diacritics. That in turn is why the **run-length elision is not used** despite working and saving a third of a row's bytes: a diffing writer writes runs after a cursor jump, and a cell that means "the one after the last one" is meaningless there. |
+| The id in the foreground colour could be netted away | **not real, and still safe** | SGR collapsing merges *adjacent* escapes and nets them by value, so the foreground survives; and the depth downgrade happens at `Color`→ANSI time, not as a pass over emitted strings, so a 256-colour terminal cannot quantise an id. Pinned by a test that reads the id back out of every row. |
+
+### 8.2 One thing the feature found that had nothing to do with it
+
+The Kitty row/column diacritics are combining marks from a dozen scripts, and a
+test that asserted "every mark is zero cells wide" failed on **214 of 297**.
+
+`isWidthNeutralExtraScalar` named five blocks — the Latin diacriticals, the
+selectors, the symbol marks — and Unicode has 354 ranges of them. Everything
+else measured **one cell**: Hebrew points, Arabic vowels, Cyrillic, Devanagari,
+Syriac, Thai, Tibetan, Ethiopic, Khmer, and the CJK tone and kana voicing marks
+that sit *inside* the East-Asian-Wide ranges and were scored **two**. A line
+carrying one measured wider than it painted, so every column after it landed
+short — the same defect the bidi controls had, found the same way and fixed in
+the same place. This is not an exotic script: it is any Hebrew or Arabic text
+with points.
+
+The fix is by Unicode general category (`Mn`/`Me` occupy no column, `Mc` does),
+through a generated range table rather than the property itself — see §8.3.
+
+### 8.3 The cost
+
+Asking `Unicode.Scalar.Properties.generalCategory` on the width path is a
+second standard-library lookup for every non-ASCII scalar the earlier fast paths
+do not take, which in a terminal UI is every arrow, bullet, ellipsis, braille
+cell and spinner frame. Measured with `Tools/Profiling/ab_bench.py`, 15 paired
+reps, order randomised:
+
+    scenario        old µs   new µs   change      95% CI      verdict
+    table            518.5    526.6    +2.0%  +0.2% +2.9%     slower
+    dashboard        171.2    174.9    +2.8%  +1.6% +3.4%     slower
+    customlayout     402.9    411.7    +2.6%  +1.4% +3.3%     slower
+    kitchensink      634.8    644.3    +1.0%  +0.3% +2.1%     slower
+
+Four scenarios outside the interval is a real regression, so the property was
+replaced by a binary search over `combiningMarkRanges` — **generated from that
+same property** by `Tools/GenerateCombiningMarks/generate.swift`, with a test
+that re-derives it over all 1,114,112 codepoints and fails if the two disagree.
+The table is an optimisation, so it is checked against the thing it optimises
+rather than trusted; a toolchain shipping a newer Unicode is caught rather than
+silently mis-measuring whatever script gained a mark.
+
+### 8.4 What an image costs
+
+| | Ghostty 1.3.1, 16×34-pixel cells |
+|---|---|
+| A full-screen image, 49×17 cells | 1.8 MB of base64, transmitted and acknowledged in **43 ms** |
+| A 12×4-cell image | 104 KB, **2 ms** |
+| One placeholder row, 12 cells | 111 bytes (67 elided, unused — §8.1) |
+
+One-time per image and per size, not per frame: the image is *retained* by the
+terminal under an id, and `TerminalImageStore` re-transmits only when the
+picture or the cell box changes. It also deletes by id when the view goes away,
+which is the one genuinely new resource TUIkit now owns — nothing in the
+terminal will free it otherwise.
+
+---
+
+## 9. Reproducing all of it
 
 ```sh
 cd Tools/TerminalProbes
-PROBE_OUT=/tmp/graphics.json python3 graphics_probe.py
+PROBE_OUT=/tmp/graphics.json  python3 graphics_probe.py
+PROBE_OUT=/tmp/placement.json python3 placement_probe.py
 ```
 
-Run it inside each terminal you have. It records what the host advertises, what
-its cursor does with each of the three payloads, and prints the card that asks
-the question no escape sequence can. Records belong in
-`Tools/TerminalProbes/data/<terminal>-<version>-graphics.json`.
+Run both inside each terminal you have. The first records what the host
+advertises and what its cursor does with each of the three payloads; the second
+asks the question this design rests on — whether a placed image behaves like
+cells — and measures the advance, the elision, both id encodings, delete-by-id,
+and what a full-screen transmit costs. Each prints the card that asks the
+question no escape sequence can. Records belong in
+`Tools/TerminalProbes/data/<terminal>-<version>-{graphics,placement}.json`.

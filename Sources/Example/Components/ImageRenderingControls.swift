@@ -130,6 +130,16 @@ struct ImageRenderingControls: View {
             Toggle("component.imageControls.shapeAware", isOn: $settings.shapeAware)
                 .disabled(!ImageDemoHelpers.usesShape(settings.charset))
 
+            // Above every glyph knob in importance and below them on the page,
+            // because it is the one switch that decides whether any of them
+            // apply: on a terminal with a graphics protocol the picture is
+            // drawn in real pixels and the charset choice does nothing. Left
+            // enabled on terminals without one — it costs a keystroke to find
+            // out that nothing changed, and disabling it would need the answer
+            // published into the environment for a control that would then
+            // still be there, greyed, saying the same thing.
+            Toggle("component.imageControls.terminalGraphics", isOn: $settings.terminalGraphics)
+
             // Edge tracing sits BESIDE shape-awareness rather than under it.
             // The two are orthogonal: one asks where the picture has an edge,
             // the other how a cell's ink is chosen, and either can be had

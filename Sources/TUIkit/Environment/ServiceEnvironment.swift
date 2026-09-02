@@ -96,6 +96,13 @@ private struct DragAndDropSessionKey: EnvironmentKey {
     static let defaultValue: DragAndDropSession? = nil
 }
 
+// MARK: - Terminal image store
+
+/// EnvironmentKey for the images this app has put in the terminal.
+private struct TerminalImageStoreKey: EnvironmentKey {
+    static let defaultValue: TerminalImageStore? = nil
+}
+
 // MARK: - Active Focus Section
 
 /// EnvironmentKey for the focus section that child views should register in.
@@ -142,6 +149,16 @@ extension EnvironmentValues {
     var mouseEventDispatcher: MouseEventDispatcher? {
         get { self[MouseEventDispatcherKey.self] }
         set { self[MouseEventDispatcherKey.self] = newValue }
+    }
+
+    /// The images this app has transmitted to the terminal, or `nil` where
+    /// there is no terminal to transmit to — a headless ``ViewRenderer``, a
+    /// snapshot test. `nil` is not a degraded mode: an ``Image`` with nowhere
+    /// to send pixels draws itself out of glyphs, which is what it has always
+    /// done.
+    var terminalImageStore: TerminalImageStore? {
+        get { self[TerminalImageStoreKey.self] }
+        set { self[TerminalImageStoreKey.self] = newValue }
     }
 
     /// The app-wide drag-and-drop session, or `nil` outside a live app.
@@ -225,6 +242,7 @@ extension EnvironmentValues {
         synthesizeKeyEvent = context.synthesizeKeyEvent
         mouseEventDispatcher = context.mouseEventDispatcher
         dragAndDropSession = context.dragAndDropSession
+        terminalImageStore = context.terminalImageStore
         renderCache = context.renderCache
         preferenceStorage = context.preferences
         localizationService = LocalizationService.shared

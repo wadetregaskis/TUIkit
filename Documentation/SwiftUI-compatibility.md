@@ -278,9 +278,25 @@ Image(systemName: "star.fill")          Image(systemName: "star.fill")          
 Button("Save", systemImage: "tray") { } Button("Save", systemImage: "tray") { }   // and on the controls
 ```
 
-**Bitmap / vector `Image` stays out.** A cell grid can't blit a bitmap or render
-a vector glyph, so TUIkit converts a raster source to ASCII/ANSI art with its own
-controls (`.imageCharacterSet`, `.imageColorMode`, `.imageDithering`).
+**A raster `Image` renders as text everywhere, and as REAL PIXELS where the
+terminal has a graphics protocol.** The glyph renderer is the universal path and
+the one this section used to describe as the only one: a raster source converted
+to ASCII/ANSI art with its own controls (`.imageCharacterSet`, `.imageColorMode`,
+`.imageDithering`). On a terminal that answers TUIkit's startup handshake — it
+will place an image in its **cell grid**, through the Kitty protocol's Unicode
+placeholders — the same `Image` draws the actual picture instead, at roughly
+fifty times the pixels and in full colour, with no palette quantisation and no
+contrast floor. Nothing else changes: the picture occupies the same cells, in the
+same place, measured by the same function, so a layout does not move when the
+renderer does. Detection is a handshake rather than a host table, and `false` is
+the default before one answers, so an unmeasured terminal draws glyphs. TUI-specific
+`.terminalGraphics(false)` keeps the glyphs on a terminal that could draw a
+photograph, which an app built around a ramp genuinely wants — see
+`Documentation/Terminal graphics protocols.md`.
+
+A cell grid still cannot blit a bitmap *itself*, which is why this is a protocol
+and not a drawing API: TUIkit hands the terminal an image and a rectangle of
+cells, and the terminal draws. Vector glyphs are unchanged — see below.
 
 **`Image(systemName:)` now ships**, reversing what this section used to say. The
 old reasoning — an SF Symbol is a character rather than a resizable image, so it
@@ -641,6 +657,7 @@ SwiftUI API (the CLAUDE.md rule).
 | `.textCursor(_:animation:speed:)` | text-field cursor shape/blink |
 | `.dimmed()`, `Text.dim()/.blink()/.inverted()` | ANSI display attributes |
 | Image: `.imageCharacterSet`/`.imageColorMode`/`.imageDithering`/… | raster→ASCII conversion controls |
+| `.terminalGraphics(_:)`, `.imageCellPixels(_:)` | whether an `Image` draws with the terminal's OWN graphics protocol (real pixels) rather than glyphs, and what cell size it is resampled to. SwiftUI has no counterpart because it has no fallback renderer to prefer over: here the glyph rendering is a look as well as a fallback, so an app built around `.blocks(_:)` or a `.customRamp` needs a way to keep it on exactly the terminals that could draw a photograph. Availability is a startup handshake, not this modifier — see §2.4 |
 | `Card`, `Panel`, `RadioButton`/`RadioButtonGroup`, `Spinner`, `TrackStyle`, `IndeterminateStyle` | terminal-idiomatic containers/controls/styles |
 | `MenuStyle.inline` (+ `.menuStyle(_:)`) | a `Menu` rendered expanded in place under its label, rather than collapsed behind it. SwiftUI has no inline menu style; a terminal app's landing screen often *is* a menu, and making the user open the only thing on the page would be perverse. The rows are the same `Button`s either way, and each prints its `keyboardShortcut` at its trailing edge (`^S` for Control, `M-s` for Option — not ⌃⌥, whose width is ambiguous). A menu taller than its space scrolls inside its border, with the focus reveal following the arrows. |
 | `TrackStyle.custom(TrackConfiguration)` | fully-configurable progress/slider/gauge fill (glyphs, sub-cell ramp, solid-background unfilled, gradient); the named styles are presets of it |

@@ -44,6 +44,16 @@ struct ImageDemoSettings: Equatable {
     /// than mapped from cell luminance.
     var shapeAware = false
 
+    /// Whether the image is drawn with the terminal's OWN graphics protocol —
+    /// real pixels — where the terminal has one.
+    ///
+    /// On by default, matching the framework: every knob above it is then
+    /// inert, which is the point of having the switch on this page. Turning it
+    /// off is how you compare the two renderings of the same picture on a
+    /// terminal that can do both, and on every terminal that cannot it changes
+    /// nothing at all.
+    var terminalGraphics = true
+
     /// Whether shape-aware cells may draw directional line glyphs at edges.
     var edgeLines = false
 

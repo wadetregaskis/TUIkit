@@ -51,6 +51,7 @@ extension RenderContext {
         // entire class of mouse tests vacuous until we noticed.
         env.mouseEventDispatcher = tuiContext.mouseEventDispatcher
         env.renderCache = tuiContext.renderCache
+        env.terminalImageStore = tuiContext.terminalImageStore
         env.preferenceStorage = tuiContext.preferences
         self.init(
             availableWidth: availableWidth,

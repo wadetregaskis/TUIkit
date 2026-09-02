@@ -269,6 +269,14 @@ final class TUIContext: @unchecked Sendable {
     /// Mouse event handler registration and hit-test dispatch.
     let mouseEventDispatcher: MouseEventDispatcher
 
+    /// The images this app has transmitted to the terminal, and the only
+    /// thing that deletes one.
+    ///
+    /// A plain stored property with no init parameter, unlike its neighbours:
+    /// nothing needs to substitute one, and an image store shared between two
+    /// contexts would delete one context's images out from under the other.
+    let terminalImageStore = TerminalImageStore()
+
     /// App-wide drag-and-drop state (active drag + per-frame drop targets).
     let dragAndDropSession: DragAndDropSession
 

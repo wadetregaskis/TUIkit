@@ -115,6 +115,15 @@ extension ViewRenderer {
             environment: environment
         )
         let buffer = renderToBuffer(view, context: renderContext)
+        // Any image the view drew has to reach the terminal before the cells
+        // that name it — the same ordering the run loop keeps at `beginFrame`,
+        // and for the same reason: a placeholder pointing at an image the
+        // terminal has not been given draws nothing at all. This context is
+        // discarded afterwards, so the images it transmitted are never deleted;
+        // a one-off render is a one-off, and there is no lifecycle here to hang
+        // a release on.
+        let graphics = context.terminalImageStore.takePending()
+        if !graphics.isEmpty { terminal.write(graphics) }
         flush(buffer, atRow: row, column: column)
     }
 }

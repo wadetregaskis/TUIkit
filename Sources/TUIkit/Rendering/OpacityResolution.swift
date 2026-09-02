@@ -117,6 +117,20 @@ extension FrameBuffer {
         {
             let covering = translucent.filter { $0.spans(row: row) }
             guard !covering.isEmpty else { return nil }
+            // A row drawing an image is left alone. Its FOREGROUND is not a
+            // colour, it is the image's id (see
+            // ``TUIkitCore/KittyGraphics``), and blending it toward a surface
+            // produces a number naming no image — so a faded picture would not
+            // dim, it would vanish. Left unblended it stays at full strength
+            // inside a fade, which is wrong in a way anyone can see and
+            // describe, rather than wrong in a way that looks like the image
+            // failed to load.
+            //
+            // Fading a real picture is possible — the alpha would go into the
+            // pixels before they are transmitted — but that is the store's
+            // business and it cannot be done from here, where all that is left
+            // of the image is cells.
+            guard !line.unicodeScalars.contains(.terminalImagePlaceholder) else { return nil }
             let first = covering.map(\.offsetX).min() ?? 0
             let last = covering.map { $0.offsetX + $0.width }.max() ?? 0
             let start = max(0, first)

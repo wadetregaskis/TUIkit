@@ -9,6 +9,14 @@ width 0 with combining class 0 and matches none of its draw branches. A row
 carrying ⚙️ ⚠️ ✂️ therefore looks truncated in a pyte dump whatever the app
 sent, which has cost real time — twice — chasing a bug the harness invented.
 
+**pyte has no APC parser either**, and that one is louder: given the Kitty
+graphics protocol's `ESC _ G …; <base64> ESC \\`, it prints the payload into the
+screen — so an image page dumped through `tui_walk.py` shows kilobytes of
+base64 across the top and bottom rows and the placement command as text. That
+is the harness, not the app: every real terminal either consumes the sequence
+or (Apple Terminal) is never sent one. The rows BETWEEN are still trustworthy,
+which is how the placeholder cells' alignment was checked.
+
 This probe decodes nothing. It records the child's bytes verbatim and counts
 patterns in them, which is what the questions below actually need:
 
