@@ -325,9 +325,59 @@ Two places owe the terminal a reset, and both are the coupling:
 which is the honest shape of this win: it is worth having exactly where the span
 path is doing the work.
 
+## Carrying state across PASSES
+
+The section above stops at the pass boundary, and named the reason: two places
+owe the terminal a reset, one of them "at the end of the pass". That second one
+turned out to be a statement about the erase loop and nothing else — and the
+erase loop runs only when the previous frame had more rows than this one, which
+is almost never.
+
+So the closing reset moved inside that `if`, and `FrameDiffWriter.terminalStyle`
+carries what the pass left in force to the next one. Nothing happens between
+them: the loop writes app header, content and status bar inside one
+`beginFrame`/`endFrame`, flushes once, and then waits for input. The boundary is
+a cursor move, and a cursor move is not styling — the same argument as within a
+row and between rows, taken one step further.
+
+What it removes is the most stereotyped pair in the stream. Measured on a slider
+drag before the change: of 608 SGR escapes, 228 were a bare `ESC[0m` and 213
+more were `0;`-prefixed restatements — a state the terminal had been in a
+moment earlier, torn down and rebuilt across a cursor move.
+
+    ESC[29;95H '1' ESC[0m   ESC[29;4H ESC[0;38;5;40;48;5;16m '▉'
+
+Paired captures of the same 1,020-step drag, release build, a fresh config
+directory each run so a persisted toggle cannot leak between them:
+
+| track | before | after | |
+|---|---|---|---|
+| plain | 65,438 | **41,195** | −37.0% |
+| gradient, spanning the track | 72,087 | **55,323** | −23.3% |
+| gradient, scaled to the fill | 166,639 | **150,079** | −9.9% |
+
+The relative win is largest where the per-frame content is smallest, which is
+the honest shape of it: the pair was a fixed cost per pass, so it dominated a
+frame that changed two cells and disappeared into one that changed eighty. A
+first paint barely moves (−0.3% to −5.1%) — those are whole-line writes, which
+state their own styling. CPU is unchanged either way.
+
+**What the carry costs is a promise that had been kept by accident.** The
+terminal used to be handed back unstyled at the end of every frame, so nothing
+had to think about the app giving it away. It can now end a frame styled, and
+leaving the alternate screen does NOT restore SGR — so
+`RenderLoop.restoreTerminalStyling()` says it explicitly, at both places the app
+hands the terminal over: the shell on the way out, and a job-control suspend.
+
+Two writers can invalidate the belief because they emit bytes this one did not
+plan: `repaintRightEdge` (Terminal.app's phantom-cell workaround, which replays
+a row's own SGR context) and `ViewRenderer.flush` (a one-off render outside the
+run loop). Both set it to `nil`, which is the honest "not known" the pass used
+to start from every time.
+
 ## What is left
 
 - **The remaining bytes.** The frame still spends most of itself on styling
-  (58% after this pass, down from 69%), and the next lever is genuinely the
-  renderer: a cell grid rather than `lines: [String]`, which is the API break
-  described above.
+  (49% after this pass, down from 58% and 69% before that), and the next lever
+  is genuinely the renderer: a cell grid rather than `lines: [String]`, which is
+  the API break described above.

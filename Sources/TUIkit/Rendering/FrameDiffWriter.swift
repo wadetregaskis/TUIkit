@@ -208,6 +208,25 @@ final class FrameDiffWriter {
         }
     }
 
+    /// The styling the terminal is in, as far as this writer knows — `nil`
+    /// when something it cannot model has written since.
+    ///
+    /// A pass used to hand the terminal back unstyled and the next one had to
+    /// state every parameter afresh from a reset, so the boundary between two
+    /// frames cost an `ESC[0m` plus a full `ESC[0;…m` restatement of a state
+    /// the terminal was already in a moment earlier. Nothing happens between
+    /// them: the loop writes a whole frame inside one `beginFrame`/`endFrame`
+    /// and then waits for input. Carrying the state over is the same argument
+    /// that already lets one row continue from the last — the boundary is a
+    /// cursor move, and a cursor move is not styling.
+    ///
+    /// The promise this replaces is real and is kept elsewhere: the terminal is
+    /// handed back unstyled when the app gives it back, via
+    /// ``restoreDefaultStyling(on:)``. Leaving the alternate screen does not
+    /// restore SGR, so that call is not merely a replacement — nothing was
+    /// doing it before except the incidental reset at the end of every frame.
+    private var terminalStyle: SGRState?
+
     private var contentCells = CellCache()
     private var statusBarCells = CellCache()
     private var appHeaderCells = CellCache()
@@ -729,6 +748,32 @@ extension FrameDiffWriter {
         contentCells = CellCache()
         statusBarCells = CellCache()
         appHeaderCells = CellCache()
+        // The cached frames are gone, so the next pass writes whole lines —
+        // which state their own styling — but the belief is dropped anyway:
+        // an invalidation is exactly the moment something outside this writer
+        // may have happened to the screen.
+        terminalStyle = nil
+    }
+
+    /// Hands the terminal back unstyled, and forgets what it was.
+    ///
+    /// Call before giving the terminal to anything else — the shell on the way
+    /// out, a job-control suspend — because ``terminalStyle`` lets a frame end
+    /// with styling still in force. Leaving the alternate screen does NOT
+    /// restore SGR, so without this a suspended or exited app could tint the
+    /// shell it hands control back to.
+    func restoreDefaultStyling(on terminal: any TerminalProtocol) {
+        if terminalStyle?.isDefault != true { terminal.write("\u{1B}[0m") }
+        terminalStyle = SGRState()
+    }
+
+    /// Forgets what the terminal is wearing, because something that is not this
+    /// writer has written to it.
+    ///
+    /// The one caller is ``ViewRenderer``, which flushes styled lines straight
+    /// to the terminal for a one-off render outside the run loop.
+    func forgetTerminalStyling() {
+        terminalStyle = nil
     }
 
     /// Computes which row indices have changed between two frames.
@@ -773,9 +818,11 @@ extension FrameDiffWriter {
         // appeared 1,898 times in one capture: a row's worth of styling stated
         // afresh, per row, to say what a handful of parameters would.
         //
-        // `nil` means "not known", which is the honest state at the start: what
-        // the caller left in force before this pass is not ours to assume.
-        var emitted: SGRState?
+        // Seeded from what the LAST pass left in force — see ``terminalStyle``.
+        // `nil` there means "not known", which is the honest state before this
+        // writer has written anything, or after something else has.
+        var emitted = terminalStyle
+        defer { terminalStyle = emitted }
         for row in changedRows {
             switch spanDiff(
                 newLines: newLines, previousLines: previousLines, row: row,
@@ -803,17 +850,22 @@ extension FrameDiffWriter {
                 emitted = SGRState()  // every built row ends with a reset
             }
         }
-        // Hand the terminal back the way every row used to: unstyled. The erase
-        // below depends on it — `ESC[2K` clears with the background in force,
-        // and this pass's last row must not choose the colour of a row it is
-        // not painting.
-        if emitted?.isDefault == false { terminal.write("\u{1B}[0m") }
-
         // Clear excess old lines when the previous frame had more rows.
         // Each output line already contains ESC[2K (from buildOutputLines),
         // but these extra rows have no corresponding new line, so we erase
         // them explicitly with the terminal's default background.
+        //
+        // THIS is what the pass's closing reset was for, and it is the only
+        // thing that was: `ESC[2K` clears with the background in force, so a
+        // row this pass is not painting must not inherit the colour of one it
+        // is. Reset here rather than unconditionally at the end — a pass that
+        // erases nothing hands its styling to the next one, which is the whole
+        // saving (see ``terminalStyle``).
         if previousLines.count > newLines.count {
+            if emitted?.isDefault == false {
+                terminal.write("\u{1B}[0m")
+                emitted = SGRState()
+            }
             let eraseEntireLine = "\u{1B}[2K"
             for row in newLines.count..<previousLines.count {
                 terminal.moveCursor(toRow: startRow + row, column: 1)
@@ -915,6 +967,10 @@ extension FrameDiffWriter {
                 terminal.moveCursor(toRow: startRow + row, column: repaintCol)
                 terminal.write(suffix)
             }
+            // Sequences this writer did not model: the row's own SGR context,
+            // replayed. What the terminal is wearing afterwards is no longer
+            // something ``terminalStyle`` can claim to know.
+            terminalStyle = nil
         }
     }
 }

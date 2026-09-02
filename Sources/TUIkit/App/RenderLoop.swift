@@ -702,6 +702,16 @@ extension RenderLoop {
     /// Invalidates the diff cache, forcing a full repaint on the next render.
     ///
     /// Call this when the terminal is resized (SIGWINCH).
+    /// Hands the terminal back unstyled, before the app gives it to anything
+    /// else — the shell on the way out, a job-control suspend.
+    ///
+    /// A frame may now END with styling still in force (see
+    /// ``FrameDiffWriter/terminalStyle``), and leaving the alternate screen
+    /// does not restore SGR, so this has to be said rather than assumed.
+    func restoreTerminalStyling() {
+        diffWriter.restoreDefaultStyling(on: terminal)
+    }
+
     func invalidateDiffCache() {
         diffWriter.invalidate()
         // A SIGWINCH is also our signal that the tmux CLIENT may have changed —

@@ -387,7 +387,7 @@ extension AppRunner {
         cursorTimer.stop()
 
         // Cleanup
-        cleanup()
+        cleanup(renderer: renderer)
     }
 }
 
@@ -523,6 +523,9 @@ extension AppRunner {
     /// diff-cache invalidation — restores whatever mode the scene wants.
     fileprivate func suspendUntilContinued(renderer: RenderLoop<A>) {
         terminal.applyMouseSupport(.disabled)
+        // Before the screen goes back: a frame may have ended with styling in
+        // force, and leaving the alternate screen does not restore SGR.
+        renderer.restoreTerminalStyling()
         terminal.disableRawMode()
         terminal.showCursor()
         terminal.exitAlternateScreen()
@@ -605,7 +608,7 @@ extension AppRunner {
         }
     }
 
-    fileprivate func cleanup() {
+    fileprivate func cleanup(renderer: RenderLoop<A>) {
         // Before the terminal teardown: this forks tmux, and doing it while our
         // pane is still alive is the tidy window. A crash skips this — then the
         // hooks' own `||` arm removes them on their next firing instead (see
@@ -613,6 +616,8 @@ extension AppRunner {
         if TerminalHost.isTmux {
             TerminalHost.removeTmuxClientChangeHooks()
         }
+        // See the twin in `suspendUntilContinued`.
+        renderer.restoreTerminalStyling()
         terminal.disableRawMode()
         terminal.showCursor()
         terminal.exitAlternateScreen()

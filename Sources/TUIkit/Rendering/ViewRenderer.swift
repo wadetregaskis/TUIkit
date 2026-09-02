@@ -129,6 +129,10 @@ extension ViewRenderer {
             // Each line is cursor-addressed, so nothing follows this one on its
             // row and the model's end-of-string rule takes its whole-row answer.
             terminal.write(writer.compensatingCursorAdvance(line))
+            // Styled bytes this writer did not plan, so its belief about what
+            // the terminal is wearing no longer holds — see
+            // ``FrameDiffWriter/terminalStyle``.
+            writer.forgetTerminalStyling()
         }
     }
 }
