@@ -145,20 +145,21 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// > the aspect for it — the shape ``TrackConfiguration`` takes for the
     /// > same problem — and is not implemented.
     ///
-    /// > Important: a character the terminal is entitled to MOVE cannot be a
-    /// > pixel. A ramp of right-to-left letters (Hebrew, Arabic) draws a
-    /// > corrupt picture on Apple Terminal — reported, and consistent with the
-    /// > host reordering each run of them within the columns it occupies, which
-    /// > in a picture swaps the ink with the blanks beside it and mirrors the
-    /// > row in patches. In text that reordering is arguably correct and merely
-    /// > looks odd; here every character is a pixel and moving one is
-    /// > corruption with nothing gained.
-    /// >
-    /// > Whether a mark or an isolate around each cell suppresses it is
-    /// > measured by `Tools/TerminalProbes/rtl_image_card.py` and is an open
-    /// > question in `Documentation/Terminal-compatibility.md` — the obvious
-    /// > candidate, U+202D … U+202C, is already ruled out: Apple Terminal
-    /// > paints those two as the missing-glyph box.
+    /// A ramp of RIGHT-TO-LEFT letters (Hebrew, Arabic) works, and does so by
+    /// following each of them with U+200E LEFT-TO-RIGHT MARK as it is written.
+    /// Without that a host applying the bidirectional algorithm draws the
+    /// picture MIRRORED — measured on Apple Terminal, where a gradient's flat
+    /// end comes out at the wrong side of every row. In text that reordering is
+    /// arguably right and merely looks odd; here every character is a pixel, so
+    /// moving one is corruption with nothing gained.
+    ///
+    /// The mark ends each RTL run at one character, and a run of one cannot be
+    /// reversed. It is zero width — nothing downstream counts it and the same
+    /// host paints nothing for it, both measured — so the picture keeps its
+    /// columns. It costs three bytes per RTL cell and nothing at all for a ramp
+    /// without any, and it makes the row one the intra-line span diff declines
+    /// (a zero-width scalar belongs to no column), so such rows are rewritten
+    /// whole. `Tools/TerminalProbes/rtl_image_card.py` is the measurement.
     case customRamp(String)
 
     /// The full ASCII repertoire (`.ascii(glyphs: nil)`).
@@ -657,6 +658,23 @@ extension ASCIIConverter {
         mode: ASCIIColorMode
     ) -> [String] {
         let ramp = characterRamp
+        // A ramp of right-to-left letters draws a MIRRORED picture on a host
+        // that applies the bidirectional algorithm — measured on Apple
+        // Terminal, where the flat end of a gradient comes out at the wrong
+        // side of every row. Reordering a run of letters is arguably right in
+        // TEXT and merely looks odd; here every character is a pixel and moving
+        // one is corruption with nothing gained.
+        //
+        // A left-to-right mark after each such glyph ends its run at one
+        // character, and a run of one cannot be reversed. Zero width, so
+        // nothing downstream counts it (`String+TerminalWidth` treats LRM, RLM
+        // and ALM as no advance) and the same host paints nothing for it —
+        // measured, with the alignment column unmoved.
+        //
+        // Asked of the RAMP once so an ASCII one pays a single `contains`, and
+        // of each glyph as it is written because an edge-traced cell draws a
+        // line glyph from a different vocabulary.
+        let isolatesBidi = ramp.contains(where: \.isStrongRightToLeft)
         // Edge tracing is independent of shape matching: it asks where the
         // PICTURE has a strong gradient, which the luminance renderer can
         // answer as well as the shape one — from the cells around each cell
@@ -710,6 +728,9 @@ extension ASCIIConverter {
                     lastColor = colorCode
                 }
                 line.append(char)
+                if isolatesBidi, char.isStrongRightToLeft {
+                    line.unicodeScalars.append(leftToRightMark)
+                }
             }
 
             if !lastColor.isEmpty {

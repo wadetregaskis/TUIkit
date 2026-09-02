@@ -2524,48 +2524,58 @@ one cell each until 2026-09-01. A line carrying one, as text pasted from a
 bidirectional document does, measured a cell wider than it drew. They are
 zero-width now (`BidiControlWidthTests`).
 
-### RTL characters as image PIXELS — OPEN, probe written 2026-09-01
+### RTL characters as image PIXELS — measured 2026-09-01, and fixed
 
-A `TUIkitImage` `.customRamp` containing Hebrew letters draws a corrupt picture
-on Apple Terminal (reported; not yet measured against the other three). The
-stakes differ from text: reordering a run of letters is arguably the right
-thing and merely looks odd, but in a picture every character is a pixel, so
-moving one is corruption with nothing gained — and the run's *neutrals* go with
-it, which is why a row mirrors in patches rather than in place.
+**Apple Terminal mirrors a picture made of right-to-left glyphs.** A
+`TUIkitImage` `.customRamp` of Hebrew letters draws a gradient whose flat end
+comes out at the wrong side of every row. The stakes differ from text:
+reordering a run of letters is arguably the right thing there and merely looks
+odd, but in a picture every character is a pixel, so moving one is corruption
+with nothing gained — and the run drags its neutrals along, which is why a row
+mirrors rather than shuffles.
+
+Measured with `Tools/TerminalProbes/rtl_image_card.py`, which draws a gradient
+whose flat run of one repeated glyph grows along the LEFT edge row by row, so
+the reading needs no Hebrew — reversal moves that block to the right, against an
+ASCII control drawing the same picture:
+
+| Block | Apple Terminal |
+|---|---|
+| `control` (ASCII ramp) | flat run on the left — this is the picture |
+| `hebrew` | flat run on the **right** — mirrored |
+| `coloured` (an SGR per cell) | mirrored, identically — the colour changes make no difference |
+| `lrm` (U+200E after each cell) | flat run back on the **left**, and every `X` still in one column |
+| `positioned` (`ESC[nG` per cell) | mirrored, identical to `hebrew` |
+
+Three things fall out of that table:
+
+- **U+200E is the fix**, and it is free of charge: the alignment column does not
+  move, so this host paints nothing for the mark and counts no cell for it —
+  unlike U+202D/U+202C, which it paints as the missing-glyph box (above).
+- **The host reorders what it has STORED, not what it is handed.** Cursor-
+  addressing every cell changes nothing, so `FrameDiffWriter`'s existing
+  span machinery could never have been the answer.
+- **It is not the finished line's SGR structure**, since interleaving a colour
+  change per cell leaves the result identical.
+
+`ASCIIConverter.convertCharacterBased` now writes a mark after each strong-RTL
+glyph, which ends every such run at one character — and a run of one cannot be
+reversed. Three bytes per RTL cell, nothing at all for a ramp without any. The
+one cost worth recording: a zero-width scalar belongs to no column, so the
+intra-line span diff declines those rows and they are rewritten whole.
 
 **The first version of the probe measured nothing, and why is the useful part.**
 It drew a staircase out of ONE repeated Hebrew letter and blanks. A run of
 identical characters looks exactly the same reversed, and the blanks are
 neutrals which at end-of-line take the paragraph's own direction and do not
-move — so a host doing precisely what is suspected would have drawn that card
-correctly, and Apple Terminal did. A real image render never looks like that: a
-ramp maps each luminance to a DIFFERENT glyph, so a row is a run of distinct
-letters, and reversing those scrambles the picture. **A card about ordering has
-to be made of things that can be told apart.**
+move — so a host doing precisely what is suspected drew that card correctly, and
+Apple Terminal did. A real render never looks like that: a ramp maps each
+luminance to a DIFFERENT glyph. **A card about ordering has to be made of things
+that can be told apart.**
 
-`Tools/TerminalProbes/rtl_image_card.py` now draws a gradient from a ten-letter
-ramp, with a FLAT RUN of one repeated glyph growing along the left edge row by
-row. Reversal leaves each block of identical letters looking as it was and puts
-the blocks in the opposite order, so the flat end moves to the right — legible
-without reading a word of Hebrew, against an ASCII control that shows which side
-is correct on that host. Five blocks:
-
-| Block | What it costs | What it would prove |
-|---|---|---|
-| `control` | — | what correct looks like here (an ASCII ramp, same picture) |
-| `hebrew` | nothing | the baseline — does this host reorder a picture at all? |
-| `coloured` | — | the same with an SGR change per cell, as a render emits: if it differs from `hebrew`, it is not the finished line being reordered |
-| `lrm` | 3 bytes per cell | U+200E after each RTL cell ends the run at one character, and a run of one cannot be reversed |
-| `positioned` | one `ESC[nG` per cell, no added characters | whether a host reorders what it is HANDED or what it has STORED — `FrameDiffWriter` already writes partial rows this way |
-
-There is deliberately no column ruler. Digits would move under the algorithm's
-own rule for numbers after an RTL letter even on a host doing everything right,
-so a ruler would report every compliant terminal as broken; what is wanted is
-narrower and harder — whether the picture comes out mirrored.
-
-U+2068 … U+2069 is dropped from the card as well: it is a stronger statement of
-what `lrm` already asks, and the override (U+202D … U+202C) is ruled out
-outright — Apple Terminal paints those two, measured above.
+Not yet asked of iTerm2, Ghostty or Warp. Any host implementing the algorithm
+should mirror it the same way and take the same fix, so the mark is emitted
+unconditionally rather than behind a quirk.
 
 That leaves **a known divergence on Apple Terminal in the other direction**: it
 paints U+202D and U+202C as a box that occupies a cell TUIkit no longer counts.

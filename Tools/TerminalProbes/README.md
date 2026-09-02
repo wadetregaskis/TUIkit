@@ -43,8 +43,10 @@ when unset), the visual/aspect probes print to the terminal.
   **Its first version measured nothing** — it drew the staircase from ONE
   repeated letter, and a run of identical characters looks the same reversed —
   which is the lesson: a card about ordering has to be made of things that can
-  be told apart. OPEN — see Terminal-compatibility.md's "RTL characters as
-  image PIXELS".
+  be told apart. MEASURED on Apple Terminal 2026-09-01: `hebrew`, `coloured`
+  and `positioned` all mirrored, `lrm` correct with the alignment column
+  unmoved. TUIkit emits the mark now; see Terminal-compatibility.md's "RTL
+  characters as image PIXELS".
 - `visual_card.py` — static `|<c>|<c>|<c>|X` alignment card with a column
   ruler, for screenshot inspection of PAINTED width (which DSR can't see),
   merged-vs-split clusters, seams, and swatches. It answers exactly ONE of a
