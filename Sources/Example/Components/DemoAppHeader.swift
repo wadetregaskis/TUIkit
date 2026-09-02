@@ -50,15 +50,38 @@ struct DemoAppHeader: View {
         self.init(titleKey.localized)
     }
 
-    /// Creates a header shown as written.
+    /// Creates a header shown as written, with a subtitle.
+    ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overloads above — see
+    /// ``LocalizedStringKey``. Two independent lines of prose, so two type
+    /// parameters: a caller may well have computed one and sliced the other.
     ///
     /// - Parameters:
     ///   - title: The page title.
-    ///   - subtitle: The line beneath it, if any.
+    ///   - subtitle: The line beneath it.
     @_disfavoredOverload
-    init(_ title: String, subtitle: String? = nil) {
-        self.title = title
-        self.subtitle = subtitle
+    init<S1: StringProtocol, S2: StringProtocol>(_ title: S1, subtitle: S2) {
+        self.title = String(title)
+        self.subtitle = String(subtitle)
+    }
+
+    /// Creates a header shown as written, with no subtitle.
+    ///
+    /// The absent subtitle is an arity here rather than the `subtitle:
+    /// String? = nil` this used to be, because a generic parameter can carry
+    /// neither a default nor a `nil`: there is nothing for Swift to infer `S2`
+    /// from in either case. So it moves out into its own overload, the same way
+    /// `QuitShortcut`'s defaulted label does. Nothing is lost — the key side
+    /// already spells the two cases as two initializers, for its own reason
+    /// (`nil` has no key to look up), so this only makes the disfavoured side
+    /// mirror it.
+    ///
+    /// - Parameter title: The page title.
+    @_disfavoredOverload
+    init<S: StringProtocol>(_ title: S) {
+        self.title = String(title)
+        self.subtitle = nil
     }
 
     var body: some View {

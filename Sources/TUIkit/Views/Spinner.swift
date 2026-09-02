@@ -285,8 +285,8 @@ public struct Spinner: View {
     ///
     /// A string **literal** binds here, so it is a lookup key — see
     /// ``LocalizedStringKey``. The label is not optional in this overload:
-    /// `Spinner()` has no label to look up, and would otherwise be ambiguous
-    /// between the two.
+    /// `Spinner()` and `Spinner(nil)` have no label to look up, and defaulting
+    /// it here would make them ambiguous.
     ///
     /// - Parameters:
     ///   - labelKey: The key for text displayed after the spinner indicator.
@@ -300,10 +300,46 @@ public struct Spinner: View {
         self.init(labelKey.localized, style: style, color: color)
     }
 
-    /// Creates a spinner with an optional label, displayed as written.
+    /// Creates a spinner labelled as written.
+    ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``. It is also SwiftUI's own spelling, so a
+    /// `Substring` no longer has to be copied at the call site.
+    ///
+    /// Non-optional, because a generic parameter cannot be inferred from `nil`.
+    /// The optional label — and with it `Spinner()`'s default — therefore stays
+    /// on the concrete overload below.
     ///
     /// - Parameters:
     ///   - label: Text displayed after the spinner indicator.
+    ///   - style: The animation style (default: `.dots`).
+    ///   - color: The spinner color (default: theme accent).
+    @_disfavoredOverload
+    public init<S: StringProtocol>(
+        _ label: S,
+        style: SpinnerStyle = .dots,
+        color: Color? = nil
+    ) {
+        self.label = String(label)
+        self.style = style
+        self.color = color
+    }
+
+    /// Creates a spinner with an optional label, displayed as written.
+    ///
+    /// Stays concrete, and keeps the default, because the generic overload
+    /// above can express neither: a generic parameter cannot be inferred from
+    /// `nil`, and cannot carry a default argument at all. So this is the
+    /// overload `Spinner()`, `Spinner(nil)` and a `String?` in hand all reach.
+    ///
+    /// Unlike a concrete *non-optional* `String`, it cannot take a literal away
+    /// from the key overload: binding one here costs an optional injection,
+    /// which ranks below both siblings. That is why it did not have to be split
+    /// the way ``QuitShortcut``'s label was.
+    ///
+    /// - Parameters:
+    ///   - label: Text displayed after the spinner indicator, or `nil` for none.
     ///   - style: The animation style (default: `.dots`).
     ///   - color: The spinner color (default: theme accent).
     @_disfavoredOverload

@@ -108,6 +108,10 @@ public struct Dialog<Content: View, Footer: View>: View {
 
     /// Creates a dialog with content and footer, titled as written.
     ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
+    ///
     /// - Parameters:
     ///   - title: The dialog title.
     ///   - borderStyle: The border style (default: appearance borderStyle).
@@ -120,8 +124,8 @@ public struct Dialog<Content: View, Footer: View>: View {
     ///   - content: The dialog content.
     ///   - footer: The footer content.
     @_disfavoredOverload
-    public init(
-        title: String,
+    public init<S: StringProtocol>(
+        title: S,
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
@@ -131,7 +135,7 @@ public struct Dialog<Content: View, Footer: View>: View {
         @ViewBuilder content: () -> Content,
         @ViewBuilder footer: () -> Footer
     ) {
-        self.title = title
+        self.title = String(title)
         self.config = ContainerConfig(
             borderStyle: borderStyle,
             borderColor: borderColor,
@@ -244,6 +248,9 @@ extension Dialog where Footer == EmptyView {
 
     /// Creates a dialog without a footer, titled as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the footered
+    /// overload — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The dialog title.
     ///   - borderStyle: The border style (default: appearance borderStyle).
@@ -252,15 +259,15 @@ extension Dialog where Footer == EmptyView {
     ///   - padding: The inner padding (default: horizontal 2, vertical 1).
     ///   - content: The dialog content.
     @_disfavoredOverload
-    public init(
-        title: String,
+    public init<S: StringProtocol>(
+        title: S,
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
         padding: EdgeInsets = EdgeInsets(horizontal: 2, vertical: 1),
         @ViewBuilder content: () -> Content
     ) {
-        self.title = title
+        self.title = String(title)
         self.config = ContainerConfig(
             borderStyle: borderStyle,
             borderColor: borderColor,
@@ -305,6 +312,11 @@ extension Dialog where Footer == EmptyView {
 
     /// Creates a dialog with a double-line border style, titled as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the initializers —
+    /// a factory is ranked against its key twin exactly as an `init` is, so the
+    /// concrete-`String` spelling would swallow the literal here too. See
+    /// ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The dialog title.
     ///   - borderColor: The border color (default: nil).
@@ -312,8 +324,8 @@ extension Dialog where Footer == EmptyView {
     ///   - content: The dialog content.
     /// - Returns: A dialog with double-line borders.
     @_disfavoredOverload
-    public static func doubleLine(
-        title: String,
+    public static func doubleLine<S: StringProtocol>(
+        title: S,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
         @ViewBuilder content: () -> Content
@@ -354,6 +366,9 @@ extension Dialog where Footer == EmptyView {
 
     /// Creates a dialog with a heavy border style, titled as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as `doubleLine` above —
+    /// see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The dialog title.
     ///   - borderColor: The border color (default: nil).
@@ -361,8 +376,8 @@ extension Dialog where Footer == EmptyView {
     ///   - content: The dialog content.
     /// - Returns: A dialog with heavy borders.
     @_disfavoredOverload
-    public static func heavy(
-        title: String,
+    public static func heavy<S: StringProtocol>(
+        title: S,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
         @ViewBuilder content: () -> Content

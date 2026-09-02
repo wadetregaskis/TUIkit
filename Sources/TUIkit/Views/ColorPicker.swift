@@ -66,13 +66,19 @@ public struct ColorPicker: View {
 
     /// Creates a colour picker whose label is displayed as written.
     ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
+    /// `step` keeps its default: it is `S` that cannot carry one, and `step` is
+    /// a plain `Double`.
+    ///
     /// - Parameters:
     ///   - title: The label shown beside the editor.
     ///   - selection: The colour to edit. Rewritten as `.rgb(...)` on each change.
     ///   - step: How much each arrow press moves a channel (default 5 of 255).
     @_disfavoredOverload
-    public init(_ title: String, selection: Binding<Color>, step: Double = 5) {
-        self.title = title
+    public init<S: StringProtocol>(_ title: S, selection: Binding<Color>, step: Double = 5) {
+        self.title = String(title)
         self.selection = selection
         self.step = step
     }
@@ -108,8 +114,9 @@ public struct ColorPicker: View {
             .buttonStyle(_ColorSwatchButtonStyle(color: selection.wrappedValue))
             .modal(isPresented: $isEditing) {
                 // `title` is already localized (the key overload resolves it in
-                // init), so the String overload takes it — a second lookup
-                // would search for the resolved text as a key.
+                // init), so the as-written overload takes it — a `String` is
+                // not a literal, so it cannot reach the key one, and a second
+                // lookup would search for the resolved text as a key.
                 ColorPickerPanel(title, selection: selection, isPresented: $isEditing)
             }
     }

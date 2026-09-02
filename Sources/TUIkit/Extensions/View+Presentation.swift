@@ -32,8 +32,12 @@ extension View {
     /// }
     /// ```
     ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. A `String` you computed binds to the overload
+    /// below and is shown as written.
+    ///
     /// - Parameters:
-    ///   - title: The alert title.
+    ///   - titleKey: The key for the alert title.
     ///   - isPresented: A binding to a Boolean value that determines whether
     ///     to present the alert.
     ///   - actions: A ViewBuilder returning the alert action buttons.
@@ -59,6 +63,10 @@ extension View {
 
     /// Presents an alert whose title is displayed as written.
     ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
+    ///
     /// - Parameters:
     ///   - title: The alert title.
     ///   - isPresented: A binding to a Boolean value that determines whether
@@ -70,8 +78,8 @@ extension View {
     ///   - titleColor: Custom title text color (TUIkit extension, default: nil).
     /// - Returns: A view that presents an alert conditionally.
     @_disfavoredOverload
-    public func alert<Actions: View, Message: View>(
-        _ title: String,
+    public func alert<S: StringProtocol, Actions: View, Message: View>(
+        _ title: S,
         isPresented: Binding<Bool>,
         @ViewBuilder actions: @escaping () -> Actions,
         @ViewBuilder message: @escaping () -> Message,
@@ -82,7 +90,7 @@ extension View {
         AlertPresentationModifier<Self, Actions, Message>(
             content: self,
             isPresented: isPresented,
-            title: title,
+            title: String(title),
             message: message(),
             actions: actions(),
             borderStyle: borderStyle,
@@ -93,8 +101,11 @@ extension View {
 
     /// Presents an alert with title and actions only (no message).
     ///
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``.
+    ///
     /// - Parameters:
-    ///   - title: The alert title.
+    ///   - titleKey: The key for the alert title.
     ///   - isPresented: A binding to a Boolean value that determines whether
     ///     to present the alert.
     ///   - actions: A ViewBuilder returning the alert action buttons.
@@ -117,6 +128,10 @@ extension View {
 
     /// Presents an alert with actions only, whose title is shown as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the form above:
+    /// that is what keeps a *literal* binding to the key overload rather than
+    /// to this one — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The alert title.
     ///   - isPresented: A binding to a Boolean value that determines whether
@@ -127,8 +142,8 @@ extension View {
     ///   - titleColor: Optional title color.
     /// - Returns: A view that presents an alert conditionally.
     @_disfavoredOverload
-    public func alert<Actions: View>(
-        _ title: String,
+    public func alert<S: StringProtocol, Actions: View>(
+        _ title: S,
         isPresented: Binding<Bool>,
         @ViewBuilder actions: @escaping () -> Actions,
         borderStyle: BorderStyle? = nil,
@@ -138,7 +153,7 @@ extension View {
         AlertPresentationModifier<Self, Actions, EmptyView>(
             content: self,
             isPresented: isPresented,
-            title: title,
+            title: String(title),
             message: nil,
             actions: actions(),
             borderStyle: borderStyle,
@@ -158,11 +173,13 @@ extension View {
     /// Escape — but with the action buttons stacked **vertically** (an action
     /// sheet). A `.cancel`-role button sorts to the bottom.
     ///
-    /// - Note: SwiftUI's `title` is a `LocalizedStringKey`; TUIkit uses `String`
-    ///   to match its own `.alert` spelling (documented deviation).
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. A `String` you computed binds to the overload
+    /// below and is shown as written.
     ///
     /// - Parameters:
-    ///   - title: The dialog title (suppressed when `titleVisibility` is `.hidden`).
+    ///   - titleKey: The key for the dialog title (suppressed when
+    ///     `titleVisibility` is `.hidden`).
     ///   - isPresented: A binding controlling presentation.
     ///   - titleVisibility: Whether the title is shown (default `.automatic`).
     ///   - actions: A ViewBuilder returning the dialog's action buttons.
@@ -180,9 +197,13 @@ extension View {
     }
 
     /// Presents a confirmation dialog whose title is displayed as written.
+    ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
     @_disfavoredOverload
-    public func confirmationDialog<Actions: View, Message: View>(
-        _ title: String,
+    public func confirmationDialog<S: StringProtocol, Actions: View, Message: View>(
+        _ title: S,
         isPresented: Binding<Bool>,
         titleVisibility: Visibility = .automatic,
         @ViewBuilder actions: @escaping () -> Actions,
@@ -191,7 +212,7 @@ extension View {
         AlertPresentationModifier<Self, Actions, Message>(
             content: self,
             isPresented: isPresented,
-            title: titleVisibility == .hidden ? "" : title,
+            title: titleVisibility == .hidden ? "" : String(title),
             message: message(),
             actions: actions(),
             borderStyle: nil,
@@ -214,9 +235,13 @@ extension View {
     }
 
     /// Presents an actions-only dialog whose title is displayed as written.
+    ///
+    /// Generic over `StringProtocol` for the same reason as the form above:
+    /// that is what keeps a *literal* binding to the key overload rather than
+    /// to this one — see ``LocalizedStringKey``.
     @_disfavoredOverload
-    public func confirmationDialog<Actions: View>(
-        _ title: String,
+    public func confirmationDialog<S: StringProtocol, Actions: View>(
+        _ title: S,
         isPresented: Binding<Bool>,
         titleVisibility: Visibility = .automatic,
         @ViewBuilder actions: @escaping () -> Actions
@@ -224,7 +249,7 @@ extension View {
         AlertPresentationModifier<Self, Actions, EmptyView>(
             content: self,
             isPresented: isPresented,
-            title: titleVisibility == .hidden ? "" : title,
+            title: titleVisibility == .hidden ? "" : String(title),
             message: nil,
             actions: actions(),
             borderStyle: nil,

@@ -110,10 +110,16 @@ extension ContentUnavailableView where Label == Text, Description == EmptyView, 
 
     /// Creates a content unavailable view with a title shown as written.
     ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``.
+    ///
     /// - Parameter title: The title text.
     @_disfavoredOverload
-    public init(_ title: String) {
-        self.init(label: { Text(title) }, description: { EmptyView() }, actions: { EmptyView() })
+    public init<S: StringProtocol>(_ title: S) {
+        self.init(
+            label: { Text(String(title)) }, description: { EmptyView() },
+            actions: { EmptyView() })
     }
 }
 
@@ -133,12 +139,22 @@ extension ContentUnavailableView where Label == Text, Description == Text, Actio
 
     /// Creates a content unavailable view with strings shown as written.
     ///
+    /// Both are generic over `StringProtocol` rather than concrete `String`s,
+    /// which is what keeps *literals* binding to the key overload above — see
+    /// ``LocalizedStringKey``. A type parameter each, not one shared between
+    /// them: they are two independent strings, and one `S` would force a caller
+    /// who has a `String` for the title and a `Substring` for the description to
+    /// convert one of them for no reason. ``LabeledContent`` is the in-tree
+    /// precedent for the two-parameter shape.
+    ///
     /// - Parameters:
     ///   - title: The title text.
     ///   - description: The description text.
     @_disfavoredOverload
-    public init(_ title: String, description: String) {
-        self.init(label: { Text(title) }, description: { Text(description) }, actions: { EmptyView() })
+    public init<S1: StringProtocol, S2: StringProtocol>(_ title: S1, description: S2) {
+        self.init(
+            label: { Text(String(title)) }, description: { Text(String(description)) },
+            actions: { EmptyView() })
     }
 }
 

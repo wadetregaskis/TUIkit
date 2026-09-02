@@ -90,12 +90,16 @@ extension Menu where Label == Text {
 
     /// Creates a menu that generates its label from a string, shown as written.
     ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The menu's title.
     ///   - content: The menu's items — `Button`s and `Divider`s.
     @_disfavoredOverload
-    public init(_ title: String, @ViewBuilder content: () -> Content) {
-        self.init(content: content) { Text(title) }
+    public init<S: StringProtocol>(_ title: S, @ViewBuilder content: () -> Content) {
+        self.init(content: content) { Text(String(title)) }
     }
 }
 

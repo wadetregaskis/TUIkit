@@ -337,13 +337,17 @@ extension Picker where Label == Text {
 
     /// Creates a picker with a text label, displayed as written.
     ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
+    ///
     /// - Parameters:
     ///   - title: The picker's label text.
     ///   - selection: A binding to the selected value.
     ///   - content: A view builder of options, each carrying a ``View/tag(_:)``.
     @_disfavoredOverload
-    public init(
-        _ title: String,
+    public init<S: StringProtocol>(
+        _ title: S,
         selection: Binding<SelectionValue>,
         @ViewBuilder content: () -> Content
     ) {

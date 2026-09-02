@@ -489,8 +489,7 @@ extension View {
     ///
     /// A string **literal** binds here, so it is a lookup key — see
     /// ``LocalizedStringKey``. The text is not optional in this overload:
-    /// `nil` has no key to look up, and would otherwise be ambiguous between
-    /// the two.
+    /// `nil` has no key to look up, and would otherwise be ambiguous.
     ///
     /// - Parameter textKey: The key for the placeholder text.
     /// - Returns: A modified view.
@@ -500,7 +499,27 @@ extension View {
 
     /// Sets the placeholder text shown while an image is loading, as written.
     ///
-    /// - Parameter text: The placeholder text, or nil for no text.
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``. Non-optional, because a generic parameter cannot
+    /// be inferred from `nil`; clearing the text stays on the overload below.
+    ///
+    /// - Parameter text: The placeholder text.
+    /// - Returns: A modified view.
+    @_disfavoredOverload
+    public func imagePlaceholder<S: StringProtocol>(_ text: S) -> some View {
+        environment(\.imagePlaceholderText, String(text))
+    }
+
+    /// Sets — or clears — the placeholder text shown while an image is loading.
+    ///
+    /// Stays concrete because the generic overload above cannot be inferred
+    /// from `nil`, and `nil` ("no text at all") is the spelling that turns the
+    /// placeholder text off. Unlike a concrete *non-optional* `String`, it
+    /// cannot take a literal away from the key overload: binding one here costs
+    /// an optional injection, which ranks below both siblings.
+    ///
+    /// - Parameter text: The placeholder text, or `nil` for no text.
     /// - Returns: A modified view.
     @_disfavoredOverload
     public func imagePlaceholder(_ text: String?) -> some View {

@@ -135,22 +135,36 @@ public struct RadioButtonItem<Value: Hashable> {
 
     /// Creates a radio button item with a string label, displayed as written.
     ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``. Only the label is a key: `value` is what the
+    /// option stands for, not text anyone reads.
+    ///
     /// - Parameters:
     ///   - value: The value for this option.
     ///   - label: The label text.
     @MainActor
     @_disfavoredOverload
-    public init(
+    public init<S: StringProtocol>(
         _ value: Value,
-        _ label: String
+        _ label: S
     ) {
         self.value = value
-        self.labelBuilder = { AnyView(Text(label)) }
+        // Flattened to a `String` here rather than inside the closure. The
+        // builder escapes — it is called later, while the group renders — so
+        // what it captures is stored, and storing a `String` is what this held
+        // before and what `Text` is built from anyway. Nothing generic outlives
+        // the call.
+        let text = String(label)
+        self.labelBuilder = { AnyView(Text(text)) }
         self.contentBuilder = nil
     }
 
     /// Creates a radio button item with a string label, displayed as written,
     /// and controls of its own shown under it.
+    ///
+    /// Generic over `StringProtocol` for the same reason as the label-only
+    /// overload above — see ``LocalizedStringKey``.
     ///
     /// - Parameters:
     ///   - value: The value for this option.
@@ -158,13 +172,14 @@ public struct RadioButtonItem<Value: Hashable> {
     ///   - content: The controls that configure this option.
     @MainActor
     @_disfavoredOverload
-    public init<Content: View>(
+    public init<Content: View, S: StringProtocol>(
         _ value: Value,
-        _ label: String,
+        _ label: S,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.value = value
-        self.labelBuilder = { AnyView(Text(label)) }
+        let text = String(label)  // see the label-only overload above
+        self.labelBuilder = { AnyView(Text(text)) }
         self.contentBuilder = { AnyView(content()) }
     }
 }

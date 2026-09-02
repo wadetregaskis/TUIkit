@@ -59,6 +59,10 @@ extension View {
 
     /// Presents an alert built from `data`, with a title shown as written.
     ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
+    ///
     /// - Parameters:
     ///   - title: The alert title.
     ///   - isPresented: Whether to present the alert.
@@ -67,8 +71,8 @@ extension View {
     ///   - message: The alert's message, built from `data`.
     /// - Returns: A view that presents an alert conditionally.
     @_disfavoredOverload
-    public func alert<Actions: View, Message: View, T>(
-        _ title: String,
+    public func alert<S: StringProtocol, Actions: View, Message: View, T>(
+        _ title: S,
         isPresented: Binding<Bool>,
         presenting data: T?,
         @ViewBuilder actions: @escaping (T) -> Actions,
@@ -100,6 +104,10 @@ extension View {
     /// Presents an alert built from `data` with buttons and no message, with a
     /// title shown as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the form above:
+    /// that is what keeps a *literal* binding to the key overload rather than
+    /// to this one — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The alert title.
     ///   - isPresented: Whether to present the alert.
@@ -107,8 +115,8 @@ extension View {
     ///   - actions: The alert's buttons, built from `data`.
     /// - Returns: A view that presents an alert conditionally.
     @_disfavoredOverload
-    public func alert<Actions: View, T>(
-        _ title: String,
+    public func alert<S: StringProtocol, Actions: View, T>(
+        _ title: S,
         isPresented: Binding<Bool>,
         presenting data: T?,
         @ViewBuilder actions: @escaping (T) -> Actions
@@ -206,6 +214,10 @@ extension View {
 
     /// Presents a confirmation dialog built from `data`, titled as written.
     ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
+    ///
     /// - Parameters:
     ///   - title: The dialog title.
     ///   - isPresented: Whether to present the dialog.
@@ -215,8 +227,8 @@ extension View {
     ///   - message: The dialog's message, built from `data`.
     /// - Returns: A view that presents a confirmation dialog conditionally.
     @_disfavoredOverload
-    public func confirmationDialog<Actions: View, Message: View, T>(
-        _ title: String,
+    public func confirmationDialog<S: StringProtocol, Actions: View, Message: View, T>(
+        _ title: S,
         isPresented: Binding<Bool>,
         titleVisibility: Visibility = .automatic,
         presenting data: T?,
@@ -253,6 +265,10 @@ extension View {
     /// Presents a confirmation dialog built from `data` with no message, titled
     /// as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the form above:
+    /// that is what keeps a *literal* binding to the key overload rather than
+    /// to this one — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The dialog title.
     ///   - isPresented: Whether to present the dialog.
@@ -261,8 +277,8 @@ extension View {
     ///   - actions: The dialog's buttons, built from `data`.
     /// - Returns: A view that presents a confirmation dialog conditionally.
     @_disfavoredOverload
-    public func confirmationDialog<Actions: View, T>(
-        _ title: String,
+    public func confirmationDialog<S: StringProtocol, Actions: View, T>(
+        _ title: S,
         isPresented: Binding<Bool>,
         titleVisibility: Visibility = .automatic,
         presenting data: T?,

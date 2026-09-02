@@ -128,11 +128,15 @@ extension SecureField where Label == Text {
 
     /// Creates a secure field with a text label generated from a title string.
     ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
+    ///
     /// - Parameters:
     ///   - title: The title of the secure field, describing its purpose.
     ///   - text: The text to display and edit.
     @_disfavoredOverload
-    public init(_ title: String, text: Binding<String>) {
+    public init<S: StringProtocol>(_ title: S, text: Binding<String>) {
         self.label = Text(title)
         self.text = text
         self.prompt = nil
@@ -144,13 +148,17 @@ extension SecureField where Label == Text {
 
     /// Creates a secure field with a prompt.
     ///
+    /// Generic over `StringProtocol` for the same reason as
+    /// ``init(_:text:)-(S,_)``. Only the title is a key: `prompt` is already a
+    /// ``Text``, which did its own lookup where it was written.
+    ///
     /// - Parameters:
     ///   - title: The title of the secure field, describing its purpose.
     ///   - text: The text to display and edit.
     ///   - prompt: A Text representing the prompt which provides users with
     ///     guidance on what to type into the secure field.
     @_disfavoredOverload
-    public init(_ title: String, text: Binding<String>, prompt: Text?) {
+    public init<S: StringProtocol>(_ title: S, text: Binding<String>, prompt: Text?) {
         self.label = Text(title)
         self.text = text
         self.prompt = prompt

@@ -126,12 +126,19 @@ public struct TableColumn<Value>: Sendable {
 
     /// Creates a table column whose header is displayed as written.
     ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``. Only the header: `value` names a property, not
+    /// display text.
+    ///
     /// - Parameters:
     ///   - title: The column header title.
     ///   - value: A key path to the String property to display.
     @_disfavoredOverload
-    public init(_ title: String, value: KeyPath<Value, String> & Sendable) where Value: Sendable {
-        self.title = title
+    public init<S: StringProtocol>(
+        _ title: S, value: KeyPath<Value, String> & Sendable
+    ) where Value: Sendable {
+        self.title = String(title)
         self.alignment = .leading
         self.width = .flexible
         self.valueExtractor = { item in item[keyPath: value] }
@@ -165,17 +172,23 @@ public struct TableColumn<Value>: Sendable {
 
     /// Creates a sortable column whose header is displayed as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as
+    /// ``init(_:value:)``: it is what keeps a *literal* binding to the key
+    /// overload above — see ``LocalizedStringKey``. Neither `value` nor
+    /// `content` is display text a translator ever sees; `content` builds the
+    /// cell from the row.
+    ///
     /// - Parameters:
     ///   - title: The column header title.
     ///   - value: A key path to the `Comparable` property this column sorts by.
     ///   - content: Builds the cell's display string from a data item.
     @_disfavoredOverload
-    public init<V: Comparable>(
-        _ title: String,
+    public init<S: StringProtocol, V: Comparable>(
+        _ title: S,
         value: KeyPath<Value, V> & Sendable,
         content: @escaping @Sendable (Value) -> String
     ) where Value: Sendable {
-        self.title = title
+        self.title = String(title)
         self.alignment = .leading
         self.width = .flexible
         self.valueExtractor = content
@@ -197,12 +210,15 @@ public struct TableColumn<Value>: Sendable {
 
     /// Creates a closure column whose header is displayed as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as
+    /// ``init(_:value:)`` — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The column header title.
     ///   - value: A closure that extracts the display string from a data item.
     @_disfavoredOverload
-    public init(_ title: String, value: @escaping @Sendable (Value) -> String) {
-        self.title = title
+    public init<S: StringProtocol>(_ title: S, value: @escaping @Sendable (Value) -> String) {
+        self.title = String(title)
         self.alignment = .leading
         self.width = .flexible
         self.valueExtractor = value
