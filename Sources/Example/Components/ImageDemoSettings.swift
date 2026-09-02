@@ -227,6 +227,12 @@ struct ImageDemoSettings: Equatable {
     /// mode that does not support it — coherence of what is on screen wins over
     /// remembering hidden state.
     mutating func snap() {
+        // A terminal that will not draw a picture cannot have the picture
+        // switched on: the toggle is disabled AND shows off, rather than
+        // sitting there on while glyphs are what is being drawn. Which is the
+        // whole point of this function — a disabled control must not display a
+        // setting that differs from what is on screen.
+        if !KittyGraphics.isSupported { terminalGraphics = false }
         if !ImageDemoHelpers.usesShape(charset) { shapeAware = false }
         if !ImageDemoHelpers.usesSupersampling(charset, shapeAware: shapeAware) {
             supersampling = 0
