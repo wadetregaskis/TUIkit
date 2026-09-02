@@ -84,7 +84,11 @@ final class Terminal: TerminalProtocol {
     /// shuffling cost. Capacity grows geometrically when needed
     /// and ``consume(_:)`` shrinks it back to ``baselineCapacity``
     /// once a transient large paste has been fully consumed.
-    private var input: UniqueDeque<UInt8> = .init(
+    /// Internal rather than private so `Terminal+Replies.swift` can scan it:
+    /// this file is at its length limit, and the reply walk lifted out cleanly
+    /// because it only READS the head of the buffer. Nothing outside this
+    /// module can see `Terminal` at all.
+    var input: UniqueDeque<UInt8> = .init(
         minimumCapacity: Terminal.baselineCapacity)
 
     /// Initial — and steady-state minimum — capacity for ``input``.
@@ -719,6 +723,29 @@ extension Terminal {
             return nil
         }
 
+        // A reply the application never asked for — a graphics acknowledgement,
+        // an OSC colour answer, a DCS report. These are OUTPUT the terminal
+        // volunteered, and the parser used to hand them to the app as TYPING:
+        // `ESC _ G i=7;OK ESC \` arrived as Alt+underscore followed by the
+        // keystrokes `G i = 7 ; O K`, and `=` is a shortcut (zoom, on the image
+        // pages) — so a single stray acknowledgement moved a control the user
+        // never touched.
+        //
+        // It was always possible for a terminal to volunteer one. It became
+        // likely when TUIkit started sending graphics commands, which are
+        // acknowledged unless every one of them says `q=2`, and "every one" is
+        // exactly the kind of thing that is true until it is not. Swallowing
+        // the reply is right whether or not it was asked for: this parser reads
+        // the keyboard, and nothing here is the keyboard.
+        //
+        // Recursion, like the meta-prefix branch above, and bounded by the same
+        // thing: each pass consumes bytes, and the buffer is finite.
+        if String.isStringFamilyIntroducer(UInt32(second)) {
+            guard let length = stringSequenceLength() else { return nil }
+            consume(length)
+            return tryExtractRegularEvent()
+        }
+
         // Alt + a multi-byte character: a meta-sending terminal prefixes
         // whatever the keyboard produced, ASCII or not (Option+ß under a
         // German layout arrives as ESC + the two bytes of ß). Same
@@ -1089,9 +1116,11 @@ extension Terminal {
                 }
                 return nil
             }
-            if input[1] == 0x5B || input[1] == 0x4F {
-                // Incomplete CSI/SS3: wait for the terminator; drop only a
-                // long-dead sequence.
+            if input[1] == 0x5B || input[1] == 0x4F
+                || String.isStringFamilyIntroducer(UInt32(input[1]))
+            {
+                // Incomplete CSI/SS3, or a terminal reply whose terminator has
+                // not arrived: wait for it; drop only a long-dead sequence.
                 if staleFrames >= Self.deadSequenceStaleFrames {
                     staleFrames = 0
                     consume(input.count)

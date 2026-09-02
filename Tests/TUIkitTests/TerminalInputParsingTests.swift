@@ -366,3 +366,104 @@ struct TerminalInputParsingTests {
         #expect(terminal.readEvent() == .key(KeyEvent(key: .tab, alt: true, shift: true)))
     }
 }
+
+// MARK: - Replies the terminal volunteered
+//
+// A terminal can send things nobody typed: a graphics acknowledgement, an OSC
+// colour answer, a DCS report. They arrive on stdin like keystrokes and are
+// not keystrokes, and the parser used to deliver them one character at a time
+// — `ESC _ G i=7;OK ESC \` became Alt+underscore and then `G i = 7 ; O K`.
+//
+// That was always latent. It became live when TUIkit started SENDING graphics
+// commands: those are acknowledged unless every command carries `q=2`, and
+// "every command" is the kind of claim that holds until it doesn't. The
+// observed symptom was an image page zooming on its own, because `=` is the
+// zoom-in shortcut and a reply is full of them.
+
+@MainActor
+@Suite("Terminal replies are not keystrokes")
+struct TerminalReplySwallowingTests {
+
+    private func makeTerminal() -> (Terminal, ([UInt8]) -> Void) {
+        let terminal = Terminal()
+        let box = ByteBox()
+        terminal.readSource = { buffer in
+            guard !box.bytes.isEmpty else { return 0 }
+            let count = min(box.bytes.count, buffer.count)
+            for index in 0..<count { buffer[index] = box.bytes[index] }
+            box.bytes.removeFirst(count)
+            return count
+        }
+        return (terminal, { box.bytes.append(contentsOf: $0) })
+    }
+
+    private final class ByteBox { var bytes: [UInt8] = [] }
+
+    /// The exact bytes Ghostty answers a graphics command with.
+    private let acknowledgement = Array("\u{1B}_Gi=7;OK\u{1B}\\".utf8)
+
+    @Test("A graphics acknowledgement types nothing")
+    func graphicsReplyIsSwallowed() {
+        let (terminal, stage) = makeTerminal()
+        stage(acknowledgement)
+        var seen: [TerminalInput?] = []
+        for _ in 0..<6 { seen.append(terminal.readEvent()) }
+        #expect(seen.allSatisfy { $0 == nil }, "the reply produced \(seen.compactMap { $0 })")
+        // The one that moved a slider the user never touched.
+        #expect(!seen.contains(.key(KeyEvent(character: "="))))
+    }
+
+    @Test("A real keypress behind a reply still arrives")
+    func realKeyAfterAReplyStillArrives() {
+        let (terminal, stage) = makeTerminal()
+        stage(acknowledgement + Array("q".utf8))
+        #expect(terminal.readEvent() == .key(KeyEvent(character: "q")))
+    }
+
+    /// Several at once — a burst is what a frame full of images would produce
+    /// if any command lost its `q=2`.
+    @Test("A burst of replies is swallowed whole")
+    func burstIsSwallowed() {
+        let (terminal, stage) = makeTerminal()
+        stage(acknowledgement + acknowledgement + acknowledgement + Array("x".utf8))
+        #expect(terminal.readEvent() == .key(KeyEvent(character: "x")))
+    }
+
+    /// The other three string-terminated families, and the BEL spelling of the
+    /// terminator that OSC is usually written with.
+    @Test("OSC, DCS and PM replies are swallowed too, BEL-terminated or not")
+    func everyStringFamilyIsSwallowed() {
+        for reply in [
+            "\u{1B}]11;rgb:1e1e/1e1e/1e1e\u{07}",  // an OSC background answer
+            "\u{1B}P1+r5375=31\u{1B}\\",  // an XTGETTCAP answer
+            "\u{1B}^status\u{1B}\\",  // PM
+        ] {
+            let (terminal, stage) = makeTerminal()
+            stage(Array(reply.utf8) + Array("z".utf8))
+            #expect(
+                terminal.readEvent() == .key(KeyEvent(character: "z")),
+                "leaked out of \(reply.debugDescription)")
+        }
+    }
+
+    /// An unterminated reply must not leak either — it is dropped as a unit
+    /// after the same grace an unterminated CSI gets, rather than one
+    /// character at a time.
+    @Test("An unterminated reply is dropped, not spelled out")
+    func unterminatedReplyDoesNotLeak() {
+        let (terminal, stage) = makeTerminal()
+        stage(Array("\u{1B}_Gi=7;OK".utf8))  // no ST
+        var seen: [TerminalInput?] = []
+        for _ in 0..<12 { seen.append(terminal.readEvent()) }
+        #expect(seen.allSatisfy { $0 == nil })
+    }
+
+    /// And the sequence that INTERRUPTS a reply still parses, rather than
+    /// being eaten with it — the rule the CSI walk already follows.
+    @Test("A keypress interrupting a reply is not lost with it")
+    func interruptingSequenceSurvives() {
+        let (terminal, stage) = makeTerminal()
+        stage(Array("\u{1B}_Gi=7;OK".utf8) + [0x1B, 0x5B, 0x42])  // truncated, then Down
+        #expect(terminal.readEvent() == .key(KeyEvent(key: .down)))
+    }
+}

@@ -407,7 +407,7 @@ of image id 42 and compares the encoder's cells against it. **A constant taken
 from a specification has to be checked against that specification, spelled
 out** — otherwise the tests only prove the code agrees with itself.
 
-The same round found another, which the codepoint bug was hiding:
+The same round found two more, both of which the codepoint bug was hiding:
 
 - **`RGBAImage.scaledBilinear` was dropping the alpha channel.** It
   interpolated red, green and blue and then built its pixel with
@@ -421,6 +421,13 @@ The same round found another, which the codepoint bug was hiding:
   only consumers read luminance to pick a glyph; a renderer that hands the
   pixels to the terminal notices at once, because the terminal is what
   composites them.
+
+- **A terminal reply was being read as typing.** `ESC _ G i=7;OK ESC \`
+  reached the input parser as Alt+underscore followed by the keystrokes
+  `G i = 7 ; O K`, and `=` is the zoom-in shortcut on the image pages — so an
+  acknowledgement moved a control nobody touched. The parser now swallows
+  every string-terminated family (OSC, DCS, APC, PM, SOS); a reply is output
+  the terminal volunteered, and this parser reads the keyboard.
 
 ### 8.6 What an image costs
 

@@ -30,7 +30,7 @@
 /// ## The three steps
 ///
 /// ```swift
-/// terminal.write(KittyGraphics.transmit(rgba: pixels, width: w, height: h, id: 7))
+/// terminal.write(KittyGraphics.transmit(pixels: bytes, width: w, height: h, id: 7))
 /// terminal.write(KittyGraphics.placement(id: 7, columns: 20, rows: 8))
 /// buffer = FrameBuffer(lines: KittyGraphics.placeholderRows(id: 7, columns: 20, rows: 8))
 /// ```
@@ -68,14 +68,29 @@ public enum KittyGraphics {
 
     // MARK: - Transmit
 
-    /// The escape (or escapes) that put `rgba` in the terminal's store under
-    /// `id`, and nothing else — no placement, no pixels on screen.
+    /// How many bytes a pixel takes on the wire, which is also the protocol's
+    /// `f` key.
     ///
-    /// `rgba` is 8-bit RGBA in row-major order, which is ``RGBAImage``'s own
-    /// layout and the protocol's `f=32`, so nothing is re-encoded on the way
-    /// out. Alpha is carried rather than flattened: the terminal composites
-    /// the image over whatever the cells' background is, which is the only
-    /// way a picture with transparency can sit on a themed page.
+    /// Both are 8-bit and row-major, so either is a straight copy out of
+    /// ``RGBAImage``. The choice is worth making rather than always sending
+    /// the wider one: a photograph has no transparency, and a quarter of a
+    /// multi-megabyte transmission is a quarter of the time the app spends
+    /// not drawing the frame that shows it.
+    public enum PixelFormat: Int, Sendable {
+        /// Opaque — three bytes a pixel.
+        case rgb = 24
+        /// With an alpha channel — four bytes a pixel. The terminal
+        /// composites the image over whatever the cells' background is, which
+        /// is the only way a picture with transparency can sit on a themed
+        /// page.
+        case rgba = 32
+
+        /// Bytes per pixel.
+        public var stride: Int { self == .rgb ? 3 : 4 }
+    }
+
+    /// The escape (or escapes) that put `pixels` in the terminal's store under
+    /// `id`, and nothing else — no placement, no pixels on screen.
     ///
     /// Chunked at `chunkSize`, because one escape cannot carry a whole
     /// image: `m=1` says another chunk follows and `m=0` ends the run, with
@@ -86,15 +101,15 @@ public enum KittyGraphics {
     /// - Returns: the escapes, or `""` for a request that cannot be honoured
     ///   (a non-positive size, or fewer pixels than the size claims).
     public static func transmit(
-        rgba: [UInt8], width: Int, height: Int, id: ImageID
+        pixels: [UInt8], format: PixelFormat = .rgba, width: Int, height: Int, id: ImageID
     ) -> String {
         guard width > 0, height > 0, id > 0, id <= maximumImageID,
-            rgba.count >= width * height * 4
+            pixels.count >= width * height * format.stride
         else { return "" }
 
         var encoded: [UInt8] = []
-        encoded.reserveCapacity(4 * ((rgba.count + 2) / 3))
-        base64(rgba, into: &encoded)
+        encoded.reserveCapacity(4 * ((pixels.count + 2) / 3))
+        base64(pixels, into: &encoded)
 
         let chunks = (encoded.count + chunkSize - 1) / chunkSize
         var out: [UInt8] = []
@@ -107,9 +122,17 @@ public enum KittyGraphics {
             let head: String
             if index == 0 {
                 let chunked = chunks > 1 ? ",m=1" : ""
-                head = "a=t,q=2,f=32,t=d,s=\(width),v=\(height),i=\(id)" + chunked
+                head = "a=t,q=2,f=\(format.rawValue),t=d,s=\(width),v=\(height),i=\(id)"
+                    + chunked
             } else {
-                head = end < encoded.count ? "m=1" : "m=0"
+                // `q=2` on EVERY chunk, not just the first. The terminal's
+                // acknowledgement is emitted when the transmission COMPLETES,
+                // which is the last chunk — and a last chunk that carries no
+                // `q` is a last chunk that may be answered out loud. Four
+                // bytes per chunk against a reply arriving on the
+                // application's stdin, where the input parser would read it as
+                // typing.
+                head = (end < encoded.count ? "m=1" : "m=0") + ",q=2"
             }
             out.append(contentsOf: introducer)
             out.append(contentsOf: head.utf8)
