@@ -132,3 +132,72 @@ struct PaletteTableFidelityTests {
         #expect(huge.quantisationTable() == nil)
     }
 }
+
+/// The approximation must not reach the character renderer.
+///
+/// It is kept out by a **default argument**: `applyFloydSteinbergDithering`
+/// and `quantizePixel` take `table:` defaulted to `nil`, and
+/// `ASCIIConverter.convert` does not pass one, so the character path takes the
+/// exact search. That is a fine mechanism and a poor guarantee — a defaulted
+/// parameter is precisely what a later edit threads a value into without
+/// noticing what it changed.
+///
+/// So this test does not check that the caller omits the argument. It finds a
+/// colour the table and the exact search DISAGREE about, and checks the
+/// character renderer draws the exact answer.
+@Suite("The table stays out of the character renderer")
+struct TableIsolationTests {
+
+    /// A colour where the table's answer differs from the exact search, found
+    /// rather than hardcoded — the disagreements move whenever the metric, the
+    /// cell spacing or the palette does, and a stale constant would quietly
+    /// make this test vacuous.
+    private func disagreeingColour(in palette: ASCIIPalette) -> (RGBA, exact: Int, table: Int)? {
+        guard let table = palette.quantisationTable() else { return nil }
+        var state: UInt64 = 0x243F_6A88_85A3_08D3
+        for _ in 0..<400_000 {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            let pixel = RGBA(
+                r: UInt8(truncatingIfNeeded: state >> 16),
+                g: UInt8(truncatingIfNeeded: state >> 32),
+                b: UInt8(truncatingIfNeeded: state >> 48))
+            let cell = ASCIIPalette.quantisationCell(for: pixel)
+            guard table.trusted[cell] else { continue }
+            let exact = palette.nearestIndex(to: pixel)
+            let approximate = Int(table.answers[cell])
+            if approximate != exact { return (pixel, exact, approximate) }
+        }
+        return nil
+    }
+
+    /// The guarantee, stated where it actually lives.
+    ///
+    /// An end-to-end assertion on `convert`'s output cannot say this: with
+    /// dithering on, a flat colour legitimately draws as SEVERAL neighbouring
+    /// entries, so seeing the table's answer on screen would prove nothing. The
+    /// mechanism is the defaulted parameter, so that is what is pinned — asked
+    /// about a colour the two genuinely disagree about, which is what stops the
+    /// test passing for the wrong reason.
+    @Test("Without a table, the answer is the exact one")
+    func defaultIsTheExactSearch() throws {
+        let palette = ASCIIPalette.ansi16
+        let found = try #require(disagreeingColour(in: palette))
+        let (pixel, exact, approximate) = found
+        #expect(exact != approximate, "the search set found no real disagreement")
+
+        let converter = ASCIIConverter(colorMode: .ansi16)
+        // No `table:` — which is what `ASCIIConverter.convert` passes, and
+        // therefore what the character renderer gets.
+        let drawn = converter.quantizePixel(pixel, mode: .ansi16, monoThreshold: 128)
+        #expect(drawn.r == palette.rgba(at: exact).r)
+        #expect(drawn.g == palette.rgba(at: exact).g)
+        #expect(drawn.b == palette.rgba(at: exact).b)
+
+        // …and WITH one it may differ, which is the whole point of having it
+        // and the reason the default matters.
+        let table = try #require(palette.quantisationTable())
+        let approximated = converter.quantizePixel(
+            pixel, mode: .ansi16, monoThreshold: 128, table: table)
+        #expect(approximated.r == palette.rgba(at: approximate).r)
+    }
+}
