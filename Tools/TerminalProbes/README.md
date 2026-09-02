@@ -80,6 +80,16 @@ when unset), the visual/aspect probes print to the terminal.
   HONOURS the link — hover, ⌘-click — no query reports, so the probe prints
   a card for a person and records their answer beside the measurement
   instead of pretending to have derived it.
+- `graphics_probe.py` — Sixel, the iTerm2 inline-image protocol and the Kitty
+  graphics protocol: what the host advertises (DA1's Sixel parameter, Kitty's
+  `a=q` handshake, and a *virtual placement* probe — the feature a TUI actually
+  needs), and what its cursor does when sent one of each. The safety half is the
+  same DSR question `hyperlink_probe.py` asks, and it has a different answer per
+  family: **Apple Terminal parses OSC and PRINTS DCS and APC**, so a
+  string-terminated escape is not automatically safe. Whether a picture actually
+  appeared is a question about pixels, so the probe draws a card and asks. The
+  analysis and the recommendation are in
+  `Documentation/Terminal graphics protocols.md`.
 - `cell_aspect_probe.py` — the terminal cell's height:width ratio (what
   `Image` needs to render undistorted), via `TIOCGWINSZ` pixel fields and
   the `CSI 14t`/`18t` escape queries. Report to `$PROBE_OUT` (default

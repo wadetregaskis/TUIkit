@@ -3,8 +3,9 @@
 The canonical record of how each terminal emulator behaves on every axis
 TUIkit cares about — input encodings (keys, mouse, trackpad) and output
 behaviour (cursor advance vs painted width, emoji handling, glyph cell
-coverage, colour depth, OSC 8 hyperlinks) — plus the environment variables
-each one defines and the exact versions the observations were made against.
+coverage, colour depth, OSC 8 hyperlinks, graphics protocols) — plus the
+environment variables each one defines and the exact versions the observations
+were made against.
 
 **Maintenance contract:** whenever anything new is observed or learned
 about any terminal's behaviour — a new quirk, a version that changes one,
@@ -1911,6 +1912,63 @@ builds out of data it did not author, so `TerminalHyperlink` percent-encodes
 every byte that is not a printable non-blank ASCII character rather than
 assuming the caller did. Same reasoning as `String.sanitizedForTerminal`:
 the gate belongs where the escape is written.
+
+---
+
+## Graphics protocols, and a parser gap — measured 2026-09-02
+
+Full treatment, including what TUIkit should do about it, is in
+`Documentation/Terminal graphics protocols.md`. Two facts belong here because
+they are facts about the terminals rather than about a design.
+
+### Apple Terminal parses OSC and does NOT parse DCS or APC
+
+All three graphics protocols ride string-terminated escape families — DCS for
+Sixel, OSC 1337 for iTerm2's, APC for Kitty's — so it is tempting to reason
+that any terminal with an escape parser consumes them whole and ignores the
+ones it does not implement. That is what all four hosts do with OSC 8
+(previous section). Apple Terminal does it for **OSC only**.
+
+Measured with `graphics_probe.py`: a payload printed between two brackets on a
+cleared row, and the cursor asked where it landed.
+
+| Payload | Apple Terminal 455.1 |
+|---|---|
+| OSC 1337 (161 B) | Δ0 — swallowed |
+| DCS Sixel (25 B) | **Δcol +21 — printed** |
+| APC Kitty (123 B) | **Δrow +1, Δcol +39 — printed** |
+
+`ESC P` has its `P` consumed as though it were a two-byte escape and the rest
+of the payload goes to the screen — exactly `25 − ESC − P − ESC − \` visible
+cells. Same for `ESC _`. A page-sized image would be tens of kilobytes of
+base64 across the screen.
+
+**So a string-terminated escape is not automatically safe, and which family it
+is decides.** The same parser weakness is already recorded here twice over:
+`probe_stamp.py` skips DECRQM on Apple Terminal because it prints that query's
+final byte, and this host is why. Anything DCS- or APC-shaped must be gated on
+positive evidence.
+
+### What each host advertises
+
+| Host | version | Sixel in DA1 | Kitty `a=q` | Kitty Unicode placeholder |
+|---|---|---|---|---|
+| Apple Terminal | 455.1 | no | silent | silent |
+| iTerm2 | 3.6.11 | **yes** (`4` in `ESC[?64;1;2;4;6;17;18;21;22;52c`) | **`OK`** | *not measured* |
+| Ghostty | 1.3.1 | no | **`OK`** | **`OK`** |
+| Warp | v0.2026.08.26.17.59.stable_01 | no | **`OK`** | **refused, by name** |
+| tmux | 3.7c | **yes** (`ESC[?1;2;4c`) | silent | silent |
+
+Warp's refusal is a named answer rather than a silence to be interpreted —
+`InvalidKittyAction(InvalidControlData(UnicodePlaceholderUnsupported))` — which
+makes the Kitty protocol the only terminal capability in this document that can
+be interrogated **per feature** instead of looked up in a table keyed on an
+identified host. A table written from Warp's feature list would have recorded
+it as supporting placements.
+
+**`XTGETTCAP Su` is not a Sixel signal.** iTerm2 answers `DCS 0 + r … ST` (not
+present) while its DA1 advertises Sixel; Ghostty answers `DCS 1 + r 5375 ST` —
+a success flag with no value — while supporting no Sixel at all. Use DA1.
 
 ---
 

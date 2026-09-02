@@ -28,6 +28,12 @@ conditions. Four kinds of file live here:
   saying so. Every file carries an `unknown_osc` row: a command number
   nothing implements, which is what makes a "swallowed" result a property of
   the host's OSC parser rather than of this one sequence.
+- **`<terminal>-<version>-graphics.json`** — GRAPHICS-PROTOCOL records
+  (`graphics_probe.py`): what the host advertises for Sixel, the iTerm2
+  protocol and Kitty, plus the cursor deltas after being sent one of each. The
+  deltas answer "is it safe to emit", which has a different answer per escape
+  FAMILY on the same host; `rendered` is the human half and stays
+  `unmeasured` until somebody looks at the card.
 - **`tmux-3.7b-tonebases.json`** — the full Emoji_Modifier_Base sweep
   (`advance_probe.py --modifier-bases`): which of the 134 bases tmux merges
   with a following tone (70) and which it detaches (64). The source of
