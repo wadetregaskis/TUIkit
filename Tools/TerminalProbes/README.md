@@ -90,6 +90,17 @@ when unset), the visual/aspect probes print to the terminal.
   appeared is a question about pixels, so the probe draws a card and asks. The
   analysis and the recommendation are in
   `Documentation/Terminal graphics protocols.md`.
+- `placement_probe.py` — the follow-on question, and the one TUIkit's design
+  rests on: with a *virtual* placement and Unicode placeholders, does a Kitty
+  image behave like **cells**? It transmits a hue-ramp image, places it, writes
+  the placeholder rows, and asks DSR how far the cursor moved — because
+  U+10EFFF sits inside the Plane-16 PUA that this framework paints two cells
+  wide and compensates for, and an image that inherited that rule would shear.
+  Measured 2026-09-02: **one column per cell on all three hosts that answered**,
+  Apple Terminal included. Also measures the run-length elision, both id
+  encodings (256-colour and direct), delete-by-id, and what a full-screen
+  transmit costs in bytes and milliseconds. Skips the big transmit on a
+  terminal that answered no Kitty query — Apple Terminal would print it.
 - `cell_aspect_probe.py` — the terminal cell's height:width ratio (what
   `Image` needs to render undistorted), via `TIOCGWINSZ` pixel fields and
   the `CSI 14t`/`18t` escape queries. Report to `$PROBE_OUT` (default

@@ -1,0 +1,71 @@
+{
+  "probe": "placement_probe",
+  "measured": "2026-09-02T12:17:30-07:00",
+  "screen": "primary",
+  "os": "macOS 15.7.9",
+  "machine": "arm64",
+  "env": {
+    "TERM": "xterm-256color",
+    "TERM_PROGRAM": "WarpTerminal",
+    "TERM_PROGRAM_VERSION": "v0.2026.08.26.17.59.stable_01",
+    "COLORTERM": "truecolor",
+    "__CFBundleIdentifier": "dev.warp.Warp-Stable"
+  },
+  "mode_2027_grapheme_clustering": null,
+  "method": "DSR cursor report — confirm any disagreement with visual_card.py",
+  "cell_pixels": {
+    "width": 8,
+    "height": 16,
+    "reported": true
+  },
+  "advertised": {
+    "kitty_answered_query": true,
+    "virtual_placement_ok": false,
+    "replies": {
+      "KITTY_QUERY": "<ESC>_Gi=1;OK<ESC>\\",
+      "PROBE_TRANSMIT": "<ESC>_Gi=9;OK<ESC>\\",
+      "VIRTUAL_PLACEMENT": "<ESC>_Gi=9;InvalidKittyAction(InvalidControlData(UnicodePlaceholderUnsupported))<ESC>\\",
+      "TRANSMIT_SMALL": "OK",
+      "PLACE_SMALL": "<ESC>_Gi=31;InvalidKittyAction(InvalidControlData(UnicodePlaceholderUnsupported))<ESC>\\",
+      "TRANSMIT_LARGE": "OK",
+      "PLACE_LARGE": "<ESC>_Gi=48879;InvalidKittyAction(InvalidControlData(UnicodePlaceholderUnsupported))<ESC>\\",
+      "DELETE": "<ESC>_Gi=31;OK<ESC>\\",
+      "PLACE_AFTER_DELETE": "<ESC>_Gi=31;InvalidKittyAction(InvalidControlData(UnicodePlaceholderUnsupported))<ESC>\\"
+    }
+  },
+  "measurements": {
+    "plain_text_control": {
+      "expected": 12,
+      "advance": 12,
+      "row_delta": 0
+    },
+    "placeholder_row_explicit": {
+      "expected": 12,
+      "advance": 12,
+      "row_delta": 0
+    },
+    "placeholder_row_elided": {
+      "expected": 12,
+      "advance": 12,
+      "row_delta": 0
+    },
+    "single_placeholder": {
+      "expected": 1,
+      "advance": 1,
+      "row_delta": 0
+    }
+  },
+  "bytes": {
+    "image": 18432,
+    "transmitted_base64": 24576,
+    "row_explicit": 111,
+    "row_elided": 67,
+    "full_screen_base64": 4644864
+  },
+  "transmit_seconds": {
+    "card_image": 0.0005995420000000015,
+    "full_screen": 0.07617854199999996,
+    "full_screen_cells": "162x56"
+  },
+  "rendered": "unmeasured — see the card; fill this in by hand"
+}
