@@ -40,6 +40,9 @@
   "label.from": "From",
   "label.to": "To",
   "label.gradient": "Gradient",
+  "label.noResults": "No Results",
+  "label.noResultsFor": "No Results for '%@'",
+  "label.noResultsHint": "Check the spelling or try a new search.",
 
   "error.invalid_input": "Invalid input",
   "error.required_field": "This field is required",

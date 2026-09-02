@@ -134,30 +134,11 @@ final class LocalizationKeyConsistencyTests {
 
     @Test("All label keys exist in translations")
     func allLabelKeysExist() {
-        let keys = [
-            LocalizationKey.Label.search,
-            LocalizationKey.Label.name,
-            LocalizationKey.Label.description,
-            LocalizationKey.Label.value,
-            LocalizationKey.Label.status,
-            LocalizationKey.Label.error,
-            LocalizationKey.Label.warning,
-            LocalizationKey.Label.info,
-            LocalizationKey.Label.success,
-            LocalizationKey.Label.loading,
-            LocalizationKey.Label.empty,
-            LocalizationKey.Label.none,
-            LocalizationKey.Label.page,
-            LocalizationKey.Label.item,
-            LocalizationKey.Label.items,
-            LocalizationKey.Label.total,
-            LocalizationKey.Label.from,
-            LocalizationKey.Label.to,
-            LocalizationKey.Label.gradient,
-        ]
-
-        for key in keys {
-            #expect(englishTranslations[key.rawValue] != nil, "Label key '\(key.rawValue)' not found in translations")
+        // `allCases`, not a written-out list — see `allStatusBarKeysExist`.
+        for key in LocalizationKey.Label.allCases {
+            #expect(
+                englishTranslations[key.rawValue] != nil,
+                "Label key '\(key.rawValue)' not found in translations")
         }
     }
 
@@ -319,25 +300,9 @@ final class LocalizationKeyConsistencyTests {
         enumKeys.insert(LocalizationKey.Button.refresh.rawValue)
 
         // Label keys
-        enumKeys.insert(LocalizationKey.Label.search.rawValue)
-        enumKeys.insert(LocalizationKey.Label.name.rawValue)
-        enumKeys.insert(LocalizationKey.Label.description.rawValue)
-        enumKeys.insert(LocalizationKey.Label.value.rawValue)
-        enumKeys.insert(LocalizationKey.Label.status.rawValue)
-        enumKeys.insert(LocalizationKey.Label.error.rawValue)
-        enumKeys.insert(LocalizationKey.Label.warning.rawValue)
-        enumKeys.insert(LocalizationKey.Label.info.rawValue)
-        enumKeys.insert(LocalizationKey.Label.success.rawValue)
-        enumKeys.insert(LocalizationKey.Label.loading.rawValue)
-        enumKeys.insert(LocalizationKey.Label.empty.rawValue)
-        enumKeys.insert(LocalizationKey.Label.none.rawValue)
-        enumKeys.insert(LocalizationKey.Label.page.rawValue)
-        enumKeys.insert(LocalizationKey.Label.item.rawValue)
-        enumKeys.insert(LocalizationKey.Label.items.rawValue)
-        enumKeys.insert(LocalizationKey.Label.total.rawValue)
-        enumKeys.insert(LocalizationKey.Label.from.rawValue)
-        enumKeys.insert(LocalizationKey.Label.to.rawValue)
-        enumKeys.insert(LocalizationKey.Label.gradient.rawValue)
+        for key in LocalizationKey.Label.allCases {
+            enumKeys.insert(key.rawValue)
+        }
 
         // Error keys
         enumKeys.insert(LocalizationKey.Error.invalidInput.rawValue)
@@ -412,7 +377,8 @@ final class LocalizationKeyConsistencyTests {
         // button + label + error + placeholder + menu + dialog + validation
         //   + statusbar + appearance
         let expectedKeyCount =
-            21 + 19 + 11 + 6 + 8 + 7 + 4 + LocalizationKey.StatusBar.allCases.count + 6
+            21 + LocalizationKey.Label.allCases.count + 11 + 6 + 8 + 7 + 4
+            + LocalizationKey.StatusBar.allCases.count + 6
         #expect(
             englishTranslations.count == expectedKeyCount,
             "Expected \(expectedKeyCount) keys in translations, but got \(englishTranslations.count)"

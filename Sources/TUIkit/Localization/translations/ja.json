@@ -40,6 +40,9 @@
   "label.from": "開始",
   "label.to": "終了",
   "label.gradient": "グラデーション",
+  "label.noResults": "結果なし",
+  "label.noResultsFor": "「%@」の結果なし",
+  "label.noResultsHint": "スペルを確認するか、別のキーワードで検索してください。",
 
   "error.invalid_input": "入力が無効です",
   "error.required_field": "この項目は必須です",

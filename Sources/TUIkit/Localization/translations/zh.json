@@ -40,6 +40,9 @@
   "label.from": "从",
   "label.to": "到",
   "label.gradient": "渐变",
+  "label.noResults": "无结果",
+  "label.noResultsFor": "没有“%@”的结果",
+  "label.noResultsHint": "请检查拼写或尝试新的搜索。",
 
   "error.invalid_input": "输入无效",
   "error.required_field": "此字段为必填项",

@@ -44,7 +44,9 @@ public enum LocalizationKey {
     }
 
     /// Label and field names
-    public enum Label: String {
+    /// `CaseIterable` for the same reason as ``StatusBar``: so the consistency
+    /// tests enumerate the group rather than restating it.
+    public enum Label: String, CaseIterable {
         case search = "label.search"
         case name = "label.name"
         case description = "label.description"
@@ -64,6 +66,16 @@ public enum LocalizationKey {
         case from = "label.from"
         case to = "label.to"
         case gradient = "label.gradient"
+
+        // `ContentUnavailableView.search`'s prose. Framework text, so it is
+        // keyed here rather than written as a `Text` literal: a literal IS
+        // looked up, but under the key "No Results", which is prose and so can
+        // collide with an app's own — the reason every framework key is
+        // dot-separated.
+        case noResults = "label.noResults"
+        /// Carries the query as `%@`, so a translation can move it.
+        case noResultsFor = "label.noResultsFor"
+        case noResultsHint = "label.noResultsHint"
     }
 
     /// Border appearance names, as shown in a settings screen.

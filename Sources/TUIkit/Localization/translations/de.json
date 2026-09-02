@@ -40,6 +40,9 @@
   "label.from": "Von",
   "label.to": "Bis",
   "label.gradient": "Verlauf",
+  "label.noResults": "Keine Ergebnisse",
+  "label.noResultsFor": "Keine Ergebnisse für „%@“",
+  "label.noResultsHint": "Prüfen Sie die Schreibweise oder starten Sie eine neue Suche.",
 
   "error.invalid_input": "Ungültige Eingabe",
   "error.required_field": "Dieses Feld ist erforderlich",

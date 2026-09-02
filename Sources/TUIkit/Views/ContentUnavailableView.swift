@@ -165,11 +165,20 @@ extension ContentUnavailableView where Label == Text, Description == Text, Actio
     ///
     /// Displays "No Results" with a generic description.
     public static var search: ContentUnavailableView<Text, Text, EmptyView> {
+        // `Text(verbatim:)` around an already-resolved string: the lookup has
+        // happened, and letting the RESULT bind to `Text`'s key overload would
+        // search for the translated prose as a key. The same reason
+        // `ColorPicker` hands its resolved title to `ColorPickerPanel`.
         ContentUnavailableView<Text, Text, EmptyView>(
-            label: { Text("No Results") },
-            description: { Text("Check the spelling or try a new search.") },
+            label: { Text(verbatim: Self.localized(.noResults)) },
+            description: { Text(verbatim: Self.localized(.noResultsHint)) },
             actions: { EmptyView() }
         )
+    }
+
+    /// One framework string, resolved through the shared service.
+    private static func localized(_ key: LocalizationKey.Label) -> String {
+        LocalizationService.shared.string(for: key)
     }
 
     /// Creates a content unavailable view for empty search results with a query.
@@ -179,9 +188,17 @@ extension ContentUnavailableView where Label == Text, Description == Text, Actio
     /// - Parameter text: The search query that produced no results.
     /// - Returns: A configured content unavailable view.
     public static func search(text: String) -> ContentUnavailableView<Text, Text, EmptyView> {
+        // The query goes in through `%@` rather than Swift interpolation, so a
+        // translation chooses both the wording AND its own quotation marks —
+        // „…“ in German, « … » in French — instead of inheriting the ASCII
+        // apostrophes this used to hardcode.
         ContentUnavailableView<Text, Text, EmptyView>(
-            label: { Text("No Results for '\(text)'") },
-            description: { Text("Check the spelling or try a new search.") },
+            label: {
+                Text(
+                    verbatim: LocalizedStringKey.substituting(
+                        [text], into: Self.localized(.noResultsFor)))
+            },
+            description: { Text(verbatim: Self.localized(.noResultsHint)) },
             actions: { EmptyView() }
         )
     }

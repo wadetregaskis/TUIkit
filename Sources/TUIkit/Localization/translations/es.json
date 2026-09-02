@@ -40,6 +40,9 @@
   "label.from": "De",
   "label.to": "A",
   "label.gradient": "Degradado",
+  "label.noResults": "Sin resultados",
+  "label.noResultsFor": "Sin resultados para «%@»",
+  "label.noResultsHint": "Comprueba la ortografía o prueba otra búsqueda.",
 
   "error.invalid_input": "Entrada no válida",
   "error.required_field": "Este campo es obligatorio",
