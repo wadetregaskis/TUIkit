@@ -113,4 +113,40 @@ struct LinkFocusIndicatorTests {
             "the run covers the whole label, not a two-cell prefix; got \(run.width)")
         #expect(run.frames.count > 1, "…and it actually animates")
     }
+
+    /// The frames must actually DIFFER, which the first version of this did not
+    /// manage: it breathed between the label's resting colour and
+    /// `palette.accent`, and a `Link` rests AT the accent — so both ends were
+    /// the same colour, the run replayed one picture, and a focused link sat
+    /// there motionless. It appeared to work under the pointer only because
+    /// hover lifts the resting colour away from the accent and accidentally
+    /// gave the breath somewhere to go.
+    @Test("A focused link's breath is made of different colours")
+    func focusedLinkFramesDiffer() throws {
+        let (tui, context) = harness()
+        let manager = try #require(context.environment.focusManager)
+        _ = render(link, tui: tui, context: context)
+        let id = try #require(manager.registeredFocusIDsInActiveSection().first)
+        manager.focus(id: id)
+        let run = try #require(render(link, tui: tui, context: context).animatedCells.first)
+
+        #expect(
+            Set(run.frames).count > 1,
+            "every frame is identical — the breath has nowhere to go, so nothing moves")
+    }
+
+    /// …and it must do that WITHOUT the pointer, which is the case that was
+    /// broken. Hover is a separate signal and must not be what makes focus
+    /// visible.
+    @Test("The breath does not depend on the pointer being over the link")
+    func breathIsIndependentOfHover() throws {
+        let (tui, context) = harness()
+        let manager = try #require(context.environment.focusManager)
+        _ = render(link, tui: tui, context: context)
+        let id = try #require(manager.registeredFocusIDsInActiveSection().first)
+        manager.focus(id: id)
+        // No mouse event has been dispatched, so nothing is hovered.
+        let run = try #require(render(link, tui: tui, context: context).animatedCells.first)
+        #expect(Set(run.frames).count > 1, "unhovered focus must still move")
+    }
 }

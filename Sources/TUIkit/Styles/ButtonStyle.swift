@@ -279,23 +279,43 @@ struct _LinkButtonStyle: ButtonStyle {
 // MARK: - Focus in the label
 
 extension _ButtonStyleBody {
-    /// A one-line label that breathes between `resting` and `bright` instead of
-    /// growing a bullet beside it — see ``_ButtonAppearance/indicatesFocusInLabel``.
+    /// The two ends of a label's breath, given the colour it rests at.
+    ///
+    /// **Both ends come from the label's OWN colour**, and that is the whole of
+    /// the fix for the first version of this: it breathed between the resting
+    /// colour and `palette.accent`, and a `Link` rests AT the accent
+    /// (`.buttonTextStyle { $0.foreground = .palette.accent }`), so the two ends
+    /// were the same colour and a focused link did not move. It appeared to
+    /// work under the pointer only because hover lifts the resting colour away
+    /// from the accent, which accidentally gave the breath somewhere to go.
+    ///
+    /// The bright end is where the label already is, so the peak of the breath
+    /// looks exactly like an unfocused link and the signal is the MOTION — the
+    /// same bargain `BorderRenderer.focusIndicatorPrefix` makes with the
+    /// accent, and the same `focusBorderDim` at the quiet end.
+    static func breathEnds(from resting: Color, palette: any Palette) -> (dim: Color, bright: Color) {
+        (resting.opacity(ViewConstants.focusBorderDim, over: palette.background), resting)
+    }
+
+    /// A one-line label that breathes between `ends` instead of growing a
+    /// bullet beside it — see ``_ButtonAppearance/indicatesFocusInLabel``.
     @MainActor
     static func breathingLabel(
-        _ text: String, style: TextStyle, resting: Color, bright: Color,
+        _ text: String, style: TextStyle, ends: (dim: Color, bright: Color),
         cycle: SelectionEmphasisCycle, indicating: Bool, isMeasuring: Bool
     ) -> FrameBuffer {
+        let resting = ends.bright
+        let bright = ends.bright
+        let dim = ends.dim
         func drawn(_ colour: Color) -> String {
             var style = style
             style.foregroundColor = colour
             return ANSIRenderer.render(text, with: style)
         }
-        let now = indicating ? cycle.colorNow(dim: resting, bright: bright) : resting
+        let now = indicating ? cycle.colorNow(dim: dim, bright: bright) : resting
         var buffer = FrameBuffer(lines: [drawn(now)])
         if !isMeasuring, indicating,
-            let run = cycle.run(
-                dim: resting, bright: bright, offsetX: 0, offsetY: 0, draw: drawn)
+            let run = cycle.run(dim: dim, bright: bright, offsetX: 0, offsetY: 0, draw: drawn)
         {
             buffer.animatedCells = [run]
         }
@@ -312,15 +332,15 @@ extension _ButtonStyleBody {
     /// it re-renders.
     @MainActor
     static func breathingLabel(
-        resting: Color, bright: Color, cycle: SelectionEmphasisCycle,
+        ends: (dim: Color, bright: Color), cycle: SelectionEmphasisCycle,
         indicating: Bool, isMeasuring: Bool, lines: (Color) -> [String]
     ) -> FrameBuffer {
-        let now = indicating ? cycle.colorNow(dim: resting, bright: bright) : resting
+        let now = indicating ? cycle.colorNow(dim: ends.dim, bright: ends.bright) : ends.bright
         var buffer = FrameBuffer(lines: lines(now))
         guard !isMeasuring, indicating, cycle.isAnimating else { return buffer }
         // One run per ROW: a run names a rectangle of cells on ONE line, and a
         // label may wrap onto several.
-        let framed = cycle.frames.map { lines($0.color(dim: resting, bright: bright)) }
+        let framed = cycle.frames.map { lines($0.color(dim: ends.dim, bright: ends.bright)) }
         buffer.animatedCells = buffer.lines.indices.compactMap { row in
             let rowFrames = framed.compactMap { row < $0.count ? $0[row] : nil }
             guard rowFrames.count == framed.count, let first = rowFrames.first else { return nil }
@@ -536,9 +556,9 @@ private struct _ButtonStyleBody: View, Renderable {
             // affordances.
             if appearance.indicatesFocusInLabel {
                 return Self.breathingLabel(
-                    paddedLabel, style: textStyle, resting: foregroundColor,
-                    bright: palette.accent, cycle: cycle, indicating: indicating,
-                    isMeasuring: context.isMeasuring)
+                    paddedLabel, style: textStyle,
+                    ends: Self.breathEnds(from: foregroundColor, palette: palette),
+                    cycle: cycle, indicating: indicating, isMeasuring: context.isMeasuring)
             }
 
             let prefixes = cycle.frames.map {
@@ -706,7 +726,7 @@ private struct _ButtonStyleBody: View, Renderable {
             // focus, on the passes where it re-renders.
             if appearance.indicatesFocusInLabel {
                 return Self.breathingLabel(
-                    resting: labelFg, bright: palette.accent.resolve(with: palette),
+                    ends: Self.breathEnds(from: labelFg, palette: palette),
                     cycle: cycle, indicating: indicating, isMeasuring: context.isMeasuring
                 ) { colour in
                     TUIkit.renderToBuffer(
