@@ -45,13 +45,57 @@ Two rows of that table decide the recommendation on their own — *retained* and
 
 ### 2.1 What they advertise
 
-| Host | version | Sixel in DA1 | Kitty `a=q` | Kitty virtual placement |
-|---|---|---|---|---|
-| Apple Terminal | 455.1 | no (`ESC[?1;2c`) | silent | silent |
-| iTerm2 | 3.6.11 | **yes** (`ESC[?64;1;2;4;6;17;18;21;22;52c`) | **`OK`** | *not measured — see §7* |
-| Ghostty | 1.3.1 | no (`ESC[?62;22;52c`) | **`OK`** | **`OK`** |
-| Warp | v0.2026.08.26… | no (`ESC[?62c`) | **`OK`** | **explicitly refused** |
-| tmux | 3.7c | **yes** (`ESC[?1;2;4c`) | silent | silent |
+| Host | version | Sixel in DA1 | Kitty `a=q` | Kitty virtual placement | Draws it? |
+|---|---|---|---|---|---|
+| Apple Terminal | 455.1 | no (`ESC[?1;2c`) | silent | silent | no — prints the APC |
+| iTerm2 | 3.6.11 | **yes** (`ESC[?64;1;2;4;6;17;18;21;22;52c`) | **`OK`** | **`OK`** | **NO — see §2.2** |
+| Ghostty | 1.3.1 | no (`ESC[?62;22;52c`) | **`OK`** | **`OK`** | **yes** |
+| Warp | v0.2026.08.26… | no (`ESC[?62c`) | **`OK`** | **explicitly refused** | no |
+| tmux | 3.7c | **yes** (`ESC[?1;2;4c`) | silent | silent | no |
+
+The last column is new, and it is the one that matters. Three of the five
+answer *something* to the protocol query and only **one of them draws a
+picture**.
+
+### 2.2 iTerm2 says yes to everything and draws nothing — measured 2026-09-03
+
+`placement_probe.py`, iTerm2 3.6.11:
+
+```
+Kitty answered      True
+virtual placement   True
+TRANSMIT_SMALL      OK        PLACE_SMALL   <ESC>_Gi=31;OK<ESC>\
+TRANSMIT_LARGE      OK        PLACE_LARGE   <ESC>_Gi=48879;OK<ESC>\
+PLACE_AFTER_DELETE  <ESC>_Gi=31;ENOENT:Put command refers to non-existent image with id: 31<ESC>\
+```
+
+…and no picture. **It is not lying.** The `ENOENT` after a delete proves
+iTerm2 really is tracking images by id and really is processing placement
+commands; it accepts every one of them and then never composites the pixels
+into the cells. The handshake asks *"will you accept a virtual placement?"*
+and gets a truthful yes. The question TUIkit needs answered is *"will you
+DRAW it?"*, and nothing in the protocol asks that.
+
+**The placeholder cells come back BLANK**, which is the detail that decides
+how bad this is. Apple Terminal and Warp both *print* the U+10EEEE glyphs, so
+a reader at least sees that something was attempted. iTerm2 consumes the
+placeholder codepoint and stops: the cells are spent, nothing is drawn in
+them, and because the framework believed the handshake the glyph renderer was
+never reached. An empty rectangle where the picture should be.
+
+So `TerminalClient.drawsNothingDespiteSayingOK(_:)` vetoes iTerm2 after the
+handshake. That is a host table, and §7's own commit argued against having one
+here — correctly, about Warp, which refuses honestly and is excluded by its
+own answer. iTerm2 is the case that argument did not cover. The table is kept
+as narrow as the evidence: a host goes on it only once somebody has watched it
+say yes and draw nothing, everything unmeasured still earns pictures by
+answering, and `TUIKIT_GRAPHICS=1` overrides it — so a future iTerm2 that
+implements placements needs no release here.
+
+**Also measured, and worth knowing separately:** a full-screen transmit costs
+iTerm2 **3672 ms for 19.7 MB**, against Ghostty's **417 ms for 20.1 MB** —
+about nine times slower to ingest the same picture. Even had it drawn, that is
+not a frame budget.
 
 Warp's refusal is worth quoting, because it is a *named* answer rather than a
 silence to be interpreted:

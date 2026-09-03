@@ -82,3 +82,33 @@ struct TerminalGraphicsQueryTests {
         #expect(!TerminalGraphicsQuery.sawFence(Array("\u{1B}_Gi=1;OK\u{1B}\\".utf8)))
     }
 }
+
+// MARK: - Hosts that say yes and draw nothing
+
+/// iTerm2 answers the handshake `OK` at every step and then composites no
+/// image, which is the one shape the handshake was designed on the belief that
+/// nothing could take: `8c22e630` argued the Kitty protocol is the capability
+/// that answers for itself, and it is — for the question it is asked. The
+/// handshake asks "will you accept a virtual placement?"; TUIkit needs "will
+/// you DRAW it?", and no query asks that.
+@MainActor
+@Suite("Graphics: hosts that answer OK and draw nothing")
+struct GraphicsLiarTests {
+
+    @Test("iTerm2 is excluded despite answering the handshake")
+    func iTerm2IsExcluded() {
+        #expect(TerminalClient.drawsNothingDespiteSayingOK(.iTerm2))
+    }
+
+    /// The exclusion stays NARROW. A host is on the list only once somebody
+    /// has watched it say yes and draw nothing; every other terminal — the
+    /// unmeasured ones especially — still earns pictures by answering.
+    @Test(
+        "No other modelled host is excluded",
+        arguments: [
+            TerminalClient.Program.ghostty, .warp, .appleTerminal, .tmux, .unidentified,
+        ])
+    func othersAreNotExcluded(_ program: TerminalClient.Program) {
+        #expect(!TerminalClient.drawsNothingDespiteSayingOK(program))
+    }
+}
