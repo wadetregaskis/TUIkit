@@ -112,6 +112,19 @@ when unset), the visual/aspect probes print to the terminal.
   the same ramp four ways — `{f=24, f=32}` × `{single escape, chunked}` — and
   places each, so which letters appear names the cause. No reply to read: the
   question is what a human can see, so it prints a card and asks.
+- `placeholder_spelling_probe.py` — how must a placeholder CELL be spelled
+  for a terminal to draw it? `pixel_format_probe.py` established that iTerm2
+  acknowledges everything, draws a direct placement, and draws nothing for a
+  virtual one; "placeholders unimplemented" is one explanation and this tests
+  a cheaper one. TUIkit writes TWO combining marks per cell — row and column —
+  and omits the third, which states the image id's high byte; a decoder
+  carrying a sentinel for "absent" rather than zero would look up an image
+  that was never sent, and draw nothing having acknowledged everything.
+  Crossed with the foreground spelling (24-bit, which TUIkit ships, against
+  the 256-colour form kitty's own doc example uses), that is a 2x2: one image,
+  one placement, four spellings of the cells that summon it. Also measures
+  what U+10EEEE advances the cursor by, which `Terminal-compatibility.md`
+  records as "one cell on every host" having never measured iTerm2.
 - `cell_aspect_probe.py` — the terminal cell's height:width ratio (what
   `Image` needs to render undistorted), via `TIOCGWINSZ` pixel fields and
   the `CSI 14t`/`18t` escape queries. Report to `$PROBE_OUT` (default
