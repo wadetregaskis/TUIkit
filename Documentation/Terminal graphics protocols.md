@@ -57,7 +57,7 @@ The last column is new, and it is the one that matters. Three of the five
 answer *something* to the protocol query and only **one of them draws a
 picture**.
 
-### 2.2 iTerm2 says yes to everything and draws nothing — measured 2026-09-03
+### 2.2 iTerm2 says yes to everything and draws nothing — OPEN, measured 2026-09-03
 
 `placement_probe.py`, iTerm2 3.6.11:
 
@@ -76,46 +76,37 @@ into the cells. The handshake asks *"will you accept a virtual placement?"*
 and gets a truthful yes. The question TUIkit needs answered is *"will you
 DRAW it?"*, and nothing in the protocol asks that.
 
-**The placeholder cells come back BLANK**, which is the detail that decides
-how bad this is. Apple Terminal and Warp both *print* the U+10EEEE glyphs, so
-a reader at least sees that something was attempted. iTerm2 consumes the
-placeholder codepoint and stops: the cells are spent, nothing is drawn in
-them, and because the framework believed the handshake the glyph renderer was
-never reached. An empty rectangle where the picture should be.
+**The placeholder cells come back BLANK**, which decides how bad this is.
+Apple Terminal and Warp both *print* the U+10EEEE glyphs, so a reader sees
+that something was attempted. iTerm2 consumes the placeholder codepoint and
+stops: the cells are spent, nothing is drawn in them, and because the
+framework believed the handshake the glyph renderer was never reached.
 
-So `TerminalClient.drawsNothingDespiteSayingOK(_:)` vetoes iTerm2 after the
-handshake. That is a host table, and §7's own commit argued against having one
-here — correctly, about Warp, which refuses honestly and is excluded by its
-own answer. iTerm2 is the case that argument did not cover. The table is kept
-as narrow as the evidence: a host goes on it only once somebody has watched it
-say yes and draw nothing, everything unmeasured still earns pictures by
-answering, and `TUIKIT_GRAPHICS=1` overrides it — so a future iTerm2 that
-implements placements needs no release here.
+**This is not "iTerm2 cannot do graphics", and must not be fixed by deciding
+that it cannot.** iTerm2 is believed to have worked, and the shape of the
+evidence says something specific changed rather than something being absent.
+Two things differ between the exchange iTerm2 acknowledges and the ones it
+ignores, and they travel together in everything measured so far — which is
+why neither is ruled out:
 
-**Also measured, and worth knowing separately:** a full-screen transmit costs
-iTerm2 **3672 ms for 19.7 MB**, against Ghostty's **417 ms for 20.1 MB** —
-about nine times slower to ingest the same picture. Even had it drawn, that is
-not a frame budget.
+| | pixel format | chunking |
+|---|---|---|
+| the startup handshake — acknowledged | `f=32` (one RGBA pixel) | one escape, **no `m` key at all** |
+| `placement_probe.py`'s card — blank | `f=24` | `m=1` … `m=0` |
+| a real `Image` — blank | `f=24` (measured on the wire) | `m=1` … `m=0` |
 
-Warp's refusal is worth quoting, because it is a *named* answer rather than a
-silence to be interpreted:
+`f=24` is the suspicious one on timing: TUIkit sent `f=32` for everything
+until `2eb6c256`, which added three-bytes-a-pixel for opaque photographs
+hours after graphics shipped in `eb829a29` on the same day. An opaque
+photograph is exactly what the Example draws. But chunking is an equally good
+candidate on the evidence, since the only single-escape transmission anybody
+has made is one pixel wide.
 
-```
-ESC_Gi=42;InvalidKittyAction(InvalidControlData(UnicodePlaceholderUnsupported))ESC\
-```
-
-That is the protocol's own error channel telling us a specific feature is
-missing while the protocol as a whole is present. **No other terminal
-capability in this project can be interrogated that precisely** — every other
-one is a table keyed on an identified host. It is the single strongest
-argument for Kitty over the other two, and it is the reason detection here can
-be a handshake rather than a guess.
-
-`XTGETTCAP` for the `Su` terminfo capability is **not** a usable Sixel signal:
-iTerm2 answers `DCS 0 + r … ST` (not present) while its own DA1 advertises
-Sixel, and Ghostty answers `DCS 1 + r 5375 ST` — a success flag with no value —
-while supporting no Sixel at all. Use DA1.
-
+`Tools/TerminalProbes/pixel_format_probe.py` separates them: the same ramp
+transmitted four ways — `{f=24, f=32}` × `{single escape, chunked}` — each
+virtually placed and labelled, so which letters draw names the cause. Until
+it has been run, this section records a symptom and two hypotheses, and
+**nothing in the framework has been changed on the strength of them.**
 ### 2.2 What they do when you send one — and the headline finding
 
 Each payload was printed between two brackets on a cleared row and the cursor

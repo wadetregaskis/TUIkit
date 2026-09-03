@@ -71,45 +71,8 @@ extension TerminalClient {
         switch ProcessInfo.processInfo.environment["TUIKIT_GRAPHICS"] {
         case "1": return true
         case "0": return false
-        default: return (detectedGraphics ?? false) && !drawsNothingDespiteSayingOK(current.program)
+        default: return detectedGraphics ?? false
         }
-    }
-
-    /// Hosts measured to answer the handshake `OK` and then draw **nothing**.
-    ///
-    /// This is a host table, and `8c22e630` argued against having one here on
-    /// the grounds that the Kitty protocol is the one capability that answers
-    /// for itself. That argument was right about Warp and wrong in general,
-    /// and iTerm2 is why: the handshake asks *"will you accept a virtual
-    /// placement?"*, iTerm2 answers `OK` and **means it** — delete the image
-    /// and a later placement comes back
-    /// `ENOENT: Put command refers to non-existent image with id: 31`, so it
-    /// really is tracking images and really is processing the command — and
-    /// then it never composites one. The question TUIkit actually needs
-    /// answered is *"will you DRAW it?"*, and no query in the protocol asks
-    /// that.
-    ///
-    /// Measured 2026-09-03 with `Tools/TerminalProbes/placement_probe.py`,
-    /// iTerm2 3.6.11: `Kitty answered True`, `virtual placement True`, every
-    /// transmit and placement `OK`, and no picture. The placeholder cells come
-    /// back **blank** — not the image, and not the U+10EEEE glyphs either,
-    /// which Apple Terminal and Warp both print. So iTerm2 consumes the
-    /// placeholder codepoint and stops there; the cells are spent and nothing
-    /// is drawn in them, which is worse for a user than a refusal because the
-    /// glyph fallback is never reached.
-    ///
-    /// Deliberately narrow: a host is in this list only when somebody has
-    /// watched it say yes and draw nothing. Everything else still gets
-    /// pictures by answering the handshake, which is the property worth
-    /// keeping. ``graphicsSupport`` and `TUIKIT_GRAPHICS=1` both override it,
-    /// so a future iTerm2 that implements placements needs no release here.
-    ///
-    /// Read from ``current`` rather than ``effective``: this is a fact about
-    /// the terminal actually painting the screen, and simulating a host is a
-    /// statement about which compensations to emit rather than a claim about
-    /// what can be drawn.
-    static func drawsNothingDespiteSayingOK(_ program: Program) -> Bool {
-        program == .iTerm2
     }
 
     /// Runs the startup handshake, if its answer is not already known, and

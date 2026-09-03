@@ -101,6 +101,17 @@ when unset), the visual/aspect probes print to the terminal.
   encodings (256-colour and direct), delete-by-id, and what a full-screen
   transmit costs in bytes and milliseconds. Skips the big transmit on a
   terminal that answered no Kitty query — Apple Terminal would print it.
+- `pixel_format_probe.py` — the question `OK` does not answer: which
+  transmissions does a terminal actually **draw**? `placement_probe.py`
+  established that iTerm2 acknowledges every graphics command — including a
+  real `ENOENT` for a placement after a delete, so it genuinely tracks images
+  — and then composites nothing. Two things differ between the exchange it
+  acknowledges (the startup handshake: `f=32`, one escape, no `m` key) and the
+  ones it ignores (a real picture: `f=24`, chunked `m=1` … `m=0`), and they
+  travel together everywhere measured, so neither is ruled out. This transmits
+  the same ramp four ways — `{f=24, f=32}` × `{single escape, chunked}` — and
+  places each, so which letters appear names the cause. No reply to read: the
+  question is what a human can see, so it prints a card and asks.
 - `cell_aspect_probe.py` — the terminal cell's height:width ratio (what
   `Image` needs to render undistorted), via `TIOCGWINSZ` pixel fields and
   the `CSI 14t`/`18t` escape queries. Report to `$PROBE_OUT` (default
