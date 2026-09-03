@@ -1824,21 +1824,24 @@ backwards.
 
 | Host | Click over an OSC 8 link | Seeing the destination | Shift-click |
 |---|---|---|---|
-| iTerm2 | **the terminal opens it, on every modifier** | hold ⌘ and hover → the URL appears bottom-left of the window | opens the link (no selection) |
+| iTerm2 | **⌘-click: the terminal opens it** (asking which browser). Other clicks reach the application. | hold ⌘ and hover → the URL appears bottom-left of the window | selects text |
 | Ghostty | — | hold ⌘-shift and hover → the URL appears | selects text |
 | Warp | n/a (does not honour OSC 8) | n/a | selects text |
 
 Three things follow, and the first is the one that was wrong before.
 
-- **A hyperlink outranks the mouse protocol in iTerm2.** Over a linked cell
-  iTerm2 prefers opening the URL to reporting the click, *whatever* modifier
-  is held — plain, ⌘, shift, ⌘-shift. ⌘-click additionally asks whether to
-  open in the system browser or iTerm2's built-in one, but it is still
-  handled as a link click. This does not contradict "iTerm2 forwards ⌘-click
-  as the meta bit" in the Input section: that is what happens over ordinary
-  cells, and a linked cell is the exception. It does mean an app cannot
-  receive a click on its own link in iTerm2 — plan for the terminal winning
-  there.
+- **In iTerm2 the gesture chooses the opener, and the outcome does not reveal
+  which.** ⌘-click is taken by the terminal; any other click is reported to
+  the application, which opens the same URL through ``OpenURLAction``. The
+  browser that appears is identical either way, which is why this entry first
+  read "the terminal opens it, on every modifier" — that observation was of
+  the OUTCOME, and the outcome cannot tell them apart. Distinguishing them
+  needs the application to say when it acted: `Example`'s Buttons & Links
+  page now prints a line every time TUIkit does the opening, and that readout
+  is the instrument this row should be re-measured with.
+
+  It also means the two openers put the URL on **different machines** over
+  ssh — see below.
 - **Shift-click is NOT the bypass.** The xterm convention says shift means
   "handle this yourself, do not report it", and the earlier paragraph here
   recommended it on that basis. In practice Ghostty and Warp both take
@@ -1849,6 +1852,36 @@ Three things follow, and the first is the one that was wrong before.
   hosts that honour OSC 8 reveal the URL while a modifier is held (iTerm2 ⌘,
   Ghostty ⌘-shift) rather than on hover alone. Ghostty's `link-previews`
   setting has an `osc8` mode, but no unmodified hover preview was observed.
+
+### Which MACHINE opens it — the axis this table was missing
+
+`OpenURLAction` runs `/usr/bin/open` or `/usr/bin/xdg-open` **on the machine
+the application is running on**. So the gesture above decides more than which
+component acts:
+
+| | terminal opens it | application opens it |
+|---|---|---|
+| local | the user's browser | the user's browser — indistinguishable |
+| over ssh | **the user's browser** | the *server's* browser, or nothing at all |
+
+Over a hop, the terminal taking the click is the only path that reaches the
+user's own browser. The application path runs on the server, where
+`xdg-open` ships in `xdg-utils` — a **desktop** package, absent from Debian
+and Ubuntu server images, Fedora minimal, Alpine and every distroless image.
+Where it is absent, `systemOpen`'s loop body never executes and **nothing is
+spawned at all**: no process, no output, no trace. Where it is present on a
+headless box it exits 3 into a `/dev/null` stderr, which the doc comment on
+`systemOpen` explains — an `xdg-open` complaint would otherwise land mid-frame
+at the renderer's cursor. Both failures are therefore silent by construction,
+and the keyboard route (Enter on a focused link) is *always* the application
+path, so it never reaches the user's browser over ssh at all.
+
+**The remedy that already exists** is identification, not code: `TERM_PROGRAM`
+does not survive an ssh hop, so a terminal that would have got an OSC 8 escape
+often falls to `.unidentified` and gets none. `TUIKIT_HYPERLINKS=1` on the
+remote host restores emission (`TerminalHyperlinkSupport.swift`), via `SendEnv`
+/ `AcceptEnv` or a line in a remote profile. `LC_TERMINAL` survives the hop on
+its own where iTerm2's shell integration is installed.
 
 ### Terminals also detect URLs in the TEXT, which is not this feature
 

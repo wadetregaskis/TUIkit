@@ -16,6 +16,33 @@ import TUIkit
 /// - ButtonRow for horizontal groups
 /// - Focus navigation with Tab
 /// - Live click counter demonstrating `@State` persistence across re-renders
+/// Records the links TUIkit opened itself.
+///
+/// A reference type, and `@unchecked Sendable`, because `OpenURLAction`'s
+/// handler is `@Sendable` and so cannot mutate the page's main-actor `@State`
+/// — the same shape `LinkTests` uses for the same reason. It is sound for the
+/// same reason `TerminalImageStore`'s is: every write comes from a `Link`'s
+/// button action and every read from a render, both on the run loop's own
+/// thread, one pass at a time.
+///
+/// It needs no change notification of its own. The click that causes an open IS
+/// an input event, so the loop renders a frame straight after it and that frame
+/// reads these values.
+private final class LinkOpenLog: @unchecked Sendable {
+    private(set) var last = ""
+    /// How many opens TUIkit has performed. Named `opens` rather than `count`
+    /// so the emptiness check below reads as arithmetic and not as a
+    /// collection being probed — which is what `count > 0` looks like.
+    private(set) var opens = 0
+
+    var hasOpened: Bool { opens > 0 }
+
+    func record(_ url: URL) {
+        last = url.absoluteString
+        opens += 1
+    }
+}
+
 struct ButtonsPage: View {
     @State private var clickCount: Int = 0
     @State private var tintToggle: Bool = true
@@ -25,6 +52,16 @@ struct ButtonsPage: View {
     /// reserved beside them, which is what lets a link sit inside a sentence.
     @State private var linkBullet: Bool = false
 
+    /// Where TUIkit's OWN opens are recorded.
+    ///
+    /// Worth instrumenting because the two openers are otherwise
+    /// indistinguishable: where a terminal honours OSC 8 it may open a link on
+    /// a click the application never sees, and where it does not — or on a
+    /// gesture it does not claim — the click reaches `Link`'s button and
+    /// `OpenURLAction` opens the same URL. Same browser, same page, no way to
+    /// tell which one did it. This only moves for the second.
+    @State private var openLog = LinkOpenLog()
+
     /// Read so the demo's tint can be chosen against the palette in force, and
     /// re-chosen when the theme changes.
     @Environment(\.palette) private var palette
@@ -33,6 +70,9 @@ struct ButtonsPage: View {
         ScrollView {
             content
         }
+        // Page-level, so every link reports — the ones in the prose section
+        // below included, not just the two beside the readout.
+        .environment(\.openURL, recordingOpener)
         .appHeader {
             DemoAppHeader("menu.item.buttons")
         }
@@ -220,6 +260,20 @@ struct ButtonsPage: View {
             // activatable controls: Tab to it and press Enter, or click it.
     }
 
+    /// Records every open TUIkit performs, then hands the URL on to the system
+    /// opener exactly as the default action would.
+    ///
+    /// `.systemAction`, not `.handled`: a demo that swallowed the open would be
+    /// showing something a real app does not do, and the point here is which
+    /// component acted, not whether anything happened.
+    private var recordingOpener: OpenURLAction {
+        let log = openLog
+        return OpenURLAction { url in
+            log.record(url)
+            return .systemAction
+        }
+    }
+
     @ViewBuilder
     private var linksSection: some View {
             DemoSection("page.buttons.section.links") {
@@ -237,8 +291,28 @@ struct ButtonsPage: View {
                         }
                     }
                     .linkFocusIndicator(linkBullet ? .bullet : .text)
+                    appOpenedReadout
                 }
             }
+    }
+
+    /// What TUIkit itself opened — blank until it has opened something, because
+    /// an empty readout says less than no readout at all.
+    @ViewBuilder
+    private var appOpenedReadout: some View {
+        if openLog.hasOpened {
+            // Two rows rather than one interpolated `Text`: an interpolated
+            // literal becomes a key with `%@` in it, and
+            // `page.buttons.links.openedCount %@` is not a key anybody wants to
+            // find in a translation table.
+            HStack(spacing: 3) {
+                ValueDisplayRow("page.buttons.links.openedByApp", openLog.last)
+                ValueDisplayRow("page.buttons.links.openedCount", "\(openLog.opens)")
+            }
+        } else {
+            Text("page.buttons.links.openedNothingYet")
+                .foregroundStyle(.palette.foregroundTertiary)
+        }
     }
 
     /// What the terminal painting this app does with the OSC 8 escape a `Link`
