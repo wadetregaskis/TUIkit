@@ -271,9 +271,54 @@ private struct TerminalHyperlinkModifier: ViewModifier {
 /// Reads ``OpenURLAction`` from the environment and drives a plain, accent-tinted
 /// button — reusing all of `Button`'s focus, keyboard, mouse, and disabled
 /// handling — whose action opens the destination.
+/// Swallows the repeats a held Enter produces on a link.
+///
+/// A held key auto-repeats in the terminal, so the application receives a
+/// stream of Enter presses and every one of them is a real activation. That is
+/// what a `Button` wants — holding a `+` should keep counting — and it is
+/// exactly wrong for a link, where each repeat is another browser window, or
+/// under a custom `OpenURLAction` another request. So a link is the exception,
+/// and only a link: nothing here reaches `Button`.
+///
+/// A window rather than a count, because the two cases differ in TIMING and in
+/// nothing else — a key repeat arrives every few tens of milliseconds, and two
+/// deliberate presses do not. 700 ms is the figure `AutoRepeatTimer` and
+/// `ScrollbarRenderer` already agree on for "one gesture, not two", measured
+/// against a careful click on a one-cell arrow; the same question deserves the
+/// same answer.
+///
+/// `@unchecked Sendable` for the reason `TerminalImageStore`'s is: written
+/// from a key handler and read from the next one, both on the run loop's own
+/// thread, one pass at a time.
+private final class LinkActivationGate: @unchecked Sendable {
+    private var lastNanos: UInt64 = 0
+
+    /// Milliseconds within which a second activation is a key repeat rather
+    /// than a second press — ``AutoRepeatTimer/defaultInitialDelayMs``,
+    /// because a link and a stepper arrow must not disagree about where one
+    /// gesture ends.
+    static var windowMs: Int { AutoRepeatTimer.defaultInitialDelayMs }
+
+    func allows(nowNanos: UInt64) -> Bool {
+        let window = UInt64(Self.windowMs) * 1_000_000
+        // `lastNanos == 0` is the first activation of this link's life, which
+        // must always pass however early in the process it lands.
+        guard lastNanos != 0, nowNanos &- lastNanos < window else {
+            lastNanos = nowNanos
+            return true
+        }
+        return false
+    }
+}
+
 private struct _Link<Label: View>: View {
     let destination: URL
     let label: Label
+
+    /// Persisted across frames, because the whole question is what happened on
+    /// the PREVIOUS activation — a gate rebuilt each render would let every
+    /// repeat through.
+    @State private var gate = LinkActivationGate()
 
     @Environment(\.openURL) private var openURL
     @Environment(\.linkUnderline) private var underline
@@ -301,9 +346,15 @@ private struct _Link<Label: View>: View {
         // where the environment is readable, and carried into the style as a
         // value — a `ButtonStyle` is chosen at build time and cannot branch on
         // an environment it does not have.
-        return Button(action: { open(destination) }, label: {
-            label.underline(underline)
-        })
+        let gate = self.gate
+        return Button(
+            action: {
+                guard gate.allows(nowNanos: DispatchTime.now().uptimeNanoseconds) else { return }
+                open(destination)
+            },
+            label: {
+                label.underline(underline)
+            })
         .buttonStyle(_LinkButtonStyle(indicator: focusIndicator))
         .buttonTextStyle { $0.foreground = .palette.accent }
         // Outermost, so the link covers everything the button style drew —

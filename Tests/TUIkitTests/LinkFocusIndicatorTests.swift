@@ -150,3 +150,66 @@ struct LinkFocusIndicatorTests {
         #expect(Set(run.frames).count > 1, "unhovered focus must still move")
     }
 }
+
+/// A held Enter auto-repeats in the terminal, so the application receives a
+/// stream of activations and every one is real. A `Button` wants that — holding
+/// `+` should keep counting. A link does not: each repeat is another browser
+/// window, or under a custom `OpenURLAction` another request.
+@MainActor
+@Suite("Link activation does not auto-repeat")
+struct LinkActivationRepeatTests {
+
+    private final class OpenCount: @unchecked Sendable {
+        var count = 0
+    }
+
+    private func harness() -> (TUIContext, RenderContext, FocusManager) {
+        let tui = TUIContext()
+        var environment = EnvironmentValues()
+        let manager = FocusManager()
+        environment.focusManager = manager
+        environment.applyRuntimeServices(from: tui)
+        return (
+            tui,
+            RenderContext(
+                availableWidth: 40, availableHeight: 4, environment: environment,
+                tuiContext: tui),
+            manager
+        )
+    }
+
+    /// Activating repeatedly within the window opens once. The activations are
+    /// delivered back to back, which is what a key repeat looks like.
+    @Test("A burst of activations opens the link once")
+    func burstOpensOnce() throws {
+        let counter = OpenCount()
+        let (tui, context, manager) = harness()
+        let view = Link("swift.org", destination: URL(string: "https://swift.org")!)
+            .environment(\.openURL, OpenURLAction { _ in counter.count += 1 })
+
+        for _ in 0..<5 {
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            manager.beginRenderPass()
+            _ = renderToBuffer(view, context: context)  // registers + auto-focuses
+            _ = manager.dispatchKeyEvent(KeyEvent(key: .enter))
+            tui.stateStorage.endRenderPass()
+            manager.endRenderPass()
+        }
+
+        #expect(
+            counter.count == 1,
+            "five back-to-back activations should open once, opened \(counter.count) times")
+    }
+
+    /// …and the window is the same one every other "is this one gesture or
+    /// two?" decision in the framework uses. A link and a stepper arrow must
+    /// not disagree about where one gesture ends.
+    @Test("The window matches the framework's other repeat decisions")
+    func windowMatchesAutoRepeat() {
+        #expect(
+            AutoRepeatTimer.defaultInitialDelayMs * 1_000_000
+                == Int(ScrollbarRenderer.autoRepeatInitialDelayNanos))
+        #expect(AutoRepeatTimer().initialDelayMs == AutoRepeatTimer.defaultInitialDelayMs)
+    }
+}

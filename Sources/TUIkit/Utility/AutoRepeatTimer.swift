@@ -38,6 +38,16 @@ import Dispatch
 /// Cancelling is idempotent.
 @MainActor
 public final class AutoRepeatTimer {
+    /// The delay every "is this one gesture or two?" decision in the framework
+    /// uses, in milliseconds.
+    ///
+    /// A static as well as a default so it can be read where a timer cannot be
+    /// built — `Link`'s activation gate is `nonisolated` and this type is
+    /// `@MainActor`. One number, three readers (this timer,
+    /// ``ScrollbarRenderer/autoRepeatInitialDelayNanos``, and that gate), all
+    /// pinned together by test.
+    nonisolated public static let defaultInitialDelayMs = 700
+
     /// Milliseconds between the initial action and the first
     /// repeat. Long enough that a brief tap fires only once,
     /// short enough that a held press starts repeating without
@@ -72,7 +82,7 @@ public final class AutoRepeatTimer {
     /// - Parameters:
     ///   - initialDelayMs: See ``initialDelayMs``.
     ///   - repeatIntervalMs: See ``repeatIntervalMs``.
-    public init(initialDelayMs: Int = 700, repeatIntervalMs: Int = 80) {
+    public init(initialDelayMs: Int = AutoRepeatTimer.defaultInitialDelayMs, repeatIntervalMs: Int = 80) {
         self.initialDelayMs = initialDelayMs
         self.repeatIntervalMs = repeatIntervalMs
     }
