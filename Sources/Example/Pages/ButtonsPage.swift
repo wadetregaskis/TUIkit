@@ -270,12 +270,15 @@ struct ButtonsPage: View {
             // activatable controls: Tab to it and press Enter, or click it.
     }
 
-    /// Records every open TUIkit performs, then hands the URL on to the system
-    /// opener exactly as the default action would.
+    /// Records every activation TUIkit handles, then hands the URL on exactly
+    /// as the default action would.
     ///
-    /// `.systemAction`, not `.handled`: a demo that swallowed the open would be
-    /// showing something a real app does not do, and the point here is which
-    /// component acted, not whether anything happened.
+    /// `.systemAction`, not `.handled`: the demo must show what a real app
+    /// does, and what a real app does is defer — which since 2026-09-03 means
+    /// the framework declines to launch anything unless
+    /// `TerminalClient.urlOpeningSupport` says this machine is the user's. So
+    /// this readout says the click reached the APP rather than the terminal,
+    /// which is the distinction that cannot otherwise be seen.
     private var recordingOpener: OpenURLAction {
         let log = openLog
         return OpenURLAction { url in
