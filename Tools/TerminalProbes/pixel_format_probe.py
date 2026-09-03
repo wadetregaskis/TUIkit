@@ -17,6 +17,7 @@ acknowledges and the ones it ignores.
   C  12x4     f=24  chunked, m=1 … m=0      virtual placement
   D  12x4     f=32  chunked, m=1 … m=0      virtual placement
   E  12x4     f=24  chunked                 **DIRECT placement, no U=1**
+     (placed once, in situ, at its own spot in the card)
 
 **E is the control, and it is the one that matters most.** A–D all draw
 through Unicode placeholders, so if the terminal's placeholder support is
@@ -32,6 +33,17 @@ could not tell a refusal from an acceptance that drew nothing. A diagnostic
 must never suppress the errors it exists to find. (Anything on a RENDER path
 must still use `q=2`: those replies arrive on the application's stdin, where
 the input parser reads them as typing.)
+
+Everything runs in raw mode and every byte — text included — goes out through
+one `os.write` on the terminal's own descriptor. Two reasons, both learned the
+hard way. Mixing buffered `print` with `os.write` reorders the text against
+the escapes, and for a probe whose entire result is WHERE a picture landed
+that is not cosmetic. And a DIRECT placement draws the instant it is sent, so
+its reply has to be collected at the spot the picture belongs: an earlier
+version placed it during a probing phase, drew it in the top-left corner, and
+tried to take it back with `a=d,d=i` — which cost the image, so E stopped
+drawing in Ghostty and only flashed in iTerm2 before the clear. A probe should
+not need to undo something it should not have done.
 
 Run INSIDE the terminal under test. Prints a card and asks; there is no way
 to read back what was painted.
@@ -180,72 +192,74 @@ def main():
     cell_width, cell_height = cell_pixels(fd)
     saved = termios.tcgetattr(fd)
     tty.setraw(fd)
+
+    # Everything — text included — goes out through `os.write` on the same
+    # descriptor `ask` uses. Mixing it with buffered `print` reorders the
+    # output against the escapes, which for a probe whose whole result is
+    # WHERE a picture landed is not a cosmetic problem.
+    def out(text=""):
+        os.write(fd, (text + "\r\n").encode("utf-8"))
+
     try:
-        results = []
+        out()
+        out(f"cell pixels: {cell_width}x{cell_height}")
+        out()
+
+        # A-D: transmit and place first — a VIRTUAL placement draws nothing
+        # until a placeholder cell carrying its id is written, so the replies
+        # can be collected here and the pictures appear below, in the card,
+        # where those cells are printed.
         for index, (label, columns, rows, opaque, description) in enumerate(CASES):
             image_id = 7000 + index
             payload = ramp(columns * cell_width, rows * cell_height, opaque)
             transmitted = reply(ask(fd, transmit_commands(
                 payload, columns * cell_width, rows * cell_height, image_id, opaque)))
             placed = reply(ask(fd, virtual_placement(image_id, columns, rows)))
-            results.append((label, description, columns, rows, image_id, transmitted, placed))
+            out(f"  {label}: {description}")
+            out(f"       transmit -> {transmitted}")
+            out(f"       place    -> {placed}")
+            for line in placeholder_rows(image_id, columns, rows):
+                out("       " + line)
+            out()
 
         # E — the control. Same bytes, no placeholders, so it separates "can
         # this terminal put these pixels on the screen at all" from "does it
         # honour placeholder cells".
         #
-        # Stored here and PLACED LATER, in two steps rather than one `a=T`: a
-        # direct placement draws at the cursor the moment it is sent, and the
-        # cursor at this point is wherever the probing left it — the picture
-        # would land at the top of the screen and then be printed over by the
-        # card. So the answer is collected now (a throwaway placement, whose
-        # pixels the card overwrites and whose REPLY is the thing wanted) and
-        # the visible one is emitted below, at the cursor position where it
-        # belongs.
+        # Placed ONCE, here, at the cursor position where it belongs. A direct
+        # placement draws the instant it is sent, so collecting its reply
+        # anywhere else means drawing it somewhere else — which is what the
+        # previous version did, and then tried to undo with `a=d,d=i`. That
+        # delete cost the image: E stopped drawing in Ghostty and iTerm2 showed
+        # it only as a flash in the top-left corner before it was cleared. The
+        # lesson is not about `d=i`'s semantics, it is that a probe should not
+        # need to undo something it should not have done.
         direct_id = 7100
         direct = ramp(12 * cell_width, 4 * cell_height, True)
         direct_transmitted = reply(ask(fd, transmit_commands(
             direct, 12 * cell_width, 4 * cell_height, direct_id, True)))
+        out("  E: f=24  chunked            DIRECT placement, no placeholders")
+        out(f"       transmit -> {direct_transmitted}")
+        out("       the picture, if any, is drawn at the cursor — here:")
+        out()
+        os.write(fd, b"       ")
         direct_placed = reply(ask(fd, direct_placement(direct_id, 12, 4)))
-        # …and take that throwaway placement back off the screen. `d=i`, the
-        # lower case, removes PLACEMENTS and leaves the stored image, which is
-        # exactly what is wanted: the picture below still needs the pixels.
-        # Without this the probe draws a sixth image nobody asked for, at the
-        # top of the output, and a reader counts six pictures for five cases.
-        os.write(fd, f"\x1b_Ga=d,d=i,q=2,i={direct_id}\x1b\\".encode("latin-1"))
+        # Past whatever it drew, so the questions below are not written over it.
+        for _ in range(5):
+            out()
+        out(f"       place    -> {direct_placed}")
+        out()
+
+        for line in QUESTIONS.splitlines():
+            out(line)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, saved)
 
-    # From a clean screen: the probing above drew and then removed a
-    # placement, and a terminal that ignored the removal would otherwise leave
-    # it sitting in the middle of the card.
-    sys.stdout.write("\x1b[2J\x1b[H")
-    print(f"cell pixels: {cell_width}x{cell_height}\n")
-    for label, description, columns, rows, image_id, transmitted, placed in results:
-        print(f"  {label}: {description}")
-        print(f"       transmit -> {transmitted}")
-        print(f"       place    -> {placed}")
-        for line in placeholder_rows(image_id, columns, rows):
-            print("       " + line)
-        print()
 
-    print("  E: f=24  chunked            DIRECT placement, no placeholders")
-    print(f"       transmit -> {direct_transmitted}")
-    print(f"       place    -> {direct_placed}")
-    print("       the picture, if any, is drawn at the cursor — here:")
-    print()
-    # `q=2` on this one: cooked mode is back, so nothing is reading, and an
-    # acknowledgement would be typed at the shell after the probe exits. The
-    # ANSWER was already collected above, in raw mode, where it could be read.
-    sys.stdout.write(
-        f"\x1b_Ga=p,q=2,i={direct_id},c=12,r=4\x1b\\")
-    sys.stdout.flush()
-    print("\n" * 4)
-
-    print("""
+QUESTIONS = """
   A-D should each be followed by a hue ramp: one coloured cell for A and B,
-  a 12x4 ramp fading downwards for C and D. E should have drawn one at the
-  cursor, above.
+  a 12x4 ramp fading downwards for C and D. E should have drawn one at its
+  own spot, above its `place ->` line.
 
   Report which of A B C D E drew, and paste the transmit/place lines.
 
@@ -260,7 +274,7 @@ def main():
                                      transmit lines for a refusal
     all five draw .................. this terminal is fine; the fault is in
                                      what TUIkit sends around them
-""")
+"""
 
 
 if __name__ == "__main__":
