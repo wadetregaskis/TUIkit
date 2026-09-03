@@ -320,10 +320,15 @@ private struct _Link<Label: View>: View {
     /// repeat through.
     @State private var gate = LinkActivationGate()
 
+    /// Whether the destination popover is up. Activating the link raises it,
+    /// which is what activation DOES now — see the comment on `body`.
+    @State private var showingDestination = false
+
     @Environment(\.openURL) private var openURL
     @Environment(\.linkUnderline) private var underline
     @Environment(\.terminalHyperlinks) private var terminalHyperlinks
     @Environment(\.linkFocusIndicator) private var focusIndicator
+    @Environment(\.linkDisplay) private var display
 
     var body: some View {
         // Resolve the action and destination NOW, during render, and capture the
@@ -347,14 +352,23 @@ private struct _Link<Label: View>: View {
         // value — a `ButtonStyle` is chosen at build time and cannot branch on
         // an environment it does not have.
         let gate = self.gate
+        let showing = $showingDestination
+        // Activation opens the URL **and** raises the destination popover, and
+        // the second half is not a convenience: `open` runs the system opener
+        // on the machine the app is running on, which over ssh is the server.
+        // If it declines — or spawns nothing, which is the usual shape of that
+        // failure — the popover is the only thing that tells the user where
+        // the link went. It is raised unconditionally rather than on failure
+        // because "did the browser open" is not a question this process can
+        // answer: the child is not waited on, and on a headless box there is
+        // no child.
         return Button(
             action: {
                 guard gate.allows(nowNanos: DispatchTime.now().uptimeNanoseconds) else { return }
                 open(destination)
+                showing.wrappedValue = true
             },
-            label: {
-                label.underline(underline)
-            })
+            label: { resolvedLabel })
         .buttonStyle(_LinkButtonStyle(indicator: focusIndicator))
         .buttonTextStyle { $0.foreground = .palette.accent }
         // Outermost, so the link covers everything the button style drew —
@@ -363,5 +377,39 @@ private struct _Link<Label: View>: View {
         // looking identical.
         .modifier(
             TerminalHyperlinkModifier(destination: destination, enabled: terminalHyperlinks))
+        // The destination, where the user can read and copy it. Anchored to
+        // the link rather than shown in the status bar: a URL is long, the
+        // status bar is a row shared with every shortcut, and a destination
+        // that shoved those aside — or was truncated to fit, which would make
+        // it unusable — every time focus moved would be worse than not showing
+        // it at all.
+        .popover(isPresented: $showingDestination) {
+            // `verbatim`, because a URL is content and not a lookup key.
+            Text(verbatim: destination.absoluteString)
+        }
+    }
+
+    /// The link's visible text, which the display mode decides.
+    ///
+    /// `.automatic` and `.popover` leave the caller's label alone — the
+    /// destination lives in the OSC 8 escape, or in the popover, or both. The
+    /// two URL modes rewrite it, and rewrite it with `Text(verbatim:)`: a URL
+    /// is content, and a plain `Text(_:)` would treat it as a localization
+    /// key.
+    @ViewBuilder
+    private var resolvedLabel: some View {
+        switch display.resolved(hyperlinksSupported: TerminalHyperlink.isSupported) {
+        case .urlOnly:
+            Text(verbatim: destination.absoluteString).underline(underline)
+        case .urlInParentheses:
+            // `spacing: 0` and the space written into the second `Text`: an
+            // HStack's spacing is layout, and this one is part of the sentence.
+            HStack(spacing: 0) {
+                label.underline(underline)
+                Text(verbatim: " (\(destination.absoluteString))").underline(underline)
+            }
+        case .automatic, .popover:
+            label.underline(underline)
+        }
     }
 }

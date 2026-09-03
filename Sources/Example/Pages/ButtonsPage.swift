@@ -52,6 +52,11 @@ struct ButtonsPage: View {
     /// reserved beside them, which is what lets a link sit inside a sentence.
     @State private var linkBullet: Bool = false
 
+    /// How links reveal their destination, applied to the whole page — the
+    /// modifier cascades, so one picker changes every link on it including the
+    /// ones inside the sentence below.
+    @State private var linkDisplay: LinkDisplay = .automatic
+
     /// Where TUIkit's OWN opens are recorded.
     ///
     /// Worth instrumenting because the two openers are otherwise
@@ -73,6 +78,11 @@ struct ButtonsPage: View {
         // Page-level, so every link reports — the ones in the prose section
         // below included, not just the two beside the readout.
         .environment(\.openURL, recordingOpener)
+        // …and page-level for the same reason: the picker sits beside two
+        // links and governs all of them, including the ones inside the
+        // sentence, which is where the difference between the modes is
+        // actually worth looking at.
+        .linkDisplay(linkDisplay)
         .appHeader {
             DemoAppHeader("menu.item.buttons")
         }
@@ -280,6 +290,13 @@ struct ButtonsPage: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("page.newControls.linkHint").foregroundStyle(.palette.foregroundSecondary)
                     Toggle("page.buttons.links.bulletToggle", isOn: $linkBullet)
+                    Picker("page.buttons.links.displayMode", selection: $linkDisplay) {
+                        Text("page.buttons.links.display.automatic").tag(LinkDisplay.automatic)
+                        Text("page.buttons.links.display.popover").tag(LinkDisplay.popover)
+                        Text("page.buttons.links.display.parentheses")
+                            .tag(LinkDisplay.urlInParentheses)
+                        Text("page.buttons.links.display.urlOnly").tag(LinkDisplay.urlOnly)
+                    }
                     // Scoped to these two, not to the page: the sentence in the
                     // section below is the case the default exists for, and
                     // watching it grow two cells per link would demonstrate the
