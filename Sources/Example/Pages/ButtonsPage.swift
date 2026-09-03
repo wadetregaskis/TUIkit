@@ -224,8 +224,81 @@ struct ButtonsPage: View {
                     Link(destination: URL(string: "https://github.com/apple/swift")!) {
                         Label("apple/swift", systemImage: "swift")
                     }
+                    terminalHyperlinkNote
                 }
             }
+    }
+
+    /// What the terminal painting this app does with the OSC 8 escape the links
+    /// above carry — asked live rather than written down.
+    ///
+    /// Not a static paragraph, because the escape is invisible either way: a
+    /// sentence saying "hover a link and your terminal shows you the URL" is
+    /// true on three of the five hosts TUIkit models and a lie on the other
+    /// two, and nothing on screen tells the reader which one they are looking
+    /// at. That IS the incomplete support, so the demo has to name it.
+    @ViewBuilder
+    private var terminalHyperlinkNote: some View {
+        // `.effective` rather than `.current` — it is what
+        // `hyperlinksSupported` itself reads, so simulating a host (the
+        // TerminalClientQuirks app, or `TUIKIT_TERM_PROGRAM`) moves the name and
+        // the verdict together. Asking `.current` here would print one
+        // terminal's name beside another terminal's answer.
+        let program = TerminalClient.effective.program
+        VStack(alignment: .leading) {
+            Text("page.buttons.links.osc8")
+                .foregroundStyle(.palette.foregroundSecondary)
+            HStack(spacing: 3) {
+                ValueDisplayRow("page.buttons.links.terminal", Self.displayName(of: program))
+                // The same question the renderer asks before emitting, so this
+                // row and the bytes on the wire cannot disagree.
+                ValueDisplayRow(
+                    "page.buttons.links.osc8Status",
+                    L(
+                        TerminalClient.hyperlinksSupported
+                            ? "page.buttons.links.honoured" : "page.buttons.links.notHonoured"))
+            }
+            // `L(...)`, not `Text(computedKey)`: only a string LITERAL is a
+            // lookup key. A computed `String` binds to the disfavoured overload
+            // and would print the key itself.
+            Text(L(Self.hyperlinkNoteKey(for: program)))
+                .foregroundStyle(.palette.foregroundTertiary)
+            Link("example.com", destination: URL(string: "https://example.com")!)
+                .terminalHyperlinks(false)
+            Text("page.buttons.links.suppressed")
+                .foregroundStyle(.palette.foregroundTertiary)
+        }
+    }
+
+    /// The terminal's name as a person writes it.
+    ///
+    /// Not `Program.termProgramName`, which spells these `Apple_Terminal` and
+    /// `iTerm.app`: that is how the environment variable names the host, not
+    /// how the product does, and this row is read by a human.
+    private static func displayName(of program: TerminalClient.Program) -> String {
+        switch program {
+        case .appleTerminal: "Apple Terminal"
+        case .iTerm2: "iTerm2"
+        case .ghostty: "Ghostty"
+        case .warp: "Warp"
+        case .tmux: "tmux"
+        // The only one of the six that is a description rather than a name.
+        case .unidentified: L("page.buttons.links.unidentified")
+        }
+    }
+
+    /// Why this host answers the way it does — one measured reason each, from
+    /// `Documentation/Terminal-compatibility.md`, which is where any correction
+    /// to them belongs first.
+    private static func hyperlinkNoteKey(for program: TerminalClient.Program) -> String {
+        switch program {
+        case .iTerm2: "page.buttons.links.noteITerm2"
+        case .ghostty: "page.buttons.links.noteGhostty"
+        case .tmux: "page.buttons.links.noteTmux"
+        case .appleTerminal: "page.buttons.links.noteAppleTerminal"
+        case .warp: "page.buttons.links.noteWarp"
+        case .unidentified: "page.buttons.links.noteUnidentified"
+        }
     }
 
     @ViewBuilder private var content: some View {
