@@ -291,13 +291,18 @@ struct ButtonsPage: View {
                         }
                     }
                     .linkFocusIndicator(linkBullet ? .bullet : .text)
-                    appOpenedReadout
                 }
             }
     }
 
-    /// What TUIkit itself opened — blank until it has opened something, because
-    /// an empty readout says less than no readout at all.
+    /// What TUIkit itself opened.
+    ///
+    /// In the full-width section, NOT beside the links it reports on, and that
+    /// is a layout constraint rather than a preference: it is prose, the links
+    /// live in a `ViewThatFits` column, and a paragraph in one of those columns
+    /// makes every horizontal arrangement fail to fit — collapsing the whole
+    /// page to a single narrow stack. Which it did, until the first click
+    /// shortened this text and the page silently rearranged itself.
     @ViewBuilder
     private var appOpenedReadout: some View {
         if openLog.hasOpened {
@@ -386,6 +391,7 @@ struct ButtonsPage: View {
                     .foregroundStyle(.palette.foregroundTertiary)
 
                 terminalHyperlinkStatus
+                appOpenedReadout
             }
         }
     }
