@@ -733,7 +733,7 @@ extension String {
     /// - Parameter background: A background escape (`SGRState.renderedBackground`),
     ///   or `""` to leave the line alone.
     /// - Returns: The line, painted over that field.
-    func paintedOver(background: String) -> String {
+    package func paintedOver(background: String) -> String {
         guard !background.isEmpty else { return self }
 
         var state = SGRState()

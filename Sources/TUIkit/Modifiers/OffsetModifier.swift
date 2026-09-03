@@ -62,7 +62,12 @@ extension OffsetView: Renderable, Layoutable {
         var placeholder = FrameBuffer(
             lines: Array(repeating: "", count: rendered.height), width: rendered.width)
         placeholder.overlays.append(
-            OverlayLayer(offsetX: x, offsetY: y, content: rendered, level: .popover))
+            OverlayLayer(
+                offsetX: x, offsetY: y, content: rendered, level: .popover,
+                // Displaced drawing, not a surface: `.offset` moves this view's
+                // own cells to another place on the page, and the page behind
+                // them is meant to keep showing. See ``OverlayLayer/isOpaque``.
+                isOpaque: false))
         return placeholder
     }
 }

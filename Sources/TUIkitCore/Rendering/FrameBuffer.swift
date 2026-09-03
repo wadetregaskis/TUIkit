@@ -584,6 +584,28 @@ extension FrameBuffer {
         }
     }
 
+    /// This buffer with `background` in force on every cell that names none of
+    /// its own — the buffer-level twin of `String.paintedOver(background:)`.
+    ///
+    /// What makes a floating layer opaque. A cell that already states its own
+    /// background is untouched, so a dialog that paints itself comes back
+    /// byte-identical and only the blanks a surface never got round to
+    /// colouring are filled.
+    ///
+    /// - Parameter background: A background escape
+    ///   (`SGRState.renderedBackground`), or `""` to leave the buffer alone.
+    package func paintedOver(background: String) -> Self {
+        guard !background.isEmpty else { return self }
+        // Through `replacingLines`, and with the geometry handed back rather
+        // than recomputed: painting inserts ESCAPES and no visible cells, so
+        // every width this buffer already knows is still true. Letting
+        // `FrameBuffer(lines:)` re-measure would walk every line of every
+        // floating layer, every frame, to arrive at the numbers above.
+        return replacingLines(
+            storage.map { $0.paintedOver(background: background) },
+            width: width, uniformWidth: linesAreUniformWidth, lineWidths: lineWidths)
+    }
+
     /// Creates a new buffer with another buffer composited on top at the specified position.
     ///
     /// Compositing replaces the base cell under every cell of the overlay,

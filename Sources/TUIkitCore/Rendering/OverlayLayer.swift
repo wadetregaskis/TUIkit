@@ -131,6 +131,33 @@ public struct OverlayLayer: Sendable, Equatable {
     /// stay correct by construction.
     public var isScreenLevel: Bool { centered }
 
+    /// Whether this layer is a SURFACE — something that floats OVER the page and
+    /// hides it — rather than a displaced piece of the view that emitted it.
+    ///
+    /// A menu, a dialog, a toast and a popover are windows: what is behind them
+    /// is not meant to be legible through them. `.offset` and `.position` are
+    /// not — they move a view's own drawing to another cell, and a `Text` moved
+    /// four columns right must arrive as text, not as text in a box the width
+    /// of its line.
+    ///
+    /// The compositor paints an opaque layer's cells over the surface colour
+    /// before drawing it, wherever they name no background of their own. Until
+    /// 590e71a4 that was unnecessary, because compositing replaced the base cell
+    /// under every overlay cell, field included — so a surface that named no
+    /// background still punched the page's away and every one of them was
+    /// opaque by accident. Making a cell's glyph and its field two separate
+    /// statements (so `ZStack { Color.red; Text("hi") }` draws the letters ON
+    /// the red) is right, and it left the accident-dependent surfaces showing
+    /// the page through their blanks.
+    ///
+    /// It defaults to `true` because a presentation is what an overlay layer
+    /// almost always is, and because the two failures are not equally loud: a
+    /// displaced label wrongly given a box is visible the moment anyone looks
+    /// at it, while a menu leaking the page behind it depends on the palette
+    /// and can survive a whole release unnoticed. The default that fails
+    /// loudly is the safer one.
+    public var isOpaque: Bool = true
+
     /// Creates an overlay layer.
     ///
     /// - Parameters:
@@ -143,6 +170,8 @@ public struct OverlayLayer: Sendable, Equatable {
     ///     used for flip-on-overflow placement (default: `0`).
     ///   - centered: Centre in the composite area, ignoring the offset (default: `false`).
     ///   - dimsBackground: Dim everything beneath before drawing (default: `false`).
+    ///   - isOpaque: Whether the layer is a surface that hides what is behind
+    ///     it (default: `true`) — see ``isOpaque``.
     public init(
         offsetX: Int,
         offsetY: Int,
@@ -152,9 +181,11 @@ public struct OverlayLayer: Sendable, Equatable {
         anchorHeight: Int = 0,
         centered: Bool = false,
         dimsBackground: Bool = false,
-        clampsToScreen: Bool = true
+        clampsToScreen: Bool = true,
+        isOpaque: Bool = true
     ) {
         self.clampsToScreen = clampsToScreen
+        self.isOpaque = isOpaque
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.content = content

@@ -71,8 +71,26 @@ extension FrameBuffer {
                         foreground: palette.foregroundTertiary, background: palette.overlayBackground)
                 }
                 let placed = layer.placed(maxWidth: maxWidth, maxHeight: maxHeight)
+                // A surface hides what is behind it, so its blanks are painted
+                // onto the surface colour BEFORE anything else happens to them —
+                // see ``OverlayLayer/isOpaque``. Cells that already state a
+                // background are untouched, so a dialog that paints itself
+                // comes back byte-identical.
+                //
+                // Before the blend, not after, and that ordering is the whole
+                // of what makes a fading toast still fade: `resolvingOpacity`
+                // blends the layer against what is behind it, so painting first
+                // gives it a background to fade FROM. Painting afterwards would
+                // stamp the surface colour over the blend and freeze every
+                // translucent layer fully opaque.
+                let content =
+                    layer.isOpaque
+                    ? placed.content.paintedOver(
+                        background: ANSIRenderer.backgroundCode(
+                            for: palette.background.resolve(with: palette)))
+                    : placed.content
                 result = result.compositedResolvingOpacity(
-                    with: placed.content, at: (x: placed.x, y: placed.y), palette: palette)
+                    with: content, at: (x: placed.x, y: placed.y), palette: palette)
             }
         }
         return result

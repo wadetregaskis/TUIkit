@@ -101,7 +101,10 @@ extension PositionView: Renderable, Layoutable {
                 offsetX: x - rendered.width / 2,
                 offsetY: y - rendered.height / 2,
                 content: rendered,
-                level: .popover))
+                level: .popover,
+                // Displaced drawing, not a surface — as for `.offset`. See
+                // ``OverlayLayer/isOpaque``.
+                isOpaque: false))
         _ = width
         return placeholder
     }
