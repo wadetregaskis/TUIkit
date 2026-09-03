@@ -1876,7 +1876,29 @@ at the renderer's cursor. Both failures are therefore silent by construction,
 and the keyboard route (Enter on a focused link) is *always* the application
 path, so it never reaches the user's browser over ssh at all.
 
-**The remedy that already exists** is identification, not code: `TERM_PROGRAM`
+**As of 2026-09-03 TUIkit does not take the application path at all.**
+`OpenURLAction`'s system opener is gated behind
+`TerminalClient.urlOpeningSupport` / `TUIKIT_OPEN_URLS`, and both default to
+off. The reasoning is that the framework cannot tell which machine it is on:
+`SSH_CONNECTION`, `SSH_TTY` and `SSH_CLIENT` are reliable when PRESENT and
+prove nothing when absent — gone under `sudo` and `su`, and a tmux, screen or
+zellij session started before the hop, or reattached after it, carries the
+environment of whenever it began rather than of the client now looking at it.
+No escape sequence asks a terminal which machine it is on. And the two wrong
+answers do not cost the same: guessing local when remote sends somebody's URL
+to a machine they are not at and leaves it in their history, while guessing
+remote when local costs a copy and paste.
+
+So the terminal's column above is the only one TUIkit relies on, and a `Link`
+is not silent as a result: it carries the OSC 8 escape where the host honours
+one, and activating it raises a popover with the destination to read and copy
+(`LinkDisplay`). An app that knows it is local sets `urlOpeningSupport = true`;
+a user answers for their own session with `TUIKIT_OPEN_URLS=1`; and an app
+with its own opening handler is not gated at all, because what is gated is
+only the framework launching a process on the user's behalf.
+
+**The remedy that already exists** for the escape is identification, not code:
+`TERM_PROGRAM`
 does not survive an ssh hop, so a terminal that would have got an OSC 8 escape
 often falls to `.unidentified` and gets none. `TUIKIT_HYPERLINKS=1` on the
 remote host restores emission (`TerminalHyperlinkSupport.swift`), via `SendEnv`

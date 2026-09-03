@@ -141,6 +141,15 @@ public struct OpenURLAction: Sendable {
     /// whatever cursor position the renderer was using, with nothing to
     /// repaint over it until the next full redraw.
     static func systemOpen(_ url: URL) {
+        // Not unless something said this machine is the user's. The opener
+        // runs HERE, and over ssh "here" is the server: either headless, where
+        // the launch is a silent no-op, or somebody's desktop, where the URL
+        // lands in front of a person who did not ask for it. The framework
+        // cannot tell which — `SSH_*` is reliable when present and proves
+        // nothing when absent, and a multiplexer session outlives the hop that
+        // started it — so it declines and the destination is shown instead.
+        // See ``TerminalClient/urlOpeningSupport`` and ``LinkDisplay``.
+        guard TerminalURLOpening.isEnabled else { return }
         for opener in ["/usr/bin/open", "/usr/bin/xdg-open"]
         where FileManager.default.fileExists(atPath: opener) {
             let process = Process()

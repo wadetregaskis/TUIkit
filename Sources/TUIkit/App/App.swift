@@ -222,6 +222,10 @@ extension AppRunner {
         // `Link` decides whether to emit one while rendering, and the render
         // path cannot ask a main-actor question.
         TerminalClient.applyHyperlinkSupport()
+        // And whether this process may launch a browser at all, which defaults
+        // to NO and is published for the same reason: activation is not
+        // main-actor isolated either. See ``TerminalClient/urlOpeningSupport``.
+        TerminalClient.applyURLOpeningSupport()
         // And whether it will draw a real picture. Unlike the two above, this
         // one is ASKED rather than looked up — see ``TerminalGraphicsQuery``,
         // which is also why it comes after identification: the exchange is an
