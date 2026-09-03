@@ -50,7 +50,7 @@ extension TerminalClient {
     /// | Host | Honours | Evidence |
     /// |---|---|---|
     /// | iTerm2 | yes | its own "Drawing: Underline OSC 8 hyperlinks" setting; tmux gives it the `hyperlinks` feature |
-    /// | Ghostty | yes | per-page hyperlink storage in its cell model; `link-previews` has an `osc8` mode |
+    /// | Ghostty | yes | per-page hyperlink storage in its cell model; `link-previews` has an `osc8` mode; ⌘-shift-hover shows the destination |
     /// | tmux | yes | stores links in its grid — `capture-pane -H` reads them back |
     /// | Apple Terminal | no | swallows the sequence and keeps nothing; no hyperlink support anywhere in the app |
     /// | Warp | no | see below |

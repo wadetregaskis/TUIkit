@@ -1812,31 +1812,57 @@ generous, and it is the opposite of how the cursor-advance quirks work,
 where being wrong corrupts output that was fine. See
 `TerminalClient.honoursHyperlinks(_:)`, which says so at the code.
 
-### Which gestures actually reach it — partly OPEN
+### Which gestures reach it — observed 2026-09-02, in a running TUIkit app
 
-Not all of the terminal's affordances are independent of the application,
-and the split matters because a TUIkit app holds mouse reporting open for
-its whole run.
+Not measurable from inside: the affordance is a mouse gesture over a live
+terminal, which is exactly the gesture no probe in this directory can
+perform. `hyperlink_probe.py`'s card asks a human, and this is that answer —
+the project owner's, in each terminal, with a TUIkit app running and mouse
+reporting held open. It **replaces** an earlier paragraph here that reasoned
+from the mouse-event measurements instead and got the important one
+backwards.
 
-- **Hover previews and right-click → Copy Link** are the terminal's own
-  chrome, drawn from the cell's stored URI. Nothing routes them through the
-  application.
-- **Click-to-open is contested.** A terminal that forwards a modified click
-  to the application cannot also act on it, and iTerm2 is measured to
-  forward exactly the one people reach for: ⌘-click arrives as the
-  protocol's meta bit (see iTerm2's Input behaviour, and "Keyboard
-  modifiers on key events"). So ⌘-click in iTerm2 goes to the app, not to
-  the link. Apple Terminal strips ⌘ instead and has no OSC 8 anyway;
-  Ghostty's modifier-clicks are **not yet captured at all** (its Input
-  section already says so).
+| Host | Click over an OSC 8 link | Seeing the destination | Shift-click |
+|---|---|---|---|
+| iTerm2 | **the terminal opens it, on every modifier** | hold ⌘ and hover → the URL appears bottom-left of the window | opens the link (no selection) |
+| Ghostty | — | hold ⌘-shift and hover → the URL appears | selects text |
+| Warp | n/a (does not honour OSC 8) | n/a | selects text |
 
-Shift is the conventional bypass — xterm-family terminals reserve
-shift-click to mean "do not report this, handle it yourself" — so
-shift-click, or ⌘-shift-click, is what to try. **Unverified here.** It needs
-a real click in a real terminal with a TUIkit app running, which is a
-gesture no probe in this directory can perform; `hyperlink_probe.py`'s card
-asks for it. Until then the claim this document supports is the storage and
-what follows from it, not the opening.
+Three things follow, and the first is the one that was wrong before.
+
+- **A hyperlink outranks the mouse protocol in iTerm2.** Over a linked cell
+  iTerm2 prefers opening the URL to reporting the click, *whatever* modifier
+  is held — plain, ⌘, shift, ⌘-shift. ⌘-click additionally asks whether to
+  open in the system browser or iTerm2's built-in one, but it is still
+  handled as a link click. This does not contradict "iTerm2 forwards ⌘-click
+  as the meta bit" in the Input section: that is what happens over ordinary
+  cells, and a linked cell is the exception. It does mean an app cannot
+  receive a click on its own link in iTerm2 — plan for the terminal winning
+  there.
+- **Shift-click is NOT the bypass.** The xterm convention says shift means
+  "handle this yourself, do not report it", and the earlier paragraph here
+  recommended it on that basis. In practice Ghostty and Warp both take
+  shift-click as *select text* — over OSC 8 links and over auto-detected
+  ones alike — and iTerm2 opens the link. Nothing observed here treats it as
+  a way to reach the application.
+- **The destination is shown behind a modifier, not on plain hover.** Both
+  hosts that honour OSC 8 reveal the URL while a modifier is held (iTerm2 ⌘,
+  Ghostty ⌘-shift) rather than on hover alone. Ghostty's `link-previews`
+  setting has an `osc8` mode, but no unmodified hover preview was observed.
+
+### Terminals also detect URLs in the TEXT, which is not this feature
+
+Independently of OSC 8, these hosts scan displayed characters for things
+that look like URLs and make those clickable too. It matters twice:
+
+- A demo of "this text carries no hyperlink" must not be spelled as a URL,
+  or the terminal linkifies it anyway and the demo shows the opposite of
+  what it claims. `Example`'s Buttons & Links page uses ordinary words for
+  exactly this reason.
+- The modifier-hover readout distinguishes them: in iTerm2, holding ⌘ over
+  an **OSC 8** link shows the destination bottom-left, and holding ⌘ over an
+  auto-detected URL does not. So that tooltip is a usable oracle for
+  "did the escape actually land", which is otherwise invisible.
 
 ### Honoured: not measurable from inside, and no query reports it
 
@@ -1850,7 +1876,7 @@ derived it. What the table below rests on instead:
 | Host | Honours | Evidence |
 |---|---|---|
 | iTerm2 | **yes** | its own setting, `Drawing: Underline OSC 8 hyperlinks` (`underlineHyperlinks`); and tmux gives it the `hyperlinks` feature |
-| Ghostty | **yes** | per-page hyperlink storage in its cell model (`cell_hyperlink`, "Maps cell positions to hyperlink IDs"); `link-previews` has an explicit `osc8` mode |
+| Ghostty | **yes** | per-page hyperlink storage in its cell model (`cell_hyperlink`, "Maps cell positions to hyperlink IDs"); `link-previews` has an explicit `osc8` mode; and ⌘-shift-hover shows the destination (observed) |
 | tmux | **yes** | stores links in its grid, and `capture-pane -H` reads them back — the one machine-checkable oracle here |
 | Apple Terminal | **no** | the app names no hyperlink handling at all; the sequence is swallowed and nothing is kept |
 | Warp | **no** — deliberately, see below | the only hyperlink handling its binary names is bounded by `HighlightedLink is not within the alt screen` |

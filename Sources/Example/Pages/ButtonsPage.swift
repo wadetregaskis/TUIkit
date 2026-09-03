@@ -224,21 +224,88 @@ struct ButtonsPage: View {
                     Link(destination: URL(string: "https://github.com/apple/swift")!) {
                         Label("apple/swift", systemImage: "swift")
                     }
-                    terminalHyperlinkNote
                 }
             }
     }
 
-    /// What the terminal painting this app does with the OSC 8 escape the links
-    /// above carry — asked live rather than written down.
+    /// What the terminal painting this app does with the OSC 8 escape a `Link`
+    /// carries — asked live rather than written down.
     ///
-    /// Not a static paragraph, because the escape is invisible either way: a
-    /// sentence saying "hover a link and your terminal shows you the URL" is
-    /// true on three of the five hosts TUIkit models and a lie on the other
-    /// two, and nothing on screen tells the reader which one they are looking
-    /// at. That IS the incomplete support, so the demo has to name it.
+    /// Its own full-width section, below the three columns rather than inside
+    /// one, because it is the only part of this page that is mostly prose: in a
+    /// column it made that column tall enough that `ViewThatFits` gave up on
+    /// every horizontal arrangement and the whole page fell to one narrow
+    /// stack.
+    ///
+    /// Live and not a static paragraph, because the escape is invisible either
+    /// way: "hover a link and your terminal shows you the URL" is true on two
+    /// of the five hosts TUIkit models and false on the rest, and nothing on
+    /// screen tells the reader which one they are looking at. That IS the
+    /// incomplete support, so the demo has to name it.
     @ViewBuilder
-    private var terminalHyperlinkNote: some View {
+    private var hyperlinkSection: some View {
+        DemoSection("page.buttons.section.hyperlinks") {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("page.buttons.links.osc8")
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                // A link in its natural habitat: a phrase inside a sentence,
+                // not an address on a line of its own. `HStack(spacing: 0)`
+                // rather than one `Text`, because a destination belongs to a
+                // `Link` and the prose either side of it does not.
+                //
+                // The prose fragments carry no trailing space, and the gap you
+                // see before each linked phrase is not one either: a plain
+                // button — which is what a `Link` is — always reserves two
+                // cells for its focus indicator, so that the row does not shift
+                // sideways when Tab arrives. Writing a space as well would make
+                // it three.
+                //
+                // The sentence is kept SHORT for the same reason its
+                // explanation is a separate paragraph below: a `Text` that
+                // wraps inside an `HStack` wraps within its own column, so a
+                // long clause after a link starts its second line under the
+                // link rather than at the margin.
+                HStack(spacing: 0) {
+                    Text("page.buttons.links.proseA")
+                    Link(
+                        L("page.buttons.links.linkGuide"),
+                        destination: URL(string: "https://www.swift.org/documentation/")!)
+                    Text("page.buttons.links.proseB")
+                    Link(
+                        L("page.buttons.links.linkSource"),
+                        destination: URL(string: "https://github.com/swiftlang/swift")!)
+                    Text("page.buttons.links.proseC")
+                }
+                Text("page.buttons.links.inlineNote")
+                    .foregroundStyle(.palette.foregroundSecondary)
+
+                // …and the same shape with the escape suppressed. Deliberately
+                // NOT spelled as an address: terminals scan displayed text for
+                // things that look like URLs and linkify those on their own, so
+                // an example claiming to carry no hyperlink would be made one
+                // anyway if it were written like a URL — demonstrating the
+                // opposite of what it says.
+                HStack(spacing: 0) {
+                    Link(
+                        L("page.buttons.links.linkStarted"),
+                        destination: URL(string: "https://www.swift.org/getting-started/")!)
+                        .terminalHyperlinks(false)
+                    Text("page.buttons.links.proseD")
+                }
+                Text("page.buttons.links.suppressedNote")
+                    .foregroundStyle(.palette.foregroundSecondary)
+                Text("page.buttons.links.autodetect")
+                    .foregroundStyle(.palette.foregroundTertiary)
+
+                terminalHyperlinkStatus
+            }
+        }
+    }
+
+    /// This terminal's answer, and why it answers that way.
+    @ViewBuilder
+    private var terminalHyperlinkStatus: some View {
         // `.effective` rather than `.current` — it is what
         // `hyperlinksSupported` itself reads, so simulating a host (the
         // TerminalClientQuirks app, or `TUIKIT_TERM_PROGRAM`) moves the name and
@@ -246,8 +313,6 @@ struct ButtonsPage: View {
         // terminal's name beside another terminal's answer.
         let program = TerminalClient.effective.program
         VStack(alignment: .leading) {
-            Text("page.buttons.links.osc8")
-                .foregroundStyle(.palette.foregroundSecondary)
             HStack(spacing: 3) {
                 ValueDisplayRow("page.buttons.links.terminal", Self.displayName(of: program))
                 // The same question the renderer asks before emitting, so this
@@ -262,10 +327,6 @@ struct ButtonsPage: View {
             // lookup key. A computed `String` binds to the disfavoured overload
             // and would print the key itself.
             Text(L(Self.hyperlinkNoteKey(for: program)))
-                .foregroundStyle(.palette.foregroundTertiary)
-            Link("example.com", destination: URL(string: "https://example.com")!)
-                .terminalHyperlinks(false)
-            Text("page.buttons.links.suppressed")
                 .foregroundStyle(.palette.foregroundTertiary)
         }
     }
@@ -287,7 +348,7 @@ struct ButtonsPage: View {
         }
     }
 
-    /// Why this host answers the way it does — one measured reason each, from
+    /// Why this host answers the way it does — one observed reason each, from
     /// `Documentation/Terminal-compatibility.md`, which is where any correction
     /// to them belongs first.
     private static func hyperlinkNoteKey(for program: TerminalClient.Program) -> String {
@@ -329,6 +390,8 @@ struct ButtonsPage: View {
                     compositionColumn
                 }
             }
+
+            hyperlinkSection
 
             KeyboardHelpSection(
                 "page.buttons.section.focusNav",
