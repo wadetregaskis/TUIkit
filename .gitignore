@@ -55,7 +55,24 @@ papers/
 .gource/
 .remember
 
-# Terminal-probe default outputs (Tools/TerminalProbes — run from anywhere)
+# Terminal-probe default outputs (Tools/TerminalProbes — run from anywhere).
+# Every probe that takes PROBE_OUT is listed, not only the three whose output
+# somebody happened to trip over: a probe is RUN IN THE TERMINAL UNDER TEST,
+# which means it is usually run from the repo root by a person following the
+# README, and its result is a measurement to read and transcribe into
+# Documentation/ rather than a file to commit.
 mouse_probe*.log
 advance_probe*.json
+background_probe*.json
+cell_aspect_probe*.json
+graphics_probe*.json
+hyperlink_probe*.json
 identity_probe*.json
+landing_probe*.json
+matrix_probe*.json
+mouse_probe*.json
+page_clusters_probe*.json
+palette_probe*.json
+placement_probe*.json
+recent_emoji_sweep*.json
+treatment_card*.json
