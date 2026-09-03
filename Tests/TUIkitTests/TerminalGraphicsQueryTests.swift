@@ -82,3 +82,32 @@ struct TerminalGraphicsQueryTests {
         #expect(!TerminalGraphicsQuery.sawFence(Array("\u{1B}_Gi=1;OK\u{1B}\\".utf8)))
     }
 }
+
+// MARK: - Hosts that answer OK and draw nothing
+
+/// iTerm2 acknowledges every graphics command and composites no image, and
+/// `pixel_format_probe.py` pinned why: it accepts `a=p,U=1` and does not
+/// implement Unicode placeholders. The same bytes placed directly at the
+/// cursor draw there. TUIkit uses virtual placements and nothing else, so
+/// there is no fallback inside the protocol — only the glyph renderer.
+@MainActor
+@Suite("Graphics: hosts that answer OK and draw nothing")
+struct GraphicsPlaceholderSupportTests {
+
+    @Test("iTerm2 is excluded despite answering the handshake")
+    func iTerm2IsExcluded() {
+        #expect(TerminalClient.drawsNothingDespiteSayingOK(.iTerm2))
+    }
+
+    /// The exclusion stays NARROW: a host joins only once somebody has watched
+    /// it say yes and draw nothing AND established why. Every other terminal —
+    /// the unmeasured ones especially — still earns pictures by answering.
+    @Test(
+        "No other modelled host is excluded",
+        arguments: [
+            TerminalClient.Program.ghostty, .warp, .appleTerminal, .tmux, .unidentified,
+        ])
+    func othersAreNotExcluded(_ program: TerminalClient.Program) {
+        #expect(!TerminalClient.drawsNothingDespiteSayingOK(program))
+    }
+}

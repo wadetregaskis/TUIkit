@@ -71,8 +71,54 @@ extension TerminalClient {
         switch ProcessInfo.processInfo.environment["TUIKIT_GRAPHICS"] {
         case "1": return true
         case "0": return false
-        default: return detectedGraphics ?? false
+        default: return (detectedGraphics ?? false) && !drawsNothingDespiteSayingOK(current.program)
         }
+    }
+
+    /// Hosts measured to answer the handshake `OK` and then draw **nothing**.
+    ///
+    /// This is a host table, and `8c22e630` argued against having one here on
+    /// the grounds that the Kitty protocol is the one capability that answers
+    /// for itself. That argument is right about Warp, which refuses a virtual
+    /// placement by name and is excluded by its own answer. It does not reach
+    /// iTerm2, and the reason is worth stating exactly, because it is what
+    /// distinguishes this from giving up on a symptom:
+    ///
+    /// **iTerm2 accepts `a=p,U=1` and does not implement Unicode
+    /// placeholders.** Measured 2026-09-03 with
+    /// `Tools/TerminalProbes/pixel_format_probe.py`, five cases in both hosts:
+    /// four virtual placements — `{f=24, f=32}` × `{single escape, chunked}` —
+    /// are blank in iTerm2 and draw in Ghostty, while the SAME BYTES placed
+    /// directly at the cursor draw in both. So the pixels, the transmission,
+    /// the chunking and the pixel format are all fine; iTerm2 acknowledges the
+    /// placement and never honours it.
+    ///
+    /// The handshake cannot catch that. It asks *"will you accept a virtual
+    /// placement?"* and gets a truthful yes — iTerm2 really does track images
+    /// by id, and a placement after a delete comes back `ENOENT`. The question
+    /// TUIkit needs answered is *"will you DRAW it?"*, and nothing in the
+    /// protocol asks it.
+    ///
+    /// There is no fallback within the protocol, which is why this ends in a
+    /// table rather than in a different code path. TUIkit uses virtual
+    /// placements and nothing else, on purpose: an image drawn at the cursor
+    /// does not scroll with its row, is not clipped by the container that
+    /// clips its cells, is not covered by a modal composited over it, and
+    /// cannot be diffed. Drawing iTerm2's one working case would not be
+    /// "graphics on iTerm2", it would be a picture that ignores the layout.
+    ///
+    /// Deliberately narrow: a host is here only once somebody has watched it
+    /// say yes and draw nothing, and has established WHY. Everything else
+    /// still earns pictures by answering the handshake, which is the property
+    /// worth keeping, and ``graphicsSupport`` / `TUIKIT_GRAPHICS=1` override
+    /// it — so an iTerm2 that implements placeholders needs no release here.
+    ///
+    /// Read from ``current`` rather than ``effective``: this is a fact about
+    /// the terminal actually painting the screen, and simulating a host is a
+    /// statement about which compensations to emit rather than a claim about
+    /// what can be drawn.
+    static func drawsNothingDespiteSayingOK(_ program: Program) -> Bool {
+        program == .iTerm2
     }
 
     /// Runs the startup handshake, if its answer is not already known, and

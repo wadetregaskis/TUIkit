@@ -106,35 +106,57 @@ has made is one pixel wide.
 transmitted four ways — `{f=24, f=32}` × `{single escape, chunked}` — each
 virtually placed.
 
-**Both hypotheses are refuted, measured 2026-09-03.** In iTerm2 all four are
-blank; in Ghostty all four draw, which is what makes the iTerm2 result mean
-something rather than indicting the probe. So it is neither the pixel format
-nor the chunking, and it is not the two of them together: iTerm2 draws no
-virtual placement *however* the pixels reach it.
+**CAUSE FOUND, measured 2026-09-03.** `pixel_format_probe.py`, five cases,
+run in both hosts:
 
-That leaves one candidate standing, and it is the simplest one: **iTerm2
-accepts `U=1` and does not implement Unicode placeholders.** Every A–D case
-draws through a placeholder cell, so they fail together and say nothing about
-the pixels. The probe's case **E** is the control that separates them — the
-same bytes, placed DIRECTLY at the cursor with no `U=1` and no placeholder
-cell anywhere:
+| | A `f=24` 1 cell | B `f=32` 1 cell | C `f=24` chunked | D `f=32` chunked | **E — DIRECT placement** |
+|---|---|---|---|---|---|
+| Ghostty | draws | draws | draws | draws | draws |
+| iTerm2 | blank | blank | blank | blank | **draws** |
 
-| E | A–D | reading |
-|---|---|---|
-| draws | blank | the transmission is fine; **Unicode placeholders** are unimplemented. A precise, filable bug. |
-| blank | blank | iTerm2 draws no kitty image at all, however asked — check the transmit lines for a refusal. |
+Every case is acknowledged `OK` in both hosts. A–D are virtual placements
+(`U=1`) and E is the same bytes placed directly at the cursor.
 
-Until E has been run this section records a symptom, one surviving
-hypothesis and two dead ones, and **nothing in the framework has been changed
-on the strength of any of them.**
+> **iTerm2 accepts `a=p,U=1` and does not implement Unicode placeholders.**
 
-A note on the probe itself, because it cost a round trip: its first version
-sent `q=2` and read nothing, so it could not tell a refusal from an
-acceptance that drew nothing — a diagnostic must never suppress the errors it
-exists to find. It now sends `q=0` and reads every reply, fencing each
-transmission AS A WHOLE rather than each chunk, since interleaving a DSR
-query between the chunks of one image is a thing to test deliberately and
-never by accident.
+The pixels are fine, the transmission is fine, the chunking is fine and the
+pixel format is fine — iTerm2 draws the identical image the moment it is asked
+without a placeholder. Both earlier hypotheses (`f=24`, chunking) are dead,
+and the timing coincidence that made `f=24` look guilty — TUIkit sent `f=32`
+for everything until `2eb6c256` added it hours after graphics shipped — was
+exactly that.
+
+**This is terminal.** TUIkit uses virtual placements and nothing else, on
+purpose: §1 is the argument that an image drawn at the cursor is not made of
+cells, so it does not scroll with its row, is not clipped by the container
+that clips its cells, is not covered by a modal composited over it and cannot
+be diffed. E is that image. Falling back to it would not be "graphics on
+iTerm2", it would be a picture that ignores the layout. So iTerm2 gets the
+glyph renderer, and now for a reason rather than a symptom — see
+`TerminalClient.drawsNothingDespiteSayingOK(_:)`.
+
+**A second, separate iTerm2 defect, worth its own line in a bug report:** on a
+CHUNKED transmission iTerm2 acknowledges with `i=0` instead of the image's id
+—
+
+```
+C  transmit -> <ESC>_Gi=0;OK<ESC>\        (Ghostty: <ESC>_Gi=7002;OK<ESC>\)
+D  transmit -> <ESC>_Gi=0;OK<ESC>\        (Ghostty: <ESC>_Gi=7003;OK<ESC>\)
+E  transmit -> <ESC>_Gi=0;OK<ESC>\        (Ghostty: <ESC>_Gi=7100;OK<ESC>\)
+```
+
+Single-escape transmissions (A, B) report the id correctly. The image is
+nevertheless stored under the right id — the placements that follow all
+succeed by id, and E draws — so this is a reply defect rather than a storage
+one, and it costs nothing here because TUIkit sends `q=2` and reads no
+replies. It would break any client that matched acknowledgements to requests
+by id, which is what the id in the reply is for.
+
+A note on the probe, because it cost a round trip: its first version sent
+`q=2` and read nothing, so it could not tell a refusal from an acceptance
+that drew nothing — the exact distinction it exists to make. A diagnostic
+must never suppress the errors it is looking for.
+
 ### 2.2 What they do when you send one — and the headline finding
 
 Each payload was printed between two brackets on a cleared row and the cursor

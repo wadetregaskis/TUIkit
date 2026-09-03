@@ -207,10 +207,20 @@ def main():
         direct_transmitted = reply(ask(fd, transmit_commands(
             direct, 12 * cell_width, 4 * cell_height, direct_id, True)))
         direct_placed = reply(ask(fd, direct_placement(direct_id, 12, 4)))
+        # …and take that throwaway placement back off the screen. `d=i`, the
+        # lower case, removes PLACEMENTS and leaves the stored image, which is
+        # exactly what is wanted: the picture below still needs the pixels.
+        # Without this the probe draws a sixth image nobody asked for, at the
+        # top of the output, and a reader counts six pictures for five cases.
+        os.write(fd, f"\x1b_Ga=d,d=i,q=2,i={direct_id}\x1b\\".encode("latin-1"))
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, saved)
 
-    print(f"\r\ncell pixels: {cell_width}x{cell_height}\r\n")
+    # From a clean screen: the probing above drew and then removed a
+    # placement, and a terminal that ignored the removal would otherwise leave
+    # it sitting in the middle of the card.
+    sys.stdout.write("\x1b[2J\x1b[H")
+    print(f"cell pixels: {cell_width}x{cell_height}\n")
     for label, description, columns, rows, image_id, transmitted, placed in results:
         print(f"  {label}: {description}")
         print(f"       transmit -> {transmitted}")
