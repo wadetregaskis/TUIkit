@@ -94,17 +94,21 @@ struct ControlSymbolInitializerTests {
 
     // MARK: - A renderable symbol reaches the label
 
-    /// Only meaningful where the host can draw one, so it asserts against the
-    /// same question the initializer asks rather than a hard-coded glyph.
+    /// Host-dependent by nature — the SF Symbols font is absent by default and
+    /// never present on Linux — so the assertion is the AGREEMENT between what
+    /// was drawn and what ``SFSymbol/canRender(named:)`` says can be, rather
+    /// than a hard-coded glyph. That makes it mean something on either kind of
+    /// machine: where a symbol resolves it pins that the icon really appears,
+    /// and where it does not, that the control is byte-identical to the plain
+    /// one. Same shape as `ImageTests.symbolDrawsWhenRenderable`; a `#require`
+    /// here would report a *failure* on every Linux run instead.
     @Test("A renderable symbol widens the control by its icon")
-    func renderableSymbolAddsAnIcon() throws {
-        try #require(
-            SFSymbol.canRender(named: "star"),
-            "no SF Symbols glyphs on this host — nothing to compare against")
-
+    func renderableSymbolAddsAnIcon() {
         let withIcon = rendered(Button("Save", systemImage: "star") {})
         let without = rendered(Button("Save") {})
-        #expect(withIcon != without, "the icon must actually appear")
+        #expect(
+            (withIcon != without) == SFSymbol.canRender(named: "star"),
+            "the icon appears exactly where it can be drawn")
         #expect(
             withIcon.contains { $0.contains("Save") },
             "and the title must survive beside it")

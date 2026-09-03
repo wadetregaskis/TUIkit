@@ -186,19 +186,24 @@ extension List {
 
     /// Creates a list whose title is displayed as written.
     ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``. Every disfavoured `List` initializer below is
+    /// spelled the same way, for the same reason.
+    ///
     /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - selection: A binding to the selected item's ID (nil = no selection).
     ///   - content: A ViewBuilder that defines the list content.
     ///   - footer: A ViewBuilder that defines the footer content.
     @_disfavoredOverload
-    public init(
-        _ title: String,
+    public init<S: StringProtocol>(
+        _ title: S,
         selection: Binding<SelectionValue?>,
         @ViewBuilder content: () -> Content,
         @ViewBuilder footer: () -> Footer
     ) {
-        self.title = title
+        self.title = String(title)
         self.content = content()
         self.footer = footer()
         self.singleSelection = selection
@@ -251,17 +256,20 @@ extension List where Footer == EmptyView {
 
     /// Creates a list whose title is displayed as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the footered
+    /// single-selection initializer — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - selection: A binding to the selected item's ID (nil = no selection).
     ///   - content: A ViewBuilder that defines the list content.
     @_disfavoredOverload
-    public init(
-        _ title: String,
+    public init<S: StringProtocol>(
+        _ title: S,
         selection: Binding<SelectionValue?>,
         @ViewBuilder content: () -> Content
     ) {
-        self.title = title
+        self.title = String(title)
         self.content = content()
         self.footer = nil
         self.singleSelection = selection
@@ -315,19 +323,22 @@ extension List {
 
     /// Creates a multi-selection list whose title is displayed as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the single-selection
+    /// initializers above — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - selection: A binding to the set of selected item IDs.
     ///   - content: A ViewBuilder that defines the list content.
     ///   - footer: A ViewBuilder that defines the footer content.
     @_disfavoredOverload
-    public init(
-        _ title: String,
+    public init<S: StringProtocol>(
+        _ title: S,
         selection: Binding<Set<SelectionValue>>,
         @ViewBuilder content: () -> Content,
         @ViewBuilder footer: () -> Footer
     ) {
-        self.title = title
+        self.title = String(title)
         self.content = content()
         self.footer = footer()
         self.singleSelection = nil
@@ -380,17 +391,20 @@ extension List where Footer == EmptyView {
 
     /// Creates a multi-selection list whose title is displayed as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the single-selection
+    /// initializers above — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - selection: A binding to the set of selected item IDs.
     ///   - content: A ViewBuilder that defines the list content.
     @_disfavoredOverload
-    public init(
-        _ title: String,
+    public init<S: StringProtocol>(
+        _ title: S,
         selection: Binding<Set<SelectionValue>>,
         @ViewBuilder content: () -> Content
     ) {
-        self.title = title
+        self.title = String(title)
         self.content = content()
         self.footer = nil
         self.singleSelection = nil
@@ -448,17 +462,20 @@ extension List {
 
     /// Creates a selectionless list whose title is displayed as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the selecting
+    /// initializers above — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - content: A ViewBuilder that defines the list content.
     ///   - footer: A ViewBuilder that defines the footer content.
     @_disfavoredOverload
-    public init(
-        _ title: String,
+    public init<S: StringProtocol>(
+        _ title: S,
         @ViewBuilder content: () -> Content,
         @ViewBuilder footer: () -> Footer
     ) {
-        self.title = title
+        self.title = String(title)
         self.content = content()
         self.footer = footer()
         self.singleSelection = nil
@@ -507,12 +524,15 @@ extension List where Footer == EmptyView {
 
     /// Creates a selectionless list whose title is displayed as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the selecting
+    /// initializers above — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The title displayed in the border.
     ///   - content: A ViewBuilder that defines the list content.
     @_disfavoredOverload
-    public init(_ title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
+    public init<S: StringProtocol>(_ title: S, @ViewBuilder content: () -> Content) {
+        self.title = String(title)
         self.content = content()
         self.footer = nil
         self.singleSelection = nil
@@ -561,9 +581,12 @@ extension List where SelectionValue == Int, Footer == EmptyView {
     }
 
     /// Creates a selectionless list whose title is displayed as written.
+    ///
+    /// Generic over `StringProtocol` for the same reason as the selecting
+    /// initializers above — see ``LocalizedStringKey``.
     @_disfavoredOverload
-    public init(_ title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
+    public init<S: StringProtocol>(_ title: S, @ViewBuilder content: () -> Content) {
+        self.title = String(title)
         self.content = content()
         self.footer = nil
         self.singleSelection = nil
@@ -863,12 +886,18 @@ extension List {
 
     /// Sets the empty placeholder text, displayed as written.
     ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``.
+    ///
     /// - Parameter placeholder: The text to show when the list is empty.
     /// - Returns: A list with the specified empty placeholder.
     @_disfavoredOverload
-    public func listEmptyPlaceholder(_ placeholder: String) -> List<SelectionValue, Content, Footer> {
+    public func listEmptyPlaceholder<S: StringProtocol>(
+        _ placeholder: S
+    ) -> List<SelectionValue, Content, Footer> {
         var copy = self
-        copy.emptyPlaceholder = placeholder
+        copy.emptyPlaceholder = String(placeholder)
         return copy
     }
 

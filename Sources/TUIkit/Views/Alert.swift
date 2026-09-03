@@ -119,6 +119,13 @@ public struct Alert<Actions: View>: View {
 
     /// Creates an alert with custom action views, displayed as written.
     ///
+    /// Generic over `StringProtocol` — in **both** slots, the way
+    /// `LabeledContent`'s pair is — rather than taking concrete `String`s,
+    /// which is what keeps a *literal* binding to the key overload above; see
+    /// ``LocalizedStringKey``. `@_disfavoredOverload` alone is not enough once
+    /// the initializer takes another required argument, and this one takes
+    /// `actions`.
+    ///
     /// - Parameters:
     ///   - title: The alert title.
     ///   - message: The alert message.
@@ -129,9 +136,9 @@ public struct Alert<Actions: View>: View {
     ///   - verticalButtons: Stack the buttons vertically (default: `false`).
     ///   - actions: The action views to display in the footer.
     @_disfavoredOverload
-    public init(
-        title: String,
-        message: String,
+    public init<S1: StringProtocol, S2: StringProtocol>(
+        title: S1,
+        message: S2,
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
@@ -139,8 +146,8 @@ public struct Alert<Actions: View>: View {
         verticalButtons: Bool = false,
         @ViewBuilder actions: () -> Actions
     ) {
-        self.title = title
-        self.message = message
+        self.title = String(title)
+        self.message = String(message)
         self.config = ContainerConfig(
             borderStyle: borderStyle,
             borderColor: borderColor,
@@ -446,6 +453,9 @@ extension Alert where Actions == EmptyView {
 
     /// Creates an alert without action buttons, displayed as written.
     ///
+    /// Generic over `StringProtocol` in both slots for the same reason as the
+    /// form with actions — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The alert title.
     ///   - message: The alert message.
@@ -453,15 +463,15 @@ extension Alert where Actions == EmptyView {
     ///   - borderColor: The border color (default: nil).
     ///   - titleColor: The title color (default: nil).
     @_disfavoredOverload
-    public init(
-        title: String,
-        message: String,
+    public init<S1: StringProtocol, S2: StringProtocol>(
+        title: S1,
+        message: S2,
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
         titleColor: Color? = nil
     ) {
-        self.title = title
-        self.message = message
+        self.title = String(title)
+        self.message = String(message)
         self.config = ContainerConfig(
             borderStyle: borderStyle,
             borderColor: borderColor,

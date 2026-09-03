@@ -68,6 +68,14 @@ struct SymbolVariantsTests {
 
     // MARK: - Resolution
 
+    // The two that follow read the baked name→glyph table, which is compiled in
+    // only under `#if canImport(AppKit)` (see `SFSymbol.glyph(named:)`). Off
+    // Apple there is nothing to look up and nothing to assert, so they are
+    // elided the same way `SFSymbolTests` and `LinkTests` elide theirs — a
+    // compile-time fact deserves a compile-time gate. The FONT-dependent tests
+    // below are a different condition and take a runtime one.
+    #if canImport(AppKit)
+
     /// The fallback is the load-bearing part, and it is not hypothetical:
     /// `person.circle.fill` ships, `person.square.fill` does not.
     @Test("an absent variant falls back to the base symbol")
@@ -92,6 +100,8 @@ struct SymbolVariantsTests {
         #expect(_SymbolIcon.glyph(for: "star", variants: .none) == base)
     }
 
+    #endif
+
     /// An unknown symbol yields nothing rather than a stray suffix lookup that
     /// happens to hit.
     @Test("an unknown symbol resolves to nothing")
@@ -103,9 +113,20 @@ struct SymbolVariantsTests {
 
     /// The reason it is an environment value: one modifier on a container
     /// re-cuts every symbol beneath it.
-    @Test("the variant reaches every label in the subtree")
+    /// Gated rather than asserted: it counts glyph occurrences, and off-font
+    /// there are no glyphs to count, so on Linux it would pass vacuously — the
+    /// thing this file's header says not to do. `.enabled(if:)` reports a skip
+    /// with its reason; a `#require` would report a failure.
+    ///
+    /// - Note: The condition closure is `@Sendable` and non-isolated, so it can
+    ///   only read non-isolated state. `SFSymbol` is a plain `enum` and
+    ///   `isFontAvailable` a `static let`, which is why this compiles; were the
+    ///   package to adopt default-`MainActor` isolation, these traits would be
+    ///   the first thing to break.
+    @Test(
+        "the variant reaches every label in the subtree",
+        .enabled(if: SFSymbol.isFontAvailable, "needs a terminal font carrying SF Symbols"))
     func cascades() throws {
-        try #require(SFSymbol.isFontAvailable, "needs a terminal font carrying SF Symbols")
         let starFill = try #require(SFSymbol.glyph(named: "star.fill"))
 
         let drawn = renderToBuffer(
@@ -121,9 +142,12 @@ struct SymbolVariantsTests {
         #expect(drawn.filter { String($0) == starFill }.count == 2, "…for both labels")
     }
 
-    @Test("the innermost variant wins")
+    /// Gated for the same reason as ``cascades()``: it distinguishes two
+    /// *different* glyphs, which cannot exist where none can be drawn.
+    @Test(
+        "the innermost variant wins",
+        .enabled(if: SFSymbol.isFontAvailable, "needs a terminal font carrying SF Symbols"))
     func innermostWins() throws {
-        try #require(SFSymbol.isFontAvailable, "needs a terminal font carrying SF Symbols")
         let plain = try #require(SFSymbol.glyph(named: "star"))
         let filled = try #require(SFSymbol.glyph(named: "star.fill"))
 
@@ -142,19 +166,30 @@ struct SymbolVariantsTests {
 
     /// A variant must not change whether the label HAS an icon — that is decided
     /// by the base symbol, precisely because the resolution falls back to it.
+    ///
+    /// Ungated, because width is observable on every host. Three variants of one
+    /// symbol all measure the same everywhere, which alone would pass vacuously
+    /// off-font — so the claim that carries the Linux half is the last one: the
+    /// icon column exists exactly when a cut can be drawn. That is the AGREEMENT
+    /// shape `ImageTests.symbolDrawsWhenRenderable` uses, and it fails on a host
+    /// that leaves a stray gap where it suppressed an icon.
     @Test("a variant does not remove the icon")
-    func variantKeepsTheIcon() throws {
-        try #require(SFSymbol.isFontAvailable, "needs a terminal font carrying SF Symbols")
+    func variantKeepsTheIcon() {
         func width(_ view: some View) -> Int {
             measureChild(
                 view, proposal: ProposedSize(width: 30, height: 4),
                 context: makeBareRenderContext(width: 30, height: 4)
             ).width
         }
-        // `person.square.fill` does not exist, so this falls back — and the
-        // label must still be as wide as the one with a resolvable variant.
+        // `person.square.fill` does not exist and `person.circle.fill` does, so
+        // the first falls back — and both must still be as wide as the plain cut.
+        let bare = width(Label("P", systemImage: "person").symbolVariant(.none))
+        let squared = width(Label("P", systemImage: "person").symbolVariant(.square.fill))
+        let circled = width(Label("P", systemImage: "person").symbolVariant(.circle.fill))
+        #expect(squared == circled, "a fallback measures as the variant it fell back from")
+        #expect(squared == bare, "…and as the base symbol it fell back to")
         #expect(
-            width(Label("P", systemImage: "person").symbolVariant(.square.fill))
-                == width(Label("P", systemImage: "person").symbolVariant(.circle.fill)))
+            (squared > width(Text("P"))) == SFSymbol.canRender(named: "person"),
+            "an icon column appears exactly where an icon can be drawn")
     }
 }

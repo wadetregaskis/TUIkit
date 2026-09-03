@@ -152,15 +152,19 @@ extension Section where Parent == Text, Footer == EmptyView {
 
     /// Creates a section with a string title as the header, shown as written.
     ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The string to use as the header text.
     ///   - content: A ViewBuilder that defines the section's main content.
     @_disfavoredOverload
-    public init(
-        _ title: String,
+    public init<S: StringProtocol>(
+        _ title: S,
         @ViewBuilder content: () -> Content
     ) {
-        self.header = Text(title)
+        self.header = Text(String(title))
         self.content = content()
         self.footer = EmptyView()
     }

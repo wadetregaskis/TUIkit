@@ -42,8 +42,8 @@ struct KeyboardHelpSection: View {
     ///   - title: The section title.
     ///   - shortcuts: The keys for the shortcut lines.
     @_disfavoredOverload
-    init(_ title: String, shortcuts: [LocalizedStringKey]) {
-        self.title = title
+    init<S: StringProtocol>(_ title: S, shortcuts: [LocalizedStringKey]) {
+        self.title = String(title)
         self.shortcuts = shortcuts
     }
 

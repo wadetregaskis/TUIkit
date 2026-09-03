@@ -44,7 +44,9 @@ public enum LocalizationKey {
     }
 
     /// Label and field names
-    public enum Label: String {
+    /// `CaseIterable` for the same reason as ``StatusBar``: so the consistency
+    /// tests enumerate the group rather than restating it.
+    public enum Label: String, CaseIterable {
         case search = "label.search"
         case name = "label.name"
         case description = "label.description"
@@ -64,6 +66,16 @@ public enum LocalizationKey {
         case from = "label.from"
         case to = "label.to"
         case gradient = "label.gradient"
+
+        // `ContentUnavailableView.search`'s prose. Framework text, so it is
+        // keyed here rather than written as a `Text` literal: a literal IS
+        // looked up, but under the key "No Results", which is prose and so can
+        // collide with an app's own — the reason every framework key is
+        // dot-separated.
+        case noResults = "label.noResults"
+        /// Carries the query as `%@`, so a translation can move it.
+        case noResultsFor = "label.noResultsFor"
+        case noResultsHint = "label.noResultsHint"
     }
 
     /// Border appearance names, as shown in a settings screen.
@@ -136,11 +148,65 @@ public enum LocalizationKey {
         case fieldRequired = "validation.field_required"
     }
 
-    /// Built-in status bar item labels (quit / appearance / theme).
-    public enum StatusBar: String {
+    /// Built-in status bar labels: the three standing items, and the verbs the
+    /// framework publishes for the two common keys.
+    ///
+    /// The verbs are the framework's own words, not the app's — a focused
+    /// `Toggle` says what Return does to it, a `NavigationStack` says what
+    /// Escape does over it — so they belong here beside `quit`/`appearance`/
+    /// `theme` rather than being spelled as literals at the sites that publish
+    /// them. They were literals until they were not: a translated app showed
+    /// "go back" and "close popover" in English next to a correctly translated
+    /// "beenden".
+    ///
+    /// `CaseIterable` so the consistency tests can enumerate the group instead
+    /// of restating it: the hand-written list they kept was already three
+    /// entries out of date the moment this enum grew, and a key absent from
+    /// that list is a key nothing checks.
+    public enum StatusBar: String, CaseIterable {
         case quit = "statusbar.quit"
         case appearance = "statusbar.appearance"
         case theme = "statusbar.theme"
+
+        // MARK: What Return does to the focused control
+
+        /// A button on the page.
+        case activate = "statusbar.activate"
+        /// A row of an open menu, or an open drop-down's option.
+        case choose = "statusbar.choose"
+        /// A `Toggle`.
+        case toggle = "statusbar.toggle"
+        /// A list row that has an action of its own.
+        case open = "statusbar.open"
+        /// A list row that has not — Return settles the selection on it.
+        case select = "statusbar.select"
+        /// A text field the caller gave something to submit to.
+        case submit = "statusbar.submit"
+
+        // MARK: What Escape does over a surface or a mode
+
+        /// A modal or an alert.
+        case dismiss = "statusbar.dismiss"
+        /// A pushed `NavigationStack` destination.
+        case goBack = "statusbar.goBack"
+        case closePopover = "statusbar.closePopover"
+        case closeSuggestions = "statusbar.closeSuggestions"
+        /// A keyboard drag in progress.
+        case cancelMove = "statusbar.cancelMove"
+        case clearSelection = "statusbar.clearSelection"
+        case stopExtendingSelection = "statusbar.stopExtendingSelection"
+
+        // MARK: The menu pair
+
+        // A verb and a noun rather than four whole phrases, because the pair is
+        // read as a pair — see ``MenuPresentationLabels``. The noun is
+        // substituted with `%@`, so a translation places it wherever its
+        // grammar wants ("%@ öffnen", "%@を開く") rather than being forced into
+        // English word order.
+        case openMenu = "statusbar.menu.open"
+        case closeMenu = "statusbar.menu.close"
+        case menuDropDown = "statusbar.menu.dropDown"
+        case menuPopUp = "statusbar.menu.popUp"
     }
 }
 

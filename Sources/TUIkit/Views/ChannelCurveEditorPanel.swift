@@ -144,21 +144,49 @@ public struct ChannelCurveEditorPanel: View {
 
     /// Creates a channel-curve editor titled as written.
     ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
+    /// A generic parameter cannot carry a default, so the defaulted title lives
+    /// in ``init(channels:isPresented:)`` instead of here.
+    ///
     /// - Parameters:
-    ///   - title: The dialog title (default `"Channel curves"`).
+    ///   - title: The dialog title.
     ///   - channels: The three curves. Rewritten live on every change;
     ///     restored on Cancel / `Esc`.
     ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
     ///     it false.
     @_disfavoredOverload
-    public init(
-        _ title: String = "Channel curves",
+    public init<S: StringProtocol>(
+        _ title: S,
         channels: Binding<ASCIIToneCurve.Channels>,
         isPresented: Binding<Bool>
     ) {
-        self.title = title
+        self.title = String(title)
         self.channels = channels
         self.isPresented = isPresented
+    }
+
+    /// Creates a channel-curve editor titled `"Channel curves"`.
+    ///
+    /// The title's default lives here rather than on either titled overload:
+    /// neither of those can carry it — a generic parameter cannot have a
+    /// default, and defaulting the ``LocalizedStringKey`` one would make the
+    /// two ambiguous wherever the title is omitted. The forwarded default is
+    /// written `as String` so it stays on the disfavoured side: a bare literal
+    /// would bind to the key overload and go looking for a `"Channel curves"`
+    /// key that is in no table.
+    ///
+    /// - Parameters:
+    ///   - channels: The three curves. Rewritten live on every change;
+    ///     restored on Cancel / `Esc`.
+    ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
+    ///     it false.
+    public init(
+        channels: Binding<ASCIIToneCurve.Channels>,
+        isPresented: Binding<Bool>
+    ) {
+        self.init("Channel curves" as String, channels: channels, isPresented: isPresented)
     }
 
     public var body: some View {

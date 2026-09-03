@@ -134,30 +134,11 @@ final class LocalizationKeyConsistencyTests {
 
     @Test("All label keys exist in translations")
     func allLabelKeysExist() {
-        let keys = [
-            LocalizationKey.Label.search,
-            LocalizationKey.Label.name,
-            LocalizationKey.Label.description,
-            LocalizationKey.Label.value,
-            LocalizationKey.Label.status,
-            LocalizationKey.Label.error,
-            LocalizationKey.Label.warning,
-            LocalizationKey.Label.info,
-            LocalizationKey.Label.success,
-            LocalizationKey.Label.loading,
-            LocalizationKey.Label.empty,
-            LocalizationKey.Label.none,
-            LocalizationKey.Label.page,
-            LocalizationKey.Label.item,
-            LocalizationKey.Label.items,
-            LocalizationKey.Label.total,
-            LocalizationKey.Label.from,
-            LocalizationKey.Label.to,
-            LocalizationKey.Label.gradient,
-        ]
-
-        for key in keys {
-            #expect(englishTranslations[key.rawValue] != nil, "Label key '\(key.rawValue)' not found in translations")
+        // `allCases`, not a written-out list — see `allStatusBarKeysExist`.
+        for key in LocalizationKey.Label.allCases {
+            #expect(
+                englishTranslations[key.rawValue] != nil,
+                "Label key '\(key.rawValue)' not found in translations")
         }
     }
 
@@ -257,6 +238,37 @@ final class LocalizationKeyConsistencyTests {
         }
     }
 
+    @Test("All status bar keys exist in translations")
+    func allStatusBarKeysExist() {
+        // `allCases` rather than a written-out list, so a key added to the enum
+        // is covered here the moment it exists rather than the moment somebody
+        // remembers to add it. This group is the framework's OWN words — the
+        // verbs it publishes for Return and Escape — so a missing entry shows
+        // up as English in a translated app, which is what it did.
+        for key in LocalizationKey.StatusBar.allCases {
+            #expect(
+                englishTranslations[key.rawValue] != nil,
+                "Status bar key '\(key.rawValue)' not found in translations")
+        }
+    }
+
+    /// The two menu verbs are templates, and a translation that drops the
+    /// placeholder loses the noun entirely rather than misplacing it.
+    @Test("The menu verb templates keep their placeholder in every language")
+    func menuTemplatesKeepPlaceholder() {
+        for language in LocalizationService.Language.allCases {
+            let table = Self.loadTranslations(language: language.rawValue)
+            for key in [
+                LocalizationKey.StatusBar.openMenu, LocalizationKey.StatusBar.closeMenu,
+            ] {
+                let template = table[key.rawValue]
+                #expect(
+                    template?.contains("%@") == true,
+                    "\(language.rawValue).json '\(key.rawValue)' must carry %@, got \(template ?? "nil")")
+            }
+        }
+    }
+
     // MARK: - Coverage Tests
 
     @Test("No extraneous keys in translations")
@@ -288,25 +300,9 @@ final class LocalizationKeyConsistencyTests {
         enumKeys.insert(LocalizationKey.Button.refresh.rawValue)
 
         // Label keys
-        enumKeys.insert(LocalizationKey.Label.search.rawValue)
-        enumKeys.insert(LocalizationKey.Label.name.rawValue)
-        enumKeys.insert(LocalizationKey.Label.description.rawValue)
-        enumKeys.insert(LocalizationKey.Label.value.rawValue)
-        enumKeys.insert(LocalizationKey.Label.status.rawValue)
-        enumKeys.insert(LocalizationKey.Label.error.rawValue)
-        enumKeys.insert(LocalizationKey.Label.warning.rawValue)
-        enumKeys.insert(LocalizationKey.Label.info.rawValue)
-        enumKeys.insert(LocalizationKey.Label.success.rawValue)
-        enumKeys.insert(LocalizationKey.Label.loading.rawValue)
-        enumKeys.insert(LocalizationKey.Label.empty.rawValue)
-        enumKeys.insert(LocalizationKey.Label.none.rawValue)
-        enumKeys.insert(LocalizationKey.Label.page.rawValue)
-        enumKeys.insert(LocalizationKey.Label.item.rawValue)
-        enumKeys.insert(LocalizationKey.Label.items.rawValue)
-        enumKeys.insert(LocalizationKey.Label.total.rawValue)
-        enumKeys.insert(LocalizationKey.Label.from.rawValue)
-        enumKeys.insert(LocalizationKey.Label.to.rawValue)
-        enumKeys.insert(LocalizationKey.Label.gradient.rawValue)
+        for key in LocalizationKey.Label.allCases {
+            enumKeys.insert(key.rawValue)
+        }
 
         // Error keys
         enumKeys.insert(LocalizationKey.Error.invalidInput.rawValue)
@@ -362,10 +358,12 @@ final class LocalizationKeyConsistencyTests {
         enumKeys.insert(LocalizationKey.Appearance.block.rawValue)
         enumKeys.insert(LocalizationKey.Appearance.blank.rawValue)
 
-        // Status bar keys
-        enumKeys.insert(LocalizationKey.StatusBar.quit.rawValue)
-        enumKeys.insert(LocalizationKey.StatusBar.appearance.rawValue)
-        enumKeys.insert(LocalizationKey.StatusBar.theme.rawValue)
+        // Status bar keys — enumerated, not restated. The hand-written list
+        // here covered three of them and silently stopped covering the rest as
+        // the group grew.
+        for key in LocalizationKey.StatusBar.allCases {
+            enumKeys.insert(key.rawValue)
+        }
 
         // Check for extraneous keys
         let translationKeys = Set(englishTranslations.keys)
@@ -378,7 +376,9 @@ final class LocalizationKeyConsistencyTests {
     func allEnumKeysCovered() {
         // button + label + error + placeholder + menu + dialog + validation
         //   + statusbar + appearance
-        let expectedKeyCount = 21 + 19 + 11 + 6 + 8 + 7 + 4 + 3 + 6
+        let expectedKeyCount =
+            21 + LocalizationKey.Label.allCases.count + 11 + 6 + 8 + 7 + 4
+            + LocalizationKey.StatusBar.allCases.count + 6
         #expect(
             englishTranslations.count == expectedKeyCount,
             "Expected \(expectedKeyCount) keys in translations, but got \(englishTranslations.count)"

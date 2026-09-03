@@ -172,7 +172,10 @@ extension AlertPresentationModifier: Renderable {
             // show nor fire while an alert is up. This item is still what
             // makes Escape mean "dismiss" rather than nothing.
             let dismissItem = StatusBarItem(
-                shortcut: Shortcut.escape, label: "dismiss", action: dismiss)
+                shortcut: Shortcut.escape,
+                    label: LocalizationService.shared.string(
+                        for: LocalizationKey.StatusBar.dismiss),
+                    action: dismiss)
             context.environment.statusBar?.registerSectionItems(
                 sectionID: sectionID, items: [dismissItem], composition: .merge)
 

@@ -454,7 +454,9 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // flips it.
         let isFocused = context.indicatesFocus(
             FocusRegistration.isFocused(context: context, focusID: persistedFocusID))
-        FocusRegistration.publishActivationLabel("toggle", context: context, isFocused: isFocused)
+        FocusRegistration.publishActivationLabel(
+            LocalizationService.shared.string(for: LocalizationKey.StatusBar.toggle),
+            context: context, isFocused: isFocused)
         let isOnValue = isOn.wrappedValue
 
         // Hover state — flipped by the dispatcher on .entered / .exited events

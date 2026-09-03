@@ -38,12 +38,20 @@ struct DemoSection<Content: View>: View {
 
     /// Creates a section titled as written.
     ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``. A literal already binds correctly here as it
+    /// stands, because the `@ViewBuilder` argument is generic over `Content` and
+    /// that is enough to tip the ranking; the point of spelling it this way is
+    /// that the title no longer depends on the shape of its neighbours to be
+    /// looked up.
+    ///
     /// - Parameters:
     ///   - title: The section title.
     ///   - content: The section's content.
     @_disfavoredOverload
-    init(_ title: String, @ViewBuilder content: () -> Content) {
-        self.title = title
+    init<S: StringProtocol>(_ title: S, @ViewBuilder content: () -> Content) {
+        self.title = String(title)
         self.content = content()
     }
 

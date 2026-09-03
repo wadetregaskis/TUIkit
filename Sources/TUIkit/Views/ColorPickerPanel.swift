@@ -111,21 +111,49 @@ public struct ColorPickerPanel: View {
 
     /// Creates a colour-picker panel titled as written.
     ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
+    /// A generic parameter cannot carry a default, so the defaulted title lives
+    /// in ``init(selection:isPresented:)`` instead of here.
+    ///
     /// - Parameters:
-    ///   - title: The dialog title (default `"Colour"`).
+    ///   - title: The dialog title.
     ///   - selection: The colour to edit. Rewritten live on every change;
     ///     restored to the opening value on Cancel / `Esc`.
     ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
     ///     it false.
     @_disfavoredOverload
-    public init(
-        _ title: String = "Colour",
+    public init<S: StringProtocol>(
+        _ title: S,
         selection: Binding<Color>,
         isPresented: Binding<Bool>
     ) {
-        self.title = title
+        self.title = String(title)
         self.selection = selection
         self.isPresented = isPresented
+    }
+
+    /// Creates a colour-picker panel titled `"Colour"`.
+    ///
+    /// The title's default lives here rather than on either titled overload:
+    /// neither of those can carry it — a generic parameter cannot have a
+    /// default, and defaulting the ``LocalizedStringKey`` one would make the
+    /// two ambiguous wherever the title is omitted. The forwarded default is
+    /// written `as String` so it stays on the disfavoured side: a bare literal
+    /// would bind to the key overload and go looking for a `"Colour"` key that
+    /// is in no table.
+    ///
+    /// - Parameters:
+    ///   - selection: The colour to edit. Rewritten live on every change;
+    ///     restored to the opening value on Cancel / `Esc`.
+    ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
+    ///     it false.
+    public init(
+        selection: Binding<Color>,
+        isPresented: Binding<Bool>
+    ) {
+        self.init("Colour" as String, selection: selection, isPresented: isPresented)
     }
 
     public var body: some View {

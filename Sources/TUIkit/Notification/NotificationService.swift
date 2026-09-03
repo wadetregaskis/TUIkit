@@ -128,12 +128,18 @@ extension NotificationService {
     ///
     /// The notification appears immediately and auto-dismisses after `duration` seconds.
     ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``. `duration`'s default survives the change: it is
+    /// the generic parameter itself that cannot carry one (there would be
+    /// nothing left to infer `S` from), and `duration` is a `TimeInterval`.
+    ///
     /// - Parameters:
     ///   - message: The notification message text.
     ///   - duration: How long the notification stays visible in seconds (default: 3.0).
     @_disfavoredOverload
-    public func post(_ message: String, duration: TimeInterval = 3.0) {
-        let entry = NotificationEntry(message: message, duration: duration)
+    public func post<S: StringProtocol>(_ message: S, duration: TimeInterval = 3.0) {
+        let entry = NotificationEntry(message: String(message), duration: duration)
         lock.lock()
         entries.append(entry)
         lock.unlock()

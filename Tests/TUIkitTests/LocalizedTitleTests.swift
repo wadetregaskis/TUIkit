@@ -30,13 +30,13 @@ struct LocalizedTitleTests {
     /// Dot-separated and namespaced to this suite, so it cannot collide with an
     /// app's prose or another suite's registration — the same property that
     /// makes the whole rule safe to adopt (see `SwiftUI-compatibility.md` §4a).
-    private static let key = "test.title.control"
-    private static let translation = "Localized!"
+    static let key = "test.title.control"
+    static let translation = "Localized!"
 
     /// A `String` *equal* to the key but computed rather than written, so it
     /// must NOT be looked up. Built by concatenation so no amount of constant
     /// folding can turn it back into a literal.
-    private static var computedKey: String { "test.title" + ".control" }
+    static var computedKey: String { "test.title" + ".control" }
 
     init() {
         LocalizationService.shared.register(translations: [
@@ -63,7 +63,7 @@ struct LocalizedTitleTests {
     ///
     /// Both halves matter. Only the first would pass if every string were
     /// looked up, which is the bug in the other direction.
-    private func expectLocalized(
+    func expectLocalized(
         _ literal: some View, _ computed: some View,
         _ label: Comment, sourceLocation: SourceLocation = #_sourceLocation
     ) {
@@ -401,7 +401,7 @@ struct LocalizedTitleTests {
     }
 
     /// ``expectLocalized(_:_:_:)`` for a view whose text is in an overlay.
-    private func expectPresented(
+    func expectPresented(
         _ literal: some View, _ computed: some View,
         _ label: Comment, sourceLocation: SourceLocation = #_sourceLocation
     ) {
@@ -544,8 +544,13 @@ struct LocalizedTitleTests {
             Card(title: "test.title.control") { Text("body") } footer: { Text("f") },
             Card(title: Self.computedKey) { Text("body") } footer: { Text("f") },
             "Card(footer:)")
-        // The key overload is non-optional, so the untitled forms still reach
-        // the `String?` one rather than becoming ambiguous.
+        // The key overload is non-optional, so neither untitled form becomes
+        // ambiguous with it — but they do not reach the same place, which this
+        // comment used to claim they did. `Card { … }` reaches the dedicated
+        // no-title initializer (not disfavoured, and one fewer defaulted
+        // argument); only `Card(title: nil)` reaches the `String?` one, since
+        // `nil` cannot infer a generic `S` and so cannot go anywhere else.
+        // Both spellings must keep compiling, which is what is asserted here.
         #expect(Card { Text("body") }.title == nil)
         #expect(Card(title: nil) { Text("body") }.title == nil)
     }
@@ -623,14 +628,14 @@ struct LocalizedTitleTests {
     // MARK: - Fixtures
 
     /// A row type for the `Table` case.
-    private struct Row: Identifiable, Sendable {
+    struct Row: Identifiable, Sendable {
         let id = UUID()
         let name: String
     }
 
     /// Somewhere for a `Binding` to point. A class, because a `Binding` needs
     /// storage that outlives the expression that builds it.
-    private final class Box<T> {
+    final class Box<T> {
         var value: T
         init(_ value: T) { self.value = value }
         var binding: Binding<T> {

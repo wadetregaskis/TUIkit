@@ -111,6 +111,10 @@ public struct Panel<Content: View, Footer: View>: View {
 
     /// Creates a panel with a footer whose title is displayed as written.
     ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
+    ///
     /// - Parameters:
     ///   - title: The title to display.
     ///   - borderStyle: The border style (default: appearance borderStyle).
@@ -121,8 +125,8 @@ public struct Panel<Content: View, Footer: View>: View {
     ///   - content: The main content of the panel.
     ///   - footer: The footer content.
     @_disfavoredOverload
-    public init(
-        _ title: String,
+    public init<S: StringProtocol>(
+        _ title: S,
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
@@ -131,7 +135,7 @@ public struct Panel<Content: View, Footer: View>: View {
         @ViewBuilder content: () -> Content,
         @ViewBuilder footer: () -> Footer
     ) {
-        self.title = title
+        self.title = String(title)
         self.content = content()
         self.footer = footer()
         self.config = ContainerConfig(
@@ -188,6 +192,9 @@ extension Panel where Footer == EmptyView {
 
     /// Creates a panel whose title is displayed as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the footered
+    /// overload — see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
     ///   - title: The title to display in the top border.
     ///   - borderStyle: The border style (default: appearance borderStyle).
@@ -196,15 +203,15 @@ extension Panel where Footer == EmptyView {
     ///   - padding: The inner padding (default: horizontal 1, vertical 0).
     ///   - content: The content of the panel.
     @_disfavoredOverload
-    public init(
-        _ title: String,
+    public init<S: StringProtocol>(
+        _ title: S,
         borderStyle: BorderStyle? = nil,
         borderColor: Color? = nil,
         titleColor: Color? = nil,
         padding: EdgeInsets = EdgeInsets(horizontal: 1, vertical: 0),
         @ViewBuilder content: () -> Content
     ) {
-        self.title = title
+        self.title = String(title)
         self.content = content()
         self.footer = nil
         self.config = ContainerConfig(

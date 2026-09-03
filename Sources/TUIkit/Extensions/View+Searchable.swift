@@ -225,7 +225,12 @@ struct SearchableModifier<Content: View>: View {
     /// would make the search field the one exception.
     @ViewBuilder
     private var queryField: some View {
-        let field = TextField("", text: text, prompt: prompt ?? Text("Search"))
+        // The fallback prompt is the framework's word, not the caller's, so it
+        // comes from the table. `Text(verbatim:)` because the lookup has
+        // already happened — see `ContentUnavailableView.search`.
+        let defaultPrompt = Text(
+            verbatim: LocalizationService.shared.string(for: LocalizationKey.Label.search))
+        let field = TextField("", text: text, prompt: prompt ?? defaultPrompt)
             .onEditingChanged { isSearching = $0 }
         if suggestions.isEmpty {
             field

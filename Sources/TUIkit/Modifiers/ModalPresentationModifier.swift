@@ -165,7 +165,11 @@ extension ModalPresentationModifier: Renderable {
             // nothing on the status bar offering a way out that does not work.
             let isPresented = self.isPresented
             if !dismissIsDisabled {
-                let dismissItem = StatusBarItem(shortcut: Shortcut.escape, label: "dismiss") {
+                let dismissItem = StatusBarItem(
+                    shortcut: Shortcut.escape,
+                    label: LocalizationService.shared.string(
+                        for: LocalizationKey.StatusBar.dismiss)
+                ) {
                     isPresented.wrappedValue = false
                 }
                 context.environment.statusBar?.registerSectionItems(

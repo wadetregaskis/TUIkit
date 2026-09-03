@@ -127,8 +127,71 @@ public struct Card<Content: View, Footer: View>: View {
 
     /// Creates a card with all options including footer, titled as written.
     ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
+    ///
+    /// A card's title is optional, and a generic parameter can carry neither a
+    /// default nor a `nil`: `S` is inferable from neither. So the untitled card
+    /// stays behind on the concrete `String?` overload below rather than moving
+    /// here — the same split ``QuitShortcut`` makes for its defaulted label,
+    /// except that here the omitted title and the explicit `nil` are one
+    /// signature rather than two.
+    ///
     /// - Parameters:
-    ///   - title: The title (optional).
+    ///   - title: The title.
+    ///   - borderStyle: The border style (default: appearance borderStyle).
+    ///   - borderColor: The border color (default: theme border).
+    ///   - titleColor: The title color (default: theme accent).
+    ///   - backgroundColor: The background color (default: nil).
+    ///   - padding: The inner padding (default: 1 on all sides).
+    ///   - showFooterSeparator: Whether to show separator before footer (default: true).
+    ///   - content: The content of the card.
+    ///   - footer: The footer content.
+    @_disfavoredOverload
+    public init<S: StringProtocol>(
+        title: S,
+        borderStyle: BorderStyle? = nil,
+        borderColor: Color? = nil,
+        titleColor: Color? = nil,
+        backgroundColor: Color? = nil,
+        padding: EdgeInsets = EdgeInsets(all: 1),
+        showFooterSeparator: Bool = true,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        // `as String?` is load-bearing. A bare `String(title)` is a `String`,
+        // and a `String` prefers THIS overload over the optional one below —
+        // which is the right ranking everywhere else and infinite recursion
+        // here. Widening to `String?` puts the forwarding call somewhere the
+        // generic cannot follow.
+        self.init(
+            title: String(title) as String?,
+            borderStyle: borderStyle,
+            borderColor: borderColor,
+            titleColor: titleColor,
+            backgroundColor: backgroundColor,
+            padding: padding,
+            showFooterSeparator: showFooterSeparator,
+            content: content,
+            footer: footer
+        )
+    }
+
+    /// Creates an untitled card with a footer, or one whose title you already
+    /// hold as a `String?`.
+    ///
+    /// Concrete rather than generic, and that is the point of it: this is the
+    /// only signature `Card { … } footer: { … }` and
+    /// `Card(title: nil) { … } footer: { … }` can bind to, because `S` cannot be
+    /// inferred from an omitted argument or from `nil`. Everything with an
+    /// actual title goes elsewhere — a literal to the ``LocalizedStringKey``
+    /// overload, since reaching this one would mean injecting `String` into
+    /// `String?` and that ranks below a direct match; a `String` you computed to
+    /// the generic overload above, which is the more specialized of the two.
+    ///
+    /// - Parameters:
+    ///   - title: The title (default: `nil`, for an untitled card).
     ///   - borderStyle: The border style (default: appearance borderStyle).
     ///   - borderColor: The border color (default: theme border).
     ///   - titleColor: The title color (default: theme accent).
@@ -269,8 +332,56 @@ extension Card where Footer == EmptyView {
 
     /// Creates a card without a footer, titled as written.
     ///
+    /// Generic over `StringProtocol` for the same reason as the footered
+    /// overload, and split from the untitled form for the same reason too —
+    /// see ``LocalizedStringKey``.
+    ///
     /// - Parameters:
-    ///   - title: The title (optional).
+    ///   - title: The title.
+    ///   - borderStyle: The border style (default: appearance borderStyle).
+    ///   - borderColor: The border color (default: theme border).
+    ///   - titleColor: The title color (default: theme accent).
+    ///   - backgroundColor: The background color (default: nil).
+    ///   - padding: The inner padding (default: 1 on all sides).
+    ///   - content: The content of the card.
+    @_disfavoredOverload
+    public init<S: StringProtocol>(
+        title: S,
+        borderStyle: BorderStyle? = nil,
+        borderColor: Color? = nil,
+        titleColor: Color? = nil,
+        backgroundColor: Color? = nil,
+        padding: EdgeInsets = EdgeInsets(all: 1),
+        @ViewBuilder content: () -> Content
+    ) {
+        // `as String?` is load-bearing — see the footered overload.
+        self.init(
+            title: String(title) as String?,
+            borderStyle: borderStyle,
+            borderColor: borderColor,
+            titleColor: titleColor,
+            backgroundColor: backgroundColor,
+            padding: padding,
+            content: content
+        )
+    }
+
+    /// Creates an untitled card, or one whose title you already hold as a
+    /// `String?`.
+    ///
+    /// Concrete rather than generic, for the reason given on its footered
+    /// counterpart: `Card(title: nil) { … }` has nowhere else to bind, since
+    /// `S` cannot be inferred from `nil`.
+    ///
+    /// The omitted-title case does have somewhere else to go — the
+    /// title-less ``init(borderStyle:borderColor:backgroundColor:padding:content:)``
+    /// below, which wins `Card { … }` on being the only candidate that is not
+    /// disfavoured. This one still has to keep its default, though: that
+    /// initializer takes no `titleColor`, so `Card(titleColor:) { … }` reaches
+    /// only here.
+    ///
+    /// - Parameters:
+    ///   - title: The title (default: `nil`, for an untitled card).
     ///   - borderStyle: The border style (default: appearance borderStyle).
     ///   - borderColor: The border color (default: theme border).
     ///   - titleColor: The title color (default: theme accent).

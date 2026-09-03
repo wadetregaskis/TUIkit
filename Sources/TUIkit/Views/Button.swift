@@ -115,7 +115,7 @@ public struct Button: View {
     ///
     /// A string **literal** binds here, so it is a lookup key — see
     /// ``LocalizedStringKey``. A `String` you computed binds to
-    /// ``init(_:action:)-(String,_)`` and is shown as written.
+    /// ``init(_:action:)-(S,_)`` and is shown as written.
     ///
     /// - Parameters:
     ///   - titleKey: The key for the button's label.
@@ -127,17 +127,21 @@ public struct Button: View {
         self.init(titleKey.localized, action: action)
     }
 
-    /// Creates a button with a label and action, displayed as written.
+    /// Creates a button with a title and action, displayed as written.
+    ///
+    /// Generic over `StringProtocol`, which is both SwiftUI's own spelling and
+    /// what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
     ///
     /// - Parameters:
-    ///   - label: The button's label text.
+    ///   - title: The button's label text.
     ///   - action: The action to perform when pressed.
     @_disfavoredOverload
-    public init(
-        _ label: String,
+    public init<S: StringProtocol>(
+        _ title: S,
         action: @escaping () -> Void
     ) {
-        self.label = label
+        self.label = String(title)
         self.labelView = nil
         self.action = action
         self.role = nil
@@ -166,19 +170,22 @@ public struct Button: View {
         self.init(titleKey.localized, role: role, action: action)
     }
 
-    /// Creates a button with a role and a label displayed as written.
+    /// Creates a button with a role and a title displayed as written.
+    ///
+    /// Generic over `StringProtocol` for the same reason as
+    /// ``init(_:action:)-(S,_)``.
     ///
     /// - Parameters:
-    ///   - label: The button's label text.
+    ///   - title: The button's label text.
     ///   - role: An optional semantic role describing the button.
     ///   - action: The action to perform when pressed.
     @_disfavoredOverload
-    public init(
-        _ label: String,
+    public init<S: StringProtocol>(
+        _ title: S,
         role: ButtonRole?,
         action: @escaping () -> Void
     ) {
-        self.label = label
+        self.label = String(title)
         self.labelView = nil
         self.action = action
         self.role = role
@@ -300,7 +307,9 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             let verb =
                 isMenuTrigger
                 ? MenuPresentationLabels.popUp.open
-                : (context.environment.isInsideMenu ? "choose" : "activate")
+                : LocalizationService.shared.string(
+                    for: context.environment.isInsideMenu
+                        ? LocalizationKey.StatusBar.choose : .activate)
             FocusRegistration.publishActivationLabel(
                 verb, context: context, isFocused: isFocused)
             return isFocused

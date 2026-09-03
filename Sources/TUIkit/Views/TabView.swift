@@ -41,14 +41,21 @@ public struct Tab<Value: Hashable, Content: View>: View {
 
     /// Creates a tab whose title is displayed as written.
     ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``. Only the title is a key: `value` is the tab's
+    /// identity, not text.
+    ///
     /// - Parameters:
     ///   - title: The tab's label in the strip.
     ///   - value: The value this tab is selected by (matches the `TabView`'s
     ///     selection binding).
     ///   - content: The view shown while this tab is selected.
     @_disfavoredOverload
-    public init(_ title: String, value: Value, @ViewBuilder content: () -> Content) {
-        self.title = title
+    public init<S: StringProtocol>(
+        _ title: S, value: Value, @ViewBuilder content: () -> Content
+    ) {
+        self.title = String(title)
         self.value = value
         self.content = content()
     }

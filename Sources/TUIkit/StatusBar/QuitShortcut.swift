@@ -60,56 +60,78 @@ public struct QuitShortcut: Sendable {
 
     /// Creates a custom quit shortcut, labelled as written.
     ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``. A generic parameter cannot carry a default, so
+    /// the defaulted label lives in ``init(key:ctrl:shortcutSymbol:)`` instead
+    /// of here.
+    ///
     /// - Parameters:
     ///   - key: The key that triggers quit.
     ///   - ctrl: Whether Ctrl must be held (default: `false`).
     ///   - shortcutSymbol: The symbol shown in the status bar.
-    ///   - label: The label shown next to the symbol (default: `"quit"`).
+    ///   - label: The label shown next to the symbol.
     @_disfavoredOverload
-    public init(
+    public init<S: StringProtocol>(
         key: Key,
         ctrl: Bool = false,
         shortcutSymbol: String,
-        label: String = "quit"
+        label: S
     ) {
         self.key = key
         self.ctrl = ctrl
         self.shortcutSymbol = shortcutSymbol
-        self.label = label
+        self.label = String(label)
+    }
+
+    /// Creates a custom quit shortcut labelled `"quit"`.
+    ///
+    /// The label's default lives here rather than on either labelled overload:
+    /// neither of those can carry it — a generic parameter cannot have a
+    /// default, and defaulting the ``LocalizedStringKey`` one would make the
+    /// two ambiguous wherever the label is omitted.
+    ///
+    /// - Parameters:
+    ///   - key: The key that triggers quit.
+    ///   - ctrl: Whether Ctrl must be held (default: `false`).
+    ///   - shortcutSymbol: The symbol shown in the status bar.
+    public init(key: Key, ctrl: Bool = false, shortcutSymbol: String) {
+        self.init(key: key, ctrl: ctrl, shortcutSymbol: shortcutSymbol, label: "quit" as String)
     }
 }
 
 // MARK: - Presets
 
 extension QuitShortcut {
+    // Each of these spelled `label: "quit"`, which is the default written out —
+    // and, now that a literal binds to the key overload, would ask for the key
+    // `"quit"` rather than the `statusbar.quit` these actually display. They
+    // take the default instead, which is what they always meant.
+
     /// The default quit shortcut: `q` (matches both `q` and `Q`).
     public static let q = QuitShortcut(
         key: .character("q"),
-        shortcutSymbol: "q",
-        label: "quit"
+        shortcutSymbol: "q"
     )
 
     /// Quit with the Escape key (`⎋`).
     public static let escape = QuitShortcut(
         key: .escape,
-        shortcutSymbol: Shortcut.escape,
-        label: "quit"
+        shortcutSymbol: Shortcut.escape
     )
 
     /// Quit with Ctrl+Q (`⌃q`).
     public static let ctrlQ = QuitShortcut(
         key: .character("q"),
         ctrl: true,
-        shortcutSymbol: Shortcut.ctrl("q"),
-        label: "quit"
+        shortcutSymbol: Shortcut.ctrl("q")
     )
 
     /// Quit with Ctrl+C (`⌃c`).
     public static let ctrlC = QuitShortcut(
         key: .character("c"),
         ctrl: true,
-        shortcutSymbol: Shortcut.ctrl("c"),
-        label: "quit"
+        shortcutSymbol: Shortcut.ctrl("c")
     )
 }
 

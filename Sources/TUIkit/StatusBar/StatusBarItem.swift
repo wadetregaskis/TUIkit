@@ -258,10 +258,14 @@ public struct StatusBarItem: StatusBarItemProtocol, Identifiable, @unchecked Sen
     ///     Shift-variants whose display is already covered by a
     ///     sibling item like `"c|C"`.
     ///   - action: The action to perform.
+    ///
+    /// Generic over `StringProtocol` rather than taking a concrete `String`,
+    /// which is what keeps a *literal* binding to the key overload above — see
+    /// ``LocalizedStringKey``.
     @_disfavoredOverload
-    public init(
+    public init<S: StringProtocol>(
         shortcut: String,
-        label: String,
+        label: S,
         key: Key? = nil,
         order: StatusBarItemOrder = .default,
         displayInStatusBar: Bool = true,
@@ -284,7 +288,7 @@ public struct StatusBarItem: StatusBarItemProtocol, Identifiable, @unchecked Sen
         // when merging user and system items).
         self.id = shortcut
         self.shortcut = shortcut
-        self.label = label
+        self.label = String(label)
         self.order = order
         self.displayInStatusBar = displayInStatusBar
         self.action = action
@@ -327,8 +331,13 @@ public struct StatusBarItem: StatusBarItemProtocol, Identifiable, @unchecked Sen
     ///   - shortcut: The shortcut key(s) to display.
     ///   - label: A short description.
     ///   - order: The display order (default: `.default`).
+    ///
+    /// Generic over `StringProtocol` for the same reason as
+    /// ``init(shortcut:label:key:order:displayInStatusBar:action:)-(_,S,_,_,_,_)``.
     @_disfavoredOverload
-    public init(shortcut: String, label: String, order: StatusBarItemOrder = .default) {
+    public init<S: StringProtocol>(
+        shortcut: String, label: S, order: StatusBarItemOrder = .default
+    ) {
         self.init(
             shortcut: shortcut, label: label, key: nil, order: order,
             displayInStatusBar: true, action: nil)

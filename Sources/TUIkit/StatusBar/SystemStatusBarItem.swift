@@ -62,13 +62,33 @@ public enum SystemStatusBarItem {
     /// chain. That is the whole point of the split. A page that wants Escape to
     /// DO something publishes its own item (`⎋ back`), which wins the shortcut
     /// dedup and keeps its own action.
-    public static func escape(label: String) -> StatusBarItem {
+    /// A string **literal** binds here, so it is a lookup key — see
+    /// ``LocalizedStringKey``. These were the only two public status-bar APIs
+    /// without a key overload, so a literal here could never be one while the
+    /// same literal on `StatusBarItem(shortcut:label:)` always was.
+    public static func escape(label labelKey: LocalizedStringKey) -> StatusBarItem {
+        escape(label: labelKey.localized)
+    }
+
+    /// The Escape entry, labelled as written.
+    ///
+    /// Generic over `StringProtocol`, which is what keeps a literal binding to
+    /// the key overload above — see ``LocalizedStringKey``.
+    @_disfavoredOverload
+    public static func escape<S: StringProtocol>(label: S) -> StatusBarItem {
         StatusBarItem(shortcut: Shortcut.escape, label: label, order: .escapeKey)
     }
 
     /// The Return entry, labelled by whatever claimed the key this frame. See
-    /// ``escape(label:)`` — informational for the same reason.
-    public static func returnKey(label: String) -> StatusBarItem {
+    /// ``escape(label:)-(LocalizedStringKey)`` — informational for the same
+    /// reason, and a literal is a key here too.
+    public static func returnKey(label labelKey: LocalizedStringKey) -> StatusBarItem {
+        returnKey(label: labelKey.localized)
+    }
+
+    /// The Return entry, labelled as written.
+    @_disfavoredOverload
+    public static func returnKey<S: StringProtocol>(label: S) -> StatusBarItem {
         StatusBarItem(shortcut: Shortcut.enter, label: label, order: .returnKey)
     }
 
