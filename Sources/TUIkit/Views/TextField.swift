@@ -362,6 +362,17 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
 
     private typealias StateIndex = TextFieldStateIndex
 
+    /// What Return does to this field, for the status bar — `nil` when the
+    /// caller gave it nothing to submit to, which is what suppresses the entry.
+    ///
+    /// A property rather than a `let` in `renderToBuffer`: resolving it inline
+    /// took that function to 101 lines against SwiftLint's 100-line ceiling,
+    /// and the lookup is a self-contained question about this field anyway.
+    private var submitVerb: String? {
+        guard onSubmitAction != nil else { return nil }
+        return LocalizationService.shared.string(for: LocalizationKey.StatusBar.submit)
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = self.isDisabled || !context.environment.isEnabled
         let stateStorage = context.stateStorage!
@@ -386,10 +397,6 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             context: context)
         FocusRegistration.register(context: context, handler: handler)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
-        // Return submits, when the caller gave it something to submit to.
-        let submitVerb =
-            onSubmitAction != nil
-            ? LocalizationService.shared.string(for: LocalizationKey.StatusBar.submit) : nil
         FocusRegistration.publishActivationLabel(submitVerb, context: context, isFocused: isFocused)
 
         // Hover state persists across renders; the dispatcher
