@@ -55,7 +55,7 @@ struct ButtonsPage: View {
     /// How links reveal their destination, applied to the whole page — the
     /// modifier cascades, so one picker changes every link on it including the
     /// ones inside the sentence below.
-    @State private var linkDisplay: LinkDisplay = .automatic
+    @State private var linkDisplay: LinkDisplay = .popover
 
     /// Where TUIkit's OWN opens are recorded.
     ///
@@ -294,7 +294,6 @@ struct ButtonsPage: View {
                     Text("page.newControls.linkHint").foregroundStyle(.palette.foregroundSecondary)
                     Toggle("page.buttons.links.bulletToggle", isOn: $linkBullet)
                     Picker("page.buttons.links.displayMode", selection: $linkDisplay) {
-                        Text("page.buttons.links.display.automatic").tag(LinkDisplay.automatic)
                         Text("page.buttons.links.display.popover").tag(LinkDisplay.popover)
                         Text("page.buttons.links.display.parentheses")
                             .tag(LinkDisplay.urlInParentheses)

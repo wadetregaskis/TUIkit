@@ -391,14 +391,14 @@ private struct _Link<Label: View>: View {
 
     /// The link's visible text, which the display mode decides.
     ///
-    /// `.automatic` and `.popover` leave the caller's label alone — the
-    /// destination lives in the OSC 8 escape, or in the popover, or both. The
+    /// `.popover` leaves the caller's label alone — the destination lives in
+    /// the popover, and in the OSC 8 escape where the host honours one. The
     /// two URL modes rewrite it, and rewrite it with `Text(verbatim:)`: a URL
     /// is content, and a plain `Text(_:)` would treat it as a localization
     /// key.
     @ViewBuilder
     private var resolvedLabel: some View {
-        switch display.resolved(hyperlinksSupported: TerminalHyperlink.isSupported) {
+        switch display {
         case .urlOnly:
             Text(verbatim: destination.absoluteString).underline(underline)
         case .urlInParentheses:
@@ -408,7 +408,7 @@ private struct _Link<Label: View>: View {
                 label.underline(underline)
                 Text(verbatim: " (\(destination.absoluteString))").underline(underline)
             }
-        case .automatic, .popover:
+        case .popover:
             label.underline(underline)
         }
     }

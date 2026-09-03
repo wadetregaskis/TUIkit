@@ -60,33 +60,16 @@ struct LinkDisplayTests {
         #expect(rendered(link(.popover)) == "language guide")
     }
 
-    /// `automatic` is the label either way — the difference it makes is which
-    /// FALLBACK applies, not what is drawn — so this pins the drawn form and
-    /// the resolution rule separately.
-    @Test("automatic shows the label alone")
-    func automaticShowsTheLabel() {
-        #expect(rendered(link(.automatic)) == "language guide")
-    }
-
-    /// The one rule `automatic` encodes: on a terminal that will not be sent
-    /// an OSC 8 escape, a bare label says nothing about where it goes, so it
-    /// falls back to the popover. On one that will, the escape carries the
-    /// destination and the label stays clean.
-    @Test("automatic falls back to popover exactly when OSC 8 is not sent")
-    func automaticResolution() {
-        #expect(LinkDisplay.automatic.resolved(hyperlinksSupported: true) == .automatic)
-        #expect(LinkDisplay.automatic.resolved(hyperlinksSupported: false) == .popover)
-    }
-
-    /// Every other mode is already concrete and must not be re-decided by the
-    /// terminal's capabilities — an app that asked for the URL inline gets it
-    /// on a host that would have linkified the label anyway.
-    @Test(
-        "Explicit modes ignore the terminal's capabilities",
-        arguments: [LinkDisplay.popover, .urlInParentheses, .urlOnly])
-    func explicitModesAreNotResolved(_ display: LinkDisplay) {
-        #expect(display.resolved(hyperlinksSupported: true) == display)
-        #expect(display.resolved(hyperlinksSupported: false) == display)
+    /// `.popover` is the default, and the default is what an app that writes
+    /// `Link(...)` and nothing else gets. There is no `automatic` beside it:
+    /// a case that resolved to "clean label plus OSC 8" on one host and to
+    /// this on another was the same thing twice — the label is identical, the
+    /// escape is emitted either way, and the popover is needed either way
+    /// because no terminal gesture reaches the keyboard.
+    @Test("popover is the default")
+    func popoverIsTheDefault() {
+        #expect(EnvironmentValues().linkDisplay == .popover)
+        #expect(rendered(Link("language guide", destination: url)) == "language guide")
     }
 
     /// A URL is content, not a localization key. Rendering one through
