@@ -213,25 +213,44 @@ app-side write cost separately.
 
 ---
 
-## 6. The separable win, which is not about PNG at all
+## 6. The separable win, which is not about PNG at all — DONE, and smaller than expected
 
-The one finding here worth acting on independently.
+`TerminalImageSignature` carried `columns`, `rows`, `cellWidth` and
+`cellHeight` alongside the content fields, so **a resize was a new picture**:
+every step of a drag ran delete + transmit + place over bytes the terminal
+might already hold. It now keys on `pixelWidth` / `pixelHeight` — the
+resolution actually transmitted, which is what decides the bytes — and the
+store answers a box-only change with a placement alone.
 
-`TerminalImageSignature` carries `columns`, `rows`, `cellWidth` and
-`cellHeight` alongside the content fields. So **a resize invalidates the
-signature and runs delete + re-transmit + place**, on every step of a drag, for
-bytes the terminal already holds — provably identical bytes whenever the
-picture is clamped to the source resolution.
+**Measured, and the estimate above was optimistic.** Example's image page under
+a PTY, ten resize steps, `demo-image.jpg` (1101×1080):
 
-Splitting the signature into *content* (what the terminal must hold) and *box*
-(where it goes), so that a box-only change emits `KittyGraphics.placement(…)`
-alone and rebuilds the placeholder rows, is a change in one file. It needs no
-PNG, no new probe, and no new terminal behaviour, and it pays on the path that
-exists today. `TerminalImageStoreTests` already greps `takePending()` for the
-transmit escape, so the assertion has somewhere obvious to go.
+| sweep | before | after |
+|---|---|---|
+| 300×80 grid, both axes (the clamped regime) | 10 transmits, 47.29 MB | **8 transmits, 37.77 MB** |
+| 150 cols, width only, small grid | 0 transmits, 0.36 MB | 0 transmits, 0.36 MB |
 
-This is recorded rather than done, on the same "revisit when there is a
-specific need" basis as the rest.
+So −20% of the transmissions and −9.5 MB over ten steps, reproducible to two
+decimal places across runs — real, free, and **not** "most of the win", which
+is what §6 claimed before it was measured.
+
+The reason it is 2 steps in 10 rather than 10 in 10 is worth writing down,
+because it caps what this approach can ever give. In the clamped regime only
+the *binding* axis pins exactly to the source: the other is
+`round(wantedOther × shrink)`, and `wantedOther` still follows the box's
+cell-rounded aspect. So most steps genuinely do change the transmitted
+resolution, and re-transmitting is then correct rather than wasteful.
+
+**The obvious next step is a trap.** Transmitting at the source's own
+resolution and aspect would make the content wholly box-independent — and
+would introduce letterbox bars, because the terminal fits and centres rather
+than filling (§1.1). Today's exact fill depends on the transmitted image
+carrying the *box's* aspect. Do not chase this without answering §5 blocker 1
+first.
+
+The small sweep is the honest other half: at ordinary sizes the image's cell
+box does not change at all across an 18-column resize, so there was never
+anything to save there.
 
 ---
 

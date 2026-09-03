@@ -697,11 +697,13 @@ extension _ImageCore {
         let ink = Self.rgba(palette.foreground, in: palette) ?? RGBA(r: 255, g: 255, b: 255)
         let paper = Self.rgba(palette.background, in: palette) ?? RGBA(r: 0, g: 0, b: 0)
 
+        // The transmitted resolution, not the cell box: two boxes that resample
+        // to the same pixels are the same picture, and the store answers the
+        // second with a placement instead of megabytes.
         let signature = TerminalImageSignature(
             source: source,
             rawWidth: rawImage.width, rawHeight: rawImage.height,
-            columns: target.width, rows: target.height,
-            cellWidth: cell.width, cellHeight: cell.height,
+            pixelWidth: pixelWidth, pixelHeight: pixelHeight,
             colorMode: colorMode, toneCurve: toneCurve,
             edgeContrast: edgeContrast, dithering: dithering,
             monoInk: ink, monoPaper: paper)
@@ -710,7 +712,6 @@ extension _ImageCore {
             let lines = store.placeholderRows(
                 token: "image-\(context.identity.path)", signature: signature,
                 columns: target.width, rows: target.height,
-                pixelWidth: pixelWidth, pixelHeight: pixelHeight,
                 pixels: {
                     // Only on a miss: this resamples and recolours the decoded
                     // image and can be megabytes. The common case, by a wide

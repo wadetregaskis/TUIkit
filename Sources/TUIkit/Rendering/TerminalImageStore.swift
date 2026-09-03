@@ -24,11 +24,25 @@ struct TerminalImageSignature: Equatable {
     var rawWidth: Int
     var rawHeight: Int
 
-    /// The cell box the placement covers, and what a cell is in pixels.
-    var columns: Int
-    var rows: Int
-    var cellWidth: Int
-    var cellHeight: Int
+    /// The resolution the picture is transmitted AT — which is what decides
+    /// the bytes, and is not the same question as where it goes.
+    ///
+    /// This used to be the cell box (`columns`, `rows`, `cellWidth`,
+    /// `cellHeight`), and that made a resize a new picture: every step of a
+    /// drag ran delete + transmit + place over bytes the terminal already
+    /// held. The four are not dropped so much as *resolved* — `pixelWidth` and
+    /// `pixelHeight` are computed from all four (`_ImageCore`: box times cell,
+    /// clamped so the transmission never exceeds the source), so keying on
+    /// them is strictly more precise rather than less. Two boxes that resample
+    /// to the same resolution ARE the same picture, and the clamped regime
+    /// makes that the common case: past the point where the placement wants
+    /// more pixels than the source has, the transmitted size stops tracking
+    /// the box on the binding axis and pins to the source.
+    ///
+    /// Where the picture GOES is the placement, and a placement is twenty
+    /// bytes — see ``TerminalImageStore/placeholderRows(token:signature:columns:rows:pixels:)``.
+    var pixelWidth: Int
+    var pixelHeight: Int
 
     /// The settings `ASCIIConverter.recoloured(_:width:height:)` consults —
     /// and only those. A charset or a supersampling factor changes which
@@ -65,9 +79,10 @@ struct TerminalImageSignature: Equatable {
 /// So there is exactly one owner, keyed by the view's identity path, and it
 /// answers three questions:
 ///
-/// - **What do I draw?** ``placeholderRows(token:signature:columns:rows:pixelWidth:pixelHeight:pixels:)``
-///   returns the cells, transmitting first if this is a new image or a new
-///   size.
+/// - **What do I draw?** ``placeholderRows(token:signature:columns:rows:pixels:)``
+///   returns the cells — transmitting first if this is a picture the terminal
+///   does not have, and sending a placement alone if it is one it does at a
+///   size it was not told about.
 /// - **What do I still owe the terminal?** ``takePending()`` hands back the
 ///   escapes that have to reach it before the frame those cells are in.
 /// - **What can go?** ``release(token:)``, from the view's disappear handler.
@@ -93,7 +108,12 @@ final class TerminalImageStore: @unchecked Sendable {
     private struct Entry {
         var id: KittyGraphics.ImageID
         var signature: TerminalImageSignature
-        var rows: [String]
+        /// The cell box currently declared to the terminal, so a box-only
+        /// change can be spotted and answered with a placement alone.
+        var columns: Int
+        var rows: Int
+        /// The placeholder cells, which are a function of the id and the box.
+        var cells: [String]
     }
 
     private var entries: [String: Entry] = [:]
@@ -116,31 +136,48 @@ final class TerminalImageStore: @unchecked Sendable {
     ///     call with a different `signature` replaces the first rather than
     ///     adding to it, which is what stops a resize leaking an image a
     ///     frame.
-    ///   - signature: Everything that decides the picture's content.
+    ///   - signature: Everything that decides the picture's content — and
+    ///     deliberately nothing about where it goes, so a move or a resize
+    ///     that resamples to the same resolution costs a placement rather
+    ///     than a re-transmission.
     ///   - columns: Width of the placement, in cells.
     ///   - rows: Height of the placement, in cells.
-    ///   - pixelWidth: Width of `pixels`.
-    ///   - pixelHeight: Height of `pixels`.
-    ///   - pixels: 8-bit pixel bytes and their format, row-major. **Only
-    ///     evaluated on a miss** — it is a resample of the decoded image and
-    ///     megabytes of it, and the common case by a wide margin is that
-    ///     nothing has changed since last frame.
+    ///   - pixels: 8-bit pixel bytes and their format, row-major, at the
+    ///     signature's `pixelWidth` × `pixelHeight`. **Only evaluated when the
+    ///     terminal does not already hold this picture** — it is a resample of
+    ///     the decoded image and megabytes of it, and the common case by a
+    ///     wide margin is that nothing has changed since last frame.
     /// - Returns: the rows, or `nil` for a request the protocol cannot express
     ///   — at which point the caller draws the picture out of glyphs, as it
     ///   always has.
     func placeholderRows(
         token: String, signature: TerminalImageSignature,
         columns: Int, rows: Int,
-        pixelWidth: Int, pixelHeight: Int,
         pixels: () -> (bytes: [UInt8], format: KittyGraphics.PixelFormat)
     ) -> [String]? {
+        let pixelWidth = signature.pixelWidth
+        let pixelHeight = signature.pixelHeight
         guard columns > 0, rows > 0, pixelWidth > 0, pixelHeight > 0,
             columns <= KittyGraphics.maximumCellExtent,
             rows <= KittyGraphics.maximumCellExtent
         else { return nil }
 
+        // Three cases, not two, and the middle one is the point of splitting
+        // the signature. A picture the terminal already holds, asked for in a
+        // DIFFERENT box, needs no bytes: an `a=p` replaces the placement for
+        // that id, and the picture is refit to the new rectangle by the
+        // terminal. Without this case every step of a resize drag ran
+        // delete + transmit + place — megabytes, per step, to end up with the
+        // pixels already in the store.
         if let existing = entries[token], existing.signature == signature {
-            return existing.rows
+            if existing.columns == columns, existing.rows == rows { return existing.cells }
+            let cells = KittyGraphics.placeholderRows(id: existing.id, columns: columns, rows: rows)
+            guard !cells.isEmpty else { return nil }
+            pending += KittyGraphics.placement(id: existing.id, columns: columns, rows: rows)
+            entries[token] = Entry(
+                id: existing.id, signature: signature,
+                columns: columns, rows: rows, cells: cells)
+            return cells
         }
 
         let id = entries[token]?.id ?? claimID()
@@ -161,7 +198,8 @@ final class TerminalImageStore: @unchecked Sendable {
         if entries[token] != nil { pending += KittyGraphics.delete(id: id) }
         pending += transmit
         pending += KittyGraphics.placement(id: id, columns: columns, rows: rows)
-        entries[token] = Entry(id: id, signature: signature, rows: cells)
+        entries[token] = Entry(
+            id: id, signature: signature, columns: columns, rows: rows, cells: cells)
         return cells
     }
 
