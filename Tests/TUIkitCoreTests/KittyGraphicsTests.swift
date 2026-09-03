@@ -137,16 +137,19 @@ struct KittyGraphicsPlaceholderTests {
     func everyCellNamesItself() {
         let rows = KittyGraphics.placeholderRows(id: 1, columns: 3, rows: 2)
         let second = Array(rows[1].unicodeScalars.drop(while: { $0 != "\u{10EEEE}" }))
-        // placeholder, row mark, column mark — three scalars per cell, and the
-        // row mark repeats while the column mark advances.
+        // placeholder, row mark, column mark, id-high-byte mark — FOUR scalars
+        // per cell. The row mark repeats, the column mark advances, and the
+        // high-byte mark is always the one for zero (see `maximumImageID`).
         #expect(second[0] == "\u{10EEEE}")
         #expect(second[1] == KittyGraphics.diacritic(1))
         #expect(second[2] == KittyGraphics.diacritic(0))
-        #expect(second[3] == "\u{10EEEE}")
-        #expect(second[4] == KittyGraphics.diacritic(1), "same row")
-        #expect(second[5] == KittyGraphics.diacritic(1), "next column")
-        #expect(second[7] == KittyGraphics.diacritic(1))
-        #expect(second[8] == KittyGraphics.diacritic(2))
+        #expect(second[3] == KittyGraphics.diacritic(0), "id high byte")
+        #expect(second[4] == "\u{10EEEE}")
+        #expect(second[5] == KittyGraphics.diacritic(1), "same row")
+        #expect(second[6] == KittyGraphics.diacritic(1), "next column")
+        #expect(second[7] == KittyGraphics.diacritic(0), "id high byte")
+        #expect(second[9] == KittyGraphics.diacritic(1))
+        #expect(second[10] == KittyGraphics.diacritic(2))
     }
 
     /// The run-length form is not used, and this is what says so: no cell
@@ -155,10 +158,10 @@ struct KittyGraphicsPlaceholderTests {
     func noRunLengthElision() {
         let row = KittyGraphics.placeholderRows(id: 1, columns: 8, rows: 1)[0]
         let scalars = Array(row.unicodeScalars.drop(while: { $0 != "\u{10EEEE}" }))
-        // 8 cells x 3 scalars, plus the four-scalar `ESC [ 3 9 m` reset.
-        #expect(scalars.prefix(24).filter { $0 == "\u{10EEEE}" }.count == 8)
+        // 8 cells x 4 scalars, plus the four-scalar `ESC [ 3 9 m` reset.
+        #expect(scalars.prefix(32).filter { $0 == "\u{10EEEE}" }.count == 8)
         for cell in 0..<8 {
-            #expect(scalars[cell * 3] == "\u{10EEEE}")
+            #expect(scalars[cell * 4] == "\u{10EEEE}")
         }
     }
 
@@ -208,15 +211,55 @@ struct KittyGraphicsDiacriticTests {
         #expect(KittyGraphics.diacritic(1) == "\u{030D}")
         #expect(KittyGraphics.diacritic(2) == "\u{030E}")
 
-        // The cells of the spec's own 2x2 example, foreground aside — this
-        // encoder spells the id as a direct-colour triple where the example
-        // uses the 256-colour form, which the spec allows either way.
+        // The cells of the spec's own 2x2 example, with TWO differences the
+        // spec permits and one terminal does not.
+        //
+        // The foreground: this encoder spells the id as a direct-colour triple
+        // where the example uses the 256-colour form. Either is legal and both
+        // are measured to draw.
+        //
+        // The third mark: the spec's example omits it, because for an id below
+        // 2^24 the high byte is zero and a cell may leave it unsaid. TUIkit
+        // says it anyway — `\u{0305}`, the mark for zero, on every cell —
+        // because **iTerm2 draws nothing without it** while kitty and Ghostty
+        // compute the same id either way (measured 2026-09-03,
+        // `Tools/TerminalProbes/placeholder_spelling_probe.py`). So this is
+        // not the spec's example plus a mistake; it is the spec's example plus
+        // two bytes a cell, to accommodate a terminal that treats an optional
+        // mark as required.
         let rows = KittyGraphics.placeholderRows(id: 42, columns: 2, rows: 2)
         let cells = rows.map { row in
-            String(row.unicodeScalars.drop(while: { $0 != "\u{10EEEE}" }).prefix(6))
+            String(row.unicodeScalars.drop(while: { $0 != "\u{10EEEE}" }).prefix(8))
         }
-        #expect(cells[0] == "\u{10EEEE}\u{0305}\u{0305}\u{10EEEE}\u{0305}\u{030D}")
-        #expect(cells[1] == "\u{10EEEE}\u{030D}\u{0305}\u{10EEEE}\u{030D}\u{030D}")
+        #expect(
+            cells[0] == "\u{10EEEE}\u{0305}\u{0305}\u{0305}\u{10EEEE}\u{0305}\u{030D}\u{0305}")
+        #expect(
+            cells[1] == "\u{10EEEE}\u{030D}\u{0305}\u{0305}\u{10EEEE}\u{030D}\u{030D}\u{0305}")
+
+        // …and the spec's example itself, still legal, still what kitty
+        // documents: the difference above is TUIkit's addition, not a
+        // correction to the spec.
+        #expect(
+            "\u{10EEEE}\u{0305}\u{0305}\u{10EEEE}\u{0305}\u{030D}"
+                == String([
+                    Unicode.Scalar.terminalImagePlaceholder, KittyGraphics.diacritic(0),
+                    KittyGraphics.diacritic(0), .terminalImagePlaceholder,
+                    KittyGraphics.diacritic(0), KittyGraphics.diacritic(1),
+                ].map(Character.init)))
+    }
+
+    /// What a row COSTS on the wire, pinned so the figure in
+    /// `Documentation/Terminal graphics protocols.md` cannot drift away from
+    /// the encoder. It moved once already: adding the id's high-byte mark put
+    /// two bytes on every cell.
+    @Test("A 12-cell row's byte cost")
+    func rowByteCost() {
+        let row = KittyGraphics.placeholderRows(id: 42, columns: 12, rows: 1)[0]
+        // 139 for id 42: a 15-byte foreground, 12 cells of placeholder plus
+        // three two-byte marks, and a five-byte reset. It was 115 before the
+        // high-byte mark; the doc's older figure of 111 was taken with a
+        // shorter id.
+        #expect(row.utf8.count == 139)
     }
 
     @Test("297 marks, in the order the protocol reads them")

@@ -2081,7 +2081,7 @@ Three further things that run settled, each of which the encoder would
 otherwise have had to guess:
 
 - **Run-length elision works.** A cell with no diacritics continues the
-  previous one; a 12-cell row costs 67 bytes rather than 111. TUIkit does not
+  previous one; a 12-cell row costs a fraction of its explicit form. TUIkit does not
   use it — see `Documentation/Terminal graphics protocols.md` — because a
   self-describing cell survives being written out of sequence and an elided
   one does not.

@@ -59,14 +59,35 @@ extension KittyGraphics {
 
         return (0..<rows).map { row in
             var line = prefix
-            // Placeholder (4 bytes) plus two marks per cell, and the last of
-            // the marks is U+1D244 — four bytes, not three. The reset is five.
-            line.reserveCapacity(prefix.utf8.count + columns * 12 + 5)
+            // Placeholder (4 bytes) plus THREE marks per cell, and the last
+            // of the marks is U+1D244 — four bytes, not three. The reset is
+            // five.
+            line.reserveCapacity(prefix.utf8.count + columns * 14 + 5)
             let rowMark = diacritic(row)
             for column in 0..<columns {
                 line.unicodeScalars.append(.terminalImagePlaceholder)
                 line.unicodeScalars.append(rowMark)
                 line.unicodeScalars.append(diacritic(column))
+                // The third mark: the id's most significant byte, which for
+                // every id this type will issue is ZERO — ``maximumImageID``
+                // caps them at 24 bits precisely so the foreground can carry
+                // the whole of one.
+                //
+                // The protocol says a cell may omit it, and TUIkit did, and
+                // that was the bug. **iTerm2 draws nothing without it**
+                // (measured 2026-09-03, `placeholder_spelling_probe.py`: two
+                // marks blank, three marks draw, on both the 256-colour and
+                // the 24-bit foreground spelling) — an omitted mark and an
+                // explicit zero are not the same statement to every decoder,
+                // and a terminal that carries a sentinel for "absent" and ORs
+                // it into the id looks up an image nobody transmitted. It
+                // then acknowledges every command and paints an empty
+                // rectangle, which is exactly what iTerm2 was doing and why
+                // the handshake could not catch it.
+                //
+                // kitty and Ghostty compute `(0 << 24) | fg` either way, so
+                // they see no change at all. The cost is two bytes a cell.
+                line.unicodeScalars.append(diacritic(0))
             }
             // Foreground only. The row's background is the caller's business:
             // a transparent image composites over whatever that background is,

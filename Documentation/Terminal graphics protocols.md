@@ -48,7 +48,7 @@ Two rows of that table decide the recommendation on their own — *retained* and
 | Host | version | Sixel in DA1 | Kitty `a=q` | Kitty virtual placement | Draws it? |
 |---|---|---|---|---|---|
 | Apple Terminal | 455.1 | no (`ESC[?1;2c`) | silent | silent | no — prints the APC |
-| iTerm2 | 3.6.11 | **yes** (`ESC[?64;1;2;4;6;17;18;21;22;52c`) | **`OK`** | **`OK`** | **NO — see §2.2** |
+| iTerm2 | 3.6.11 | **yes** (`ESC[?64;1;2;4;6;17;18;21;22;52c`) | **`OK`** | **`OK`** | **yes**, once the third mark is sent — §2.2 |
 | Ghostty | 1.3.1 | no (`ESC[?62;22;52c`) | **`OK`** | **`OK`** | **yes** |
 | Warp | v0.2026.08.26… | no (`ESC[?62c`) | **`OK`** | **explicitly refused** | no |
 | tmux | 3.7c | **yes** (`ESC[?1;2;4c`) | silent | silent | no |
@@ -106,56 +106,62 @@ has made is one pixel wide.
 transmitted four ways — `{f=24, f=32}` × `{single escape, chunked}` — each
 virtually placed.
 
-**CAUSE FOUND, measured 2026-09-03.** `pixel_format_probe.py`, five cases,
-run in both hosts:
+**CAUSE FOUND AND FIXED, measured 2026-09-03.** It was not iTerm2's absence
+of a feature; it was one optional combining mark.
 
-| | A `f=24` 1 cell | B `f=32` 1 cell | C `f=24` chunked | D `f=32` chunked | **E — DIRECT placement** |
+`pixel_format_probe.py` first: five cases in both hosts, four virtual
+placements (`{f=24, f=32}` × `{single escape, chunked}`) and one direct.
+
+| | A `f=24` 1 cell | B `f=32` 1 cell | C `f=24` chunked | D `f=32` chunked | E — DIRECT |
 |---|---|---|---|---|---|
 | Ghostty | draws | draws | draws | draws | draws |
 | iTerm2 | blank | blank | blank | blank | **draws** |
 
-Every case is acknowledged `OK` in both hosts. A–D are virtual placements
-(`U=1`) and E is the same bytes placed directly at the cursor.
+So the pixels, the transmission, the chunking and the format were all fine —
+iTerm2 draws the identical image without a placeholder — and `f=24` was
+innocent despite the timing that made it look guilty. That much said only
+"virtual placements do not work", and the conclusion drawn from it — that
+iTerm2 does not implement Unicode placeholders — was the first explanation
+that fitted rather than the measured one.
 
-> **iTerm2 accepts `a=p,U=1` and does not implement Unicode placeholders.**
+`placeholder_spelling_probe.py` measured it properly: one image, one
+placement, four spellings of the cells that summon it.
 
-The pixels are fine, the transmission is fine, the chunking is fine and the
-pixel format is fine — iTerm2 draws the identical image the moment it is asked
-without a placeholder. Both earlier hypotheses (`f=24`, chunking) are dead,
-and the timing coincidence that made `f=24` look guilty — TUIkit sent `f=32`
-for everything until `2eb6c256` added it hours after graphics shipped — was
-exactly that.
+| | two marks | three marks |
+|---|---|---|
+| 256-colour foreground | blank | **draws** |
+| 24-bit foreground | blank | **draws** |
 
-**This is terminal.** TUIkit uses virtual placements and nothing else, on
-purpose: §1 is the argument that an image drawn at the cursor is not made of
-cells, so it does not scroll with its row, is not clipped by the container
-that clips its cells, is not covered by a modal composited over it and cannot
-be diffed. E is that image. Falling back to it would not be "graphics on
-iTerm2", it would be a picture that ignores the layout. So iTerm2 gets the
-glyph renderer, and now for a reason rather than a symptom — see
-`TerminalClient.drawsNothingDespiteSayingOK(_:)`.
+**The third mark decides it, and the foreground spelling is irrelevant.** A
+placeholder cell carries the row, the column, and the image id's most
+significant byte. For any id below 2^24 that byte is zero, and the spec says
+the mark may be omitted — kitty's own documentation example omits it, and
+kitty and Ghostty read the two spellings identically. **iTerm2 does not**: it
+requires the mark, and without it looks up an image nobody transmitted, then
+acknowledges every command and paints an empty rectangle. Which is why the
+handshake could not catch it — every answer was true.
 
-**A second, separate iTerm2 defect, worth its own line in a bug report:** on a
-CHUNKED transmission iTerm2 acknowledges with `i=0` instead of the image's id
-—
+TUIkit now emits the mark. `KittyGraphics.maximumImageID` caps ids at 24 bits
+precisely so it is always the mark for zero, so it is a constant two bytes per
+cell and nothing else changes: kitty and Ghostty compute `(0 << 24) | fg`
+either way. **iTerm2 is a fully supported graphics host**, on the pipeline that
+already existed, and the veto that briefly excluded it is gone.
 
-```
-C  transmit -> <ESC>_Gi=0;OK<ESC>\        (Ghostty: <ESC>_Gi=7002;OK<ESC>\)
-D  transmit -> <ESC>_Gi=0;OK<ESC>\        (Ghostty: <ESC>_Gi=7003;OK<ESC>\)
-E  transmit -> <ESC>_Gi=0;OK<ESC>\        (Ghostty: <ESC>_Gi=7100;OK<ESC>\)
-```
+**Worth filing against iTerm2**, since the spec is on the other side: an
+omitted third diacritic must mean a high byte of zero, not an absent id.
 
-Single-escape transmissions (A, B) report the id correctly. The image is
-nevertheless stored under the right id — the placements that follow all
-succeed by id, and E draws — so this is a reply defect rather than a storage
-one, and it costs nothing here because TUIkit sends `q=2` and reads no
-replies. It would break any client that matched acknowledgements to requests
-by id, which is what the id in the reply is for.
+A second iTerm2 defect fell out of the first probe and stands on its own: a
+CHUNKED transmission is acknowledged `i=0` instead of the image's id, where a
+single-escape one reports it correctly. The image is stored under the right id
+— every placement that follows succeeds — so it is a reply defect, and it
+costs TUIkit nothing because the render path sends `q=2` and reads no replies.
+It would break any client matching acknowledgements to requests by id.
 
-A note on the probe, because it cost a round trip: its first version sent
-`q=2` and read nothing, so it could not tell a refusal from an acceptance
-that drew nothing — the exact distinction it exists to make. A diagnostic
-must never suppress the errors it is looking for.
+Two notes on the probes, because both cost a round trip. The first version of
+`pixel_format_probe.py` sent `q=2` and read nothing, so it could not tell a
+refusal from an acceptance that drew nothing — the exact distinction it
+existed to make. And **the control host is not optional**: four blanks with no
+Ghostty run indicts the probe, not the terminal.
 
 ### 2.2 What they do when you send one — and the headline finding
 
@@ -568,7 +574,7 @@ The same round found two more, both of which the codepoint bug was hiding:
 |---|---|
 | A full-screen image, 49×17 cells | 1.8 MB of base64, transmitted and acknowledged in **43 ms** |
 | A 12×4-cell image | 104 KB, **2 ms** |
-| One placeholder row, 12 cells | 111 bytes (67 elided, unused — §8.1) |
+| One placeholder row, 12 cells | 139 bytes for id 42, of which 24 are the id's high-byte mark — §2.2. Pinned by `KittyGraphicsTests.rowByteCost`. |
 
 One-time per image and per size, not per frame: the image is *retained* by the
 terminal under an id, and `TerminalImageStore` re-transmits only when the

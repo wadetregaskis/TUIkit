@@ -53,8 +53,10 @@ public enum KittyGraphics {
     /// A handle for an image in the terminal's store.
     ///
     /// Capped at 24 bits (``maximumImageID``) because the id travels in the
-    /// **foreground colour** of every placeholder cell, and a wider id needs a
-    /// fourth combining mark on each of them to carry the high byte. Sixteen
+    /// **foreground colour** of every placeholder cell, and its most
+    /// significant byte in a third combining mark — which, capped this way, is
+    /// always the mark for zero. A wider id would have to vary that mark per
+    /// image instead of stating the same thing on every cell. Sixteen
     /// million concurrent images is not the constraint anyone will meet.
     public typealias ImageID = UInt32
 
