@@ -211,6 +211,11 @@ spec:
 - **Encoding** — `ImageLoader` already produces `RGBAImage`, which is Kitty's
   `f=32` format verbatim. No re-encode; optionally `o=z` (zlib) to cut the wire
   cost, which is the standard library's `compress` away.
+  **Superseded 2026-09-02:** neither `o=z` nor `f=100` is being adopted, and
+  the aside above understates `o=z` — it needs a deflate encoder this package
+  will not carry. The investigation, the measured crossover for passing PNG
+  bytes through untouched, and what would reopen it are in
+  `Documentation/Compressed image transfer.md`.
 - **Lifetime** — images must be deleted by id when their view goes away, or the
   terminal's image store fills. This is the one genuinely new resource TUIkit
   would own, and it wants the same discipline `LifecycleManager` already applies

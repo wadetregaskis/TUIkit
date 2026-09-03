@@ -34,9 +34,17 @@ private struct TerminalCellPixelsKey: EnvironmentKey {
     /// A plausible cell on an unscaled display, used where the terminal
     /// reports no pixel size. Transmitting at the wrong resolution is a
     /// quality question and not a correctness one — a virtual placement
-    /// declares its size in CELLS, and the terminal scales the picture to
-    /// fill them — so a terminal that will not say gets a reasonable guess
-    /// rather than no image.
+    /// declares its size in CELLS, and the terminal fits the picture to them —
+    /// so a terminal that will not say gets a reasonable guess rather than no
+    /// image.
+    ///
+    /// Fits and CENTRES, preserving the source aspect ratio; it does not fill.
+    /// (kitty's `graphics.c` and Ghostty's `graphics_unicode.zig` each say so
+    /// in as many words.) This said "fill" until 2026-09-02, and the error was
+    /// invisible because it cannot bite here: the picture handed over has
+    /// already been resampled to the box, so the fit is exact and there is
+    /// nothing to centre. It would bite the moment an UNRESAMPLED image were
+    /// transmitted — see `Documentation/Compressed image transfer.md` §1.1.
     static let defaultValue = TerminalCellPixels(width: 8, height: 16)
 }
 
