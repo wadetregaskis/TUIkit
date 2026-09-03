@@ -166,6 +166,28 @@ private struct Flattening {
     /// was: the splice puts them into a line that is one uniform dim span, and
     /// a frame carrying any other styling would show as a bright notch in it.
     func callAsFunction(_ text: String, toWidth width: Int) -> String {
+        // A row carrying a terminal-graphics image is passed through
+        // UNCHANGED, and this is not an exemption from dimming so much as a
+        // recognition that there is nothing here to dim. Such a row is
+        // U+10EEEE placeholders whose FOREGROUND COLOUR is the image's id, not
+        // a colour — the picture's pixels live in the terminal. Flattening it
+        // replaced that id with the backdrop's grey, so the cells named an
+        // image that does not exist and the terminal drew NOTHING: a page with
+        // a picture on it lost the picture entirely the moment any sheet or
+        // alert opened, which is erasure rather than dimming.
+        //
+        // The whole row rather than the placeholder runs within it, because
+        // the alternative is splitting a line into dimmed and undimmed spans
+        // to save the case of text sharing a row with a picture — more
+        // machinery than that case is worth, against a bug whose current cost
+        // is the picture disappearing.
+        //
+        // The picture therefore keeps its own brightness behind a modal. That
+        // is the honest ceiling: dimming it would mean re-transmitting the
+        // pixels darker, or deleting the placement and putting it back on
+        // dismissal, and both are real costs for a modal that is usually up
+        // for a second.
+        guard !text.unicodeScalars.contains(.terminalImagePlaceholder) else { return text }
         let cleaned = String(
             text.stripped.map { DimmedOrnaments.characters.contains($0) ? " " : $0 })
         // Pad in CELLS, not code units: `padding(toLength:)` counts UTF-16
