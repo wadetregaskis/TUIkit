@@ -9,55 +9,84 @@ protocol query, the transmit and the virtual placement, returns a real
 the picture.
 
 So `OK` is not the question. This probe asks the question `OK` does not
-answer, and separates the two candidates that differ between the exchange
-iTerm2 acknowledges and the ones it ignores:
+answer, and separates the candidates that differ between the exchange iTerm2
+acknowledges and the ones it ignores.
 
-  * **Pixel format.** The startup handshake transmits ONE RGBA pixel — `f=32`.
-    Every real picture TUIkit sends for an opaque photograph is `f=24`, three
-    bytes a pixel, which is a quarter less on the wire. `placement_probe.py`'s
-    own card is `f=24` too, so its blank result and the app's are the same
-    case, and neither has ever tested `f=32` at a size worth drawing.
-  * **Chunking.** The handshake's one pixel fits in a single escape and
-    carries no `m` key at all — the protocol reads its absence as "not
-    chunked", which is a different statement from `m=0`, "the last chunk of
-    one". Every real picture is split at 4096 base64 bytes with `m=1` … `m=0`.
+  A  1 cell   f=24  single escape, no `m`   virtual placement
+  B  1 cell   f=32  single escape, no `m`   virtual placement
+  C  12x4     f=24  chunked, m=1 … m=0      virtual placement
+  D  12x4     f=32  chunked, m=1 … m=0      virtual placement
+  E  12x4     f=24  chunked                 **DIRECT placement, no U=1**
 
-Those two travel together in everything measured so far, which is why neither
-has been ruled out. This draws the 2x2:
+**E is the control, and it is the one that matters most.** A–D all draw
+through Unicode placeholders, so if the terminal's placeholder support is
+what is missing they all fail together and say nothing about the pixels. E
+draws the same bytes at the cursor with no placeholders involved. If E draws
+and A–D do not, the transmission is fine and the fault is *specifically*
+Unicode placeholders — which is a precise, filable bug rather than "images do
+not work".
 
-    A  1 cell   f=24  single escape, no `m`
-    B  1 cell   f=32  single escape, no `m`
-    C  12x4     f=24  chunked, m=1 … m=0
-    D  12x4     f=32  chunked, m=1 … m=0
+Every command is `q=0` and its reply is read. That is deliberate and it is
+the fix for this probe's first version, which sent `q=2` — quiet — and so
+could not tell a refusal from an acceptance that drew nothing. A diagnostic
+must never suppress the errors it exists to find. (Anything on a RENDER path
+must still use `q=2`: those replies arrive on the application's stdin, where
+the input parser reads them as typing.)
 
-Read off which letters appear and the cause is pinned to a row, a column, or
-a single cell of that table — which is what a bug report against a terminal
-needs, rather than "images do not work".
-
-Run INSIDE the terminal under test. Prints a card; there is nothing to parse
-and no reply to read, because the question is what a human can see.
+Run INSIDE the terminal under test. Prints a card and asks; there is no way
+to read back what was painted.
 """
+import base64
 import fcntl
 import os
+import select
 import struct
 import sys
 import termios
+import tty
 
-# ── Geometry ────────────────────────────────────────────────────────────────
+FENCE_TIMEOUT = 2.0
+CHUNK = 4096
 
 PLACEHOLDER = "\U0010EEEE"
-# Row/column travel in these combining marks; only the first few are needed
-# here, and they are the same table `KittyGraphics+Placeholders.swift` uses.
+# Row/column travel in these combining marks — the head of the same table
+# `KittyGraphics+Placeholders.swift` generates, and the one `placement_probe.py`
+# is measured drawing correctly in Ghostty.
 DIACRITICS = [
-    "̅", "̍", "̎", "̐", "̒", "̽", "̾", "̿",
-    "͆", "͊", "͋", "͌",
+    "̅", "̍", "̎", "̐", "̒", "̽",
+    "̾", "̿", "͆", "͊", "͋", "͌",
 ]
 
 
-def cell_pixels():
-    """The terminal's cell size in pixels, or a plausible default."""
+# MARK: - Asking
+
+def ask(fd, query, timeout=FENCE_TIMEOUT):
+    """Send `query` fenced by DSR; return what came back before the fence."""
+    os.write(fd, query + b"\x1b[6n")
+    buf = b""
+    while select.select([fd], [], [], timeout)[0]:
+        buf += os.read(fd, 65536)
+        if buf.endswith(b"R") and b"\x1b[" in buf:
+            break
+    else:
+        return None
+    return buf[:buf.rfind(b"\x1b[")]
+
+
+def reply(raw):
+    """The APC body a terminal answered with, readable."""
+    if raw is None:
+        return "<no fence — timed out>"
+    if not raw:
+        return "<silent>"
+    return raw.decode("latin-1").replace("\x1b", "<ESC>")
+
+
+# MARK: - Geometry
+
+def cell_pixels(fd):
     try:
-        packed = fcntl.ioctl(sys.stdout, termios.TIOCGWINSZ, struct.pack("HHHH", 0, 0, 0, 0))
+        packed = fcntl.ioctl(fd, termios.TIOCGWINSZ, struct.pack("HHHH", 0, 0, 0, 0))
         rows, cols, width, height = struct.unpack("HHHH", packed)
         if width and height and rows and cols:
             return max(1, width // cols), max(1, height // rows)
@@ -67,108 +96,160 @@ def cell_pixels():
 
 
 def ramp(width, height, opaque):
-    """A left-to-right hue ramp, so a transposed or torn placement is visible
-    and not just 'something appeared'."""
+    """A left-to-right hue ramp fading downwards, so a transposed or torn
+    placement is visible and not merely 'something appeared'."""
     out = bytearray()
     for y in range(height):
         fade = 1.0 - (y / max(1, height - 1)) * 0.6
         for x in range(width):
             hue = (x / max(1, width - 1)) * 6.0
-            sector, frac = int(hue) % 6, hue - int(hue)
-            rising, falling = int(255 * frac * fade), int(255 * (1 - frac) * fade)
-            full, none = int(255 * fade), 0
+            sector, frac = min(5, int(hue)), hue - int(hue)
+            rising, falling, full = int(255 * frac * fade), int(255 * (1 - frac) * fade), int(255 * fade)
             red, green, blue = [
-                (full, rising, none), (falling, full, none), (none, full, rising),
-                (none, falling, full), (rising, none, full), (full, none, falling),
+                (full, rising, 0), (falling, full, 0), (0, full, rising),
+                (0, falling, full), (rising, 0, full), (full, 0, falling),
             ][sector]
             out += bytes((red, green, blue)) if opaque else bytes((red, green, blue, 255))
     return bytes(out)
 
 
-# ── The protocol ────────────────────────────────────────────────────────────
+# MARK: - The protocol
 
-import base64  # noqa: E402  (after the geometry helpers, for readability)
+def transmit_commands(payload, width, height, image_id, opaque):
+    """`a=t` — store the image, draw nothing. Chunked only when the payload
+    does not fit: a single escape carries NO `m` key, which the protocol reads
+    as 'not chunked' and is a different statement from `m=0`, 'the last chunk
+    of one'.
 
-CHUNK = 4096
-
-
-def transmit(payload, width, height, image_id, opaque, force_chunked=False):
-    """`a=t` for one image. Emits a single escape with NO `m` key when the
-    payload fits, which is the shape the handshake uses and the shape nothing
-    has tested at a drawable size."""
+    Returns ONE byte string containing every chunk, so the caller fences the
+    whole transmission rather than each chunk. Fencing between chunks would
+    interleave a DSR query inside a chunked image, which is a thing to test
+    deliberately and never by accident — and the acknowledgement is emitted
+    when the transmission COMPLETES, so there is nothing to read until the
+    last chunk anyway."""
     encoded = base64.b64encode(payload).decode("ascii")
     fmt = 24 if opaque else 32
-    head = f"a=t,q=2,f={fmt},t=d,s={width},v={height},i={image_id}"
-    if len(encoded) <= CHUNK and not force_chunked:
-        return f"\033_G{head};{encoded}\033\\"
-    parts, out, first = [encoded[i:i + CHUNK] for i in range(0, len(encoded), CHUNK)], "", True
+    head = f"a=t,q=0,f={fmt},t=d,s={width},v={height},i={image_id}"
+    if len(encoded) <= CHUNK:
+        return f"\x1b_G{head};{encoded}\x1b\\".encode("latin-1")
+    parts = [encoded[i:i + CHUNK] for i in range(0, len(encoded), CHUNK)]
+    out = ""
     for index, part in enumerate(parts):
-        last = index == len(parts) - 1
-        prefix = f"{head},m={0 if last else 1}" if first else f"m={0 if last else 1},q=2"
-        out += f"\033_G{prefix};{part}\033\\"
-        first = False
-    return out
+        more = 0 if index == len(parts) - 1 else 1
+        prefix = f"{head},m={more}" if index == 0 else f"m={more},q=0"
+        out += f"\x1b_G{prefix};{part}\x1b\\"
+    return out.encode("latin-1")
 
 
-def place(image_id, columns, rows):
-    return f"\033_Ga=p,U=1,q=2,i={image_id},c={columns},r={rows}\033\\"
+def direct_placement(image_id, columns, rows):
+    """A placement with NO `U=1`: the terminal draws it at the cursor, and no
+    placeholder cell is involved anywhere."""
+    return f"\x1b_Ga=p,q=0,i={image_id},c={columns},r={rows}\x1b\\".encode("latin-1")
+
+
+def virtual_placement(image_id, columns, rows):
+    return f"\x1b_Ga=p,U=1,q=0,i={image_id},c={columns},r={rows}\x1b\\".encode("latin-1")
 
 
 def placeholder_rows(image_id, columns, rows):
-    """The cells that draw the image: the id in a 24-bit foreground, then one
-    placeholder per cell carrying its row and column."""
+    """The cells that draw a virtual placement: the id in a 24-bit foreground,
+    then one placeholder per cell carrying its row and column."""
     red, green, blue = (image_id >> 16) & 0xFF, (image_id >> 8) & 0xFF, image_id & 0xFF
-    lines = []
-    for row in range(rows):
-        cells = "".join(
-            PLACEHOLDER + DIACRITICS[row] + DIACRITICS[column] for column in range(columns))
-        lines.append(f"\033[38;2;{red};{green};{blue}m{cells}\033[0m")
-    return lines
-
-
-# ── The card ────────────────────────────────────────────────────────────────
-
-def main():
-    cell_width, cell_height = cell_pixels()
-    print(f"cell pixels: {cell_width}x{cell_height}\n")
-
-    cases = [
-        ("A", 1, 1, True, "f=24  single escape, no m"),
-        ("B", 1, 1, False, "f=32  single escape, no m"),
-        ("C", 12, 4, True, "f=24  chunked, m=1 … m=0"),
-        ("D", 12, 4, False, "f=32  chunked, m=1 … m=0"),
+    return [
+        "\x1b[38;2;%d;%d;%dm%s\x1b[0m" % (
+            red, green, blue,
+            "".join(PLACEHOLDER + DIACRITICS[row] + DIACRITICS[col] for col in range(columns)))
+        for row in range(rows)
     ]
 
-    out = []
-    for index, (label, columns, rows, opaque, description) in enumerate(cases):
-        image_id = 7000 + index
-        width, height = columns * cell_width, rows * cell_height
-        payload = ramp(width, height, opaque)
-        encoded_len = (len(payload) + 2) // 3 * 4
-        chunks = 1 if encoded_len <= CHUNK else (encoded_len + CHUNK - 1) // CHUNK
-        sys.stdout.write(transmit(payload, width, height, image_id, opaque))
-        sys.stdout.write(place(image_id, columns, rows))
-        out.append((label, description, columns, rows, image_id, encoded_len, chunks))
 
-    for label, description, columns, rows, image_id, encoded_len, chunks in out:
-        print(f"  {label}: {description}   ({encoded_len} base64 bytes, {chunks} escape(s))")
+# MARK: - The card
+
+CASES = [
+    ("A", 1, 1, True, "f=24  single escape, no m   virtual"),
+    ("B", 1, 1, False, "f=32  single escape, no m   virtual"),
+    ("C", 12, 4, True, "f=24  chunked m=1 … m=0     virtual"),
+    ("D", 12, 4, False, "f=32  chunked m=1 … m=0     virtual"),
+]
+
+
+def main():
+    fd = sys.stdin.fileno()
+    if not os.isatty(fd):
+        sys.exit("run this inside the terminal under test")
+    cell_width, cell_height = cell_pixels(fd)
+    saved = termios.tcgetattr(fd)
+    tty.setraw(fd)
+    try:
+        results = []
+        for index, (label, columns, rows, opaque, description) in enumerate(CASES):
+            image_id = 7000 + index
+            payload = ramp(columns * cell_width, rows * cell_height, opaque)
+            transmitted = reply(ask(fd, transmit_commands(
+                payload, columns * cell_width, rows * cell_height, image_id, opaque)))
+            placed = reply(ask(fd, virtual_placement(image_id, columns, rows)))
+            results.append((label, description, columns, rows, image_id, transmitted, placed))
+
+        # E — the control. Same bytes, no placeholders, so it separates "can
+        # this terminal put these pixels on the screen at all" from "does it
+        # honour placeholder cells".
+        #
+        # Stored here and PLACED LATER, in two steps rather than one `a=T`: a
+        # direct placement draws at the cursor the moment it is sent, and the
+        # cursor at this point is wherever the probing left it — the picture
+        # would land at the top of the screen and then be printed over by the
+        # card. So the answer is collected now (a throwaway placement, whose
+        # pixels the card overwrites and whose REPLY is the thing wanted) and
+        # the visible one is emitted below, at the cursor position where it
+        # belongs.
+        direct_id = 7100
+        direct = ramp(12 * cell_width, 4 * cell_height, True)
+        direct_transmitted = reply(ask(fd, transmit_commands(
+            direct, 12 * cell_width, 4 * cell_height, direct_id, True)))
+        direct_placed = reply(ask(fd, direct_placement(direct_id, 12, 4)))
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+
+    print(f"\r\ncell pixels: {cell_width}x{cell_height}\r\n")
+    for label, description, columns, rows, image_id, transmitted, placed in results:
+        print(f"  {label}: {description}")
+        print(f"       transmit -> {transmitted}")
+        print(f"       place    -> {placed}")
         for line in placeholder_rows(image_id, columns, rows):
-            print("     " + line)
+            print("       " + line)
         print()
 
-    print("""  Each letter above should be followed by a hue ramp — red -> yellow ->
-  green -> blue, fading downwards for C and D, a single coloured cell for
-  A and B.
+    print("  E: f=24  chunked            DIRECT placement, no placeholders")
+    print(f"       transmit -> {direct_transmitted}")
+    print(f"       place    -> {direct_placed}")
+    print("       the picture, if any, is drawn at the cursor — here:")
+    print()
+    # `q=2` on this one: cooked mode is back, so nothing is reading, and an
+    # acknowledgement would be typed at the shell after the probe exits. The
+    # ANSWER was already collected above, in raw mode, where it could be read.
+    sys.stdout.write(
+        f"\x1b_Ga=p,q=2,i={direct_id},c=12,r=4\x1b\\")
+    sys.stdout.flush()
+    print("\n" * 4)
 
-  Report which of A B C D drew a picture and which are blank. That splits
-  the cause:
+    print("""
+  A-D should each be followed by a hue ramp: one coloured cell for A and B,
+  a 12x4 ramp fading downwards for C and D. E should have drawn one at the
+  cursor, above.
 
-    A and B draw, C and D blank .... CHUNKING is the problem
-    A and C blank, B and D draw .... the PIXEL FORMAT f=24 is the problem
-    only B draws ................... both, independently
-    all four blank ................. neither — something else entirely
-    all four draw .................. this terminal is fine; the fault is
-                                     in what TUIkit sends around them
+  Report which of A B C D E drew, and paste the transmit/place lines.
+
+    E draws, A-D blank ............. UNICODE PLACEHOLDERS are the problem.
+                                     The pixels and the transmission are
+                                     fine; the terminal accepts a virtual
+                                     placement and never honours it.
+    A and B draw, C and D blank .... chunking
+    A and C blank, B and D draw .... the f=24 pixel format
+    all five blank ................. the terminal draws no kitty image at
+                                     all, however it is asked — check the
+                                     transmit lines for a refusal
+    all five draw .................. this terminal is fine; the fault is in
+                                     what TUIkit sends around them
 """)
 
 

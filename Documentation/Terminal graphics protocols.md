@@ -104,9 +104,37 @@ has made is one pixel wide.
 
 `Tools/TerminalProbes/pixel_format_probe.py` separates them: the same ramp
 transmitted four ways — `{f=24, f=32}` × `{single escape, chunked}` — each
-virtually placed and labelled, so which letters draw names the cause. Until
-it has been run, this section records a symptom and two hypotheses, and
-**nothing in the framework has been changed on the strength of them.**
+virtually placed.
+
+**Both hypotheses are refuted, measured 2026-09-03.** In iTerm2 all four are
+blank; in Ghostty all four draw, which is what makes the iTerm2 result mean
+something rather than indicting the probe. So it is neither the pixel format
+nor the chunking, and it is not the two of them together: iTerm2 draws no
+virtual placement *however* the pixels reach it.
+
+That leaves one candidate standing, and it is the simplest one: **iTerm2
+accepts `U=1` and does not implement Unicode placeholders.** Every A–D case
+draws through a placeholder cell, so they fail together and say nothing about
+the pixels. The probe's case **E** is the control that separates them — the
+same bytes, placed DIRECTLY at the cursor with no `U=1` and no placeholder
+cell anywhere:
+
+| E | A–D | reading |
+|---|---|---|
+| draws | blank | the transmission is fine; **Unicode placeholders** are unimplemented. A precise, filable bug. |
+| blank | blank | iTerm2 draws no kitty image at all, however asked — check the transmit lines for a refusal. |
+
+Until E has been run this section records a symptom, one surviving
+hypothesis and two dead ones, and **nothing in the framework has been changed
+on the strength of any of them.**
+
+A note on the probe itself, because it cost a round trip: its first version
+sent `q=2` and read nothing, so it could not tell a refusal from an
+acceptance that drew nothing — a diagnostic must never suppress the errors it
+exists to find. It now sends `q=0` and reads every reply, fencing each
+transmission AS A WHOLE rather than each chunk, since interleaving a DSR
+query between the chunks of one image is a thing to test deliberately and
+never by accident.
 ### 2.2 What they do when you send one — and the headline finding
 
 Each payload was printed between two brackets on a cleared row and the cursor
