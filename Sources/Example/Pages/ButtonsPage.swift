@@ -20,6 +20,11 @@ struct ButtonsPage: View {
     @State private var clickCount: Int = 0
     @State private var tintToggle: Bool = true
 
+    /// Which focus affordance the two links below use. Off is the default a
+    /// `Link` ships with — the words themselves breathe, and nothing is
+    /// reserved beside them, which is what lets a link sit inside a sentence.
+    @State private var linkBullet: Bool = false
+
     /// Read so the demo's tint can be chosen against the palette in force, and
     /// re-chosen when the theme changes.
     @Environment(\.palette) private var palette
@@ -220,10 +225,18 @@ struct ButtonsPage: View {
             DemoSection("page.buttons.section.links") {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("page.newControls.linkHint").foregroundStyle(.palette.foregroundSecondary)
-                    Link("swift.org", destination: URL(string: "https://swift.org")!)
-                    Link(destination: URL(string: "https://github.com/apple/swift")!) {
-                        Label("apple/swift", systemImage: "swift")
+                    Toggle("page.buttons.links.bulletToggle", isOn: $linkBullet)
+                    // Scoped to these two, not to the page: the sentence in the
+                    // section below is the case the default exists for, and
+                    // watching it grow two cells per link would demonstrate the
+                    // wrong thing.
+                    VStack(alignment: .leading, spacing: 1) {
+                        Link("swift.org", destination: URL(string: "https://swift.org")!)
+                        Link(destination: URL(string: "https://github.com/apple/swift")!) {
+                            Label("apple/swift", systemImage: "swift")
+                        }
                     }
+                    .linkFocusIndicator(linkBullet ? .bullet : .text)
                 }
             }
     }
@@ -254,12 +267,12 @@ struct ButtonsPage: View {
                 // rather than one `Text`, because a destination belongs to a
                 // `Link` and the prose either side of it does not.
                 //
-                // The prose fragments carry no trailing space, and the gap you
-                // see before each linked phrase is not one either: a plain
-                // button — which is what a `Link` is — always reserves two
-                // cells for its focus indicator, so that the row does not shift
-                // sideways when Tab arrives. Writing a space as well would make
-                // it three.
+                // The prose fragments carry their own word spaces, which is
+                // only true because a focused `Link` breathes its own words
+                // rather than growing a bullet beside them — see
+                // `.linkFocusIndicator(_:)`. Under `.bullet` the same sentence
+                // gains two cells before each linked phrase, which is what the
+                // toggle above the two links is for.
                 //
                 // The sentence is kept SHORT for the same reason its
                 // explanation is a separate paragraph below: a `Text` that

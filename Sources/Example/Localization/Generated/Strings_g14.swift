@@ -11,8 +11,10 @@
 //
 //  The `prose*` / `link*` keys are the fragments of two sentences with links
 //  inside them, assembled left to right in that order. A translation must fit
-//  that shape: prose, link, prose, link, prose. English is the source of
-//  truth; every other language carries the same key set.
+//  that shape: prose, link, prose, link, prose, and must carry its own word
+//  spaces — a `Link` occupies exactly its label and reserves nothing beside
+//  it. English is the source of truth; every other language carries the same
+//  key set.
 
 // swiftlint:disable line_length
 
@@ -20,10 +22,11 @@ extension ExampleStrings {
     static let g14: [String: [String: String]] = [
         "en": [
             "page.buttons.section.hyperlinks": "Terminal hyperlinks (OSC 8)",
+            "page.buttons.links.bulletToggle": "Bullet beside a focused link (default: the words breathe)",
             "page.buttons.links.osc8": "A Link also carries an OSC 8 escape, telling the terminal where the label points. The terminal can then show and copy a destination that appears nowhere on screen — which no application can do for itself, since a click it handles leaves the URL as invisible as it was.",
-            "page.buttons.links.proseA": "Read the",
+            "page.buttons.links.proseA": "Read the ",
             "page.buttons.links.linkGuide": "language guide",
-            "page.buttons.links.proseB": ", or browse the",
+            "page.buttons.links.proseB": ", or browse the ",
             "page.buttons.links.linkSource": "compiler source",
             "page.buttons.links.proseC": ".",
             "page.buttons.links.inlineNote": "Neither linked phrase is written as an address, and the terminal knows where both of them point.",
@@ -46,10 +49,11 @@ extension ExampleStrings {
 
         "de": [
             "page.buttons.section.hyperlinks": "Terminal-Hyperlinks (OSC 8)",
+            "page.buttons.links.bulletToggle": "Punkt neben einem fokussierten Link (Standard: die Wörter atmen)",
             "page.buttons.links.osc8": "Ein Link trägt außerdem eine OSC-8-Sequenz, die dem Terminal mitteilt, wohin die Beschriftung zeigt. Das Terminal kann ein Ziel dann anzeigen und kopieren, das nirgends auf dem Bildschirm steht — was keine Anwendung selbst leisten kann, denn ein Klick, den sie selbst behandelt, lässt die URL so unsichtbar wie zuvor.",
-            "page.buttons.links.proseA": "Lies den",
+            "page.buttons.links.proseA": "Lies den ",
             "page.buttons.links.linkGuide": "Sprachleitfaden",
-            "page.buttons.links.proseB": " oder durchstöbere den",
+            "page.buttons.links.proseB": " oder durchstöbere den ",
             "page.buttons.links.linkSource": "Compiler-Quelltext",
             "page.buttons.links.proseC": ".",
             "page.buttons.links.inlineNote": "Keine der beiden verlinkten Wendungen ist als Adresse geschrieben, und das Terminal weiß, wohin beide zeigen.",
@@ -72,10 +76,11 @@ extension ExampleStrings {
 
         "fr": [
             "page.buttons.section.hyperlinks": "Hyperliens de terminal (OSC 8)",
+            "page.buttons.links.bulletToggle": "Puce à côté d'un lien ciblé (par défaut : les mots respirent)",
             "page.buttons.links.osc8": "Un Link porte aussi une séquence OSC 8, qui indique au terminal où pointe le libellé. Le terminal peut alors afficher et copier une destination qui n'apparaît nulle part à l'écran — ce qu'aucune application ne peut faire elle-même, puisqu'un clic qu'elle traite laisse l'URL aussi invisible qu'avant.",
-            "page.buttons.links.proseA": "Lisez le",
+            "page.buttons.links.proseA": "Lisez le ",
             "page.buttons.links.linkGuide": "guide du langage",
-            "page.buttons.links.proseB": ", ou parcourez les",
+            "page.buttons.links.proseB": ", ou parcourez les ",
             "page.buttons.links.linkSource": "sources du compilateur",
             "page.buttons.links.proseC": ".",
             "page.buttons.links.inlineNote": "Aucune des deux expressions liées n'est écrite comme une adresse, et le terminal sait où elles mènent toutes les deux.",
@@ -98,10 +103,11 @@ extension ExampleStrings {
 
         "it": [
             "page.buttons.section.hyperlinks": "Hyperlink del terminale (OSC 8)",
+            "page.buttons.links.bulletToggle": "Punto accanto a un collegamento a fuoco (predefinito: le parole respirano)",
             "page.buttons.links.osc8": "Un Link porta anche una sequenza OSC 8, che dice al terminale dove punta l'etichetta. Il terminale può poi mostrare e copiare una destinazione che non compare da nessuna parte sullo schermo — cosa che nessuna applicazione può fare da sé, perché un clic gestito da lei lascia l'URL invisibile com'era.",
-            "page.buttons.links.proseA": "Leggi la",
+            "page.buttons.links.proseA": "Leggi la ",
             "page.buttons.links.linkGuide": "guida al linguaggio",
-            "page.buttons.links.proseB": ", oppure sfoglia i",
+            "page.buttons.links.proseB": ", oppure sfoglia i ",
             "page.buttons.links.linkSource": "sorgenti del compilatore",
             "page.buttons.links.proseC": ".",
             "page.buttons.links.inlineNote": "Nessuna delle due espressioni collegate è scritta come un indirizzo, e il terminale sa dove portano entrambe.",
@@ -124,10 +130,11 @@ extension ExampleStrings {
 
         "es": [
             "page.buttons.section.hyperlinks": "Hiperenlaces de terminal (OSC 8)",
+            "page.buttons.links.bulletToggle": "Viñeta junto a un enlace enfocado (por defecto: las palabras respiran)",
             "page.buttons.links.osc8": "Un Link lleva además una secuencia OSC 8, que indica al terminal adónde apunta la etiqueta. El terminal puede entonces mostrar y copiar un destino que no aparece en ninguna parte de la pantalla — algo que ninguna aplicación puede hacer por sí misma, ya que un clic que ella gestiona deja la URL tan invisible como estaba.",
-            "page.buttons.links.proseA": "Lee la",
+            "page.buttons.links.proseA": "Lee la ",
             "page.buttons.links.linkGuide": "guía del lenguaje",
-            "page.buttons.links.proseB": ", o explora las",
+            "page.buttons.links.proseB": ", o explora las ",
             "page.buttons.links.linkSource": "fuentes del compilador",
             "page.buttons.links.proseC": ".",
             "page.buttons.links.inlineNote": "Ninguna de las dos expresiones enlazadas está escrita como una dirección, y el terminal sabe adónde llevan ambas.",
@@ -150,6 +157,7 @@ extension ExampleStrings {
 
         "zh": [
             "page.buttons.section.hyperlinks": "终端超链接（OSC 8）",
+            "page.buttons.links.bulletToggle": "为获得焦点的链接加圆点（默认：文字呼吸）",
             "page.buttons.links.osc8": "Link 还会带上一段 OSC 8 转义序列，告诉终端标签指向何处。于是终端可以显示并复制一个从未出现在屏幕上的目标地址——这是应用自身做不到的，因为由它自己处理的点击并不会让 URL 变得可见。",
             "page.buttons.links.proseA": "读一读",
             "page.buttons.links.linkGuide": "语言指南",
@@ -176,6 +184,7 @@ extension ExampleStrings {
 
         "ja": [
             "page.buttons.section.hyperlinks": "端末のハイパーリンク（OSC 8）",
+            "page.buttons.links.bulletToggle": "フォーカス中のリンクに丸印（既定：文字が明滅）",
             "page.buttons.links.osc8": "Link には OSC 8 エスケープも付き、ラベルの指す先を端末に伝えます。おかげで端末は、画面のどこにも現れない宛先を表示してコピーできます——アプリ自身にはできないことです。自分で処理したクリックでは、URL は見えないままだからです。",
             "page.buttons.links.proseA": "こちらの",
             "page.buttons.links.linkGuide": "言語ガイド",

@@ -255,6 +255,83 @@ extension ButtonStyle where Self == PlainButtonStyle {
     public static var plain: PlainButtonStyle { PlainButtonStyle() }
 }
 
+/// A ``Link``'s style: plain, with the focus in the text rather than in front
+/// of it.
+///
+/// Internal on purpose. The public way to choose between the two affordances is
+/// ``SwiftUICore/View/linkFocusIndicator(_:)``, and SwiftUI has no `.link`
+/// button style to be source-compatible with — adding one would be a public
+/// name this framework would then owe forever for the sake of an internal
+/// wiring detail.
+struct _LinkButtonStyle: ButtonStyle {
+    /// Which affordance the app asked for. Carried as a value rather than read
+    /// from the environment inside the style, so the choice is made once, in
+    /// `_Link`'s body, where the environment is legitimately readable.
+    let indicator: LinkFocusIndicator
+
+    func makeBody(configuration: Configuration) -> some View {
+        _ButtonStyleBody(
+            configuration: configuration,
+            appearance: indicator == .bullet ? .plain : .link)
+    }
+}
+
+// MARK: - Focus in the label
+
+extension _ButtonStyleBody {
+    /// A one-line label that breathes between `resting` and `bright` instead of
+    /// growing a bullet beside it — see ``_ButtonAppearance/indicatesFocusInLabel``.
+    @MainActor
+    static func breathingLabel(
+        _ text: String, style: TextStyle, resting: Color, bright: Color,
+        cycle: SelectionEmphasisCycle, indicating: Bool, isMeasuring: Bool
+    ) -> FrameBuffer {
+        func drawn(_ colour: Color) -> String {
+            var style = style
+            style.foregroundColor = colour
+            return ANSIRenderer.render(text, with: style)
+        }
+        let now = indicating ? cycle.colorNow(dim: resting, bright: bright) : resting
+        var buffer = FrameBuffer(lines: [drawn(now)])
+        if !isMeasuring, indicating,
+            let run = cycle.run(
+                dim: resting, bright: bright, offsetX: 0, offsetY: 0, draw: drawn)
+        {
+            buffer.animatedCells = [run]
+        }
+        return buffer
+    }
+
+    /// The same, for a label that is a VIEW and may therefore wrap.
+    ///
+    /// `lines` is called once per frame of the cycle rather than the render
+    /// being recoloured after the fact, because the label's cells can carry an
+    /// underline (a link's do), a symbol or bold, and a string-level recolour
+    /// would have to reproduce all of it. That is `frames.count` renders of a
+    /// short label, for the one control holding the focus, on the passes where
+    /// it re-renders.
+    @MainActor
+    static func breathingLabel(
+        resting: Color, bright: Color, cycle: SelectionEmphasisCycle,
+        indicating: Bool, isMeasuring: Bool, lines: (Color) -> [String]
+    ) -> FrameBuffer {
+        let now = indicating ? cycle.colorNow(dim: resting, bright: bright) : resting
+        var buffer = FrameBuffer(lines: lines(now))
+        guard !isMeasuring, indicating, cycle.isAnimating else { return buffer }
+        // One run per ROW: a run names a rectangle of cells on ONE line, and a
+        // label may wrap onto several.
+        let framed = cycle.frames.map { lines($0.color(dim: resting, bright: bright)) }
+        buffer.animatedCells = buffer.lines.indices.compactMap { row in
+            let rowFrames = framed.compactMap { row < $0.count ? $0[row] : nil }
+            guard rowFrames.count == framed.count, let first = rowFrames.first else { return nil }
+            return AnimatedCellRun(
+                offsetX: 0, offsetY: row, width: first.strippedLength,
+                frames: rowFrames, clock: .cursor)
+        }
+        return buffer
+    }
+}
+
 // MARK: - Button Appearance
 
 /// The resolved visual parameters shared by the built-in button styles.
@@ -277,6 +354,21 @@ private struct _ButtonAppearance {
     /// The variant token used to scope `.controlVariant(.button, …)` style
     /// entries (see ``Button/Variant``).
     var variant: String
+
+    /// Whether focus is shown by breathing the LABEL rather than by a bullet
+    /// in front of it — and therefore whether the two chrome cells the bullet
+    /// needs are reserved at all.
+    ///
+    /// What a `Link` wants, and the reason it is a property here rather than a
+    /// second plain style: a link is written INSIDE a sentence, and a control
+    /// that reserves two columns cannot be. The bullet is the right affordance
+    /// for a plain button sitting on its own line, where the reservation keeps
+    /// a column of them aligned as the focus moves between them; it is the
+    /// wrong one for four words in a paragraph.
+    ///
+    /// The breath goes in the text for the same reason the tab strip's does —
+    /// see ``ActiveChipCycle``, which says it at more length.
+    var indicatesFocusInLabel: Bool = false
 
     /// The default appearance — dimmed foreground, not bold.
     static let `default` = Self(
@@ -321,6 +413,21 @@ private struct _ButtonAppearance {
         horizontalPadding: 0,
         isPlain: true,
         variant: "plain"
+    )
+
+    /// The link appearance — plain, and with the focus in the text rather than
+    /// in front of it, so a link occupies exactly its own words.
+    ///
+    /// The variant stays `"plain"`: it is the token `.controlVariant(.button, …)`
+    /// scopes on, a link IS a plain button, and an app that styled plain
+    /// buttons did not ask for links to fall out of that.
+    static let link = Self(
+        foregroundColor: nil,
+        isBold: false,
+        horizontalPadding: 0,
+        isPlain: true,
+        variant: "plain",
+        indicatesFocusInLabel: true
     )
 }
 
@@ -389,7 +496,9 @@ private struct _ButtonStyleBody: View, Renderable {
             // prefix (which always reserves 2 cells — `BorderRenderer` pads
             // with spaces when unfocused so things stay aligned) plus the
             // horizontal padding either side of the label.
-            let chromeWidth = 2 + 2 * appearance.horizontalPadding
+            let indicatorWidth =
+                appearance.indicatesFocusInLabel ? 0 : BorderRenderer.focusIndicatorWidth
+            let chromeWidth = indicatorWidth + 2 * appearance.horizontalPadding
             let labelText = Self.fitLabel(
                 configuration.label, into: context.availableWidth, chrome: chromeWidth)
             let paddedLabel = padding + labelText + padding
@@ -420,6 +529,18 @@ private struct _ButtonStyleBody: View, Renderable {
             // made an idle page cost a third of a core. See ``AnimatedCellRun``.
             let indicating = isFocused && !isDisabled
             let cycle = context.environment.selectionEmphasis.cycle(indicating)
+
+            // The label breathes, and nothing sits in front of it. Same clock
+            // and same frames as the bullet — only the cells it lands on
+            // differ, which is the whole of the difference between the two
+            // affordances.
+            if appearance.indicatesFocusInLabel {
+                return Self.breathingLabel(
+                    paddedLabel, style: textStyle, resting: foregroundColor,
+                    bright: palette.accent, cycle: cycle, indicating: indicating,
+                    isMeasuring: context.isMeasuring)
+            }
+
             let prefixes = cycle.frames.map {
                 BorderRenderer.focusIndicatorPrefix(
                     isFocused: indicating, emphasis: $0, palette: palette)
@@ -574,6 +695,28 @@ private struct _ButtonStyleBody: View, Renderable {
         if appearance.isPlain {
             let indicating = isFocused && !isDisabled
             let cycle = context.environment.selectionEmphasis.cycle(indicating)
+
+            // The label breathes, and reserves nothing in front of itself —
+            // see ``_ButtonAppearance/indicatesFocusInLabel``. Rendered once
+            // per frame of the cycle rather than recoloured after the fact,
+            // because the label is a VIEW: its cells can carry an underline (a
+            // link's does), a symbol, or bold, and a string-level recolour
+            // would have to reproduce all of it. That is `frames.count`
+            // renders of a short label, for the one control that holds the
+            // focus, on the passes where it re-renders.
+            if appearance.indicatesFocusInLabel {
+                return Self.breathingLabel(
+                    resting: labelFg, bright: palette.accent.resolve(with: palette),
+                    cycle: cycle, indicating: indicating, isMeasuring: context.isMeasuring
+                ) { colour in
+                    TUIkit.renderToBuffer(
+                        labelView.foregroundStyle(colour),
+                        context: context.withChildIdentity(
+                            erasedType: type(of: labelView), index: 0)
+                    ).lines
+                }
+            }
+
             let prefixes = cycle.frames.map {
                 BorderRenderer.focusIndicatorPrefix(
                     isFocused: indicating, emphasis: $0, palette: palette)

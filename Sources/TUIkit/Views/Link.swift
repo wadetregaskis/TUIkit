@@ -131,6 +131,25 @@ extension View {
 
 // MARK: - Terminal hyperlinks
 
+/// How a focused ``Link`` shows that it holds the focus.
+///
+/// See ``SwiftUICore/View/linkFocusIndicator(_:)``.
+public enum LinkFocusIndicator: Sendable, Equatable, CaseIterable {
+    /// The label's own words breathe in the accent, and nothing is reserved
+    /// beside them — so a link occupies exactly its own text and sits inside a
+    /// sentence like any other words. The default.
+    case text
+
+    /// A pulsing `●` in two reserved cells before the label — the affordance
+    /// every other plain button uses, and what keeps a COLUMN of links aligned
+    /// as the focus moves down it.
+    case bullet
+}
+
+private struct LinkFocusIndicatorKey: EnvironmentKey {
+    static let defaultValue = LinkFocusIndicator.text
+}
+
 private struct TerminalHyperlinksKey: EnvironmentKey {
     static let defaultValue = true
 }
@@ -143,6 +162,13 @@ extension EnvironmentValues {
     public var terminalHyperlinks: Bool {
         get { self[TerminalHyperlinksKey.self] }
         set { self[TerminalHyperlinksKey.self] = newValue }
+    }
+
+    /// How a focused ``Link`` says so — see
+    /// ``SwiftUICore/View/linkFocusIndicator(_:)``.
+    public var linkFocusIndicator: LinkFocusIndicator {
+        get { self[LinkFocusIndicatorKey.self] }
+        set { self[LinkFocusIndicatorKey.self] = newValue }
     }
 }
 
@@ -168,6 +194,33 @@ extension View {
     /// - Returns: A view whose links honour the setting.
     public func terminalHyperlinks(_ enabled: Bool = true) -> some View {
         environment(\.terminalHyperlinks, enabled)
+    }
+
+    /// How a focused ``Link`` says so.
+    ///
+    /// The default is ``LinkFocusIndicator/text`` — the words themselves
+    /// breathe in the accent — because a link is written inside a sentence and
+    /// a control that reserves two columns for a bullet cannot be. It is the
+    /// same clock and the same frames as every other focus affordance in the
+    /// framework; only the cells differ.
+    ///
+    /// ``LinkFocusIndicator/bullet`` is the plain-button affordance: a pulsing
+    /// `●` in two reserved cells before the label. Right for a column of links
+    /// on their own lines, where the reservation is what keeps them aligned as
+    /// the focus moves; wrong for four words in a paragraph.
+    ///
+    /// ```swift
+    /// VStack(alignment: .leading) {
+    ///     Link("swift.org", destination: swiftOrg)
+    ///     Link("apple/swift", destination: repo)
+    /// }
+    /// .linkFocusIndicator(.bullet)
+    /// ```
+    ///
+    /// TUI-specific: SwiftUI draws focus rings the terminal has no equivalent
+    /// for, so there is no signature to match.
+    public func linkFocusIndicator(_ indicator: LinkFocusIndicator) -> some View {
+        environment(\.linkFocusIndicator, indicator)
     }
 }
 
@@ -225,6 +278,7 @@ private struct _Link<Label: View>: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.linkUnderline) private var underline
     @Environment(\.terminalHyperlinks) private var terminalHyperlinks
+    @Environment(\.linkFocusIndicator) private var focusIndicator
 
     var body: some View {
         // Resolve the action and destination NOW, during render, and capture the
@@ -242,10 +296,15 @@ private struct _Link<Label: View>: View {
         // down — and it is the STYLE that knows whether the pointer is over the
         // link. Routed this way, `.plain`'s hover lift applies to a link like
         // any other plain button, which is the whole affordance a link has.
+        // The appearance breathes the words and reserves nothing, or falls back
+        // to the plain button's bullet in two cells before them. Resolved here,
+        // where the environment is readable, and carried into the style as a
+        // value — a `ButtonStyle` is chosen at build time and cannot branch on
+        // an environment it does not have.
         return Button(action: { open(destination) }, label: {
             label.underline(underline)
         })
-        .buttonStyle(.plain)
+        .buttonStyle(_LinkButtonStyle(indicator: focusIndicator))
         .buttonTextStyle { $0.foreground = .palette.accent }
         // Outermost, so the link covers everything the button style drew —
         // its hover prefix included. The control IS the link; a hyperlink over
