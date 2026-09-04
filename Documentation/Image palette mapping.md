@@ -318,76 +318,140 @@ elsewhere.
 
 ## `.ansi256` became one of these too
 
-**Status: shipped 2026-09-04.** The ladder above described `.ansi256` as
-"256 colours", and the way it reached them was the one thing in this module
-that was not a palette search: each channel divided by 51 and rounded onto the
-6×6×6 cube, with a near-grey short-circuit onto the 24-step ramp. It was the
-cheapest mode by a distance, and the reason it was cheap was that it guessed.
-
-What that bought was **a second quantiser on one screen**. `.effective(for:)`
-sends every `.trueColor` image to `.ansi256` on a 256-colour terminal, and the
-page the picture sits on is quantised to those very same 240 entries by
-`Color.downsampledToPalette256()` — an OKLab search with hue weighted. The two
-disagreed for **85%** of colours, and visibly: the framework's own warm cream
-`#F2DEC9` came out `(255,215,215)`, a pink, in the picture and `(255,215,175)`,
-warm, in the background behind it. The near-grey test compared red against green
-and green against blue but never red against blue, so a pale blue `#C8D0D8` was
-declared neutral and drawn as flat grey where the page beside it kept its tint.
+**Status: shipped 2026-09-04; the rule corrected the same day.** The ladder
+above described `.ansi256` as "256 colours", and the way it reached them was the
+one thing in this module that was not a palette search: each channel divided by
+51 and rounded onto the 6×6×6 cube, with a near-grey short-circuit onto the
+24-step ramp. It was the cheapest mode by a distance, and the reason it was
+cheap was that it guessed.
 
 `.ansi256` is now `ASCIIPalette.ansi256`, a palette of those 240 entries, and
-`ASCIIColorMode.searchedPalette` returns it like any other. One palette answers
-by `Color`'s rule rather than by this module's plain OKLab, which is the only
-place in TUIkitImage that happens and is stated at the line: these colours are
-not the app's, they are the terminal's, and the UI is already painted in them.
-Measured against `Color`'s answer, plain OKLab over the same 240 entries would
-still disagree for 31% of colours, so borrowing the rule — rather than
-re-deriving a similar one — is the whole point.
+`ASCIIColorMode.searchedPalette` returns it like any other — mapped by nearest
+in OKLab, like every other palette here.
 
-**What it costs, measured in a release build** (`Tools/Profiling/ImageHarness`,
-a 180×75 photograph, M-series):
+### Three rules for one palette, and which question each answers
 
-| path | asks | before | after |
-|---|---|---|---|
-| glyph (`convert`, 120×50 cells) | twice per cell | 0.75 ms | 6.1 ms |
-| pixel (`recoloured`, 960×850) | once per pixel | 11.7 ms | 9.3 ms |
+It took two attempts to get this right, so it is worth writing down what the
+choices actually are. All three pick from the **same 240 colours**; they differ
+only in what they mean by "best".
 
-The per-cell path pays for exactness — `Color`'s answer is a 240-entry scan at
-about 450 ns, against a few nanoseconds of arithmetic — and gets it: the index
-in a glyph's `38;5;n` is now bit-identical to the one the UI beside it is
-painted with. That conversion is cached in `StateStorage` per view, so it is
-paid when the picture, the size or the settings change, and `.trueColor` on the
-same picture costs 4.4 ms for comparison.
+**1. Truncation — divide by 51 and round.** O(1), no search. Its trouble is not
+that it is approximate but that it is approximate *per channel independently*,
+which is not how anyone sees colour: rounding red up and blue down rotates the
+hue, and it does so worst where the cube is coarsest, in the pale range. The
+framework's own warm cream `#F2DEC9` came out `(255,215,215)`, a pink. It also
+cannot see the grey ramp except through a hand-written short-circuit, and that
+one compared red against green and green against blue but never red against
+blue — so a pale blue `#C8D0D8` was declared neutral and drawn flat grey. The
+divisor is not even the right arithmetic: the cube's levels are 0, 95, 135, 175,
+215, 255, which are not multiples of 51.
 
-The per-pixel path cannot pay for exactness — 800,000 pixels × 450 ns is
-over a third of a second — so it takes the same table every other searched palette
-takes, built once for the process because these 240 colours never change. It
-comes out **faster** than the arithmetic it replaced, because a table lookup is
-cheaper than three roundings and a branch. What the table costs in accuracy is
-measured in `PaletteTableFidelityTests`, and it is still an order of magnitude
-closer than the arithmetic was:
+**2. Nearest in OKLab.** Convert the pixel and every candidate to a space built
+so that equal distances look equally different, and take the closest. This is
+"which of these 240 colours is a person least likely to notice the substitution
+of". It uses the grey ramp when the ramp is nearest — which for a photograph is
+often, because the ramp's 24 rungs are ten units apart where the cube's six are
+forty, and a photograph's metals, skies and shadows live near the neutral axis.
+This is what every other `ASCIIPalette` uses, and it is what an image wants.
+
+**3. `Color.downsampledToPalette256()`, the UI's quantiser.** Deliberately *not*
+nearest. It weights hue ×4, charges chroma LOSS ×4, and applies a gate:
+a colour with any chroma at all (OKLab ≥ 0.01) may not quantise to a grey. That
+is a rule about colour **identity**, and the UI needs it — a designed colour is a
+semantic thing, and the gate is what stops a fading accent from stepping red,
+red, red, GREY, grey, black.
+
+The mistake worth naming is the one made on the way here: **`.ansi256` briefly
+borrowed rule 3**, on the argument that one screen should not answer the same
+RGB two ways. That conflates sharing a *palette* with sharing a *rule*. Sharing
+the palette is what makes a screen coherent, and both do. Sharing the rule makes
+the picture wrong, because the two callers are asking different questions — the
+UI about a few dozen colours that each mean something, the image about a million
+that mean nothing individually and whose residual error dithering exists to
+spread.
+
+Measured, applying rule 3 per pixel:
+
+| | rule 2 (nearest) | rule 3 (the UI's) |
+|---|---|---|
+| colours denied the grey ramp by the gate | none | **99.8%** |
+| random sweep answered from the ramp | 6.4% | **0.23%** |
+| mean OKLab error, random sweep | 0.0384 | 0.0433 |
+| mean OKLab error, near-neutral band | 0.0124 | **0.0260** (2.1×) |
+| `demo-image.jpg` at 220×220, mean OKLab error | 0.0225 | **0.0381** (1.7×) |
+
+The near-neutral row is the one that matters, because that is what a photograph
+is mostly made of. A dark blue-grey `(96,100,106)` — ten units of spread between
+its channels — comes back `(95,95,135)` under rule 3, a navy with forty. The
+picture's greys **invent a hue**: on `demo-image.jpg` the brushed-metal ring
+broke into flat teal and lavender patches. The number that names the cause is
+the first row: the gate fires for essentially every pixel that is not exactly
+neutral, so the only fine-grained tonal detail this palette has is unreachable.
+
+The 31% figure once cited for "plain OKLab still disagrees with the UI" was
+never error. It is the size of rule 3's deliberate bias, measured.
+
+### What it costs, measured in a release build
+
+`Tools/Profiling/ImageHarness`, a 180×75 photograph, M-series, three alternating
+reps of paired binaries:
+
+| path | asks | cube arithmetic | rule 3 | rule 2 (shipped) |
+|---|---|---|---|---|
+| glyph (`convert`, 120×50 cells) | twice per cell | 0.75 ms | 6.3 ms | 4.5 ms |
+| pixel (`recoloured`, 960×850) | once per pixel | 11.7 ms | 9.5 ms | 9.5 ms |
+
+The per-cell path pays for searching and gets a right answer for it. It is 28%
+cheaper than rule 3 was — a plain three-term distance against a gate, a chroma
+split and two extra weights — and that conversion is cached in `StateStorage`
+per view, so it is paid when the picture, the size or the settings change rather
+than per frame. `.trueColor` on the same picture costs 4.4 ms, so the searched
+mode is now the same order as the default rather than a fifth of `.ansi16`.
+
+The per-pixel path cannot search at all — 800,000 pixels against 240 entries — so
+it takes the same quantisation table every other searched palette takes, and is
+unchanged by the rule (the work is a table lookup either way). It is still
+**faster than the arithmetic it replaced**, because one array read beats three
+roundings and a branch.
+
+Two things that table does differently from every other palette's, both forced by
+having 240 entries where the next largest here has 16:
+
+- **Built once for the process**, not per conversion. A table is 32,768 exact
+  answers, so this one is fifteen times the work `ansi16`'s is — and it is the
+  same table every time, because these 240 colours are the terminal's and not
+  the app's.
+- **No boundary fallback.** The `trusted` mask exists so a cell straddling two
+  entries is looked up exactly instead of guessed. With 240 entries only 33% of
+  cells have six agreeing neighbours, so the fallback would fire for three
+  pixels in four, each walking 240 entries — most of a second for a megapixel.
+
+What that costs is measured in `PaletteTableFidelityTests`:
 
 | | differs from the exact answer | mean excess distance | worst |
 |---|---|---|---|
 | the old cube arithmetic | 85.0% | 0.0447 | 0.157 |
-| the table (pixel path) | 13.6% | 0.0044 | 0.142 |
+| the table under rule 3 | 13.6% | 0.0044 | 0.142 |
+| the table under rule 2 | 13.4% | 0.0041 | **0.027** |
 | the exact search (glyph path) | 0% | 0 | 0 |
 
 ("Excess" is how much further the chosen entry sits from the pixel than the
 exact answer does, in OKLab; two adjacent cube levels are about 0.13 apart.)
 
-The table has no boundary fallback, which every other palette's does. That is
-not an oversight: with 240 entries only 33% of cells have six agreeing
-neighbours, so the fallback would fire for three pixels in four and cost more
-than the search it was meant to avoid.
+The worst case improved 5× along with the rule, and for a reason worth keeping:
+rule 3 forbids a tinted colour the grey ramp, so its regions are not contiguous
+in OKLab and two adjacent table cells can answer with entries nowhere near each
+other. Rule 2 has no holes, so a cell's neighbours really are its neighbours and
+a miss is always a near tie.
 
-**A grey answers differently now, and better.** The old near-grey branch matched
-against the 24-step ramp alone. The cube has six greys of its own — 0, 95, 135,
-175, 215, 255 — and four of them fall between ramp steps, so `(92,92,92)` is
-three units from the cube's `(95,95,95)` and four from the ramp's `(88,88,88)`.
-Searching the whole 256 finds them. `(2,2,2)` moved too, from black to
-`(8,8,8)`: sRGB's transfer function is steep in the shadows, so in perceived
-lightness it is nearer the ramp's first rung than it is black, however the byte
-values read.
+**A grey answers differently than the arithmetic gave, and better.** The old
+near-grey branch matched against the 24-step ramp alone. The cube has six greys
+of its own — 0, 95, 135, 175, 215, 255 — and four of them fall between ramp
+steps, so `(92,92,92)` is three units from the cube's `(95,95,95)` and four from
+the ramp's `(88,88,88)`. Searching the whole 256 finds them. `(2,2,2)` moved too,
+from black to `(8,8,8)`: sRGB's transfer function is steep in the shadows, so in
+perceived lightness it is nearer the ramp's first rung than it is black, however
+the byte values read.
 
 ## Still open
 

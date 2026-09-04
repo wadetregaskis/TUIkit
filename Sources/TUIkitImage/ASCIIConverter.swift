@@ -201,13 +201,14 @@ public enum ASCIIColorMode: Sendable, Equatable {
     /// The terminal's own 256 — the 6×6×6 colour cube and the 24-step grey
     /// ramp, emitted as `38;5;n` with `n` never below 16.
     ///
-    /// Where a `.trueColor` image LANDS on a 256-colour terminal, which is why
-    /// it maps by exactly the rule the rest of the app is quantised by:
-    /// `Color.downsampledToPalette256()`, an OKLab search with hue weighted.
-    /// It used to divide each channel by 51 onto the cube instead, which is
-    /// cheaper and disagreed with that rule for 85% of colours — a picture and
-    /// a background of the same cream, drawn pink and warm side by side. See
-    /// `ASCIIPalette.ansi256`.
+    /// Where a `.trueColor` image LANDS on a 256-colour terminal, so the
+    /// picture and the page beside it draw from the same 240 colours. Mapped by
+    /// nearest in OKLab, like every other palette here — the same COLOURS as
+    /// the UI, deliberately not the same RULE, and
+    /// ``ASCIIPalette/nearestIndex(to:)`` says why. It used to divide each
+    /// channel by 51 onto the cube instead, which rotates hue in the pale range
+    /// — a cream came out pink — and short-circuited near-greys on a test that
+    /// never compared red against blue. See `ASCIIPalette.ansi256`.
     case ansi256
 
     /// The terminal's own sixteen: the 8 standard ANSI colours and their 8

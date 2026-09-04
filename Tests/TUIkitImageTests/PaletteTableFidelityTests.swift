@@ -25,7 +25,7 @@ import Testing
 ///     3-stop tone ramp    0.017%        1
 ///
 /// ``ASCIIPalette/ansi256`` is measured separately and on a different scale —
-/// 13.6%, because 240 entries in the same 32,768 cells leaves most cells
+/// 13.4%, because 240 entries in the same 32,768 cells leaves most cells
 /// straddling a boundary, and because its table has no exact fallback to rescue
 /// them. See `terminalPaletteTableIsHonest` for why that is the right trade
 /// there and nowhere else.
@@ -135,21 +135,25 @@ struct PaletteTableFidelityTests {
     ///
     /// `ASCIIPalette.terminalQuantisationTable` has no boundary fallback: with
     /// 240 entries only 33% of cells have six agreeing neighbours, so falling
-    /// back would fire for three pixels in four at 450 ns each, which is a third
-    /// of a second for a megapixel. The table answers everywhere instead, and
-    /// this is what that costs.
+    /// back would fire for three pixels in four, each walking 240 entries —
+    /// most of a second for a megapixel. The table answers everywhere instead,
+    /// and this is what that costs.
     ///
-    /// Measured 2026-09-04: **13.6%** of colours take a different entry than the
-    /// exact search, landing on average 0.0044 further from the pixel in OKLab
-    /// — 3% of the 0.13 that separates two adjacent cube levels — and 0.14
-    /// further in the worst case, which is one whole step. The arithmetic this
-    /// replaced differed for 85.0% and landed 0.0447 further on average, so the
-    /// approximation is an order of magnitude closer than what it approximates
-    /// used to be.
+    /// Measured 2026-09-04: **13.4%** of colours take a different entry than the
+    /// exact search, landing on average 0.0041 further from the pixel in OKLab
+    /// — 3% of the 0.13 that separates two adjacent cube levels — and 0.027
+    /// further in the worst case, which is a fifth of a step. The arithmetic
+    /// this replaced differed for 85.0% and landed 0.0447 further on average.
+    ///
+    /// The worst case is the number that moved, and it moved by 5×: while this
+    /// table was built with the UI's hue-weighted quantiser it could miss by
+    /// 0.14, a whole cube step. That rule forbids a tinted colour the grey ramp,
+    /// so its regions are not contiguous in OKLab and two cells side by side can
+    /// answer with entries that are nowhere near each other. Nearest-in-OKLab
+    /// has no holes, so a cell's neighbours are its neighbours.
     ///
     /// This is the pixel renderer only. The character renderer passes no table
-    /// and takes the exact answer, so a glyph's `38;5;n` is identical to the one
-    /// the UI beside it is painted with — see `ImageQuantiserParityTests`.
+    /// and takes the exact answer — see `ImageQuantiserRuleTests`.
     @Test("The terminal's 256: the table's misses are all near ties")
     func terminalPaletteTableIsHonest() {
         let palette = ASCIIPalette.ansi256
