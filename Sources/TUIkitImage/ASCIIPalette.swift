@@ -24,8 +24,14 @@ public enum ASCIIPaletteMapping: Sendable, Equatable {
     /// `b` are then equal and drop out. So `.shades(_:)` needs no special case.
     case nearestColor
 
-    /// The colours in dark-to-light order, spread evenly across the image's
-    /// tonal range: every colour is used, whatever its hue.
+    /// The colours in dark-to-light order, spread evenly across the luminance
+    /// axis — a third of 0…255 each, for three — so every colour has a band,
+    /// whatever its hue.
+    ///
+    /// The axis is the absolute one every other renderer here reads, not the
+    /// image's own range: a picture whose tones all lie inside one band draws
+    /// one colour, and a two-colour ramp splits at mid-grey rather than at the
+    /// image's measured (`.mono`) threshold.
     ///
     /// What "draw this in my three colours" usually means, and the case
     /// `nearestColor` cannot serve. In the shipped green theme
@@ -68,8 +74,8 @@ public enum ASCIIPaletteMapping: Sendable, Equatable {
 ///
 /// See ``ASCIIPaletteMapping``. The default reproduces the image as closely as
 /// the colours allow; the alternative spends every colour, spread across the
-/// image's tonal range, which is what "draw this in my three colours" usually
-/// means.
+/// luminance axis in equal bands, which is what "draw this in my three
+/// colours" usually means.
 ///
 /// ## The order does not matter
 ///
