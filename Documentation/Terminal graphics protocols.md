@@ -54,10 +54,10 @@ Two rows of that table decide the recommendation on their own — *retained* and
 | tmux | 3.7c | **yes** (`ESC[?1;2;4c`) | silent | silent | no |
 
 The last column is new, and it is the one that matters. Three of the five
-answer *something* to the protocol query and only **one of them draws a
-picture**.
+answer *something* to the protocol query and **two of them draw a picture**
+— Ghostty outright, iTerm2 once the third mark is sent (§2.2).
 
-### 2.2 iTerm2 says yes to everything and draws nothing — OPEN, measured 2026-09-03
+### 2.2 iTerm2 says yes to everything and drew nothing — RESOLVED 2026-09-03: it wants the optional third mark
 
 `placement_probe.py`, iTerm2 3.6.11:
 
@@ -399,19 +399,13 @@ had to be measured host by host and re-measured on every release.
 
 ## 7. What is not measured, and should be
 
-- **iTerm2's virtual placements.** iTerm2 answers `OK` to the Kitty protocol
-  query; whether it supports Unicode placeholders is still not captured. It is
-  the single most load-bearing gap here: it decides whether this covers two
-  hosts or three. Two attempts, two different walls — `open -a iTerm <file>`
-  does nothing (the app is running and answers neither it nor `open -a iTerm`
-  alone), and AppleScript reaches iTerm2's standard suite (`get version`
-  answers `3.6.11`) but is refused for anything touching its object model:
-  `create window with default profile` returns `-1743`, errAEEventNotPermitted,
-  which is iTerm2's own authorisation rather than the system's. `placement_probe.py`
-  answers it in one run from inside an iTerm2 window.
-
-  Being wrong about iTerm2 costs nothing while it stands: the handshake is
-  positive-evidence-only, so an unanswered iTerm2 draws glyphs.
+- **iTerm2's virtual placements — measured 2026-09-03, §2.2.** They draw, once
+  every cell carries the third (image-id) mark; the two earlier walls — `open
+  -a iTerm <file>` doing nothing, AppleScript refused at the object model with
+  `-1743` — were got round by running the probes from inside an iTerm2 window.
+  What is still not captured for iTerm2 is the cursor advance over a
+  placeholder row: the probe's report was never quoted, so
+  `Terminal-compatibility.md`'s advance table omits the host.
 - **iTerm2's cursor behaviour after an image.** Its DSR went unanswered inside
   one second after both image payloads. The probe now waits four (`IMAGE_TIMEOUT`),
   but the number has not been re-taken. A terminal that takes measurable time to

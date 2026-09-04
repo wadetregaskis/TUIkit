@@ -113,18 +113,21 @@ when unset), the visual/aspect probes print to the terminal.
   places each, so which letters appear names the cause. No reply to read: the
   question is what a human can see, so it prints a card and asks.
 - `placeholder_spelling_probe.py` — how must a placeholder CELL be spelled
-  for a terminal to draw it? `pixel_format_probe.py` established that iTerm2
-  acknowledges everything, draws a direct placement, and draws nothing for a
-  virtual one; "placeholders unimplemented" is one explanation and this tests
-  a cheaper one. TUIkit writes TWO combining marks per cell — row and column —
-  and omits the third, which states the image id's high byte; a decoder
+  for a terminal to draw it? `pixel_format_probe.py` had established that
+  iTerm2 acknowledges everything, draws a direct placement, and drew nothing
+  for a virtual one; "placeholders unimplemented" was one explanation and this
+  tested a cheaper one. TUIkit then wrote TWO combining marks per cell — row
+  and column — and omitted the third, which states the image id's high byte
+  and which the spec lets a cell inherit from its left neighbour; a decoder
   carrying a sentinel for "absent" rather than zero would look up an image
-  that was never sent, and draw nothing having acknowledged everything.
-  Crossed with the foreground spelling (24-bit, which TUIkit ships, against
+  that was never sent. Crossed with the foreground spelling (24-bit against
   the 256-colour form kitty's own doc example uses), that is a 2x2: one image,
-  one placement, four spellings of the cells that summon it. Also measures
-  what U+10EEEE advances the cursor by, which `Terminal-compatibility.md`
-  records as "one cell on every host" having never measured iTerm2.
+  one placement, four spellings of the cells that summon it. **Verdict
+  (iTerm2 3.6.11, 2026-09-03): the two-mark cells draw nothing and the
+  three-mark cells draw the picture, under either foreground spelling.** The
+  encoder has written all three marks on every cell since 0d4d2015. The probe
+  also reports what U+10EEEE advances the cursor by; iTerm2's line was never
+  captured, so `Terminal-compatibility.md`'s advance table still omits it.
 - `cell_aspect_probe.py` — the terminal cell's height:width ratio (what
   `Image` needs to render undistorted), via `TIOCGWINSZ` pixel fields and
   the `CSI 14t`/`18t` escape queries. Report to `$PROBE_OUT` (default

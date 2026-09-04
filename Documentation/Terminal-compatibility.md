@@ -1996,7 +1996,7 @@ the gate belongs where the escape is written.
 
 ---
 
-## Graphics protocols, and a parser gap — measured 2026-09-02
+## Graphics protocols, and a parser gap — measured 2026-09-02, iTerm2's placeholders 2026-09-03
 
 Full treatment, including what TUIkit should do about it, is in
 `Documentation/Terminal graphics protocols.md`. Two facts belong here because
@@ -2035,10 +2035,23 @@ positive evidence.
 | Host | version | Sixel in DA1 | Kitty `a=q` | Kitty Unicode placeholder |
 |---|---|---|---|---|
 | Apple Terminal | 455.1 | no | silent | silent |
-| iTerm2 | 3.6.11 | **yes** (`4` in `ESC[?64;1;2;4;6;17;18;21;22;52c`) | **`OK`** | *not measured* |
+| iTerm2 | 3.6.11 | **yes** (`4` in `ESC[?64;1;2;4;6;17;18;21;22;52c`) | **`OK`** | **`OK`** — and draws, given the third mark (below) |
 | Ghostty | 1.3.1 | no | **`OK`** | **`OK`** |
 | Warp | v0.2026.08.26.17.59.stable_01 | no | **`OK`** | **refused, by name** |
 | tmux | 3.7c | **yes** (`ESC[?1;2;4c`) | silent | silent |
+
+**iTerm2 needs the spec-optional third combining mark** (iTerm2 3.6.11,
+measured 2026-09-03 with `Tools/TerminalProbes/placeholder_spelling_probe.py`).
+The Kitty spec lets a placeholder cell omit the diacritic that carries the
+image id's high byte, inheriting it from the cell to the left, and TUIkit did
+omit it. kitty and Ghostty read a two-mark cell and a three-mark cell
+identically; iTerm2 draws NOTHING for the two-mark cell and the picture for the
+three-mark one, whichever way the foreground is spelled (24-bit, or the
+256-colour form the spec's own example uses). The encoder therefore writes all
+three marks on every cell — `KittyGraphics+Placeholders.swift` says so at the
+line — and the section stamp above predates this row. iTerm2 is absent from the
+advance table further down: its cursor advance over a placeholder row was not
+captured, and the codepoint exemption applies to it regardless.
 
 Warp's refusal is a named answer rather than a silence to be interpreted —
 `InvalidKittyAction(InvalidControlData(UnicodePlaceholderUnsupported))` — which
