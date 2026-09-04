@@ -144,7 +144,7 @@ extension String {
                 // the previous glyph wherever they sit relative to styling.
                 var fusedContent = ""
                 if let last = sequence.last, last.unicodeScalars.count > 1,
-                    last.unicodeScalars.first?.properties.isAlphabetic == true
+                    let final = last.unicodeScalars.first?.value, String.isCSIFinalByte(final)
                 {
                     let scalars = last.unicodeScalars
                     fusedContent = String(String.UnicodeScalarView(scalars.dropFirst()))
@@ -265,7 +265,15 @@ extension String {
             // with a following combining scalar into a cluster (`m` + U+0301
             // is one Character, "ḿ") whose letter-ness is an accident of the
             // mark. The caller peels the fused scalars back off the sequence.
-            if character.unicodeScalars.first?.properties.isAlphabetic == true { return index }
+            //
+            // And the ECMA-48 final-byte test (0x40…0x7E), NOT "is a letter":
+            // `ESC[1@` (ICH) ends at `@`, and a walker that runs on past it
+            // to the next letter swallows the following escape — which, when
+            // that one ends in `m`, turns `ESC[1@ ESC[0m` into one "SGR" and
+            // merges it into a corrupt parameter list.
+            if let value = character.unicodeScalars.first?.value, String.isCSIFinalByte(value) {
+                return index
+            }
         }
         return nil
     }

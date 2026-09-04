@@ -38,7 +38,7 @@ struct SGRCollapsingTests {
         while index < scalars.count {
             if scalars[index] == "\u{1B}", index + 1 < scalars.count, scalars[index + 1] == "[" {
                 var end = index + 2
-                while end < scalars.count, !scalars[end].properties.isAlphabetic { end += 1 }
+                while end < scalars.count, !String.isCSIFinalByte(scalars[end].value) { end += 1 }
                 if end < scalars.count {
                     state.apply(String(String.UnicodeScalarView(scalars[index...end])))
                     index = end + 1
