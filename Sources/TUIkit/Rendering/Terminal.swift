@@ -624,7 +624,7 @@ extension Terminal {
     /// read from stdin.
     ///
     /// For handing back bytes another reader took but does not own — see
-    /// ``identifyHostFromDeviceAttributes(timeout:)``. Appends rather than
+    /// ``queryIdentity(timeout:)``. Appends rather than
     /// prepends because the only caller runs before the loop starts, when the
     /// buffer is empty and these ARE the oldest bytes.
     private func enqueue(input bytes: [UInt8]) {
@@ -678,7 +678,7 @@ extension Terminal {
     private static let deadSequenceStaleFrames = 8
 
     /// Tries to peel one complete regular (non-paste) event off the
-    /// front of ``inputBuffer``. Returns the raw bytes, or `nil` if
+    /// front of ``input``. Returns the raw bytes, or `nil` if
     /// the buffer doesn't have a complete sequence yet — in which
     /// case the bytes already there stay put for the next call.
     private func tryExtractRegularEvent() -> [UInt8]? {
@@ -829,7 +829,7 @@ extension Terminal {
         }
     }
 
-    /// CSI extractor — assumes `inputBuffer` starts with `ESC [`
+    /// CSI extractor — assumes `input` starts with `ESC [`
     /// and the buffer has at least 2 bytes. Returns the full
     /// sequence bytes on success or `nil` if the terminator hasn't
     /// arrived yet.
@@ -897,7 +897,7 @@ extension Terminal {
         return nil
     }
 
-    /// While `inPasteMode` is set, scans ``inputBuffer`` for the
+    /// While `inPasteMode` is set, scans ``input`` for the
     /// paste end marker. If found, builds a paste event from the
     /// content between markers and consumes through the end marker.
     /// Otherwise returns `nil` and leaves the buffer intact.

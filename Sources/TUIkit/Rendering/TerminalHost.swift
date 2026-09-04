@@ -137,8 +137,7 @@ enum TerminalHost {
     /// Whether anything in the process environment names the host terminal.
     ///
     /// `false` is the ssh case, and the cue to ask the terminal itself rather
-    /// than give up on it — see
-    /// ``Terminal/identifyHostFromDeviceAttributes(timeout:)``.
+    /// than give up on it — see ``Terminal/queryIdentity(timeout:)``.
     static var hostIsNamedByEnvironment: Bool {
         hostProgram(environment: ProcessInfo.processInfo.environment) != nil
     }
@@ -562,7 +561,7 @@ enum TerminalHost {
     ///
     /// **Cost:** one `fork`/`exec` per call, so callers MUST cache. It is not
     /// safe to call per frame, let alone per view. `RenderLoop` calls it once
-    /// at startup (via ``EmojiChromeRefresher``) and again — asynchronously,
+    /// at startup (via ``ClientCapabilityRefresher``) and again — asynchronously,
     /// off the render path — only when a SIGWINCH says something changed: a
     /// real resize, or the synthetic one the client-change hooks send (see
     /// ``installTmuxClientChangeHooks()``). Steady state runs no probes.
