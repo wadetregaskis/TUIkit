@@ -168,4 +168,90 @@ struct StatusBarItemBuilderTests {
 
         #expect(result.count == 1)
     }
+
+    // MARK: - Control Flow
+    //
+    // `buildBlock` and `buildExpression` were called directly above; the four
+    // control-flow methods can only be reached by WRITING the control flow, so
+    // that is what these do. Asserted by shortcut rather than by count: a
+    // `buildEither` whose two arms are transposed — the classic copy-paste in a
+    // result builder, invisible at the call site — keeps the count right and
+    // shows the wrong key.
+
+    /// Builds an item list from a closure, the way `.statusBarItems { }` and
+    /// `StatusBarState.setItems { }` do, and reads back the shortcuts.
+    private func build(
+        @StatusBarItemBuilder _ builder: () -> [any StatusBarItemProtocol]
+    ) -> [String] {
+        builder().map(\.shortcut)
+    }
+
+    @Test("An if without else contributes its item only when the condition holds")
+    func builderOptional() {
+        func items(editing: Bool) -> [String] {
+            build {
+                StatusBarItem(shortcut: "n", label: "new")
+                if editing {
+                    StatusBarItem(shortcut: "s", label: "save")
+                }
+            }
+        }
+
+        #expect(items(editing: true) == ["n", "s"])
+        #expect(items(editing: false) == ["n"])
+    }
+
+    @Test("An if/else contributes the arm that matches, not the other one")
+    func builderEither() {
+        func items(editing: Bool) -> [String] {
+            build {
+                if editing {
+                    StatusBarItem(shortcut: "s", label: "save")
+                } else {
+                    StatusBarItem(shortcut: "e", label: "edit")
+                }
+            }
+        }
+
+        #expect(items(editing: true) == ["s"])
+        #expect(items(editing: false) == ["e"], "the else arm must not be dropped or swapped")
+    }
+
+    @Test("An if let contributes the bound item")
+    func builderOptionalBinding() {
+        func items(shortcut: String?) -> [String] {
+            build {
+                if let shortcut {
+                    StatusBarItem(shortcut: shortcut, label: "bound")
+                }
+            }
+        }
+
+        #expect(items(shortcut: "b") == ["b"])
+        #expect(items(shortcut: nil).isEmpty)
+    }
+
+    @Test("A for loop contributes every iteration, in order")
+    func builderArray() {
+        let shortcuts = ["1", "2", "3"]
+        let items = build {
+            StatusBarItem(shortcut: "h", label: "head")
+            for shortcut in shortcuts {
+                StatusBarItem(shortcut: shortcut, label: "item \(shortcut)")
+            }
+        }
+
+        #expect(items == ["h", "1", "2", "3"])
+    }
+
+    @Test("An empty for loop contributes nothing")
+    func builderEmptyArray() {
+        let items = build {
+            for shortcut in [String]() {
+                StatusBarItem(shortcut: shortcut, label: shortcut)
+            }
+        }
+
+        #expect(items.isEmpty)
+    }
 }
