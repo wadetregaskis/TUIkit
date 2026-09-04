@@ -431,6 +431,21 @@ struct TmuxCompatibilityTests {
         #expect(TerminalHost.applicationDrawsEmojiChrome(executablePath: path) == expected, "\(what)")
     }
 
+    /// The process walk returns a path ONLY for a recognised terminal, so a
+    /// non-nil path is an identification whichever list it is on. Mapping a
+    /// recognised-but-not-chrome application (Ghostty) to `nil` — "might
+    /// improve" — made the refresher re-fork `tmux list-clients` three more
+    /// times per attach to re-learn an answer it already had.
+    @Test("A recognised application that is not chrome-capable is a definitive no")
+    func recognisedApplicationIsAnAnswer() {
+        let ghostty = "/Applications/Ghostty.app/Contents/MacOS/ghostty"
+        let terminal = "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal"
+        #expect(TerminalHost.classifyClient(termtype: "", owningApplication: ghostty) == false)
+        #expect(TerminalHost.classifyClient(termtype: "", owningApplication: terminal) == true)
+        #expect(TerminalHost.classifyClient(termtype: "", owningApplication: nil) == nil, "nothing named it yet")
+        #expect(TerminalHost.classifyClient(termtype: "ghostty 1.3.1", owningApplication: terminal) == false, "the termtype wins")
+    }
+
     @Test(
         "Skin tones survive through tmux only when every client is Ghostty",
         arguments: [

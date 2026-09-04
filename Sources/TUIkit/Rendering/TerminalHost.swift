@@ -368,19 +368,33 @@ enum TerminalHost {
     ///
     /// Returns `true` for a client positively identified as chrome-capable,
     /// `false` for one positively identified as not (a termtype we don't
-    /// recognise), and `nil` for one neither signal could name — silent, with
-    /// no recognisable local application in its process chain. `nil` clients
-    /// draw the safe glyphs, but distinguish themselves from `false` because
-    /// their answer may improve within milliseconds (see
+    /// recognise, or an owning application recognised but not on the chrome
+    /// list — Ghostty), and `nil` for one neither signal could name — silent,
+    /// with no recognisable local application in its process chain. `nil`
+    /// clients draw the safe glyphs, but distinguish themselves from `false`
+    /// because their answer may improve within milliseconds (see
     /// ``clientCapabilities(tmuxClients:)``).
     static func classifyClient(_ client: TmuxClient) -> Bool? {
-        if !client.termtype.isEmpty {
-            return termtypeDrawsEmojiChrome(client.termtype)
+        classifyClient(
+            termtype: client.termtype,
+            owningApplication: client.pid.flatMap(owningApplicationPath(ofTmuxClient:)))
+    }
+
+    /// The decision behind ``classifyClient(_:)``, with the process walk
+    /// already done — so a test can hand it a path.
+    ///
+    /// `owningApplication` is non-nil ONLY for a path the walk recognised, so
+    /// it is an identification whichever list it is on: a recognised
+    /// application that is not chrome-capable is a definitive `false`, not an
+    /// answer that might improve. Mapping it to `nil` made the refresher
+    /// re-fork `tmux list-clients` three more times per attach under Ghostty
+    /// to re-learn an answer it already had.
+    static func classifyClient(termtype: String, owningApplication: String?) -> Bool? {
+        if !termtype.isEmpty {
+            return termtypeDrawsEmojiChrome(termtype)
         }
-        guard let pid = client.pid,
-            let executable = owningApplicationPath(ofTmuxClient: pid)
-        else { return nil }
-        return applicationDrawsEmojiChrome(executablePath: executable) ? true : nil
+        guard let executable = owningApplication else { return nil }
+        return applicationDrawsEmojiChrome(executablePath: executable)
     }
 
     /// Classifies a client by its XTVERSION reply — against the THROUGH-TMUX
