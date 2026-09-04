@@ -11,11 +11,15 @@
 #
 # Requirements:
 #   - Docker Desktop (or compatible runtime) for Linux tests
-#   - Swift 6.0+ toolchain for macOS tests
+#   - Swift 6.2+ toolchain for macOS tests (the manifest's tools version)
 
 set -euo pipefail
 
-SWIFT_IMAGE="swift:6.0"
+# The manifest is `swift-tools-version: 6.2`, so the container needs at least
+# that toolchain — `swift:6.0`, which this pinned for months, refused the
+# manifest before building anything. Tracks the images CI uses
+# (.github/workflows/ci.yml); override with SWIFT_IMAGE=swift:6.3-noble.
+SWIFT_IMAGE="${SWIFT_IMAGE:-swift:6.2-noble}"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TARGET="${1:-all}"
 # Separate build directory inside the container to avoid permission conflicts
