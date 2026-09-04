@@ -19,6 +19,8 @@
 /// already thought to doubt; the corpus is deliberately wider than the known
 /// defects, which is how it keeps finding pre-existing ones (Apple Terminal's
 /// tag-flag drift, Warp's 🪉).
+import Foundation  // `String(format:)` / `trimmingCharacters` — stated, not borrowed from a sibling file (SE-0444)
+
 package enum TerminalWidthCorpus {
 
     package struct Entry: Sendable, Identifiable, CustomStringConvertible {

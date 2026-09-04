@@ -22,6 +22,8 @@
 /// ```swift
 /// Text("Custom").foregroundStyle(.rgb(255, 128, 0))
 /// ```
+import Foundation  // `String(format:)` / `trimmingCharacters` — stated, not borrowed from a sibling file (SE-0444)
+
 public struct Color: Sendable, Hashable {
     /// The internal color value.
     public let value: ColorValue
