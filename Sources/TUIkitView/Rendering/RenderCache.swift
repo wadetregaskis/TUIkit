@@ -493,9 +493,11 @@ extension RenderCache {
     ///   captures per-frame handler state.
     /// - **A volatile read** means the next frame differs even though the value
     ///   compares equal — a cached `Spinner` would freeze.
-    /// - **An invalidation during the render** (a `@State` write from an
-    ///   `onAppear`) already cleared this entry; storing now would resurrect
-    ///   the pre-write buffer.
+    /// - **An invalidation during the render** — an environment change or a
+    ///   `ScrollViewReader` publish calling `clearAffected` synchronously; NOT
+    ///   a `@State` write, which is queued and drained at the next pass —
+    ///   already cleared this entry; storing now would resurrect the
+    ///   pre-clear buffer.
     /// - **An uncomparable environment value** could change under the subtree
     ///   with nothing to notice, the cache key being free of the environment
     ///   precisely because the modifier compares.

@@ -124,8 +124,10 @@ extension EquatableView: Renderable {
             ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
             : context
         let unsafeBefore = tracker.cacheUnsafeCount
-        // See _MemoizedRow: a state write during this render invalidates
-        // first, so storing afterwards would resurrect the pre-write buffer.
+        // See _MemoizedRow: a synchronous `clearAffected` during this render
+        // (an environment change, a ScrollViewReader publish — not a @State
+        // write, which is queued) invalidates first, so storing afterwards
+        // would resurrect the pre-clear buffer.
         let clearsBefore = cache.stats.subtreeClears
 
         let buffer = TUIkitView.renderToBuffer(content, context: renderContext)

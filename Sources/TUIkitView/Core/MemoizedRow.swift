@@ -185,11 +185,16 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
             ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
             : context
         let unsafeBefore = tracker.cacheUnsafeCount
-        // Snapshot the cache's invalidation generation too: a @State write
-        // DURING this render (an onAppear stamping state, a synchronous task
-        // effect) fires clearAffected before we store — storing afterwards
-        // would resurrect the pre-write buffer and serve it until the element
-        // value next changes. Any clear during the render skips the store.
+        // Snapshot the cache's invalidation generation too: a `clearAffected`
+        // DURING this render — an environment or colour-environment change, a
+        // `ScrollViewReader` publish; those are its synchronous callers —
+        // fires before we store, and storing afterwards would resurrect the
+        // pre-clear buffer and serve it until the element value next changes.
+        // NOT a @State write: since 44660d87 those are queued
+        // (`pendingInvalidations`) and drained at the next `beginRenderPass`,
+        // so this counter does not move for them and the store goes ahead —
+        // which is right, because the drain clears the entry before it can
+        // be served.
         let clearsBefore = cache.stats.subtreeClears
 
         let buffer = TUIkitView.renderToBuffer(content, context: renderContext)
