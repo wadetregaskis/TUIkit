@@ -191,7 +191,6 @@ struct MyApp: App {
 - ``KeyEquivalent``
 - ``EventModifiers``
 - ``CommandKeyBinding``
-- ``SubmitLabel``
 - ``SubmitTriggers``
 
 ### Mouse & Drag and Drop
