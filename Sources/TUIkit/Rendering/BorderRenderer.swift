@@ -27,34 +27,41 @@ enum BorderRenderer {
 // MARK: - Focus Indicator
 
 extension BorderRenderer {
-    /// Renders a pulsing focus indicator for inline focusable elements.
+    /// The two ends the focus indicator breathes between: the accent dimmed to
+    /// ``ViewConstants/focusBorderDim`` over the page, and the full accent.
     ///
-    /// Uses the same `●` character and color interpolation as Focus Sections,
+    /// Handed to `SelectionEmphasisCycle.colors(dim:bright:)` by a caller
+    /// drawing the WHOLE cycle, which is every caller there is. Separate from
+    /// ``focusIndicatorPrefix(isFocused:color:)`` for exactly that reason: the
+    /// prefix used to take a `SelectionEmphasis` and resolve its own colour,
+    /// which meant a caller drawing sixteen frames rebuilt the pulse ramp
+    /// sixteen times.
+    ///
+    /// The ends come from the shared selection clock's palette, not from
+    /// `pulsePhase` — that is the other timer (2.0 s against the selection
+    /// clock's 0.8 s), so a plain button visibly lagged every list cursor and
+    /// menu row on the same screen, and `.selectionIndicatorStyle(.none/.blink)`
+    /// never reached it at all.
+    static func focusIndicatorEnds(palette: any Palette) -> (dim: Color, bright: Color) {
+        (dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
+            bright: palette.accent)
+    }
+
+    /// Renders a pulsing focus indicator for inline focusable elements, at one
+    /// point of the cycle.
+    ///
+    /// Uses the same `●` character and colour interpolation as Focus Sections,
     /// ensuring visual consistency across all focusable components.
     ///
     /// - Parameters:
     ///   - isFocused: Whether the element is currently focused.
-    ///   - emphasis: The focus emphasis — the shared clock's current state,
-    ///     which is what the indicator breathes with. NOT `context.pulsePhase`:
-    ///     that is the other timer, and the body says why.
-    ///   - palette: The active palette for color resolution.
+    ///   - color: This frame's colour, from
+    ///     ``focusIndicatorEnds(palette:)`` through the cycle.
     /// - Returns: A 2-character string: `"● "` (colored) when focused, `"  "` when not.
-    static func focusIndicatorPrefix(
-        isFocused: Bool,
-        emphasis: SelectionEmphasis,
-        palette: any Palette
-    ) -> String {
+    static func focusIndicatorPrefix(isFocused: Bool, color: Color) -> String {
         guard isFocused else {
             return "  "  // 2 spaces for alignment (matches focusIndicatorWidth)
         }
-
-        // Through the shared clock, not `pulsePhase` directly: that is the other
-        // timer (2.0 s against the selection clock's 0.8 s), so a plain button
-        // visibly lagged every list cursor and menu row on the same screen — and
-        // `.selectionIndicatorStyle(.none/.blink)` never reached it at all.
-        let color = emphasis.color(
-            dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
-            bright: palette.accent)
         return ANSIRenderer.colorize(String(focusIndicator), foreground: color) + " "
     }
 }

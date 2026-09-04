@@ -153,6 +153,14 @@ struct _SwatchGridCore: View, Renderable {
 
         var lines: [String] = []
         let markRow = cellHeight / 2  // the sub-line that carries the cursor check
+        // Resolved once, outside the loops: one sub-line of one cell carries the
+        // mark, and its two ends are the swatch sitting under the cursor.
+        let cursorMark = entries.indices.contains(handler.cursor)
+            ? Self.markEnds(for: entries[handler.cursor], palette: palette)
+            : nil
+        let cursorMarkNow = cursorMark.map {
+            (color: indicator.color(dim: $0.dim, bright: $0.bright), isBold: indicator.isFocused)
+        }
         for row in 0..<rows {
             var sublines = [String](repeating: "", count: max(1, cellHeight))
             for col in 0..<columns {
@@ -162,7 +170,7 @@ struct _SwatchGridCore: View, Renderable {
                 for h in sublines.indices {
                     sublines[h] += cellText(
                         entries[index], cellWidth: cellWidth, palette: palette,
-                        isCursor: isCursor && h == markRow, indicator: indicator)
+                        mark: isCursor && h == markRow ? cursorMarkNow : nil)
                 }
             }
             lines.append(contentsOf: sublines)
@@ -173,7 +181,12 @@ struct _SwatchGridCore: View, Renderable {
         // the `markRow` sub-line of the cell's row — the same two numbers the
         // draw above used.
         if !context.isMeasuring, cycle.isAnimating, markerVisible,
-            handler.cursor >= 0, handler.cursor < entries.count
+            handler.cursor >= 0, handler.cursor < entries.count,
+            // Non-nil exactly when the cursor is in range, which the two
+            // conditions above have just established — bound here so the run's
+            // ends are the same two colours the draw above used, with no
+            // second lookup and no fallback that could silently differ.
+            let ends = cursorMark
         {
             let row = handler.cursor / columns
             let col = handler.cursor % columns
@@ -181,10 +194,15 @@ struct _SwatchGridCore: View, Renderable {
                 AnimatedCellRun(
                     offsetX: col * cellWidth, offsetY: row * max(1, cellHeight) + markRow,
                     width: cellWidth,
-                    frames: cycle.frames.map {
+                    // One ramp for the run: the mark's ends are the swatch
+                    // under the cursor, which does not change while the cycle
+                    // plays, so `colors` builds the ramp once where the old
+                    // `frames.map { cellText(indicator: $0) }` built one per
+                    // frame.
+                    frames: cycle.colors(dim: ends.dim, bright: ends.bright).map {
                         cellText(
                             entries[handler.cursor], cellWidth: cellWidth, palette: palette,
-                            isCursor: true, indicator: $0)
+                            mark: (color: $0, isBold: cycle.isFocused))
                     },
                     clock: .cursor)
             ]
@@ -221,22 +239,37 @@ struct _SwatchGridCore: View, Renderable {
     /// contrasting tone (white on dark, dark on light) so it reads on any colour.
     static let selectionMark = "✔"
 
+    /// The two ends the cursor swatch's mark breathes between: the swatch's own
+    /// colour, and the tone that reads on it.
+    ///
+    /// Named apart from ``cellText(_:cellWidth:palette:mark:)`` so a caller
+    /// drawing the whole cycle can hand them to
+    /// `SelectionEmphasisCycle.colors(dim:bright:)` ONCE. `cellText` used to
+    /// take a `SelectionEmphasis` and resolve the mark itself, which rebuilt
+    /// the pulse ramp for every frame of the run.
+    static func markEnds(for color: Color, palette: any Palette) -> (dim: Color, bright: Color) {
+        (dim: color.resolve(with: palette), bright: Self.contrast(for: color, palette: palette))
+    }
+
     /// One swatch: the colour as a background, with a check on the selected cell.
     /// The check is contrasting so it stays visible on any swatch; when the grid
     /// is focused it animates (per ``SelectionIndicatorStyle``) between the swatch
     /// colour and the contrasting tone — breathing/blinking/steady — and is bold.
+    ///
+    /// `mark` is what makes a cell the CURSOR cell — non-nil says "draw the
+    /// check here", in the colour this frame of the cycle calls for. One
+    /// parameter rather than an `isCursor` flag beside a colour, so the two
+    /// cannot disagree.
     private func cellText(
-        _ color: Color, cellWidth: Int, palette: any Palette, isCursor: Bool,
-        indicator: SelectionEmphasis
+        _ color: Color, cellWidth: Int, palette: any Palette,
+        mark: (color: Color, isBold: Bool)?
     ) -> String {
-        guard isCursor else {
+        guard let mark else {
             return ANSIRenderer.colorize(String(repeating: " ", count: cellWidth), background: color)
         }
-        let markerColor = indicator.color(
-            dim: color.resolve(with: palette), bright: Self.contrast(for: color, palette: palette))
         return ANSIRenderer.colorize(
             Self.centred(Self.selectionMark, in: cellWidth),
-            foreground: markerColor, background: color, bold: indicator.isFocused)
+            foreground: mark.color, background: color, bold: mark.isBold)
     }
 
     /// Centres `text` within `width` cells (a trailing-biased split for odd gaps).

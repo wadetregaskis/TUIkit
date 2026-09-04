@@ -144,7 +144,15 @@ public struct SelectionEmphasis: Equatable, Sendable {
     /// An unfocused-but-selected indicator stays at `bright` (steady, visible);
     /// a focused one animates between the two per the style.
     public func color(dim: Color, bright: Color) -> Color {
-        color(dim: dim, bright: bright, ramp: Self.pulseRamp(dim: dim, bright: bright))
+        // Asked before the ramp is BUILT, not after. Only a focused pulse reads
+        // one (see the overload below), and building one walks a couple of
+        // hundred candidate shades — so a steady or blinking emphasis used to
+        // pay for a ramp it then ignored. Same test as
+        // `SelectionEmphasisCycle.pulseRamp(dim:bright:)`, for the same reason.
+        guard isFocused, animation == .pulse else {
+            return color(dim: dim, bright: bright, ramp: nil)
+        }
+        return color(dim: dim, bright: bright, ramp: Self.pulseRamp(dim: dim, bright: bright))
     }
 
     /// The colour this frame, against a ramp the caller already has.
@@ -342,19 +350,30 @@ public struct SelectionEmphasisCycle: Sendable {
     public func run(
         dim: Color, bright: Color, offsetX: Int, offsetY: Int, draw: (Color) -> String
     ) -> AnimatedCellRun? {
-        // Asked BEFORE the ramp is built, not left to the overload below: a
-        // still cycle earns no run, and a ramp built for one would be thrown
-        // away with it.
+        // Asked BEFORE the colours are built: a still cycle earns no run, and
+        // the ramp built for one would be thrown away with it.
         guard isAnimating else { return nil }
-        // The ramp-building `color(dim:bright:)` used to be called from inside
-        // the per-frame closure, which rebuilt the identical ramp once per
-        // frame of the cycle — sixteen times for a regular pulse, and twice
-        // that for a focused button's two caps, on every terminal below
-        // truecolor. Same colours either way; ~8,200 quantiser samples fewer.
-        let ramp = pulseRamp(dim: dim, bright: bright)
-        return run(offsetX: offsetX, offsetY: offsetY) {
-            draw($0.color(dim: dim, bright: bright, ramp: ramp))
-        }
+        // `colors(dim:bright:)`, not `color(dim:bright:)` per frame. The latter
+        // BUILDS the pulse ramp, so calling it from inside the per-frame
+        // closure rebuilt the identical ramp once per frame of the cycle —
+        // sixteen times for a regular pulse, on every terminal below truecolor.
+        // Same colours either way; ~8,200 quantiser samples fewer.
+        return run(colors: colors(dim: dim, bright: bright), offsetX: offsetX, offsetY: offsetY, draw: draw)
+    }
+
+    /// A run whose frames are drawn from colours the caller already has.
+    ///
+    /// The route for a caller that spends ONE cycle's colours on more than one
+    /// run — a button's two end caps, drawn from the same breath at opposite
+    /// ends of the same row. Going through `run(dim:bright:…)` twice would
+    /// build the same ramp twice; `colors(dim:bright:)` builds it once and this
+    /// spends it as often as the caller likes.
+    @MainActor
+    func run(
+        colors: [Color], offsetX: Int, offsetY: Int, draw: (Color) -> String
+    ) -> AnimatedCellRun? {
+        guard isAnimating else { return nil }
+        return run(drawn: colors.map(draw), offsetX: offsetX, offsetY: offsetY)
     }
 
     /// A run for an element whose appearance is not one colour between two
@@ -373,7 +392,13 @@ public struct SelectionEmphasisCycle: Sendable {
         guard isAnimating else { return nil }
         // One finished, styled string per step, so the loop's per-tick work is
         // an array index.
-        let drawn = frames.map(draw)
+        return run(drawn: frames.map(draw), offsetX: offsetX, offsetY: offsetY)
+    }
+
+    /// The tail every `run` overload shares: the finished cells become a run,
+    /// measured from what was actually drawn.
+    @MainActor
+    private func run(drawn: [String], offsetX: Int, offsetY: Int) -> AnimatedCellRun? {
         guard let first = drawn.first else { return nil }
         return AnimatedCellRun(
             offsetX: offsetX,

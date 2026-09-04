@@ -219,7 +219,7 @@ struct AnimatedRunSplicingTests {
     func realFocusGutterFrameKeepsItsSurface() {
         let palette = SystemPalette(.green)
         let frame = BorderRenderer.focusIndicatorPrefix(
-            isFocused: true, emphasis: .steady(isFocused: true), palette: palette)
+            isFocused: true, color: BorderRenderer.focusIndicatorEnds(palette: palette).bright)
         #expect(frame.strippedLength == BorderRenderer.focusIndicatorWidth)
 
         let patched = FrameBuffer.patchingAnimatedCells(

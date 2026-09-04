@@ -312,10 +312,15 @@ extension _ButtonStyleBody {
             style.foregroundColor = colour
             return ANSIRenderer.render(text, with: style)
         }
-        let now = indicating ? cycle.colorNow(dim: dim, bright: bright) : resting
+        // ONE breath for both readers. The colour drawn now is just this
+        // cycle's frames coloured and indexed by `step`, so asking
+        // `colorNow(dim:bright:)` for it and then `run(dim:bright:…)` for the
+        // frames built the identical pulse ramp twice.
+        let breath = indicating ? cycle.colors(dim: dim, bright: bright) : []
+        let now = breath.isEmpty ? resting : breath[cycle.step % breath.count]
         var buffer = FrameBuffer(lines: [drawn(now)])
         if !isMeasuring, indicating,
-            let run = cycle.run(dim: dim, bright: bright, offsetX: 0, offsetY: 0, draw: drawn)
+            let run = cycle.run(colors: breath, offsetX: 0, offsetY: 0, draw: drawn)
         {
             buffer.animatedCells = [run]
         }
@@ -335,7 +340,9 @@ extension _ButtonStyleBody {
         ends: (dim: Color, bright: Color), cycle: SelectionEmphasisCycle,
         indicating: Bool, isMeasuring: Bool, render: (Color) -> FrameBuffer
     ) -> FrameBuffer {
-        let now = indicating ? cycle.colorNow(dim: ends.dim, bright: ends.bright) : ends.bright
+        // ONE breath for both readers — see the note in the string variant.
+        let breath = indicating ? cycle.colors(dim: ends.dim, bright: ends.bright) : []
+        let now = breath.isEmpty ? ends.bright : breath[cycle.step % breath.count]
         // The label's OWN buffer, payload and all — not `FrameBuffer(lines:)`
         // rebuilt from its lines. Overlays, hit regions, opacity regions and
         // the label's own runs live BESIDE the lines, and a buffer built from
@@ -348,7 +355,7 @@ extension _ButtonStyleBody {
         // label may wrap onto several. Appended after the label's own runs, so
         // both stay on the buffer: the label's keep a spinner in it alive when
         // the link is not the focus, the breath's cover the label when it is.
-        let framed = cycle.frames.map { render($0.color(dim: ends.dim, bright: ends.bright)).lines }
+        let framed = breath.map { render($0).lines }
         buffer.animatedCells += buffer.lines.indices.compactMap { row in
             let rowFrames = framed.compactMap { row < $0.count ? $0[row] : nil }
             guard rowFrames.count == framed.count, let first = rowFrames.first else { return nil }
@@ -569,9 +576,12 @@ private struct _ButtonStyleBody: View, Renderable {
                     cycle: cycle, indicating: indicating, isMeasuring: context.isMeasuring)
             }
 
-            let prefixes = cycle.frames.map {
-                BorderRenderer.focusIndicatorPrefix(
-                    isFocused: indicating, emphasis: $0, palette: palette)
+            // One ramp for the cycle, not one per frame: `focusIndicatorPrefix`
+            // used to resolve its own colour from a `SelectionEmphasis`, so
+            // drawing sixteen frames rebuilt the identical ramp sixteen times.
+            let ends = BorderRenderer.focusIndicatorEnds(palette: palette)
+            let prefixes = cycle.colors(dim: ends.dim, bright: ends.bright).map {
+                BorderRenderer.focusIndicatorPrefix(isFocused: indicating, color: $0)
             }
             let styledLabel = ANSIRenderer.render(paddedLabel, with: textStyle)
             var buffer = FrameBuffer(
@@ -744,9 +754,12 @@ private struct _ButtonStyleBody: View, Renderable {
                 }
             }
 
-            let prefixes = cycle.frames.map {
-                BorderRenderer.focusIndicatorPrefix(
-                    isFocused: indicating, emphasis: $0, palette: palette)
+            // One ramp for the cycle, not one per frame: `focusIndicatorPrefix`
+            // used to resolve its own colour from a `SelectionEmphasis`, so
+            // drawing sixteen frames rebuilt the identical ramp sixteen times.
+            let ends = BorderRenderer.focusIndicatorEnds(palette: palette)
+            let prefixes = cycle.colors(dim: ends.dim, bright: ends.bright).map {
+                BorderRenderer.focusIndicatorPrefix(isFocused: indicating, color: $0)
             }
             // Under a child identity: the plain path renders the caller's
             // label directly (the standard path's HStack pushes one

@@ -369,6 +369,30 @@ enum DropdownMenu {
 
     // MARK: - Line drawing
 
+    /// The two pairs of ends an open popup breathes between.
+    ///
+    /// Both pairs in one place because both are read together, once per render,
+    /// and neither depends on the frame: the highlighted row's background
+    /// pulses between a dim and a bright accent — the same affordance ``List``
+    /// uses for its focused row, so the arrow keys and Enter visibly drive the
+    /// menu rather than whatever sits behind it — and the border echoes that
+    /// pulse at lower intensity so the popup's frame reads as part of the same
+    /// active control.
+    static func pulseEnds(
+        palette: any Palette
+    ) -> (highlight: (dim: Color, bright: Color), border: (dim: Color, bright: Color)) {
+        (
+            highlight: (
+                dim: palette.accentPulse().dim,
+                bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
+            ),
+            border: (
+                dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
+                bright: palette.accent
+            )
+        )
+    }
+
     /// Draws the bordered popup lines for the visible window, at one point of
     /// the focus pulse.
     ///
@@ -378,30 +402,23 @@ enum DropdownMenu {
     /// the cycle and hands the loop one run per line — the frames are then
     /// literally what this renderer produces, which is the strongest form the
     /// "a run must match the cells that were drawn" rule can take.
+    ///
+    /// The two moving colours arrive already resolved rather than being
+    /// derived here from a `SelectionEmphasis`. Resolving them here meant two
+    /// pulse ramps built per frame — 32 per open menu — for two ramps that are
+    /// the same on every frame; ``pulseEnds(palette:)`` and
+    /// `SelectionEmphasisCycle.colors(dim:bright:)` now build each one once.
     private static func lines(
         rows: [Row],
         highlightedRow: Int?,
         visibleRange: Range<Int>,
         innerWidth: Int,
         barCells: [String]?,
-        emphasis: SelectionEmphasis,
+        highlightBg: Color,
+        borderColor: Color,
         context: RenderContext
     ) -> [String] {
-        let palette = context.environment.palette
         let borderStyle = context.environment.appearance.borderStyle
-        // While the popup is open its control holds keyboard focus, so the
-        // highlighted row's background pulses between a dim and a bright
-        // accent — the same affordance ``List`` uses for its focused row —
-        // to make it visually obvious that the arrow keys and Enter are
-        // driving the menu rather than whatever sits behind it.
-        let dimAccent = palette.accentPulse().dim
-        let brightAccent = palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
-        let highlightBg = emphasis.color(dim: dimAccent, bright: brightAccent)
-        // The border echoes the highlight pulse at lower intensity so the
-        // popup's frame reads as part of the same active control.
-        let borderColor = emphasis.color(
-            dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
-            bright: palette.accent)
 
         var lines: [String] = [
             BorderRenderer.standardTopBorder(
@@ -480,19 +497,26 @@ enum DropdownMenu {
         barCells: [String]?,
         context: RenderContext
     ) -> (lines: [String], runs: [AnimatedCellRun]) {
-        func draw(_ emphasis: SelectionEmphasis) -> [String] {
+        func draw(_ highlight: Color, _ border: Color) -> [String] {
             lines(
                 rows: rows, highlightedRow: highlightedRow, visibleRange: visibleRange,
-                innerWidth: innerWidth, barCells: barCells, emphasis: emphasis, context: context)
+                innerWidth: innerWidth, barCells: barCells,
+                highlightBg: highlight, borderColor: border, context: context)
         }
         // The cycle, not the live phase: reading the phase marks the frame as
         // having consulted the clock, and an open menu would then re-render the
         // entire page behind it ~20 times a second.
         let cycle = context.environment.selectionEmphasis.cycle(true)
-        let now = cycle.frames[cycle.step % max(1, cycle.frames.count)]
-        let drawn = draw(now)
+        // Two colour tracks, each from ONE ramp: the highlight and the border
+        // fade between different pairs of ends, but both pairs are fixed for
+        // the whole cycle.
+        let ends = Self.pulseEnds(palette: context.environment.palette)
+        let highlights = cycle.colors(dim: ends.highlight.dim, bright: ends.highlight.bright)
+        let borders = cycle.colors(dim: ends.border.dim, bright: ends.border.bright)
+        let step = cycle.step % max(1, cycle.frames.count)
+        let drawn = draw(highlights[step], borders[step])
         guard cycle.isAnimating, !context.isMeasuring else { return (drawn, []) }
-        let perStep = cycle.frames.map(draw)
+        let perStep = zip(highlights, borders).map(draw)
         let runs = drawn.indices.compactMap { row -> AnimatedCellRun? in
             let frames = perStep.map { $0[row] }
             let run = AnimatedCellRun(

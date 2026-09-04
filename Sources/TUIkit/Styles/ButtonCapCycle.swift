@@ -36,6 +36,13 @@ struct ButtonCapCycle {
     /// several of them off-hue greys.
     private let accent: Color
 
+    /// The cap colour at each point of the cycle.
+    ///
+    /// Built once, here, because BOTH readers want the same breath: the colour
+    /// to draw now, and the frames of the two runs. Asking for it twice would
+    /// build the pulse ramp twice for a fade that is identical either way.
+    private let breath: [Color]
+
     /// Builds the cycle for a button on `background` in a palette whose accent
     /// is `accent`.
     ///
@@ -43,9 +50,11 @@ struct ButtonCapCycle {
     ///   never indicating, however the focus system has it recorded.
     @MainActor
     init(isFocused: Bool, background: Color, accent: Color, context: RenderContext) {
-        cycle = context.environment.selectionEmphasis.cycle(isFocused)
+        let cycle = context.environment.selectionEmphasis.cycle(isFocused)
+        self.cycle = cycle
         self.background = background
         self.accent = accent
+        breath = cycle.colors(dim: background, bright: accent)
     }
 
     /// Whether the caps actually move. A still cap needs no run — the ordinary
@@ -54,9 +63,11 @@ struct ButtonCapCycle {
 
     /// The colour to draw right now. A cap is a fill, so it recedes to the
     /// button's own face when unfocused rather than sitting at the accent.
-    @MainActor
     var colorNow: Color {
-        cycle.isFocused ? cycle.colorNow(dim: background, bright: accent) : background
+        // `breath` is the cycle's own frames coloured, so indexing it by `step`
+        // is what `cycle.colorNow(dim:bright:)` would return — without building
+        // a second ramp to get there.
+        cycle.isFocused ? breath[cycle.step % breath.count] : background
     }
 
     /// The runs for a single-row button `width` cells wide: one cap at each end.
@@ -71,15 +82,19 @@ struct ButtonCapCycle {
     @MainActor
     func runs(width: Int) -> [AnimatedCellRun] {
         guard isAnimating, width >= 2 else { return [] }
+        // ONE breath spent on both caps. Asking `cycle.run(dim:bright:…)` twice
+        // would build the same pulse ramp twice — the two caps are the same
+        // colours at opposite ends of the same row, never two animations.
         return [
-            run(TerminalSymbols.openCap, offsetX: 0),
-            run(TerminalSymbols.closeCap, offsetX: width - 1),
+            run(TerminalSymbols.openCap, colors: breath, offsetX: 0),
+            run(TerminalSymbols.closeCap, colors: breath, offsetX: width - 1),
         ].compactMap { $0 }
     }
 
     @MainActor
-    private func run(_ cap: Character, offsetX: Int) -> AnimatedCellRun? {
-        cycle.run(
-            String(cap), dim: background, bright: accent, offsetX: offsetX, offsetY: 0)
+    private func run(_ cap: Character, colors: [Color], offsetX: Int) -> AnimatedCellRun? {
+        cycle.run(colors: colors, offsetX: offsetX, offsetY: 0) {
+            ANSIRenderer.colorize(String(cap), foreground: $0)
+        }
     }
 }
