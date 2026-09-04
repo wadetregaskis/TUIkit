@@ -24,12 +24,6 @@ struct ListStyleTests {
         #expect(style.rowPadding == EdgeInsets(all: 0))
     }
 
-    @Test("PlainListStyle uses plain grouping")
-    func testPlainListStyleGrouping() {
-        let style = PlainListStyle()
-        #expect(style.groupingStyle == .plain)
-    }
-
     @Test("PlainListStyle has no alternating rows")
     func testPlainListStyleNoAlternating() {
         let style = PlainListStyle()
@@ -53,30 +47,10 @@ struct ListStyleTests {
         #expect(style.rowPadding == expectedPadding)
     }
 
-    @Test("InsetGroupedListStyle uses insetGrouped grouping")
-    func testInsetGroupedListStyleGrouping() {
-        let style = InsetGroupedListStyle()
-        #expect(style.groupingStyle == .insetGrouped)
-    }
-
     @Test("InsetGroupedListStyle has no alternating rows by default")
     func testInsetGroupedListStyleAlternating() {
         let style = InsetGroupedListStyle()
         #expect(!style.alternatingRowColors)
-    }
-
-    // MARK: - Edge Cases
-
-    @Test("PlainListStyle color pair is nil")
-    func testPlainListStyleColorPair() {
-        let style = PlainListStyle()
-        #expect(style.alternatingColorPair == nil)
-    }
-
-    @Test("InsetGroupedListStyle color pair is nil")
-    func testInsetGroupedListStyleColorPair() {
-        let style = InsetGroupedListStyle()
-        #expect(style.alternatingColorPair == nil)
     }
 
     // MARK: - Direct Instantiation Tests
@@ -138,22 +112,6 @@ struct ListStyleTests {
         #expect(env.unfocusedSelectionVisibility == .visible)
     }
 
-    // MARK: - Grouping Style Tests
-
-    @Test("Plain grouping style value")
-    func testPlainGroupingStyle() {
-        let style: ListGroupingStyle = .plain
-        let plain = PlainListStyle()
-        #expect(plain.groupingStyle == style)
-    }
-
-    @Test("Inset grouping style value")
-    func testInsetGroupingStyle() {
-        let style: ListGroupingStyle = .insetGrouped
-        let inset = InsetGroupedListStyle()
-        #expect(inset.groupingStyle == style)
-    }
-
     // MARK: - Sendable Tests
 
     @Test("PlainListStyle is Sendable")
@@ -168,12 +126,6 @@ struct ListStyleTests {
         let _: InsetGroupedListStyle = style
     }
 
-    @Test("ListGroupingStyle is Sendable")
-    func testGroupingStyleSendable() {
-        let style: ListGroupingStyle = .plain
-        let _: ListGroupingStyle = style
-    }
-
     // MARK: - Border rendering (plain vs. bordered)
 
     /// The box-drawing glyphs a bordered container draws — none of which a
@@ -186,7 +138,7 @@ struct ListStyleTests {
     ]
 
     @MainActor
-    private func renderedListLines<S: ListStyle>(_ style: S) -> [String] {
+    private func renderedListLines<S: ListStyle>(_ style: S, stripped: Bool = true) -> [String] {
         let list = List {
             ForEach(["Alpha", "Bravo", "Charlie"], id: \.self) { name in
                 Text(name)
@@ -194,8 +146,8 @@ struct ListStyleTests {
         }
         .listStyle(style)
         .frame(height: 6)
-        return renderToBuffer(list, context: makeRenderContext(width: 30, height: 8))
-            .lines.map { $0.stripped }
+        let lines = renderToBuffer(list, context: makeRenderContext(width: 30, height: 8)).lines
+        return stripped ? lines.map { $0.stripped } : lines
     }
 
     @Test("PlainListStyle renders no border glyphs")
@@ -219,5 +171,32 @@ struct ListStyleTests {
         // Side walls specifically: every interior row is flanked by `│`.
         #expect(joined.contains("│"), "bordered list draws vertical side walls")
         #expect(joined.contains("Alpha") && joined.contains("Charlie"))
+    }
+
+    // MARK: - Alternating row backgrounds
+
+    /// A style that turns alternating rows on — which neither built-in style
+    /// does, so this is the only way to reach the code that draws them.
+    private struct ZebraListStyle: ListStyle {
+        let alternatingRowColors: Bool
+        var showsBorder: Bool { false }
+        var rowPadding: EdgeInsets { EdgeInsets(all: 0) }
+    }
+
+    /// The style decides WHETHER rows alternate; the palette decides which
+    /// colour. `ListStyle` used to declare an `alternatingColorPair` for a
+    /// style to name its own two colours, but nothing ever read it — even
+    /// rows always took the palette accent and odd rows always took nothing —
+    /// so the pair is gone and this pins the behaviour that remains.
+    @Test("alternatingRowColors tints rows, and it is a background only")
+    @MainActor
+    func alternatingRowColorsTintsRows() {
+        let flat = renderedListLines(ZebraListStyle(alternatingRowColors: false), stripped: false)
+        let zebra = renderedListLines(ZebraListStyle(alternatingRowColors: true), stripped: false)
+
+        #expect(flat != zebra, "the tint is the only difference between them, and it must show")
+        #expect(
+            flat.map { $0.stripped } == zebra.map { $0.stripped },
+            "a background changes no text: \(zebra.map { $0.stripped })")
     }
 }

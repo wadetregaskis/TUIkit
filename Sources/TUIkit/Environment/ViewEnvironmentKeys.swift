@@ -105,7 +105,8 @@ extension EnvironmentValues {
     ///
     /// Controls how lists render, including borders, padding, and row backgrounds.
     /// Set via `.listStyle()` modifier on List views.
-    /// Default: ``InsetGroupedListStyle`` (bordered with alternating rows).
+    /// Default: ``InsetGroupedListStyle`` (bordered and inset; it does NOT
+    /// alternate row backgrounds — neither built-in style does).
     var listStyle: any ListStyle {
         get { self[ListStyleKey.self] }
         set { self[ListStyleKey.self] = newValue }

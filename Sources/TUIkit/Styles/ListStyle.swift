@@ -6,10 +6,11 @@
 
 /// A style that customizes the appearance of lists.
 ///
-/// List styles control how lists render, including borders, padding, row separators,
-/// and background colors. TUIkit provides two built-in styles that match SwiftUI's behavior:
+/// List styles control how lists render: whether the list draws a border, the
+/// padding around its rows, and whether rows alternate backgrounds. TUIkit
+/// provides two built-in styles that match SwiftUI's behavior:
 /// - ``PlainListStyle``: Minimal appearance with no borders or background
-/// - ``InsetGroupedListStyle``: Bordered container with inset padding and alternating row colors
+/// - ``InsetGroupedListStyle``: Bordered container with inset padding
 ///
 /// # Usage
 ///
@@ -35,29 +36,16 @@ public protocol ListStyle: Sendable {
     /// The padding applied to list rows.
     var rowPadding: EdgeInsets { get }
 
-    /// The style of list grouping (plain, inset, or insetGrouped).
-    var groupingStyle: ListGroupingStyle { get }
-
-    /// Whether rows should alternate between two background colors.
+    /// Whether rows alternate backgrounds.
+    ///
+    /// The style says *whether*, and the palette says *which*: when this is
+    /// true, `_ListCore` tints every even-indexed row within a section with
+    /// the palette's accent at low opacity and leaves the odd rows untinted,
+    /// so an app's theme keeps control of the colour. A focused or selected
+    /// row keeps its own highlight either way. Both built-in styles return
+    /// false, so this is a hook for a conforming style rather than something
+    /// TUIkit's own styles turn on.
     var alternatingRowColors: Bool { get }
-
-    /// The color pair for alternating rows (even, odd).
-    /// If nil, uses the palette's semantic colors.
-    var alternatingColorPair: (evenColor: Color, oddColor: Color)? { get }
-}
-
-// MARK: - List Grouping Style
-
-/// Defines how a list groups its content visually.
-public enum ListGroupingStyle: Sendable {
-    /// Minimal grouping with no visual container.
-    case plain
-
-    /// Inset grouping with borders and padding.
-    case inset
-
-    /// Grouped style with borders, padding, and section separations.
-    case insetGrouped
 }
 
 // MARK: - Plain List Style
@@ -84,32 +72,23 @@ public struct PlainListStyle: ListStyle {
         EdgeInsets(all: 0)
     }
 
-    public var groupingStyle: ListGroupingStyle {
-        .plain
-    }
-
     public var alternatingRowColors: Bool {
         false
-    }
-
-    public var alternatingColorPair: (evenColor: Color, oddColor: Color)? {
-        nil
     }
 }
 
 // MARK: - Inset Grouped List Style
 
-/// A list style that uses borders, inset padding, and section grouping with alternating row colors.
+/// A list style that uses borders and inset padding.
 ///
-/// InsetGroupedListStyle renders lists with a border, inset padding, and optionally
-/// alternating row background colors. This matches SwiftUI's `.listStyle(.insetGrouped)`.
+/// InsetGroupedListStyle renders lists with a border and inset padding. This
+/// matches SwiftUI's `.listStyle(.insetGrouped)`.
 ///
 /// # Rendering
 /// - Rows have inset padding (1 character on each side)
 /// - Border surrounds the entire list
-/// - Rows alternate between two subtle background colors
-/// - Even-indexed rows: accent color at low opacity
-/// - Odd-indexed rows: no background (or default)
+/// - No alternating row backgrounds: ``alternatingRowColors`` is false, so a
+///   row's background comes from focus and selection alone
 public struct InsetGroupedListStyle: ListStyle {
     /// Creates an inset grouped list style.
     public init() {}
@@ -124,17 +103,8 @@ public struct InsetGroupedListStyle: ListStyle {
         EdgeInsets(all: 0)
     }
 
-    public var groupingStyle: ListGroupingStyle {
-        .insetGrouped
-    }
-
     public var alternatingRowColors: Bool {
         false
-    }
-
-    public var alternatingColorPair: (evenColor: Color, oddColor: Color)? {
-        // Uses palette semantic colors during rendering (nil = use default)
-        nil
     }
 }
 
@@ -150,7 +120,7 @@ extension ListStyle where Self == PlainListStyle {
 }
 
 extension ListStyle where Self == InsetGroupedListStyle {
-    /// The inset grouped list style with borders and alternating rows.
+    /// The inset grouped list style: a bordered, inset container.
     ///
     /// Usable with leading-dot syntax: `.listStyle(.insetGrouped)`.
     public static var insetGrouped: InsetGroupedListStyle {
