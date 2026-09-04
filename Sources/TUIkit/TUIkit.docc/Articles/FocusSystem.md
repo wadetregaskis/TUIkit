@@ -142,7 +142,7 @@ taking the view out of the focus ring — SwiftUI's modifier and SwiftUI's
 contract. Tab still reaches the control, it still takes the keys, it simply
 stops advertising that it has arrived. Everything goes: the pulse, a `Button`'s
 caps and bold, a `Toggle`'s glyph colour, a `Slider`'s and `Stepper`'s arrows,
-a `List`'s or `Table`'s cursor-row highlight.
+a `List`'s or `Table`'s cursor-row highlight, a `TabView`'s active-chip breath.
 
 Two things deliberately survive, and the rule behind them is worth stating
 because it decides the case this document has not seen:

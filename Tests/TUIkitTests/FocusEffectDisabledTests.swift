@@ -177,6 +177,20 @@ struct FocusEffectDisabledTests {
         expectIndistinguishable(picker, "DatePicker")
     }
 
+    /// A `TabView`'s active chip BREATHES when the strip is focused — that is
+    /// the whole of `ActiveChipCycle`'s job — so the breath goes with every
+    /// other indication. The selected chip's own surface stays: which tab is
+    /// showing is not which control has the keyboard.
+    @Test("TabView")
+    func tabView() {
+        let tabs = TabView(selection: .constant(0)) {
+            Tab("Alpha", value: 0) { Text("A") }
+            Tab("Bravo", value: 1) { Text("B") }
+        }
+        expectDistinguishable(tabs, "TabView")
+        expectIndistinguishable(tabs, "TabView")
+    }
+
     /// A `TextField` is the documented exception, and the exception is
     /// specific: the CARET survives, because it is the insertion point rather
     /// than an announcement of focus — which is what SwiftUI keeps too. So

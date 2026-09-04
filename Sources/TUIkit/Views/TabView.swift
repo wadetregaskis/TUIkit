@@ -493,7 +493,11 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             handler.centers = geometry.centers
             FocusRegistration.register(context: context, handler: handler)
         }
-        let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID) && !isDisabled
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. The strip is
+        // the only consumer of this flag, and all it does with it is breathe
+        // the active chip; the arrow keys still reach the strip either way.
+        let isFocused = context.indicatesFocus(
+            FocusRegistration.isFocused(context: context, focusID: persistedFocusID) && !isDisabled)
         let selected = selectedIndex
 
         var buffer =
