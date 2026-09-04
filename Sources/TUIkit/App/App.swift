@@ -572,6 +572,13 @@ extension AppRunner {
         terminal.enterAlternateScreen()
         terminal.hideCursor()
         terminal.enableRawMode()
+        // `disableRawMode` put grapheme clustering (mode 2027) back the way the
+        // shell had it, and `enableRawMode` re-emits bracketed paste and the
+        // cursor-key mode but not that: the advance model was frozen into the
+        // diff writer at startup on the strength of the pin, so a resume
+        // without it compensated every later frame against a terminal whose
+        // mode had changed under it.
+        terminal.pinGraphemeClusteringIfNeeded()
         renderer.invalidateDiffCache()
     }
 
