@@ -254,15 +254,20 @@ struct LifecycleManagerTaskTests {
         let manager = LifecycleManager()
         let target = Cancellation()
         let bystander = Cancellation()
+        // Ten MINUTES, not the ten seconds the sibling below uses. Both tasks
+        // have to still be IN FLIGHT when the cancels land — a task that
+        // finished on its own reports `isCancelled == false` and says nothing
+        // about either half — and the wait before the first cancel is a
+        // main-actor `Task.sleep`, which a loaded parallel suite can starve for
+        // many seconds. The duration only has to outlast that starvation; both
+        // tasks are cancelled before the test returns, so nothing is left
+        // running.
         manager.startTask(token: "task-1", priority: .medium) {
-            try? await Task.sleep(for: .seconds(10))
+            try? await Task.sleep(for: .seconds(600))
             await MainActor.run { target.record(Task.isCancelled) }
         }
-        // Ten seconds, not a short sleep that would let it finish on its own:
-        // the bystander has to still be IN FLIGHT when the cancel lands, or
-        // sparing it says nothing.
         manager.startTask(token: "task-2", priority: .medium) {
-            try? await Task.sleep(for: .seconds(10))
+            try? await Task.sleep(for: .seconds(600))
             await MainActor.run { bystander.record(Task.isCancelled) }
         }
         try await Task.sleep(for: .milliseconds(20))
