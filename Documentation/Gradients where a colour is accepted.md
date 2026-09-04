@@ -1,10 +1,12 @@
 # Gradients where a colour is accepted
 
 **Status: SHIPPED.** Every item on §8's list is built and on `main` (merged
-2026-09-01, 53 commits, fast-forwarded). Nothing here is outstanding work; what
-remains is one thing this document cannot do anything about — **CI has never run
-on it**, so Linux and Windows have not compiled a line — plus the two curiosities
-in §9, neither of which blocks anything.
+2026-09-01, 53 commits, fast-forwarded), and CI has run on it since 2026-09-02
+— Linux and Windows compile it (the Windows lanes are green). What that run
+also showed is outside this document: the Test step has been red on the
+Linux lanes and on macOS 26 since that day, on `main` as a whole, and needs
+triage. What remains of this work itself is the two curiosities in §9, neither
+of which blocks anything.
 
 This began as a proposal and became the build log, which is why it reads as one.
 §1–§9 are the design as it was decided; §10 onward is what each step actually
