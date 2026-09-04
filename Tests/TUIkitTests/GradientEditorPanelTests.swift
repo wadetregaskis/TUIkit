@@ -223,10 +223,10 @@ struct GradientEditorPanelRenderTests {
         let text = buffer.lines.joined(separator: "\n")
 
         // Both endpoints appear as foreground colours in the preview strip,
-        // and so does an interior cell computed exactly as the strip does:
-        // 36 cells sampled at parameter i/35 (cell 18 here).
+        // and so does an interior cell computed exactly as the strip does: the
+        // ramp overload, 36 cells, cell 18.
         let interior = TrackRenderer.gradientColor(
-            ramp, parameter: 18.0 / 35.0, fallback: .rgb(0, 0, 0))
+            ramp, index: 18, span: 36, fallback: .rgb(0, 0, 0), depth: ColorDepth.current)
         let components = interior.rgbComponents!
         #expect(text.contains("38;2;255;0;0"), "the left endpoint is drawn")
         #expect(text.contains("38;2;0;0;255"), "the right endpoint is drawn")

@@ -151,23 +151,15 @@ enum TrackRenderer {
         }
     }
 
-    /// The colour `gradient` shows at `parameter` (0…1). Shared by every
-    /// gradient consumer — the configured fill tracks, `.threeSegment`'s
-    /// ``SegmentColoring/gradient(_:)``, and (via its own cyclic wrapper) the
-    /// indeterminate sweep — so "a gradient" always means the same
-    /// interpolation. Fewer than two stops yield `fallback`.
-    static func gradientColor(_ gradient: Gradient, parameter: Double, fallback: Color) -> Color {
-        // ONE stop is a solid colour, not a broken gradient: the editor can
-        // collapse a ramp to a single stop, and what that has to mean
-        // everywhere downstream is "this colour". Only an EMPTY gradient has
-        // nothing to say, and that is what the fallback is for.
-        guard !gradient.stops.isEmpty else { return fallback }
-        return gradient.color(at: parameter)
-    }
-
-    /// The colour a gradient shows at cell `index` of a `span`-cell ramp.
+    /// The colour a gradient shows at cell `index` of a `span`-cell ramp — the
+    /// one interpolation every track consumer uses: the configured fill
+    /// tracks, the stepped fill and `.threeSegment`'s
+    /// ``SegmentColoring/gradient(_:)``. (The indeterminate sweep samples
+    /// `Gradient.color(at:)` per intensity; it is not a run of cells.) ONE
+    /// stop is a solid colour, not a broken gradient — the editor can collapse
+    /// a ramp to a single stop — and only an EMPTY gradient yields `fallback`.
     ///
-    /// Not `gradientColor(parameter:)` per cell, because a per-cell nearest
+    /// Not `Gradient.color(at:)` per cell, because a per-cell nearest
     /// match has no memory of its neighbours and a gradient's smoothness is a
     /// property of the SEQUENCE — see ``Color/quantisedRamp(stops:count:depth:)``,
     /// which is where the whole ramp is quantised at once and repaired into a
