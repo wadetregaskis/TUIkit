@@ -123,10 +123,17 @@ finding that out took a probe rather than a proof.
 
    So the gate is not per-host but **per-row, and stricter**: a row is declined
    if it carries any character claiming more than one cell, any cursor-moving
-   escape, or an erase anywhere but the head. Single-cell characters have no
-   such disagreement — box drawing, accented Latin, Greek and Cyrillic advance
-   one everywhere — so the ordinary row still takes the fast path, on every
-   host, including hosts whose advance model has never been measured. The
+   escape, or an erase anywhere but the head — and two more things the code
+   enforces that this sentence used to omit: any scalar that is not its own
+   grapheme cluster (`Character.isStandaloneClusterScalar` — every combining
+   mark, so a DECOMPOSED accented row, Hebrew with points or an image
+   placeholder row bails even though each claims one cell; the row is walked
+   scalar by scalar without segmenting, which is what makes it cheap), and
+   any string-family introducer (OSC, DCS, APC). Precomposed single-cell
+   characters have no such disagreement — box drawing, accented Latin in NFC,
+   Greek and Cyrillic advance one everywhere — so the ordinary row still takes
+   the fast path, on every host, including hosts whose advance model has never
+   been measured. The
    Example's emoji page, which exists to demonstrate these divergences, takes
    the whole-line path on every row that demonstrates one.
 5. **Correctness exposure is high — it needs a corpus, not just unit tests.**
