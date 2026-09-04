@@ -234,6 +234,32 @@ struct RowEditRestrictionTests {
         #expect(!handler.isKeyboardMove)
     }
 
+    @Test("A mouse grab on a pinned row ends a keyboard move entirely")
+    func pinnedPressEndsKeyboardMove() {
+        let fixture = Fixture([
+            Row(id: 0, name: "a", locked: false),
+            Row(id: 1, name: "b", locked: false),
+            Row(id: 2, name: "pinned", locked: true),
+        ])
+        fixture.render(reorderableList(fixture))
+        guard let handler = fixture.handler else {
+            Issue.record("no handler")
+            return
+        }
+        handler.focusedIndex = 0
+        _ = handler.beginKeyboardMove()
+        #expect(handler.isKeyboardMove)
+
+        // The pinned row declines the grab. The refusal used to clear the mode
+        // flag and leave the keyboard move's `reorder` armed — which reads as
+        // a mouse drag in flight, so every navigation key after it scrolled
+        // instead of moving the cursor.
+        handler.beginReorder(grabbing: 2)
+        #expect(!handler.isKeyboardMove)
+        #expect(!handler.isReordering, "nothing is in hand")
+        #expect(handler.handleReorderKey(KeyEvent(key: .down)) == nil, "navigation keys fall through")
+    }
+
     @Test("A multi-row hold leaves pinned selection members behind")
     func heldRowsExcludePinned() {
         let fixture = Fixture([

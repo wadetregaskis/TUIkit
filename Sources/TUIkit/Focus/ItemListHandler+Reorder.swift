@@ -970,6 +970,12 @@ extension ItemListHandler {
         // during a keyboard move replaced the reorder but left the mode
         // latched, and every navigation key after the click was swallowed
         // doing nothing. (The keyboard pick-up re-raises it after this.)
+        // Ended entirely — `reorder` as well as the flag — and BEFORE the grab
+        // is refused below: with the flag cleared but the keyboard move's
+        // `reorder` still armed, a press on a `.moveDisabled()` row read as a
+        // mouse drag in flight, and every navigation key after it scrolled
+        // instead of moving the cursor.
+        reorder = nil
         isKeyboardMove = false
         guard !moveDisabledRows.contains(offset) else {
             focusedIndex = offset
