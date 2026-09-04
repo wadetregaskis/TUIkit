@@ -49,9 +49,15 @@ public final class Lock<State: Sendable>: @unchecked Sendable {
 
         /// Executes the closure while holding the lock and returns the result.
         ///
+        /// The SAME signature as the macOS arm's — `R: Sendable`, `@Sendable`
+        /// body — although `NSLock` would accept anything: a looser signature
+        /// here let a call site returning or capturing a non-`Sendable` value
+        /// compile on every platform but macOS, which a library's public API
+        /// must not do.
+        ///
         /// - Parameter body: The closure to execute with exclusive access to the state.
         /// - Returns: The value returned by the closure.
-        public func withLock<R>(_ body: (inout State) throws -> R) rethrows -> R {
+        public func withLock<R: Sendable>(_ body: @Sendable (inout State) throws -> R) rethrows -> R {
             _lock.lock()
             defer { _lock.unlock() }
             return try body(&_state)
