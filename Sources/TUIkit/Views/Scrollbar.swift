@@ -581,9 +581,14 @@ struct ScrollbarColors {
         let base = palette.foregroundQuaternary.resolve(with: palette)
         let accent = palette.accent.resolve(with: palette)
         let page = palette.background.resolve(with: palette)
-        let key = TrackKey(base: base, accent: accent, page: page)
+        let ink = palette.foreground.resolve(with: palette)
+        // Every input of `resolvedTrack` is in the key. The ink was not, so two
+        // palettes alike but for their foreground shared one answer — and the
+        // answer can be the FALLBACK, cached from a palette whose ink offered
+        // no acceptable rung and served to one whose ink would have.
+        let key = TrackKey(base: base, accent: accent, page: page, ink: ink)
         if let cached = trackCache[key] { return cached }
-        let answer = resolvedTrack(base: base, accent: accent, page: page, ink: palette.foreground.resolve(with: palette))
+        let answer = resolvedTrack(base: base, accent: accent, page: page, ink: ink)
         // Sixteen palettes and one entry each; the cap is a backstop against an
         // app generating palettes per frame, not a working set.
         if trackCache.count > 64 { trackCache.removeAll(keepingCapacity: true) }
@@ -595,13 +600,15 @@ struct ScrollbarColors {
         let base: Color
         let accent: Color
         let page: Color
+        let ink: Color
     }
 
     /// Up to 24 quantisations per palette, so it is answered once and kept —
     /// this is asked per scrollbar per frame.
     @MainActor private static var trackCache: [TrackKey: Color] = [:]
 
-    private static func resolvedTrack(base: Color, accent: Color, page: Color, ink: Color) -> Color {
+    /// Internal, not private, so the memo test can ask for a cold answer.
+    static func resolvedTrack(base: Color, accent: Color, page: Color, ink: Color) -> Color {
         func acceptable(_ candidate: Color) -> Bool {
             renderedRatio(candidate, accent) >= ViewConstants.chromeSeparationFloor
                 && renderedRatio(candidate, page) >= ViewConstants.chromeGrooveFloor

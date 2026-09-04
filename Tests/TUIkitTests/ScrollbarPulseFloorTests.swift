@@ -43,6 +43,44 @@ struct ScrollbarPulseFloorTests {
         }
     }
 
+    /// Two palettes alike in groove, accent and page but not in ink must not
+    /// share a memoised groove: the ink is the second direction the search
+    /// walks, and the answer for a palette whose ink offers no acceptable rung
+    /// is the FALLBACK — served, before the key named the ink, to a palette
+    /// whose ink would have found one.
+    @Test("The track memo keys on the ink as well")
+    func trackMemoKeysOnInk() {
+        struct InkPalette: Palette {
+            let id = "ink"
+            let name = "Ink"
+            // A groove that fails the accent floor, with a page too close to
+            // walk toward: only the ink-ward search can answer, so the ink is
+            // the whole difference between these two palettes.
+            let background = Color.rgb(55, 55, 55)
+            let foregroundQuaternary = Color.rgb(70, 70, 70)
+            let accent = Color.rgb(90, 90, 90)
+            let foreground: Color
+            let success = Color.green
+            let warning = Color.yellow
+            let error = Color.red
+            let info = Color.blue
+            let border = Color.brightBlack
+        }
+        func cold(_ palette: InkPalette) -> Color {
+            ScrollbarColors.resolvedTrack(
+                base: palette.foregroundQuaternary.resolve(with: palette),
+                accent: palette.accent.resolve(with: palette),
+                page: palette.background.resolve(with: palette),
+                ink: palette.foreground.resolve(with: palette))
+        }
+        let pale = InkPalette(foreground: .rgb(250, 250, 250))
+        let dim = InkPalette(foreground: .rgb(100, 100, 100))
+        #expect(cold(pale) != cold(dim), "fixture: the ink must decide the answer")
+        _ = ScrollbarColors.track(in: pale)
+        #expect(ScrollbarColors.track(in: dim) == cold(dim), "the dim palette got the pale one's memo")
+        #expect(ScrollbarColors.track(in: pale) == cold(pale))
+    }
+
     /// …and it is still a breath. A floor that lifted the dim end all the way
     /// to the bright one would satisfy the test above and remove the animation.
     ///
