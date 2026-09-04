@@ -52,17 +52,24 @@ extension Color {
     /// This colour composited at `opacity` over `surface`, in **linear
     /// light** — physical alpha blending.
     ///
-    /// The distinction from ``opacity(_:over:)`` is the space the mix happens
-    /// in, and each has its job. That method interpolates the encoded sRGB
-    /// components, which is the right tool for deriving *styles* — a "30%
-    /// strength" secondary label, a dim border — because every palette the
-    /// framework derives was tuned by eye in encoded space, and re-deriving
-    /// them through different arithmetic would re-tint the whole system.
-    /// Simulating a translucent layer is a different question with a physical
-    /// answer: light adds linearly, and mixing encoded bytes understates it —
-    /// halfway between white and black lands at 22% of white's light rather
-    /// than half — so an encoded-space fade spends most of its range darker
-    /// than the light it stands for and pops at the end.
+    /// Correct, and **not what the framework fades with**. The distinction from
+    /// ``opacity(_:over:)`` is the space the mix happens in, and the two answer
+    /// different questions. This one answers *what light would actually leave a
+    /// translucent layer*: light adds linearly, and mixing encoded bytes
+    /// understates it — halfway between white and black carries 22% of white's
+    /// light rather than half.
+    ///
+    /// What a fade needs is the other question — *what does a person see change*
+    /// — and the two diverge sharply, because perceived lightness goes roughly
+    /// as the cube root of luminance. In linear light `dL/d(opacity)` is 7.52 at
+    /// 0 and 0.25 at 1: a **22×** sensitivity ratio, almost all of the visible
+    /// movement crammed into the first few percent of alpha. Encoded sRGB is
+    /// near enough perceptually uniform (ratio 1.66×), which is why it is the
+    /// space every 8-bit compositor mixes in, and what SwiftUI is measured to
+    /// use. `View.opacity(_:)`, the transition dissolve and every style
+    /// derivation therefore go through ``opacity(_:over:)``; see
+    /// `Documentation/Opacity as composition.md`, rule 5, for the numbers and
+    /// the reversal.
     ///
     /// - Parameters:
     ///   - opacity: The weight of this colour (0–1; clamped).

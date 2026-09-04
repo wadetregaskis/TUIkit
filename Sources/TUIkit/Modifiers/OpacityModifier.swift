@@ -263,12 +263,18 @@ enum OpacityFade {
     /// A thin face on ``SGRColorRewrite``, which is the general form: every
     /// colour effect in the framework is the same walk over the same escape
     /// sequences with a different function of the colour.
+    ///
+    /// ``Color/opacity(_:over:)`` — the ENCODED-sRGB mix — and deliberately not
+    /// ``Color/compositing(_:over:)``, which mixes in linear light. Both are
+    /// correct arithmetic for different questions, and this one is a FADE
+    /// watched by an eye rather than a translucent layer measured by a meter.
+    /// See `Documentation/Opacity as composition.md`.
     static func fading(
         _ line: String, by factor: Double, over surface: Color, defaultForeground: Color
     ) -> String {
         SGRColorRewrite.rewriting(
             line, defaultForeground: defaultForeground, defaultBackground: surface
-        ) { $0.compositing(factor, over: surface) }
+        ) { $0.opacity(factor, over: surface) }
     }
 }
 

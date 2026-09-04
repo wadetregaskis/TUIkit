@@ -290,10 +290,13 @@ extension FrameBuffer {
             displayedInk(of: destination, defaultForeground: defaultForeground) ?? surface
         let destinationField = destination?.background ?? surface
 
+        // ``Color/opacity(_:over:)``, the ENCODED-sRGB mix, not
+        // ``Color/compositing(_:over:)``'s linear-light one — see
+        // `OpacityFade.fading` and `Documentation/Opacity as composition.md`.
         let foreground =
-            sourceInk.map { $0.compositing(alpha, over: destinationInk) } ?? destination?.foreground
+            sourceInk.map { $0.opacity(alpha, over: destinationInk) } ?? destination?.foreground
         let background =
-            source.background.map { $0.compositing(alpha, over: destinationField) }
+            source.background.map { $0.opacity(alpha, over: destinationField) }
             ?? destination?.background
 
         // Only the glyph needs a DECISION, because a cell can hold one and

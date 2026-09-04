@@ -571,19 +571,43 @@ The rules, updated as each lands:
    is weight — bold is on or off — so a cell's non-colour styling follows
    whichever side drew its glyph.
 
-5. **The blend happens in linear light.** `Color.opacity(_:over:)` (and
-   `lerp`, underneath it) interpolates the ENCODED sRGB components. For style
-   derivation that is right — every palette the framework derives was tuned by
-   eye in encoded space, and re-deriving them through different arithmetic
-   would re-tint the whole system, so those stay as they are. Simulating a
-   translucent layer is a different question with a physical answer: light
-   adds linearly, and mixing encoded bytes understates it (halfway between
-   white and black lands at 22% of white's light rather than half), so an
-   encoded-space fade spends most of its range darker than the light it
-   stands for and pops at the end. The resolution — and the transition
-   dissolve, which is the same operation against the palette background —
-   now blends through `Color.compositing(_:over:)`: decode via the shared
-   IEC 61966-2-1 helpers, mix, re-encode with rounding.
+5. **The blend happens in ENCODED sRGB — reversed 2026-09-04, and this is why.**
+
+   It used to happen in linear light, through `Color.compositing(_:over:)`,
+   on an argument that is physically correct and turned out to answer the
+   wrong question: light adds linearly, and mixing encoded bytes understates
+   it (halfway between white and black carries 22% of white's light, not
+   half), so a linear mix is what a translucent LAYER really does.
+
+   A fade is not measured by a meter, it is watched by an eye, and perceived
+   lightness goes roughly as the cube root of luminance. So under a linear
+   mix `dL/d(alpha)` is **7.52 at alpha 0 and 0.25 at alpha 1** — a **22.2×**
+   sensitivity ratio, with almost all of the visible change crammed into the
+   first few percent. Encoded sRGB is already close to perceptually uniform,
+   which is what makes it the space every 8-bit compositor mixes in; its
+   ratio is **1.66×**.
+
+   The bill arrived at a bouncy spring. A spring transition plays the same
+   oscillation in both directions — insertion opacity is `fraction`, removal
+   is `1 - fraction` — so its excursions are exactly symmetric in ALPHA. In
+   linear light they were 2.94×, 4.78×, 7.08× and 10.52× apart in rendered
+   lightness (`spring(duration: 0.6, bounce: 0.9)`, accent over the default
+   palette's ground), which is why the fade-out visibly bounced and the
+   fade-in barely did. At the shipped default bounce of 0.3 the fade-in
+   excursion measured ΔL **0.0000** while the fade-out one was still a step.
+   Encoded, the same four excursions are **1.20×, 1.33×, 1.42× and 1.49×**.
+
+   And it is what SwiftUI does. Measured through `ImageRenderer` over
+   `ZStack { Color(5,10,5); Color(102,255,102).opacity(a) }`, SwiftUI's
+   composite matches an encoded-space lerp to the byte at every alpha tried
+   (0.05 → `10,22,10`; 0.28 → `32,79,32`; 0.85 → `87,218,87`), and does NOT
+   match the linear-light prediction at any of them.
+
+   So the resolution and the transition dissolve blend through
+   `Color.opacity(_:over:)` — the same encoded mix style derivation has
+   always used, which also removes the split where one screen faded two ways.
+   `Color.compositing(_:over:)` remains, correct and public, for the question
+   it actually answers.
 
 6. **The blend reads the colours a cell DISPLAYS, not the ones it stores.**
    Reverse video (SGR 7) makes the foreground the colour the cell is painted:

@@ -407,6 +407,14 @@ extension Color {
     /// dark-on-dark controls seen under light palettes), so palette-aware
     /// rendering should pass the surface the colour actually draws on.
     ///
+    /// **The mix is in ENCODED sRGB**, which is the whole difference from
+    /// ``compositing(_:over:)`` and is deliberate: encoded space is near enough
+    /// perceptually uniform that equal steps of `opacity` look like equal steps,
+    /// where a linear-light mix puts 22× more visible change at the transparent
+    /// end than at the opaque one. This is what every style derivation, every
+    /// fade and every transition dissolve uses, and what SwiftUI is measured to
+    /// composite with.
+    ///
     /// - Parameters:
     ///   - opacity: The opacity (0–1).
     ///   - surface: The colour beneath, typically the palette background the

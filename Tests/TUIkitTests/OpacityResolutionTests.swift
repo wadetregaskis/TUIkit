@@ -122,7 +122,7 @@ struct OpacityResolutionTests {
         // at every alpha. The field does NOT — the source states no background
         // of its own, so it composites none and the destination's stands.
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(Color.green.compositing(0.2, over: .red))))
+        #expect(resolved.lines[0].contains(codes(Color.green.opacity(0.2, over: .red))))
         #expect(!resolved.lines[0].contains(codes(.green)))
         #expect(resolved.lines[0].contains(backgroundCodes(.blue)))
     }
@@ -142,8 +142,8 @@ struct OpacityResolutionTests {
             over: destination, surface: .black, palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
-        let towardTheBlocks = Color.rgb(0, 255, 0).compositing(0.6, over: .rgb(0, 0, 255))
-        let towardTheSurface = Color.rgb(0, 255, 0).compositing(0.6, over: .rgb(0, 0, 0))
+        let towardTheBlocks = Color.rgb(0, 255, 0).opacity(0.6, over: .rgb(0, 0, 255))
+        let towardTheSurface = Color.rgb(0, 255, 0).opacity(0.6, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(codes(towardTheBlocks)))
         #expect(!resolved.lines[0].contains(codes(towardTheSurface)))
     }
@@ -163,7 +163,7 @@ struct OpacityResolutionTests {
             over: destination, surface: .black, palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
-        let expected = Color.rgb(0, 255, 0).compositing(0.3, over: .rgb(255, 0, 0))
+        let expected = Color.rgb(0, 255, 0).opacity(0.3, over: .rgb(255, 0, 0))
         #expect(resolved.lines[0].contains(codes(expected)))
         #expect(!resolved.lines[0].contains(codes(.rgb(255, 0, 0))))
         #expect(!resolved.lines[0].contains(codes(.rgb(0, 255, 0))))
@@ -207,9 +207,9 @@ struct OpacityResolutionTests {
         // its field over the destination's field. Neither is mixed into the
         // other, so no estimate of how much of a cell a glyph inks is needed.
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(Color.green.compositing(0.25, over: .red))))
+        #expect(resolved.lines[0].contains(codes(Color.green.opacity(0.25, over: .red))))
         #expect(!resolved.lines[0].contains(codes(.green)))
-        let field = Color.rgb(0, 0, 255).compositing(0.25, over: .rgb(255, 0, 0))
+        let field = Color.rgb(0, 0, 255).opacity(0.25, over: .rgb(255, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(field)))
         #expect(!resolved.lines[0].contains(backgroundCodes(.rgb(255, 0, 0))))
     }
@@ -230,8 +230,8 @@ struct OpacityResolutionTests {
         // A fill has no glyph, so what it shows where one would draw is its
         // own colour — the same reading on this side of the blend as on the
         // other. Both channels therefore carry it.
-        #expect(resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).compositing(0.5, over: .red))))
-        let expected = Color.rgb(0, 0, 255).compositing(0.5, over: .rgb(0, 0, 0))
+        #expect(resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).opacity(0.5, over: .red))))
+        let expected = Color.rgb(0, 0, 255).opacity(0.5, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
 
@@ -249,9 +249,9 @@ struct OpacityResolutionTests {
 
         #expect(resolved.lines[0].stripped == "hello")
         // Toward BLUE — the displayed field — not toward the stored red.
-        let expected = Color.rgb(0, 255, 0).compositing(0.6, over: .rgb(0, 0, 255))
+        let expected = Color.rgb(0, 255, 0).opacity(0.6, over: .rgb(0, 0, 255))
         #expect(resolved.lines[0].contains(codes(expected)))
-        #expect(!resolved.lines[0].contains(codes(.rgb(0, 255, 0).compositing(0.6, over: .rgb(255, 0, 0)))))
+        #expect(!resolved.lines[0].contains(codes(.rgb(0, 255, 0).opacity(0.6, over: .rgb(255, 0, 0)))))
     }
 
     @Test("A reversed cell passed through unchanged still displays swapped")
@@ -293,11 +293,11 @@ struct OpacityResolutionTests {
             over: destination, surface: .black, palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
-        let ink = Color.rgb(0, 200, 0).compositing(0.25, over: .rgb(255, 0, 0))
-        let stored = Color.rgb(0, 200, 0).compositing(0.25, over: .rgb(0, 0, 255))
+        let ink = Color.rgb(0, 200, 0).opacity(0.25, over: .rgb(255, 0, 0))
+        let stored = Color.rgb(0, 200, 0).opacity(0.25, over: .rgb(0, 0, 255))
         #expect(resolved.lines[0].contains(codes(ink)))
         #expect(!resolved.lines[0].contains(codes(stored)))
-        let expected = Color.rgb(0, 200, 0).compositing(0.25, over: .rgb(0, 0, 255))
+        let expected = Color.rgb(0, 200, 0).opacity(0.25, over: .rgb(0, 0, 255))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
 
@@ -318,7 +318,7 @@ struct OpacityResolutionTests {
         // underline's own red rather than from the field behind it.
         #expect(resolved.lines[0].stripped.trimmingCharacters(in: .whitespaces).isEmpty)
         #expect(resolved.lines[0].contains(";4;"))
-        let ink = Color.rgb(0, 255, 0).compositing(0.3, over: .rgb(255, 0, 0))
+        let ink = Color.rgb(0, 255, 0).opacity(0.3, over: .rgb(255, 0, 0))
         #expect(resolved.lines[0].contains(codes(ink)))
     }
 
@@ -346,7 +346,7 @@ struct OpacityResolutionTests {
 
         #expect(resolved.lines[0].stripped == "hello")
         // Half green, half red — neither endpoint, and nowhere near black.
-        let expected = Color.rgb(0, 255, 0).compositing(0.5, over: .rgb(255, 0, 0))
+        let expected = Color.rgb(0, 255, 0).opacity(0.5, over: .rgb(255, 0, 0))
         #expect(resolved.lines[0].contains(codes(expected)))
         #expect(!resolved.lines[0].contains(codes(.rgb(0, 255, 0))))
     }
@@ -377,8 +377,8 @@ struct OpacityResolutionTests {
         // around it, so the cell fades evenly rather than leaving crisp text
         // standing on a washed-out field.
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).compositing(0.5, over: .red))))
-        let expected = Color.rgb(0, 0, 255).compositing(0.5, over: .rgb(0, 0, 0))
+        #expect(resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).opacity(0.5, over: .red))))
+        let expected = Color.rgb(0, 0, 255).opacity(0.5, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
 
@@ -395,8 +395,8 @@ struct OpacityResolutionTests {
 
         #expect(resolved.lines[0].stripped == "world")
         #expect(
-            resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).compositing(0.25, over: .red))))
-        let expected = Color.rgb(0, 0, 255).compositing(0.25, over: .rgb(0, 0, 0))
+            resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).opacity(0.25, over: .red))))
+        let expected = Color.rgb(0, 0, 255).opacity(0.25, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
 
@@ -429,7 +429,7 @@ struct OpacityResolutionTests {
         // paints ink where it has a letter and none where it has a space, so
         // only the lettered columns take its colour. That is emptiness rather
         // than blankness — the same answer a fully transparent layer gets.
-        #expect(resolved.lines[0].contains(codes(Color.green.compositing(0.43, over: .red))))
+        #expect(resolved.lines[0].contains(codes(Color.green.opacity(0.43, over: .red))))
         #expect(resolved.lines[0].contains(codes(.red)))
         #expect(!resolved.lines[0].contains("49m"), "no cell falls back to the terminal default")
     }
@@ -441,7 +441,7 @@ struct OpacityResolutionTests {
         let resolved = source.resolvingOpacity(
             over: FrameBuffer(), surface: surface, palette: palette())
 
-        let expected = Color.rgb(255, 255, 0).compositing(0.5, over: surface)
+        let expected = Color.rgb(255, 255, 0).opacity(0.5, over: surface)
         #expect(resolved.lines[0].contains(codes(expected)))
     }
 
@@ -462,8 +462,8 @@ struct OpacityResolutionTests {
         // Nothing contests these cells, so every character draws — the first
         // two at the inner product, the rest at the outer alpha alone.
         #expect(resolved.lines[0].stripped == "hello")
-        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).compositing(0.25, over: .black))))
-        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).compositing(0.75, over: .black))))
+        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).opacity(0.25, over: .black))))
+        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).opacity(0.75, over: .black))))
     }
 
     @Test("Over a blank cell there is no contest, and text fades all the way out")
@@ -479,7 +479,7 @@ struct OpacityResolutionTests {
             over: destination, surface: .black, palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
-        let expected = Color.rgb(0, 255, 0).compositing(0.2, over: .rgb(255, 0, 0))
+        let expected = Color.rgb(0, 255, 0).opacity(0.2, over: .rgb(255, 0, 0))
         #expect(resolved.lines[0].contains(codes(expected)))
     }
 
@@ -589,13 +589,13 @@ struct OpacityResolutionTests {
         // b fades toward ITS field (red, column 1) and c toward its own
         // (blue, column 2) — not each toward its neighbour's.
         let sourceColor = Color.rgb(0, 255, 0)
-        #expect(drawn.lines[0].contains(codes(sourceColor.compositing(0.8, over: .rgb(200, 0, 0)))))
-        #expect(drawn.lines[0].contains(codes(sourceColor.compositing(0.8, over: .rgb(0, 0, 200)))))
+        #expect(drawn.lines[0].contains(codes(sourceColor.opacity(0.8, over: .rgb(200, 0, 0)))))
+        #expect(drawn.lines[0].contains(codes(sourceColor.opacity(0.8, over: .rgb(0, 0, 200)))))
         // And the first column blended toward its own field too — all three
         // cells inside the region were faded. (The source's full-strength
         // green may still appear once, in the splice's restored trailing
         // state after the last cell, where it styles nothing.)
-        #expect(drawn.lines[0].contains(codes(sourceColor.compositing(0.8, over: .rgb(9, 9, 9)))))
+        #expect(drawn.lines[0].contains(codes(sourceColor.opacity(0.8, over: .rgb(9, 9, 9)))))
     }
 
     @Test("Aligned wide characters reveal whole")
@@ -613,7 +613,7 @@ struct OpacityResolutionTests {
         #expect(resolved.lines[0].stripped == "中文字")
         #expect(resolved.lines[0].strippedLength == 6)
         #expect(
-            resolved.lines[0].contains(codes(Color.rgb(0, 255, 0).compositing(0.2, over: .red))))
+            resolved.lines[0].contains(codes(Color.rgb(0, 255, 0).opacity(0.2, over: .red))))
     }
 
     @Test("Compositing punches the covered footprint out of pending regions")
@@ -650,8 +650,8 @@ struct OpacityResolutionTests {
             context: context)
 
         #expect(composed.lines[0].contains(codes(.rgb(40, 200, 40))))
-        #expect(!composed.lines[0].contains(codes(.rgb(40, 200, 40).compositing(0.5, over: background))))
-        #expect(composed.lines[0].contains(codes(.rgb(200, 40, 40).compositing(0.5, over: background))))
+        #expect(!composed.lines[0].contains(codes(.rgb(40, 200, 40).opacity(0.5, over: background))))
+        #expect(composed.lines[0].contains(codes(.rgb(200, 40, 40).opacity(0.5, over: background))))
     }
 
     @Test("An overlay applied after opacity draws at full strength")
@@ -666,7 +666,7 @@ struct OpacityResolutionTests {
             context: context)
 
         #expect(composed.lines[0].contains(codes(.rgb(40, 200, 40))))
-        #expect(!composed.lines[0].contains(codes(.rgb(40, 200, 40).compositing(0.5, over: background))))
+        #expect(!composed.lines[0].contains(codes(.rgb(40, 200, 40).opacity(0.5, over: background))))
     }
 
     @Test("A row no region covers is left exactly as it was")
@@ -727,7 +727,7 @@ struct OpacityForeignRunTests {
         let faded = resolved.animatedCells.first
         #expect(faded?.frames.count == 2)
         #expect(faded?.frames.first?.stripped == "aaaaa")
-        let expected = Color.rgb(0, 255, 0).compositing(0.6, over: .black)
+        let expected = Color.rgb(0, 255, 0).opacity(0.6, over: .black)
         #expect(faded?.frames.first?.contains(codes(expected)) == true)
         #expect(faded?.frames.first?.contains(codes(Color.rgb(0, 255, 0))) == false)
         // The cadence is the producer's; fading the pictures must not touch it.
@@ -759,7 +759,7 @@ struct OpacityForeignRunTests {
         ])
         let resolved = buffer.resolvingOpacity(over: behind, at: (x: 0, y: 0), surface: .black, palette: palette())
         let frame = try #require(resolved.animatedCells.first?.frames.first)
-        let lineField = Color.rgb(0, 0, 255).compositing(0.5, over: .rgb(255, 0, 0))
+        let lineField = Color.rgb(0, 0, 255).opacity(0.5, over: .rgb(255, 0, 0))
         #expect(frame.contains(backgroundCodes(lineField)), "frame: \(frame.debugDescription)")
         #expect(!frame.contains(backgroundCodes(.rgb(255, 0, 0))), "the destination's field, unblended")
     }
