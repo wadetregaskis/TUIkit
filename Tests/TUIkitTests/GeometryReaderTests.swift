@@ -121,13 +121,32 @@ struct GeometryReaderTests {
         #expect(positioned.frame(in: .local).x == 0)
     }
 
-    @Test("A zero-sized proposal does not crash or go negative")
+    @Test("A negative proposal is clamped before the proxy ever sees it")
     func degenerateSizes() {
-        // The negative-size class: chrome subtractions reach zero on a tiny
-        // terminal, and every container has to survive it.
+        // The negative-size class: chrome subtractions reach zero — and, when
+        // a clamp is missing, go past it — on a tiny terminal, and every
+        // container has to survive it.
+        //
+        // Read out of the CLOSURE, not off the buffer. What the reader hands
+        // its content cannot be recovered downstream: at width 0 the content's
+        // own text is truncated to "" (`String.truncatedToWidth` returns empty
+        // below 1), so `Text("\(proxy.size.width)")` draws the same nothing for
+        // 0 as for -2, and the reader's padding guard `buffer.width < width` is
+        // false against a negative width so it returns early without trapping.
+        // Asserting anything about the buffer — including a `>= 0` bound, or an
+        // exact `width == 0` — therefore passes with the clamps deleted.
+        var seen: CellSize?
         let buffer = renderToBuffer(
-            GeometryReader { proxy in Text("\(proxy.size.width)") },
-            context: makeRenderContext(width: 0, height: 0))
-        #expect(buffer.width >= 0)
+            GeometryReader { proxy in
+                seen = proxy.size
+                return Text("\(proxy.size.width)")
+            },
+            context: makeRenderContext(width: -2, height: -1))
+
+        #expect(seen == CellSize(width: 0, height: 0))
+        // And at zero the content is truncated away entirely, as documented:
+        // the reader fills its (empty) proposal rather than drawing the digits.
+        #expect(buffer.width == 0)
+        #expect(buffer.lines.allSatisfy { $0.stripped.isEmpty })
     }
 }
