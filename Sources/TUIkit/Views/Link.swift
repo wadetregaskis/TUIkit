@@ -11,8 +11,12 @@ import Foundation
 /// A control that opens a URL when activated.
 ///
 /// Mirrors SwiftUI's `Link`. In a terminal a link is focusable like a button:
-/// Tab to it and press Enter/Space, or click it, to open its destination via
-/// the environment's ``OpenURLAction`` (the system opener by default). The
+/// Tab to it and press Enter/Space, or click it, to activate it — the
+/// destination goes to the environment's ``OpenURLAction`` and a popover shows
+/// it to read or copy. By default that action launches NOTHING: the system
+/// opener is off unless the session is declared local (see ``OpenURLAction``
+/// for why), so the popover, and the OSC 8 hyperlink the label carries for a
+/// terminal that honours one, are what the user gets. The
 /// label is tinted with the accent colour and underlined so it reads as a link
 /// — regardless of the label form. Turn the underline off for a subtree with
 /// ``View/linkUnderline(_:)``.

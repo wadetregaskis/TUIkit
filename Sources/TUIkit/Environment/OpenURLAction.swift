@@ -25,9 +25,15 @@ import TUIkitCore
 /// ```
 ///
 /// The default action hands the URL to the operating system's opener — `open`
-/// on macOS, `xdg-open` on Linux — so it launches in the user's browser (or
-/// whatever app is registered), the same as SwiftUI's default. Override it for
-/// a scope by putting a custom action in the environment:
+/// on macOS, `xdg-open` on Linux — but that opener is OFF unless the session
+/// has been declared local: over ssh it would run on the wrong machine, and
+/// the framework cannot tell which machine it is on (3a96d8fc). A tool that
+/// knows it is local turns it on through ``TerminalClient/urlOpeningSupport``,
+/// and `TUIKIT_OPEN_URLS=1` lets a user answer for their own session. A
+/// ``Link`` shows its destination in a popover either way, and carries an
+/// OSC 8 hyperlink for the terminal — which IS on the user's machine — to
+/// open. Override the action for a scope by putting a custom one in the
+/// environment:
 ///
 /// ```swift
 /// content.environment(\.openURL, OpenURLAction { url in log("would open \(url)") })
@@ -178,7 +184,9 @@ extension EnvironmentValues {
     /// An action that opens a URL (see ``OpenURLAction``).
     ///
     /// Read it with `@Environment(\.openURL)` and call it like a function.
-    /// The default hands the URL to the system opener (`open` / `xdg-open`).
+    /// The default hands the URL to the system opener (`open` / `xdg-open`),
+    /// which is off unless the session is declared local — see
+    /// ``OpenURLAction``.
     public var openURL: OpenURLAction {
         get { self[OpenURLActionKey.self] }
         set { self[OpenURLActionKey.self] = newValue }
