@@ -609,10 +609,16 @@ extension TrackRenderer {
             return ANSIRenderer.colorize(text, foreground: gradient.stops.first?.color ?? fallback)
         }
         var result = ""
-        for (index, cell) in cells.enumerated() {
+        // Indexed by the CELL column, not the character: `span` counts cells,
+        // and a wide glyph — a segment can be any string — covers two. Stepping
+        // the ramp per character traversed it at half rate and never drew its
+        // last stops.
+        var column = 0
+        for cell in cells {
             let color = gradientColor(
-                gradient, index: index, span: span, fallback: fallback, depth: depth)
+                gradient, index: column, span: span, fallback: fallback, depth: depth)
             result += ANSIRenderer.colorize(String(cell), foreground: color)
+            column += max(1, cell.terminalWidth)
         }
         return result
     }

@@ -30,6 +30,32 @@ struct TrackGradientTests {
             palette: SystemPalette.green)
     }
 
+    /// `span` counts cells and a segment can be any string, so a wide glyph
+    /// covers two. Stepping the ramp per CHARACTER traversed it at half rate
+    /// and never emitted its last stops.
+    @Test("A gradient over wide glyphs reaches its last stop")
+    func gradientOverWideGlyphsReachesTheEnd() {
+        let full = TrackRenderer.render(
+            fraction: 1.0, width: 20,
+            style: .threeSegment(
+                leading: "🌑", middle: "🌕", trailing: "🌖", emptyFill: "·",
+                coloring: .gradient(Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)]))),
+            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7),
+            palette: SystemPalette.green)
+        // A wide glyph is coloured at its FIRST cell, so the last glyph (cells
+        // 18–19) wears ramp[18] of 20 — not the final stop itself, but eighteen
+        // steps along. Per character it wore ramp[9], the middle of the ramp.
+        let gradient = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])
+        func code(_ index: Int) -> String {
+            let c = TrackRenderer.gradientColor(
+                gradient, index: index, span: 20, fallback: .rgb(1, 2, 3), depth: ColorDepth.current).rgbComponents!
+            return "38;2;\(c.red);\(c.green);\(c.blue)"
+        }
+        let lastGlyph = full.components(separatedBy: "\u{1B}[0m").dropLast().last ?? ""
+        #expect(lastGlyph.contains(code(18)), "the last glyph wears ramp[18]: \(lastGlyph.debugDescription)")
+        #expect(!lastGlyph.contains(code(9)), "…not the per-character ramp[9]")
+    }
+
     /// The set of distinct `38;2;r;g;b` foreground codes in `output`.
     private func foregroundTriples(in output: String) -> Set<String> {
         var found: Set<String> = []
