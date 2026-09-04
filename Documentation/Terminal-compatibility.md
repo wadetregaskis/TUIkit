@@ -562,7 +562,7 @@ before the render loop is built.
 > "candidate A" of the 2026-08-28 session). In Swift's own grapheme
 > segmentation a Fitzpatrick modifier is an Extend scalar, so it FUSES with
 > the escape's final byte: `…C` + 🏻 becomes one `Character`, and every
-> Character-level escape scanner in the pipeline (`csiSequenceEnd`, the
+> Character-level escape scanner in the pipeline (`escapeSequenceEnd`, the
 > advance oracle, the width scan) mis-parses the emission it itself
 > produced — the same `m🏻` hazard the SGR-collapsing code documents. The
 > contiguous-cluster emission (`ECH` + whole rewritten cluster + `CUF`) has
@@ -797,8 +797,9 @@ non-default setup.
   cell keeps the default background here exactly as on Terminal.app. (The
   primary-screen alignment card renders correctly; the app misrendered
   until the model was rebuilt from alternate-screen measurements —
-  user-reported, byte-capture confirmed identical output bytes, and the
-  `context_probe` isolated the screen mode as the variable.)
+  user-reported, byte-capture confirmed identical output bytes, and an
+  ad-hoc probe of the day — not kept in `Tools/TerminalProbes` — isolated
+  the screen mode as the variable.)
 - **Fitzpatrick skin tones — split by plane:**
   - SMP bases (👍🏽): render MERGED (one skin-toned glyph), advance 2 ✓.
   - BMP bases (✊🏻 ☝🏽): render **base + separate 2-cell colour swatch**,
@@ -2265,7 +2266,7 @@ line cannot ask that question: `FrameDiffWriter.repaintRightEdge` documents a
 family that consumes more line budget than it claims and WRAPS, and a row padded
 to the terminal's exact width is where that would show.
 
-**Measured** (`Tools/TerminalProbes/row_probe.py`, `PROBE_ALT=1`, Terminal.app
+**Measured** (`row_probe.py` — retired 2026-08-28, see `Tools/TerminalProbes/README.md` — with `PROBE_ALT=1`, Terminal.app
 455.1 / macOS 15.7, 80 columns). Each row carries one cluster and is padded to
 four cells short of the edge, where the cursor is read — at the edge itself it
 CLAMPS, and reports the same column whatever the row spent:
