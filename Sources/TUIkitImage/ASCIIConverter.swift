@@ -214,7 +214,11 @@ public enum ASCIIColorMode: Sendable, Equatable {
     /// Worth asking for above 16 colours too, for the same reason ``ansi256``
     /// is on a truecolor terminal: it is the look of the terminal's own palette,
     /// and it follows the user's theme, since the sixteen are whatever their
-    /// terminal profile says they are.
+    /// terminal profile says they are — when drawn as GLYPHS, which emit the
+    /// names (SGR 30–37 / 90–97). Drawn as pixels through terminal graphics
+    /// the sixteen are xterm's default RGB, baked in: a transmitted image is
+    /// not SGR, and nothing here can ask the terminal what its profile paints
+    /// for "red". See `ASCIIConverter.recoloured`.
     case ansi16
 
     /// 24 shades of gray.
