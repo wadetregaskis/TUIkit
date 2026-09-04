@@ -82,6 +82,29 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
     /// ~45× slower than the border-free `frames` tree. Measuring instead of
     /// rendering removes that cost; the measure/render equivalence tests pin the
     /// two passes together.
+    /// The context a structural child gets, with the axis this box lays it out
+    /// along published on it — the same thing `_VStackCore` does for a real
+    /// column, and for the same reader: ``Divider``.
+    ///
+    /// A multi-view body is an implicit column. `@ViewBuilder` packs it into a
+    /// `TupleView`, whose `renderToBuffer` stacks the children vertically, and
+    /// nothing in that path publishes an axis — so the body inherited the axis
+    /// of whatever stack the BOX sits in. Inside an `HStack` that made a
+    /// `Divider` between two stacked children a full-height `│`, which then
+    /// took the interior's whole height and pushed the children after it out of
+    /// the box.
+    ///
+    /// Not published for a single child, which is not stacked at all: a box
+    /// around one view is a modifier (`.border()` is spelled as one), so it
+    /// stays transparent to the axis and `Divider().border()` in a row remains
+    /// the vertical rule it is in SwiftUI.
+    private func publishingStackAxis(
+        _ context: RenderContext, stacking child: (any View)?
+    ) -> RenderContext {
+        guard let child, child is any ChildInfoProvider else { return context }
+        return context.publishingContainerAxis(.vertical)
+    }
+
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         // Resolve the space we were offered (proposal wins over the context,
         // exactly as renderChild sets availableWidth/Height before rendering).
@@ -109,8 +132,10 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         // — since a footerless container's empty footer measures to height 0,
         // giving the body the same available height — they would collide on a
         // memoized-measurement key. Must match `renderToBuffer` exactly.
-        let bodyInner = innerContext.withChildIdentity(type: Content.self, index: 0)
-        let footerInner = innerContext.withChildIdentity(type: Footer.self, index: 1)
+        let bodyInner = publishingStackAxis(
+            innerContext.withChildIdentity(type: Content.self, index: 0), stacking: content)
+        let footerInner = publishingStackAxis(
+            innerContext.withChildIdentity(type: Footer.self, index: 1), stacking: footer)
 
         // Vertical chrome: top + bottom border (only when bordered), plus the
         // optional footer separator — the same arithmetic renderToBuffer uses.
@@ -256,8 +281,10 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         // Distinct identities for the body and footer (see `sizeThatFits` — must
         // match it exactly so the two passes agree on identity, hence on
         // `@State` slots and focus IDs).
-        let bodyInner = innerContext.withChildIdentity(type: Content.self, index: 0)
-        let footerInner = innerContext.withChildIdentity(type: Footer.self, index: 1)
+        let bodyInner = publishingStackAxis(
+            innerContext.withChildIdentity(type: Content.self, index: 0), stacking: content)
+        let footerInner = publishingStackAxis(
+            innerContext.withChildIdentity(type: Footer.self, index: 1), stacking: footer)
 
         // Vertical chrome: top + bottom border (only when bordered), plus the
         // optional footer separator. The body and footer must share whatever is

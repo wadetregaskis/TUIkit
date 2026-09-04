@@ -281,6 +281,7 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
     }
 
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let context = context.publishingContainerAxis(.vertical)
         let rows = rows(context: context)
         guard !rows.isEmpty else { return ViewSize.fixed(0, 0) }
         let lattice = lattice(rows, context: context)
@@ -292,6 +293,15 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // A grid stacks its rows into a column, so it publishes `.vertical` for
+        // everything inside it — exactly as `_VStackCore` does, and for the
+        // same reader. It is a child that is NOT a `GridRow` that needs it: it
+        // spans every column, so the `Divider` between two rows must be the
+        // horizontal rule it is when the grid stands alone. Publishing nothing
+        // is not the same as publishing this: with nothing published, a grid
+        // placed inside an `HStack` handed that full-width child the ROW's
+        // axis, and the rule collapsed to a single `│` in column 0.
+        let context = context.publishingContainerAxis(.vertical)
         let rows = rows(context: context)
         guard !rows.isEmpty else { return FrameBuffer() }
         let (columns, heights, columnAlignment) = lattice(rows, context: context)

@@ -71,4 +71,56 @@ struct DividerAxisTests {
         let inColumn = render(VStack { Text("a"); Divider(character: "═"); Text("b") })
         #expect(inColumn.contains { $0.contains("═") }, "and in a column: \(inColumn)")
     }
+
+    // MARK: - Containers that stack their content without a VStack
+
+    /// A box's multi-view body is an implicit COLUMN — the `@ViewBuilder` packs
+    /// it into a `TupleView`, which stacks its children vertically — so a rule
+    /// between two of them is horizontal. The axis is published by whichever
+    /// container imposes the stacking, and a box that leaves it to the row it
+    /// sits in hands the rule the wrong one: the divider drew a full-height `│`
+    /// and pushed `bb` out of the box entirely.
+    @Test("A rule between a bordered container's stacked children stays horizontal in a row")
+    func horizontalInsideBorderedContainerInRow() {
+        let lines = render(
+            HStack(spacing: 1) {
+                Text("x")
+                Panel("P") {
+                    Text("aa")
+                    Divider()
+                    Text("bb")
+                }
+            }, width: 30, height: 8)
+        let joined = lines.joined(separator: "\n")
+
+        #expect(joined.contains("bb"), "the last child is still in the box: \(lines)")
+        for (index, line) in lines.enumerated() {
+            // The box's own two side walls, and no third `│` from the rule.
+            #expect(
+                line.filter { $0 == "│" }.count <= 2,
+                "row \(index) carries only the box's walls: \(lines)")
+        }
+    }
+
+    /// A `Grid` stacks its rows into a column, and a child that is not a
+    /// `GridRow` spans every column — so the rule between two rows is
+    /// horizontal wherever the grid itself sits. `GridTests` pins that at the
+    /// top level, where no axis is published at all; inside a row the grid used
+    /// to hand its full-width child the ROW's axis, collapsing the rule to one
+    /// `│` in column 0.
+    @Test("A grid's full-width rule stays horizontal when the grid sits in a row")
+    func gridRuleInRow() {
+        let lines = render(
+            HStack(spacing: 1) {
+                Text("x")
+                Grid(alignment: .leading) {
+                    GridRow { Text("aaa"); Text("bbb") }
+                    Divider()
+                    GridRow { Text("ccc"); Text("ddd") }
+                }
+            }, width: 30, height: 6)
+
+        #expect(lines[1].contains("─"), "the rule spans the columns: \(lines)")
+        #expect(!lines[1].contains("│"), "and is not a vertical bar: \(lines)")
+    }
 }
