@@ -178,10 +178,9 @@ extension Terminal {
         var chunk = [UInt8](repeating: 0, count: 512)
         let deadline = Date().addingTimeInterval(timeout)
         while !TerminalGraphicsQuery.sawFence(collected) {
-            let remaining = deadline.timeIntervalSinceNow
-            guard remaining > 0 else { break }
-            var descriptor = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
-            guard poll(&descriptor, 1, Int32(remaining * 1000)) > 0 else { break }
+            // Shared with the other two startup probes, and EINTR-aware —
+            // see ``Terminal/waitForInput(on:until:)``.
+            guard Terminal.waitForInput(until: deadline) else { break }
             let read = chunk.withUnsafeMutableBufferPointer { readSource($0) }
             guard read > 0 else { break }
             collected.append(contentsOf: chunk[0..<read])

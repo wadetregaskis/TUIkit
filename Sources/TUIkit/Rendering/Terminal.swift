@@ -587,6 +587,56 @@ extension Terminal {
         return added
     }
 
+    /// Waits until `descriptor` has bytes to read, or `deadline` passes.
+    ///
+    /// NOT a bare `poll`, and the difference is the whole point: `poll` returns
+    /// `-1`/`EINTR` whenever a signal handler runs during the wait, and it is
+    /// one of the calls POSIX explicitly says `SA_RESTART` does *not* restart.
+    /// A caller that reads that as "the terminal said nothing" abandons its
+    /// probe with time still on the clock — so an `EINTR` resumes the wait
+    /// against the SAME deadline, never a fresh timeout, which is what stops a
+    /// storm of signals from extending the probe past its budget.
+    ///
+    /// The asymmetry is why this went unnoticed. On Darwin ``SignalManager``
+    /// installs `SIG_IGN` and lets kqueue deliver the signal, so no handler
+    /// runs and `poll` is never interrupted; on Linux libdispatch installs and
+    /// owns the handler, so dragging the terminal window (or a multiplexer
+    /// resizing the pane) during the ~500 ms startup handshake is enough to cut
+    /// a probe short. The one that costs most is `queryGraphicsSupport`:
+    /// abandoned, it disables image placement for the whole session, silently.
+    ///
+    /// The sibling ``readSource`` already retries `EINTR` by name; this is that
+    /// rule for the wait rather than the read, in one place so the three probes
+    /// that need it cannot drift apart.
+    ///
+    /// `nonisolated` because it touches no terminal state — it is a `poll` and
+    /// a clock. Every caller happens to be on the main actor; nothing here
+    /// requires it, and a blocking wait has no business claiming isolation it
+    /// does not need.
+    ///
+    /// - Parameters:
+    ///   - descriptor: The file descriptor to wait on. Defaults to standard
+    ///     input, which is what every probe uses; the parameter exists so the
+    ///     retry can be driven over a pipe in a test, the same kind of seam
+    ///     ``readSource`` opens for the parser.
+    ///   - deadline: When to give up.
+    /// - Returns: `true` when the descriptor is readable, `false` on the
+    ///   deadline or on any error that is not `EINTR`.
+    nonisolated static func waitForInput(
+        on descriptor: Int32 = STDIN_FILENO, until deadline: Date
+    ) -> Bool {
+        while true {
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { return false }
+            var target = pollfd(fd: descriptor, events: Int16(POLLIN), revents: 0)
+            let ready = poll(&target, 1, Int32(remaining * 1000))
+            if ready > 0 { return true }
+            // `errno` is thread-local and transient, so it is read here, before
+            // anything else can overwrite it.
+            guard ready < 0, errno == EINTR else { return false }
+        }
+    }
+
     /// Asks the terminal to identify itself, and returns the
     /// `TERM_PROGRAM`-style name of the host if its answers name one.
     ///
@@ -623,11 +673,7 @@ extension Terminal {
         let deadline = Date().addingTimeInterval(timeout)
         var identity = TerminalIdentity()
         while !identity.sawFence {
-            let remaining = deadline.timeIntervalSinceNow
-            guard remaining > 0 else { break }
-            var descriptor = pollfd(
-                fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
-            guard poll(&descriptor, 1, Int32(remaining * 1000)) > 0 else { break }
+            guard Terminal.waitForInput(until: deadline) else { break }
             let read = chunk.withUnsafeMutableBufferPointer { readSource($0) }
             guard read > 0 else { break }
             collected.append(contentsOf: chunk[0..<read])
