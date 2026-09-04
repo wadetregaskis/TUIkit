@@ -312,32 +312,48 @@ extension Terminal {
         let endMarker = Self.pasteEnd
         guard input.count >= endMarker.count else { return nil }
 
-        // Scan for the end marker. Note: the start marker is no
-        // longer in the buffer — `readEvent()` consumed it before
-        // setting `inPasteMode = true`.
+        // Scan for the end marker, RESUMING where the last pass stopped rather
+        // than restarting at zero. Note: the start marker is no longer in the
+        // buffer — `readEvent()` consumed it before setting `inPasteMode`.
+        //
+        // Nothing is consumed from the front while a paste is open, so a byte
+        // ruled out on one pass is still that same byte, still ruled out, on
+        // the next; and one pass happens per `readEvent()`, each of which adds
+        // at most one 4 KiB drain. Rescanning from zero therefore made a paste
+        // quadratic in its own size — a 512 KiB paste took 52 s of CPU in a
+        // debug build, against 0.44 s for 64 KiB, and the run loop calls this
+        // twice per frame while it waits.
         let searchEnd = input.count - endMarker.count + 1
-        for start in 0..<searchEnd {
-            var match = true
-            for i in 0..<endMarker.count where input[start + i] != endMarker[i] {
-                match = false
-                break
+        if pasteScanCursor < searchEnd {
+            for start in pasteScanCursor..<searchEnd {
+                var match = true
+                for i in 0..<endMarker.count where input[start + i] != endMarker[i] {
+                    match = false
+                    break
+                }
+                if !match { continue }
+
+                // Content is everything before the marker.
+                var content = [UInt8]()
+                content.reserveCapacity(start)
+                for i in 0..<start { content.append(input[i]) }
+                consume(start + endMarker.count)
+                inPasteMode = false
+
+                let text = String(bytes: content, encoding: .utf8)
+                    ?? String(content.map { Character(UnicodeScalar($0)) })
+                return .key(KeyEvent(key: .paste(text)))
             }
-            if !match { continue }
-
-            // Content is everything before the marker.
-            var content = [UInt8]()
-            content.reserveCapacity(start)
-            for i in 0..<start { content.append(input[i]) }
-            consume(start + endMarker.count)
-            inPasteMode = false
-
-            let text = String(bytes: content, encoding: .utf8)
-                ?? String(content.map { Character(UnicodeScalar($0)) })
-            return .key(KeyEvent(key: .paste(text)))
         }
 
-        // No end marker yet. Safety: if a runaway paste fills more
-        // than the cap, give up on it so we don't pin memory.
+        // No end marker yet. Back the cursor up by one byte less than the
+        // marker's length: a marker STRADDLING the boundary — `ESC [ 2` in this
+        // drain and `0 1 ~` in the next — has to be matched from its first
+        // byte, and that first byte is inside the tail we just failed on.
+        pasteScanCursor = input.count - (endMarker.count - 1)
+
+        // Safety: if a runaway paste fills more than the cap, give up on it so
+        // we don't pin memory.
         if input.count > Self.maxPasteBytes {
             consume(input.count)
             inPasteMode = false

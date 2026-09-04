@@ -376,6 +376,65 @@ struct TerminalInputParsingTests {
         #expect(!terminal.hasPendingInput, "once the stalled paste is abandoned the loop can idle")
     }
 
+    /// The end-marker scan restarted at byte zero on every `readEvent()`, and a
+    /// paste's buffer only grows — nothing is consumed until the marker is
+    /// found — so receiving a paste cost O(n²) in its own size, twice per
+    /// frame. Measured in a debug build before the cursor was added: 64 KiB
+    /// took 0.44 s, 512 KiB took 52.7 s.
+    ///
+    /// A strictly increasing cursor is the whole mechanism: each pass starts
+    /// where the last stopped, so a byte is compared a bounded number of times
+    /// however long the paste runs.
+    @Test("The end-marker scan resumes rather than restarting each pump")
+    func pasteScanResumesAcrossPumps() {
+        let (terminal, stage) = makeTerminal()
+        stage(Array("\u{1B}[200~".utf8))
+        #expect(terminal.readEvent() == nil, "the start marker opens paste mode")
+
+        var cursors: [Int] = []
+        for _ in 0..<8 {
+            stage([UInt8](repeating: 0x61, count: 1000))
+            #expect(terminal.readEvent() == nil, "still mid-paste")
+            cursors.append(terminal.pasteScanCursor)
+        }
+
+        #expect(cursors.first.map { $0 > 0 } == true, "nothing was ruled out: \(cursors)")
+        #expect(
+            zip(cursors, cursors.dropFirst()).allSatisfy { $0 < $1 },
+            "the scan restarted instead of resuming: \(cursors)")
+
+        // And the content still arrives whole.
+        stage(Array("\u{1B}[201~".utf8))
+        var event: TerminalInput?
+        for _ in 0..<8 where event == nil { event = terminal.readEvent() }
+        guard case .key(let key) = event, case .paste(let text) = key.key else {
+            Issue.record("no paste event: \(String(describing: event))")
+            return
+        }
+        #expect(text == String(repeating: "a", count: 8000))
+    }
+
+    /// The risk the cursor introduces, and the reason it backs up by five: an
+    /// end marker SPLIT across two drains — `ESC [ 2` in one, `0 1 ~` in the
+    /// next — has to be matched from its first byte, which lives inside the
+    /// tail the previous pass already walked past.
+    @Test("An end marker split across two drains is still found", arguments: 1...5)
+    func pasteEndMarkerSplitAcrossDrainsIsFound(prefixLength: Int) {
+        let (terminal, stage) = makeTerminal()
+        let content = String(repeating: "x", count: 20)
+        let endMarker = Array("\u{1B}[201~".utf8)
+
+        stage(
+            Array("\u{1B}[200~".utf8) + Array(content.utf8)
+                + Array(endMarker.prefix(prefixLength)))
+        #expect(terminal.readEvent() == nil, "the marker is incomplete, so nothing yet")
+
+        stage(Array(endMarker.dropFirst(prefixLength)))
+        var event: TerminalInput?
+        for _ in 0..<8 where event == nil { event = terminal.readEvent() }
+        #expect(event == .key(KeyEvent(key: .paste(content))), "split at \(prefixLength)")
+    }
+
     /// The timeout must not cut a real paste in half: a stream that keeps
     /// delivering bytes keeps resetting the silence count, however long it
     /// takes in total.

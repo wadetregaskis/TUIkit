@@ -104,7 +104,20 @@ final class Terminal: TerminalProtocol {
     /// across as many `readEvent()` calls as it takes for the end
     /// marker to arrive — no blocking, no `usleep`. The run loop
     /// stays responsive even for very large pastes.
-    var inPasteMode: Bool = false
+    var inPasteMode: Bool = false {
+        didSet { pasteScanCursor = 0 }
+    }
+
+    /// How many leading bytes of ``input`` have already been checked and ruled
+    /// out as the START of the bracketed-paste end marker.
+    ///
+    /// Meaningful only while ``inPasteMode``, which is why its `didSet` clears
+    /// this: a cursor into a buffer that belongs to a finished paste is
+    /// nonsense, and leaving a stale one behind would skip past the next
+    /// paste's marker. Nothing is consumed from the front while a paste is
+    /// open, so an index taken on one pass still means the same byte on the
+    /// next.
+    var pasteScanCursor: Int = 0
 
     /// Frames during which we couldn't make progress on whatever
     /// sits at the front of the input buffer. Increments only when
