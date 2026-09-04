@@ -9,9 +9,12 @@ import TUIkitCore
 
 /// One grapheme cluster worth showing, and why it is worth showing.
 ///
-/// The list IS ``TerminalWidthCorpus`` — the same 69 clusters the
-/// probes in `Tools/TerminalProbes/` measure on real terminals, pinned
-/// identical to their JSON by `WidthCorpusParityTests`. The app deliberately
+/// The list IS ``TerminalWidthCorpus`` — the same clusters the probes in
+/// `Tools/TerminalProbes/` measure on real terminals, pinned identical to
+/// their JSON by `WidthCorpusParityTests`. No count is quoted: the corpus
+/// grows whenever something new is worth doubting (69 rows, then 78, then 116
+/// when the complex scripts arrived), and a number here would only ever be
+/// the count on the day somebody wrote it down. The app deliberately
 /// shows every entry rather than a summary battery: a hand-picked battery only
 /// contains what somebody already thought to doubt, and the whole point of
 /// this app is meeting the terminal nobody measured yet.
@@ -76,8 +79,8 @@ enum Clusters {
             note: TerminalWidthCorpus.categoryNotes[entry.category] ?? "")
     }
 
-    /// One representative per category — for screens where 69 rows would bury
-    /// the signal, like the class-by-class quirk table. The representative is
+    /// One representative per category — for screens where the whole corpus
+    /// would bury the signal, like the class-by-class quirk table. The representative is
     /// the category's first corpus entry.
     static let representatives: [Cluster] = {
         var seen = Set<String>()
