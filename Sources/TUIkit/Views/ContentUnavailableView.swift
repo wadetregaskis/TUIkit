@@ -233,18 +233,29 @@ private struct _ContentUnavailableViewCore<Label: View, Description: View, Actio
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
 
-        // Render label
-        let labelBuffer = TUIkit.renderToBuffer(label, context: context)
+        // Each slot renders under its OWN child identity, not the core's.
+        // They are three caller-supplied @ViewBuilders, and at one identity a
+        // composite slot's first @State binds StateKey(coreIdentity, 0) — the
+        // same key for all three, so a matching type silently shares one box
+        // and a mismatched one makes `storage(for:)` replace the box every
+        // render, resetting each slot to its default. The collision class
+        // 778699f5 closed and 6ab904e7 carried to ProgressView's two labels;
+        // these three sites were missed instances. The index (not the type)
+        // is what separates them: two slots can hold the same view type.
+        let labelBuffer = TUIkit.renderToBuffer(
+            label, context: context.withChildIdentity(erasedType: type(of: label), index: 0))
 
         // Render description with secondary foreground color
-        var descContext = context
+        var descContext = context.withChildIdentity(
+            erasedType: type(of: description), index: 1)
         if descContext.environment.foregroundStyle == nil {
             descContext.environment.foregroundStyle = .color(palette.foregroundSecondary)
         }
         let descBuffer = TUIkit.renderToBuffer(description, context: descContext)
 
         // Render actions
-        let actionsBuffer = TUIkit.renderToBuffer(actions, context: context)
+        let actionsBuffer = TUIkit.renderToBuffer(
+            actions, context: context.withChildIdentity(erasedType: type(of: actions), index: 2))
 
         // Combine vertically with spacing
         var result = FrameBuffer()

@@ -65,6 +65,29 @@ struct InfrastructureStateCollisionTests {
         #expect(!text.contains("count-0"), what)
     }
 
+    /// The second half of the class: a wrapper that renders TWO
+    /// caller-supplied `@ViewBuilder` slots at its own identity aliases them
+    /// with EACH OTHER, not just with its own boxes — so a core that persists
+    /// nothing still corrupts its content. Deliberately a different `@State`
+    /// type from ``StatefulProbe`` (the mismatch is what makes
+    /// `storage(for:)` replace the box each frame) and a different `Body`
+    /// type (the `.onAppear` token is `"appear-\(identity.path)"`, so two
+    /// identical bodies at one identity would collide there too and the test
+    /// would be measuring the wrong thing).
+    private struct SecondStatefulProbe: View {
+        @State private var flag = false
+        var body: some View {
+            HStack(spacing: 0) { Text(flag ? "flag-yes" : "flag-no") }
+                .onAppear { flag = true }
+        }
+    }
+
+    private func expectSlotsKeepOwnState(_ view: some View, _ what: Comment) {
+        let text = render(view).lines.joined(separator: "\n").stripped
+        #expect(text.contains("count-7"), what)
+        #expect(text.contains("flag-yes"), what)
+    }
+
     @Test("focusable")
     func focusable() {
         expectStateSurvives(
@@ -117,5 +140,18 @@ struct InfrastructureStateCollisionTests {
         expectStateSurvives(
             Toggle(isOn: .constant(true)) { StatefulProbe() },
             "Toggle clobbered its composite label's @State")
+    }
+
+    @Test("ContentUnavailableView's label and actions")
+    func contentUnavailableViewSlots() {
+        expectSlotsKeepOwnState(
+            ContentUnavailableView {
+                StatefulProbe()
+            } description: {
+                Text("d")
+            } actions: {
+                SecondStatefulProbe()
+            },
+            "ContentUnavailableView's slots shared one @State box")
     }
 }
