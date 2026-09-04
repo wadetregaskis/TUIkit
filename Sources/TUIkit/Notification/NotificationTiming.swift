@@ -19,17 +19,6 @@ enum NotificationTiming {
     /// Duration of the fade-out phase in seconds.
     static let fadeOutDuration: TimeInterval = 0.3
 
-    /// Calculates the current opacity based on elapsed time and phase.
-    ///
-    /// The notification goes through three phases:
-    /// 1. Fade-in (0 → 1.0 over `fadeInDuration`)
-    /// 2. Visible (1.0 for `visibleDuration`)
-    /// 3. Fade-out (1.0 → 0.0 over `fadeOutDuration`)
-    ///
-    /// - Parameters:
-    ///   - elapsed: Time elapsed since the notification appeared.
-    ///   - visibleDuration: How long the notification stays fully visible.
-    /// - Returns: The current opacity value between 0.0 and 1.0.
     /// How often to re-render while an opacity is actually CHANGING.
     ///
     /// ~42 fps, which is what the fades are drawn at. It is not how often to
@@ -69,6 +58,17 @@ enum NotificationTiming {
         return .infinity
     }
 
+    /// Calculates the current opacity based on elapsed time and phase.
+    ///
+    /// The notification goes through three phases:
+    /// 1. Fade-in (0 → 1.0 over `fadeInDuration`)
+    /// 2. Visible (1.0 for `visibleDuration`)
+    /// 3. Fade-out (1.0 → 0.0 over `fadeOutDuration`)
+    ///
+    /// - Parameters:
+    ///   - elapsed: Time elapsed since the notification appeared.
+    ///   - visibleDuration: How long the notification stays fully visible.
+    /// - Returns: The current opacity value between 0.0 and 1.0.
     static func opacity(elapsed: TimeInterval, visibleDuration: TimeInterval) -> Double {
         if elapsed < fadeInDuration {
             return min(1.0, elapsed / fadeInDuration)

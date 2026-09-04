@@ -244,32 +244,6 @@ extension ViewIdentity {
         public let key: String?
     }
 
-    /// Whether the given identity is a strict descendant of this one.
-    ///
-    /// Used by `StateStorage` / `RenderCache` to invalidate all state under a
-    /// branch when a `ConditionalView` switches.
-    ///
-    /// **Structural fast path** (the only form production builds ever take — the
-    /// render tree's identities are uniformly structural, rooted at
-    /// ``init(rootType:)`` with typed/branch descents): decide ancestry by
-    /// walking the structural parent chain. `descendant` is strictly below `self`
-    /// iff `self`'s node lies on `descendant`'s *strict* parent chain — we climb
-    /// `descendant`'s chain to `self`'s depth, then compare that node to `self`'s
-    /// node structurally. An O(depth) pointer/value walk with **zero** path-string
-    /// materialisation. This is invoked once per stored key on a `@State` /
-    /// `@Published` change (`StateStorage.invalidateDescendants`), so eliminating
-    /// the per-key `renderPath()` allocation matters.
-    ///
-    /// **Raw fall-back**: a ``init(path:)`` identity is an opaque path *string*
-    /// (the whole path lives in one `.raw` node), so structural ancestry can't
-    /// see its `/` / `#` component boundaries. When either chain is raw-rooted we
-    /// fall back to the rendered-path prefix comparison, preserving the exact
-    /// prior semantics for the empty-root default and the identity tests. (A
-    /// render tree is uniformly structural or uniformly raw, so the two worlds
-    /// never mix in practice.)
-    ///
-    /// - Parameter descendant: The identity to check.
-    /// - Returns: `true` if `descendant` is strictly below this identity.
     /// The view type this identity's last structural step names, or `nil` when
     /// the step names no type (a conditional branch label, a raw path).
     ///

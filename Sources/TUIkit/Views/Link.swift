@@ -290,9 +290,6 @@ private struct TerminalHyperlinkModifier: ViewModifier {
 
 // MARK: - Internal
 
-/// Reads ``OpenURLAction`` from the environment and drives a plain, accent-tinted
-/// button — reusing all of `Button`'s focus, keyboard, mouse, and disabled
-/// handling — whose action opens the destination.
 /// Swallows the repeats a held Enter produces on a link.
 ///
 /// A held key auto-repeats in the terminal, so the application receives a
@@ -339,6 +336,9 @@ final class LinkActivationGate: @unchecked Sendable {
     }
 }
 
+/// Reads ``OpenURLAction`` from the environment and drives a plain, accent-tinted
+/// button — reusing all of `Button`'s focus, keyboard, mouse, and disabled
+/// handling — whose action opens the destination.
 private struct _Link<Label: View>: View {
     let destination: URL
     let label: Label

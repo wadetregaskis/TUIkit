@@ -812,20 +812,6 @@ extension FrameBuffer {
             contentsOf: overlay.shiftedOpacityRegions(byX: position.x, y: position.y))
     }
 
-    /// Returns a copy of this buffer guaranteed to fit within the given bounds.
-    ///
-    /// Lines wider than `width` are truncated to `width` visible cells
-    /// (ANSI-aware — a wide character is dropped rather than split in half);
-    /// lines beyond `height` are discarded.
-    ///
-    /// This is the layout system's safety net: a view that mistakenly
-    /// produces an oversized buffer cannot overwrite a sibling or overflow
-    /// the terminal — at worst its own content is truncated.
-    ///
-    /// - Parameters:
-    ///   - width: The maximum visible width in cells. Values below 0 are treated as 0.
-    ///   - height: The maximum number of lines. Values below 0 are treated as 0.
-    /// - Returns: A buffer with `width <= max(0, width)` and `height <= max(0, height)`.
     /// A copy with each line's trailing unstyled blank cells removed.
     ///
     /// For buffers that are drawn OVER something — a floating drag preview,
