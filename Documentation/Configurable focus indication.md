@@ -1,6 +1,8 @@
 # Making focus indication configurable
 
-**Status: research. Nothing implemented, nothing decided.**
+**Status: research. The one inconsistency it turned up was fixed on 2026-08-24
+(`List` and `Table` now share `RowSelectionIndicator`, below); the
+configurability API itself is neither decided nor implemented.**
 
 The question, as asked: focus is shown inconsistently across the TUI — a bullet
 here, a row background there — so what if *what* focus looks like were
