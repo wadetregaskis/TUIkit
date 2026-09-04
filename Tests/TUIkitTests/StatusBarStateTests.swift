@@ -597,4 +597,65 @@ struct StatusBarSectionCascadingTests {
         #expect(labels.contains("global"))
         #expect(!labels.contains("other"))
     }
+
+    // MARK: - Quit Behaviour
+
+    /// `.always` is the default, so `isAtRoot` never gates anything until an
+    /// app opts into `.rootOnly` — which is why the whole `rootOnly` arm had
+    /// no test. These pin both sides of the gate AND the correspondence it
+    /// rests on: "root" means the user context stack is empty, nothing else.
+    @Test("Default quit behaviour allows quitting from any depth")
+    func quitAlwaysIgnoresContextDepth() {
+        let state = StatusBarState()
+
+        // `QuitBehavior` is deliberately not `Equatable` (it is a config knob,
+        // never compared in the framework), so the default is pinned by pattern
+        // match rather than `==`.
+        if case .rootOnly = state.quitBehavior { Issue.record("default should be .always") }
+        #expect(state.isAtRoot)
+        #expect(state.isQuitAllowed)
+
+        state.push(context: "detail", items: [StatusBarItem(shortcut: "x", label: "x")])
+
+        #expect(!state.isAtRoot, "a pushed context is no longer the root")
+        #expect(state.isQuitAllowed, ".always does not consult isAtRoot")
+    }
+
+    @Test("rootOnly allows quitting at the root and refuses it under a pushed context")
+    func quitRootOnlyTracksContextStack() {
+        let state = StatusBarState()
+        state.quitBehavior = .rootOnly
+
+        #expect(state.isQuitAllowed, "no context pushed is the root")
+
+        state.push(context: "detail", items: [StatusBarItem(shortcut: "x", label: "x")])
+        #expect(!state.isQuitAllowed)
+
+        state.push(context: "deeper", items: [StatusBarItem(shortcut: "y", label: "y")])
+        #expect(!state.isQuitAllowed)
+
+        state.pop(context: "deeper")
+        #expect(!state.isQuitAllowed, "one context is still pushed")
+
+        state.pop(context: "detail")
+        #expect(state.isQuitAllowed, "back at the root")
+
+        state.push(context: "detail", items: [])
+        state.clearContexts()
+        #expect(state.isQuitAllowed, "clearContexts returns to the root")
+    }
+
+    /// The gate is not just advisory: `currentSystemItems` drops the quit entry
+    /// entirely, so the bar never advertises a key that would do nothing.
+    @Test("rootOnly hides the quit item from the bar under a pushed context")
+    func quitRootOnlyHidesTheSystemItem() {
+        let state = StatusBarState()
+        state.quitBehavior = .rootOnly
+
+        #expect(state.currentSystemItems.contains { $0.order == .quit })
+
+        state.push(context: "detail", items: [StatusBarItem(shortcut: "x", label: "x")])
+
+        #expect(!state.currentSystemItems.contains { $0.order == .quit })
+    }
 }
