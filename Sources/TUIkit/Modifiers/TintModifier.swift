@@ -16,8 +16,20 @@ import TUIkitView
 /// slider/stepper's arrows, a radio's selected dot, focus highlights, accent-
 /// coloured text — follows the tint, with no per-control wiring.
 ///
-/// Only `accent` is overridden; stored roles like `focusBackground` and
-/// `cursorColor` keep the base palette's values.
+/// `accent` is the only role this CHANGES — but every other role still has to
+/// be written out, and that is the whole hazard of the type. A `Palette` role
+/// left without a witness here does not fall through to `base`; it falls to
+/// `Palette`'s protocol extension, whose defaults are *collapsing* — they
+/// recompute the role from this palette's OTHER roles. So an omission silently
+/// discards whatever the base stated for it and substitutes a derived colour.
+/// That is not hypothetical: `fieldBackground` was missing, and every tinted
+/// subtree drew its text fields on a surface stepped off `background` instead
+/// of on the one the base palette named.
+///
+/// Adding a role to ``Palette`` therefore means adding a line here.
+/// `StyleCascadeCoverageTests` asserts all of them, driven by a table it
+/// cross-checks against a palette that states every role, so the omission
+/// fails a test instead of quietly changing a colour.
 struct TintedPalette: Palette {
     let base: any Palette
     let tint: Color
@@ -50,6 +62,7 @@ struct TintedPalette: Palette {
     var border: Color { base.border }
     var focusBackground: Color { base.focusBackground }
     var cursorColor: Color { base.cursorColor }
+    var fieldBackground: Color { base.fieldBackground }
 }
 
 // MARK: - tint environment

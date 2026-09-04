@@ -18,6 +18,67 @@ private struct CoverageRow: Identifiable, Sendable {
     let name: String
 }
 
+/// A palette that STATES every ``Palette`` role, each a distinct colour.
+///
+/// Every role, because the defaults in `Palette`'s extension are *collapsing*
+/// — `foregroundSecondary` falls back to `foreground`, `cursorColor` to
+/// `accent`, `fieldBackground` to a step off `background` — so a palette that
+/// leaves a role unstated cannot tell "delegated to the base" apart from
+/// "recomputed from the base's other roles", which is exactly the bug this
+/// palette exists to catch.
+///
+/// Distinct, for the same reason at a smaller scale: two roles sharing a
+/// colour make a forwarding mistake *between those two* invisible. The suite
+/// asserts the distinctness rather than trusting this list.
+private struct EveryRolePalette: Palette {
+    let id = "every-role"
+    let name = "Every role"
+
+    let background = Color.rgb(1, 1, 1)
+    let statusBarBackground = Color.rgb(2, 2, 2)
+    let appHeaderBackground = Color.rgb(3, 3, 3)
+    let overlayBackground = Color.rgb(4, 4, 4)
+    let foreground = Color.rgb(5, 5, 5)
+    let foregroundSecondary = Color.rgb(6, 6, 6)
+    let foregroundTertiary = Color.rgb(7, 7, 7)
+    let foregroundQuaternary = Color.rgb(8, 8, 8)
+    let accent = Color.rgb(9, 9, 9)
+    let success = Color.rgb(10, 10, 10)
+    let warning = Color.rgb(11, 11, 11)
+    let error = Color.rgb(12, 12, 12)
+    let info = Color.rgb(13, 13, 13)
+    let border = Color.rgb(14, 14, 14)
+    let focusBackground = Color.rgb(15, 15, 15)
+    let cursorColor = Color.rgb(16, 16, 16)
+    let fieldBackground = Color.rgb(17, 17, 17)
+}
+
+/// Every colour role, read through the existential so the same entry can be
+/// applied to a base palette and to the `TintedPalette` wrapping it.
+///
+/// Closures rather than key paths because `\(any Palette).background` is not a
+/// key path Swift will form — the roles live on a protocol, and the two sides
+/// of every comparison below are different concrete types.
+private let paletteRoles: [(name: String, read: @Sendable (any Palette) -> Color)] = [
+    ("background", { $0.background }),
+    ("statusBarBackground", { $0.statusBarBackground }),
+    ("appHeaderBackground", { $0.appHeaderBackground }),
+    ("overlayBackground", { $0.overlayBackground }),
+    ("foreground", { $0.foreground }),
+    ("foregroundSecondary", { $0.foregroundSecondary }),
+    ("foregroundTertiary", { $0.foregroundTertiary }),
+    ("foregroundQuaternary", { $0.foregroundQuaternary }),
+    ("accent", { $0.accent }),
+    ("success", { $0.success }),
+    ("warning", { $0.warning }),
+    ("error", { $0.error }),
+    ("info", { $0.info }),
+    ("border", { $0.border }),
+    ("focusBackground", { $0.focusBackground }),
+    ("cursorColor", { $0.cursorColor }),
+    ("fieldBackground", { $0.fieldBackground }),
+]
+
 @MainActor
 @Suite("Style cascade — additional coverage")
 struct StyleCascadeCoverageTests {
@@ -81,15 +142,41 @@ struct StyleCascadeCoverageTests {
 
     // MARK: - TintedPalette delegation
 
-    @Test("TintedPalette overrides only accent; other roles delegate to base")
+    @Test("The role table lists exactly the roles a palette states")
+    func roleTableIsComplete() {
+        // The forcing function under the test below, which can only check the
+        // roles it is given: a new `Palette` requirement is stated on
+        // `EveryRolePalette` (that is what the type is FOR), Mirror sees the
+        // new stored property, and this fails until the table grows to match.
+        // Without it, adding a role silently leaves it untested — which is how
+        // `fieldBackground` went unforwarded.
+        let stated = Set(
+            Mirror(reflecting: EveryRolePalette()).children
+                .compactMap(\.label)
+                .filter { $0 != "id" && $0 != "name" })
+        #expect(Set(paletteRoles.map(\.name)) == stated)
+    }
+
+    @Test("TintedPalette overrides only accent; EVERY other role delegates to base")
     func tintedPaletteDelegates() {
-        let base = SystemPalette(.green)
-        let tinted = TintedPalette(base: base, tint: .rgb(1, 2, 3))
-        #expect(tinted.accent == .rgb(1, 2, 3))
-        #expect(tinted.background == base.background)
-        #expect(tinted.foreground == base.foreground)
-        #expect(tinted.success == base.success)
+        let base = EveryRolePalette()
+        let tint = Color.rgb(200, 100, 50)
+        let tinted = TintedPalette(base: base, tint: tint)
+
+        // Or a forwarding mistake BETWEEN two roles reads as a pass.
+        #expect(
+            Set(paletteRoles.map { $0.read(base) }).count == paletteRoles.count,
+            "the base palette's roles must all differ")
+        #expect(tint != base.accent, "the tint must differ from the base's accent")
+
+        for role in paletteRoles where role.name != "accent" {
+            #expect(
+                role.read(tinted) == role.read(base),
+                "\(role.name) did not delegate: \(role.read(tinted)) vs \(role.read(base))")
+        }
+        #expect(tinted.accent == tint.resolve(with: base))
         #expect(tinted.id == base.id)
+        #expect(tinted.name == base.name)
     }
 
     @Test("TintedPalette resolves a semantic tint against its base")
