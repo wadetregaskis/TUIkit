@@ -153,6 +153,26 @@ public struct LocalizedStringKey: Equatable, Hashable, Sendable {
         }
     }
 
+    /// printf's `-` flag and the digits after it, read from `cursor` and
+    /// leaving it past them. The digits are a position if a `$` follows and a
+    /// width otherwise; that is the caller's call, which is why they come
+    /// back as text.
+    private static func scanFlagAndDigits(
+        _ template: String, from cursor: inout String.Index
+    ) -> (leftAligned: Bool, digits: String) {
+        var leftAligned = false
+        if cursor < template.endIndex, template[cursor] == "-" {
+            leftAligned = true
+            cursor = template.index(after: cursor)
+        }
+        var digits = ""
+        while cursor < template.endIndex, template[cursor].isNumber {
+            digits.append(template[cursor])
+            cursor = template.index(after: cursor)
+        }
+        return (leftAligned, digits)
+    }
+
     /// Replaces `%@` / `%N$@` (and the numeric conversions a translator might
     /// reasonably write) in `template` with `arguments`.
     ///
@@ -186,22 +206,23 @@ public struct LocalizedStringKey: Equatable, Hashable, Sendable {
             var position: Int?
             // A `-` before the digits is printf's left-align flag; with a
             // width it changes which side the padding lands on.
-            var leftAligned = false
-            if cursor < template.endIndex, template[cursor] == "-" {
-                leftAligned = true
-                cursor = template.index(after: cursor)
-            }
-            var digits = ""
-            while cursor < template.endIndex, template[cursor].isNumber {
-                digits.append(template[cursor])
-                cursor = template.index(after: cursor)
-            }
+            let scanned = Self.scanFlagAndDigits(template, from: &cursor)
+            var leftAligned = scanned.leftAligned
+            let digits = scanned.digits
             var width: Int?
             if !digits.isEmpty, cursor < template.endIndex, template[cursor] == "$",
                 !leftAligned
             {
                 position = Int(digits)
                 cursor = template.index(after: cursor)
+                // printf permits the flags and width AFTER a position too —
+                // `%2$3d`, `%1$-6@` — and a scan that stopped at the `$`
+                // rejected the `3` as the conversion, emitted the `%` verbatim
+                // and dropped the argument. The same scan, once more; the
+                // digits here can only be a width.
+                let after = Self.scanFlagAndDigits(template, from: &cursor)
+                leftAligned = after.leftAligned
+                width = Int(after.digits)
             } else if !digits.isEmpty {
                 // Digits that were not a position are a WIDTH — `%3d`. The
                 // cursor already sits past them; remember the width rather

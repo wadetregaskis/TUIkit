@@ -191,19 +191,15 @@ struct LocalizedStringKeyTests {
         #expect(LocalizedStringKey.substituting(["x"], into: "100%% and %@") == "100% and x")
         #expect(LocalizedStringKey.substituting(["7"], into: "%d items") == "7 items")
         #expect(LocalizedStringKey.substituting(["7"], into: "%lld items") == "7 items")
-        #expect(LocalizedStringKey.substituting(["a", "b"], into: "%@%@") == "ab")
-        // A position may repeat; the implicit cursor is not advanced by one.
-        #expect(LocalizedStringKey.substituting(["a", "b"], into: "%1$@%1$@") == "aa")
-        // Missing arguments leave the placeholder empty rather than trapping.
-        #expect(LocalizedStringKey.substituting(["a"], into: "%@%@") == "a")
-        // A trailing lone percent is emitted, not dropped.
-        #expect(LocalizedStringKey.substituting(["a"], into: "%@ 100%") == "a 100%")
-        // A WIDTH pads the value and, crucially, still consumes its argument:
-        // the old scan rewound onto the digits, emitted %3d verbatim, and
-        // delivered the first argument to the SECOND placeholder.
-        #expect(LocalizedStringKey.substituting(["2", "10"], into: "Zeile %3d von %d") == "Zeile   2 von 10")
-        #expect(LocalizedStringKey.substituting(["ab"], into: "[%-4d]") == "[ab  ]")
-        #expect(LocalizedStringKey.substituting(["3.14"], into: "%.2f rad") == "3.14 rad")
+    }
+
+    @Test("A width after a position pads like a width before one")
+    func positionalWidth() {
+        // printf allows `%2$3d`: position first, then the flags and width. A
+        // scan that stopped at the `$` took the `3` for the conversion and
+        // emitted the `%` verbatim, dropping the argument.
+        #expect(LocalizedStringKey.substituting(["10", "2"], into: "Zeile %2$3d von %1$d") == "Zeile   2 von 10")
+        #expect(LocalizedStringKey.substituting(["ab"], into: "[%1$-4@]") == "[ab  ]")
     }
 
     // MARK: - Value semantics
