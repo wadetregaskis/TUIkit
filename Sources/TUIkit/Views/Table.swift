@@ -1129,8 +1129,12 @@ where Value.ID: Hashable {
         // Multi-line rows reorder with `.live` feedback only: a drop slot would
         // have to take part in the line-budget arithmetic below that lets a tall
         // row be partially clipped, and moving the rows themselves needs no slot.
-        // Stated in ``Table/onMove(_:)``.
+        // Stated in ``Table/onMove(_:)``. That includes a KEYBOARD move, which
+        // the handler otherwise previews `.dimmed` — a slot this composer never
+        // draws, so Ctrl-R moved nothing visible and parked the cursor on the
+        // slot's neighbour.
         handler.reorderFeedback = .live
+        handler.keyboardMoveIsLive = true
         // Captured at render so Shift+arrow can accelerate the focus cursor at
         // event time, when the environment is no longer reachable.
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier

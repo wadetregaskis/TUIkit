@@ -196,8 +196,10 @@ extension ItemListHandler {
         // view asked for. A mouse drag needs no mode indicator — the pointer is
         // one — but Ctrl-R puts the control into a state the user cannot see
         // otherwise, and `.live` (which just shuffles the data) shows nothing at
-        // all. The faint copy at the slot IS the indicator.
-        if isKeyboardMove { return .dimmed }
+        // all. The faint copy at the slot IS the indicator — except where the
+        // view cannot draw one (``keyboardMoveIsLive``), where the row moving
+        // under the cursor is the only indication there can be.
+        if isKeyboardMove { return keyboardMoveIsLive ? .live : .dimmed }
         guard reorderFeedback == .cursor else { return reorderFeedback }
         return canFloatDraggedRow ? .cursor : .dimmed
     }

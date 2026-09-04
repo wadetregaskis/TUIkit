@@ -421,6 +421,13 @@ final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffs
     /// during render; read at event time, when the environment is out of reach.
     var reorderFeedback: RowReorderFeedback = .live
 
+    /// Whether a KEYBOARD move shuffles the data as it goes instead of
+    /// previewing `.dimmed`. Set by a view whose row composer draws no slot —
+    /// the multi-line `Table` — because a dimmed preview it never draws left
+    /// Ctrl-R moving nothing visible while the handler parked the cursor
+    /// beside a slot that was not there. See ``effectiveReorderFeedback``.
+    var keyboardMoveIsLive = false
+
     /// Whether the reorder in flight was started from the KEYBOARD (see
     /// ``ItemListHandler/beginKeyboardMove()``) rather than by a drag.
     var isKeyboardMove = false

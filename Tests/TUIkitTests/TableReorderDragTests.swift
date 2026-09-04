@@ -346,6 +346,29 @@ struct TableReorderDragTests {
             buffer.lines.firstIndex { $0.stripped.contains(label) } ?? -1
         }
     }
+    /// The multi-line composer draws no slot, so the handler must not preview
+    /// one: it used to resolve a keyboard move to `.dimmed` whatever the view
+    /// asked for, moving nothing visible and parking the cursor beside a slot
+    /// that was never drawn.
+    @Test("A multi-line table's keyboard move moves the row itself and keeps the cursor on it")
+    func multiLineKeyboardMoveIsLive() {
+        let fixture = MultiLineFixture(rows: ["alpha", "bravo", "charlie"])
+        fixture.env.focusManager?.beginRenderPass()
+        fixture.render()
+        fixture.env.focusManager?.endRenderPass()
+        guard let handler = fixture.env.focusManager?.currentFocused as? ItemListHandler<String> else {
+            Issue.record("no handler")
+            return
+        }
+        handler.focusedIndex = 0
+        #expect(handler.handleKeyEvent(KeyEvent(key: .character("r"), ctrl: true)), "Ctrl-R picks the row up")
+        #expect(handler.handleKeyEvent(KeyEvent(key: .down)))
+        #expect(fixture.rows == ["bravo", "alpha", "charlie"], "the row moved as the key was pressed")
+        #expect(handler.focusedIndex == 1, "the cursor travelled with it")
+        let buffer = fixture.render()
+        #expect(fixture.rowY(buffer, "bravo") < fixture.rowY(buffer, "alpha"), "and the drawing agrees")
+    }
+
     // MARK: - Several rows at once
 
     /// The `List` twin of this pair lives in ListReorderDragTests; the two views
