@@ -111,6 +111,83 @@ struct StdinArrivalNotifierTests {
         #expect(clock.now - start >= .milliseconds(15))
     }
 
+    /// The defensive branch at the top of `waitForArrival`'s continuation body.
+    /// It is unreachable through the real run loop — that loop is single-waiter
+    /// by construction — which is exactly why it reads as dead code and why
+    /// nothing pinned it. What it prevents is not a wrong pixel but a hang: a
+    /// dropped `CheckedContinuation` is never resumed, so the first waiter's
+    /// task is suspended for the life of the process and the loop it belongs to
+    /// stops waking. A second `await waitForArrival` added later — a resize
+    /// watcher, a paste drain — is all it takes.
+    @MainActor
+    @Test("A second waiter resumes the first rather than dropping its continuation")
+    func secondWaiterResumesTheStaleOne() async {
+        @MainActor final class Flags {
+            var firstStarted = false
+            var firstReturned = false
+            var secondStarted = false
+            var secondReturned = false
+        }
+        let notifier = StdinArrivalNotifier()
+        let flags = Flags()
+
+        /// Polls for a condition instead of sleeping a fixed interval.
+        ///
+        /// Every actor in this test is the MAIN one, and under the full suite
+        /// it is contended by hundreds of other `@MainActor` tests — a fixed
+        /// 20 ms sleep was enough when this suite ran alone and nowhere near it
+        /// when the whole suite ran, so the test failed on scheduling rather
+        /// than on behaviour. The bound is generous because it costs nothing
+        /// when the condition holds: the loop returns the moment it does.
+        func waitUntil(_ condition: @MainActor () -> Bool) async -> Bool {
+            let clock = ContinuousClock()
+            let deadline = clock.now.advanced(by: .seconds(30))
+            while clock.now < deadline {
+                if condition() { return true }
+                try? await Task.sleep(nanoseconds: 1_000_000)
+            }
+            return condition()
+        }
+
+        // 60-second timeouts throughout: nothing here may be resumed BY a
+        // timeout, or the test would pass without the guard.
+        let first = Task { @MainActor in
+            flags.firstStarted = true
+            await notifier.waitForArrival(timeoutNanoseconds: 60_000_000_000)
+            flags.firstReturned = true
+        }
+        // Observing `firstStarted` means the task has also run ON to its
+        // suspension: `waitForArrival` is same-actor, so it registers the
+        // continuation synchronously and the test body cannot get the actor
+        // back until it has.
+        #expect(await waitUntil { flags.firstStarted })
+
+        let second = Task { @MainActor in
+            flags.secondStarted = true
+            await notifier.waitForArrival(timeoutNanoseconds: 60_000_000_000)
+            flags.secondReturned = true
+        }
+        #expect(await waitUntil { flags.secondStarted })
+
+        // The guard fires while `second` registers, so `first` comes back with
+        // no wake of any kind having been delivered.
+        #expect(
+            await waitUntil { flags.firstReturned },
+            "the stale continuation was dropped instead of resumed")
+        #expect(!flags.secondReturned, "the newer waiter must still be waiting")
+
+        // And the newer waiter is the one a single wake now finishes — the
+        // guard leaves it installed, not the one it displaced.
+        notifier.wake()
+        #expect(await waitUntil { flags.secondReturned })
+
+        // Awaited only once the flags say both have returned: without the guard
+        // the first task is parked on a continuation nobody will ever resume,
+        // and awaiting it would hang the suite instead of failing it.
+        if flags.firstReturned { await first.value }
+        if flags.secondReturned { await second.value }
+    }
+
     @MainActor
     @Test("a cancelled timeout never resumes a later waiter (no cascade spin)")
     func cancelledTimeoutDoesNotCascade() async {
