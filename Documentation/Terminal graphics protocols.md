@@ -571,7 +571,7 @@ The same round found two more, both of which the codepoint bug was hiding:
 |---|---|
 | A full-screen image, 49×17 cells | 1.8 MB of base64, transmitted and acknowledged in **43 ms** |
 | A 12×4-cell image | 104 KB, **2 ms** |
-| One placeholder row, 12 cells | 139 bytes for id 42, of which 24 are the id's high-byte mark — §2.2. Pinned by `KittyGraphicsPlaceholderTests.rowByteCost`. |
+| One placeholder row, 12 cells | 139 bytes for id 42, of which 24 are the id's high-byte mark — §2.2. Pinned by `KittyGraphicsDiacriticTests.rowByteCost`. |
 
 One-time per image and per size, not per frame: the image is *retained* by the
 terminal under an id, and `TerminalImageStore` re-transmits only when the
