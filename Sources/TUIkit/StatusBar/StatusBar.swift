@@ -63,7 +63,7 @@ public struct StatusBar: View {
     /// - Parameters:
     ///   - userItems: User-defined items (left container).
     ///   - systemItems: System items (right container).
-    ///   - style: The visual style (default: `.compact`).
+    ///   - style: The visual style (default: `.bordered`).
     ///   - alignment: The alignment of user items (default: `.leading`).
     ///   - highlightColor: The color for shortcut keys (default: `.cyan`).
     ///   - labelColor: The color for labels (default: nil, terminal default).
@@ -87,7 +87,7 @@ public struct StatusBar: View {
     ///
     /// - Parameters:
     ///   - items: All items to display (will be treated as user items).
-    ///   - style: The visual style (default: `.compact`).
+    ///   - style: The visual style (default: `.bordered`).
     ///   - alignment: The horizontal alignment (default: `.justified`).
     ///   - highlightColor: The color for shortcut keys (default: `.cyan`).
     ///   - labelColor: The color for labels (default: nil, terminal default).

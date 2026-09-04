@@ -34,7 +34,9 @@ extension BorderRenderer {
     ///
     /// - Parameters:
     ///   - isFocused: Whether the element is currently focused.
-    ///   - pulsePhase: The current animation phase (0–1) from `context.pulsePhase`.
+    ///   - emphasis: The focus emphasis — the shared clock's current state,
+    ///     which is what the indicator breathes with. NOT `context.pulsePhase`:
+    ///     that is the other timer, and the body says why.
     ///   - palette: The active palette for color resolution.
     /// - Returns: A 2-character string: `"● "` (colored) when focused, `"  "` when not.
     static func focusIndicatorPrefix(

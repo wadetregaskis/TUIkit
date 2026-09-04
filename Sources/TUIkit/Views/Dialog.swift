@@ -75,7 +75,7 @@ public struct Dialog<Content: View, Footer: View>: View {
     ///   - titleKey: The key for the dialog title.
     ///   - borderStyle: The border style (default: appearance borderStyle).
     ///   - borderColor: The border color (default: theme border).
-    ///   - titleColor: The title color (default: theme foreground).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - padding: The inner padding (default: horizontal 2, vertical 1).
     ///   - showFooterSeparator: Whether to show separator before footer (default: true).
     ///   - footerAlignment: How the footer content is aligned within the
@@ -116,7 +116,7 @@ public struct Dialog<Content: View, Footer: View>: View {
     ///   - title: The dialog title.
     ///   - borderStyle: The border style (default: appearance borderStyle).
     ///   - borderColor: The border color (default: theme border).
-    ///   - titleColor: The title color (default: theme foreground).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - padding: The inner padding (default: horizontal 2, vertical 1).
     ///   - showFooterSeparator: Whether to show separator before footer (default: true).
     ///   - footerAlignment: How the footer content is aligned within the
@@ -225,7 +225,7 @@ extension Dialog where Footer == EmptyView {
     ///   - titleKey: The key for the dialog title.
     ///   - borderStyle: The border style (default: appearance borderStyle).
     ///   - borderColor: The border color (default: theme border).
-    ///   - titleColor: The title color (default: theme foreground).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - padding: The inner padding (default: horizontal 2, vertical 1).
     ///   - content: The dialog content.
     public init(
@@ -255,7 +255,7 @@ extension Dialog where Footer == EmptyView {
     ///   - title: The dialog title.
     ///   - borderStyle: The border style (default: appearance borderStyle).
     ///   - borderColor: The border color (default: theme border).
-    ///   - titleColor: The title color (default: theme foreground).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - padding: The inner padding (default: horizontal 2, vertical 1).
     ///   - content: The dialog content.
     @_disfavoredOverload
@@ -293,7 +293,7 @@ extension Dialog where Footer == EmptyView {
     /// - Parameters:
     ///   - titleKey: The key for the dialog title.
     ///   - borderColor: The border color (default: nil).
-    ///   - titleColor: The title color (default: nil).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - content: The dialog content.
     /// - Returns: A dialog with double-line borders.
     public static func doubleLine(
@@ -320,7 +320,7 @@ extension Dialog where Footer == EmptyView {
     /// - Parameters:
     ///   - title: The dialog title.
     ///   - borderColor: The border color (default: nil).
-    ///   - titleColor: The title color (default: nil).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - content: The dialog content.
     /// - Returns: A dialog with double-line borders.
     @_disfavoredOverload
@@ -347,7 +347,7 @@ extension Dialog where Footer == EmptyView {
     /// - Parameters:
     ///   - titleKey: The key for the dialog title.
     ///   - borderColor: The border color (default: nil).
-    ///   - titleColor: The title color (default: nil).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - content: The dialog content.
     /// - Returns: A dialog with heavy borders.
     public static func heavy(
@@ -372,7 +372,7 @@ extension Dialog where Footer == EmptyView {
     /// - Parameters:
     ///   - title: The dialog title.
     ///   - borderColor: The border color (default: nil).
-    ///   - titleColor: The title color (default: nil).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - content: The dialog content.
     /// - Returns: A dialog with heavy borders.
     @_disfavoredOverload

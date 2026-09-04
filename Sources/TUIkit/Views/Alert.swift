@@ -7,8 +7,8 @@
 /// A modal alert view that displays a title, message, and optional action buttons.
 ///
 /// `Alert` draws the panel. **Presenting it is a separate job**, and the way to
-/// do it is ``SwiftUICore/View/alert(_:isPresented:actions:message:)`` or
-/// ``SwiftUICore/View/modal(isPresented:onDismiss:content:)``.
+/// do it is ``View/alert(_:isPresented:actions:message:)`` or
+/// ``View/modal(isPresented:onDismiss:content:)``.
 ///
 /// ## Structure
 ///
@@ -91,7 +91,7 @@ public struct Alert<Actions: View>: View {
     ///   - messageKey: The key for the alert message.
     ///   - borderStyle: The border style (default: appearance borderStyle).
     ///   - borderColor: The border color (default: theme border).
-    ///   - titleColor: The title color (default: theme foreground).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - showFooterSeparator: Whether to show separator before actions (default: true).
     ///   - verticalButtons: Stack the buttons vertically (default: `false`).
     ///   - actions: The action views to display in the footer.
@@ -131,7 +131,7 @@ public struct Alert<Actions: View>: View {
     ///   - message: The alert message.
     ///   - borderStyle: The border style (default: appearance borderStyle).
     ///   - borderColor: The border color (default: theme border).
-    ///   - titleColor: The title color (default: theme foreground).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - showFooterSeparator: Whether to show separator before actions (default: true).
     ///   - verticalButtons: Stack the buttons vertically (default: `false`).
     ///   - actions: The action views to display in the footer.
@@ -434,7 +434,7 @@ extension Alert where Actions == EmptyView {
     ///   - messageKey: The key for the alert message.
     ///   - borderStyle: The border style (default: appearance default).
     ///   - borderColor: The border color (default: nil).
-    ///   - titleColor: The title color (default: nil).
+    ///   - titleColor: The title color (default: theme accent).
     public init(
         title titleKey: LocalizedStringKey,
         message messageKey: LocalizedStringKey,
@@ -461,7 +461,7 @@ extension Alert where Actions == EmptyView {
     ///   - message: The alert message.
     ///   - borderStyle: The border style (default: appearance default).
     ///   - borderColor: The border color (default: nil).
-    ///   - titleColor: The title color (default: nil).
+    ///   - titleColor: The title color (default: theme accent).
     @_disfavoredOverload
     public init<S1: StringProtocol, S2: StringProtocol>(
         title: S1,

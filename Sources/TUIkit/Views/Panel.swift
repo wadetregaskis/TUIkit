@@ -85,7 +85,7 @@ public struct Panel<Content: View, Footer: View>: View {
     /// Creates a panel with content and footer.
     ///
     /// - Parameters:
-    ///   - title: The title to display.
+    ///   - titleKey: The title to display.
     ///   - borderStyle: The border style (default: appearance borderStyle).
     ///   - borderColor: The border color (default: theme border).
     ///   - titleColor: The title color (default: theme accent).
@@ -171,10 +171,10 @@ extension Panel where Footer == EmptyView {
     /// Creates a panel without a footer.
     ///
     /// - Parameters:
-    ///   - title: The title to display in the top border.
+    ///   - titleKey: The title to display in the top border.
     ///   - borderStyle: The border style (default: appearance borderStyle).
     ///   - borderColor: The border color (default: theme border).
-    ///   - titleColor: The title color (default: same as border).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - padding: The inner padding (default: horizontal 1, vertical 0).
     ///   - content: The content of the panel.
     public init(
@@ -199,7 +199,7 @@ extension Panel where Footer == EmptyView {
     ///   - title: The title to display in the top border.
     ///   - borderStyle: The border style (default: appearance borderStyle).
     ///   - borderColor: The border color (default: theme border).
-    ///   - titleColor: The title color (default: same as border).
+    ///   - titleColor: The title color (default: theme accent).
     ///   - padding: The inner padding (default: horizontal 1, vertical 0).
     ///   - content: The content of the panel.
     @_disfavoredOverload
