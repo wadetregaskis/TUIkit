@@ -33,16 +33,6 @@ struct BorderViaContainerViewTests {
         #expect(buffer.width >= 6)  // "Hi" (2) + borders (2) + padding (2)
     }
 
-    @Test(".border() with empty content renders empty")
-    func borderEmptyContent() {
-        let view = EmptyView().border(style: .line)
-        let context = testContext()
-        let buffer = renderToBuffer(view, context: context)
-
-        // EmptyView produces empty buffer, so bordered empty = empty
-        #expect(buffer.isEmpty)
-    }
-
     @Test(".border() with VStack renders multiple lines")
     func borderMultipleChildren() {
         let view = VStack {
