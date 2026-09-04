@@ -589,6 +589,11 @@ struct MousePage: View {
         let frameCount = poofStyle.frames.count
         while !poofs.isEmpty {
             try? await Task.sleep(nanoseconds: 90_000_000)
+            // A second spawn restarts the `.task(id:)`, which cancels THIS
+            // task mid-sleep: the sleep throws, `try?` swallows it, and the
+            // loop then spun with no delay over the same `poofs` array the
+            // new puff had just been added to, finishing every puff at once.
+            guard !Task.isCancelled else { return }
             poofs = poofs.compactMap { poof in
                 var advanced = poof
                 advanced.frame += 1
