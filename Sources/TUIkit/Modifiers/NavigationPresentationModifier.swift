@@ -86,9 +86,9 @@ extension View {
 private enum StateIndex {
     /// Whether THIS modifier is what put its token on the path.
     ///
-    /// Negative: infrastructure slots share the wrapped content's identity,
-    /// and 0... belongs to a composite content view's own @State. See
-    /// `StateStorage.StateKey`'s reserved-range table.
+    /// Negative: infrastructure slots share an identity a composite content
+    /// view could also occupy, and 0... belongs to such a view's own @State.
+    /// See `StateStorage.StateKey`'s reserved-range table.
     static let didPush = -30
 }
 
@@ -134,29 +134,36 @@ extension NavigationPresentationModifier: Renderable {
     private func reconcile(
         coordinator: NavigationCoordinator, stateStorage: StateStorage, context: RenderContext
     ) {
-        // The did-push memory is a MANUAL box, so nothing hydrates this
+        // Two of these STACKED on one view render at the same identity, so the
+        // identity path alone is not unique to an instance: sharing one token
+        // made the outer modifier pop what the inner pushed (a pop+push per
+        // frame with one flag set), and sharing one didPush box meant Back
+        // could never be reported — the outer wrote false before the inner read
+        // it, re-pushing forever. So each instance takes a place one step below
+        // the shared one, stepped by its OWN generic type: stacking strictly
+        // nests these, so no two can coincide.
+        //
+        // Not an ordinal from the per-identity counter the onChange family
+        // claims from, which is what this used to offset the box slot by. That
+        // counter is unbounded and shared, so an eleventh claimant at the
+        // identity — ten `.onChange`s ahead of this modifier is enough — put
+        // the box at -40, inside `_UserResizableCore`'s reserved ten. The two
+        // differently-typed boxes then evicted each other every frame
+        // (`storage(for:default:)` replaces on a type mismatch), didPush read
+        // false forever, and Back pushed the screen straight back on.
+        let identity = context.identity.child(type: Self.self)
+        // The did-push memory is a MANUAL box, so nothing else hydrates that
         // identity and `endRenderPass` would prune it at the end of every frame
         // — leaving the reconciler to rediscover "the flag is true and the
         // screen is not up" as a reason to push, forever. Same gotcha
         // `OnChangeModifier` and `RefreshableModifier` answer the same way.
-        stateStorage.markActive(context.identity)
-        // Two of these STACKED on one view render at the same identity, so
-        // the identity path alone is not unique to an instance: sharing one
-        // token made the outer modifier pop what the inner pushed (a
-        // pop+push per frame with one flag set), and sharing one didPush box
-        // meant Back could never be reported — the outer wrote false before
-        // the inner read it, re-pushing forever. The slot is drawn from the
-        // same per-identity render-order sequence the onChange family uses:
-        // reconcile runs once per render pass, in body order, which is the
-        // same every frame. The box steps DOWNWARD within navigation's
-        // reserved ten (see StateStorage.StateKey's table).
-        let slot = stateStorage.nextOnChangeIndex(for: context.identity)
-        let token = AnyHashable(NavigationViewToken(id: "\(context.identity.path)#\(slot)"))
+        stateStorage.markActive(identity)
+        let token = AnyHashable(NavigationViewToken(id: identity.path))
         let path = coordinator.read()
         let onPath = path.contains(token)
         let didPush: StateBox<Bool> = stateStorage.storage(
             for: StateStorage.StateKey(
-                identity: context.identity, propertyIndex: StateIndex.didPush - slot),
+                identity: identity, propertyIndex: StateIndex.didPush),
             default: false)
 
         guard isPresented.wrappedValue else {

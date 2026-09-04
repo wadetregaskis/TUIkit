@@ -156,6 +156,49 @@ struct NavigationBindingDestinationTests {
         #expect(fixture.path.isEmpty, "and it stayed off")
     }
 
+    /// The did-push memory has to stay inside navigation's own reserved slot
+    /// range whatever else shares the identity.
+    @Test("A crowded identity does not push the did-push memory onto a neighbour")
+    func didPushSurvivesACrowdedIdentity() {
+        let fixture = Fixture()
+
+        // Ten claimants of the shared per-identity counter ahead of the
+        // destination, and a `.userResizable()` whose own focus-id box sits at
+        // the slot the eleventh claim would reach. All at ONE identity:
+        // `Renderable` modifiers push none of their own.
+        func stack() -> some View {
+            NavigationStack(path: Binding(get: { fixture.path }, set: { fixture.path = $0 })) {
+                Text("root")
+                    .navigationDestination(
+                        isPresented: Binding(
+                            get: { fixture.showing }, set: { fixture.showing = $0 })
+                    ) { Text("pushed screen") }
+                    .onChange(of: 0) { _, _ in }
+                    .onChange(of: 1) { _, _ in }
+                    .onChange(of: 2) { _, _ in }
+                    .onChange(of: 3) { _, _ in }
+                    .onChange(of: 4) { _, _ in }
+                    .onChange(of: 5) { _, _ in }
+                    .onChange(of: 6) { _, _ in }
+                    .onChange(of: 7) { _, _ in }
+                    .onChange(of: 8) { _, _ in }
+                    .onChange(of: 9) { _, _ in }
+                    .userResizable()
+            }
+        }
+
+        fixture.showing = true
+        fixture.frame(stack)
+        #expect(fixture.path.count == 1)
+
+        // What Back does.
+        fixture.path = NavigationPath()
+        fixture.frame(stack)
+        #expect(!fixture.showing, "the pop was reported back to the app")
+        for _ in 0..<3 { fixture.frame(stack) }
+        #expect(fixture.path.isEmpty, "and it stayed off")
+    }
+
     @Test("A screen pushed above the destination goes when the flag clears")
     func clearingTakesTheScreensAboveItToo() {
         let fixture = Fixture()
