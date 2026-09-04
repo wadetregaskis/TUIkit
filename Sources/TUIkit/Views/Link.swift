@@ -382,15 +382,20 @@ private struct _Link<Label: View>: View {
         // on the machine the app is running on, which over ssh is the server.
         // If it declines — or spawns nothing, which is the usual shape of that
         // failure — the popover is the only thing that tells the user where
-        // the link went. It is raised unconditionally rather than on failure
-        // because "did the browser open" is not a question this process can
-        // answer: the child is not waited on, and on a headless box there is
-        // no child.
+        // the link went. It is raised whether or not `open` "worked" because
+        // "did the browser open" is not a question this process can answer:
+        // the child is not waited on, and on a headless box there is no child.
+        //
+        // But only in the `.popover` mode. The two URL modes already put the
+        // destination ON THE ROW, and a popover repeating it would take the
+        // keyboard — a presented popover grabs input until Escape — for the
+        // sake of a string the user is looking at.
+        let raisesPopover = display == .popover
         return Button(
             action: {
                 guard gate.allows(nowNanos: DispatchTime.now().uptimeNanoseconds) else { return }
                 open(destination)
-                showing.wrappedValue = true
+                if raisesPopover { showing.wrappedValue = true }
             },
             label: { resolvedLabel })
         .buttonStyle(_LinkButtonStyle(indicator: focusIndicator))
@@ -407,7 +412,7 @@ private struct _Link<Label: View>: View {
         // that shoved those aside — or was truncated to fit, which would make
         // it unusable — every time focus moved would be worse than not showing
         // it at all.
-        .popover(isPresented: $showingDestination) {
+        .popover(isPresented: raisesPopover ? $showingDestination : .constant(false)) {
             // `verbatim`, because a URL is content and not a lookup key.
             Text(verbatim: destination.absoluteString)
         }

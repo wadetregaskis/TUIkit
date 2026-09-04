@@ -46,14 +46,16 @@ public enum LinkDisplay: Sendable, Equatable, CaseIterable {
     /// For a page where the destination is part of what the reader is reading
     /// — a list of references, a diagnostic — and for terminals with their own
     /// URL detection, which linkify the visible text whether or not OSC 8 ever
-    /// arrives.
+    /// arrives. Activation opens the URL where the app permits and raises no
+    /// popover: the destination is already on the row.
     case urlInParentheses
 
     /// The URL alone, in place of the label.
     ///
     /// The densest form, and the one to reach for when the URL *is* the
     /// content: a log line, a list of endpoints, anything the reader will copy
-    /// rather than follow.
+    /// rather than follow. As with ``urlInParentheses``, activation raises no
+    /// popover — the row already says everything a popover would.
     case urlOnly
 }
 

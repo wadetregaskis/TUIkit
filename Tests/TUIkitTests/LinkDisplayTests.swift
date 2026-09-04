@@ -41,6 +41,47 @@ struct LinkDisplayTests {
         return renderToBuffer(view, context: context).lines.first?.stripped ?? ""
     }
 
+    /// Renders `view`, activates the auto-focused link with Enter, and renders
+    /// again — the buffer that would carry a popover the activation raised.
+    private func activated(_ view: some View) -> FrameBuffer {
+        let tui = TUIContext()
+        let manager = FocusManager()
+        var environment = EnvironmentValues()
+        environment.focusManager = manager
+        environment.applyRuntimeServices(from: tui)
+        environment.terminalWidth = 70
+        environment.terminalHeight = 8
+        environment.overlayContentHeight = 6
+        let context = RenderContext(
+            availableWidth: 70, availableHeight: 8, environment: environment, tuiContext: tui)
+        func pass(_ body: () -> Void) {
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            manager.beginRenderPass()
+            body()
+            tui.stateStorage.endRenderPass()
+            manager.endRenderPass()
+        }
+        pass {
+            _ = renderToBuffer(view, context: context)
+            _ = manager.dispatchKeyEvent(KeyEvent(key: .enter))
+        }
+        var result = FrameBuffer()
+        pass { result = renderToBuffer(view, context: context) }
+        return result
+    }
+
+    /// A presented popover grabs the keyboard until Escape. In the two URL
+    /// modes the destination is already on the row, so the popover repeated
+    /// it — and took the arrow keys — for nothing.
+    @Test("Only the popover mode raises a popover; the URL modes already show the destination")
+    func onlyPopoverModePresents() {
+        let link = Link("Docs", destination: url).environment(\.openURL, OpenURLAction { _ in })
+        #expect(!activated(link.linkDisplay(.popover)).overlays.isEmpty)
+        #expect(activated(link.linkDisplay(.urlOnly)).overlays.isEmpty)
+        #expect(activated(link.linkDisplay(.urlInParentheses)).overlays.isEmpty)
+    }
+
     private func link(_ display: LinkDisplay) -> some View {
         Link("language guide", destination: url).linkDisplay(display)
     }
