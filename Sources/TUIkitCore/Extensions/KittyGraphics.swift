@@ -268,7 +268,7 @@ extension KittyGraphics {
     /// **Defaults to `false`**, which is what makes the whole feature safe to
     /// add: every path that reads this falls back to the glyph renderer, which
     /// has drawn every image in this framework until now and still draws them
-    /// on three of the four hosts.
+    /// on two of the four hosts (Apple Terminal and Warp).
     public static var isSupported: Bool {
         get { taskSupported ?? processSupported }
         set { processSupported = newValue }
