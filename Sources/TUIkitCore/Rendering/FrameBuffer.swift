@@ -632,8 +632,12 @@ extension FrameBuffer {
             // Nothing visible to draw, but the overlay may still carry its
             // own nested layers / hit-test regions that need to be
             // lifted into the result.
+            // All FOUR payloads, as the in-place twin's guard names them: a
+            // faded subtree clamped to no rows is exactly a line-empty overlay
+            // whose only payload is its opacity region, and this returned
+            // `self` for it while `composite(with:at:)` lifted the region.
             guard !overlay.overlays.isEmpty || !overlay.hitTestRegions.isEmpty
-                || !overlay.animatedCells.isEmpty
+                || !overlay.animatedCells.isEmpty || !overlay.opacityRegions.isEmpty
             else {
                 return self
             }

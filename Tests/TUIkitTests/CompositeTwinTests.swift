@@ -56,6 +56,22 @@ struct CompositeTwinTests {
         #expect(copied.animatedCells == inPlace.animatedCells, "the two paths placed it differently")
     }
 
+    /// The copying path's guard named three payloads and its body lifted
+    /// four; for a line-empty overlay whose ONLY payload is an opacity region
+    /// — a faded subtree clamped to no rows — it returned `self` while the
+    /// in-place twin lifted the region.
+    @Test("A zero-size overlay's opacity regions survive both paths")
+    func zeroSizeOverlayKeepsItsOpacityRegions() {
+        var carrier = FrameBuffer(lines: [])
+        carrier.opacityRegions = [OpacityRegion(offsetX: 0, offsetY: 0, width: 1, height: 1, opacity: 0.5)]
+        let base = FrameBuffer(lines: ["base"])
+        let copied = base.composited(with: carrier, at: (x: 2, y: 1))
+        var inPlace = base
+        inPlace.composite(with: carrier, at: (x: 2, y: 1))
+        #expect(copied.opacityRegions == inPlace.opacityRegions)
+        #expect(copied.opacityRegions == [OpacityRegion(offsetX: 2, offsetY: 1, width: 1, height: 1, opacity: 0.5)])
+    }
+
     @Test("A zero-size overlay's regions and nested layers survive both paths")
     func zeroSizeOverlayKeepsTheRest() {
         let base = FrameBuffer(lines: ["base"])
