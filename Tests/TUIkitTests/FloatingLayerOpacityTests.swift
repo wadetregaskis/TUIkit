@@ -323,6 +323,34 @@ struct FloatingLayerOpacityTests {
         }
     }
 
+    /// The two layers `WindowGroup.renderScene` makes itself — a lifted drag
+    /// preview and its return flight — rather than a presentation. They took
+    /// `isOpaque`'s default silently and no test rendered either; a row being
+    /// carried is a card, and the page must not show through it.
+    @Test("A lifted drag preview is opaque")
+    func dragPreview() throws {
+        let (tui, context) = harness()
+        let session = try #require(context.environment.dragAndDropSession)
+        session.beginFrame()
+        session.lastAbsoluteEvent = MouseEvent(button: .left, phase: .pressed, x: 4, y: 3)
+        session.lastAbsoluteEvent = MouseEvent(button: .left, phase: .dragged, x: 12, y: 7)
+        session.begin(payload: "row", preview: FrameBuffer(lines: ["ROW", "ROW"]), grabX: 0, grabY: 0)
+
+        let scene = WindowGroup { page(Text("page")) }
+        let buffer = scene.renderScene(context: context)
+        let layer = try #require(buffer.overlays.first, "no preview layer was emitted")
+        #expect(layer.isOpaque, "a carried row is a card")
+        let composited = buffer.compositingOverlays(
+            maxWidth: context.availableWidth, maxHeight: context.availableHeight,
+            palette: context.environment.palette)
+        let placed = layer.placed(maxWidth: context.availableWidth, maxHeight: context.availableHeight)
+        let leaks = showThrough(
+            composited, rows: placed.y..<(placed.y + placed.content.height),
+            columns: placed.x..<(placed.x + placed.content.width))
+        #expect(leaks.isEmpty, "the page shows through the preview at \(leaks)")
+        _ = tui
+    }
+
     // MARK: - The other side of the rule
 
     /// `.offset` and `.position` displace a view; they do not wrap it in a

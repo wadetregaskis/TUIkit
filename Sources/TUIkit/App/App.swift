@@ -740,7 +740,11 @@ extension WindowGroup: SceneRenderable {
                     // Pinned to the pointer: clipped at the screen edge, never
                     // slid back onto it. Sliding is what made a wide preview
                     // stop following the cursor a few cells in.
-                    clampsToScreen: false
+                    clampsToScreen: false,
+                    // A lifted row is a card over the page, not a stencil: it
+                    // covers what is under it. Stated rather than defaulted so
+                    // the choice is visible where the layer is made.
+                    isOpaque: true
                 )
             )
         } else if let step = dragSession?.returnFlightFrame {
@@ -750,7 +754,8 @@ extension WindowGroup: SceneRenderable {
             centered.overlays.append(
                 OverlayLayer(
                     offsetX: step.x, offsetY: step.y,
-                    content: step.preview, level: .notification, clampsToScreen: false))
+                    content: step.preview, level: .notification, clampsToScreen: false,
+                    isOpaque: true))  // the same card, on its way home
         }
         return centered
     }
