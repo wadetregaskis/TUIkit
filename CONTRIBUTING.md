@@ -150,8 +150,9 @@ Tools/BuildDocs/build-docs.sh            # add --analyze for every diagnostic
 
 1. Branch from `main`
 2. Fill in the PR template completely
-3. The `CI` gate check must be green (it covers macOS + Linux; the Windows and
-   nightly-toolchain lanes are advisory and do not block)
+3. The `CI` gate check must be green — it covers macOS, Linux and, on
+   released toolchains, Windows; only the nightly-toolchain lanes are
+   advisory (see "What CI covers" above)
 4. No new SwiftLint warnings
 5. Follow the architecture and API rules below
 
