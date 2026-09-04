@@ -3,7 +3,7 @@
 Written by a probe and never by hand. These are the evidence behind the
 tables in `Documentation/Terminal-compatibility.md`. The doc explains what
 the numbers *mean*; these say who measured what, when, and under which
-conditions. Four kinds of file live here:
+conditions. Seven kinds of file live here:
 
 - **`width-corpus.json`** — the shared cluster corpus: every cluster the
   probes measure and the Swift tests ask about, one id per row, duplicated
@@ -34,6 +34,12 @@ conditions. Four kinds of file live here:
   deltas answer "is it safe to emit", which has a different answer per escape
   FAMILY on the same host; `rendered` is the human half and stays
   `unmeasured` until somebody looks at the card.
+- **`<terminal>-<version>-placement.json`** — PLACEMENT records
+  (`placement_probe.py`): one Kitty image transmitted and placed through
+  Unicode placeholders — the mechanism TUIkit ships — with the host's reply
+  to each command, the cursor advance over a placeholder row, and the
+  human-filled `rendered`. These are what the graphics design rests on; the
+  iTerm2 third-mark finding of 2026-09-03 came out of this probe.
 - **`tmux-3.7b-tonebases.json`** — the full Emoji_Modifier_Base sweep
   (`advance_probe.py --modifier-bases`): which of the 134 bases tmux merges
   with a following tone (70) and which it detaches (64). The source of
