@@ -36,6 +36,19 @@ struct SanitizedForTerminalRowTests {
         #expect("a\u{7F}b".sanitizedForTerminalRow() == "a b")  // DEL
     }
 
+    /// C1 too: a pasted U+009B is an 8-bit CSI and a U+0085 a NEL on any host
+    /// that decodes them. They encode as `C2 8x`/`C2 9x`, so the byte
+    /// fast-reject could not even see them.
+    @Test("C1 controls become spaces")
+    func c1ControlsReplaced() {
+        #expect("a\u{85}b".sanitizedForTerminalRow() == "a b")  // NEL
+        #expect("a\u{9B}2Jb".sanitizedForTerminalRow() == "a 2Jb")  // 8-bit CSI
+        #expect("a\u{80}b".sanitizedForTerminalRow() == "a b")
+        #expect("a\u{9F}b".sanitizedForTerminalRow() == "a b")
+        // The lead byte also begins U+00A0…U+00BF, which are content.
+        #expect("a\u{A0}b©°".sanitizedForTerminalRow() == "a\u{A0}b©°")
+    }
+
     @Test("The ESC that introduces an ANSI sequence is preserved")
     func ansiPreserved() {
         let styled = "\u{1B}[31mred\u{1B}[0m"

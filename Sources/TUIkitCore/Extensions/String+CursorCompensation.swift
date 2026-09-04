@@ -116,16 +116,22 @@ extension String {
     /// sanitize, which is the overwhelmingly common case.
     public func sanitizedForTerminalRow() -> String {
         func isStray(_ value: UInt32) -> Bool {
-            (value < 0x20 && value != 0x1B) || value == 0x7F
+            // C0 (bar the ESC that introduces a sequence), DEL, and the C1
+            // controls: a pasted U+009B is an 8-bit CSI and a U+0085 a NEL on
+            // any host that decodes them, and neither is content in a cell.
+            (value < 0x20 && value != 0x1B) || value == 0x7F || (0x80...0x9F).contains(value)
         }
         // Fast reject for the clean line that virtually every line is, and which
         // runs once per *changed* terminal row per frame: every byte we'd
         // replace is single-byte UTF-8 (< 0x80), so a raw contiguous-byte scan is
         // correct and far cheaper than walking the `UnicodeScalarView` (whose
         // per-element index validation showed up in render profiling).
+        // A C1 scalar encodes as `C2 8x`/`C2 9x`, so its lead byte is what the
+        // byte scan can see; `C2` also leads U+00A0…U+00BF (a no-break space,
+        // `©`, `°`), which merely sends such a line down the scalar walk.
         let hasStray =
             utf8.withContiguousStorageIfAvailable { buffer -> Bool in
-                for byte in buffer where (byte < 0x20 && byte != 0x1B) || byte == 0x7F {
+                for byte in buffer where (byte < 0x20 && byte != 0x1B) || byte == 0x7F || byte == 0xC2 {
                     return true
                 }
                 return false
