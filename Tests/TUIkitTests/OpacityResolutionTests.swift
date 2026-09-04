@@ -699,6 +699,10 @@ struct OpacityForeignRunTests {
         color.foregroundCodes().joined(separator: ";")
     }
 
+    private func backgroundCodes(_ color: Color) -> String {
+        color.backgroundCodes().joined(separator: ";")
+    }
+
     @Test("A run inside a faded region replays FADED, not dropped")
     func foreignRunsAreFaded() {
         // The frames were coloured by a view that never saw the fade — but

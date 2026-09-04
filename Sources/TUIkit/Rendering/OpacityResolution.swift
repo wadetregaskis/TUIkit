@@ -219,12 +219,21 @@ extension FrameBuffer {
             // own columns, where the per-column alpha and the destination line
             // expect them.
             let prefix = String(repeating: " ", count: max(0, run.offsetX))
+            // The frame's cells inherit their FIELD from the line they replace
+            // — a frame from `colorize(glyph, foreground:)` states none, and
+            // the splice relies on the line's background applying under it.
+            // Blended against what is behind the layer alone, such a cell took
+            // the destination's field unblended (or the bare surface) and then
+            // STATED it, so an indeterminate bar inside `.background(.blue)
+            // .opacity(0.5)` drew its tint once and replayed it plain.
+            let ownLine = lines.indices.contains(run.offsetY) ? lines[run.offsetY] : ""
             let fadedFrames = run.frames.map { frame in
                 Self.blendedSpan(
                     source: prefix + frame,
                     destination: behindLine,
                     columns: run.offsetX..<(run.offsetX + run.width),
                     destinationShift: position.x,
+                    fieldsFrom: ownLine,
                     alpha: { column in
                         covering.first { $0.contains(column: column, row: run.offsetY) }?
                             .opacity

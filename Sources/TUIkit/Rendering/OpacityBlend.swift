@@ -43,6 +43,7 @@ extension FrameBuffer {
         destination: String,
         columns: Range<Int>,
         destinationShift: Int,
+        fieldsFrom: String? = nil,
         alpha: (Int) -> Double?,
         surface: Color,
         defaultForeground: Color
@@ -50,6 +51,12 @@ extension FrameBuffer {
         let sourceCells = cells(
             in: source, through: columns.upperBound,
             defaultForeground: defaultForeground, surface: surface)
+        // The row a run's frame is spliced INTO, when the source is a frame:
+        // a frame cell stating no background wears that row's, exactly as the
+        // splice will give it, so it is blended as the cell it replaces.
+        let fieldCells = fieldsFrom.map {
+            cells(in: $0, through: columns.upperBound, defaultForeground: defaultForeground, surface: surface)
+        }
         let behindCells = cells(
             in: destination, through: columns.upperBound + destinationShift,
             defaultForeground: defaultForeground, surface: surface)
@@ -68,13 +75,17 @@ extension FrameBuffer {
             // and the splice then replaced too few columns and let unfaded
             // source glyphs through. It yields as a space wearing the
             // character's own styling, so the blend's ordinary rules apply.
-            let cell =
+            var cell =
                 sourceCells[column]
                 ?? RowCell(
                     character: " ", style: lastSourceCell?.style ?? SGRState(),
                     foreground: lastSourceCell?.foreground,
                     background: lastSourceCell?.background)
             if sourceCells[column] != nil { lastSourceCell = cell }
+            if cell.background == nil, let field = fieldCells?[column]?.background {
+                cell.background = field
+                cell.style = cell.style.settingBackground(field)
+            }
             // Bounds-checked rather than trusted: a negative shift is legal —
             // `composited` accepts one — and would index before the start.
             let behindColumn = column + destinationShift
