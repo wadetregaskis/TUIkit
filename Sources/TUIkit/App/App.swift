@@ -417,7 +417,11 @@ extension AppRunner {
     /// screen. Replay is skipped when a render is due anyway — one is strictly
     /// better, and replaying first would paint the old frame's cells over
     /// content about to change.
-    fileprivate func foldPendingWork(
+    /// Internal rather than `fileprivate` only so a test can name it: the sole
+    /// caller is the `while isRunning` loop, which enters raw mode and installs
+    /// signal handlers before it gets here, so the three rules below were
+    /// reachable from nothing a unit test can drive.
+    func foldPendingWork(
         alreadyPending: Bool, renderer: RenderLoop<A>, cursorTimer: CursorTimer
     ) -> Bool {
         var pending = alreadyPending
@@ -441,7 +445,9 @@ extension AppRunner {
     ///   builds its appearance from a phase as it renders, there is no frame to
     ///   patch yet, or nothing on screen animates on any clock that ticked.
     ///   That is the behaviour this replaces, so falling back is always safe.
-    fileprivate func serveAnimationTicks(
+    /// Internal rather than `fileprivate` for the same reason as
+    /// ``foldPendingWork(alreadyPending:renderer:cursorTimer:)``.
+    func serveAnimationTicks(
         renderer: RenderLoop<A>, cursorTimer: CursorTimer
     ) -> Bool {
         let ticked = appState.consumePendingAnimationClocks()

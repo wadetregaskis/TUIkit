@@ -126,7 +126,10 @@ final class CursorTimer {
     /// precisely that long instead of waking to compare identical pictures —
     /// or, for a run asking for a rate finer than the interval, sooner than the
     /// interval.
-    private var sleepSeconds = CursorTimer.tickInterval
+    /// Readable rather than fully private so a test can assert that a served
+    /// animation replay re-based the sleep — the value never leaves this class
+    /// otherwise, and the run loop only ever writes it through ``advance(by:)``.
+    private(set) var sleepSeconds = CursorTimer.tickInterval
 
     /// Sets how far the next wake-up is. Takes effect after the current sleep.
     func advance(by seconds: Double) {
