@@ -81,9 +81,15 @@ struct QuirkTableView: View {
         guard diverges else { return "" }
         let hasSkinTone = cluster.text.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
         if hasSkinTone {
-            return client.program == .ghostty
-                ? "kept — Ghostty merges them correctly"
-                : "modifier stripped (withSkinToneFallback)"
+            // What `TerminalClient.compensating` does with the tone on each
+            // host — not a two-way switch: only tmux still strips.
+            switch client.program {
+            case .ghostty: return "kept — Ghostty merges them correctly"
+            case .appleTerminal: return "separated — base, ZWNJ, modifier (withTerminalAppCursorCompensation)"
+            case .iTerm2, .warp: return "kept, detached — advance measured per host"
+            case .tmux: return "modifier stripped (withSkinToneFallback)"
+            case .unidentified: return "none — terminal not identified"
+            }
         }
         return advanceIsShort(cluster) ? "CUF after the glyph" : "cursor pulled back"
     }
