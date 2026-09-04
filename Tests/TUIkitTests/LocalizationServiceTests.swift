@@ -427,3 +427,90 @@ final class LocalizationKeyTests {
         #expect(LocalizationKey.Label.name.rawValue == "label.name")
     }
 }
+
+// MARK: - Auto-Detection Tests
+
+/// Auto-detection had one input, and off Darwin that input is not a preference:
+/// swift-foundation answers `NSLocale.preferredLanguages` with the hard-coded
+/// `["en-001"]` there, so a German Linux user with `LANG=de_DE.UTF-8` and no
+/// saved preference always started in English.
+///
+/// Driven through the injected parameters rather than the process environment,
+/// so both platforms' inputs can be posed on either — the one variable a
+/// terminal user actually sets is the same either way.
+@Suite("Language auto-detection")
+struct LanguageDetectionTests {
+
+    @Test("A POSIX locale variable names the language")
+    func posixVariableIsRead() {
+        // The Linux shape: the sentinel Foundation returns off Darwin, and a
+        // LANG that says otherwise.
+        #expect(
+            LocalizationService.systemPreferredLanguage(
+                environment: ["LANG": "de_DE.UTF-8"], preferredLanguages: ["en-001"]) == .german)
+    }
+
+    @Test("The POSIX variables are consulted in gettext's precedence order")
+    func posixPrecedence() {
+        let all = [
+            "LANGUAGE": "ja", "LC_ALL": "de_DE.UTF-8", "LC_MESSAGES": "fr_FR.UTF-8",
+            "LANG": "it_IT.UTF-8",
+        ]
+        #expect(LocalizationService.posixEnvironmentLanguage(all) == .japanese)
+        #expect(LocalizationService.posixEnvironmentLanguage(all.filter { $0.key != "LANGUAGE" }) == .german)
+        #expect(LocalizationService.posixEnvironmentLanguage(["LC_MESSAGES": "fr", "LANG": "it"]) == .french)
+        #expect(LocalizationService.posixEnvironmentLanguage(["LANG": "it_IT"]) == .italian)
+
+        // LANGUAGE alone carries a priority list, and the first entry this
+        // framework has wins — not the first entry.
+        #expect(LocalizationService.posixEnvironmentLanguage(["LANGUAGE": "pt:es:fr"]) == .spanish)
+    }
+
+    @Test("The C and POSIX locales name no language")
+    func neutralLocalesNameNothing() {
+        // They mean "no preference", and a two-character prefix would have read
+        // them as one: "C" and "po".
+        #expect(LocalizationService.posixEnvironmentLanguage(["LC_ALL": "C"]) == nil)
+        #expect(LocalizationService.posixEnvironmentLanguage(["LANG": "POSIX"]) == nil)
+        #expect(LocalizationService.posixEnvironmentLanguage(["LANG": ""]) == nil)
+        #expect(LocalizationService.posixEnvironmentLanguage([:]) == nil)
+    }
+
+    @Test("A language with no bundled translations falls through to the next source")
+    func unsupportedLanguageFallsThrough() {
+        #expect(
+            LocalizationService.systemPreferredLanguage(
+                environment: ["LANG": "pt_BR.UTF-8"], preferredLanguages: ["fr-FR"]) == .french)
+        #expect(
+            LocalizationService.systemPreferredLanguage(
+                environment: ["LANG": "pt_BR.UTF-8"], preferredLanguages: ["en-001"]) == .english)
+    }
+
+    @Test("The preferred-languages list still decides when nothing is set")
+    func preferredLanguagesStillDecide() {
+        // Darwin's genuine answer, unchanged: a process with no POSIX locale
+        // variables — a GUI-launched one — reads the same list it always did.
+        #expect(
+            LocalizationService.systemPreferredLanguage(
+                environment: [:], preferredLanguages: ["de-DE", "en-US"]) == .german)
+        #expect(
+            LocalizationService.systemPreferredLanguage(
+                environment: [:], preferredLanguages: []) == nil)
+    }
+
+    @Test("The real process environment reaches the detection")
+    func processEnvironmentIsTheDefault() {
+        // The wiring, not the rule: the defaulted arguments must actually read
+        // `ProcessInfo` and `NSLocale`. Setting LC_ALL is process-wide, but
+        // neither Foundation's locale nor any other suite reads it — Darwin
+        // takes its locale from the preferences domain, and swift-foundation
+        // off Darwin never calls `getenv` for one at all.
+        let name = "LC_ALL"
+        let saved = ProcessInfo.processInfo.environment[name]
+        setenv(name, "ja_JP.UTF-8", 1)
+        defer {
+            if let saved { setenv(name, saved, 1) } else { unsetenv(name) }
+        }
+        #expect(LocalizationService.systemPreferredLanguage() == .japanese)
+    }
+}

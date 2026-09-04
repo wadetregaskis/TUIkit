@@ -314,7 +314,15 @@ platform-idiomatic configuration directory:
 
 `<App>` is the executable's (sanitized) process name, so each app keeps its own
 preference. The saved preference is restored when the app restarts; with no
-saved preference the system locale is used, falling back to English.
+saved preference the language is detected, falling back to English.
+
+Detection reads the POSIX locale variables first — `LANGUAGE`, then `LC_ALL`,
+`LC_MESSAGES` and `LANG`, gettext's order — and then the system's preferred
+languages. The environment comes first on every platform, including macOS,
+because it is what a terminal user (or `ssh`, which forwards `LANG` and `LC_*`)
+sets to say which language they want, and because off Darwin it is the only
+real source: Foundation there reports a fixed `en-001` rather than any user
+preference, so a `LANG=de_DE.UTF-8` machine used to start in English.
 
 ### Fallback Behavior
 
