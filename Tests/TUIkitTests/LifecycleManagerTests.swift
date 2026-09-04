@@ -243,20 +243,52 @@ struct LifecycleManagerTaskTests {
         #expect(box.onMain, "and it ran on the main actor")
     }
 
-    @Test("cancelTask sets cancellation flag")
+    /// `cancelTask` cancels ONE token, and the second half is the one nothing
+    /// else watches. `reset()`, twenty lines below it in `LifecycleManager`,
+    /// cancels every task in a loop; a copy of that loop landing here — or a
+    /// token lookup that stopped discriminating — would tear down a sibling
+    /// `.task` on some unrelated view, and a test that only watched the task
+    /// it asked to cancel would report green.
+    @Test("cancelTask cancels its own token's task and spares the others")
     func cancelTask() async throws {
         let manager = LifecycleManager()
+        let target = Cancellation()
+        let bystander = Cancellation()
         manager.startTask(token: "task-1", priority: .medium) {
-            // Long-running task; cancelTask() should interrupt the sleep.
             try? await Task.sleep(for: .seconds(10))
+            await MainActor.run { target.record(Task.isCancelled) }
         }
-        // Cancel immediately
+        // Ten seconds, not a short sleep that would let it finish on its own:
+        // the bystander has to still be IN FLIGHT when the cancel lands, or
+        // sparing it says nothing.
+        manager.startTask(token: "task-2", priority: .medium) {
+            try? await Task.sleep(for: .seconds(10))
+            await MainActor.run { bystander.record(Task.isCancelled) }
+        }
+        try await Task.sleep(for: .milliseconds(20))
+
         manager.cancelTask(token: "task-1")
+        // Polled, not slept, for the reason `cancellationReachesTheClosureBody`
+        // gives below: under a full parallel suite a fixed wait is a coin toss
+        // on when the cancelled sleep unwinds.
+        for _ in 0..<200 where target.value == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(target.value == true, "cancelTask never reached its own token's task")
+
+        // An untargeted cancel would unwind the bystander at the same instant
+        // as the target, so once the target has landed a short grace period is
+        // enough to see it; otherwise the bystander is still asleep.
         try await Task.sleep(for: .milliseconds(50))
-        // Task was cancelled, so it either didn't complete the sleep
-        // or Task.isCancelled was true. Either way the task is cancelled.
-        // We can't easily observe the internal state, but cancellation was requested.
-        // This verifies cancelTask doesn't crash and processes correctly.
+        #expect(bystander.value == nil, "cancelTask cancelled a task it was not given")
+
+        // …and it was alive to be spared rather than already finished, which
+        // its own token proves by reaching it.
+        manager.cancelTask(token: "task-2")
+        for _ in 0..<200 where bystander.value == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(bystander.value == true)
     }
 
     @Test("startTask replaces existing task for same token")
