@@ -70,12 +70,18 @@ struct IdentificationView: View {
             Text("Signals").bold()
             ForEach(Self.environmentSignals, id: \.variable) { signal in
                 let value = ProcessInfo.processInfo.environment[signal.variable]
+                // The framework SEEDS `TUIKIT_TERM_PROGRAM` itself when only the
+                // Device Attributes reply named the host, so on that hop the
+                // variable is set and was not set by anyone; the fixed caption
+                // called it an explicit override.
+                let seeded = signal.variable == "TUIKIT_TERM_PROGRAM" && client.namedBy == .deviceAttributes
                 HStack(spacing: 1) {
                     Text(pad(signal.variable, 22))
                         .foregroundStyle(.palette.foregroundSecondary)
                     Text(pad(value.map { $0.isEmpty ? "(empty)" : $0 } ?? "unset", 22))
                         .foregroundStyle(value == nil ? .palette.foregroundTertiary : .palette.foreground)
-                    Text(signal.reach).foregroundStyle(.palette.foregroundTertiary)
+                    Text(seeded ? "seeded from Device Attributes (below); not set by you" : signal.reach)
+                        .foregroundStyle(.palette.foregroundTertiary)
                 }
             }
             HStack(spacing: 1) {
