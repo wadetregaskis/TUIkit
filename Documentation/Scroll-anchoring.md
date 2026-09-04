@@ -1,7 +1,9 @@
 # Scroll anchoring
 
-**Status:** specified (by the project owner, 2026-07-17), partially
-implemented. This is a feature in its own right — related to, but
+**Status:** specified (by the project owner, 2026-07-17) and **shipped** —
+every row of §2 reads Shipped or Resolved, and the work is on `main` (the
+`locating-without-drawing` branch it grew on was fast-forwarded). This is a
+feature in its own right — related to, but
 conceptually distinct from, "Locating things without drawing them", whose
 anchor machinery is the natural substrate for it. This document records the
 spec so no interim decision forecloses it, maps what exists today onto it,
@@ -59,7 +61,7 @@ content, at both ends, specifiable as **absolute** rows (`5`) and
 
 ## 2. What exists today, mapped honestly
 
-| Spec item | State on the `locating-without-drawing` branch |
+| Spec item | State (all on `main`) |
 |---|---|
 | Bottom mode | **Shipped**, on every scrollable (`db848b03`, `2d9931e3`). Starts at the tail and follows appends; scrolling up releases it and scrolling back re-engages, because engagement is POSITIONAL (being at the tail *is* the follow — no stored flag to fall out of step). Available from the declaration *and* from a bound `.anchorPosition`, whose write jumps to the edge (§3.2's `anchor(to:)`). **End re-engages** it explicitly. |
 | Top mode | **Shipped** (`28ef33e6`), and smaller than it looks. Top asks only that the view stay at the start, and a scroll offset of 0 is not moved by *any* data change — so once the edge modes stopped hijacking the row-identity re-bind (below), Top needed no offset logic at all. Writing `.top` into the binding jumps there; after that it is positional like Bottom. It is deliberately indistinguishable from Window once the user has scrolled away — snapping back unconditionally would nail a `.defaultScrollAnchor(.top)` view to the top and make it unscrollable, which is worse than useless. |
@@ -392,7 +394,7 @@ old single-margin-row behaviour when the anchor is at/above the top). A
 sticky-top clamp (`clampDesignatedHold`) rides the row up if the rows above it
 are deleted past its held line, so it never leaves a blank strip.
 
-### Overscroll shipped for `ScrollView` (§1.5) — List/Table still to come
+### Overscroll shipped on every scrollable (§1.5)
 
 `.scrollOverscroll(top:bottom:)` is live on `ScrollView`. The constrained design
 of §3.3 held up: `scrollOffset` never leaves `[0, maxOffset]`, and the excursion
