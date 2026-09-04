@@ -146,19 +146,31 @@ struct TableRowAnchorHoldTests {
     /// Table does NOT hold, so the machinery is provably what does the work and
     /// an un-anchored Table is unaffected by it.
     @Test("Without a bound anchor the same insert DOES move the row")
-    func withoutAnchorTheRowMoves() {
+    func withoutAnchorTheRowMoves() throws {
         let tui = TUIContext()
         let fm = FocusManager()
         var ids = Array(0..<30)
 
         _ = settle(ids: ids, anchored: 20, tui: tui, fm: fm)
         let before = renderFrame(ids: ids, anchored: nil, tui: tui, fm: fm)
-        let lineBefore = screenLine(of: 20, in: before)
+
+        // Watch the row at the TOP of the viewport, not the row 20 the
+        // anchored tests watch. Holding the offset pushes row 20 five rows past
+        // the bottom, so `screenLine` answers nil for it — and `nil != Optional`
+        // is true no matter what happened, including a viewport that jumped
+        // somewhere else entirely. The control has to compare two real lines.
+        let watched = 15
+        let lineBefore = try #require(
+            screenLine(of: watched, in: before),
+            "row \(watched) was not on screen to begin with: \(before)")
 
         ids.insert(contentsOf: 100..<105, at: 5)
         let after = renderFrame(ids: ids, anchored: nil, tui: tui, fm: fm)
+        let lineAfter = try #require(
+            screenLine(of: watched, in: after),
+            "row \(watched) left the screen entirely: \(after)")
         #expect(
-            screenLine(of: 20, in: after) != lineBefore,
-            "an un-anchored Table holds the POSITION, so the row shifts: \(before) → \(after)")
+            lineAfter == lineBefore + 5,
+            "an un-anchored Table holds the offset, so the row shifts down by the five inserted rows: \(before) → \(after)")
     }
 }
