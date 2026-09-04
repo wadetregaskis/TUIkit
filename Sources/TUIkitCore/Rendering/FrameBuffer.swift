@@ -924,11 +924,16 @@ extension FrameBuffer {
             trimmed.leftClip = region.leftClip
             return trimmed
         }
-        // Runs describe CELLS, so unlike the free-floating layers above they are
-        // dropped when their cells are clipped away — otherwise a run scrolled
-        // out of a viewport would keep repainting over whatever took its place.
-        result.animatedCells = animatedCells.filter {
-            $0.fits(columns: maxWidth, rows: maxHeight)
+        // Runs describe CELLS, so unlike the free-floating layers above they
+        // follow the clip. A run whose ROW is clipped away is gone — scrolled
+        // out of a viewport it must stop, or it keeps repainting over whatever
+        // took its place. A run the WIDTH cuts through is cut to the cells that
+        // survive, not dropped: dropping it whole froze the visible part of a
+        // pulsing label at a container's right edge, which read as the
+        // animation dying wherever a clamp happened to fall. The same cut the
+        // overlay punch makes (`animatedCellsPunched`).
+        result.animatedCells = animatedCells.compactMap {
+            $0.clipped(toCanvasColumns: maxWidth, rows: maxHeight)
         }
         return result
     }

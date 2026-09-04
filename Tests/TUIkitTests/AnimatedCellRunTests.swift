@@ -91,20 +91,50 @@ struct AnimatedCellRunTests {
         #expect(result.animatedCells[0].offsetY == 1)
     }
 
-    @Test("Clamping drops the runs whose cells it clipped away")
+    @Test("Clamping drops the runs whose rows it clipped and cuts the ones its width cut through")
     func clampingDropsClippedRuns() {
         // The point of the whole type: a run IS its cells. Scrolled out of a
         // viewport, it must stop — otherwise it repaints on a clock over
-        // whatever moved into that position.
+        // whatever moved into that position. Cut through by the width, the
+        // cells that survive keep animating: the run used to be dropped
+        // whole, which froze the visible part of a pulsing label at a
+        // container's right edge.
         let runs = [
             run(x: 0, y: 0),  // kept
             run(x: 0, y: 5),  // clipped by height
-            run(x: 9, y: 0, width: 3),  // clipped by width (9 + 3 > 10)
+            run(x: 9, y: 0, width: 3, frames: ["abc", "ABC"]),  // cut by width (9 + 3 > 10)
         ]
         let wide = buffer(Array(repeating: String(repeating: "x", count: 20), count: 8), runs: runs)
         let clamped = wide.clamped(toWidth: 10, height: 3)
-        #expect(clamped.animatedCells.count == 1, "got: \(clamped.animatedCells)")
-        #expect(clamped.animatedCells[0].offsetY == 0)
+        #expect(clamped.animatedCells.count == 2, "got: \(clamped.animatedCells)")
+        #expect(clamped.animatedCells.allSatisfy { $0.offsetY == 0 })
+        let cut = clamped.animatedCells[1]
+        #expect(cut.offsetX == 9 && cut.width == 1, "the cell inside the clamp survives: \(cut)")
+        #expect(cut.frames == ["a", "A"], "each frame is sliced to the surviving cell")
+    }
+
+    @Test("A pulsing label straddling the clamp edge keeps its visible cells animating")
+    func straddlingRunIsCutNotDropped() {
+        let label = run(x: 6, y: 0, width: 6, frames: ["ABCDEF", "abcdef"])
+        let wide = buffer([String(repeating: "x", count: 12)], runs: [label])
+        let clamped = wide.clamped(toWidth: 10, height: 1)
+        #expect(clamped.width == 10)
+        let cut = clamped.animatedCells.first
+        #expect(cut?.offsetX == 6 && cut?.width == 4, "got: \(String(describing: cut))")
+        #expect(cut?.frames == ["ABCD", "abcd"])
+        #expect(cut?.isAnimating == true)
+    }
+
+    @Test("A cut whose remainder no longer animates is dropped")
+    func stillRemainderIsDropped() {
+        // Only the cells past the clamp differed between frames, so what is
+        // left is a still picture — and a still run only holds the clock open.
+        let label = run(x: 8, y: 0, width: 4, frames: ["ABxy", "ABXY"])
+        let wide = buffer([String(repeating: "x", count: 12)], runs: [label])
+        #expect(wide.clamped(toWidth: 10, height: 1).animatedCells.isEmpty)
+        // …whereas an uncut still run is kept as before: not this method's call.
+        let still = run(x: 0, y: 0, width: 2, frames: ["AB", "AB"])
+        #expect(buffer(["xxxx"], runs: [still]).clamped(toWidth: 3, height: 1).animatedCells.count == 1)
     }
 
     @Test("Clamping within bounds keeps every run")

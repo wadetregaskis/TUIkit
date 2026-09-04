@@ -1024,17 +1024,19 @@ extension RenderLoop {
         // screen, the runs composited into absolute positions, and the geometry
         // the diff was written with. Only runs that ANIMATE are kept — a
         // one-frame run is a still picture the render above already drew — and
-        // only runs wholly ON SCREEN: content can exceed the terminal (a wide
-        // unwrapped row, say — buildOutputLines clips the LINES to the
+        // only the ON-SCREEN part of each: content can exceed the terminal (a
+        // wide unwrapped row, say — buildOutputLines clips the LINES to the
         // terminal but nothing clipped the runs), and a run patched past the
         // edge pads its row wider than the terminal, which wraps and smears
-        // the row below. Every interior clip already enforces this via
-        // `clamped`; see AnimatedCellRun.fits.
+        // the row below. A run straddling the edge is CUT to the screen, not
+        // dropped, so its visible cells keep animating — the same cut every
+        // interior clip makes in `clamped`; see
+        // `AnimatedCellRun.clipped(toCanvasColumns:rows:)`.
         replayable = ReplayableFrame(
             contentLines: outputLines,
-            runs: buffer.animatedCells.filter { run in
-                run.isAnimating
-                    && run.fits(columns: terminalWidth, rows: outputLines.count)
+            runs: buffer.animatedCells.compactMap { run in
+                guard run.isAnimating else { return nil }
+                return run.clipped(toCanvasColumns: terminalWidth, rows: outputLines.count)
             },
             terminalWidth: terminalWidth,
             startRow: 1 + headerHeight,

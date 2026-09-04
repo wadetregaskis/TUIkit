@@ -318,4 +318,23 @@ extension AnimatedCellRun {
     package func fits(columns: Int, rows: Int) -> Bool {
         offsetY >= 0 && offsetY < rows && offsetX >= 0 && offsetX + width <= columns
     }
+
+    /// The part of this run inside a `columns` × `rows` canvas, or `nil` when
+    /// none of it is — the CUT where ``fits(columns:rows:)`` is the yes/no.
+    ///
+    /// Rows are all-or-nothing (a run is one row); columns are cut with
+    /// ``clipped(toColumns:)``, so the piece kept claims exactly the cells the
+    /// canvas has and can be replayed without padding a row past the edge. A
+    /// cut piece with nothing left animating is dropped, since a still run
+    /// only holds the clock open; a run that needed no cut comes back as it
+    /// is, animating or not, which is what the whole-run filter kept too.
+    package func clipped(toCanvasColumns columns: Int, rows: Int) -> Self? {
+        guard offsetY >= 0, offsetY < rows else { return nil }
+        let span = offsetX..<(offsetX + width)
+        let window = (0..<max(0, columns)).clamped(to: span)
+        guard !window.isEmpty else { return nil }
+        if window == span { return self }
+        guard let cut = clipped(toColumns: window), cut.isAnimating else { return nil }
+        return cut
+    }
 }
