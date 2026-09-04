@@ -215,9 +215,9 @@ struct DesignatedRowAnchorTests {
     // MARK: - The contrast: no designation means no holding
 
     /// Shows the designation is doing the work: with none, the default is
-    /// Window, which holds the POSITION — so the same edit moves the row.
+    /// Window, which holds the OFFSET — so the same edit moves the row.
     @Test("Without a designation the same insert DOES move the row (Window default)")
-    func withoutDesignationTheRowMoves() {
+    func withoutDesignationTheRowMoves() throws {
         let tuiContext = TUIContext()
         let focusManager = FocusManager()
         var items = Array(0..<400)
@@ -230,15 +230,34 @@ struct DesignatedRowAnchorTests {
         let before = renderFrame(
             items: items, anchored: nil, uniform: false,
             tuiContext: tuiContext, focusManager: focusManager)
-        let lineBefore = screenLine(of: 300, in: before)
+        let lineBefore = try #require(
+            screenLine(of: 300, in: before),
+            "row 300 was not on screen to begin with: \(before)")
 
-        items.insert(contentsOf: 1_000..<1_025, at: 10)
+        // THREE rows inserted, not the twenty-five this test used to insert.
+        // Holding the offset shifts the window by the inserted count, and
+        // twenty-five of them past a viewport five rows deep left row 300
+        // nowhere on screen: `screenLine` answered nil, so the assertion was
+        // `nil != Optional(0)` — true whatever had happened, including a
+        // viewport that jumped somewhere else entirely. Three keeps the row
+        // visible in both frames, so the control compares two real lines, and
+        // `#require` is what keeps it that way.
+        items.insert(contentsOf: 1_000..<1_003, at: 10)
         let after = renderFrame(
             items: items, anchored: nil, uniform: false,
             tuiContext: tuiContext, focusManager: focusManager)
+        let lineAfter = try #require(
+            screenLine(of: 300, in: after),
+            "row 300 left the screen entirely: \(after)")
+
+        // Six lines, not three: the window keeps its ORDINAL offset, so it now
+        // opens on rows 297, 298 and 299, whose heights under this harness's
+        // `i % 3 + 1` are 1, 2 and 3. Row 300 was the top line; it is now the
+        // seventh.
+        #expect(lineBefore == 0)
         #expect(
-            screenLine(of: 300, in: after) != lineBefore,
-            "Window holds the position, so the row shifts: \(before) → \(after)")
+            lineAfter == 6,
+            "Window holds the offset, so the row shifts down past the rows now above it: \(before) → \(after)")
     }
 
     // MARK: - Adoption
