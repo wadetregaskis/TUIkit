@@ -1160,27 +1160,22 @@ where Value.ID: Hashable {
         // of reach — line granularity steps by lines through the tall rows.
         handler.scrollGranularity = context.environment.scrollGranularity
         handler.followMargin = context.environment.scrollFollowMargin
-        // Choose viewportHeight so the handler's row-based maxOffset
-        // (itemCount − viewportHeight) equals the height-aware furthest scroll.
-        let furthest = maxScrollOffset(
-            count: data.count, contentHeight: rowArea,
-            drawsTextIndicators: drawsTextIndicators(showsScrollbar, context), height: heightOf)
-        handler.viewportHeight = max(1, data.count - furthest)
-        // Sync both chrome flags in case the rows switch between the
-        // single-line and multi-line paths across frames (the single-line
-        // resolve sets them from ITS chrome; stale values would mis-budget the
-        // focus-reveal arithmetic). Same divergence class as the `017683fa`
-        // capture notes on the single-line path.
-        handler.showsScrollbar = showsScrollbar
-        // Not `!showsScrollbar`: a table whose indicators are hidden draws
-        // neither, and the "N more" arithmetic must know that.
-        handler.drawsScrollIndicators = drawsTextIndicators(showsScrollbar, context) && furthest > 0
-        // §1.5, in LINES — and therefore AFTER `viewportHeight` above, which on
-        // this path is a ROW count (`itemCount − furthest`, chosen to give the
-        // handler the right `maxOffset`). Resolving against that made
-        // `.viewport(minus:)` mean "rows visible − n" lines here while the List
-        // twin meant "viewport lines − n"; and being a frame stale, the first
-        // blocked tick resolved against a fresh handler's default of 1.
+        // `viewportHeight` is set once the window is cut, below. It used to be
+        // set HERE to the row count of the tail screenful — an
+        // offset-independent number that once calibrated the handler's
+        // row-based maxOffset, a job the height walk in `resolvedMaxOffset`
+        // has done since `rowHeight` and `contentHeight` are both set on this
+        // path — and that made PageDown, Shift+Page and the row-move page step
+        // travel by the wrong count wherever the rows at the end are taller or
+        // shorter than the rows on screen.
+        let furthest = syncIndicatorChrome(
+            handler, showsScrollbar: showsScrollbar, rowArea: rowArea, context: context, heightOf: heightOf)
+        // §1.5, in LINES — not against `viewportHeight`, which on this path is
+        // a ROW count (set from the window further down). Resolving against
+        // that made `.viewport(minus:)` mean "rows visible − n" lines here
+        // while the List twin meant "viewport lines − n"; and being a frame
+        // stale, the first blocked tick resolved against a fresh handler's
+        // default of 1.
         handler.resolveOverscroll(
             environment: context.environment, contentHeight: contentHeight,
             reservesIndicatorLine: handler.drawsScrollIndicators)
@@ -1220,6 +1215,10 @@ where Value.ID: Hashable {
         let topClip = window.topClip
         // …and so must the indicators. See ``ItemListHandler/drawnOffset``.
         handler.drawnOffset = window.range.lowerBound
+        // The rows actually on screen — what a page moves by, and what the
+        // `List` and the single-line path publish. See the note above the
+        // window for what used to stand here.
+        handler.viewportHeight = max(1, window.range.count)
         // The bar is metered in LINES, like the `List`'s over multi-line rows:
         // its extent is the whole wrapped height and its offset the lines
         // above the window. That total is the one thing this path otherwise
@@ -1370,6 +1369,29 @@ where Value.ID: Hashable {
         !showsScrollbar && context.environment.verticalScrollIndicators(overflowing: true).text
     }
 
+    /// The multi-line path's indicator chrome, published to the handler, and
+    /// the furthest scroll offset the wrapped heights allow — the one number
+    /// both flags depend on, handed back for the overscroll settle below.
+    ///
+    /// Sync both chrome flags in case the rows switch between the single-line
+    /// and multi-line paths across frames (the single-line resolve sets them
+    /// from ITS chrome; stale values would mis-budget the focus-reveal
+    /// arithmetic). Same divergence class as the `017683fa` capture notes on
+    /// the single-line path.
+    private func syncIndicatorChrome(
+        _ handler: ItemListHandler<Value.ID>, showsScrollbar: Bool, rowArea: Int, context: RenderContext,
+        heightOf: @escaping (Int) -> Int
+    ) -> Int {
+        let furthest = maxScrollOffset(
+            count: data.count, contentHeight: rowArea,
+            drawsTextIndicators: drawsTextIndicators(showsScrollbar, context), height: heightOf)
+        handler.showsScrollbar = showsScrollbar
+        // Not `!showsScrollbar`: a table whose indicators are hidden draws
+        // neither, and the "N more" arithmetic must know that.
+        handler.drawsScrollIndicators = drawsTextIndicators(showsScrollbar, context) && furthest > 0
+        return furthest
+    }
+
     private func maxScrollOffset(
         count: Int, contentHeight: Int, drawsTextIndicators: Bool = true,
         height: (Int) -> Int
@@ -1385,7 +1407,6 @@ where Value.ID: Hashable {
         }
         return offset
     }
-
     /// Whether a multi-line table's wrapped rows are taller than its row area —
     /// stopping the moment they are, so a tall table sums a screenful rather
     /// than all of it, and a table that fits has at most `rowArea` rows to sum.
