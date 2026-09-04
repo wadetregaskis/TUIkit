@@ -136,7 +136,6 @@ struct CellSpanDiffTests {
         case identical
         case wholeLine
         case spanCount(Int)
-        case atMostColumns(Int)
 
         func matches(_ plan: ANSICellDiff) -> Bool {
             switch (self, plan) {
@@ -144,8 +143,6 @@ struct CellSpanDiffTests {
                 return true
             case (.spanCount(let n), .spans(let spans)):
                 return spans.count == n
-            case (.atMostColumns(let limit), .spans(let spans)):
-                return spans.reduce(0) { $0 + $1.content.filter { !$0.isASCII || $0 != "\u{1B}" }.count } <= limit
             default:
                 return false
             }
