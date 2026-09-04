@@ -173,13 +173,19 @@ def foreground(image_id):
 
 def cell(row, column, image_id=None, elide=False):
     """One placeholder cell. `elide` drops the diacritics, which Kitty reads as
-    "same row, next column" — the run-length form."""
+    "same row, next column" — the run-length form.
+
+    THREE marks, always — row, column, and the image id's high byte even when
+    it is zero. The spec lets a cell omit the third and inherit it, and this
+    probe once did for ids under 2^24 (every id TUIkit issues); measured
+    2026-09-03, iTerm2 3.6.11 acknowledges such a cell and draws nothing,
+    while kitty and Ghostty read both spellings alike. The encoder writes all
+    three since 0d4d2015, and a probe that spelled cells differently from the
+    encoder could no longer see a disagreement between them."""
     if elide:
         return PLACEHOLDER
-    marks = chr(DIACRITICS[row]) + chr(DIACRITICS[column])
-    if image_id is not None and image_id > 0xFFFFFF:
-        marks += chr(DIACRITICS[(image_id >> 24) & 0xFF])
-    return PLACEHOLDER + marks
+    high_byte = ((image_id or 0) >> 24) & 0xFF
+    return PLACEHOLDER + chr(DIACRITICS[row]) + chr(DIACRITICS[column]) + chr(DIACRITICS[high_byte])
 
 
 def placeholder_rows(image_id, columns, rows, elide=False):
