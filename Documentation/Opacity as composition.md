@@ -415,11 +415,19 @@ apart for exactly this reason.
 
 ### 9.4 The leak paths, each of which fails silently
 
+One row is excluded from the blend and from the backdrop dim outright, and
+is not a leak: an **image placeholder row** (U+10EEEE cells), whose
+foreground colour IS the Kitty image id — any pass that rewrites foregrounds
+turns the picture into a lookup of an image nobody transmitted. Both
+combining sites test for the codepoint and pass the row through unchanged
+(`OpacityResolution`, `DimmedModifier`); the boundary is stated in
+`Terminal graphics protocols.md`. It is the one layer the model cannot fade.
+
 | | what leaks | what it needs |
 |---|---|---|
 | **L2** | `composited` builds its result with a bare `Self(lines:)` and drops the DESTINATION's own α | carry it onto the result |
 | **L3** | 65 bare `FrameBuffer(lines:)` rebuilds, live ones in `DimmedModifier`, `DropdownMenuRenderer`, `AppHeader`, `Alert`, `ProgressView`, `NavigationSplitView`, `Color256Grid` | convert to `replacingLines`, and a test that α survives a `.padding`/`.border`/`.frame` wrap |
-| **L4** | `.offset`/`.position` return a placeholder of empty lines with the real drawing in `overlays[…].content`, so α on the placeholder fades nothing | multiply into every non-screen-level layer's content, recursively — the recursion `cyclingOverlays`/`fadingOverlays` already perform |
+| **L4** | `.offset`/`.position` return a placeholder of empty lines with the real drawing in `overlays[…].content`, so α on the placeholder fades nothing | multiply into every non-screen-level layer's content, recursively — the recursion `fadingOverlays` already performs (its sibling `cyclingOverlays` went with 54af97be, the commit this section is the design for) |
 | **L5** | the app header and status bar render real view trees and go straight to `buildOutputLines` | resolve against their OWN backgrounds, not `palette.background` |
 | **L6** | runs emitted by other views inside a faded subtree — a pulsing button under `.opacity(0.5)` — carry unfaded frames and replay at full strength over a faded row | **CLOSED**: the resolution drops them. A missed saving rather than a frozen animation — `noteServedByRuns` is the only thing that stops the loop rendering for an animation and `.opacity` is its only caller, so every other producer keeps asking for frames and simply pays for them |
 | **L7** | `FrameBuffer.==` excludes the new payload, and the render/measure memo keys on it — so an unfaded buffer is served where a faded one is wanted | include it in `==`; α is content, not a perf hint |
