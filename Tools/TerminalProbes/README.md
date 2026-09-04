@@ -280,8 +280,10 @@ PROBE_OUT=/tmp/sweep.json python3 recent_emoji_sweep.py
 First run (2026-08-28, all four hosts): Warp v0.2026.07.08 advances exactly
 the seven Unicode 16.0 additions (🪉 🪏 🪾 🫆 🫜 🫟 🫩) by 1 — its width
 table is Unicode 15.1 — while Apple Terminal, iTerm2 and Ghostty advance
-all 113 by 2. That measurement is `Character.warpCursorAdvance`'s
-`unicode16EmojiWarpDoesNotKnow` set. Re-run when a Unicode version ships,
+all 113 by 2. That measurement is `Character.unicode16Emoji`, consulted
+through `Character.isUnicode16EmojiOlderTablesMiss` wherever a host's
+`TerminalQuirks.preUnicode16WidthTable` says its table predates 16.0 (it
+was Warp-specific until bc9dc5b8 generalised it). Re-run when a Unicode version ships,
 when a terminal updates, or when one emoji misbehaves — the sweep costs
 seconds and answers for the whole block; extend `SWEEP` when new emoji land
 outside it.
