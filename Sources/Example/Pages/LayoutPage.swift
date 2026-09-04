@@ -259,11 +259,27 @@ struct LayoutPage: View {
             after: "."),
     ]
 
-    /// How wide each of the three prose columns is, given the terminal and the
-    /// two cells of gap between them. Floored so a narrow terminal still gets
-    /// something wrappable rather than a division by nothing.
+    /// Everything standing between the terminal's width and the three columns:
+    /// the page's `.padding(.horizontal, 1)` (2), the `ScrollView`'s scrollbar
+    /// gutter (1), the `.border` around the row plus the cell of padding it
+    /// holds inside each edge (4), and the two `spacing: 2` gaps between the
+    /// columns (4).
+    ///
+    /// Counted, not estimated, because under-counting it is not cosmetic: the
+    /// blocks then wrap at a width the row cannot place them at, an `HStack`
+    /// takes the whole shortfall out of its LAST child, and the third paragraph
+    /// renders narrower than it wrapped. A row that filled its width comes back
+    /// with its final word ellipsed — or, when nothing is left for it, dropped
+    /// without a mark. It was 8, so the row over-asked by 1 to 3 cells at every
+    /// terminal width, and only ever the third column paid.
+    private static let keywordColumnChrome = 2 + 1 + 4 + 4
+
+    /// How wide each of the three prose columns is. Floored so a narrow terminal
+    /// still gets something wrappable rather than a division by nothing — below
+    /// about 47 columns that floor binds and the columns overflow, which is the
+    /// deliberate trade rather than an unreadable four-cell column.
     private var keywordColumnWidth: Int {
-        max(12, (terminalWidth - 8) / Self.keywordBlocks.count)
+        max(12, (terminalWidth - Self.keywordColumnChrome) / Self.keywordBlocks.count)
     }
 
     /// A locale whose decimal separator is not this one's, so the pair of
@@ -765,15 +781,37 @@ private struct KeywordBlock: View {
     let width: Int
 
     /// One word of the paragraph, and whether it is THE word.
+    ///
+    /// `trailing` is punctuation that belongs to this word and is drawn tight
+    /// against it — see ``words(of:)``. It is styled as prose while `text` may
+    /// be the keyword, which is the whole reason it is a second field rather
+    /// than being appended to `text`.
     private struct Word {
         let text: String
         let isKeyword: Bool
+        var trailing: String = ""
+
+        /// What the word costs the wrap, in cells: both halves, since they are
+        /// drawn with nothing between them.
+        var cells: Int { text.strippedLength + trailing.strippedLength }
     }
 
     private static func words(of block: LayoutPage.Keyworded) -> [Word] {
-        block.before.split(separator: " ").map { Word(text: String($0), isKeyword: false) }
-            + [Word(text: block.keyword, isKeyword: true)]
-            + block.after.split(separator: " ").map { Word(text: String($0), isKeyword: false) }
+        // Punctuation that OPENS the tail is not a word, it is the end of the
+        // one before it. `keyword` and `after` are separate fields, so the split
+        // that gives every other word its punctuation cannot give the keyword
+        // its own — and the rows are an `HStack(spacing: 1)`, so anything left
+        // standing alone gets a cell in front of it. The third block's tail is
+        // just ".", and it read "answers ." on screen.
+        var tail = Substring(block.after)
+        var trailing = ""
+        while let first = tail.first, first.isPunctuation {
+            trailing.append(first)
+            tail = tail.dropFirst()
+        }
+        return block.before.split(separator: " ").map { Word(text: String($0), isKeyword: false) }
+            + [Word(text: block.keyword, isKeyword: true, trailing: trailing)]
+            + tail.split(separator: " ").map { Word(text: String($0), isKeyword: false) }
     }
 
     /// Greedy wrap, in CELLS — the same unit the terminal measures in, so a
@@ -782,7 +820,7 @@ private struct KeywordBlock: View {
         var rows: [[Word]] = [[]]
         var used = 0
         for word in words(of: block) {
-            let cells = word.text.strippedLength
+            let cells = word.cells
             if used > 0, used + 1 + cells > width {
                 rows.append([word])
                 used = cells
@@ -810,13 +848,22 @@ private struct KeywordBlock: View {
             ForEach(wrapped, id: \.offset) { _, row in
                 HStack(spacing: 1) {
                     ForEach(Array(row.enumerated()), id: \.offset) { _, word in
-                        if word.isKeyword {
-                            Text(verbatim: word.text)
-                                .bold()
-                                .foregroundStyle(.palette.accent)
-                        } else {
-                            Text(verbatim: word.text)
-                                .foregroundStyle(.palette.foregroundSecondary)
+                        // `spacing: 0` inside, so the word's own punctuation is
+                        // drawn tight against it while the row keeps its cell
+                        // between words.
+                        HStack(spacing: 0) {
+                            if word.isKeyword {
+                                Text(verbatim: word.text)
+                                    .bold()
+                                    .foregroundStyle(.palette.accent)
+                            } else {
+                                Text(verbatim: word.text)
+                                    .foregroundStyle(.palette.foregroundSecondary)
+                            }
+                            if !word.trailing.isEmpty {
+                                Text(verbatim: word.trailing)
+                                    .foregroundStyle(.palette.foregroundSecondary)
+                            }
                         }
                     }
                 }
