@@ -178,6 +178,35 @@ package enum TerminalWidthCorpus {
         Entry(id: "latin_zwnj", category: "format_control", text: "\u{61}\u{200C}"),
         Entry(id: "bidi_lrm", category: "format_control", text: "\u{200E}"),
         Entry(id: "bidi_rlm", category: "format_control", text: "\u{200F}"),
+        Entry(id: "key_escape", category: "chrome_key", text: "\u{238B}"),  // ⎋ Shortcut.escape
+        Entry(id: "key_return", category: "chrome_key", text: "\u{21B5}"),  // ↵ Shortcut.enter — reported 2 cells in Ghostty
+        Entry(id: "key_return_symbol", category: "chrome_key", text: "\u{23CE}"),  // ⏎ Shortcut.returnKey
+        Entry(id: "key_tab", category: "chrome_key", text: "\u{21E5}"),  // ⇥ Shortcut.tab
+        Entry(id: "key_backtab", category: "chrome_key", text: "\u{21E4}"),  // ⇤ Shortcut.shiftTab
+        Entry(id: "key_backspace", category: "chrome_key", text: "\u{232B}"),  // ⌫ Shortcut.backspace
+        Entry(id: "key_delete", category: "chrome_key", text: "\u{2326}"),  // ⌦ Shortcut.delete
+        Entry(id: "key_space", category: "chrome_key", text: "\u{2423}"),  // ␣ Shortcut.space
+        Entry(id: "key_arrow_up", category: "chrome_key", text: "\u{2191}"),  // ↑ Shortcut.arrowUp — EAW Ambiguous
+        Entry(id: "key_arrow_down", category: "chrome_key", text: "\u{2193}"),  // ↓ Shortcut.arrowDown — EAW Ambiguous
+        Entry(id: "key_arrow_left", category: "chrome_key", text: "\u{2190}"),  // ← Shortcut.arrowLeft — EAW Ambiguous
+        Entry(id: "key_arrow_right", category: "chrome_key", text: "\u{2192}"),  // → Shortcut.arrowRight — EAW Ambiguous
+        Entry(id: "key_shift", category: "chrome_key", text: "\u{21E7}"),  // ⇧ Shortcut.shift — EAW Ambiguous
+        Entry(id: "key_control", category: "chrome_key", text: "\u{2303}"),  // ⌃ Shortcut.control
+        Entry(id: "key_option", category: "chrome_key", text: "\u{2325}"),  // ⌥ Shortcut.option
+        Entry(id: "key_command", category: "chrome_key", text: "\u{2318}"),  // ⌘ Shortcut.command
+        Entry(id: "chrome_left_tri", category: "chrome_glyph", text: "\u{25C0}"),  // ◀ TerminalSymbols.leftArrow — EAW Ambiguous
+        Entry(id: "chrome_right_tri", category: "chrome_glyph", text: "\u{25B6}"),  // ▶ TerminalSymbols.rightArrow / disclosureCollapsed
+        Entry(id: "chrome_down_tri", category: "chrome_glyph", text: "\u{25BC}"),  // ▼ TerminalSymbols.disclosureExpanded
+        Entry(id: "chrome_up_tri", category: "chrome_glyph", text: "\u{25B2}"),  // ▲ TerminalSymbols.toneCurveStop
+        Entry(id: "chrome_radio_on", category: "chrome_glyph", text: "\u{25CF}"),  // ● TerminalSymbols.radioSelected / maskBullet
+        Entry(id: "chrome_radio_off", category: "chrome_glyph", text: "\u{25EF}"),  // ◯ TerminalSymbols.radioUnselected
+        Entry(id: "chrome_radio_dis", category: "chrome_glyph", text: "\u{25CC}"),  // ◌ TerminalSymbols.radioDisabledUnselected
+        Entry(id: "chrome_full_block", category: "chrome_glyph", text: "\u{2588}"),  // █ track fill — EAW Ambiguous
+        Entry(id: "chrome_left_half", category: "chrome_glyph", text: "\u{258C}"),  // ▌ field cap — EAW Ambiguous
+        Entry(id: "chrome_right_half", category: "chrome_glyph", text: "\u{2590}"),  // ▐ field cap
+        Entry(id: "chrome_shade", category: "chrome_glyph", text: "\u{2592}"),  // ▒ track groove — EAW Ambiguous
+        Entry(id: "chrome_box_h", category: "chrome_glyph", text: "\u{2500}"),  // ─ border — EAW Ambiguous
+        Entry(id: "chrome_box_v", category: "chrome_glyph", text: "\u{2502}"),  // │ border — EAW Ambiguous
     ]
 
     /// Entries of one category.
@@ -262,6 +291,19 @@ package enum TerminalWidthCorpus {
             "A letter carrying a ZWJ or ZWNJ (which is what pasted Arabic or Indic text and "
                 + "a truncated emoji both leave), and the bidi marks alone. All zero-width "
                 + "extras: the cluster is its base, and a lone mark is nothing. UNMEASURED.",
+        "chrome_key":
+            "The keyboard symbols the status bar draws — ⎋ ↵ ⇥ ⌫ ⌘ and the arrows. "
+                + "The framework claims one cell for every one of them and had never "
+                + "measured any: half are East Asian AMBIGUOUS, which is a terminal "
+                + "SETTING rather than a property of the character, and ↵ (U+21B5, EAW "
+                + "Neutral, so 1 by every wcwidth) was reported painting 2 in Ghostty — "
+                + "which ate the space before the label beside it. UNMEASURED.",
+        "chrome_glyph":
+            "The drawing glyphs the framework's own controls are made of — borders, "
+                + "track fills, field caps, radio indicators, disclosure and stepper "
+                + "triangles. Same claim and the same gap as `chrome_key`, and a wider "
+                + "blast radius: a border glyph measured wrong moves every cell of every "
+                + "row inside it. Most are East Asian AMBIGUOUS. UNMEASURED.",
         "combining":
             "Base + combining mark(s) (NFD é, and one with three stacked): one cell, "
                 + "agreed everywhere — the marks are Mn and advance nothing.",

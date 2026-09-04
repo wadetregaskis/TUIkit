@@ -1054,6 +1054,238 @@
    "scalars": [
     "U+200F"
    ]
+  },
+  {
+   "id": "key_escape",
+   "class": "chrome_key",
+   "text": "⎋",
+   "scalars": [
+    "U+238B"
+   ]
+  },
+  {
+   "id": "key_return",
+   "class": "chrome_key",
+   "text": "↵",
+   "scalars": [
+    "U+21B5"
+   ]
+  },
+  {
+   "id": "key_return_symbol",
+   "class": "chrome_key",
+   "text": "⏎",
+   "scalars": [
+    "U+23CE"
+   ]
+  },
+  {
+   "id": "key_tab",
+   "class": "chrome_key",
+   "text": "⇥",
+   "scalars": [
+    "U+21E5"
+   ]
+  },
+  {
+   "id": "key_backtab",
+   "class": "chrome_key",
+   "text": "⇤",
+   "scalars": [
+    "U+21E4"
+   ]
+  },
+  {
+   "id": "key_backspace",
+   "class": "chrome_key",
+   "text": "⌫",
+   "scalars": [
+    "U+232B"
+   ]
+  },
+  {
+   "id": "key_delete",
+   "class": "chrome_key",
+   "text": "⌦",
+   "scalars": [
+    "U+2326"
+   ]
+  },
+  {
+   "id": "key_space",
+   "class": "chrome_key",
+   "text": "␣",
+   "scalars": [
+    "U+2423"
+   ]
+  },
+  {
+   "id": "key_arrow_up",
+   "class": "chrome_key",
+   "text": "↑",
+   "scalars": [
+    "U+2191"
+   ]
+  },
+  {
+   "id": "key_arrow_down",
+   "class": "chrome_key",
+   "text": "↓",
+   "scalars": [
+    "U+2193"
+   ]
+  },
+  {
+   "id": "key_arrow_left",
+   "class": "chrome_key",
+   "text": "←",
+   "scalars": [
+    "U+2190"
+   ]
+  },
+  {
+   "id": "key_arrow_right",
+   "class": "chrome_key",
+   "text": "→",
+   "scalars": [
+    "U+2192"
+   ]
+  },
+  {
+   "id": "key_shift",
+   "class": "chrome_key",
+   "text": "⇧",
+   "scalars": [
+    "U+21E7"
+   ]
+  },
+  {
+   "id": "key_control",
+   "class": "chrome_key",
+   "text": "⌃",
+   "scalars": [
+    "U+2303"
+   ]
+  },
+  {
+   "id": "key_option",
+   "class": "chrome_key",
+   "text": "⌥",
+   "scalars": [
+    "U+2325"
+   ]
+  },
+  {
+   "id": "key_command",
+   "class": "chrome_key",
+   "text": "⌘",
+   "scalars": [
+    "U+2318"
+   ]
+  },
+  {
+   "id": "chrome_left_tri",
+   "class": "chrome_glyph",
+   "text": "◀",
+   "scalars": [
+    "U+25C0"
+   ]
+  },
+  {
+   "id": "chrome_right_tri",
+   "class": "chrome_glyph",
+   "text": "▶",
+   "scalars": [
+    "U+25B6"
+   ]
+  },
+  {
+   "id": "chrome_down_tri",
+   "class": "chrome_glyph",
+   "text": "▼",
+   "scalars": [
+    "U+25BC"
+   ]
+  },
+  {
+   "id": "chrome_up_tri",
+   "class": "chrome_glyph",
+   "text": "▲",
+   "scalars": [
+    "U+25B2"
+   ]
+  },
+  {
+   "id": "chrome_radio_on",
+   "class": "chrome_glyph",
+   "text": "●",
+   "scalars": [
+    "U+25CF"
+   ]
+  },
+  {
+   "id": "chrome_radio_off",
+   "class": "chrome_glyph",
+   "text": "◯",
+   "scalars": [
+    "U+25EF"
+   ]
+  },
+  {
+   "id": "chrome_radio_dis",
+   "class": "chrome_glyph",
+   "text": "◌",
+   "scalars": [
+    "U+25CC"
+   ]
+  },
+  {
+   "id": "chrome_full_block",
+   "class": "chrome_glyph",
+   "text": "█",
+   "scalars": [
+    "U+2588"
+   ]
+  },
+  {
+   "id": "chrome_left_half",
+   "class": "chrome_glyph",
+   "text": "▌",
+   "scalars": [
+    "U+258C"
+   ]
+  },
+  {
+   "id": "chrome_right_half",
+   "class": "chrome_glyph",
+   "text": "▐",
+   "scalars": [
+    "U+2590"
+   ]
+  },
+  {
+   "id": "chrome_shade",
+   "class": "chrome_glyph",
+   "text": "▒",
+   "scalars": [
+    "U+2592"
+   ]
+  },
+  {
+   "id": "chrome_box_h",
+   "class": "chrome_glyph",
+   "text": "─",
+   "scalars": [
+    "U+2500"
+   ]
+  },
+  {
+   "id": "chrome_box_v",
+   "class": "chrome_glyph",
+   "text": "│",
+   "scalars": [
+    "U+2502"
+   ]
   }
  ]
 }

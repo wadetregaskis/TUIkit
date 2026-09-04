@@ -994,6 +994,25 @@ is deliberately NOT applied here — it would discard a correct rendering.
 - **Cell aspect ratio:** fills `ws_xpixel`/`ws_ypixel` AND answers CSI
   14t/18t, which agree within ~1.4% (ioctl **2.154**, CSI 2.125 — default
   font). Slightly taller than the 2.0 default; auto-detection handles it.
+- **`↵` (U+21B5) is reported to paint 2 cells — UNMEASURED, 2026-09-04.**
+  User-reported: the status bar's `Shortcut.enter` swallows the space before
+  the label beside it, so `↵ activate` reads as `↵activate`. That is an
+  observation of PAINT, and nothing here yet says whether the ADVANCE is 1 or
+  2 — the two have very different consequences (a 2-cell paint at a 1-cell
+  advance only eats the following blank; a 2-cell advance shifts the rest of
+  the row and is a `FrameDiffWriter` compensation case). U+21B5 is East Asian
+  Width **Neutral**, so every `wcwidth` in existence answers 1 and no Unicode
+  table predicts this; if it reproduces it is a host or font decision.
+
+  The wider finding is the gap it exposed: **none of the framework's own
+  chrome had ever been measured on any host.** Every keyboard symbol the
+  status bar draws and every glyph its borders, scrollbars, tracks, radio
+  buttons and steppers are made of was claimed at one cell on trust, and
+  fifteen of them are East Asian **Ambiguous** — a width that is a terminal
+  SETTING rather than a property of the character. All 29 are now corpus rows
+  (`chrome_key`, `chrome_glyph`) carried by `advance_probe.py` and
+  `landing_probe.py`, and listed in `awaitingLandingMeasurement`. Run
+  `advance_probe.py` inside each host to close it.
 
 ### Input behaviour
 

@@ -188,6 +188,18 @@ struct TerminalLedgerConformanceTests {
         "hebrew_hiriq", "hebrew_dagesh_qamats",
         "hangul_jamo_lvt", "hangul_jamo_lv",
         "latin_zwj", "latin_zwnj", "bidi_lrm", "bidi_rlm",
+        // The framework's own chrome, added 2026-09-04. Never measured on any
+        // host — which matters more than the rows above it, because these are
+        // glyphs TUIkit itself draws in every status bar, border, scrollbar and
+        // control rather than characters someone's data might contain.
+        "key_escape", "key_return", "key_return_symbol", "key_tab", "key_backtab",
+        "key_backspace", "key_delete", "key_space",
+        "key_arrow_up", "key_arrow_down", "key_arrow_left", "key_arrow_right",
+        "key_shift", "key_control", "key_option", "key_command",
+        "chrome_left_tri", "chrome_right_tri", "chrome_down_tri", "chrome_up_tri",
+        "chrome_radio_on", "chrome_radio_off", "chrome_radio_dis",
+        "chrome_full_block", "chrome_left_half", "chrome_right_half", "chrome_shade",
+        "chrome_box_h", "chrome_box_v",
     ]
 
     /// The completeness half the suite lacked: it flagged a measurement with

@@ -190,6 +190,51 @@ BATTERY.update({
     "combining_stack": "e\u0301\u0308\u0327",
 })
 
+BATTERY.update({
+    # The framework's OWN chrome, added to the width corpus 2026-09-04 with the
+    # same ids. Every one of these is claimed 1 cell by `terminalWidth` and none
+    # had ever been measured on any host — which is a wide gap, because unlike
+    # an emoji in someone's data these are drawn by TUIkit itself, in every
+    # status bar, border, scrollbar, slider and radio group it renders.
+    #
+    # Two reasons to doubt the claim. Fifteen of them are East Asian AMBIGUOUS,
+    # whose width is a terminal SETTING and not a property of the character. And
+    # ↵ (U+21B5) is EAW *Neutral* — 1 cell by every wcwidth there is — yet was
+    # reported painting 2 in Ghostty, eating the space before the label beside
+    # it in the status bar. If that reproduces here it is a font/host width
+    # decision no Unicode table predicts, and the only way to know which hosts
+    # do it is to ask them.
+    "key_escape": "\u238B",  # ⎋ Shortcut.escape
+    "key_return": "\u21B5",  # ↵ Shortcut.enter — reported 2 cells in Ghostty
+    "key_return_symbol": "\u23CE",  # ⏎ Shortcut.returnKey
+    "key_tab": "\u21E5",  # ⇥ Shortcut.tab
+    "key_backtab": "\u21E4",  # ⇤ Shortcut.shiftTab
+    "key_backspace": "\u232B",  # ⌫ Shortcut.backspace
+    "key_delete": "\u2326",  # ⌦ Shortcut.delete
+    "key_space": "\u2423",  # ␣ Shortcut.space
+    "key_arrow_up": "\u2191",  # ↑ Shortcut.arrowUp — EAW Ambiguous
+    "key_arrow_down": "\u2193",  # ↓ Shortcut.arrowDown — EAW Ambiguous
+    "key_arrow_left": "\u2190",  # ← Shortcut.arrowLeft — EAW Ambiguous
+    "key_arrow_right": "\u2192",  # → Shortcut.arrowRight — EAW Ambiguous
+    "key_shift": "\u21E7",  # ⇧ Shortcut.shift — EAW Ambiguous
+    "key_control": "\u2303",  # ⌃ Shortcut.control
+    "key_option": "\u2325",  # ⌥ Shortcut.option
+    "key_command": "\u2318",  # ⌘ Shortcut.command
+    "chrome_left_tri": "\u25C0",  # ◀ TerminalSymbols.leftArrow — EAW Ambiguous
+    "chrome_right_tri": "\u25B6",  # ▶ TerminalSymbols.rightArrow / disclosureCollapsed
+    "chrome_down_tri": "\u25BC",  # ▼ TerminalSymbols.disclosureExpanded
+    "chrome_up_tri": "\u25B2",  # ▲ TerminalSymbols.toneCurveStop
+    "chrome_radio_on": "\u25CF",  # ● TerminalSymbols.radioSelected / maskBullet
+    "chrome_radio_off": "\u25EF",  # ◯ TerminalSymbols.radioUnselected
+    "chrome_radio_dis": "\u25CC",  # ◌ TerminalSymbols.radioDisabledUnselected
+    "chrome_full_block": "\u2588",  # █ track fill — EAW Ambiguous
+    "chrome_left_half": "\u258C",  # ▌ field cap — EAW Ambiguous
+    "chrome_right_half": "\u2590",  # ▐ field cap
+    "chrome_shade": "\u2592",  # ▒ track groove — EAW Ambiguous
+    "chrome_box_h": "\u2500",  # ─ border — EAW Ambiguous
+    "chrome_box_v": "\u2502",  # │ border — EAW Ambiguous
+})
+
 def cursor_col(fd):
     os.write(fd, b"\x1b[6n")
     buf = b""
