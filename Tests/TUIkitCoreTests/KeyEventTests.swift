@@ -102,6 +102,19 @@ struct KeyEventParseTests {
         #expect(event?.key == .escape)
     }
 
+    /// `ESC [ ;` — a CSI whose only parameter byte is the separator. The
+    /// modifier extractor sliced from one past the `;` to one before the end,
+    /// an inverted range, and `Array` subscripting traps on one: a truncated
+    /// or malformed sequence killed the process from the input parser.
+    @Test("A CSI whose last parameter byte is the separator does not trap")
+    func separatorAsLastByteDoesNotTrap() {
+        #expect(KeyEvent.parse([0x1B, 0x5B, 0x3B]) == nil)
+        #expect(KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B]) == nil)
+        // …and a well-formed modifier still decodes.
+        let shiftUp = KeyEvent.parse([0x1B, 0x5B, 0x31, 0x3B, 0x32, 0x41])
+        #expect(shiftUp?.key == .up && shiftUp?.shift == true)
+    }
+
     @Test("Parse enter (carriage return)")
     func parseEnter() {
         let event = KeyEvent.parse([0x0D])

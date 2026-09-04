@@ -347,7 +347,14 @@ extension KeyEvent {
             return (shift: false, alt: false, ctrl: false)
         }
 
-        // Extract modifier number after semicolon (before final byte)
+        // Extract modifier number after semicolon (before final byte). When
+        // the `;` IS the last byte — `ESC [ ;`, a truncated or malformed
+        // sequence — the range below would be inverted, and an inverted
+        // `Range` traps. Nothing follows the separator, so there is no
+        // modifier to read.
+        guard semicolonIndex < params.count - 1 else {
+            return (shift: false, alt: false, ctrl: false)
+        }
         let modifierBytes = params[(semicolonIndex + 1)..<(params.count - 1)]
         guard let string = String(bytes: modifierBytes, encoding: .ascii),
             let modifier = Int(string)
