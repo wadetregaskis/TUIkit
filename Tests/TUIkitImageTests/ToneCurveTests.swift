@@ -38,6 +38,19 @@ struct ToneCurveTests {
         #expect(ASCIIToneCurve.inverted.apply(to: cyan) == RGBA(r: 225, g: 35, b: 35))
     }
 
+    /// `Ramp.Point` is public and validates nothing, and `apply(to:)` clamped
+    /// on the far side of an `Int(_:)` — so a point at `1e308` (or NaN) was a
+    /// process-killing trap on the first pixel, not a saturated channel.
+    @Test(
+        "A ramp point outside 0…1 clamps rather than trapping",
+        arguments: [(Double, UInt8)]([(1e308, 255), (-1e308, 0), (.nan, 0), (2.0, 255), (-1.0, 0)]))
+    func outOfRangeRampPointsClamp(pair: (Double, UInt8)) {
+        let curve = ASCIIToneCurve.channels(red: [(0, 0), (1, pair.0)], green: .identity, blue: .identity)
+        let pixel = RGBA(r: 128, g: 128, b: 128)
+        #expect(curve.apply(to: pixel).r == pair.1, "output \(pair.0)")
+        #expect(curve.apply(to: pixel).g == 128, "the untouched channels keep their level")
+    }
+
     /// It is still an inversion in the sense anyone means: it is its own
     /// opposite, and it moves every tone to the other end.
     @Test("A negative is its own inverse and reverses lightness")

@@ -872,7 +872,7 @@ extension ASCIIConverter {
         cellAspect: Double = 2.0
     ) -> (width: Int, height: Int) {
         // The terminal cell's height:width ratio — cells are taller than wide.
-        let terminalAspect = cellAspect > 0 ? cellAspect : 2.0
+        let terminalAspect = Self.sanitizedCellAspect(cellAspect)
 
         // Use override ratio or compute from source dimensions.
         let sourceRatio =
@@ -886,9 +886,16 @@ extension ASCIIConverter {
         guard sourceRatio.isFinite, sourceRatio > 0 else { return (width: 1, height: 1) }
 
         // correctedRatio accounts for terminal character aspect (tall cells).
+        // Guarded AGAIN, not redundantly: two finite operands can still
+        // multiply to infinity (an override ratio near `Double.greatestFiniteMagnitude`).
         let correctedRatio = sourceRatio * terminalAspect
+        guard correctedRatio.isFinite, correctedRatio > 0 else { return (width: 1, height: 1) }
 
-        let maxH = maxHeight ?? Int((Double(maxWidth) / correctedRatio).rounded())
+        // `Int(clamping:)` throughout, not `Int(_:)`: the ratio is bounded but
+        // the product with a caller's size need not fit an `Int`, and the
+        // conversion is the one place this arithmetic can trap. A saturated
+        // dimension is then cut back to the bound it exceeds, or floored at 1.
+        let maxH = maxHeight ?? Int(clamping: (Double(maxWidth) / correctedRatio).rounded())
 
         let targetWidth: Int
         let targetHeight: Int
@@ -896,28 +903,51 @@ extension ASCIIConverter {
         switch contentMode {
         case .fit:
             // Scale to fit within both bounds. Result <= bounds.
-            let widthFromHeight = Int((Double(maxH) * correctedRatio).rounded())
+            let widthFromHeight = Int(clamping: (Double(maxH) * correctedRatio).rounded())
             if widthFromHeight <= maxWidth {
                 targetWidth = widthFromHeight
                 targetHeight = maxH
             } else {
                 targetWidth = maxWidth
-                targetHeight = Int((Double(maxWidth) / correctedRatio).rounded())
+                targetHeight = Int(clamping: (Double(maxWidth) / correctedRatio).rounded())
             }
 
         case .fill:
             // Scale so the shorter dimension fills its bound.
             // Result may exceed one bound.
-            let widthFromHeight = Int((Double(maxH) * correctedRatio).rounded())
+            let widthFromHeight = Int(clamping: (Double(maxH) * correctedRatio).rounded())
             if widthFromHeight >= maxWidth {
                 targetWidth = widthFromHeight
                 targetHeight = maxH
             } else {
                 targetWidth = maxWidth
-                targetHeight = Int((Double(maxWidth) / correctedRatio).rounded())
+                targetHeight = Int(clamping: (Double(maxWidth) / correctedRatio).rounded())
             }
         }
 
         return (width: max(1, targetWidth), height: max(1, targetHeight))
+    }
+
+    /// The cell aspects ``targetSize(imageWidth:imageHeight:maxWidth:maxHeight:contentMode:overrideAspectRatio:cellAspect:)``
+    /// will compute with: cells between a tenth as tall as they are wide and
+    /// ten times as tall.
+    ///
+    /// No terminal is near either end — measured cells sit between 1 and 4
+    /// (`Terminal` clamps its own measurement to that) — so the range costs a
+    /// real caller nothing. What it buys is that the arithmetic downstream
+    /// is bounded: an aspect of `1e300` is finite, passes a `> 0` test, and
+    /// still produces a width no `Int` can hold.
+    public static let cellAspectRange: ClosedRange<Double> = 0.1...10
+
+    /// `ratio`, if it is a cell aspect the arithmetic can use; otherwise the
+    /// default of `2.0`, or the nearer end of ``cellAspectRange``.
+    ///
+    /// ONE implementation of the rule, shared by this function's own argument
+    /// and by the `imageCellAspect` environment value that feeds it, so the
+    /// two cannot drift. NaN, infinities and non-positive values have no
+    /// meaning as a ratio and fall back to the default rather than to a bound.
+    public static func sanitizedCellAspect(_ ratio: Double) -> Double {
+        guard ratio.isFinite, ratio > 0 else { return 2.0 }
+        return min(max(ratio, cellAspectRange.lowerBound), cellAspectRange.upperBound)
     }
 }

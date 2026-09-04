@@ -246,6 +246,22 @@ private struct ImageFitTargetKey: EnvironmentKey {
 /// Environment key for the image zoom multiplier.
 private struct ImageZoomKey: EnvironmentKey {
     static let defaultValue: Double = 1.0
+
+    /// The largest zoom honoured. Past it a fitted image is thousands of
+    /// cells on a side — more than any terminal shows and more glyph
+    /// conversion than anyone waits for — and the size arithmetic downstream
+    /// stops fitting an `Int` long before the factor stops being finite.
+    static let maximum: Double = 64
+
+    /// `factor`, if it is a zoom the arithmetic can use; the default for NaN,
+    /// an infinity or a non-positive value; ``maximum`` for anything past it.
+    /// There is deliberately NO lower bound beyond `> 0`: the rendered size
+    /// is floored at one cell (`_ImageCore.zoomed`), so a 1/512 zoom shrinks
+    /// to a single cell rather than vanishing.
+    static func sanitized(_ factor: Double) -> Double {
+        guard factor.isFinite, factor > 0 else { return defaultValue }
+        return min(factor, maximum)
+    }
 }
 
 // MARK: - EnvironmentValues
@@ -354,16 +370,25 @@ extension EnvironmentValues {
     }
 
     /// The zoom multiplier applied to an image's fitted size (`1` = fit exactly).
+    ///
+    /// Sanitised on the way IN, not where it is read: the value is multiplied
+    /// into cell counts and converted to `Int` on both the measure and the
+    /// render pass, and `Int(_:)` traps on an infinity. One setter is one
+    /// place to enforce that; the two readers then need no guard of their own.
     var imageZoom: Double {
         get { self[ImageZoomKey.self] }
-        set { self[ImageZoomKey.self] = newValue }
+        set { self[ImageZoomKey.self] = ImageZoomKey.sanitized(newValue) }
     }
 
     /// The terminal cell's height:width ratio, used to size an image so it isn't
     /// distorted. See ``View/imageCellAspect(_:)``.
+    ///
+    /// Sanitised on the way in, by the same rule `ASCIIConverter.targetSize`
+    /// applies to its own argument, so the environment and the converter
+    /// cannot disagree about what a usable ratio is.
     public var imageCellAspect: Double {
         get { self[ImageCellAspectKey.self] }
-        set { self[ImageCellAspectKey.self] = newValue }
+        set { self[ImageCellAspectKey.self] = ASCIIConverter.sanitizedCellAspect(newValue) }
     }
 }
 
@@ -608,7 +633,10 @@ extension View {
     /// viewport. The ASCII conversion re-runs at the zoomed size, so zooming in adds
     /// detail rather than just enlarging cells.
     ///
-    /// - Parameter factor: The zoom multiplier (clamped to a small positive minimum).
+    /// - Parameter factor: The zoom multiplier. Any positive finite factor is
+    ///   honoured up to `64` (the rendered size is floored at one cell, so
+    ///   arbitrarily small factors shrink to a single cell); NaN, infinities
+    ///   and non-positive values mean `1`.
     /// - Returns: A modified view.
     public func imageZoom(_ factor: Double) -> some View {
         environment(\.imageZoom, factor)
@@ -628,10 +656,15 @@ extension View {
     /// where available; set this explicitly to override it (e.g. to match a
     /// custom font or a terminal that doesn't report its cell size).
     ///
-    /// - Parameter ratio: Cell height ÷ cell width (values ≤ 0 are ignored).
+    /// - Parameter ratio: Cell height ÷ cell width. NaN, infinities and values
+    ///   ≤ 0 are ignored (the default `2.0` applies); values outside
+    ///   `ASCIIConverter.cellAspectRange` (`0.1…10`) are clamped to it.
     /// - Returns: A modified view.
     public func imageCellAspect(_ ratio: Double) -> some View {
-        environment(\.imageCellAspect, ratio > 0 ? ratio : 2.0)
+        // No `ratio > 0 ? ratio : 2.0` here any more: the environment's setter
+        // applies the converter's own rule, and a second copy of it was how
+        // this one came to admit `.infinity`.
+        environment(\.imageCellAspect, ratio)
     }
 
     /// Sets the maximum allowed pixel count for image loading.

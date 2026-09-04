@@ -144,9 +144,12 @@ extension RGBAImage {
     /// - Parameters:
     ///   - targetWidth: The desired width.
     ///   - targetHeight: The desired height.
-    /// - Returns: A new image with the specified dimensions.
+    /// - Returns: A new image with the specified dimensions — or an empty
+    ///   image when the target is empty, or when this image is: there is no
+    ///   pixel to sample. (An empty image is an ordinary value here; a decode
+    ///   can succeed with one.)
     public func scaled(to targetWidth: Int, _ targetHeight: Int) -> RGBAImage {
-        guard targetWidth > 0, targetHeight > 0 else {
+        guard targetWidth > 0, targetHeight > 0, width > 0, height > 0 else {
             return RGBAImage(width: 0, height: 0, pixels: [])
         }
 
@@ -171,9 +174,13 @@ extension RGBAImage {
     /// - Parameters:
     ///   - targetWidth: The desired width.
     ///   - targetHeight: The desired height.
-    /// - Returns: A new image with the specified dimensions.
+    /// - Returns: A new image with the specified dimensions — or an empty
+    ///   image when the target is empty, or when this image is. The source
+    ///   guard is load-bearing, not tidy: the edge clamps below are written
+    ///   against `sourceWidth - 1`, which for an empty source is `-1`, and an
+    ///   index of `-1` into the unsafe buffer is a read off its front.
     public func scaledBilinear(to targetWidth: Int, _ targetHeight: Int) -> RGBAImage {
-        guard targetWidth > 0, targetHeight > 0 else {
+        guard targetWidth > 0, targetHeight > 0, width > 0, height > 0 else {
             return RGBAImage(width: 0, height: 0, pixels: [])
         }
 

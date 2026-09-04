@@ -155,7 +155,6 @@ struct ASCIIConverterTests {
                 imageWidth: 8, imageHeight: 8, maxWidth: 40, overrideAspectRatio: 0
             ) == (1, 1))
     }
-
     @Test("Target size calculation preserves aspect ratio")
     func targetSizeAspectRatio() {
         let size = ASCIIConverter.targetSize(
@@ -627,23 +626,11 @@ struct ImageSizingTests {
         #expect(size.height < 100, "height is bounded, not the 4096-line canvas: \(size.height)")
     }
 
-    /// Builds a context that mimics being inside a ScrollView: a tall measure canvas
-    /// plus a published `scrollViewportSize` for the visible area.
-    private func scrollContext(viewport: (Int, Int)) -> RenderContext {
-        var environment = EnvironmentValues()
-        environment.stateStorage = StateStorage()
-        environment.scrollViewportSize = ScrollViewportSize(width: viewport.0, height: viewport.1)
-        return RenderContext(
-            availableWidth: viewport.0, availableHeight: 4096,
-            environment: environment, tuiContext: TUIContext()
-        ).isolatingRenderCache()
-    }
-
     @Test(".imageFitTarget(.viewport) fits the visible viewport, not the proposed canvas")
     func viewportFitUsesViewport() {
         // Proposed width 80 but viewport only 20 wide → the image sizes to the
         // viewport (20), so at zoom 1 it fills the visible area and won't overflow.
-        let context = scrollContext(viewport: (20, 10))
+        let context = makeScrollContext(viewport: (20, 10))
         let size = measureChild(
             Image(.file("/no/such/image.png")).imageFitTarget(.viewport),
             proposal: ProposedSize(width: 80, height: nil),
@@ -656,7 +643,7 @@ struct ImageSizingTests {
     func proposedFitIgnoresViewport() {
         // Same published viewport, but the default target tracks the proposal — so an
         // unzoomed image in a horizontal scroll can still be wider than the viewport.
-        let context = scrollContext(viewport: (20, 10))
+        let context = makeScrollContext(viewport: (20, 10))
         let size = measureChild(
             Image(.file("/no/such/image.png")),
             proposal: ProposedSize(width: 80, height: nil),
@@ -666,7 +653,7 @@ struct ImageSizingTests {
 
     @Test(".imageZoom multiplies the fitted size")
     func zoomMultipliesSize() {
-        let context = scrollContext(viewport: (20, 10))
+        let context = makeScrollContext(viewport: (20, 10))
         let base = measureChild(
             Image(.file("/no/such/image.png")).imageFitTarget(.viewport),
             proposal: ProposedSize(width: 80, height: nil),
@@ -678,7 +665,6 @@ struct ImageSizingTests {
         #expect(zoomed.width == base.width * 2, "zoom 2 doubles width: \(zoomed.width) vs \(base.width)")
         #expect(zoomed.height == base.height * 2, "zoom 2 doubles height: \(zoomed.height) vs \(base.height)")
     }
-
     private func renderContext(width: Int, height: Int) -> RenderContext {
         var environment = EnvironmentValues()
         environment.focusManager = FocusManager()

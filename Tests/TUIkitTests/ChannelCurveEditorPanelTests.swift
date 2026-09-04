@@ -61,6 +61,20 @@ struct ChannelCurveEditorPanelTests {
         }
     }
 
+    /// The plot rounded `within * 8` through `Int(_:)` and clamped AFTER — so
+    /// a binding holding a point at `1e308` killed the editor the frame it
+    /// first plotted, instead of drawing a full column.
+    @Test("A ramp point past Double's range plots as full or empty instead of trapping")
+    func plotClampsOutOfRangePoints() {
+        let huge = Panel.plotRows(for: [(0, 0), (1, 1e308)])
+        #expect(huge.count == Panel.plotHeight)
+        #expect(huge.allSatisfy { $0.last == "█" }, "an output past 1 fills the whole column")
+        let negative = Panel.plotRows(for: [(0, 0), (1, -1e308)])
+        #expect(negative.allSatisfy { $0.last == " " }, "an output below 0 empties it")
+        let notANumber = Panel.plotRows(for: [(0, .nan), (1, 1)])
+        #expect(notANumber.count == Panel.plotHeight, "NaN plots as empty rather than trapping")
+    }
+
     @Test("An inverted ramp draws the mirror of the identity one")
     func invertedMirrorsIdentity() {
         let identity = Panel.plotRows(for: .identity)

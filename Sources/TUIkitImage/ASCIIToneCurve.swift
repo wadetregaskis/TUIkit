@@ -307,8 +307,12 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
             // Each channel through its own ramp, in the same gamma-encoded sRGB
             // the tone branch works in — see below for why that consistency is
             // the whole design.
+            // `Int(clamping:)`, not `Int(_:)`: a `Ramp.Point` is public and
+            // unvalidated, so an output of `1e308` or NaN reaches this
+            // conversion, and `UInt8(clamping:)` is on the far side of it —
+            // it can clamp an `Int`, not an infinity that never became one.
             func level(_ value: UInt8, _ ramp: Ramp) -> UInt8 {
-                UInt8(clamping: Int((ramp.value(at: Double(value) / 255) * 255).rounded()))
+                UInt8(clamping: Int(clamping: (ramp.value(at: Double(value) / 255) * 255).rounded()))
             }
             return RGBA(
                 r: level(pixel.r, channels.red),

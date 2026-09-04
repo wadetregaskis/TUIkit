@@ -283,7 +283,10 @@ public struct ChannelCurveEditorPanel: View {
             let floorOfRow = Double(plotHeight - row - 1) / Double(plotHeight)
             return values.map { value in
                 let within = (value - floorOfRow) * Double(plotHeight)
-                return fillGlyphs[min(8, max(0, Int((within * 8).rounded())))]
+                // `Int(clamping:)`: the ramp's points are whatever the binding
+                // holds, and a point at `1e308` (or NaN) must plot as full
+                // (or empty), not kill the editor the frame it opens.
+                return fillGlyphs[min(8, max(0, Int(clamping: (within * 8).rounded())))]
             }
             .joined()
         }

@@ -59,6 +59,20 @@ func makeRenderContext(width: Int = 80, height: Int = 24) -> RenderContext {
 /// - Parameters:
 ///   - width: The available width for layout. Defaults to 40.
 ///   - height: The available height for layout. Defaults to 24.
+/// Builds a context that mimics being inside a ScrollView: a tall measure
+/// canvas plus a published `scrollViewportSize` for the visible area, so a
+/// `.imageFitTarget(.viewport)` image sizes to the viewport rather than the
+/// 4096-line canvas a ScrollView measures against.
+func makeScrollContext(viewport: (Int, Int)) -> RenderContext {
+    var environment = EnvironmentValues()
+    environment.stateStorage = StateStorage()
+    environment.scrollViewportSize = ScrollViewportSize(width: viewport.0, height: viewport.1)
+    return RenderContext(
+        availableWidth: viewport.0, availableHeight: 4096,
+        environment: environment, tuiContext: TUIContext()
+    ).isolatingRenderCache()
+}
+
 /// - Returns: A render context with only a backing TUI context.
 func makeBareRenderContext(width: Int = 40, height: Int = 24) -> RenderContext {
     RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext())

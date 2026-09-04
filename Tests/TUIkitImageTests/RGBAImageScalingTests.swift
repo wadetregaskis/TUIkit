@@ -41,6 +41,24 @@ struct RGBAImageScalingTests {
             "and the edge between them is interpolated, not stepped")
     }
 
+    /// Both resamplers guarded the TARGET size and never the source. A 0x0
+    /// source (which a decode can return as a success, and which `scaled(to:
+    /// 0, 0)` produces) then indexed an empty array in `scaled(to:)` and read
+    /// `source[-1]` through an unsafe buffer in `scaledBilinear`.
+    @Test("An empty source scales to an empty image instead of trapping")
+    func emptySourceScales() {
+        let sources = [
+            RGBAImage(width: 0, height: 0, pixels: []),
+            RGBAImage(width: 3, height: 0, pixels: []),
+            RGBAImage(width: 0, height: 2, pixels: []),
+        ]
+        for source in sources {
+            #expect(source.scaled(to: 4, 4).pixels.isEmpty, "\(source.width)x\(source.height)")
+            #expect(source.scaledBilinear(to: 4, 4).pixels.isEmpty, "\(source.width)x\(source.height)")
+            #expect(source.boxReduced(by: 2).pixels.isEmpty, "\(source.width)x\(source.height)")
+        }
+    }
+
     /// The other two resamplers already did this; the test is here so a future
     /// edit to any of the three fails in the same place.
     @Test("The other resamplers carry it too")
