@@ -93,10 +93,17 @@ extension ASCIIConverter {
         let rDiff = abs(Int(pixel.r) - Int(pixel.g))
         let gDiff = abs(Int(pixel.g) - Int(pixel.b))
         if rDiff < 10, gDiff < 10 {
-            let gray = Int(pixel.r)
-            if gray < 8 { return 16 }
-            if gray >= 248 { return 231 }
-            return UInt8(232 + (gray - 8) / 10)
+            // The NEAREST ramp entry, by luminance. The entries sit ten apart
+            // (8, 18, … 238), and `(gray - 8) / 10` floored, so every level in
+            // the upper half of a step came out an entry too dark — exact
+            // entries included; and `< 8 → black` sent 5…7 to (0,0,0) with
+            // (8,8,8) three away. Black and white are the cube's corners (16
+            // and 231) and take over only where they are closer than the
+            // ramp's ends.
+            let level = pixel.luminance
+            if level < 4 { return 16 }
+            if level > 246.5 { return 231 }
+            return UInt8(232 + min(23, max(0, Int(((level - 8) / 10).rounded()))))
         }
 
         // 6x6x6 color cube (indices 16-231)
