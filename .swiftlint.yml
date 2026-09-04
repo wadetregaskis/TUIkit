@@ -166,6 +166,7 @@ identifier_name:
     - _providesAlignmentGuide
     - _isAnimatable
     - _animated
+    - _modify
     - _renderSelf
     - _measureSelf
     # Idiomatic single-letter math / graphics / loop names: keeping

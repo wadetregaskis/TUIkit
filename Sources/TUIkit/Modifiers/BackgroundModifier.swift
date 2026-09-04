@@ -15,14 +15,29 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
     /// What to fill with.
     let style: S
 
+    /// Fills at this modifier's own type, which is the right owner only when
+    /// nothing encloses it — a direct call, never the render path. `ModifiedView`
+    /// calls ``_modify(buffer:context:owner:)`` instead and names itself.
     public func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
+        _modify(buffer: buffer, context: context, owner: Self.self)
+    }
+
+    public func _modify(
+        buffer: FrameBuffer, context: RenderContext, owner: Any.Type
+    ) -> FrameBuffer {
         guard !buffer.isEmpty else { return buffer }
         let width = buffer.width
         // Through the animator, so a change inside `withAnimation` moves rather
         // than jumping — a colour and every stop of a ramp alike. Returns the
         // paint untouched when nothing is moving.
+        //
+        // Keyed on the ENCLOSING `ModifiedView`, not on `Self`: this type is not
+        // generic over the content, so two `.background`s around one view are
+        // one type at one identity and shared a single animation record — the
+        // inner one painted the outer's colour for a frame and both fades were
+        // then abandoned.
         let paint = PaintAnimation.resolving(
-            style.paint(in: context.environment), owner: Self.self, context: context)
+            style.paint(in: context.environment), owner: owner, context: context)
 
         // A ramp is resolved over the view being filled — its own box, or the
         // rectangle a `.gradientExtent(.subtree)` named. `nil` from the sampler

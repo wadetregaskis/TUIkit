@@ -130,4 +130,25 @@ struct ColorAnimationTests {
             end.first?.contains("\(components.red);\(components.green);\(components.blue)") == true,
             "got \(end)")
     }
+
+    @Test("Two backgrounds around one view fade independently")
+    func nestedBackgroundsDoNotShareOneRecord() {
+        // Only `Renderable` modifiers stand between the two `.background`s, and
+        // those push no child identity — so both fills are painted at ONE
+        // `ViewIdentity`, and the animation store can only tell them apart by
+        // the enclosing `ModifiedView`'s generic type.
+        func nested(_ inner: Color) -> some View {
+            Text("ab").background(inner).padding(1).background(Color.rgb(0, 0, 200))
+        }
+        let screen = Screen(.linear(duration: 1))
+        _ = screen.draw(nested(.rgb(0, 0, 0)), atMillis: 0)
+        _ = screen.draw(nested(.rgb(0, 200, 0)), atMillis: 0)
+        let half = screen.draw(nested(.rgb(0, 200, 0)), atMillis: 500)
+
+        // `padding(1)` puts the inner fill on the middle row, inside the outer's
+        // own fill — so the row carries both SGRs and each can be checked.
+        #expect(half.dropFirst().first?.contains("0;100;0") == true, "got \(half)")
+        // The outer never changed, so it must not have moved either.
+        #expect(half.first?.contains("0;0;200") == true, "got \(half)")
+    }
 }

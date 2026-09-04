@@ -32,6 +32,29 @@ public protocol ViewModifier {
     /// - Returns: The modified buffer.
     func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer
 
+    /// Transforms a rendered buffer, told which ``ModifiedView`` type encloses
+    /// this modifier.
+    ///
+    /// Implement this INSTEAD of ``modify(buffer:context:)`` only when the
+    /// modifier keys per-view state — an animation store entry, say — because
+    /// `owner` is the discriminator such a key needs and the modifier's own
+    /// type cannot supply it: `BackgroundModifier<Color>` is the same type
+    /// whether it is the inner or the outer `.background` around one view,
+    /// whereas `ModifiedView<Content, Modifier>` is generic over its content
+    /// and so differs. Exactly why ``_animated(_:owner:context:isMeasuring:)``
+    /// takes an owner too, and a witness rather than an existential cast for
+    /// the same reason.
+    ///
+    /// The default ignores `owner` and calls ``modify(buffer:context:)``, which
+    /// is the method to write for everything else.
+    ///
+    /// - Parameters:
+    ///   - buffer: The rendered content of the wrapped view.
+    ///   - context: The rendering context.
+    ///   - owner: The enclosing ``ModifiedView``'s own type.
+    /// - Returns: The modified buffer.
+    func _modify(buffer: FrameBuffer, context: RenderContext, owner: Any.Type) -> FrameBuffer
+
     /// Static witness: whether this modifier type nominates something
     /// continuous about itself — that is, whether it conforms to ``Animatable``.
     ///
@@ -85,6 +108,14 @@ extension ViewModifier {
     /// - Returns: The context its content should render under.
     public func adjustContext(_ context: RenderContext) -> RenderContext {
         context
+    }
+
+    /// A modifier that keys no per-view state has no use for its owner.
+    @inlinable
+    public func _modify(
+        buffer: FrameBuffer, context: RenderContext, owner: Any.Type
+    ) -> FrameBuffer {
+        modify(buffer: buffer, context: context)
     }
 
     /// A modifier says nothing continuous about itself unless it is
@@ -176,7 +207,11 @@ extension ModifiedView: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let adjustedContext = modifier.adjustContext(context)
         let childBuffer = TUIkitView.renderToBuffer(content, context: adjustedContext)
-        var result = modifier.modify(buffer: childBuffer, context: context)
+        // `Self.self`, not `Modifier.self`: this type is generic over the
+        // content, so it distinguishes two of the same modifier nested around
+        // one view — which is the whole reason the owner is passed at all.
+        var result = modifier._modify(
+            buffer: childBuffer, context: context, owner: Self.self)
 
         // Overlay-layer safety net: if the modifier produced a buffer without
         // overlay layers but the wrapped content carried some, re-attach them.
