@@ -43,6 +43,14 @@
    ]
   },
   {
+   "id": "fullwidth_latin_a",
+   "class": "cjk",
+   "text": "Ａ",
+   "scalars": [
+    "U+FF21"
+   ]
+  },
+  {
    "id": "watch",
    "class": "wide_symbol",
    "text": "⌚",
@@ -693,6 +701,358 @@
    "scalars": [
     "U+0065",
     "U+0301"
+   ]
+  },
+  {
+   "id": "combining_stack",
+   "class": "combining",
+   "text": "ȩ́̈",
+   "scalars": [
+    "U+0065",
+    "U+0301",
+    "U+0308",
+    "U+0327"
+   ]
+  },
+  {
+   "id": "conjunct_deva_ksha",
+   "class": "indic_conjunct",
+   "text": "क्ष",
+   "scalars": [
+    "U+0915",
+    "U+094D",
+    "U+0937"
+   ]
+  },
+  {
+   "id": "conjunct_deva_stra",
+   "class": "indic_conjunct",
+   "text": "स्त्र",
+   "scalars": [
+    "U+0938",
+    "U+094D",
+    "U+0924",
+    "U+094D",
+    "U+0930"
+   ]
+  },
+  {
+   "id": "conjunct_deva_shtra",
+   "class": "indic_conjunct",
+   "text": "ष्ट्र",
+   "scalars": [
+    "U+0937",
+    "U+094D",
+    "U+091F",
+    "U+094D",
+    "U+0930"
+   ]
+  },
+  {
+   "id": "conjunct_deva_stri",
+   "class": "indic_conjunct",
+   "text": "स्त्री",
+   "scalars": [
+    "U+0938",
+    "U+094D",
+    "U+0924",
+    "U+094D",
+    "U+0930",
+    "U+0940"
+   ]
+  },
+  {
+   "id": "conjunct_bengali_ksha",
+   "class": "indic_conjunct",
+   "text": "ক্ষ",
+   "scalars": [
+    "U+0995",
+    "U+09CD",
+    "U+09B7"
+   ]
+  },
+  {
+   "id": "conjunct_telugu_ksha",
+   "class": "indic_conjunct",
+   "text": "క్ష",
+   "scalars": [
+    "U+0C15",
+    "U+0C4D",
+    "U+0C37"
+   ]
+  },
+  {
+   "id": "virama_tamil_sa",
+   "class": "virama_final",
+   "text": "ஸ்",
+   "scalars": [
+    "U+0BB8",
+    "U+0BCD"
+   ]
+  },
+  {
+   "id": "virama_kannada_ka",
+   "class": "virama_final",
+   "text": "ಕ್",
+   "scalars": [
+    "U+0C95",
+    "U+0CCD"
+   ]
+  },
+  {
+   "id": "virama_khmer_ka",
+   "class": "virama_final",
+   "text": "ក្",
+   "scalars": [
+    "U+1780",
+    "U+17D2"
+   ]
+  },
+  {
+   "id": "matra_deva_i",
+   "class": "spacing_vowel_sign",
+   "text": "कि",
+   "scalars": [
+    "U+0915",
+    "U+093F"
+   ]
+  },
+  {
+   "id": "matra_deva_o",
+   "class": "spacing_vowel_sign",
+   "text": "को",
+   "scalars": [
+    "U+0915",
+    "U+094B"
+   ]
+  },
+  {
+   "id": "matra_deva_au",
+   "class": "spacing_vowel_sign",
+   "text": "कौ",
+   "scalars": [
+    "U+0915",
+    "U+094C"
+   ]
+  },
+  {
+   "id": "matra_deva_i_anusvara",
+   "class": "spacing_vowel_sign",
+   "text": "किं",
+   "scalars": [
+    "U+0915",
+    "U+093F",
+    "U+0902"
+   ]
+  },
+  {
+   "id": "matra_tamil_aa",
+   "class": "spacing_vowel_sign",
+   "text": "ரா",
+   "scalars": [
+    "U+0BB0",
+    "U+0BBE"
+   ]
+  },
+  {
+   "id": "matra_khmer_aa",
+   "class": "spacing_vowel_sign",
+   "text": "កា",
+   "scalars": [
+    "U+1780",
+    "U+17B6"
+   ]
+  },
+  {
+   "id": "nukta_deva_qa",
+   "class": "nukta",
+   "text": "क़",
+   "scalars": [
+    "U+0915",
+    "U+093C"
+   ]
+  },
+  {
+   "id": "nukta_deva_rra",
+   "class": "nukta",
+   "text": "ड़",
+   "scalars": [
+    "U+0921",
+    "U+093C"
+   ]
+  },
+  {
+   "id": "chillu_malayalam_atomic",
+   "class": "chillu",
+   "text": "ൻ",
+   "scalars": [
+    "U+0D7B"
+   ]
+  },
+  {
+   "id": "chillu_malayalam_zwj",
+   "class": "chillu",
+   "text": "ന്‍",
+   "scalars": [
+    "U+0D28",
+    "U+0D4D",
+    "U+200D"
+   ]
+  },
+  {
+   "id": "thai_tone",
+   "class": "thai_lao",
+   "text": "ก่",
+   "scalars": [
+    "U+0E01",
+    "U+0E48"
+   ]
+  },
+  {
+   "id": "thai_vowel_tone",
+   "class": "thai_lao",
+   "text": "กิ้",
+   "scalars": [
+    "U+0E01",
+    "U+0E34",
+    "U+0E49"
+   ]
+  },
+  {
+   "id": "thai_sara_am",
+   "class": "thai_lao",
+   "text": "กำ",
+   "scalars": [
+    "U+0E01",
+    "U+0E33"
+   ]
+  },
+  {
+   "id": "lao_vowel_tone",
+   "class": "thai_lao",
+   "text": "ກີ່",
+   "scalars": [
+    "U+0E81",
+    "U+0EB5",
+    "U+0EC8"
+   ]
+  },
+  {
+   "id": "tibetan_subjoined",
+   "class": "tibetan_stack",
+   "text": "ཀྐ",
+   "scalars": [
+    "U+0F40",
+    "U+0F90"
+   ]
+  },
+  {
+   "id": "tibetan_subjoined_vowel",
+   "class": "tibetan_stack",
+   "text": "ཀྐུ",
+   "scalars": [
+    "U+0F40",
+    "U+0F90",
+    "U+0F74"
+   ]
+  },
+  {
+   "id": "arabic_lam_alef",
+   "class": "arabic",
+   "text": "ﻻ",
+   "scalars": [
+    "U+FEFB"
+   ]
+  },
+  {
+   "id": "arabic_harakat",
+   "class": "arabic",
+   "text": "بَ",
+   "scalars": [
+    "U+0628",
+    "U+064E"
+   ]
+  },
+  {
+   "id": "arabic_shadda_harakat",
+   "class": "arabic",
+   "text": "بَّ",
+   "scalars": [
+    "U+0628",
+    "U+0651",
+    "U+064E"
+   ]
+  },
+  {
+   "id": "hebrew_hiriq",
+   "class": "hebrew_points",
+   "text": "בִ",
+   "scalars": [
+    "U+05D1",
+    "U+05B4"
+   ]
+  },
+  {
+   "id": "hebrew_dagesh_qamats",
+   "class": "hebrew_points",
+   "text": "בָּ",
+   "scalars": [
+    "U+05D1",
+    "U+05BC",
+    "U+05B8"
+   ]
+  },
+  {
+   "id": "hangul_jamo_lvt",
+   "class": "hangul_jamo",
+   "text": "한",
+   "scalars": [
+    "U+1112",
+    "U+1161",
+    "U+11AB"
+   ]
+  },
+  {
+   "id": "hangul_jamo_lv",
+   "class": "hangul_jamo",
+   "text": "하",
+   "scalars": [
+    "U+1112",
+    "U+1161"
+   ]
+  },
+  {
+   "id": "latin_zwj",
+   "class": "format_control",
+   "text": "a‍",
+   "scalars": [
+    "U+0061",
+    "U+200D"
+   ]
+  },
+  {
+   "id": "latin_zwnj",
+   "class": "format_control",
+   "text": "a‌",
+   "scalars": [
+    "U+0061",
+    "U+200C"
+   ]
+  },
+  {
+   "id": "bidi_lrm",
+   "class": "format_control",
+   "text": "‎",
+   "scalars": [
+    "U+200E"
+   ]
+  },
+  {
+   "id": "bidi_rlm",
+   "class": "format_control",
+   "text": "‏",
+   "scalars": [
+    "U+200F"
    ]
   }
  ]

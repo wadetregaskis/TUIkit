@@ -52,6 +52,7 @@ package enum TerminalWidthCorpus {
         Entry(id: "cjk_han", category: "cjk", text: "\u{6F22}"),
         Entry(id: "hangul", category: "cjk", text: "\u{D55C}"),
         Entry(id: "halfwidth_kana", category: "cjk", text: "\u{FF71}"),
+        Entry(id: "fullwidth_latin_a", category: "cjk", text: "\u{FF21}"),
         Entry(id: "watch", category: "wide_symbol", text: "\u{231A}"),
         Entry(id: "hourglass", category: "wide_symbol", text: "\u{231B}"),
         Entry(id: "fast_forward", category: "wide_symbol", text: "\u{23E9}"),
@@ -125,6 +126,58 @@ package enum TerminalWidthCorpus {
         Entry(id: "zwj_broken_chain", category: "zwj", text: "\u{26D3}\u{FE0F}\u{200D}\u{1F4A5}"),
         Entry(id: "zwj_astronaut_tone", category: "zwj_skin_tone", text: "\u{1F469}\u{1F3FD}\u{200D}\u{1F680}"),
         Entry(id: "combining_acute", category: "combining", text: "\u{65}\u{301}"),
+        Entry(id: "combining_stack", category: "combining", text: "\u{65}\u{301}\u{308}\u{327}"),
+        // The complex-script rows, added 2026-09-04 and NOT YET MEASURED on any
+        // host — see `TerminalLedgerConformanceTests.awaitingLandingMeasurement`
+        // and the "Complex scripts" section of
+        // `Documentation/Terminal-compatibility.md` for the command that
+        // measures them. They exist because the corpus was emoji-only, so the
+        // one question the width rule cannot answer — what a cluster of three
+        // or more ADVANCING scalars costs — had no sample to ask it of.
+        Entry(id: "conjunct_deva_ksha", category: "indic_conjunct", text: "\u{915}\u{94D}\u{937}"),
+        Entry(id: "conjunct_deva_stra", category: "indic_conjunct", text: "\u{938}\u{94D}\u{924}\u{94D}\u{930}"),
+        Entry(id: "conjunct_deva_shtra", category: "indic_conjunct", text: "\u{937}\u{94D}\u{91F}\u{94D}\u{930}"),
+        Entry(id: "conjunct_deva_stri", category: "indic_conjunct", text: "\u{938}\u{94D}\u{924}\u{94D}\u{930}\u{940}"),
+        Entry(id: "conjunct_bengali_ksha", category: "indic_conjunct", text: "\u{995}\u{9CD}\u{9B7}"),
+        Entry(id: "conjunct_telugu_ksha", category: "indic_conjunct", text: "\u{C15}\u{C4D}\u{C37}"),
+        // NOT the conjuncts they are half of: க்ஷ, ಕ್ಷ and ក្ក are each TWO
+        // grapheme clusters, because GB9c's `InCB=Linker` set covers only six
+        // scripts and Tamil, Kannada and Khmer are not among them. The
+        // virama-final half-form is the whole cluster, and it is the row.
+        Entry(id: "virama_tamil_sa", category: "virama_final", text: "\u{BB8}\u{BCD}"),
+        Entry(id: "virama_kannada_ka", category: "virama_final", text: "\u{C95}\u{CCD}"),
+        Entry(id: "virama_khmer_ka", category: "virama_final", text: "\u{1780}\u{17D2}"),
+        Entry(id: "matra_deva_i", category: "spacing_vowel_sign", text: "\u{915}\u{93F}"),
+        Entry(id: "matra_deva_o", category: "spacing_vowel_sign", text: "\u{915}\u{94B}"),
+        Entry(id: "matra_deva_au", category: "spacing_vowel_sign", text: "\u{915}\u{94C}"),
+        Entry(id: "matra_deva_i_anusvara", category: "spacing_vowel_sign", text: "\u{915}\u{93F}\u{902}"),
+        Entry(id: "matra_tamil_aa", category: "spacing_vowel_sign", text: "\u{BB0}\u{BBE}"),
+        Entry(id: "matra_khmer_aa", category: "spacing_vowel_sign", text: "\u{1780}\u{17B6}"),
+        Entry(id: "nukta_deva_qa", category: "nukta", text: "\u{915}\u{93C}"),
+        Entry(id: "nukta_deva_rra", category: "nukta", text: "\u{921}\u{93C}"),
+        Entry(id: "chillu_malayalam_atomic", category: "chillu", text: "\u{D7B}"),
+        Entry(id: "chillu_malayalam_zwj", category: "chillu", text: "\u{D28}\u{D4D}\u{200D}"),
+        Entry(id: "thai_tone", category: "thai_lao", text: "\u{E01}\u{E48}"),
+        Entry(id: "thai_vowel_tone", category: "thai_lao", text: "\u{E01}\u{E34}\u{E49}"),
+        Entry(id: "thai_sara_am", category: "thai_lao", text: "\u{E01}\u{E33}"),
+        Entry(id: "lao_vowel_tone", category: "thai_lao", text: "\u{E81}\u{EB5}\u{EC8}"),
+        Entry(id: "tibetan_subjoined", category: "tibetan_stack", text: "\u{F40}\u{F90}"),
+        Entry(id: "tibetan_subjoined_vowel", category: "tibetan_stack", text: "\u{F40}\u{F90}\u{F74}"),
+        // The PRESENTATION form, not the لا spelling a keyboard produces: that
+        // is U+0644 U+0627, two letters and so two grapheme clusters, which
+        // this list cannot hold a row for. Shaping is the renderer's business;
+        // what the corpus can ask is what one cluster costs.
+        Entry(id: "arabic_lam_alef", category: "arabic", text: "\u{FEFB}"),
+        Entry(id: "arabic_harakat", category: "arabic", text: "\u{628}\u{64E}"),
+        Entry(id: "arabic_shadda_harakat", category: "arabic", text: "\u{628}\u{651}\u{64E}"),
+        Entry(id: "hebrew_hiriq", category: "hebrew_points", text: "\u{5D1}\u{5B4}"),
+        Entry(id: "hebrew_dagesh_qamats", category: "hebrew_points", text: "\u{5D1}\u{5BC}\u{5B8}"),
+        Entry(id: "hangul_jamo_lvt", category: "hangul_jamo", text: "\u{1112}\u{1161}\u{11AB}"),
+        Entry(id: "hangul_jamo_lv", category: "hangul_jamo", text: "\u{1112}\u{1161}"),
+        Entry(id: "latin_zwj", category: "format_control", text: "\u{61}\u{200D}"),
+        Entry(id: "latin_zwnj", category: "format_control", text: "\u{61}\u{200C}"),
+        Entry(id: "bidi_lrm", category: "format_control", text: "\u{200E}"),
+        Entry(id: "bidi_rlm", category: "format_control", text: "\u{200F}"),
     ]
 
     /// Entries of one category.
@@ -137,7 +190,7 @@ package enum TerminalWidthCorpus {
     /// terminal behaviour, and the measurements are Swift-side ledgers.
     package static let categoryNotes: [String: String] = [
         "ascii": "One cell everywhere. The control.",
-        "cjk": "East Asian wide (or halfwidth): agreed on by every measured host.",
+        "cjk": "East Asian wide, fullwidth or halfwidth: agreed on by every measured host.",
         "wide_symbol": "BMP scalars with emoji presentation (⌚ ⏰) — 2 cells despite the plane.",
         "vs16_pictograph": "Base + U+FE0F: painted 2, internal advance 1 on Apple Terminal and iTerm2's alternate screen.",
         "vs16_wide_exception": "VS-16 on an East-Asian-Wide base — advances its full 2; Warp gives it 3.",
@@ -169,6 +222,48 @@ package enum TerminalWidthCorpus {
         "zwj":
             "ZWJ sequence. Apple Terminal composes the glyph while its internal column decomposes (👨‍👩‍👧‍👦: 11 vs 2); Warp decomposes both.",
         "zwj_skin_tone": "A skin-toned segment inside a ZWJ sequence (👩🏽‍🚀) — both rules at once.",
-        "combining": "Base + combining mark (NFD é): one cell, agreed everywhere.",
+        "indic_conjunct":
+            "C + virama + C (+ virama + C) fused into ONE cluster by GB9c, plus a matra. "
+                + "UNMEASURED: the cluster rule answers a flat 2 while the per-scalar rule "
+                + "prices स्त्र at 3 and स्त्री at 4, and nothing has yet asked a terminal.",
+        "virama_final":
+            "The half-form alone (ஸ், ಕ್, ក្). GB9c's linker set is six scripts, so Tamil, "
+                + "Kannada and Khmer conjuncts break INTO these — a shear here is per half. "
+                + "UNMEASURED.",
+        "spacing_vowel_sign":
+            "Base + Mc matra (कि को कौ ரீ កា), which the per-scalar rule says advances and "
+                + "the cluster rule prices at 2. The two coincide at exactly two advancing "
+                + "scalars, which is why nothing has caught the divergence. UNMEASURED.",
+        "nukta":
+            "Base + U+093C, a non-advancing Mn that changes the glyph. Should be the base's "
+                + "own width. UNMEASURED.",
+        "chillu":
+            "Malayalam chillu, atomic (ൻ) and spelled with a ZWJ (ന്‍) — the same letter, "
+                + "one scalar or three, and the ZWJ spelling reaches the emoji-shaped joiner "
+                + "path with no emoji in it. UNMEASURED.",
+        "thai_lao":
+            "A base carrying stacked Mn vowels and tone marks, plus sara am (a SPACING "
+                + "vowel). The classic wcwidth-zero-mark case. UNMEASURED.",
+        "tibetan_stack":
+            "A head letter with a subjoined consonant, and one with a vowel on top — a "
+                + "three-scalar vertical stack in one cell. UNMEASURED.",
+        "arabic":
+            "The lam-alef ligature as its presentation form, and a letter carrying harakat "
+                + "(one mark, and shadda + fatha). Shaping is the renderer's; the cluster is "
+                + "one cell. UNMEASURED.",
+        "hebrew_points":
+            "A letter with a vowel point, and with dagesh + vowel — two Mn marks inside one "
+                + "cell, in a right-to-left run. UNMEASURED.",
+        "hangul_jamo":
+            "한 spelled as conjoining jamo (L+V+T and L+V) rather than the precomposed "
+                + "U+D55C the corpus already carries: same syllable, three scalars or two, "
+                + "and the jamo are the multi-scalar case that coincides with 2. UNMEASURED.",
+        "format_control":
+            "A letter carrying a ZWJ or ZWNJ (which is what pasted Arabic or Indic text and "
+                + "a truncated emoji both leave), and the bidi marks alone. All zero-width "
+                + "extras: the cluster is its base, and a lone mark is nothing. UNMEASURED.",
+        "combining":
+            "Base + combining mark(s) (NFD é, and one with three stacked): one cell, "
+                + "agreed everywhere — the marks are Mn and advance nothing.",
     ]
 }

@@ -152,15 +152,41 @@ struct TerminalLedgerConformanceTests {
 
     /// Corpus rows with no landing measurement on ANY host yet.
     ///
-    /// Empty since 2026-08-28, when Screen Recording was restored and all four
-    /// hosts were measured over the whole corpus. Kept rather than deleted: it
-    /// is the seam a newly added corpus row passes through, and the assertions
-    /// below are what stop "not measured yet" from reading as "passes".
+    /// It was empty from 2026-08-28 — when Screen Recording was restored and
+    /// all four hosts were measured over the whole corpus — until 2026-09-04,
+    /// when the complex-script rows were added. Every id below is one of those:
+    /// a cluster the corpus can now ask about and no terminal has yet answered.
     /// Listed explicitly so a missing measurement cannot look like a pass:
     /// ``ledgerCoversTheCorpus`` fails for a row that is absent from a ledger
     /// AND absent from this list, and fails the other way when a measured row
     /// forgets to leave it.
-    static let awaitingLandingMeasurement: Set<String> = []
+    ///
+    /// Measure them, and shorten this list, with:
+    ///
+    /// ```sh
+    /// cd Tools/TerminalProbes
+    /// PROBE_OUT=/tmp/landing.json PROBE_SHOT=/tmp/shot python3 landing_probe.py --wrap
+    /// python3 landing_analyze.py /tmp/landing.json \
+    ///     -o data/<terminal>-<version>-alternate-landing.json
+    /// ```
+    ///
+    /// run inside each host.
+    static let awaitingLandingMeasurement: Set<String> = [
+        "fullwidth_latin_a", "combining_stack",
+        "conjunct_deva_ksha", "conjunct_deva_stra", "conjunct_deva_shtra",
+        "conjunct_deva_stri", "conjunct_bengali_ksha", "conjunct_telugu_ksha",
+        "virama_tamil_sa", "virama_kannada_ka", "virama_khmer_ka",
+        "matra_deva_i", "matra_deva_o", "matra_deva_au", "matra_deva_i_anusvara",
+        "matra_tamil_aa", "matra_khmer_aa",
+        "nukta_deva_qa", "nukta_deva_rra",
+        "chillu_malayalam_atomic", "chillu_malayalam_zwj",
+        "thai_tone", "thai_vowel_tone", "thai_sara_am", "lao_vowel_tone",
+        "tibetan_subjoined", "tibetan_subjoined_vowel",
+        "arabic_lam_alef", "arabic_harakat", "arabic_shadda_harakat",
+        "hebrew_hiriq", "hebrew_dagesh_qamats",
+        "hangul_jamo_lvt", "hangul_jamo_lv",
+        "latin_zwj", "latin_zwnj", "bidi_lrm", "bidi_rlm",
+    ]
 
     /// The completeness half the suite lacked: it flagged a measurement with
     /// no corpus row, but a corpus row with no measurement got zero
