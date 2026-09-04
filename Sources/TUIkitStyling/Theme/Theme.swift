@@ -213,7 +213,7 @@ extension Palette {
     /// none.
     ///
     /// **How far** is measured in ``Color/perceivedLightness`` (see
-    /// ``surfaceSeparation``), not in contrast ratios and not in cube entries.
+    /// ``planeSeparation``), not in contrast ratios and not in cube entries.
     /// A cube-entry difference is a yes/no that says nothing about size — Man
     /// Page's stated tone and Novel's derived one both cleared it while sitting
     /// ΔL\* 0.5 and 3.4 from their pages, which is to say invisibly. And a

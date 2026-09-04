@@ -31,7 +31,7 @@ import TUIkitCore
 ///   presentation that forgets leaves its content holding the top-level
 ///   meaning, and `Button("Done") { dismiss() }` — the shape SwiftUI's own
 ///   documentation teaches — quits the program instead of closing the sheet.
-///   ``PresentationDismissTests`` pins every presentation against that.
+///   `PresentationDismissTests` pins every presentation against that.
 ///
 /// # Example
 ///
