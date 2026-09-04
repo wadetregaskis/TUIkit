@@ -512,7 +512,10 @@ extension ASCIIConverter {
         // the render grid BEFORE dithering — error diffusion belongs at the
         // resolution the glyphs actually quantise (dither-then-average would
         // just smooth the pattern back out).
-        var scaled = image.scaledBilinear(to: pixelWidth, pixelHeight)
+        // Over black, explicitly: the glyph renderers below read colour and
+        // never alpha, and the resampler no longer darkens a soft edge for
+        // them by accident. See `flattenedOverBlack`.
+        var scaled = image.scaledBilinear(to: pixelWidth, pixelHeight).flattenedOverBlack()
         if factor > 1 {
             scaled = scaled.boxReduced(by: factor)
         }

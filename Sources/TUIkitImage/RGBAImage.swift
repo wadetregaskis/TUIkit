@@ -234,6 +234,26 @@ extension RGBAImage {
                         let p10 = source[row0 + x1]
                         let p01 = source[row1 + x0]
                         let p11 = source[row1 + x1]
+                        // PREMULTIPLIED: each colour is weighted by its own
+                        // coverage as well as its distance, and divided back
+                        // out at the end. Straight RGBA cannot be filtered
+                        // channel-wise — a transparent pixel's colour is
+                        // meaningless, yet it got full weight, and the decoder
+                        // writes every fully transparent pixel as BLACK, so a
+                        // soft edge pulled its opaque neighbours toward black:
+                        // a dark fringe one pixel wide around every PNG with a
+                        // transparent surround, on a terminal that composites
+                        // the pixels itself. Opaque images are unchanged: with
+                        // every coverage 255 the weights are the plain ones.
+                        let w00 = oneMinusX * oneMinusY
+                        let w10 = xFrac * oneMinusY
+                        let w01 = oneMinusX * yFrac
+                        let w11 = xFrac * yFrac
+                        let k00 = w00 * Double(Int(p00.a))
+                        let k10 = w10 * Double(Int(p10.a))
+                        let k01 = w01 * Double(Int(p01.a))
+                        let k11 = w11 * Double(Int(p11.a))
+                        let coverage = k00 + k10 + k01 + k11
 
                         // `Double(Int(byte))`, not `Double(byte)`, and not a
                         // typo: Swift has no `Double.init(UInt8)`, so the short
@@ -243,26 +263,25 @@ extension RGBAImage {
                         // concrete initializer. Same value, every time: every
                         // byte is exactly representable as a Double, and as an
                         // Int on the way. See the note above the loop.
-                        let red =
-                            (Double(Int(p00.r)) * oneMinusX + Double(Int(p10.r)) * xFrac)
-                            * oneMinusY
-                            + (Double(Int(p01.r)) * oneMinusX + Double(Int(p11.r)) * xFrac) * yFrac
-                        let green =
-                            (Double(Int(p00.g)) * oneMinusX + Double(Int(p10.g)) * xFrac)
-                            * oneMinusY
-                            + (Double(Int(p01.g)) * oneMinusX + Double(Int(p11.g)) * xFrac) * yFrac
-                        let blue =
-                            (Double(Int(p00.b)) * oneMinusX + Double(Int(p10.b)) * xFrac)
-                            * oneMinusY
-                            + (Double(Int(p01.b)) * oneMinusX + Double(Int(p11.b)) * xFrac) * yFrac
+                        // A fully transparent sample has no colour to keep,
+                        // and `0 / 0` would be NaN: it takes zero outright.
+                        let red = coverage > 0
+                            ? (Double(Int(p00.r)) * k00 + Double(Int(p10.r)) * k10
+                                + Double(Int(p01.r)) * k01 + Double(Int(p11.r)) * k11) / coverage
+                            : 0
+                        let green = coverage > 0
+                            ? (Double(Int(p00.g)) * k00 + Double(Int(p10.g)) * k10
+                                + Double(Int(p01.g)) * k01 + Double(Int(p11.g)) * k11) / coverage
+                            : 0
+                        let blue = coverage > 0
+                            ? (Double(Int(p00.b)) * k00 + Double(Int(p10.b)) * k10
+                                + Double(Int(p01.b)) * k01 + Double(Int(p11.b)) * k11) / coverage
+                            : 0
                         // Alpha is interpolated like every other channel. It
                         // used to be dropped — `RGBA(r:g:b:)` defaults it to
                         // opaque — so this function silently flattened every
                         // transparent picture it touched.
-                        let alpha =
-                            (Double(Int(p00.a)) * oneMinusX + Double(Int(p10.a)) * xFrac)
-                            * oneMinusY
-                            + (Double(Int(p01.a)) * oneMinusX + Double(Int(p11.a)) * xFrac) * yFrac
+                        let alpha = coverage
 
                         destination[out + x] = RGBA(
                             r: UInt8(clamping: Int(red.rounded())),
@@ -275,6 +294,29 @@ extension RGBAImage {
             }
         }
         return RGBAImage(width: targetWidth, height: targetHeight, pixels: scaled)
+    }
+
+    /// The picture composited over black: every colour multiplied by its own
+    /// coverage, and every pixel made opaque.
+    ///
+    /// For the glyph renderers, which read a pixel's colour and never its
+    /// alpha. They composited over black by ACCIDENT for as long as the
+    /// resampler filtered straight alpha — the decoder writes a transparent
+    /// pixel as black, so a soft edge came out of the filter already
+    /// darkened — and `scaledBilinear` now filters premultiplied, which hands
+    /// them the true colour with the coverage beside it. This is that
+    /// accident made deliberate, in one place.
+    public func flattenedOverBlack() -> RGBAImage {
+        guard pixels.contains(where: { $0.a != 255 }) else { return self }
+        var flattened = self
+        flattened.mapPixels { pixel in
+            let coverage = Int(pixel.a)
+            return RGBA(
+                r: UInt8(Int(pixel.r) * coverage / 255),
+                g: UInt8(Int(pixel.g) * coverage / 255),
+                b: UInt8(Int(pixel.b) * coverage / 255))
+        }
+        return flattened
     }
 
     /// Returns a copy with each `factor × factor` block averaged into one

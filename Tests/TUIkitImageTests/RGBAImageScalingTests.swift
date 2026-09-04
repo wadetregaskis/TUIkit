@@ -59,6 +59,41 @@ struct RGBAImageScalingTests {
         }
     }
 
+    /// Straight RGBA cannot be filtered channel-wise: the decoder writes a
+    /// transparent pixel as BLACK, and it got full weight, so a soft edge
+    /// pulled its opaque neighbour toward black — a dark fringe on every PNG
+    /// with a transparent surround, on a terminal that composites pixels.
+    @Test("A soft edge keeps its colour: the filter is premultiplied")
+    func softEdgeKeepsItsColour() {
+        let source = RGBAImage(
+            width: 2, height: 1,
+            pixels: [RGBA(r: 255, g: 0, b: 0, a: 255), RGBA(r: 0, g: 0, b: 0, a: 0)])
+        let out = source.scaledBilinear(to: 4, 1)
+        let edge = out.pixel(at: 1, 0)
+        #expect(edge.r == 255 && edge.g == 0 && edge.b == 0, "\(edge)")
+        #expect(edge.a == 128, "\(edge)")
+        // A fully transparent sample has no colour to keep and does not trap.
+        #expect(out.pixel(at: 3, 0).a == 0)
+        // Opaque pictures are byte-identical to the plain filter.
+        let opaque = RGBAImage(
+            width: 2, height: 1, pixels: [RGBA(r: 255, g: 0, b: 0), RGBA(r: 0, g: 0, b: 255)])
+        let mid = opaque.scaledBilinear(to: 4, 1).pixel(at: 1, 0)
+        #expect(mid.r == 128 && mid.b == 128 && mid.a == 255, "\(mid)")
+    }
+
+    /// The glyph renderers read colour and never alpha. They composited over
+    /// black by accident while the filter darkened soft edges; now they do it
+    /// on purpose, in one place.
+    @Test("Flattening over black multiplies colour by coverage")
+    func flattenedOverBlack() {
+        let image = RGBAImage(
+            width: 2, height: 1,
+            pixels: [RGBA(r: 255, g: 0, b: 0, a: 128), RGBA(r: 10, g: 20, b: 30)])
+        let flat = image.flattenedOverBlack()
+        #expect(flat.pixel(at: 0, 0) == RGBA(r: 128, g: 0, b: 0, a: 255), "\(flat.pixel(at: 0, 0))")
+        #expect(flat.pixel(at: 1, 0) == RGBA(r: 10, g: 20, b: 30, a: 255))
+    }
+
     /// The other two resamplers already did this; the test is here so a future
     /// edit to any of the three fails in the same place.
     @Test("The other resamplers carry it too")
@@ -101,14 +136,6 @@ struct ResamplingEquivalenceTests {
     private func reference(_ image: RGBAImage, to targetWidth: Int, _ targetHeight: Int)
         -> [RGBA]
     {
-        func interpolate(
-            _ v00: Double, _ v10: Double, _ v01: Double, _ v11: Double,
-            _ xFrac: Double, _ yFrac: Double
-        ) -> Double {
-            let top = v00 * (1.0 - xFrac) + v10 * xFrac
-            let bottom = v01 * (1.0 - xFrac) + v11 * xFrac
-            return top * (1.0 - yFrac) + bottom * yFrac
-        }
         var result = [RGBA](repeating: RGBA(r: 0, g: 0, b: 0), count: targetWidth * targetHeight)
         let xRatio = Double(image.width) / Double(targetWidth)
         let yRatio = Double(image.height) / Double(targetHeight)
@@ -126,14 +153,27 @@ struct ResamplingEquivalenceTests {
                 let p10 = image.pixel(at: x1, y0)
                 let p01 = image.pixel(at: x0, y1)
                 let p11 = image.pixel(at: x1, y1)
-                let red = interpolate(
-                    Double(p00.r), Double(p10.r), Double(p01.r), Double(p11.r), xFrac, yFrac)
-                let green = interpolate(
-                    Double(p00.g), Double(p10.g), Double(p01.g), Double(p11.g), xFrac, yFrac)
-                let blue = interpolate(
-                    Double(p00.b), Double(p10.b), Double(p01.b), Double(p11.b), xFrac, yFrac)
-                let alpha = interpolate(
-                    Double(p00.a), Double(p10.a), Double(p01.a), Double(p11.a), xFrac, yFrac)
+                // Premultiplied, in the SAME expression shape as the fast path
+                // — this test is "the unsafe-buffer version equals the plain
+                // one", and two associations of the same sum can differ in the
+                // last bit, which a `.rounded()` on a half turns into a pixel.
+                let w00 = (1 - xFrac) * (1 - yFrac)
+                let w10 = xFrac * (1 - yFrac)
+                let w01 = (1 - xFrac) * yFrac
+                let w11 = xFrac * yFrac
+                let k00 = w00 * Double(p00.a)
+                let k10 = w10 * Double(p10.a)
+                let k01 = w01 * Double(p01.a)
+                let k11 = w11 * Double(p11.a)
+                let alpha = k00 + k10 + k01 + k11
+                func channel(_ c00: UInt8, _ c10: UInt8, _ c01: UInt8, _ c11: UInt8) -> Double {
+                    alpha > 0
+                        ? (Double(c00) * k00 + Double(c10) * k10 + Double(c01) * k01 + Double(c11) * k11) / alpha
+                        : 0
+                }
+                let red = channel(p00.r, p10.r, p01.r, p11.r)
+                let green = channel(p00.g, p10.g, p01.g, p11.g)
+                let blue = channel(p00.b, p10.b, p01.b, p11.b)
                 result[y * targetWidth + x] = RGBA(
                     r: UInt8(clamping: Int(red.rounded())),
                     g: UInt8(clamping: Int(green.rounded())),
