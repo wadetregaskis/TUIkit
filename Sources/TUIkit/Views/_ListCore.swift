@@ -570,10 +570,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 style: style,
                 context: context
             )
-            // The bar is the last interior column: border (1) + left padding, then
-            // the content, then the bar cell. Matches the `1 + paddingTop` content
-            // inset used for click mapping (see attachMouseHandlers).
-            scrollbarColumn = 1 + style.rowPadding.leading + contentRowWidth
+            // The bar is the last interior column: the border's cell when the
+            // style draws one — a `.plain` list has none, and a constant 1 here
+            // registered the bar's hit region one column PAST the drawn bar, off
+            // the buffer's edge — then the left padding, the content, and the bar
+            // cell. Matches the content inset used for click mapping (see
+            // attachMouseHandlers).
+            scrollbarColumn = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + contentRowWidth
             scrollbarHeight = bar.count
             rowContentWidth = max(0, contentRowWidth - 1)
         } else {

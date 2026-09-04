@@ -234,6 +234,43 @@ struct ListRowMouseRegionTests {
         }
     }
 
+    @Test("A .plain list's scrollbar hit region sits on the drawn bar")
+    func plainScrollbarRegionAlignment() {
+        let view = List(selection: .constant(String?.none)) {
+            ForEach((0..<20).map { "Item \($0)" }, id: \.self) { Text($0) }
+        }
+        .listStyle(.plain)
+        .scrollIndicators(.visible)
+        .frame(height: 6)
+
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.mouseEventDispatcher = tui.mouseEventDispatcher
+        let context = RenderContext(
+            availableWidth: 24, availableHeight: 8, environment: env, tuiContext: tui)
+        let buffer = renderToBuffer(view, context: context)
+
+        let glyphs: Set<Character> = ["█", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "▲", "▼"]
+        let columns = buffer.lines.compactMap { line in
+            Array(line.stripped).firstIndex { glyphs.contains($0) }
+        }
+        guard let column = columns.first else {
+            Issue.record("no bar drawn: \(buffer.lines.map(\.stripped))")
+            return
+        }
+        // The bar's own region: a column or two wide, several rows tall (the
+        // rows' regions are one line each, the container's is the full width).
+        // A bordered list has a border cell before its content; a plain one
+        // does not, and the bar's region was registered as if it did — one
+        // column past the drawn bar, off the buffer's right edge.
+        let bars = buffer.hitTestRegions.filter { $0.width <= 2 && $0.height > 1 }
+        #expect(
+            bars.contains { $0.offsetX <= column && column < $0.offsetX + $0.width },
+            "bar drawn at column \(column); regions: \(bars.map { ($0.offsetX, $0.width, $0.height) })")
+        #expect(bars.allSatisfy { $0.offsetX + $0.width <= buffer.width }, "no region past the buffer's edge")
+    }
+
     @Test("A selected .plain row terminates its background (no rightward bleed)")
     func plainSelectionBackgroundIsBounded() {
         // The selection highlight is a persistent background; without a
