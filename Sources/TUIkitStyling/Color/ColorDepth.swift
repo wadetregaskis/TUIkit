@@ -19,8 +19,10 @@ import Foundation
 /// 2. `TERM` not set → ``truecolor`` (backward-compatible default)
 /// 3. `TERM` equal to `dumb` → ``noColor``
 /// 4. `TERM` containing `direct` → ``truecolor``
-/// 5. `TERM` containing `color` → ``basic16``
-/// 6. `TERM` set but unrecognized → ``basic16``
+/// 5. `TERM` containing `256color` → ``palette256`` (`xterm-256color`,
+///    `screen-256color`, `tmux-256color` — the common case)
+/// 6. `TERM` containing `color` → ``basic16``
+/// 7. `TERM` set but unrecognized → ``basic16``
 ///
 /// > Note: `NO_COLOR` (https://no-color.org/) is not handled here because
 /// > it represents a user preference, not a terminal capability. It should
