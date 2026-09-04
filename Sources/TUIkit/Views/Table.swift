@@ -297,17 +297,18 @@ extension Table {
 extension Table {
     /// Creates a table with no selection.
     ///
-    /// SwiftUI's `Table(_:columns:)`. The rows are shown and scrolled; nothing
-    /// is selectable, so the table has no row cursor to move and no binding to
-    /// write into.
+    /// SwiftUI's `Table(_:columns:)`. Nothing is selectable and there is no
+    /// binding to write into. The rows still carry a keyboard CURSOR — it is
+    /// what the arrow, Home/End and Page keys scroll with, it wears the focus
+    /// background, and a click lands it on a row — only the selection gutter
+    /// and the selection itself are absent. (An earlier version of this note
+    /// said there was no cursor to move; there is, and the keyboard scrolling
+    /// the next sentence relies on is that cursor.)
     ///
-    /// Worth reaching for whenever the rows are a display: a table that carries
-    /// a cursor invites a click that means nothing, and while a cursor is being
-    /// followed every scroll is chased by another scroll bringing it back into
-    /// view — which makes a table's actual scrolling behaviour impossible to
-    /// see. `.disabled(true)` is not the same thing: that also greys the rows
-    /// and takes the table out of the focus ring, so it can no longer be
-    /// scrolled from the keyboard.
+    /// Worth reaching for whenever the rows are a display and nothing should
+    /// be chosen from them. `.disabled(true)` is not the same thing: that also
+    /// greys the rows and takes the table out of the focus ring, so it can no
+    /// longer be scrolled from the keyboard.
     ///
     /// - Parameters:
     ///   - data: The data items to display.
