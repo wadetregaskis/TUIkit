@@ -3086,3 +3086,125 @@ individually, and the box strongly suggests the host treats none of them as
 default-ignorable. Zero is still the right number for three hosts out of four
 and for the standard, and TUIkit emits none of these controls itself — this can
 only arrive in content the user pastes.
+
+## Complex scripts — 38 corpus rows, and NOT ONE of them measured
+
+Added to the corpus 2026-09-04. Every one is listed in
+`TerminalLedgerConformanceTests.awaitingLandingMeasurement`, which is what stops
+"nobody has asked a terminal" from reading as "the models pass". **Nothing below
+is a measurement. It is a list of questions.**
+
+### Why they exist
+
+Until this date the corpus was emoji, flags, selectors and Plane-16 PUA: 78 rows
+whose most complicated member was a four-person ZWJ family. That is not the
+whole of what a terminal is handed, and it left one question with no sample able
+to ask it.
+
+`Character.terminalWidth` has two rules that answer for the same scalars. The
+**cluster** rule (`String+TerminalWidth.swift`) answers a flat **2** for any
+multi-scalar cluster carrying a scalar that adds width. The **per-scalar** rule
+(`Unicode.Scalar.loneTerminalWidth`) prices each scalar and sums: a combining
+mark 0, a consonant or a spacing matra 1. For every cluster in the old corpus
+the two coincide, because an emoji sequence has exactly two advancing scalars —
+a base and a modifier, or a base and a joined base — and 1 + 1 = 2.
+
+Unicode 15.1's rule GB9c broke the coincidence. Swift 6.2 implements it, so a
+Devanagari conjunct is ONE grapheme cluster however many consonants it stacks:
+
+| Cluster | Scalars | Cluster rule | Per-scalar rule |
+|---|---|---|---|
+| क्ष | U+0915 U+094D U+0937 | 2 | 2 — agree |
+| स्त्र | U+0938 U+094D U+0924 U+094D U+0930 | 2 | **3** |
+| ष्ट्र | U+0937 U+094D U+091F U+094D U+0930 | 2 | **3** |
+| स्त्री | U+0938 U+094D U+0924 U+094D U+0930 U+0940 | 2 | **4** |
+
+The framework therefore contains two answers for the same text, and which one
+you get depends only on whether the standard library fused it — nothing about
+the host. `ComplexScriptWidthTests` records both numbers for every new row and
+wraps the disagreements in `withKnownIssue`, so they are visible in every test
+run and neither answer can quietly become the other.
+
+**Five of the 38 rows disagree, and not all in the same direction.** Asking
+every new row rather than only the Indic ones turned up a second divergence
+pointing the other way:
+
+| Row | Cluster rule | Per-scalar rule | Which is suspect |
+|---|---|---|---|
+| स्त्र `conjunct_deva_stra` | 2 | 3 | the cluster rule's 2 |
+| ष्ट्र `conjunct_deva_shtra` | 2 | 3 | the cluster rule's 2 |
+| स्त्री `conjunct_deva_stri` | 2 | 4 | the cluster rule's 2 |
+| U+1112 U+1161 U+11AB `hangul_jamo_lvt` | 2 | 4 | the per-scalar rule's 4 |
+| U+1112 U+1161 `hangul_jamo_lv` | 2 | 3 | the per-scalar rule's 3 |
+
+한 is two cells however it is spelled, so the cluster rule is right about the
+jamo and the per-scalar rule is wrong: it prices the conjoining V and T jamo at
+one cell each, where `wcwidth` gives the whole U+1160…U+11FF range zero. That
+is why "make one rule call the other" is not the fix for either half.
+
+Both rows are pinned rather than repaired, because what a host does with a bare
+jamo is as unmeasured as the rest of this section. A composed syllable always
+reaches the cluster rule and is claimed 2, which is right; the per-scalar 1 is
+only reachable for a **lone** V or T jamo — orphaned text, not a spelling of a
+syllable — and no terminal has been asked what it advances one by. Correcting
+it to `wcwidth`'s zero would be a change nothing here measured, in a file whose
+per-scalar answers are otherwise derived from measurements.
+
+**The rule has not been changed, and must not be, until these rows are
+measured.** Under a wcwidth-per-codepoint host (Ghostty, kitty, xterm, VTE, tmux)
+3 is the plausible answer; under a grapheme-cluster host (DEC mode 2027) 1 is.
+Both differ from 2, in opposite directions. This project has twice drawn a wrong
+conclusion from one of a row's four facts, and this would be the third.
+
+### What the 38 rows cover
+
+- **`indic_conjunct`** — Devanagari क्ष स्त्र ष्ट्र स्त्री, Bengali ক্ষ, Telugu క్ష.
+  The GB9c fusions, at two, three and four advancing scalars.
+- **`virama_final`** — Tamil ஸ், Kannada ಕ್, Khmer ក្. GB9c's `InCB=Linker` set
+  is six scripts, and these three are not in it: க்ஷ, ಕ್ಷ and ក្ក are each **two**
+  grapheme clusters, so the half-form is the whole cluster and a shear would be
+  per half rather than per conjunct.
+- **`spacing_vowel_sign`** — कि को कौ किं ரா កា. `Mc` marks, which the per-scalar
+  rule says advance and the cluster rule prices at 2.
+- **`nukta`** — क़ ड़. A non-advancing `Mn` that changes the glyph.
+- **`chillu`** — ൻ atomic against ന്‍ spelled with a ZWJ: the same Malayalam
+  letter reaching two different code paths, the second of them the one shaped
+  for emoji.
+- **`thai_lao`** — ก่ กิ้ กำ ກີ່. Stacked marks, plus sara am, which is a
+  *spacing* vowel.
+- **`tibetan_stack`** — ཀྐ ཀྐུ. A vertical stack of three scalars in one cell.
+- **`arabic`** — the lam-alef ligature as its presentation form U+FEFB, بَ, بَّ.
+  (The لا a keyboard produces is U+0644 U+0627: two letters, two clusters, so
+  the corpus cannot hold a row for it — shaping is the renderer's business.)
+- **`hebrew_points`** — בִ, בָּ. Marks inside a right-to-left run.
+- **`hangul_jamo`** — U+1112 U+1161 U+11AB and U+1112 U+1161: 한 as conjoining
+  jamo rather than the precomposed U+D55C already in the corpus.
+- **`format_control`** — a‍ a‌ (letter + ZWJ / ZWNJ, which is what pasted Indic
+  or Arabic text and a truncated emoji both leave), and LRM/RLM alone.
+- Plus **Ａ** (fullwidth Latin) in `cjk` and **e◌́◌̈◌̧** (three stacked NFD marks)
+  in `combining`.
+
+### Measure them
+
+The DSR half needs no display, no screenshot and no Screen Recording grant —
+`advance_probe.py` carries all 38 under the same ids as the corpus:
+
+```sh
+cd Tools/TerminalProbes
+PROBE_ALT=1 PROBE_OUT=data/<terminal>-<version>-alternate.json python3 advance_probe.py
+```
+
+The full four facts — advance, landing, ink, reserve — come from the landing
+pair, which reads `data/width-corpus.json` and so already carries every row:
+
+```sh
+cd Tools/TerminalProbes
+PROBE_OUT=/tmp/landing.json PROBE_SHOT=/tmp/shot python3 landing_probe.py --wrap
+python3 landing_analyze.py /tmp/landing.json \
+    -o data/<terminal>-<version>-alternate-landing.json
+```
+
+Run both inside each of the four hosts this document records, then delete the
+measured ids from `awaitingLandingMeasurement`. Read `advance` before believing
+anything: it is the internal column, which governs wrapping, and on Apple
+Terminal it has disagreed with the paint by nine cells.

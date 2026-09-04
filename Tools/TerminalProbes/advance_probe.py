@@ -123,6 +123,73 @@ BATTERY.update({
     "u15_flute": "\U0001FA88",
 })
 
+BATTERY.update({
+    # The complex-script rows added to the width corpus 2026-09-04, with the
+    # SAME ids, because DSR is the half of the measurement that needs no
+    # screenshot and no Screen Recording grant -- so this battery can answer
+    # the advance question for them today, on any host, while the landing
+    # halves wait for `landing_probe.py` (which reads the corpus and so already
+    # carries every row below; nothing needs adding there).
+    #
+    # The question they exist to settle: `Character.terminalWidth` answers a
+    # flat 2 for any cluster carrying width-adding extras, while the framework's
+    # own per-scalar rule prices the scalars individually, and from THREE
+    # advancing scalars on the two disagree (see ComplexScriptWidthTests). No
+    # host has been measured on any of it, so the rule must not be changed until
+    # these rows have numbers.
+    #
+    # GB9c conjuncts: two, three and four advancing scalars in ONE cluster.
+    "conjunct_deva_ksha": "\u0915\u094D\u0937",
+    "conjunct_deva_stra": "\u0938\u094D\u0924\u094D\u0930",
+    "conjunct_deva_shtra": "\u0937\u094D\u091F\u094D\u0930",
+    "conjunct_deva_stri": "\u0938\u094D\u0924\u094D\u0930\u0940",
+    "conjunct_bengali_ksha": "\u0995\u09CD\u09B7",
+    "conjunct_telugu_ksha": "\u0C15\u0C4D\u0C37",
+    # The half-forms GB9c does NOT fuse -- Tamil, Kannada and Khmer are outside
+    # its `InCB=Linker` set, so their conjuncts break into these.
+    "virama_tamil_sa": "\u0BB8\u0BCD",
+    "virama_kannada_ka": "\u0C95\u0CCD",
+    "virama_khmer_ka": "\u1780\u17D2",
+    # Spacing (Mc) vowel signs: the per-scalar rule says they advance.
+    "matra_deva_i": "\u0915\u093F",
+    "matra_deva_o": "\u0915\u094B",
+    "matra_deva_au": "\u0915\u094C",
+    "matra_deva_i_anusvara": "\u0915\u093F\u0902",
+    "matra_tamil_aa": "\u0BB0\u0BBE",
+    "matra_khmer_aa": "\u1780\u17B6",
+    # Non-advancing marks that change the glyph.
+    "nukta_deva_qa": "\u0915\u093C",
+    "nukta_deva_rra": "\u0921\u093C",
+    # The same Malayalam letter, atomic and spelled with a ZWJ.
+    "chillu_malayalam_atomic": "\u0D7B",
+    "chillu_malayalam_zwj": "\u0D28\u0D4D\u200D",
+    # Stacked marks, and a SPACING vowel (sara am).
+    "thai_tone": "\u0E01\u0E48",
+    "thai_vowel_tone": "\u0E01\u0E34\u0E49",
+    "thai_sara_am": "\u0E01\u0E33",
+    "lao_vowel_tone": "\u0E81\u0EB5\u0EC8",
+    "tibetan_subjoined": "\u0F40\u0F90",
+    "tibetan_subjoined_vowel": "\u0F40\u0F90\u0F74",
+    # RTL: a presentation-form ligature, and letters carrying harakat/points.
+    "arabic_lam_alef": "\uFEFB",
+    "arabic_harakat": "\u0628\u064E",
+    "arabic_shadda_harakat": "\u0628\u0651\u064E",
+    "hebrew_hiriq": "\u05D1\u05B4",
+    "hebrew_dagesh_qamats": "\u05D1\u05BC\u05B8",
+    # The same syllable as the corpus's precomposed U+D55C, as conjoining jamo.
+    "hangul_jamo_lvt": "\u1112\u1161\u11AB",
+    "hangul_jamo_lv": "\u1112\u1161",
+    # Zero-width extras on their own or on a letter -- what pasted text leaves.
+    "latin_zwj": "a\u200D",
+    "latin_zwnj": "a\u200C",
+    "bidi_lrm": "\u200E",
+    "bidi_rlm": "\u200F",
+    # Fullwidth Latin and a three-mark NFD stack, the two rows added to
+    # existing corpus classes on the same date.
+    "fullwidth_latin_a": "\uFF21",
+    "combining_stack": "e\u0301\u0308\u0327",
+})
+
 def cursor_col(fd):
     os.write(fd, b"\x1b[6n")
     buf = b""
