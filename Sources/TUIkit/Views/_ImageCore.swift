@@ -208,6 +208,14 @@ struct _ImageCore: View, Renderable, Layoutable {
         // handlers for it. The measure pass still reads the current phase below
         // so what's measured is what's drawn.
         if !context.isMeasuring {
+            // Declared as a side effect, as `LifecycleModifier` declares its
+            // own: the appearance record is per-frame presence, and a
+            // memoized row serving its cached cells skips this body — the
+            // token then vanishes from the frame's visible set and
+            // `endRenderPass` fires the disappear handler for an image still
+            // on screen, deleting it from the terminal or cancelling its
+            // decode. The memos decline a buffer that declares this.
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
             manageLoadLifecycle(
                 lifecycle: lifecycle, token: token,
                 phaseBox: phaseBox, lastSourceBox: lastSourceBox,

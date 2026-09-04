@@ -80,6 +80,34 @@ struct MemoizedRowGateTests {
         #expect(cache.isEmpty)  // gate refused to cache it
     }
 
+    /// An `Image` records its appearance every frame and registers a
+    /// disappear handler that deletes the picture from the terminal (or
+    /// cancels its decode). A memoized row serving cached cells skips that,
+    /// so the token vanished from the visible set and the handler fired for
+    /// an image still on screen. The lifecycle bookkeeping is declared as a
+    /// render side effect now, which is what makes the gate refuse the row.
+    @Test("Row holding an Image is NOT memoized: its lifecycle is a render side effect")
+    func imageRowIsNotMemoized() {
+        let cache = RenderCache()
+        // No effects: a real lifecycle would start a decode Task for the
+        // missing file, which is not what is under test.
+        let tui = TUIContext(
+            lifecycle: LifecycleManager(firesEffects: false),
+            keyEventDispatcher: KeyEventDispatcher(),
+            preferences: PreferenceStorage(),
+            stateStorage: StateStorage())
+        var env = EnvironmentValues()
+        env.applyRuntimeServices(from: tui)
+        env.renderCache = cache
+        let context = RenderContext(
+            availableWidth: 80, availableHeight: 24,
+            environment: env, identity: ViewIdentity(path: "Root"))
+
+        let row = _MemoizedRow(element: "row-I", content: Image(.file("/no/such/image.png")))
+        _ = renderToBuffer(row, context: context)
+        #expect(cache.isEmpty, "the gate must refuse a row whose image declares its lifecycle")
+    }
+
     @Test("Row that reads pulsePhase is NOT memoized (volatile-read probe)")
     func volatileReadingRowIsNotMemoized() {
         let cache = RenderCache()
