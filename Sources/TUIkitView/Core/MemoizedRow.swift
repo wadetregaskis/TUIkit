@@ -166,6 +166,18 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
             // `EquatableView.markSubtreeActive`, the same rule).
             context.stateStorage?.markActive(identity)
             context.stateStorage?.retainSubtree(identity)
+            // The same declaration to the render cache, for the same reason
+            // one layer over. `markActive(identity)` above covers THIS row
+            // only; a nested `_MemoizedRow` or `.equatable()` below it — the
+            // ordinary nested-`ForEach` shape, since `ForEach` wraps every
+            // Equatable element row in one of these — is never visited on a
+            // hit, so `removeInactive()` collected its entry while it was
+            // still live, and `sizeThatFits` deliberately marks nothing, so
+            // the measure walk could not rescue it either. The steady state
+            // was one entry where there should have been two, and the first
+            // frame the OUTER element changed, every inner row re-rendered
+            // from scratch though none of them had.
+            cache.retainSubtree(identity)
             return cached
         }
         // Render the content under a volatile-read tracker (reusing an

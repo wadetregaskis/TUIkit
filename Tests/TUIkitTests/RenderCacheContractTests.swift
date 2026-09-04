@@ -35,6 +35,19 @@ private struct CacheOuter: View, Equatable {
     }
 }
 
+/// The `_MemoizedRow` twin of ``CacheOuter``: `ForEach` wraps every
+/// `Equatable` element row in one of these, so an outer row containing an
+/// inner one is the ordinary nested-`ForEach` shape, not a contrivance.
+@MainActor
+private func nestedMemoizedRow(_ title: String) -> some View {
+    _MemoizedRow(
+        element: title,
+        content: VStack(spacing: 0) {
+            Text(title)
+            _MemoizedRow(element: "inner", content: Text("static"))
+        })
+}
+
 /// A value with no `Equatable` conformance, so a change under it is
 /// undetectable by construction.
 private struct Incomparable {
@@ -142,6 +155,31 @@ struct RenderCacheContractTests {
         let delta = cache.stats.delta(since: before)
 
         #expect(delta.hits >= 1, "the unchanged inner subtree is served from cache")
+    }
+
+    @Test("A nested entry survives a cache hit at the _MemoizedRow above it")
+    func nestedRowEntrySurvivesOuterHit() {
+        let context = self.context()
+        let cache = context.environment.renderCache!
+
+        // Frame 1 — both miss and both store.
+        frame(context, nestedMemoizedRow("one"))
+        #expect(cache.count == 2, "outer and inner row should both be cached")
+
+        // Frame 2 — the outer element is unchanged, so it hits and nothing
+        // below it is walked. Only the hit's subtree retention keeps the inner
+        // entry alive; `sizeThatFits` deliberately marks nothing, so the
+        // measure walk cannot rescue it either.
+        frame(context, nestedMemoizedRow("one"))
+        #expect(cache.count == 2, "the nested row entry is still live and must not be collected")
+
+        // Frame 3 — the outer element changes, so the subtree is walked again.
+        // The inner row did not change, so it answers from cache.
+        let before = cache.stats
+        frame(context, nestedMemoizedRow("two"))
+        let delta = cache.stats.delta(since: before)
+
+        #expect(delta.hits >= 1, "the unchanged inner row is served from cache")
     }
 
     @Test("The nested entry survives an arbitrary run of outer hits")
