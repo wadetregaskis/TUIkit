@@ -60,6 +60,19 @@ struct TerminalHyperlinkSequenceTests {
         #expect(TerminalHyperlink.encoded("a;b[c]m") == "a;b[c]m", "printable ASCII is left alone")
     }
 
+    /// An id is a parameter VALUE: `;` ends the parameter list, `:` separates
+    /// parameters and `=` splits key from value, so in an id those three are
+    /// the container's syntax and must be encoded — while in the URI, the
+    /// last field, they are the URI's own and must not be.
+    @Test("An id encodes its field syntax; the URI keeps its own")
+    func parameterValueEncodesFieldSyntax() {
+        #expect(TerminalHyperlink.encoded("a;b:c=d", in: .parameterValue) == "a%3Bb%3Ac%3Dd")
+        #expect(TerminalHyperlink.encoded("a;b:c=d") == "a;b:c=d", "the URI is the last field")
+        let link = TerminalHyperlink(destination: "https://x/?a=1;b", id: "row;2")
+        #expect(link.opening == "\u{1B}]8;id=row%3B2;https://x/?a=1;b\u{1B}\\")
+        #expect(TerminalHyperlink.opensLink(link.opening))
+    }
+
     /// The difference between the two sequences is the URI field, not the
     /// spelling — `ESC]8;;ST` names no destination, and that is precisely how
     /// OSC 8 says "the link ends here".

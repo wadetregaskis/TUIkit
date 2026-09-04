@@ -86,7 +86,7 @@ public struct TerminalHyperlink: Sendable, Equatable {
     /// The sequence that opens this link — everything after it, up to a
     /// ``closing``, carries the destination.
     public var opening: String {
-        let parameters = id.map { "id=" + Self.encoded($0) } ?? ""
+        let parameters = id.map { "id=" + Self.encoded($0, in: .parameterValue) } ?? ""
         return Self.introducer + parameters + ";" + Self.encoded(destination) + Self.terminator
     }
 
@@ -111,13 +111,18 @@ public struct TerminalHyperlink: Sendable, Equatable {
     ///
     /// `;` is deliberately not encoded in the URI either: the URI is the LAST
     /// field, so a semicolon in a path or a query cannot be mistaken for a
-    /// field separator. In an `id` it is encoded, because there the field
-    /// boundary is real.
-    static func encoded(_ value: String) -> String {
+    /// field separator. In a parameter value — an `id` — it is, and so are `:`
+    /// and `=`, because there the boundaries are real: `;` ends the parameter
+    /// list, `:` separates parameters and `=` splits a key from its value. An
+    /// id is application data (a `ForEach` element id, verbatim), and one
+    /// carrying a `;` would otherwise hand the host a truncated id and a URI
+    /// beginning with the id's tail.
+    static func encoded(_ value: String, in field: Field = .uri) -> String {
         var result = ""
         result.reserveCapacity(value.utf8.count)
         for byte in value.utf8 {
-            if byte > 0x20, byte < 0x7F, byte != 0x25 {  // printable ASCII, not ' ' or '%'
+            let isFieldSyntax = field == .parameterValue && (byte == 0x3B || byte == 0x3A || byte == 0x3D)
+            if byte > 0x20, byte < 0x7F, byte != 0x25, !isFieldSyntax {  // printable ASCII, not ' ' or '%'
                 result.unicodeScalars.append(Unicode.Scalar(byte))
             } else {
                 // '%' itself is encoded so the encoding round-trips: a
@@ -137,6 +142,16 @@ public struct TerminalHyperlink: Sendable, Equatable {
     }
 
     private static let hexDigits: [Unicode.Scalar] = Array("0123456789ABCDEF".unicodeScalars)
+
+    /// Which field of the sequence a value is bound for — what ``encoded(_:in:)``
+    /// must escape beyond the bytes OSC 8 requires depends on it.
+    enum Field {
+        /// The URI: the last field, so `;` `:` `=` are its own syntax and stay.
+        case uri
+        /// A `key=value` parameter's value, followed by `;` and possibly by
+        /// `:key=value`, so those three bytes are the container's syntax.
+        case parameterValue
+    }
 
     /// Whether `sequence` is an OSC 8 introducer at all — the test every
     /// escape walk applies before asking which of the two it is.
