@@ -2068,7 +2068,7 @@ it as supporting placements.
 present) while its DA1 advertises Sixel; Ghostty answers `DCS 1 + r 5375 ST` —
 a success flag with no value — while supporting no Sixel at all. Use DA1.
 
-### The image placeholder advances ONE cell, on every host — measured 2026-09-02
+### The image placeholder advances ONE cell, on every host — measured 2026-09-02, iTerm2 added 2026-09-04
 
 U+10EEEE, the Kitty protocol's Unicode image placeholder, sits inside the
 Plane-16 Private Use Area — the range this document records as painted two
@@ -2086,11 +2086,18 @@ landed, against twelve `x` characters.
 | Ghostty 1.3.1 | 12 | **12** | **12** |
 | Warp v0.2026.08.26… | 12 | **12** | **12** |
 | Apple Terminal 455.1 | 12 | **12** | **12** |
+| iTerm2 3.6.11 | 12 | **12** | **12** |
 
 **Including the two hosts that do not implement the protocol.** No font carries
 the codepoint, so it is not painted two cells the way an SF Symbol is; a host
 that implements placements intercepts it, and one that does not draws nothing
-and moves on. Either way it is one cell, which is why the exemption is by
+and moves on. iTerm2's row was the gap this table carried as *not measured*
+until 2026-09-04: run from inside an iTerm2 window, `placement_probe.py`
+advances one cell per placeholder and draws the card correctly (hue L→R,
+fade T→B) — so iTerm2's decode is specification-ordered and its only defect is
+that it treats the spec-optional third diacritic as required (the desktop bug
+report, and `KittyGraphics+Placeholders.swift`, cover that; the encoder writes
+all three marks, so TUIkit is unaffected). Either way it is one cell, which is why the exemption is by
 codepoint (`Unicode.Scalar.terminalImagePlaceholder`) rather than gated on
 detection.
 

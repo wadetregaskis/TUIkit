@@ -178,10 +178,13 @@ struct AlignmentGuideTests {
             resolved: resolved, sizes: [3, 3], fixedExtent: nil, minimumExtent: 0
         ) { Double($0) / 2 }
         #expect(run.offsets.count == 2)
-        // Bounded by the coordinate limit, NOT merely finite: the extent is
-        // what a container pads a buffer to, so an `Int.max` from a saturating
-        // conversion would trade the trap for an allocation.
-        #expect((0...1_100_000).contains(run.extent), "extent \(run.extent)")
+        // Bounded by the CHILDREN'S geometry, not merely finite and not a
+        // magic constant: a guide is a coordinate within its own view, so the
+        // furthest one places a child is its own extent (with overshoot), and
+        // the region a content-sized run grows to follows from the real sizes.
+        // Here sizes are 3, so the extent cannot pass ~3× a child; an `Int.max`
+        // from a saturating conversion would instead pad a buffer that wide.
+        #expect((0...12).contains(run.extent), "extent \(run.extent)")
         #expect(
             run.offsets.allSatisfy { (0...run.extent).contains($0) },
             "offsets \(run.offsets) within 0...\(run.extent)")

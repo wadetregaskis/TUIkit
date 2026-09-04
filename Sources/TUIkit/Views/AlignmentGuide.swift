@@ -211,7 +211,7 @@ struct AlignmentGuideRun {
     /// - Parameters:
     ///   - resolved: Each child's guide position within itself. A value that is
     ///     not a cell coordinate is taken as the child's own origin — see
-    ///     ``coordinate(_:)``.
+    ///     ``coordinate(_:within:)``.
     ///   - sizes: Each child's extent along the axis.
     ///   - fixedExtent: The region's extent when the container does not size to
     ///     content; `nil` to grow to fit the run.
@@ -228,7 +228,7 @@ struct AlignmentGuideRun {
         // child's non-coordinate poisons every sibling's base through the
         // maximum, and the child that set it gets `∞ - ∞`, i.e. NaN, for its
         // own.
-        let positions = resolved.map(coordinate)
+        let positions = zip(resolved, sizes).map { coordinate($0.0, within: $0.1) }
         let merged = positions.max() ?? 0
 
         // A child's distance from the run's leading edge is how far its guide
@@ -249,7 +249,7 @@ struct AlignmentGuideRun {
         // positioned: its guide meets the region's. `max` keeps every offset
         // non-negative when the region's guide sits before the merged one
         // (`.leading` with a guide pushed inward, say).
-        let anchor = max(merged, coordinate(regionGuide(extent)))
+        let anchor = max(merged, coordinate(regionGuide(extent), within: extent))
 
         var offsets: [Int] = []
         offsets.reserveCapacity(positions.count)
@@ -260,28 +260,32 @@ struct AlignmentGuideRun {
         return Self(offsets: offsets, extent: extent)
     }
 
-    /// The magnitude past which a guide value stops being a cell coordinate.
+    /// `value` as a cell coordinate within a view of extent `size`.
     ///
-    /// A million cells is three orders of magnitude past any terminal, so no
-    /// real layout reaches it — and the arithmetic here is exact well beyond
-    /// it. What the ceiling actually buys is the ``extent``: a container pads
-    /// a buffer to it, so an unbounded guide is an allocation, not just a
-    /// strange number.
-    private static let coordinateLimit = 1_000_000.0
-
-    /// `value` as a cell coordinate.
+    /// A guide is a position INSIDE its own view, so a real one lives in that
+    /// view's extent. This is NOT the clamp into the region — that happens per
+    /// child further down, exactly as
+    /// ``HorizontalAlignment/childOffset(childWidth:in:)`` clamps its result —
+    /// it is a filter on values that are not positions at all. A guide is
+    /// caller arithmetic: `Double(d.width) / Double(d.height)` on a child that
+    /// is legitimately zero-height during a measure pass is `+∞`, `0 / 0` is
+    /// NaN, and a runaway expression is a finite astronomical number. Every one
+    /// used to reach `Int(_: Double)`, which traps on NaN, on either infinity
+    /// and on any magnitude past `Int`'s range — and even a finite one that a
+    /// saturating conversion let through would grow a content-sized region to
+    /// `Int.max` cells and try to allocate a buffer that wide.
     ///
-    /// This is NOT a clamp into the region, which happens per child further
-    /// down; it is a filter on values that are not positions at all. A guide
-    /// is caller arithmetic — `Double(d.width) / Double(d.height)` on a child
-    /// that is legitimately zero-height during a measure pass is `+∞`, `0 / 0`
-    /// is NaN — and every one of those used to reach `Int(_: Double)`, which
-    /// traps on NaN, on either infinity, and on any magnitude past `Int`'s
-    /// range. NaN has no order and so no nearer edge to fall back to: it
-    /// becomes the view's own origin, the position a view with no guide has.
-    private static func coordinate(_ value: Double) -> Double {
+    /// So a non-finite guide becomes the view's own origin — the position a
+    /// view with no guide has; NaN has no order and so no nearer edge to fall
+    /// back to. A finite one is held within the view's own geometry, a full
+    /// extent of overshoot to either side (which covers aligning one child's
+    /// far edge to another's near one) — rather than an arbitrary constant, so
+    /// the extent a content-sized run grows to is bounded by the children's
+    /// real sizes and never by a magic number.
+    private static func coordinate(_ value: Double, within size: Int) -> Double {
         guard value.isFinite else { return 0 }
-        return min(max(-coordinateLimit, value), coordinateLimit)
+        let reach = Double(max(1, size))
+        return min(max(-reach, value), 2 * reach)
     }
 }
 
