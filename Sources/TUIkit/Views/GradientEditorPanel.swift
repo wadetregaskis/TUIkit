@@ -198,8 +198,8 @@ public struct GradientEditorPanel: View {
             // No leading Spacer (it is width-flexible and would stretch the
             // dialog); the footer sizes to the buttons, the dialog to its tabs.
             HStack(spacing: 2) {
-                Button("Cancel") { isPresented.wrappedValue = false }
-                Button("Done") {
+                Button(LocalizationService.shared.string(for: LocalizationKey.Button.cancel)) { isPresented.wrappedValue = false }
+                Button(LocalizationService.shared.string(for: LocalizationKey.Button.done)) {
                     session.applied = true
                     recentsRaw = Self.encodeRecents(
                         Self.recordingRecent(

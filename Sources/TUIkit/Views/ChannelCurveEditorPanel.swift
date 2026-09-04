@@ -212,8 +212,8 @@ public struct ChannelCurveEditorPanel: View {
             }
         } footer: {
             HStack(spacing: 2) {
-                Button("Cancel") { isPresented.wrappedValue = false }
-                Button("Done") {
+                Button(LocalizationService.shared.string(for: LocalizationKey.Button.cancel)) { isPresented.wrappedValue = false }
+                Button(LocalizationService.shared.string(for: LocalizationKey.Button.done)) {
                     session.applied = true
                     isPresented.wrappedValue = false
                 }

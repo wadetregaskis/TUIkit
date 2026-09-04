@@ -148,5 +148,9 @@ public enum ViewConstants {
     // MARK: - Default Strings
 
     /// Default placeholder text for empty List and Table views.
+    /// English, and the fallback only: the views resolve their default through
+    /// `ViewConstants.localizedEmptyListPlaceholder` (in the umbrella module,
+    /// where the localization service lives) so the one framework-owned
+    /// string an empty list shows is translated like every other.
     public static let emptyListPlaceholder = "No items"
 }

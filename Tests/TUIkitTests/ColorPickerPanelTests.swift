@@ -266,13 +266,15 @@ struct ColorPickerPanelSemanticTests {
     @Test("Semantic table maps names to palette-role references")
     func semanticTable() {
         let table = ColorPickerPanel.semanticColors
-        #expect(table.contains { $0.name == "Accent" && $0.color == .palette.accent })
-        #expect(table.contains { $0.name == "Error" && $0.color == .palette.error })
+        #expect(table.contains { $0.name == LocalizationKey.Label.accent.rawValue && $0.color == .palette.accent })
+        #expect(table.contains { $0.name == LocalizationKey.Label.error.rawValue && $0.color == .palette.error })
         // Distinct roles are distinct colour references.
         #expect(Color.palette.accent != Color.palette.success)
         // The core roles are offered.
         let names = Set(table.map(\.name))
-        #expect(names.isSuperset(of: ["Foreground", "Accent", "Success", "Warning", "Error", "Background"]))
+        #expect(names.isSuperset(of: [
+                LocalizationKey.Label.foreground, .accent, .success, .warning, .error, .background,
+            ].map(\.rawValue)))
     }
 
     @Test("A semantic selection resolves to a concrete read-out, and the tab shows")

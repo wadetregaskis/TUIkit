@@ -243,7 +243,7 @@ extension Table {
     ///   - focusID: The unique focus identifier (default: auto-generated).
 
     ///   - columnSpacing: Spacing between columns (default: 2).
-    ///   - emptyPlaceholder: Placeholder text when empty (default: "No items").
+    ///   - emptyPlaceholder: Placeholder text when empty (default: the localized "No items").
     ///   - columns: A builder that defines the table columns.
     public init(
         _ data: [Value],
@@ -252,7 +252,7 @@ extension Table {
         focusID: String? = nil,
 
         columnSpacing: Int = 2,
-        emptyPlaceholder: String = "No items",
+        emptyPlaceholder: String = ViewConstants.localizedEmptyListPlaceholder,
         @TableColumnBuilder<Value> columns: () -> [TableColumn<Value>]
     ) {
         self.init(
@@ -316,14 +316,14 @@ extension Table {
     ///     leaves them inert, as a SwiftUI `Table` without one has them.
     ///   - focusID: The unique focus identifier (default: auto-generated).
     ///   - columnSpacing: Spacing between columns (default: 2).
-    ///   - emptyPlaceholder: Placeholder text when empty (default: "No items").
+    ///   - emptyPlaceholder: Placeholder text when empty (default: the localized "No items").
     ///   - columns: A builder that defines the table columns.
     public init(
         _ data: [Value],
         sortOrder: Binding<[KeyPathComparator<Value>]>? = nil,
         focusID: String? = nil,
         columnSpacing: Int = 2,
-        emptyPlaceholder: String = "No items",
+        emptyPlaceholder: String = ViewConstants.localizedEmptyListPlaceholder,
         @TableColumnBuilder<Value> columns: () -> [TableColumn<Value>]
     ) {
         // No binding at all, rather than a `.constant` one. A constant binding
@@ -352,7 +352,7 @@ extension Table {
     ///   - focusID: The unique focus identifier (default: auto-generated).
 
     ///   - columnSpacing: Spacing between columns (default: 2).
-    ///   - emptyPlaceholder: Placeholder text when empty (default: "No items").
+    ///   - emptyPlaceholder: Placeholder text when empty (default: the localized "No items").
     ///   - columns: A builder that defines the table columns.
     public init(
         _ data: [Value],
@@ -361,7 +361,7 @@ extension Table {
         focusID: String? = nil,
 
         columnSpacing: Int = 2,
-        emptyPlaceholder: String = "No items",
+        emptyPlaceholder: String = ViewConstants.localizedEmptyListPlaceholder,
         @TableColumnBuilder<Value> columns: () -> [TableColumn<Value>]
     ) {
         self.init(

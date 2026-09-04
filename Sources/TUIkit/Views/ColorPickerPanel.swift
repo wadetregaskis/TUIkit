@@ -173,8 +173,8 @@ public struct ColorPickerPanel: View {
             // dialog claim the full available width instead of sizing to its
             // content. The footer sizes to the buttons; the dialog fits its tabs.
             HStack(spacing: 2) {
-                Button("Cancel") { isPresented.wrappedValue = false }
-                Button("Done") {
+                Button(LocalizationService.shared.string(for: LocalizationKey.Button.cancel)) { isPresented.wrappedValue = false }
+                Button(LocalizationService.shared.string(for: LocalizationKey.Button.done)) {
                     session.applied = true
                     isPresented.wrappedValue = false
                 }
@@ -375,6 +375,7 @@ struct _ColorPickerBody: View {
         // and so always shows the role's live colour.
         let concrete = color.resolve(with: palette)
         let isSelected = selection.wrappedValue.resolve(with: palette) == concrete
+        let name = LocalizationService.shared.string(for: name)
         HStack(spacing: 1) {
             Text("██").foregroundStyle(color)
             if isSelected {
@@ -392,16 +393,20 @@ extension ColorPickerPanel {
     /// The palette roles offered on the semantic tab (see
     /// ``_ColorPickerBody``'s semantic editor for why selections snapshot the
     /// concrete colour rather than the semantic reference).
+    ///
+    /// The names are localization KEYS, resolved where the row is built: a
+    /// `String`-typed name could only ever bind the verbatim initializer, so
+    /// the nine roles read in English in every language.
     static let semanticColors: [(name: String, color: Color)] = [
-        ("Foreground", .palette.foreground),
-        ("Secondary", .palette.foregroundSecondary),
-        ("Accent", .palette.accent),
-        ("Success", .palette.success),
-        ("Warning", .palette.warning),
-        ("Error", .palette.error),
-        ("Info", .palette.info),
-        ("Border", .palette.border),
-        ("Background", .palette.background),
+        ("label.foreground", .palette.foreground),
+        ("label.secondary", .palette.foregroundSecondary),
+        ("label.accent", .palette.accent),
+        ("label.success", .palette.success),
+        ("label.warning", .palette.warning),
+        ("label.error", .palette.error),
+        ("label.info", .palette.info),
+        ("label.border", .palette.border),
+        ("label.background", .palette.background),
     ]
 
     /// Parses a typed/pasted channel value: keeps the digits, clamps to `range`

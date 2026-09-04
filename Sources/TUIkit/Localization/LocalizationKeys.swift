@@ -66,6 +66,16 @@ public enum LocalizationKey {
         case from = "label.from"
         case to = "label.to"
         case gradient = "label.gradient"
+        /// What an empty `List` or `Table` shows by default.
+        case noItems = "label.noItems"
+        /// `ToneCurveEditorPanel`'s readout caption.
+        case position = "label.position"
+        // `ColorPickerPanel`'s nine semantic roles; the other four are above.
+        case foreground = "label.foreground"
+        case secondary = "label.secondary"
+        case accent = "label.accent"
+        case border = "label.border"
+        case background = "label.background"
 
         // `ContentUnavailableView.search`'s prose. Framework text, so it is
         // keyed here rather than written as a `Text` literal: a literal IS

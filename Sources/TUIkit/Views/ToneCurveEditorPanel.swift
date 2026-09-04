@@ -196,8 +196,8 @@ public struct ToneCurveEditorPanel: View {
             }
         } footer: {
             HStack(spacing: 2) {
-                Button("Cancel") { isPresented.wrappedValue = false }
-                Button("Done") {
+                Button(LocalizationService.shared.string(for: LocalizationKey.Button.cancel)) { isPresented.wrappedValue = false }
+                Button(LocalizationService.shared.string(for: LocalizationKey.Button.done)) {
                     session.applied = true
                     isPresented.wrappedValue = false
                 }
@@ -349,7 +349,7 @@ public struct ToneCurveEditorPanel: View {
     private var positionRow: some View {
         let percent = Int((Self.position(of: ordered[clampedSelection]) * 100).rounded())
         return HStack(spacing: 1) {
-            Text(verbatim: "Position").dim()
+            Text(LocalizationService.shared.string(for: LocalizationKey.Label.position)).dim()
             // No `.frame(maxWidth: .infinity)`: this dialog hugs its content,
             // and a width-flexible child would stretch it to the screen.
             Slider(value: positionBinding, in: 0...1, step: 0.01)
