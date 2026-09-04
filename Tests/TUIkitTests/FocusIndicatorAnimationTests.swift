@@ -548,6 +548,29 @@ struct FocusIndicatorAnimationTests {
         }
     }
 
+    @Test("The arrows stay pinned when a multi-cell track glyph shrinks the track")
+    func sliderArrowsWithCoarseTrack() {
+        // A multi-cell fill or unfilled glyph — an emoji, a CJK character —
+        // quantises the track: `TrackRenderer.renderCoarsePattern` shrinks it to
+        // the largest whole multiple of that glyph's width that fits, so it is
+        // up to `quantum - 1` cells NARROWER than the width it was handed, and
+        // everything drawn right of it moves with it. Taking the REQUESTED width
+        // put the right arrow's run one column past the arrow, on the blank
+        // before the read-out, where the loop replayed a second ▶ breathing out
+        // of step with the real one.
+        let coarse = TrackStyle.custom(TrackConfiguration(fill: "😃", emptyStyle: .glyph("·")))
+        for width in 12...48 {
+            expectArrowsPinned(
+                focusedRender(Slider(value: .constant(0.5)).trackStyle(coarse), width: width),
+                "coarse slider arrows at width \(width)")
+            expectArrowsPinned(
+                focusedRender(
+                    Slider(value: .constant(0.5)).trackStyle(coarse).sliderShowsValue(false),
+                    width: width),
+                "coarse slider arrows, no read-out, at width \(width)")
+        }
+    }
+
     @Test("An unfocused or disabled slider animates nothing")
     func sliderArrowsStill() {
         let context = makeRenderContext(width: 40, height: 8)

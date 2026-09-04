@@ -350,6 +350,45 @@ struct SliderArrowZoneTests {
         #expect(value == 43, "the ▶ cell itself still increments, got \(value)")
     }
 
+    @Test("A coarse track's ▶ click zone is on the ▶ it drew")
+    func coarseTrackRightArrowZone() async {
+        // A multi-cell fill quantises the track: `TrackRenderer` shrinks it to a
+        // whole number of glyphs, so the drawn track is up to `quantum - 1`
+        // cells shorter than the width it was handed and the ▶ moves left with
+        // it. A click zone placed from the REQUESTED width lands on the blank
+        // beside the arrow instead — the arrow reads as inert, and the gap
+        // increments.
+        var value = 42.0
+        let binding = Binding(get: { value }, set: { value = $0 })
+        let context = makeRenderContext(width: 30, height: 1)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.full)
+
+        let slider = Slider(value: binding, in: 0...100, step: 1)
+            .trackStyle(.custom(TrackConfiguration(fill: "😃", emptyStyle: .glyph("·"))))
+        let buffer = renderToBuffer(slider, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        // Read the arrow's column off what was painted, not off arithmetic —
+        // the arithmetic is the thing under test. In CELLS, not characters: the
+        // track is made of a two-cell glyph, so a character offset would be the
+        // very mistake this is here to catch.
+        let painted = buffer.lines[0].stripped
+        let mark = painted.lastIndex(of: Character(TerminalSymbols.rightArrow))!
+        let arrow = String(painted[painted.startIndex..<mark]).strippedLength
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: arrow, y: 0))
+        await Self.settle()
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: arrow, y: 0))
+        #expect(value == 43, "the drawn ▶ did not increment, got \(value)")
+
+        value = 42
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: arrow + 1, y: 0))
+        await Self.settle()
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: arrow + 1, y: 0))
+        #expect(value == 42, "the blank beside ▶ incremented, got \(value)")
+    }
+
     @Test("Only the ◀ cell is the left arrow — the space beside it is not")
     func spaceBesideLeftArrowIsNotTheArrow() async {
         var value = 42.0

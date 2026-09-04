@@ -490,8 +490,15 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         // tick would then re-render the entire page to repaint two cells.
         let cycle = context.environment.selectionEmphasis.cycle(isFocused && !isDisabled)
 
-        // Build the slider content
-        let content = buildContent(
+        // Build the slider content. The track's DRAWN width comes back with it:
+        // a coarse (multi-cell) track style renders narrower than it was asked
+        // for, and everything positioned AFTER the track — the right arrow's
+        // breathing run, its click zone, the drag mapping — has to be measured
+        // from what was drawn, exactly as `Stepper.arrowRuns` measures its own
+        // arrows from `buffer.width`. Taking the requested width put the run one
+        // column past the arrow, on the blank before the read-out, where the
+        // loop replayed a SECOND ▶ breathing out of step with the real one.
+        let (content, drawnTrackWidth) = buildContent(
             fraction: fraction,
             isFocused: isFocused,
             isHovered: isHovered,
@@ -508,7 +515,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         var buffer = FrameBuffer(text: content)
         if !context.isMeasuring {
             buffer.animatedCells = arrowRuns(
-                cycle: cycle, palette: palette, trackWidth: trackWidth)
+                cycle: cycle, palette: palette, drawnTrackWidth: drawnTrackWidth)
         }
 
         attachMouseHandlers(
@@ -518,7 +525,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             hoverBox: hoverBox,
             persistedFocusID: persistedFocusID,
             stateStorage: stateStorage,
-            trackWidth: trackWidth
+            drawnTrackWidth: drawnTrackWidth
         )
 
         return buffer
@@ -537,7 +544,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         hoverBox: StateBox<Bool>,
         persistedFocusID: String,
         stateStorage: StateStorage,
-        trackWidth: Int
+        drawnTrackWidth: Int
     ) {
         // Own AND cascaded — `renderToBuffer`'s shadowing local does not reach
         // this helper, so the bare `self.isDisabled` here answered only for a
@@ -552,7 +559,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         mouseDispatcher.requestFeature(.motion)
 
         let focusManager = context.environment.focusManager
-        let track = TrackGeometry(left: 2, width: trackWidth)  // 2 = "◀ "
+        let track = TrackGeometry(left: 2, width: drawnTrackWidth)  // 2 = "◀ "
 
         let leftArrowTimer = autoRepeatTimer(
             stateStorage: stateStorage,
@@ -843,9 +850,14 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// The offsets follow the one layout `buildContent` emits — `"◀ TRACK ▶"` —
     /// and the same `trackLeft` the mouse handler maps clicks through, so the
     /// cells a run claims are the cells the arrows were drawn in.
+    ///
+    /// `drawnTrackWidth`, never the width the track was ASKED for: a coarse
+    /// (multi-cell) track style renders narrower than its request, so the two
+    /// differ by up to a glyph, and a run one column off the arrow is a second
+    /// arrow the loop breathes out of step with the real one.
     @MainActor
     private func arrowRuns(
-        cycle: SelectionEmphasisCycle, palette: any Palette, trackWidth: Int
+        cycle: SelectionEmphasisCycle, palette: any Palette, drawnTrackWidth: Int
     ) -> [AnimatedCellRun] {
         guard cycle.isAnimating else { return [] }
         let (dim, bright) = palette.accentPulse()
@@ -855,7 +867,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                 TerminalSymbols.leftArrow, dim: dim, bright: bright, offsetX: 0, offsetY: 0),
             cycle.run(
                 TerminalSymbols.rightArrow, dim: dim, bright: bright,
-                offsetX: trackLeft + trackWidth + 1, offsetY: 0),
+                offsetX: trackLeft + drawnTrackWidth + 1, offsetY: 0),
         ].compactMap { $0 }
     }
 
@@ -875,7 +887,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         isDisabled: Bool,
         showsValue: Bool,
         gradientScaling: TrackGradientScaling
-    ) -> String {
+    ) -> (content: String, drawnTrackWidth: Int) {
         // Arrow colors:
         //   - Focused: pulsing accent
         //   - Hovered: static accent at the hoverBackground tint, so the
@@ -943,10 +955,22 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             bold: !isDisabled && (valueStyle.bold ?? false),
             underline: !isDisabled && (valueStyle.underline ?? false)) + padding
 
+        // What the track came back as, in CELLS — which is not always the
+        // `trackWidth` it was asked for. A multi-cell fill or unfilled glyph
+        // quantises the track, and `TrackRenderer.renderCoarsePattern` then
+        // shrinks it to the largest whole multiple of that quantum that fits;
+        // deliberately and permanently, so a bar's width cannot wobble with its
+        // fill ratio. Everything drawn to the RIGHT of the track moves with it,
+        // so say where the track actually ended rather than let the caller
+        // assume it got what it asked for.
+        let drawnTrackWidth = track.strippedLength
+
         // Pulsing arrows indicate focus - no extra markers needed. The value
         // read-out is omitted when `.sliderShowsValue(false)` (some surrounding
         // control shows the value instead).
-        guard showsValue else { return "\(leftArrow) \(track) \(rightArrow)" }
-        return "\(leftArrow) \(track) \(rightArrow) \(valueLabel)"
+        guard showsValue else {
+            return ("\(leftArrow) \(track) \(rightArrow)", drawnTrackWidth)
+        }
+        return ("\(leftArrow) \(track) \(rightArrow) \(valueLabel)", drawnTrackWidth)
     }
 }
