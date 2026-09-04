@@ -154,4 +154,11 @@ struct InfrastructureStateCollisionTests {
             },
             "ContentUnavailableView's slots shared one @State box")
     }
+
+    @Test("Gauge's label and currentValueLabel")
+    func gaugeLabels() {
+        expectSlotsKeepOwnState(
+            Gauge(value: 0.5) { StatefulProbe() } currentValueLabel: { SecondStatefulProbe() },
+            "Gauge's labels shared one @State box")
+    }
 }

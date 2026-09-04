@@ -196,6 +196,15 @@ extension Gauge {
 
 // MARK: - Internal Core View
 
+/// Child-identity indices for `_GaugeCore`'s four caller-supplied label
+/// slots. File scope: a generic type cannot hold static storage.
+private enum GaugeLabelSlot: Int {
+    case label = 0
+    case currentValue = 1
+    case minimumValue = 2
+    case maximumValue = 3
+}
+
 /// Internal view that renders the gauge: an optional label line above a bar
 /// flanked by optional bound labels.
 private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: View>: View, Renderable, Layoutable {
@@ -247,9 +256,25 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
 
     /// Renders a label view to its first visible line, or `""` for an
     /// `EmptyView` / absent label.
-    private func inlineText<V: View>(_ view: V?, context: RenderContext) -> String {
+    ///
+    /// The render happens under the slot's OWN child identity, not the core's.
+    /// The four labels are caller-supplied `@ViewBuilder` content, and at one
+    /// identity a composite label's first `@State` binds
+    /// `StateKey(coreIdentity, 0)` — the same key for all four: a matching
+    /// type silently shares one box, and a mismatched one makes
+    /// `storage(for:)` replace the box every render, so both labels read
+    /// their defaults every frame. The collision class 778699f5 closed and
+    /// 6ab904e7 carried to ProgressView's two labels; these sites were missed
+    /// instances. `minimumValueLabel` and `maximumValueLabel` are the same
+    /// generic parameter, so the type could never have told them apart — the
+    /// slot index is what does.
+    private func inlineText<V: View>(
+        _ view: V?, slot: GaugeLabelSlot, context: RenderContext
+    ) -> String {
         guard let view, !(view is EmptyView) else { return "" }
-        return TUIkit.renderToBuffer(view, context: context).lines.first ?? ""
+        let slotContext = context.withChildIdentity(
+            erasedType: type(of: view), index: slot.rawValue)
+        return TUIkit.renderToBuffer(view, context: slotContext).lines.first ?? ""
     }
 
     /// The bar glyph a linear gauge style draws with. The default (a shaded
@@ -270,8 +295,8 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
         // labels stay, being readouts of the value rather than names for it.
         // See the same split in `ProgressView.renderLabelLine`.
         let labelText =
-            context.environment.controlLabelsAreHidden ? "" : inlineText(label, context: context)
-        let valueText = inlineText(currentValueLabel, context: context)
+            context.environment.controlLabelsAreHidden ? "" : inlineText(label, slot: .label, context: context)
+        let valueText = inlineText(currentValueLabel, slot: .currentValue, context: context)
         guard !(labelText.stripped.allSatisfy(\.isWhitespace) && valueText.stripped.allSatisfy(\.isWhitespace))
         else { return nil }
         let gap = max(1, width - labelText.strippedLength - valueText.strippedLength)
@@ -283,8 +308,8 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
     private func renderBarLine(
         width: Int, style: GaugeStyle, palette: any Palette, context: RenderContext
     ) -> String {
-        let minText = inlineText(minimumValueLabel, context: context)
-        let maxText = inlineText(maximumValueLabel, context: context)
+        let minText = inlineText(minimumValueLabel, slot: .minimumValue, context: context)
+        let maxText = inlineText(maximumValueLabel, slot: .maximumValue, context: context)
         let minPart = minText.strippedLength > 0 ? minText + " " : ""
         let maxPart = maxText.strippedLength > 0 ? " " + maxText : ""
         let barWidth = max(1, width - minPart.strippedLength - maxPart.strippedLength)
@@ -307,9 +332,9 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
     /// the label (if any) on the row below.
     private func renderCircularTiny(palette: any Palette, context: RenderContext) -> FrameBuffer {
         let dial = ANSIRenderer.colorize(String(GaugePieDial.glyph(for: fraction)), foreground: palette.accent)
-        let valueText = inlineText(currentValueLabel, context: context)
+        let valueText = inlineText(currentValueLabel, slot: .currentValue, context: context)
         var lines = [valueText.strippedLength > 0 ? dial + " " + valueText : dial]
-        let labelText = inlineText(label, context: context)
+        let labelText = inlineText(label, slot: .label, context: context)
         if labelText.strippedLength > 0 {
             lines.append(labelText)
         }
@@ -324,7 +349,7 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
     private func renderCircularDial(
         capacity: Bool, palette: any Palette, context: RenderContext
     ) -> FrameBuffer {
-        let valueText = inlineText(currentValueLabel, context: context)
+        let valueText = inlineText(currentValueLabel, slot: .currentValue, context: context)
         // Fixed interior width so the dial never resizes as the value changes
         // ("67%" and "100%" both fit); only an unusually wide value grows it.
         let inner = max(gaugeCircularInnerWidth, valueText.strippedLength)
@@ -413,7 +438,7 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
             }
             lines.append(line)
         }
-        let labelText = inlineText(label, context: context)
+        let labelText = inlineText(label, slot: .label, context: context)
         if labelText.strippedLength > 0 {
             lines.append(labelText)
         }
@@ -422,8 +447,8 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
 
     /// The natural size of a circular gauge (kept in step with the renderers).
     private func circularSize(context: RenderContext) -> (width: Int, height: Int) {
-        let valueWidth = inlineText(currentValueLabel, context: context).strippedLength
-        let labelWidth = inlineText(label, context: context).strippedLength
+        let valueWidth = inlineText(currentValueLabel, slot: .currentValue, context: context).strippedLength
+        let labelWidth = inlineText(label, slot: .label, context: context).strippedLength
         if context.environment.gaugeStyle == .accessoryCircularTiny {
             let rowWidth = valueWidth > 0 ? 1 + 1 + valueWidth : 1  // dial + space + value
             return (max(1, max(rowWidth, labelWidth)), labelWidth > 0 ? 2 : 1)
