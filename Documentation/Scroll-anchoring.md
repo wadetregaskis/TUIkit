@@ -325,7 +325,13 @@ flips the read-out AND pins the row as data changes around it.
 > binding never reached the handler and *every* anchor behaviour was dead there
 > — the row hold, the wheel release, the selection shadow-switch — while its
 > twin `List` had them all. `TableRowAnchorHoldTests` now mirrors
-> `ListRowAnchorHoldTests` case for case so the two cannot drift apart again.
+> `ListRowAnchorHoldTests` case for case so the two cannot drift apart again —
+> and every one of its cases runs against BOTH of Table's row composers, single
+> line and multi-line, because the wiring this correction is about is written
+> out once in each (see "Table configures its handler from TWO independent
+> places", under §1.5's overscroll section). Until they were doubled the whole
+> suite stayed green with the multi-line capture and its `applyAnchorHold()`
+> both deleted: the same defect, one path down.
 
 ### The edge modes are POSITIONAL (`28ef33e6`)
 
