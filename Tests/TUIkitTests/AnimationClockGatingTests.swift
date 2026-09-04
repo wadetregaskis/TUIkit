@@ -170,6 +170,40 @@ struct FocusClockUnityTests {
         timer.stop()
     }
 
+    @Test("A sleep that expired before the focus moved does not credit the re-zeroed clock")
+    func expiredSleepDoesNotCreditAfterRestart() async {
+        let timer = CursorTimer(renderNotifier: AppState())
+        timer.advance(by: 0.2)  // the long stride a quantised pulse asks for
+        timer.start()
+        // The yield is load-bearing: `start()` only ENQUEUES the task, and the
+        // block below holds the main actor, so without it the task would never
+        // reach its sleep and the race under test could not happen.
+        await Task.yield()
+
+        // Hold the main actor past the sleep's deadline. Busy, not `Task.sleep`:
+        // the point is that the wake resumes the task's continuation and queues
+        // it HERE, where it cannot run — and can no longer be cancelled.
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(350))
+        while ContinuousClock.now < deadline {}
+
+        // The focus moves, in that same synchronous stretch. The app's own
+        // re-arm (the render that follows every focus change calls `start()`)
+        // is deliberately NOT done here: a live task's legitimate 50 ms ticks
+        // would race the assertion below, and the stale credit is the same
+        // either way — in the app it simply lands on top of that cadence.
+        timer.restartFocusPhase()
+        for _ in 0..<4 { await Task.yield() }
+
+        // The stale task's cancel lost the race with its own wake, so it woke
+        // "successfully" and credited its whole 0.2 s stride to a clock whose
+        // zero had just been moved to now — the breath jumped from its bright
+        // end to mid-cycle, one tick after taking the focus.
+        #expect(
+            timer.elapsed(for: .cursor) == 0,
+            "credited \(timer.elapsed(for: .cursor))s to a clock just re-zeroed")
+        timer.stop()
+    }
+
     @Test("Stopping puts both clocks back to zero")
     func stopZeroesBoth() async {
         let timer = CursorTimer(renderNotifier: AppState())

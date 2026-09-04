@@ -243,6 +243,14 @@ extension CursorTimer {
                 } catch {
                     return  // cancelled
                 }
+                // The sleep returning is NOT proof the task still wants this
+                // stride: `Task.sleep` throws only when the cancel beats the
+                // wake, so one whose deadline passed while the main actor was
+                // busy resumes normally even though `cancel()` has since been
+                // called. Crediting it then lands a whole stride on a clock
+                // `restartFocusPhase()` or `stop()` has already re-zeroed —
+                // precisely the jump those cancels exist to prevent.
+                guard !Task.isCancelled else { return }
                 guard let self else { return }
                 // Advanced by what was SLEPT, not by a grid step, which is what
                 // keeps `elapsedSeconds` a real elapsed time under a variable
@@ -281,9 +289,11 @@ extension CursorTimer {
         // finish would add that whole stride to a phase that has just been
         // re-zeroed, so a focus change during a long sleep (the quantised
         // pulse holds a shade for several ticks) jumped the clock past the
-        // bright start this exists to give it. Cancelling ends the sleep with a
-        // CancellationError the loop already returns on; the render that
-        // always follows a focus change starts the timer again.
+        // bright start this exists to give it. Cancelling usually ends the
+        // sleep with a CancellationError the loop returns on; when the wake
+        // got there first the loop's own `Task.isCancelled` check catches it
+        // instead. The render that always follows a focus change starts the
+        // timer again.
         task?.cancel()
         task = nil
     }
