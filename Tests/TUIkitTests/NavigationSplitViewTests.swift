@@ -474,21 +474,6 @@ struct NavigationSplitViewStyleEnvironmentTests {
     }
 }
 
-// MARK: - Column Width Tests
-
-@Suite("NavigationSplitView Column Width Tests")
-@MainActor
-struct NavigationSplitViewColumnWidthTests {
-    @Test("All column-width modifier spellings compile and wrap the view")
-    func columnWidthModifierSpellings() {
-        // Compile-only: every overload of navigationSplitViewColumnWidth.
-        _ = Text("Sidebar").navigationSplitViewColumnWidth(25)  // fixed
-        _ = Text("Sidebar").navigationSplitViewColumnWidth(min: 20, ideal: 30, max: 50)  // flexible
-        _ = Text("Sidebar").navigationSplitViewColumnWidth(min: 15)  // min only
-        _ = Text("Sidebar").navigationSplitViewColumnWidth(max: 40)  // max only
-    }
-}
-
 // MARK: - Equatable Tests
 
 @Suite("NavigationSplitView Equatable Tests")

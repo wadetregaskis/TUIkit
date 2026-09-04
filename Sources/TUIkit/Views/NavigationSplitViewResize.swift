@@ -76,7 +76,9 @@ extension View {
     /// tracks its content. This gives you a programmatic "reset to defaults":
     /// bump the token (e.g. a counter incremented by a button, or the id of the
     /// currently-selected layout) and every pinned column is released back to the
-    /// automatic width.
+    /// width it would have had on its own — what it asks for with
+    /// ``View/navigationSplitViewColumnWidth(_:)``, else the style's share or its
+    /// content's width.
     ///
     /// ```swift
     /// NavigationSplitView { … } detail: { … }
@@ -103,13 +105,14 @@ extension View {
 /// trailing column is always flexible and absorbs the remaining width, so it
 /// is never stored here.
 ///
-/// A column is either **style-derived** (its width comes from the active
-/// ``NavigationSplitViewStyle``'s proportions, recomputed each frame and stored
-/// only so a first drag/keyboard resize has a seed) or **user-set** (the user
-/// dragged or keyed it, after which it is pinned to that intent and no longer
-/// follows the style). ``isUserSet(_:)`` distinguishes them. This is what lets
-/// changing the style re-flow the columns that the user hasn't touched, while
-/// still honouring an explicit resize.
+/// A column is either **derived** (its width is recomputed each frame from the
+/// active ``NavigationSplitViewStyle``'s proportions, or from what the column
+/// asks for with ``View/navigationSplitViewColumnWidth(_:)``, and stored only so
+/// a first drag/keyboard resize has a seed) or **user-set** (the user dragged or
+/// keyed it, after which it is pinned to that intent and no longer follows the
+/// style — though a requested `min…max` band still holds it). ``isUserSet(_:)``
+/// distinguishes them. This is what lets changing the style re-flow the columns
+/// that the user hasn't touched, while still honouring an explicit resize.
 ///
 /// Stored values are the *effective* width after the previous frame: the split
 /// view clamps the raw intent / style default to the viable range each render

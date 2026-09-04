@@ -8,8 +8,10 @@
 
 /// A preference key for column width values.
 ///
-/// Used by ``NavigationSplitView`` to read column width preferences
-/// set by the `.navigationSplitViewColumnWidth(_:)` modifier.
+/// Read by ``NavigationSplitView``, which measures each of its columns inside a
+/// pushed preference scope before deciding how wide to make it — a preference
+/// rather than an environment value or a static conformance because the modifier
+/// may sit anywhere inside the column, and the answer has to travel back up.
 struct NavigationSplitViewColumnWidthKey: PreferenceKey {
     static let defaultValue: NavigationSplitViewColumnWidth? = nil
 
@@ -72,21 +74,45 @@ struct NavigationSplitViewColumnWidthView<Content: View>: View {
     }
 }
 
+extension NavigationSplitViewColumnWidthView {
+    /// Publishes this column's width request into the enclosing preference
+    /// scope, having first declared it as a per-pass side effect.
+    ///
+    /// The declaration is not bookkeeping: the preference stack is rebuilt every
+    /// pass and the measure memo is per-pass scratch, so a memoizing ancestor
+    /// that served a cached buffer — or a cached measurement — would silently
+    /// drop this write from the frame's collection, and the column would snap
+    /// back to the style default. ``PreferenceModifier`` declares its write the
+    /// same way.
+    private func publishColumnWidth(context: RenderContext) {
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
+        context.environment.preferenceStorage?.setValue(
+            columnWidth, forKey: NavigationSplitViewColumnWidthKey.self)
+    }
+}
+
 extension NavigationSplitViewColumnWidthView: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // Set the preference for NavigationSplitView to read
-        context.environment.preferenceStorage!.setValue(columnWidth, forKey: NavigationSplitViewColumnWidthKey.self)
-
-        // Render content
+        publishColumnWidth(context: context)
         return TUIkit.renderToBuffer(content, context: context)
     }
 }
 
 extension NavigationSplitViewColumnWidthView: Layoutable {
-    /// Publishes a column-width *preference* and renders `content` unchanged, so
-    /// it measures as `content`.
+    /// Publishes the column-width *preference* and then measures as `content`,
+    /// which it renders unchanged.
+    ///
+    /// Publishing during a MEASURE, not just during the render, is what makes
+    /// the modifier work at all: ``NavigationSplitView`` has to know what a
+    /// column asked for *before* it can render that column into the resulting
+    /// width, so it reads this key by measuring each column inside a pushed
+    /// preference scope. Unlike ``PreferenceModifier``, which gates its write on
+    /// `!context.isMeasuring` because an accumulating `reduce` would double-apply
+    /// there, this key's `reduce` keeps the last value: writing it twice in a
+    /// pass is idempotent.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureChild(content, proposal: proposal, context: context)
+        publishColumnWidth(context: context)
+        return measureChild(content, proposal: proposal, context: context)
     }
 }
 
@@ -106,6 +132,17 @@ extension View {
     ///     DetailView()
     /// }
     /// ```
+    ///
+    /// The column is held at that width: the split view opens it there instead
+    /// of at its style's proportional share (or its content width under
+    /// ``NavigationSplitViewStyle/sizeToFitFromLeft``), and dragging or
+    /// arrow-resizing its divider settles straight back to it — a fixed width is
+    /// the degenerate `min…max` band. The layout's own limits still apply: every
+    /// column keeps at least ten cells and leaves at least that many for each
+    /// column to its right.
+    ///
+    /// Applies to any column but the trailing one, which always absorbs the
+    /// width the columns before it leave.
     ///
     /// - Parameter width: The preferred column width in characters.
     /// - Returns: A view with the column width preference set.
@@ -129,6 +166,17 @@ extension View {
     ///     DetailView()
     /// }
     /// ```
+    ///
+    /// The column opens at `ideal` — or, with no `ideal`, at the width it would
+    /// have had anyway (its style's proportional share, or its content width
+    /// under ``NavigationSplitViewStyle/sizeToFitFromLeft``) — and every width it
+    /// takes afterwards, including one the user drags or arrow-resizes it to, is
+    /// held inside `min…max`. An omitted bound constrains nothing. The layout's
+    /// own limits still apply: every column keeps at least ten cells and leaves
+    /// at least that many for each column to its right.
+    ///
+    /// Applies to any column but the trailing one, which always absorbs the
+    /// width the columns before it leave.
     ///
     /// - Parameters:
     ///   - min: The minimum column width in characters (optional).

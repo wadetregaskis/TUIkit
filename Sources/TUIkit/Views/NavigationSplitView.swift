@@ -194,7 +194,12 @@ extension NavigationSplitView {
 // MARK: - Internal Core
 
 /// Internal view that handles the actual rendering of NavigationSplitView.
-private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: View, Renderable, Layoutable {
+///
+/// Internal rather than `private` (the usual spelling for a `_*Core`) because
+/// half of it lives in `NavigationSplitViewWidths.swift`, and a file-private
+/// type cannot be extended from another file — the same reason
+/// ``_ContainerViewCore`` is internal.
+struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: View, Renderable, Layoutable {
     let sidebar: Sidebar
     let content: Content
     let detail: Detail
@@ -202,7 +207,7 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
     let columnVisibility: Binding<NavigationSplitViewVisibility>?
 
     /// The minimum width for any column in characters.
-    private let minimumColumnWidth = 10
+    let minimumColumnWidth = 10
 
     /// The separator between columns (single space for TUI).
     /// TUI-specific: We use a space instead of a line to avoid double borders
@@ -239,19 +244,16 @@ private struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: Vi
             && context.stateStorage != nil
         let widths = resizable ? resolvePersistedWidths(context: context) : nil
 
-        // Calculate column widths — content-fit-from-left, or proportional.
-        let columnWidths =
-            style.sizesToFit
-            ? sizeToFitColumnWidths(
-                visibleColumns: visibleColumns, availableWidth: context.availableWidth,
-                context: context, widths: widths, writeBack: resizable && !context.isMeasuring)
-            : calculateColumnWidths(
-                visibleColumns: visibleColumns,
-                style: style,
-                availableWidth: context.availableWidth,
-                widths: widths,
-                writeBack: resizable && !context.isMeasuring
-            )
+        // Calculate column widths — content-fit-from-left, or proportional,
+        // honouring what each column asked for (NavigationSplitViewWidths.swift).
+        // `self.` because the local shadows the method's own name.
+        let columnWidths = self.columnWidths(
+            visibleColumns: visibleColumns,
+            style: style,
+            context: context,
+            widths: widths,
+            writeBack: resizable && !context.isMeasuring
+        )
 
         // Render each visible column
         var buffers: [FrameBuffer] = []
@@ -398,122 +400,6 @@ extension _NavigationSplitViewCore {
         }
     }
 
-    /// The default width of a left (non-trailing) column, derived from the
-    /// active ``NavigationSplitViewStyle``'s proportions and the usable width.
-    ///
-    /// This is what makes `.automatic`, `.balanced`, and `.prominentDetail`
-    /// render distinctly: a wider `sidebarProportion` / leading
-    /// `threeColumnProportions` yields wider leading columns, leaving the
-    /// trailing detail column (which absorbs the remainder) correspondingly
-    /// narrower. `.prominentDetail`'s small leading proportions thus give it a
-    /// noticeably wider detail; `.balanced`'s larger ones make the columns
-    /// comparable. Clamped to at least `minimumColumnWidth` so a tiny terminal
-    /// still shows every column.
-    private func defaultColumnWidth(
-        for column: NavigationSplitViewColumn,
-        style: any NavigationSplitViewStyle,
-        isThreeColumnLayout: Bool,
-        usableWidth: Int
-    ) -> Int {
-        let proportion: Double
-        if isThreeColumnLayout {
-            let props = style.threeColumnProportions
-            switch column {
-            case .sidebar: proportion = props.sidebar
-            case .content: proportion = props.content
-            default: proportion = props.detail
-            }
-        } else {
-            // Two-column: only the sidebar is a leading column; the detail
-            // absorbs the rest, so its proportion is implied (1 − sidebar).
-            proportion = column == .sidebar ? style.sidebarProportion : 1 - style.sidebarProportion
-        }
-        return max(minimumColumnWidth, Int((Double(usableWidth) * proportion).rounded()))
-    }
-
-    /// Calculates the width for each visible column.
-    ///
-    /// TUI-specific: every left column has a width, the rightmost column is
-    /// flexible and absorbs the remainder. A left column's width is the user's
-    /// stored width (from a drag / keyboard resize) when present, otherwise its
-    /// style-derived default (see ``defaultColumnWidth(for:style:isThreeColumnLayout:usableWidth:)``);
-    /// either way it is clamped so the column keeps at least
-    /// `minimumColumnWidth` and leaves at least that much for each column to its
-    /// right. When `writeBack` is set (the real render of a resizable split),
-    /// the clamped width is written back so the next arrow-key step starts from
-    /// the true current width and a too-wide drag settles at the real maximum.
-    fileprivate func calculateColumnWidths(
-        visibleColumns: [NavigationSplitViewColumn],
-        style: any NavigationSplitViewStyle,
-        availableWidth: Int,
-        widths: SplitViewWidths?,
-        writeBack: Bool
-    ) -> [Int] {
-        let separatorCount = max(0, visibleColumns.count - 1)
-        let usableWidth = availableWidth - separatorCount
-
-        guard usableWidth > 0 else {
-            return Array(repeating: 0, count: visibleColumns.count)
-        }
-
-        var result: [Int] = []
-        var remainingWidth = usableWidth
-
-        for (index, column) in visibleColumns.enumerated() {
-            let isLastColumn = index == visibleColumns.count - 1
-
-            if isLastColumn {
-                // Last column gets all remaining width
-                result.append(max(minimumColumnWidth, remainingWidth))
-            } else {
-                // A user-resized column keeps its stored width; an untouched
-                // column follows the style default (so changing the style
-                // re-flows it live).
-                let defaultWidth = defaultColumnWidth(
-                    for: column, style: style,
-                    isThreeColumnLayout: isThreeColumn, usableWidth: usableWidth)
-                let desired =
-                    (widths?.isUserSet(index) == true ? widths?.value(for: index) : nil)
-                    ?? defaultWidth
-                // Reserve at least minimumColumnWidth for every column still to
-                // the right, so a wide left column can't starve them.
-                let columnsToTheRight = visibleColumns.count - index - 1
-                let maxForColumn =
-                    remainingWidth - minimumColumnWidth * columnsToTheRight
-                let width = max(
-                    minimumColumnWidth, min(desired, max(minimumColumnWidth, maxForColumn)))
-                // Persist the clamped effective width WITHOUT marking it
-                // user-set, so a style-derived column keeps a valid drag/keyboard
-                // seed yet still re-derives when the style changes; a user-set
-                // column simply keeps its (now re-clamped) value.
-                if writeBack {
-                    widths?.setClamped(width, for: index)
-                }
-                result.append(width)
-                remainingWidth -= width
-            }
-        }
-
-        return result
-    }
-
-    /// Measures a column's content: its natural width and whether it's
-    /// width-flexible (fills its column) — used by the size-to-fit style.
-    private func measureColumn(
-        _ column: NavigationSplitViewColumn, proposal: ProposedSize, context: RenderContext
-    ) -> ViewSize {
-        switch column {
-        case .sidebar:
-            return measureChild(sidebar, proposal: proposal, context: context.withChildIdentity(type: type(of: sidebar)))
-        case .content:
-            return measureChild(content, proposal: proposal, context: context.withChildIdentity(type: type(of: content)))
-        case .detail:
-            return measureChild(detail, proposal: proposal, context: context.withChildIdentity(type: type(of: detail)))
-        default:
-            return ViewSize(width: 0, height: 0)
-        }
-    }
-
     /// The persisted per-column width store for a resizable split, having marked
     /// its identity active (so the box and divider handlers survive the run
     /// loop's per-frame StateStorage GC — the columns mark their own child
@@ -531,107 +417,6 @@ extension _NavigationSplitViewCore {
             widths.applyResetToken(context.environment.navigationSplitViewColumnWidthResetToken)
         }
         return widths
-    }
-
-    /// Sizes columns to fit their content from the left: a naturally-narrow
-    /// (non-flexible) column takes its content width; the width-flexible columns
-    /// share the remainder, the last absorbing rounding. When the fixed columns
-    /// would leave less than the minimum for each flexible column, they're shrunk
-    /// from the right (their content truncates). Every column keeps at least
-    /// `minimumColumnWidth`, and the widths always sum to the usable width.
-    fileprivate func sizeToFitColumnWidths(
-        visibleColumns: [NavigationSplitViewColumn], availableWidth: Int, context: RenderContext,
-        widths: SplitViewWidths? = nil, writeBack: Bool = false
-    ) -> [Int] {
-        let count = visibleColumns.count
-        let usable = availableWidth - max(0, count - 1)
-        guard usable > 0, count > 0 else { return Array(repeating: 0, count: count) }
-
-        // Measure each column's HUGGED content width, not its greedy fill. A
-        // width-greedy root (the sidebar/content `List`) reports `isWidthFlexible`
-        // with a fill-the-offer width unless `fixedSizeWidth` is set — which
-        // bucketed every column "flexible" so they split the usable width evenly
-        // (1/N each), coming out WIDER than the proportional Automatic (1/4) and
-        // Balanced (~1/3) shares. Requesting the hug (and proposing an unbounded
-        // width so the ideal/content width is measured) makes a naturally-narrow
-        // column take just its content width; the rightmost absorbs the slack.
-        var measureContext = context.withAvailableSize(width: usable, height: context.availableHeight)
-        measureContext.environment.fixedSizeWidth = true
-        let proposal = ProposedSize(width: nil, height: nil)
-        var natural = [Int](repeating: minimumColumnWidth, count: count)
-        var flexible = [Bool](repeating: false, count: count)
-        for (index, column) in visibleColumns.enumerated() {
-            let size = measureColumn(column, proposal: proposal, context: measureContext)
-            natural[index] = max(minimumColumnWidth, size.width)
-            flexible[index] = size.isWidthFlexible
-        }
-
-        // A column the user has dragged/keyed is PINNED at that width: treat it as
-        // a fixed column of its stored width, so it holds while the untouched
-        // columns keep fitting their content and the trailing one absorbs slack.
-        // (The trailing column is never user-set — it is always the flexible
-        // remainder.) `.navigationSplitViewColumnWidthReset(_:)` clears the pins.
-        if let widths {
-            for index in 0..<max(0, count - 1) where widths.isUserSet(index) {
-                if let pinned = widths.value(for: index) {
-                    natural[index] = max(minimumColumnWidth, pinned)
-                    flexible[index] = false
-                }
-            }
-        }
-
-        var widthsResult = [Int](repeating: minimumColumnWidth, count: count)
-        let flexIndices = (0..<count).filter { flexible[$0] }
-        let fixedIndices = (0..<count).filter { !flexible[$0] }
-        for index in fixedIndices { widthsResult[index] = natural[index] }
-        var fixedSum = fixedIndices.reduce(0) { $0 + widthsResult[$1] }
-
-        guard !flexIndices.isEmpty else {
-            // No flexible column — the rightmost absorbs the slack so the split
-            // still fills its width.
-            widthsResult[count - 1] += max(0, usable - fixedSum)
-            writeBackUserSet(widthsResult, widths: widths, writeBack: writeBack)
-            return widthsResult
-        }
-
-        // Shrink fixed columns from the right if they'd starve the flexible ones.
-        var freeForFlex = usable - fixedSum
-        let flexMinTotal = flexIndices.count * minimumColumnWidth
-        if freeForFlex < flexMinTotal {
-            var deficit = flexMinTotal - freeForFlex
-            for index in fixedIndices.reversed() where deficit > 0 {
-                let give = min(widthsResult[index] - minimumColumnWidth, deficit)
-                widthsResult[index] -= give
-                deficit -= give
-            }
-            fixedSum = fixedIndices.reduce(0) { $0 + widthsResult[$1] }
-            freeForFlex = usable - fixedSum
-        }
-
-        // Split the remainder evenly; the last flexible column absorbs rounding.
-        let per = max(minimumColumnWidth, freeForFlex / flexIndices.count)
-        for (position, index) in flexIndices.enumerated() {
-            widthsResult[index] =
-                position == flexIndices.count - 1
-                ? max(minimumColumnWidth, freeForFlex - per * (flexIndices.count - 1))
-                : per
-        }
-        writeBackUserSet(widthsResult, widths: widths, writeBack: writeBack)
-        return widthsResult
-    }
-
-    /// Writes the clamped effective width of each user-pinned column back to the
-    /// shared store (render pass only), so the next drag / arrow resize steps
-    /// from the width actually shown rather than a stale intent — the size-to-fit
-    /// counterpart of `calculateColumnWidths`'s write-back. Only user-set columns
-    /// are touched; the style-derived ones re-measure from content every frame.
-    private func writeBackUserSet(
-        _ effective: [Int], widths: SplitViewWidths?, writeBack: Bool
-    ) {
-        guard writeBack, let widths else { return }
-        for index in 0..<max(0, effective.count - 1) where widths.isUserSet(index) {
-            widths.setClamped(effective[index], for: index)
-        }
     }
 
     /// Returns the focus section ID for a column.
