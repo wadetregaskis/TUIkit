@@ -34,6 +34,21 @@ struct ViewRendererTests {
         }
     }
 
+    /// The live pipeline neutralises a cursor-moving control at its write
+    /// boundary; this one-off path is a second boundary and skipped it, so a
+    /// tab in user data shoved the row to the next tab stop.
+    @Test("A snapshot neutralises a control character in a row")
+    func snapshotSanitisesControls() {
+        let mock = MockTerminal()
+        mock.size = (20, 4)
+        let userData = "a\tb"
+        ViewRenderer(terminal: mock).render(Text(userData))
+        #expect(
+            !mock.writtenOutput.contains { $0.unicodeScalars.contains("\u{09}") },
+            "a tab reached the terminal raw")
+        #expect(mock.outputContains("a b"))
+    }
+
     /// A terminal that under-advances a glyph does so however the bytes were
     /// produced, and this path builds none of a frame: no diff, no reuse cache,
     /// no padding — and, until this was added, no advance model either. So a

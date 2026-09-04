@@ -135,9 +135,12 @@ extension ViewRenderer {
     fileprivate func flush(_ buffer: FrameBuffer, atRow row: Int, column: Int) {
         for (index, line) in buffer.lines.enumerated() {
             terminal.moveCursor(toRow: row + index, column: column)
-            // Each line is cursor-addressed, so nothing follows this one on its
-            // row and the model's end-of-string rule takes its whole-row answer.
-            terminal.write(writer.compensatingCursorAdvance(line))
+            // Through the SAME two treatments the live writer's `buildLine`
+            // applies at its write boundary: the row sanitiser (a tab or a
+            // newline in user data would otherwise move the cursor here, as it
+            // cannot in an `App`) and the host's cursor-advance compensation.
+            // This is a second write boundary, and it used to skip the first.
+            terminal.write(writer.compensatingCursorAdvance(line.sanitizedForTerminalRow()))
             // Styled bytes this writer did not plan, so its belief about what
             // the terminal is wearing no longer holds — see
             // ``FrameDiffWriter/terminalStyle``.
