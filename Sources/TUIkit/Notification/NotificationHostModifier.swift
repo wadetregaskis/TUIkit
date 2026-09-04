@@ -189,8 +189,20 @@ extension NotificationHostModifier {
     ) {
         let token = "notification-host-animation"
 
-        guard !lifecycle.hasAppeared(token: token) else { return }
+        // Recorded EVERY frame and started only on the first, which is not the
+        // same thing as returning early once it has appeared. `recordAppear` is
+        // the only writer of the manager's current-render token set, so a frame
+        // that skipped it left the token missing at `endRenderPass`: the token
+        // "disappeared", its appearance flag was cleared, and the next frame
+        // re-entered here and called `startTask`, which cancels the task
+        // already running. The cancelled sleep then threw, the loop broke, and
+        // the epilogue asked for another render — so the toast pinned the app
+        // at the frame-rate cap for its whole life, creating and cancelling a
+        // task per frame, instead of the roughly thirty wakes its sleep
+        // schedule computes. The same shape `TaskModifier` and `_ImageCore` use.
+        let isFirstAppear = !lifecycle.hasAppeared(token: token)
         _ = lifecycle.recordAppear(token: token) {}
+        guard isFirstAppear else { return }
 
         // Calculate the latest expiration time across all entries.
         let totalOverhead = NotificationTiming.fadeInDuration + NotificationTiming.fadeOutDuration
@@ -226,6 +238,12 @@ extension NotificationHostModifier {
                 AppState.shared.setNeedsRender()
             }
 
+            // Only when the loop ran to its own end. A CANCELLED task is being
+            // replaced, and its epilogue would clear the appearance flag the
+            // replacement has just set — so the frame after that would start a
+            // third task, cancelling the second, forever — and would ask for a
+            // render on the way out.
+            guard !Task.isCancelled else { return }
             // Final render to clear expired notifications.
             lifecycle.resetAppearance(token: token)
             AppState.shared.setNeedsRender()

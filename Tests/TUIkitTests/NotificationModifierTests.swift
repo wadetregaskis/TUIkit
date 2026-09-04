@@ -229,6 +229,35 @@ struct NotificationTests {
         #expect(screen.lines.joined().contains("Done!"))
     }
 
+    /// The host's animation task is keyed on a fixed lifecycle token, and a
+    /// token is only "still here" while something re-records it every frame.
+    @Test("The animation token is re-recorded every frame, not just the first")
+    func animationTokenSurvivesLaterFrames() {
+        // `firesEffects: false` keeps the bookkeeping and suppresses the actual
+        // task, so this asserts the token lifecycle and nothing timing-bound.
+        let lifecycle = LifecycleManager(firesEffects: false)
+        let tuiContext = TUIContext(
+            lifecycle: lifecycle, keyEventDispatcher: KeyEventDispatcher(),
+            preferences: PreferenceStorage())
+        let service = NotificationService()
+        service.post("Toast")
+
+        var env = EnvironmentValues()
+        env.applyRuntimeServices(from: tuiContext)
+        env.notificationService = service
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 10, environment: env, tuiContext: tuiContext)
+
+        for frame in 1...3 {
+            lifecycle.beginRenderPass()
+            _ = renderToBuffer(Text("Base").notificationHost(), context: context)
+            lifecycle.endRenderPass()
+            #expect(
+                lifecycle.hasAppeared(token: "notification-host-animation"),
+                "frame \(frame) let the animation token disappear, cancelling the task")
+        }
+    }
+
     @Test("Multiple notifications stack vertically")
     func multipleNotificationsStack() {
         let context = testContext(width: 80, height: 24)
