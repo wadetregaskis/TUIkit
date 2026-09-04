@@ -29,6 +29,7 @@ that repeatable.
 |------|------------------|--------|
 | **B — end-to-end (this toolkit)** | The real `Example` driven through a PTY: input → 5-layer dispatch → render → diff → `write()` | ✅ working |
 | **A — headless render harness** | `renderToBuffer(view:)` on fixed view trees in a tight loop — deterministic, fully CPU-bound, no input timing | ✅ working (`RenderHarness`) |
+| **A′ — headless image harness** | `ASCIIConverter` over a picture, per cell and per pixel separately | ✅ working (`ImageHarness`) |
 
 Mode B is the realism check. Mode A is the microscope for iterating on a
 fix; it pairs with the existing `TUIKIT_BENCHMARKS=1 swift package benchmark`
@@ -353,3 +354,51 @@ Build it with `--product RenderHarness` (or set `BENCHMARK_DISABLE_JEMALLOC=1`)
 so the build does not pull the `jemalloc`-backed benchmark target.
 
 Future trees worth adding: a `Table`, a `ScrollView` mid-scroll.
+
+## Mode A, for pictures — `ImageHarness`
+
+`RenderHarness` loops a view render; `ImageHarness`
+(`Tools/Profiling/ImageHarness`) loops an `ASCIIConverter` over a picture. It
+needs a target of its own because the image pipeline has **two halves with
+costs two orders of magnitude apart**, and a change to one of them says nothing
+about the other:
+
+| `--path` | what it runs | asked | reported as |
+|---|---|---|---|
+| `glyph` | `convert` — an SGR per cell | ~2 per CELL | ns/cell |
+| `pixel` | `recoloured` — the picture a graphics protocol carries | once per PIXEL | ns/pixel |
+| `colour` | `Color.downsampledToPalette256()` alone, over distinct colours | — | ns/colour |
+
+A cell is about 8×17 device pixels, so the same picture asks the pixel path
+roughly two hundred times more often than the glyph path. That is why an exact
+palette search is affordable per cell and ruinous per pixel, and why a table
+lookup can be the right trade in one and pointless in the other.
+
+`--path colour` exists because in both of the others the quantiser is a small
+part of a large total — resampling, sharpening, glyph choice and string
+building are most of what a conversion costs — so a quantiser that got four
+times dearer can hide inside `--path glyph`'s noise and still be the wrong
+trade. It uses distinct colours deliberately: `Color`'s answer is memoised, and
+a loop over one colour measures a dictionary.
+
+```bash
+swift build -c release --product ImageHarness
+BIN="$(swift build -c release --product ImageHarness --show-bin-path)/ImageHarness"
+"$BIN" --path glyph --mode ansi256 --iterations 30
+"$BIN" --path pixel --mode ansi256 --dither floyd --iterations 8
+"$BIN" --path colour --cols 400 --rows 100 --iterations 3
+```
+
+Modes (`--mode`): `truecolor`, `ansi256`, `ansi16`, `grayscale`, `mono`,
+`shades8`. The source picture is synthetic but has a photograph's colour
+*statistics* — smooth gradients with enough grain that the colours are nearly
+all distinct — because a picture of flat bands is answered by any memo and
+would measure the memo instead of the quantiser.
+
+Each run prints a checksum derived from the output, both to defeat dead-code
+elimination and so two builds that should agree can be seen to.
+
+For an A/B, build both binaries, keep a copy of each, and alternate them —
+`ab_bench.py`'s statistics do not apply here (this harness reports wall time
+for one binary, not paired CPU-time ratios), so run three or more alternating
+reps and look at the spread before believing a small difference.

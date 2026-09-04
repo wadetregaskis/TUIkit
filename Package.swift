@@ -31,6 +31,7 @@ let package = Package(
         .executable(name: "EmojiBugScanner", targets: ["EmojiBugScanner"]),
         .executable(name: "EmojiBenchmark",  targets: ["EmojiBenchmark"]),
         .executable(name: "RenderHarness",   targets: ["RenderHarness"]),
+        .executable(name: "ImageHarness",    targets: ["ImageHarness"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.3"),
@@ -134,6 +135,16 @@ let package = Package(
             name: "RenderHarness",
             dependencies: ["TUIkit"],
             path: "Tools/Profiling/RenderHarness"
+        ),
+
+        // The same, for the IMAGE pipeline: an `ASCIIConverter` looped over a
+        // picture. Separate from `RenderHarness` because the two halves of the
+        // image path — per cell (`convert`) and per pixel (`recoloured`) —
+        // have to be measured separately, and neither is a view render.
+        .executableTarget(
+            name: "ImageHarness",
+            dependencies: ["TUIkitImage", "TUIkitStyling"],
+            path: "Tools/Profiling/ImageHarness"
         ),
 
         // The smallest app that can be asked "does this view cost anything when
