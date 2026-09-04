@@ -11,8 +11,7 @@ import TUIkitStyling
 public enum ASCIIPaletteMapping: Sendable, Equatable {
     /// The colour the pixel is closest to, in OKLab. Reproduces the image as
     /// faithfully as the palette allows, and is right whenever the palette is
-    /// meant to STAND IN for the image's own colours — `.shades(_:)`,
-    /// `.sampled(_:)`, or a set of distinct hues chosen to match a subject.
+    /// meant to STAND IN for the image's own colours — `.shades(_:)`, or a set of distinct hues chosen to match a subject.
     ///
     /// Plainly nearest, not ``Color``'s hue-weighted metric, which is
     /// load-bearing for `SystemPalette` derivation and must not acquire a second
@@ -59,7 +58,8 @@ public enum ASCIIPaletteMapping: Sendable, Equatable {
 /// ```swift
 /// .palette(ASCIIPalette([.black, .palette.accent, .white]))  // these colours
 /// .palette(.shades(5))                                       // five greys
-/// .palette(.sampled(8))                                      // eight, spread over the gamut
+/// .palette(.spread(8))                                       // eight, spread over the gamut
+/// .palette(.adaptive(8, by: .leastError))                    // eight, taken from the picture
 /// ```
 ///
 /// ## Why `[Color]` and not `[RGBA]`
@@ -103,6 +103,23 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// carrying an unresolved semantic colour is equal to itself.
     let entries: [Entry]
 
+    /// The question this palette is, when its colours are not yet decided —
+    /// see ``adaptive(_:by:)``. `nil` for every palette whose colours the app
+    /// chose, which is all of them until one meets ``derived(from:)``.
+    ///
+    /// Part of ``Equatable``, unlike ``entries``: two palettes standing in with
+    /// the same greys are not the same palette if one of them is going to
+    /// become a photograph's own colours.
+    let adaptive: Adaptive?
+
+    /// An unanswered ``adaptive(_:by:)`` request.
+    public struct Adaptive: Sendable, Equatable {
+        /// Which `count` colours — see ``Adaptation``.
+        public let method: Adaptation
+        /// How many.
+        public let count: Int
+    }
+
     struct Entry: Sendable {
         let rgba: RGBA
         let lightness: Double
@@ -119,20 +136,25 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// An empty list is not a palette; it degrades to black and white, which is
     /// the one answer that always renders something.
     public init(_ colors: [Color], mapping: ASCIIPaletteMapping = .nearestColor) {
+        self.init(colors, mapping: mapping, adaptive: nil)
+    }
+
+    init(_ colors: [Color], mapping: ASCIIPaletteMapping, adaptive: Adaptive?) {
         let colors = colors.isEmpty ? [.black, .white] : colors
         let entries = colors.map(Self.entry(for:))
         self.colors = colors
         self.mapping = mapping
         self.entries = entries
         self.byTone = entries.indices.sorted { entries[$0].tone < entries[$1].tone }
+        self.adaptive = adaptive
     }
 
     /// This palette, spent as a tonal ramp instead of as a set of candidates.
     /// See ``ASCIIPaletteMapping/toneRamp``.
-    public func asToneRamp() -> Self { Self(colors, mapping: .toneRamp) }
+    public func asToneRamp() -> Self { Self(colors, mapping: .toneRamp, adaptive: adaptive) }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.colors == rhs.colors && lhs.mapping == rhs.mapping
+        lhs.colors == rhs.colors && lhs.mapping == rhs.mapping && lhs.adaptive == rhs.adaptive
     }
 
     /// `count` greys from black to white, evenly spaced in PERCEIVED
@@ -191,6 +213,15 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// `count` colours spread as far apart as they can be, taken from the
     /// terminal's own 256-colour repertoire.
     ///
+    /// About the GAMUT, not about any picture: these are `count` colours chosen
+    /// to cover the space of colours a terminal can show, so the same `count`
+    /// always answers the same palette whatever it is asked to draw. That makes
+    /// it the wrong tool for reproducing a photograph — a picture occupies a
+    /// small part of the gamut, so entries land where it has no pixels and
+    /// raising `count` can change nothing at all (measured on one photograph at
+    /// 24 colours: eight entries never drawn). ``adaptive(_:by:)`` is the one
+    /// that asks the picture.
+    ///
     /// The point of the constraint is that every entry is a colour any
     /// 256-colour terminal renders exactly, so a palette chosen this way never
     /// shifts underfoot when the image is downsampled.
@@ -204,7 +235,7 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// different feature ("reduce this image to N colours") and it would put an
     /// image-analysis pass inside a renderer whose job is mapping; with
     /// dithering on, this plus ``ASCIIPalette`` gets most of the same look.
-    public static func sampled(_ count: Int) -> Self {
+    public static func spread(_ count: Int) -> Self {
         let count = max(1, count)
         let candidates: [(index: UInt8, lab: (l: Double, a: Double, b: Double))] =
             (16...255).map { index in
@@ -236,7 +267,9 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// theme — so a palette carrying one must be resolved before it can map
     /// anything. Callers that render do this once per conversion.
     public func resolved(with palette: any Palette) -> Self {
-        Self(colors.map { $0.resolve(with: palette) }, mapping: mapping)
+        // The adaptation survives: resolving says what a colour IS, and an
+        // adaptive palette's stand-in greys are not the colours it will draw.
+        Self(colors.map { $0.resolve(with: palette) }, mapping: mapping, adaptive: adaptive)
     }
 
     // MARK: - Mapping
@@ -391,11 +424,13 @@ public struct ASCIIPalette: Sendable, Equatable {
         case .palette256:
             // Still the same colours — a `.palette256` entry downsamples to
             // itself — so ``ansi256`` stays itself here, and keeps its table.
-            return Self(colors.map { $0.downsampledToPalette256() }, mapping: mapping)
+            return Self(
+                colors.map { $0.downsampledToPalette256() }, mapping: mapping, adaptive: adaptive)
         case .basic16:
             // Not there: these are sixteen NAMED colours now, and `Color`'s
             // 256-colour quantiser cannot answer with one of them.
-            return Self(colors.map { $0.downsampledToANSI16() }, mapping: mapping)
+            return Self(
+                colors.map { $0.downsampledToANSI16() }, mapping: mapping, adaptive: adaptive)
         }
     }
 

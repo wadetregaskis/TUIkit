@@ -140,6 +140,54 @@ enum ImageDemoHelpers {
         }
         return "zoom:\(String(format: "%.1f", zoom))x"
     }
+
+    // MARK: - Custom palettes
+
+    /// A named set of colours someone wrote down, for
+    /// ``ImageDemoSettings/ColourMode/customPalette``.
+    ///
+    /// The point of the mode, and why the demo ships four rather than one: a
+    /// palette does not have to be derived from anything. These are subsets of
+    /// the terminal's own 256 chosen by eye — a duotone, a sepia, a cool set and
+    /// the cube's eight corners — and they are mapped by NEAREST COLOUR, so the
+    /// order they are written in does not matter and no entry is guaranteed to
+    /// be drawn. Every entry is a `.palette(_:)` index, so it renders exactly on
+    /// any 256-colour terminal.
+    ///
+    /// The names are `Text(verbatim:)` on purpose: they name a look the way a
+    /// font name does, and translating "Sepia" would make the demo describe a
+    /// different palette in each language.
+    struct NamedPalette {
+        let name: String
+        let palette: ASCIIPalette
+    }
+
+    static let customPalettes: [NamedPalette] = [
+        NamedPalette(
+            name: "Sepia",
+            palette: ASCIIPalette([
+                .palette(16), .palette(52), .palette(94), .palette(130),
+                .palette(172), .palette(179), .palette(223), .palette(230),
+            ])),
+        NamedPalette(
+            name: "Ice",
+            palette: ASCIIPalette([
+                .palette(17), .palette(18), .palette(25), .palette(31),
+                .palette(38), .palette(45), .palette(123), .palette(195),
+            ])),
+        NamedPalette(
+            name: "Poster",
+            palette: ASCIIPalette([
+                .palette(16), .palette(88), .palette(160), .palette(202),
+                .palette(214), .palette(226), .palette(231),
+            ])),
+        NamedPalette(
+            name: "Cube corners",
+            palette: ASCIIPalette([
+                .palette(16), .palette(21), .palette(46), .palette(51),
+                .palette(196), .palette(201), .palette(226), .palette(231),
+            ])),
+    ]
 }
 
 extension View {

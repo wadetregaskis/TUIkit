@@ -265,14 +265,46 @@ struct ImageRenderingControls: View {
                 RadioButtonItem(
                     ImageDemoSettings.ColourMode.greys, "component.imageControls.greys"
                 ) {
-                    counted("component.imageControls.levels", value: $settings.greyLevels, in: 2...16)
+                    counted("component.imageControls.levels", value: $settings.greyLevels, in: 2...256)
                 }
+                // The three counted palettes, in order of how much they know
+                // about the picture: nothing, its histogram, its error. They
+                // share one count so switching between them changes one thing.
                 RadioButtonItem(
-                    ImageDemoSettings.ColourMode.sampled, "component.imageControls.sampled"
+                    ImageDemoSettings.ColourMode.spread, "component.imageControls.spread"
                 ) {
                     counted(
-                        "component.imageControls.colours", value: $settings.sampledColours,
-                        in: 2...64)
+                        "component.imageControls.colours", value: $settings.paletteColours,
+                        in: 2...256)
+                }
+                RadioButtonItem(
+                    ImageDemoSettings.ColourMode.mostUsed, "component.imageControls.mostUsed"
+                ) {
+                    counted(
+                        "component.imageControls.colours", value: $settings.paletteColours,
+                        in: 2...256)
+                }
+                RadioButtonItem(
+                    ImageDemoSettings.ColourMode.leastError, "component.imageControls.leastError"
+                ) {
+                    counted(
+                        "component.imageControls.colours", value: $settings.paletteColours,
+                        in: 2...256)
+                }
+                RadioButtonItem(
+                    ImageDemoSettings.ColourMode.customPalette,
+                    "component.imageControls.customPalette"
+                ) {
+                    // A named set rather than a count: the whole point is that
+                    // someone chose these colours, so there is nothing to slide.
+                    Picker("", selection: $settings.customPaletteIndex) {
+                        ForEach(
+                            Array(ImageDemoHelpers.customPalettes.enumerated()), id: \.offset
+                        ) { index, entry in
+                            Text(verbatim: entry.name).tag(index)
+                        }
+                    }
+                    .labelsHidden()
                 }
             }
             Toggle("component.imageControls.dithering", isOn: $settings.dithering)

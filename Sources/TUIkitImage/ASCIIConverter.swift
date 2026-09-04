@@ -245,6 +245,19 @@ public enum ASCIIColorMode: Sendable, Equatable {
     ///
     /// Only ``palette(_:)`` names any; the rest are returned unchanged. Callers
     /// that render do this once, before consulting a cache keyed on the mode —
+    /// This mode with any adaptive palette's colours chosen from `image`.
+    ///
+    /// The converters call it once per conversion, on the picture AFTER the
+    /// tone curve and the edge lift have run — the colours have to be taken
+    /// from the picture as it will be drawn, not as it arrived, or a negative
+    /// or a duotone would be quantised to the palette of a picture nobody sees.
+    /// Everything else is unaffected, since a non-adaptive palette answers with
+    /// itself. See ``ASCIIPalette/derived(from:)``.
+    public func derived(from image: RGBAImage) -> Self {
+        guard case .palette(let colors) = self else { return self }
+        return .palette(colors.derived(from: image))
+    }
+
     /// see ``ASCIIPalette/resolved(with:)``.
     public func resolved(with palette: any Palette) -> Self {
         guard case .palette(let colors) = self else { return self }
@@ -482,7 +495,7 @@ extension ASCIIConverter {
         // Downsample the requested color mode to one the terminal can
         // actually render. Otherwise a `.trueColor` request on a 256-color
         // terminal produces garbled output.
-        let effectiveMode = colorMode.effective(for: ColorDepth.current)
+        var effectiveMode = colorMode.effective(for: ColorDepth.current)
 
         // Each rendering path has its own sub-cell pixel grid:
         //   luminance ramps        : 1×1  (one tone per cell)
@@ -560,6 +573,11 @@ extension ASCIIConverter {
             scaled = scaled.sharpened(
                 amount: edgeContrast, radiusX: cellGrid.x, radiusY: cellGrid.y)
         }
+
+        // An adaptive palette takes its colours from the picture HERE, for the
+        // same reason the threshold below is measured here: this is the picture
+        // that will be drawn. Inert for every other mode.
+        effectiveMode = effectiveMode.derived(from: scaled)
 
         // The split between ink and background, measured from THIS image
         // rather than assumed to be mid-grey — see ``monoInkThreshold(for:)``.

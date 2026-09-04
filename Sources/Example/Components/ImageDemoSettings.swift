@@ -79,8 +79,17 @@ struct ImageDemoSettings: Equatable {
     /// How many greys ``ColourMode/greys`` uses.
     var greyLevels = 4
 
-    /// How many colours ``ColourMode/sampled`` picks out of the 256-colour cube.
-    var sampledColours = 8
+    /// How many colours the three counted palette modes ask for — ``ColourMode/spread``,
+    /// ``ColourMode/mostUsed`` and ``ColourMode/leastError``.
+    ///
+    /// One setting for all three on purpose: the interesting comparison is what
+    /// the SAME count buys you under each rule, and a separate count per mode
+    /// would make switching between them change two things at once.
+    var paletteColours = 8
+
+    /// Which of ``ImageDemoHelpers/customPalettes`` ``ColourMode/customPalette``
+    /// draws in.
+    var customPaletteIndex = 0
 
     /// Supersampling factor: 0 = the default, 1–4 explicit.
     var supersampling = 0
@@ -145,7 +154,18 @@ struct ImageDemoSettings: Equatable {
     /// since an option carries its own control now rather than borrowing the
     /// row after it.
     enum ColourMode: Int, CaseIterable {
-        case trueColor, ansi256, ansi16, grayscale, mono, themed, greys, sampled
+        case trueColor, ansi256, ansi16, grayscale, mono, themed, greys
+        /// N colours spread evenly over the GAMUT — the same N whatever the
+        /// picture is.
+        case spread
+        /// N colours taken from the picture, by how many pixels are each.
+        case mostUsed
+        /// N colours taken from the picture, chosen to leave it closest to
+        /// itself.
+        case leastError
+        /// A set someone wrote down, mapped by nearest colour — so the order
+        /// they wrote it in does not matter.
+        case customPalette
     }
 
     /// The recolourings the demo offers.
@@ -199,7 +219,12 @@ struct ImageDemoSettings: Equatable {
             }
             return .mono
         case .greys: return .palette(.shades(greyLevels))
-        case .sampled: return .palette(.sampled(sampledColours))
+        case .spread: return .palette(.spread(paletteColours))
+        case .mostUsed: return .palette(.adaptive(paletteColours, by: .popularity))
+        case .leastError: return .palette(.adaptive(paletteColours, by: .leastError))
+        case .customPalette:
+            return .palette(ImageDemoHelpers.customPalettes[
+                min(customPaletteIndex, ImageDemoHelpers.customPalettes.count - 1)].palette)
         case .themed:
             // As a TONE RAMP, not by nearest colour: the accent and white sit
             // within 0.04 of each other in OKLab lightness, so by nearest
@@ -258,8 +283,10 @@ struct ImageDemoSettings: Equatable {
             asciiGlyphs, ImageDemoHelpers.maximumGlyphs(.ascii, shapeAware: shapeAware))
         unicodeGlyphs = min(
             unicodeGlyphs, ImageDemoHelpers.maximumGlyphs(.unicode, shapeAware: shapeAware))
-        greyLevels = min(16, max(2, greyLevels))
-        sampledColours = min(64, max(2, sampledColours))
+        greyLevels = min(256, max(2, greyLevels))
+        paletteColours = min(256, max(2, paletteColours))
+        customPaletteIndex = min(
+            ImageDemoHelpers.customPalettes.count - 1, max(0, customPaletteIndex))
         // A one-stop LUT is not a mapping; the editor can delete down to one,
         // so the floor is asserted here rather than hoped for.
         if lutStops.count == 1 { lutStops.append(.init(at: 1, to: .rgb(255, 255, 255))) }
@@ -275,7 +302,12 @@ struct ImageDemoSettings: Equatable {
         case .grayscale: return "color:gray"
         case .mono: return "color:mono"
         case .greys: return "color:\(greyLevels) greys"
-        case .sampled: return "color:\(sampledColours) sampled"
+        case .spread: return "color:\(paletteColours) spread"
+        case .mostUsed: return "color:\(paletteColours) most-used"
+        case .leastError: return "color:\(paletteColours) least-error"
+        case .customPalette:
+            let index = min(customPaletteIndex, ImageDemoHelpers.customPalettes.count - 1)
+            return "color:custom \(ImageDemoHelpers.customPalettes[index].name)"
         case .themed: return "color:themed"
         }
     }

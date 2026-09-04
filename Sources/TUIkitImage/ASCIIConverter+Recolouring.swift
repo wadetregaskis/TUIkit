@@ -104,6 +104,11 @@ extension ASCIIConverter {
 
         guard colorMode != .trueColor else { return scaled }
 
+        // An adaptive palette's colours come from the picture as it will be
+        // drawn — after the curve and the lift, before anything quantises.
+        // Inert for every other mode. See `ASCIIColorMode.derived(from:)`.
+        let colorMode = colorMode.derived(from: scaled)
+
         // One table, built once, for the modes that would otherwise search a
         // palette per pixel — see `ASCIIPalette.quantisationTable()`. `nil`
         // for every other mode, and for a palette too large to index with a

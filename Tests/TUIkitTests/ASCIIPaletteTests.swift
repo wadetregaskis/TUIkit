@@ -47,7 +47,7 @@ struct ASCIIPaletteTests {
 
     @Test("A sampled palette spreads over the gamut instead of clustering")
     func sampledSpreads() {
-        let sampled = ASCIIPalette.sampled(8)
+        let sampled = ASCIIPalette.spread(8)
         #expect(sampled.colors.count == 8)
         // Every entry is a 256-palette index, which is the constraint that
         // makes them render exactly on any 256-colour terminal.
@@ -73,8 +73,8 @@ struct ASCIIPaletteTests {
 
     @Test("More colours asked for than the source has is not an error")
     func sampledSaturates() {
-        #expect(ASCIIPalette.sampled(10_000).colors.count == 240)
-        #expect(ASCIIPalette.sampled(1).colors.count == 1)
+        #expect(ASCIIPalette.spread(10_000).colors.count == 240)
+        #expect(ASCIIPalette.spread(1).colors.count == 1)
     }
 
     // MARK: - Mapping

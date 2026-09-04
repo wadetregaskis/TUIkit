@@ -179,6 +179,17 @@ struct ImageHarness {
         case "grayscale": .grayscale
         case "mono": .mono
         case "shades8": .palette(.shades(8))
+        case "shades256": .palette(.shades(256))
+        // The adaptive palettes, which are the only modes whose cost depends on
+        // the picture's own colour statistics rather than only on its size: the
+        // derivation is a histogram plus (for `leastError`) median cut and
+        // Lloyd's iteration over the populated cells. Named with their counts
+        // because the cost grows with them.
+        case "popular8": .palette(.adaptive(8, by: .popularity))
+        case "popular256": .palette(.adaptive(256, by: .popularity))
+        case "optimal8": .palette(.adaptive(8, by: .leastError))
+        case "optimal64": .palette(.adaptive(64, by: .leastError))
+        case "optimal256": .palette(.adaptive(256, by: .leastError))
         default: nil
         }
     }
