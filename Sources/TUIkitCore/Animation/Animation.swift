@@ -332,13 +332,7 @@ extension Animation {
     /// ``Animation/timingCurve(_:_:_:_:duration:)``), and any repeat or delay
     /// is appended in modifier order, so the string round-trips by eye.
     public var description: String {
-        var text: String
-        switch curve {
-        case .bezier(let p1x, let p1y, let p2x, let p2y):
-            text = "timingCurve(\(p1x), \(p1y), \(p2x), \(p2y), duration: \(passDuration))"
-        case .spring(let omega, let zeta):
-            text = "spring(omega: \(omega), zeta: \(zeta), settles: \(passDuration))"
-        }
+        var text = curveDescription
         if delayInterval != 0 { text += ".delay(\(delayInterval))" }
         if speedFactor != 1 { text += ".speed(\(speedFactor))" }
         switch repeatMode {
@@ -349,5 +343,44 @@ extension Animation {
             text += ".repeatForever(autoreverses: \(autoreverses))"
         }
         return text
+    }
+
+    /// The factory call that would build ``curve`` at ``passDuration``.
+    private var curveDescription: String {
+        switch curve {
+        case .bezier(let p1x, let p1y, let p2x, let p2y):
+            // Recognised by control points rather than remembered: nothing is
+            // stored to say which factory built this, and it does not need to
+            // be. An explicit `timingCurve(0.42, 0, 0.58, 1)` IS an ease-in-out
+            // — the same animation by another spelling — so naming it one is
+            // accurate rather than a guess.
+            switch (p1x, p1y, p2x, p2y) {
+            case (0, 0, 1, 1): return "linear(duration: \(passDuration))"
+            case (0.42, 0, 1, 1): return "easeIn(duration: \(passDuration))"
+            case (0, 0, 0.58, 1): return "easeOut(duration: \(passDuration))"
+            case (0.42, 0, 0.58, 1): return "easeInOut(duration: \(passDuration))"
+            default:
+                return "timingCurve(\(p1x), \(p1y), \(p2x), \(p2y), duration: \(passDuration))"
+            }
+        case .spring(let omega, let zeta):
+            // Inverted back through `spring(duration:bounce:)`'s own mapping.
+            // This used to print the stored `omega`/`zeta`/`settles`, which no
+            // factory accepts — the one spelling that cannot round-trip.
+            let duration = omega > 0 ? 2 * Double.pi / omega : 0
+            let bounce = zeta <= 1 ? 1 - zeta : 1 / zeta - 1
+            return "spring(duration: \(Self.solved(duration)), bounce: \(Self.solved(bounce)))"
+        }
+    }
+
+    /// A solved spring parameter, printed at six decimals.
+    ///
+    /// NOT cosmetic rounding of a stored number: `duration` and `bounce` are
+    /// recovered by inverting the arithmetic the factory did, and that trip
+    /// lands a unit in the last place away — `bounce: 0.15` comes back as
+    /// 0.15000000000000002. Six decimals is finer than any pace or springiness
+    /// anyone writes, and reads back as what they wrote.
+    private static func solved(_ value: Double) -> String {
+        guard value.isFinite else { return "\(value)" }
+        return "\((value * 1_000_000).rounded() / 1_000_000)"
     }
 }
