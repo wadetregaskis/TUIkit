@@ -174,6 +174,8 @@ verifier corrected the analyst, both are shown.
 
 **2. `View.disabled(_:)`**
 
+- *Status:* **FIXED** (291b8754): `Table`, `_ListCore` and `ScrollView` read `isDisabled || !context.environment.isEnabled`.
+
 - *SwiftUI:* swiftui-docs/View.md, View.disabled(_:): "Adds a condition that controls whether users can interact with this view. The higher views in a view hierarchy can override the value you set on this view. In the following example, the button isn't interactive because the outer `disabled(_:)` modifier overrides the inner one" — followed by `HStack { Button(Text("Press")) {}.disabled(false) }.disabled(true)`. TUIkit's own DisabledModifier.swift:33-50 implements that cascade (`let enabled = context.environment.isEnabled && !disabled`) and documents that "controls combine it with their own disabled state".
 - *TUIkit:* `grep -n 'isEnabled' Sources/TUIkit/Views/Table.swift` returns no matches. The only gates are the view's own stored flag: Table.swift:1053 `ItemListHandler(… canBeFocused: !isDisabled)`, :1069 and :1691 `handler.canBeFocused = !isDisabled`, and :2403 `guard !isDisabled, !context.isMeasuring, let mouseDispatcher = context.environment.mouseEventDispatcher else { return }` — the sole gate on all mouse wiring, header-sort handlers included. `isDisabled` is written only by the member `Table.disabled(_:)` at :370-374 (`copy.isDisabled = disabled`). Every other control in the framework does combine the two — Button.swift:325, TextField.swift:358, _ToggleCore.swift:420, Slider.swift:422, Stepper.swift:434, RadioButton.swift:297/554, DatePicker.swift:291, SecureField.swift:302, TextEditor.swift:139, _PickerMenuCore.swift (x5) all read `self.isDisabled || !context.environment.isEnabled`. … — `Sources/TUIkit/Views/Table.swift:2403`
 - *Divergence:* `VStack { Table(people, selection: $selected) { TableColumn("Name", value: \.name) } }.disabled(isLoading)`. In SwiftUI the table is inert and greyed while loading. In TUIkit it still takes Tab focus, still moves its row cursor on Up/Down, still selects on Space or click (writing $selected), still sorts on a header click, and is not dimmed. Conversely the escape hatch SwiftUI explicitly rules out — an inner `.disabled(false)` — does re-enable here, because Table.disabled(false) just clears the local flag. Failing test: render `VStack { Table(…) }.disabled(true)` and assert `buffer.hitTestRegions.isEmpty` and `focusManager.currentFocused == nil` — the mirror of TableRenderTests.disabledNoHitRegion, which only ever applies .disabled() to the Table itself. No test covers the ancestor case; ModifierPropagationTests covers Button/Toggle/RadioButtonGroup but never a List or Table.
@@ -521,6 +523,8 @@ verifier corrected the analyst, both are shown.
 
 **47. `Divider`**
 
+- *Status:* **FIXED** (070423d7): `Divider` reads `context.environment.containerAxis` and picks its axis from it.
+
 - *SwiftUI:* swiftui-docs/Divider.md: "When contained in a stack, the divider extends across the minor axis of the stack, or horizontally when not in a stack." The minor axis of an HStack is vertical, so a Divider between two HStack children is a vertical rule spanning the stack's height.
 - *TUIkit:* Divider has no axis input at all. `sizeThatFits` is hard-coded horizontal — `ViewSize.flexibleWidth(minWidth: 1, height: 1)` (Spacer.swift:127-130) — and `renderToBuffer` draws `let line = String(repeating: character, count: context.availableWidth)` (Spacer.swift:133). A grep of Sources/ shows no stack, container or environment key that ever tells it which way to draw. — `Sources/TUIkit/Views/Spacer.swift:126`
 - *Divergence:* `HStack { Text("aa"); Divider(); Text("bb") }` at width 20 renders one row, `aa ────────────── bb`. SwiftUI renders `aa │ bb` with the rule spanning the stack's height. Two failures at once: the wrong glyph, and — because the divider reports isWidthFlexible == true — it absorbs all the row's slack and shoves its siblings to the two ends.
@@ -595,6 +599,8 @@ verifier corrected the analyst, both are shown.
 
 **57. `View.task(id:priority:_:)`**
 
+- *Status:* **FIXED**: the id is held as an `AnyEquatableBox` and compared with `==`, not stringified.
+
 - *SwiftUI:* swiftui-docs/View.md, View.task(id:priority:_:): "To detect a change, the modifier tests whether a new value for the `id` parameter equals the previous value. For this to work, the value's type must conform to the Equatable protocol." The `id` parameter doc repeats it: "The value to observe for changes. The value must conform to the Equatable protocol."
 - *TUIkit:* The Equatable constraint is declared and never used — the id is stringified. Sources/TUIkit/Extensions/View+Events.swift:477 passes `idToken: "\(id)"`, and Sources/TUIkit/Modifiers/LifecycleModifier.swift:139-143 makes the restart predicate a token comparison: `var token = lifecycleToken("task", context); if let idToken { token += "-\(idToken)" }; let isFirstAppear = !lifecycle.hasAppeared(token: token)`. `==` is never called on ID. — `Sources/TUIkit/Extensions/View+Events.swift:477`
 - *Divergence:* Measured both directions. (a) `final class Server: Equatable` whose `==` compares a name: `"\(Server("alpha"))" == "\(Server("beta"))"` is true (both render as "Module.Server") while the values are unequal — so `.task(id: server)` NEVER restarts when the app swaps servers, which is precisely Apple's own doc example. (b) `struct Row: Equatable` whose `==` compares only `id` while `description` includes a mutable `lastSeen`: the values are equal but the strings differ — so `.task(id: row)` cancels and restarts in-flight work on a change SwiftUI treats as a non-event. Tests/TUIkitTests/SwiftUICompatFixesTests.swift:102-110 only checks the overloads resolve; nothing pins the predicate.
@@ -617,6 +623,8 @@ verifier corrected the analyst, both are shown.
 - *Recommendation:* Fix: escape `%` to `%%` in `appendLiteral`. The existing tests for translator-authored templates (`substituting(["x"], into: "100%% and %@") == "100% and x"`) already assume the template side speaks printf, so the builder side must produce printf too. Tests/TUIkitTests/LocalizedStringKeyTests.swift:157-166 covers percent-before-space but nothing covers percent-before-placeholder, so this is a gap rather than a decision.
 
 **60. `SecureField`**
+
+- *Status:* **FIXED** (5c265171): `TextFieldHandler.isSecure` gates the clipboard paths.
 
 - *SwiftUI:* swiftui-docs/SecureField.md, the "The field:" list, states the field "Prevents anyone from cutting or copying the field's contents."
 - *TUIkit:* _SecureFieldCore stores a plain TextFieldHandler — its own comment says "Reuses TextFieldHandler since key handling is identical" (SecureField.swift:314-326) — and that handler's Ctrl table is unconditional: `case "c", "C": copySelection(); return true` / `case "x", "X": cutSelection(); return true`. copySelection()/cutSelection() slice text.wrappedValue (the real string, not the bullets) and hand it to copyToClipboard, i.e. pbcopy (TextFieldHandler+Clipboard.swift:22-48). Nothing in TextFieldHandler knows the field is secure — grep for isSecure/secure over the handler and its clipboard extension returns nothing. Masking is purely render-time (`displayCharacter: { _, _ in TerminalSymbols.maskBullet }`, SecureField.swift:359), and mouse drag-selection is registered for secure fields too (SecureField.swift:397-406). — `Sources/TUIkit/Focus/TextFieldHandler.swift:472`
@@ -647,12 +655,16 @@ verifier corrected the analyst, both are shown.
 
 **64. `View.fontWeight(_ weight: Font.Weight?)`**
 
+- *Status:* **FIXED**: `nil` resets to `.regular` (`StyleModifier`).
+
 - *SwiftUI:* swiftui-docs/View.md:13553 — "Sets the font weight of the text in this view. - Parameter weight: One of the available font weights. Providing `nil` removes the effect of any font weight modifier applied higher in the view hierarchy." The sibling fontDesign(_:) and fontWidth(_:) carry the identical sentence, so it is the family rule. Note the asymmetry in Apple's own docs: Text.fontWeight(_:) (Text.md:2288) says only "Sets the font weight of the text" with no nil semantics, so the Text-level nil-is-silence reading is fine — it is the View-level one that is wrong.
 - *TUIkit:* `/// … `nil` leaves the inherited weight unchanged. public func fontWeight(_ weight: FontWeight?) -> some View { style(.text, weight?.styleAttributes ?? StyleAttributes()) }`. `StyleAttributes()` is empty, so `StyleCascade.appending`'s `guard !attributes.isEmpty` (StyleCascade.swift:48) drops it — a complete no-op, the same mechanism as the textCase finding. — `Sources/TUIkit/Modifiers/StyleModifier.swift:94`
 - *Divergence:* Executed, reading SGR codes out of the rendered buffer (1 = bold): `VStack { VStack { Text("Hi") }.fontWeight(nil) }.fontWeight(.bold)` still contains "1" — bold survived — and is indistinguishable from the same tree without the inner modifier. SwiftUI renders it at regular weight. `.fontWeight(.regular)` in the same position does clear it, confirming the cascade works and only the nil path is dropped.
 - *Recommendation:* Make View.fontWeight(nil) emit `FontWeight.regular.styleAttributes` (bold: false, dim: false) so it removes a higher weight, per Apple's sentence; keep Text.fontWeight(nil) as silence, which Tests/TUIkitTests/FontTests.swift:219-222 (`nilWeightIsSilence`) already pins and which is the defensible half. Then correct Documentation/SwiftUI-compatibility.md §4a, which asserts "`nil` leaves the inherited weight alone, as in SwiftUI" without distinguishing the two spellings — true of Text's, false of View's.
 
 **65. `View.textCase(_ textCase: Text.Case?)`**
+
+- *Status:* **FIXED**: `nil` is the third state (`StyleAttributes(textCase: .some(nil))`).
 
 - *SwiftUI:* swiftui-docs/View.md:26053 — "Sets a transform for the case of the text contained in this view when displayed. The default value is `nil`, displaying the text without any case changes. - Parameter textCase: One of the ``Text/Case`` enumerations; the default is `nil`." The modifier writes the environment value, so passing `nil` is a statement that undoes an ancestor's `.textCase(.uppercase)` — the documented way to stop platform-uppercased section headers.
 - *TUIkit:* `public func textCase(_ textCase: TextCase?) -> some View { style(.text, StyleAttributes(textCase: textCase)) }` (StyleModifier.swift:99). `StyleAttributes.textCase` is a two-state `TextCase?` where nil means UNSET (StyleAttributes.swift:78, isEmpty at :101), and `StyleCascade.appending` discards an entry with no set fields outright: `guard !attributes.isEmpty else { return self }` (StyleCascade.swift:48). So `.textCase(nil)` is a complete no-op — the exact hole the tri-state `Bool?` closed for bold/italic/underline/strikethrough/dim, left open here because textCase was never given a third state. — `Sources/TUIkit/Modifiers/StyleModifier.swift:99`
@@ -676,6 +688,8 @@ verifier corrected the analyst, both are shown.
 ### Value controls
 
 **68. `Picker.init(_:selection:content:) with ForEach content`**
+
+- *Status:* **FIXED** (19129155): the synthesised-tag conformance the recommendation describes.
 
 - *SwiftUI:* swiftui-docs/Picker.md, "Iterating over a picker's options": "To provide selection values for the `Picker` without explicitly listing each option, you can create the picker with a ``ForEach``" … "``ForEach`` automatically assigns a tag to the selection views using each option's `id`. This is possible because `Flavor` conforms to the `Identifiable` protocol." This is Apple's own first worked example of iterating a picker.
 - *TUIkit:* Sources/TUIkit/Views/Picker.swift:63 `extension ForEach: PickerOptionProvider { func pickerOptions() -> [_RawPickerOption] { data.flatMap { element in if let provider = content(element) as? PickerOptionProvider { return provider.pickerOptions() }; return [] } } }`. The only view producing an option is `_TaggedView` (Picker.swift:32); `Text` has no PickerOptionProvider conformance (the complete list is _TaggedView, Divider, EmptyView, TupleView, ForEach, ConditionalView, Optional). ForEach stores `idKeyPath` (ForEach.swift:63) but pickerOptions() never consults it, so the id is never promoted to a tag. resolvedEntries() returns [], optionCount == 0, `let isOpen = handler.isOpen && optionCount > 0` (_PickerMenuCore.swift:109) can never be true, and collapsedLine draws "". — `Sources/TUIkit/Views/Picker.swift:63`
@@ -848,6 +862,8 @@ verifier corrected the analyst, both are shown.
 
 **89. `Text.Case / Text.TruncationMode`**
 
+- *Status:* **FIXED**: both typealiases are declared on `Text`.
+
 - *SwiftUI:* Both are nested types on Text — swiftui-docs/Text.md:273 declares `Text.Case` and :1821 declares `Text.TruncationMode` — and they are the declared parameter types of `View.textCase(_ textCase: Text.Case?)` (View.md:26053) and `View.truncationMode(_ mode: Text.TruncationMode)` (View.md:27699).
 - *TUIkit:* The types are top-level, not nested: `public enum TextCase` (Sources/TUIkit/Styling/StyleAttributes.swift:12) and `public enum TruncationMode` (Sources/TUIkit/Extensions/String+Truncation.swift:16). No nested aliases exist — `grep "typealias Case|typealias TruncationMode" Sources/` returns nothing. Contrast Font, which does carry the nested spellings: `public typealias Weight = FontWeight` (Sources/TUIkit/Styling/Font.swift:73) and `public enum TextStyle` (:56) both type-check. — `Sources/TUIkit/Styling/StyleAttributes.swift:12`
 - *Divergence:* Verified with swiftc -typecheck: `let _: Text.Case = .uppercase` fails with "'Case' is not a member type of struct 'TUIkit.Text'" and `let _: Text.TruncationMode = .tail` with the equivalent. Any ported source that names the type rather than relying on implicit member lookup breaks — e.g. `@State private var mode: Text.TruncationMode = .tail`, or a helper taking `Text.Case?`. Call sites written `.truncationMode(.head)` are unaffected.
@@ -1001,6 +1017,8 @@ verifier corrected the analyst, both are shown.
 
 **108. `Color (as View) / Color.clear`**
 
+- *Status:* **HALF FIXED**: `Color: View` shipped with the gradients work (`ColorAsView.swift`; the symbol-graph evidence below predates it). `Color.clear` is still absent.
+
 - *SwiftUI:* swiftui-docs/Color.md, `## Color`: "Because SwiftUI treats colors as ``View`` instances, you can also directly add them to a view hierarchy." and "A color used as a view expands to fill all the space it's given, as defined by the frame of the enclosing ``ZStack``". `## Color.clear`: `static let clear: Color` — "A clear color suitable for use in UI elements."
 - *TUIkit:* `Color` (Sources/TUIkitStyling/Color/Color.swift:25) is declared `public struct Color: Sendable, Hashable` — no View conformance. Confirmed against the symbol graph (tuikit/TUIkitStyling.symbols.json: conformsTo Sendable, SH, SendableMetatype, SQ only). There is no `clear` member anywhere in Sources/. — `Sources/TUIkitStyling/Color/Color.swift:25`
 - *Divergence:* Verified: `ZStack { Color.blue; Text("hi") }` gives `error: static method 'buildExpression' requires that 'Color' conform to 'View'`; `Text("x").background(.clear)` gives `error: type 'Color' has no member 'clear'`. Both are terminal-expressible — `.background(_ color: Color)` already fills a region with a colour (BackgroundModifier.swift), so Color-as-View is a flexible view that paints its background, and `.clear` is the colour that sets nothing, which `Color.default` (Color.swift:65, SGR 39/49) already models. Nothing sub-cell is involved.
@@ -1028,6 +1046,8 @@ verifier corrected the analyst, both are shown.
 - *Recommendation:* Fix: two lines beside `Color.primary`/`.secondary`, pointing at the existing `foregroundTertiary`/`foregroundQuaternary` roles. `.quinary` needs a fifth palette tier and can legitimately stay out — say so in §3, and correct §3's 'only thing lost' claim.
 
 **112. `View.background(alignment:content:)`**
+
+- *Status:* still open, but the supporting claim is stale: three `background` overloads exist now — `background<S: ShapeStyle>(_:)`, `background()` and `background(_ color:)` — and none takes a `ViewBuilder`.
 
 - *SwiftUI:* swiftui-docs/View.md, `## View.background(alignment:content:)`: "Layers the views that you specify behind this view." and "If you specify more than one view in the `content` closure, the modifier collects all of the views in the closure into an implicit ``ZStack``, taking them in order from back to front."
 - *TUIkit:* Only `background(_ color: Color)` exists (Sources/TUIkit/Extensions/View+Layout.swift:202). Its mirror image `overlay(alignment:content:)` — same alignment parameter, same @ViewBuilder, same `.center` default — DOES ship and matches SwiftUI's signature exactly (Sources/TUIkit/Modifiers/OverlayModifier). — `Sources/TUIkit/Extensions/View+Layout.swift:202`
