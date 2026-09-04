@@ -236,6 +236,30 @@ the emoji-class clusters below unless noted.
 
 ---
 
+### The framework's own chrome — advance measured 2026-09-04
+
+Until 2026-09-04 the width corpus had 116 rows for every class of cluster
+someone's *data* might contain and none for a glyph TUIkit itself draws. Every
+keyboard symbol the status bar emits (`⎋ ↵ ⏎ ⇥ ⇤ ⌫ ⌦ ␣ ↑ ↓ ← → ⇧ ⌃ ⌥ ⌘`) and
+every glyph its borders, scrollbars, tracks, radio buttons, steppers and
+disclosure triangles are made of (`◀ ▶ ▼ ▲ ● ◯ ◌ █ ▌ ▐ ▒ ─ │`) was claimed at
+one cell on trust. Fifteen of the twenty-nine are East Asian **Ambiguous**,
+whose width is a terminal SETTING rather than a property of the character, so
+the claim was not obviously safe — and a border glyph measured wrong moves
+every cell of every row inside it.
+
+**Measured on all four hosts: every one of the twenty-nine advances exactly one
+cell.** Ghostty 1.3.1, iTerm2 3.6.11, Apple Terminal 455.1 and Warp
+v0.2026.09.02 agree with each other and with the claim, with no Ambiguous-width
+divergence anywhere. Records:
+`Tools/TerminalProbes/data/{ghostty-1.3.1,iTerm2,Apple-Terminal,Warp}-advance.json`,
+asserted by `ChromeGlyphAdvanceTests`.
+
+What remains open for these rows is `landing`/`ink` — where the glyph is
+painted and how many cells it covers — which needs pixels rather than DSR, and
+is the half the `↵` report is about. They stay in
+`TerminalLedgerConformanceTests.awaitingLandingMeasurement` until then.
+
 ## Identifying the host terminal
 
 Every per-terminal model in this document is only as good as the answer to
@@ -994,25 +1018,15 @@ is deliberately NOT applied here — it would discard a correct rendering.
 - **Cell aspect ratio:** fills `ws_xpixel`/`ws_ypixel` AND answers CSI
   14t/18t, which agree within ~1.4% (ioctl **2.154**, CSI 2.125 — default
   font). Slightly taller than the 2.0 default; auto-detection handles it.
-- **`↵` (U+21B5) is reported to paint 2 cells — UNMEASURED, 2026-09-04.**
-  User-reported: the status bar's `Shortcut.enter` swallows the space before
-  the label beside it, so `↵ activate` reads as `↵activate`. That is an
-  observation of PAINT, and nothing here yet says whether the ADVANCE is 1 or
-  2 — the two have very different consequences (a 2-cell paint at a 1-cell
-  advance only eats the following blank; a 2-cell advance shifts the rest of
-  the row and is a `FrameDiffWriter` compensation case). U+21B5 is East Asian
-  Width **Neutral**, so every `wcwidth` in existence answers 1 and no Unicode
-  table predicts this; if it reproduces it is a host or font decision.
-
-  The wider finding is the gap it exposed: **none of the framework's own
-  chrome had ever been measured on any host.** Every keyboard symbol the
-  status bar draws and every glyph its borders, scrollbars, tracks, radio
-  buttons and steppers are made of was claimed at one cell on trust, and
-  fifteen of them are East Asian **Ambiguous** — a width that is a terminal
-  SETTING rather than a property of the character. All 29 are now corpus rows
-  (`chrome_key`, `chrome_glyph`) carried by `advance_probe.py` and
-  `landing_probe.py`, and listed in `awaitingLandingMeasurement`. Run
-  `advance_probe.py` inside each host to close it.
+- **`↵` (U+21B5) paints wider than it advances — advance measured 2026-09-04,
+  ink still unmeasured.** User-reported: the status bar's `Shortcut.enter`
+  swallows the space before the label beside it, so `↵ activate` reads as
+  `↵activate`. **The advance is 1**, here and on all three other hosts, so
+  nothing shifts and the framework's claim of one cell is right. Whatever
+  Ghostty is doing it is doing to the INK alone — the glyph overhangs its cell
+  and there is a blank in the next one for it to overhang into. U+21B5 is East
+  Asian Width *Neutral*, so no width table predicts this; it is a host or font
+  rendering decision, and it does not disturb the grid.
 
 ### Input behaviour
 

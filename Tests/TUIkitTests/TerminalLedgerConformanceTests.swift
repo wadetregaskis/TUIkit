@@ -188,10 +188,11 @@ struct TerminalLedgerConformanceTests {
         "hebrew_hiriq", "hebrew_dagesh_qamats",
         "hangul_jamo_lvt", "hangul_jamo_lv",
         "latin_zwj", "latin_zwnj", "bidi_lrm", "bidi_rlm",
-        // The framework's own chrome, added 2026-09-04. Never measured on any
-        // host — which matters more than the rows above it, because these are
-        // glyphs TUIkit itself draws in every status bar, border, scrollbar and
-        // control rather than characters someone's data might contain.
+        // The framework's own chrome, added 2026-09-04. Their ADVANCE is
+        // measured — one cell on all four hosts, asserted by
+        // `ChromeGlyphAdvanceTests` — but `landing`/`ink` need pixels, and that
+        // is the half the `↵` report is about: a glyph can overhang its cell
+        // without disturbing the grid.
         "key_escape", "key_return", "key_return_symbol", "key_tab", "key_backtab",
         "key_backspace", "key_delete", "key_space",
         "key_arrow_up", "key_arrow_down", "key_arrow_left", "key_arrow_right",

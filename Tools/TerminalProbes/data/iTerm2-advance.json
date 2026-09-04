@@ -1,0 +1,591 @@
+{
+ "advances": {
+  "alarm": {
+   "advance": 2,
+   "cluster": "U+23F0"
+  },
+  "arabic_harakat": {
+   "advance": 1,
+   "cluster": "U+0628 U+064E"
+  },
+  "arabic_lam_alef": {
+   "advance": 1,
+   "cluster": "U+FEFB"
+  },
+  "arabic_shadda_harakat": {
+   "advance": 1,
+   "cluster": "U+0628 U+0651 U+064E"
+  },
+  "ascii_a": {
+   "advance": 1,
+   "cluster": "U+0061"
+  },
+  "bare_gear": {
+   "advance": 1,
+   "cluster": "U+2699"
+  },
+  "bare_heart": {
+   "advance": 1,
+   "cluster": "U+2764"
+  },
+  "bare_pencil": {
+   "advance": 1,
+   "cluster": "U+270F"
+  },
+  "bare_point_up": {
+   "advance": 1,
+   "cluster": "U+261D"
+  },
+  "bare_screen": {
+   "advance": 1,
+   "cluster": "U+1F5A5"
+  },
+  "bare_smp_cityscape": {
+   "advance": 1,
+   "cluster": "U+1F3D9"
+  },
+  "bare_smp_film": {
+   "advance": 1,
+   "cluster": "U+1F39E"
+  },
+  "bare_smp_joystick": {
+   "advance": 1,
+   "cluster": "U+1F579"
+  },
+  "bare_smp_shield": {
+   "advance": 1,
+   "cluster": "U+1F6E1"
+  },
+  "bare_smp_spider": {
+   "advance": 1,
+   "cluster": "U+1F577"
+  },
+  "bidi_lrm": {
+   "advance": 0,
+   "cluster": "U+200E"
+  },
+  "bidi_rlm": {
+   "advance": 0,
+   "cluster": "U+200F"
+  },
+  "box_h": {
+   "advance": 1,
+   "cluster": "U+2500"
+  },
+  "braille": {
+   "advance": 1,
+   "cluster": "U+28FF"
+  },
+  "chillu_malayalam_atomic": {
+   "advance": 1,
+   "cluster": "U+0D7B"
+  },
+  "chillu_malayalam_zwj": {
+   "advance": 1,
+   "cluster": "U+0D28 U+0D4D U+200D"
+  },
+  "chrome_box_h": {
+   "advance": 1,
+   "cluster": "U+2500"
+  },
+  "chrome_box_v": {
+   "advance": 1,
+   "cluster": "U+2502"
+  },
+  "chrome_down_tri": {
+   "advance": 1,
+   "cluster": "U+25BC"
+  },
+  "chrome_full_block": {
+   "advance": 1,
+   "cluster": "U+2588"
+  },
+  "chrome_left_half": {
+   "advance": 1,
+   "cluster": "U+258C"
+  },
+  "chrome_left_tri": {
+   "advance": 1,
+   "cluster": "U+25C0"
+  },
+  "chrome_radio_dis": {
+   "advance": 1,
+   "cluster": "U+25CC"
+  },
+  "chrome_radio_off": {
+   "advance": 1,
+   "cluster": "U+25EF"
+  },
+  "chrome_radio_on": {
+   "advance": 1,
+   "cluster": "U+25CF"
+  },
+  "chrome_right_half": {
+   "advance": 1,
+   "cluster": "U+2590"
+  },
+  "chrome_right_tri": {
+   "advance": 1,
+   "cluster": "U+25B6"
+  },
+  "chrome_shade": {
+   "advance": 1,
+   "cluster": "U+2592"
+  },
+  "chrome_up_tri": {
+   "advance": 1,
+   "cluster": "U+25B2"
+  },
+  "cjk": {
+   "advance": 2,
+   "cluster": "U+4E2D"
+  },
+  "combining_stack": {
+   "advance": 1,
+   "cluster": "U+0065 U+0301 U+0308 U+0327"
+  },
+  "conjunct_bengali_ksha": {
+   "advance": 2,
+   "cluster": "U+0995 U+09CD U+09B7"
+  },
+  "conjunct_deva_ksha": {
+   "advance": 2,
+   "cluster": "U+0915 U+094D U+0937"
+  },
+  "conjunct_deva_shtra": {
+   "advance": 3,
+   "cluster": "U+0937 U+094D U+091F U+094D U+0930"
+  },
+  "conjunct_deva_stra": {
+   "advance": 3,
+   "cluster": "U+0938 U+094D U+0924 U+094D U+0930"
+  },
+  "conjunct_deva_stri": {
+   "advance": 4,
+   "cluster": "U+0938 U+094D U+0924 U+094D U+0930 U+0940"
+  },
+  "conjunct_telugu_ksha": {
+   "advance": 2,
+   "cluster": "U+0C15 U+0C4D U+0C37"
+  },
+  "domino": {
+   "advance": 1,
+   "cluster": "U+1F060"
+  },
+  "emoji_fist": {
+   "advance": 2,
+   "cluster": "U+270A"
+  },
+  "emoji_thumbs": {
+   "advance": 2,
+   "cluster": "U+1F44D"
+  },
+  "ffwd": {
+   "advance": 2,
+   "cluster": "U+23E9"
+  },
+  "flag_us": {
+   "advance": 2,
+   "cluster": "U+1F1FA U+1F1F8"
+  },
+  "fullblock2": {
+   "advance": 2,
+   "cluster": "U+2588 U+2588"
+  },
+  "fullwidth_latin_a": {
+   "advance": 2,
+   "cluster": "U+FF21"
+  },
+  "halfpair": {
+   "advance": 2,
+   "cluster": "U+2590 U+258C"
+  },
+  "hangul_jamo_lv": {
+   "advance": 3,
+   "cluster": "U+1112 U+1161"
+  },
+  "hangul_jamo_lvt": {
+   "advance": 4,
+   "cluster": "U+1112 U+1161 U+11AB"
+  },
+  "hebrew_dagesh_qamats": {
+   "advance": 1,
+   "cluster": "U+05D1 U+05BC U+05B8"
+  },
+  "hebrew_hiriq": {
+   "advance": 1,
+   "cluster": "U+05D1 U+05B4"
+  },
+  "hourglass": {
+   "advance": 2,
+   "cluster": "U+231B"
+  },
+  "key_arrow_down": {
+   "advance": 1,
+   "cluster": "U+2193"
+  },
+  "key_arrow_left": {
+   "advance": 1,
+   "cluster": "U+2190"
+  },
+  "key_arrow_right": {
+   "advance": 1,
+   "cluster": "U+2192"
+  },
+  "key_arrow_up": {
+   "advance": 1,
+   "cluster": "U+2191"
+  },
+  "key_backspace": {
+   "advance": 1,
+   "cluster": "U+232B"
+  },
+  "key_backtab": {
+   "advance": 1,
+   "cluster": "U+21E4"
+  },
+  "key_command": {
+   "advance": 1,
+   "cluster": "U+2318"
+  },
+  "key_control": {
+   "advance": 1,
+   "cluster": "U+2303"
+  },
+  "key_delete": {
+   "advance": 1,
+   "cluster": "U+2326"
+  },
+  "key_escape": {
+   "advance": 1,
+   "cluster": "U+238B"
+  },
+  "key_option": {
+   "advance": 1,
+   "cluster": "U+2325"
+  },
+  "key_return": {
+   "advance": 1,
+   "cluster": "U+21B5"
+  },
+  "key_return_symbol": {
+   "advance": 1,
+   "cluster": "U+23CE"
+  },
+  "key_shift": {
+   "advance": 1,
+   "cluster": "U+21E7"
+  },
+  "key_space": {
+   "advance": 1,
+   "cluster": "U+2423"
+  },
+  "key_tab": {
+   "advance": 1,
+   "cluster": "U+21E5"
+  },
+  "keycap_0": {
+   "advance": 1,
+   "cluster": "U+0030 U+FE0F U+20E3"
+  },
+  "keycap_1": {
+   "advance": 1,
+   "cluster": "U+0031 U+FE0F U+20E3"
+  },
+  "keycap_bare": {
+   "advance": 1,
+   "cluster": "U+0031 U+20E3"
+  },
+  "keycap_hash": {
+   "advance": 1,
+   "cluster": "U+0023 U+FE0F U+20E3"
+  },
+  "keycap_star": {
+   "advance": 1,
+   "cluster": "U+002A U+FE0F U+20E3"
+  },
+  "lao_vowel_tone": {
+   "advance": 1,
+   "cluster": "U+0E81 U+0EB5 U+0EC8"
+  },
+  "latin_zwj": {
+   "advance": 1,
+   "cluster": "U+0061 U+200D"
+  },
+  "latin_zwnj": {
+   "advance": 1,
+   "cluster": "U+0061 U+200C"
+  },
+  "lone_ri": {
+   "advance": 2,
+   "cluster": "U+1F1E6"
+  },
+  "matra_deva_au": {
+   "advance": 2,
+   "cluster": "U+0915 U+094C"
+  },
+  "matra_deva_i": {
+   "advance": 2,
+   "cluster": "U+0915 U+093F"
+  },
+  "matra_deva_i_anusvara": {
+   "advance": 2,
+   "cluster": "U+0915 U+093F U+0902"
+  },
+  "matra_deva_o": {
+   "advance": 2,
+   "cluster": "U+0915 U+094B"
+  },
+  "matra_khmer_aa": {
+   "advance": 2,
+   "cluster": "U+1780 U+17B6"
+  },
+  "matra_tamil_aa": {
+   "advance": 2,
+   "cluster": "U+0BB0 U+0BBE"
+  },
+  "nfd_e": {
+   "advance": 1,
+   "cluster": "U+0065 U+0301"
+  },
+  "nukta_deva_qa": {
+   "advance": 1,
+   "cluster": "U+0915 U+093C"
+  },
+  "nukta_deva_rra": {
+   "advance": 1,
+   "cluster": "U+0921 U+093C"
+  },
+  "playing_card": {
+   "advance": 1,
+   "cluster": "U+1F0A1"
+  },
+  "powerline": {
+   "advance": 1,
+   "cluster": "U+E0B0"
+  },
+  "pua16_second": {
+   "advance": 1,
+   "cluster": "U+102446"
+  },
+  "pua_lower": {
+   "advance": 1,
+   "cluster": "U+101867"
+  },
+  "sf_pua": {
+   "advance": 1,
+   "cluster": "U+100038"
+  },
+  "shade_med": {
+   "advance": 1,
+   "cluster": "U+2592"
+  },
+  "skin_fist": {
+   "advance": 4,
+   "cluster": "U+270A U+1F3FB"
+  },
+  "skin_lifter_bare": {
+   "advance": 2,
+   "cluster": "U+1F3CB U+1F3FD"
+  },
+  "skin_lifter_vs16": {
+   "advance": 4,
+   "cluster": "U+1F3CB U+FE0F U+1F3FD"
+  },
+  "skin_point_up": {
+   "advance": 3,
+   "cluster": "U+261D U+1F3FD"
+  },
+  "skin_point_vs16": {
+   "advance": 4,
+   "cluster": "U+261D U+FE0F U+1F3FD"
+  },
+  "skin_standalone": {
+   "advance": 2,
+   "cluster": "U+1F3FD"
+  },
+  "skin_thumbs": {
+   "advance": 2,
+   "cluster": "U+1F44D U+1F3FD"
+  },
+  "skin_victory_vs16": {
+   "advance": 4,
+   "cluster": "U+270C U+FE0F U+1F3FC"
+  },
+  "sq_filled": {
+   "advance": 1,
+   "cluster": "U+25A0"
+  },
+  "thai_sara_am": {
+   "advance": 2,
+   "cluster": "U+0E01 U+0E33"
+  },
+  "thai_tone": {
+   "advance": 1,
+   "cluster": "U+0E01 U+0E48"
+  },
+  "thai_vowel_tone": {
+   "advance": 1,
+   "cluster": "U+0E01 U+0E34 U+0E49"
+  },
+  "tibetan_subjoined": {
+   "advance": 1,
+   "cluster": "U+0F40 U+0F90"
+  },
+  "tibetan_subjoined_vowel": {
+   "advance": 1,
+   "cluster": "U+0F40 U+0F90 U+0F74"
+  },
+  "u15_flute": {
+   "advance": 2,
+   "cluster": "U+1FA88"
+  },
+  "u16_face_bags": {
+   "advance": 2,
+   "cluster": "U+1FAE9"
+  },
+  "u16_fingerprint": {
+   "advance": 2,
+   "cluster": "U+1FAC6"
+  },
+  "u16_harp": {
+   "advance": 2,
+   "cluster": "U+1FA89"
+  },
+  "u16_leafless_tree": {
+   "advance": 2,
+   "cluster": "U+1FABE"
+  },
+  "u16_root_vegetable": {
+   "advance": 2,
+   "cluster": "U+1FADC"
+  },
+  "u16_shovel": {
+   "advance": 2,
+   "cluster": "U+1FA8F"
+  },
+  "u16_splatter": {
+   "advance": 2,
+   "cluster": "U+1FADF"
+  },
+  "virama_kannada_ka": {
+   "advance": 1,
+   "cluster": "U+0C95 U+0CCD"
+  },
+  "virama_khmer_ka": {
+   "advance": 1,
+   "cluster": "U+1780 U+17D2"
+  },
+  "virama_tamil_sa": {
+   "advance": 1,
+   "cluster": "U+0BB8 U+0BCD"
+  },
+  "vs15_bigsquare": {
+   "advance": 2,
+   "cluster": "U+2B1B U+FE0E"
+  },
+  "vs15_whitesquare": {
+   "advance": 2,
+   "cluster": "U+2B1C U+FE0E"
+  },
+  "vs16_check": {
+   "advance": 2,
+   "cluster": "U+2714 U+FE0F"
+  },
+  "vs16_gear": {
+   "advance": 2,
+   "cluster": "U+2699 U+FE0F"
+  },
+  "vs16_hammer_pick": {
+   "advance": 2,
+   "cluster": "U+2692 U+FE0F"
+  },
+  "vs16_heart": {
+   "advance": 2,
+   "cluster": "U+2764 U+FE0F"
+  },
+  "vs16_part_alt": {
+   "advance": 2,
+   "cluster": "U+303D U+FE0F"
+  },
+  "vs16_pencil": {
+   "advance": 2,
+   "cluster": "U+270F U+FE0F"
+  },
+  "vs16_phone": {
+   "advance": 2,
+   "cluster": "U+260E U+FE0F"
+  },
+  "vs16_scissors": {
+   "advance": 2,
+   "cluster": "U+2702 U+FE0F"
+  },
+  "vs16_screen": {
+   "advance": 2,
+   "cluster": "U+1F5A5 U+FE0F"
+  },
+  "vs16_shield": {
+   "advance": 2,
+   "cluster": "U+1F6E1 U+FE0F"
+  },
+  "vs16_smp_joystick": {
+   "advance": 2,
+   "cluster": "U+1F579 U+FE0F"
+  },
+  "vs16_smp_shield": {
+   "advance": 2,
+   "cluster": "U+1F6E1 U+FE0F"
+  },
+  "vs16_umbrella": {
+   "advance": 2,
+   "cluster": "U+2602 U+FE0F"
+  },
+  "vs16_warning": {
+   "advance": 2,
+   "cluster": "U+26A0 U+FE0F"
+  },
+  "vs16_wavydash": {
+   "advance": 2,
+   "cluster": "U+3030 U+FE0F"
+  },
+  "watch": {
+   "advance": 2,
+   "cluster": "U+231A"
+  },
+  "zwj_astronaut": {
+   "advance": 2,
+   "cluster": "U+1F469 U+200D U+1F680"
+  },
+  "zwj_heart_fire": {
+   "advance": 2,
+   "cluster": "U+2764 U+FE0F U+200D U+1F525"
+  },
+  "zwj_skin": {
+   "advance": 2,
+   "cluster": "U+1F469 U+1F3FD U+200D U+1F680"
+  }
+ },
+ "stamp": {
+  "env": {
+   "COLORFGBG": "0;15",
+   "COLORTERM": "truecolor",
+   "ITERM_PROFILE": "Default",
+   "ITERM_SESSION_ID": "w0t0p0:A7FECEB6-EDBA-42C9-BE07-7F82CC8B37CA",
+   "LC_TERMINAL": "iTerm2",
+   "LC_TERMINAL_VERSION": "3.6.11",
+   "TERM": "xterm-256color",
+   "TERMINFO_DIRS": "/Applications/iTerm.app/Contents/Resources/terminfo:/usr/share/terminfo",
+   "TERM_PROGRAM": "iTerm.app",
+   "TERM_PROGRAM_VERSION": "3.6.11",
+   "TERM_SESSION_ID": "w0t0p0:A7FECEB6-EDBA-42C9-BE07-7F82CC8B37CA",
+   "__CFBundleIdentifier": "com.googlecode.iterm2"
+  },
+  "machine": "arm64",
+  "measured": "2026-09-04T13:03:43-07:00",
+  "method": "DSR cursor report \u2014 confirm any disagreement with visual_card.py",
+  "mode_2027_grapheme_clustering": "permanently reset",
+  "os": "macOS 15.7.9",
+  "probe": "advance_probe.py",
+  "screen": "primary"
+ }
+}
