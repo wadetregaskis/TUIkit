@@ -20,6 +20,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -77,6 +78,18 @@ struct FocusIndicatorAnimationTests {
         #expect(focusedRender(Button("Save") {}.disabled(true)).animatedCells.isEmpty)
         #expect(
             focusedRender(Button("Save") {}.buttonStyle(.plain).disabled(true)).animatedCells.isEmpty)
+    }
+
+    @Test("An unfocused or disabled link animates nothing")
+    func linkIsStill() {
+        // The sweep above is per control; Link was the one it did not cover,
+        // and its label is the breathing kind, so it is the one that could
+        // hand over a run while resting.
+        let link = Link("Docs", destination: URL(string: "https://example.com")!)
+        let context = makeRenderContext(width: 40, height: 8)
+        context.environment.focusManager!.register(FocusSentinel())
+        #expect(renderToBuffer(link, context: context).animatedCells.isEmpty, "unfocused")
+        #expect(focusedRender(link.disabled(true)).animatedCells.isEmpty, "disabled")
     }
 
     @Test("A button whose style does not animate hands over nothing")

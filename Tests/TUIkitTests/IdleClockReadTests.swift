@@ -69,6 +69,7 @@ struct IdleClockReadTests {
             ("TextField", AnyView(TextField("Name", text: .constant("Ada")))),
             ("SecureField", AnyView(SecureField("Password", text: .constant("x")))),
             ("Button", AnyView(Button("Save") {})),
+            ("Link", AnyView(Link("Docs", destination: URL(string: "https://example.com")!))),
             (
                 "DatePicker",
                 AnyView(DatePicker("When", selection: .constant(Date(timeIntervalSince1970: 0))))
@@ -122,6 +123,9 @@ struct IdleClockReadTests {
         // and a read gated on the wrong condition still fires.
         #expect(clockReads(of: Stepper("Count", value: .constant(3), in: 0...10).disabled(), focused: true) == 0)
         #expect(clockReads(of: Button("Save") {}.disabled(), focused: true) == 0)
+        #expect(
+            clockReads(of: Link("Docs", destination: URL(string: "https://example.com")!).disabled(), focused: true)
+                == 0)
     }
 
     @Test("A page of resting controls is completely quiet")
@@ -146,6 +150,7 @@ struct IdleClockReadTests {
         for (name, view) in [
             ("Stepper", AnyView(Stepper("Count", value: .constant(3), in: 0...10))),
             ("Button", AnyView(Button("Save") {})),
+            ("Link", AnyView(Link("Docs", destination: URL(string: "https://example.com")!))),
             ("TextField", AnyView(TextField("Name", text: .constant("Ada")))),
         ] {
             let tracker = VolatileReadTracker()
