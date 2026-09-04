@@ -101,6 +101,19 @@ struct TextMonospacedTests {
     /// Identity, and that is why adding them alongside the `View` spellings is
     /// safe: which overload a call binds to cannot change what it does. The
     /// style toggles are NOT like this — see Parity-decisions-pending.md §9.
+    /// The `View` overloads are a different symbol from `Text`'s, and a `Text`
+    /// receiver always binds `Text`'s — so these are called on a stack, which is
+    /// the only way the `View` copies are reached at all. The guarantee is that
+    /// they change nothing.
+    @Test("the View overloads are the same no-op on a non-Text view")
+    func viewOverloadsAreNoOps() {
+        let context = makeRenderContext(width: 20, height: 3)
+        let bare = renderToBuffer(HStack { Text("Save 1234") }, context: context).lines
+        #expect(renderToBuffer(HStack { Text("Save 1234") }.monospaced(), context: context).lines == bare)
+        #expect(renderToBuffer(HStack { Text("Save 1234") }.monospacedDigit(), context: context).lines == bare)
+        #expect(renderToBuffer(HStack { Text("Save 1234") }.autocorrectionDisabled(), context: context).lines == bare)
+    }
+
     @Test("both return the text unchanged")
     func monospacedIsIdentity() {
         let plain = rendered(Text(verbatim: "10%"))

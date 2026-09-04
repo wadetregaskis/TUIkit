@@ -19,7 +19,10 @@
 //  overwhelmingly common spelling are the satisfiable ones; deleting it to
 //  reject `false` would reject the honoured case too.
 //
-//  Each is covered by a test that asserts the GUARANTEE — equal cell widths
+//  The `View` overloads below are a different symbol from `Text`'s own
+//  `monospaced`/`monospacedDigit`, and a `Text` receiver always binds `Text`'s —
+//  so a test that wants THESE has to call them on some other view, which
+//  `MediumGuaranteedModifierTests` does. Each is covered by a test that asserts the GUARANTEE — equal cell widths
 //  for equal character counts, a misspelling arriving intact — rather than
 //  asserting the no-op, which would prove nothing and would keep passing if
 //  the medium ever stopped holding up its end.
