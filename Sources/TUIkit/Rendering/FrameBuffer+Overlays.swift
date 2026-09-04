@@ -8,7 +8,7 @@ import TUIkitCore
 
 extension FrameBuffer {
     /// Composites every accumulated ``overlays`` layer onto this buffer in
-    /// z-order — ascending ``OverlayLevel`` (popover < alert < modal <
+    /// z-order — ascending ``OverlayLevel`` (popover < modal < alert <
     /// notification), then ``OverlayLayer/zIndex`` — resolving each layer's
     /// placement against a `maxWidth` × `maxHeight` area.
     ///
