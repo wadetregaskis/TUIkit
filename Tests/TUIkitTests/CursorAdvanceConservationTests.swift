@@ -185,7 +185,15 @@ struct CursorAdvanceConservationTests {
     @Test(
         "A replayed run lands the row exactly where the render did",
         arguments: TerminalClient.Program.allCases,
-        ["\u{2B1C}\u{FE0E}", "\u{2699}\u{FE0F}", "x", "\u{1F600}"])
+        [
+            "\u{2B1C}\u{FE0E}", "\u{2699}\u{FE0F}", "x", "\u{1F600}",
+            // The Terminal.app shapes the un-compensator did not know: a
+            // flag pair and an FE0F keycap take the store surgery
+            // (`CUB DCH CUF`), a tag flag the pull-back (`CUB n`). Each
+            // trails its glyph, at the span's trailing edge.
+            "\u{1F1FA}\u{1F1F8}", "1\u{FE0F}\u{20E3}",
+            "\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}",
+        ])
     func replayPatchConservesTheAdvance(program: TerminalClient.Program, glyph: String) {
         TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: program)) {
             let writer = FrameDiffWriter(

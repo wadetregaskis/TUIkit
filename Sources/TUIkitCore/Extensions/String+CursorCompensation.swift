@@ -730,6 +730,7 @@ extension String {
                 while scan < buffer.count, base[scan] >= 0x30, base[scan] <= 0x39 { scan += 1 }
                 if scan < buffer.count,
                     base[scan] == UInt8(ascii: "X") || base[scan] == UInt8(ascii: "C")
+                        || base[scan] == UInt8(ascii: "D") || base[scan] == UInt8(ascii: "P")
                 {
                     return true
                 }
@@ -784,10 +785,18 @@ extension String {
             index = escapeSequenceEnd(from: index)
             let sequence = self[start..<index]
             let final = sequence.last
+            // Every shape the compensation walks emit, not only the ECH+CUF
+            // pair: Terminal.app's store surgery (`glyph CUB(1) DCH(1) CUF(1)`,
+            // for a flag pair or an FE0F keycap) and its pull-back (`glyph
+            // CUB(n)`, for a tag flag or a bare keycap) both trail the glyph,
+            // and a walk that recognised only `X` and `C` left the `D` and the
+            // `P` behind at the span's trailing edge — where the replay then
+            // re-emitted them AFTER the frame's own fresh trio, pulling the
+            // cursor back and deleting a stored column on every tick.
             let drop =
                 switch final {
                 case "X": columns.contains(column)
-                case "C": column > columns.lowerBound && column <= columns.upperBound
+                case "C", "D", "P": column > columns.lowerBound && column <= columns.upperBound
                 default: false
                 }
             if !drop { result += sequence }
