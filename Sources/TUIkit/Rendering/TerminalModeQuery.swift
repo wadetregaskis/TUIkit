@@ -134,8 +134,12 @@ extension Terminal {
     /// say — which a terminal that does not implement DECRQM will not.
     ///
     /// Same shape as ``queryIdentity(timeout:)``: one write, then read until
-    /// the DSR fence comes back or the deadline passes, then hand any
-    /// keystrokes that arrived during the round trip to the input parser.
+    /// the DSR fence comes back or the deadline passes. Unlike it, a keystroke
+    /// that arrives during the round trip is DISCARDED with the reply: handing
+    /// it back needs the input buffer, which is private to the file that owns
+    /// it. Only the identity exchange preserves them, and it is the one that
+    /// runs before a host is known at all; this one runs on Ghostty alone, a
+    /// sub-millisecond window at startup.
     func queryMode(_ mode: Int, timeout: Double = 0.5) -> TerminalModeQuery.State? {
         guard isatty(STDIN_FILENO) == 1, isRawMode else { return nil }
 
