@@ -142,6 +142,28 @@ public struct PlatformImageLoader: ImageLoader {
     }
 }
 
+// MARK: - stb_image Length Limit
+
+extension PlatformImageLoader {
+    /// `byteCount` as the C `int` length `stbi_load_from_memory` takes,
+    /// rejecting anything that does not fit.
+    ///
+    /// Deliberately NOT inside the `#if !canImport(AppKit)` arm below, even
+    /// though only that arm calls it: the ceiling comes from stb_image's own
+    /// signature, not from the host, and a helper compiled only on non-Apple
+    /// platforms could only be tested there. The conversion used to be
+    /// `Int32(data.count)` — the trapping initialiser — so a payload over
+    /// 2 GiB aborted the process, wrecking a terminal left in raw mode, where
+    /// the `NSImage` arm returns nil and throws for the same input.
+    static func stbLength(forByteCount byteCount: Int) throws -> Int32 {
+        guard let length = Int32(exactly: byteCount) else {
+            throw ImageLoadError.decodingFailed(
+                "stb_image: \(byteCount) bytes exceeds the \(Int32.max) byte maximum")
+        }
+        return length
+    }
+}
+
 // MARK: - stb_image Backend (non-Apple platforms)
 
 #if !canImport(AppKit)
@@ -173,11 +195,15 @@ public struct PlatformImageLoader: ImageLoader {
             var height: Int32 = 0
             var channels: Int32 = 0
 
+            // Before the buffer is touched, because the conversion can fail and
+            // the closure below cannot throw. See ``stbLength(forByteCount:)``.
+            let length = try Self.stbLength(forByteCount: data.count)
+
             let rawPixels: UnsafeMutablePointer<UInt8>? = data.withUnsafeBytes { buffer in
                 guard let baseAddress = buffer.baseAddress else { return nil }
                 return stbi_load_from_memory(
                     baseAddress.assumingMemoryBound(to: UInt8.self),
-                    Int32(data.count),
+                    length,
                     &width,
                     &height,
                     &channels,
