@@ -648,7 +648,6 @@ extension _ImageCore {
     ) -> FrameBuffer? {
         guard KittyGraphics.isSupported,
             context.environment.terminalGraphics,
-            !context.isMeasuring,
             let store = context.environment.terminalImageStore,
             rawImage.width > 0, rawImage.height > 0
         else { return nil }
@@ -663,6 +662,18 @@ extension _ImageCore {
             overrideAspectRatio: context.environment.imageAspectRatio,
             cellAspect: context.environment.imageCellAspect)
         guard target.width > 0, target.height > 0 else { return nil }
+
+        // A measure pass reads a BOX, not a picture. Falling through to the
+        // glyph renderer here — which is what bailing on `isMeasuring` did —
+        // paid a full glyph conversion for every new size a measure-by-render
+        // parent (a Button's label, a Section, a stack holding a Spacer)
+        // probed, and threw the ink away: the render pass then transmitted
+        // pixels and never looked at it. The box is the contract; blank
+        // cells are the cheapest thing that has it.
+        if context.isMeasuring {
+            return FrameBuffer(
+                lines: Array(repeating: String(repeating: " ", count: target.width), count: target.height))
+        }
 
         // Never transmit more pixels than the picture HAS. The terminal fits
         // the image to the placement rectangle, so upscaling before

@@ -70,6 +70,22 @@ struct ImageTerminalGraphicsTests {
         }
     }
 
+    /// A measure pass reads a box, not a picture. On a terminal that draws
+    /// real pixels the glyph conversion behind that box is never looked at,
+    /// so it must not be run.
+    @Test("A measure pass on a graphics terminal does not convert to glyphs")
+    func measurePassSkipsGlyphConversion() throws {
+        let (image, path) = try load(width: 40, height: 20)
+        let glyphs = rendered(image, path: path, width: 20, height: 20).buffer
+        let measured = KittyGraphics.withSupport(true) {
+            rendered(image, path: path, width: 20, height: 20, measuring: true).buffer
+        }
+        #expect(measured.width == glyphs.width)
+        #expect(measured.height == glyphs.height)
+        #expect(measured.lines != glyphs.lines, "it converted the whole image to measure it")
+        #expect(measured.lines.allSatisfy { $0.stripped.allSatisfy { $0 == " " } }, "a measure pass draws nothing")
+    }
+
     /// The picture is drawn as text, and it is exactly the text the layout was
     /// promised: `width` cells across, on every row.
     @Test("A supported terminal gets placeholder cells, and they measure right")
