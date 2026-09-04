@@ -21,6 +21,31 @@ private func testContext(width: Int = 40, height: Int = 24) -> RenderContext {
 @Suite("FrameModifier Tests")
 struct FrameModifierTests {
 
+    @Test("A negative fixed frame offers its content no space, not negative space")
+    func negativeFixedFrameOffersZero() {
+        // `.frame(width: -1)` reaches `contentTargetWidth` as `.fixed(-1)`,
+        // whose `min(value, availableWidth)` had no floor — and the result is
+        // assigned straight to the content's `availableWidth`, where a leaf
+        // that sizes a run from it (Divider) trapped. Measure and render share
+        // this function, so clamping here keeps the two passes agreeing.
+        let frame = FlexibleFrameView(
+            content: Text("Hi"),
+            minWidth: -1,
+            idealWidth: -1,
+            maxWidth: .fixed(-1),
+            minHeight: -2,
+            idealHeight: -2,
+            maxHeight: .fixed(-2),
+            alignment: .topLeading
+        )
+        #expect(frame.contentTargetWidth(availableWidth: 40) == 0)
+        #expect(frame.contentTargetHeight(availableHeight: 24) == 0)
+        // Positive constraints are untouched.
+        #expect(frame.contentTargetWidth(availableWidth: 40) != 40)
+        let buffer = renderToBuffer(frame, context: testContext())
+        #expect(buffer.width >= 0 && buffer.height >= 0)
+    }
+
     @Test("FlexibleFrameView with maxWidth infinity fills available width")
     func frameMaxWidthInfinity() {
         let frame = FlexibleFrameView(

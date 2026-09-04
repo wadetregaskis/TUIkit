@@ -175,7 +175,11 @@ extension Divider: Renderable, Layoutable {
             let cell = ANSIRenderer.colorize(String(glyph), foreground: color)
             return FrameBuffer(lines: Array(repeating: cell, count: max(1, context.availableHeight)))
         }
-        let line = String(repeating: glyph, count: context.availableWidth)
+        // Clamped like the vertical branch above: `String(repeating:count:)`
+        // requires a non-negative count, and the offered width can be negative
+        // — a caller's `.frame(width: available - labelWidth)` on a terminal
+        // too narrow for the label. A rule with no cells to draw draws none.
+        let line = String(repeating: glyph, count: max(0, context.availableWidth))
         return FrameBuffer(text: ANSIRenderer.colorize(line, foreground: color))
     }
 }

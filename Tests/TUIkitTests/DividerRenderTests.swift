@@ -79,6 +79,30 @@ struct DividerRenderTests {
         #expect(line.allSatisfy { $0 == "─" }, "No gaps across the wide rule")
     }
 
+    @Test("A negative offered width draws nothing rather than trapping")
+    func negativeAvailableWidth() {
+        // `String(repeating:count:)` has `precondition(count >= 0)`, and the
+        // horizontal branch passed `context.availableWidth` to it raw while the
+        // vertical branch clamped its count. The universal safety net in
+        // `renderResolved` clamps the buffer a Renderable RETURNS, so it comes
+        // too late to help here.
+        let buffer = renderToBuffer(Divider(), context: context(width: -5))
+        #expect(buffer.width == 0, "no cells to draw, got \(buffer.width)")
+        #expect(buffer.lines.count <= 1)
+    }
+
+    @Test("A negative .frame(width:) is a width of none, not a crash")
+    func negativeFrameWidth() {
+        // Where the negative actually comes from: every chrome subtraction in
+        // the framework clamps, but `.frame(width:)` passes the caller's Int
+        // through — the shape an app writes as `.frame(width: available -
+        // labelWidth)` on a terminal too narrow for the label.
+        let buffer = renderToBuffer(Divider().frame(width: -1), context: context(width: 20))
+        #expect(buffer.width == 0, "got \(buffer.width)")
+        // And the ordinary neighbour still draws, so the clamp did not eat it.
+        #expect(renderToBuffer(Divider().frame(width: 4), context: context(width: 20)).width == 4)
+    }
+
     // MARK: - In a stack
 
     @Test("Divider between two texts is exactly one full-width row")

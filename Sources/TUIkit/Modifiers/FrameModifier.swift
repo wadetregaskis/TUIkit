@@ -76,18 +76,27 @@ extension FlexibleFrameView {
     /// so the measure and render passes can never disagree about how the
     /// frame constrains its content.
     func contentTargetWidth(availableWidth: Int) -> Int {
+        let target: Int
         if let maximumWidth = maxWidth {
             switch maximumWidth {
             case .infinity:
-                return availableWidth
+                target = availableWidth
             case .fixed(let value):
-                return min(value, availableWidth)
+                target = min(value, availableWidth)
             }
         } else if let ideal = idealWidth {
-            return min(ideal, availableWidth)
+            target = min(ideal, availableWidth)
+        } else {
+            // No max constraint - offer the available width, then size to content.
+            target = availableWidth
         }
-        // No max constraint - offer the available width, then size to content.
-        return availableWidth
+        // Floored, because this number is written straight onto the content's
+        // `availableWidth` and a leaf that builds a run from it (Divider) has
+        // no defence: `String(repeating:count:)` requires a non-negative count.
+        // Every chrome subtraction in the framework already clamps; the frame
+        // is where an app's own arithmetic — `.frame(width: available -
+        // labelWidth)` — arrives unexamined.
+        return max(0, target)
     }
 
     /// The height the content is offered for a given available height, or
@@ -105,17 +114,22 @@ extension FlexibleFrameView {
     ///   budget as its natural height invents thousands of lines of scrollable
     ///   emptiness under a one-line label.
     func contentTargetHeight(availableHeight: Int, fills: Bool = true) -> Int? {
+        let target: Int?
         if let maximumHeight = maxHeight {
             switch maximumHeight {
             case .infinity:
-                return fills ? availableHeight : nil
+                target = fills ? availableHeight : nil
             case .fixed(let value):
-                return min(value, availableHeight)
+                target = min(value, availableHeight)
             }
         } else if let ideal = idealHeight {
-            return min(ideal, availableHeight)
+            target = min(ideal, availableHeight)
+        } else {
+            target = nil  // Use intrinsic height
         }
-        return nil  // Use intrinsic height
+        // Floored for the reason given on `contentTargetWidth(availableWidth:)`
+        // — nil still means "use the content's own height", not zero.
+        return target.map { max(0, $0) }
     }
 }
 
