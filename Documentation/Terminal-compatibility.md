@@ -1833,10 +1833,13 @@ Three things follow, and the first is the one that was wrong before.
 
 - **In iTerm2 the gesture chooses the opener, and the outcome does not reveal
   which.** ⌘-click is taken by the terminal; any other click is reported to
-  the application, which opens the same URL through ``OpenURLAction``. The
-  browser that appears is identical either way, which is why this entry first
-  read "the terminal opens it, on every modifier" — that observation was of
-  the OUTCOME, and the outcome cannot tell them apart. Distinguishing them
+  the application — which, since 3a96d8fc, does NOT open it by default: it
+  raises the destination popover, and opens through ``OpenURLAction`` only
+  when the app or the user has said this session is local (the ssh paragraph
+  below is why). When the application does open it, the browser that appears
+  is identical either way, which is why this entry first read "the terminal
+  opens it, on every modifier" — that observation was of the OUTCOME, and the
+  outcome cannot tell them apart. Distinguishing them
   needs the application to say when it acted: `Example`'s Buttons & Links
   page now prints a line every time TUIkit does the opening, and that readout
   is the instrument this row should be re-measured with.
