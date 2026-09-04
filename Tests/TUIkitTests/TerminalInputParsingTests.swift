@@ -511,6 +511,44 @@ struct TerminalReplySwallowingTests {
         #expect(seen.allSatisfy { $0 == nil })
     }
 
+    /// The CSI-family twin of ``realKeyAfterAReplyStillArrives``. A device reply
+    /// is a CSI too — DA, DA2, DSR, DECRPM — and `KeyEvent.parseCSISequence`
+    /// models none of their final bytes, so `finalize` dropped them and
+    /// returned nil. That nil is indistinguishable from "buffer empty" to
+    /// `App`'s `while let input = terminal.readEvent()` drain, which therefore
+    /// ended the frame with the user's keystrokes still buffered behind the
+    /// dropped reply — released one per 25 ms poll after that.
+    ///
+    /// Deliberately asserted on the FIRST call, not by pumping until nil: a
+    /// quiet-limited drain tolerates exactly this, which is why `focus-in`
+    /// already sat in the split-invariance corpus without failing.
+    @Test("A real keypress behind a CSI device reply still arrives")
+    func keyAfterCSIReplyArrives() {
+        for reply in [
+            "\u{1B}[?62;22c",  // a DA1 answer
+            "\u{1B}[>1;4000;0c",  // a DA2 answer
+            "\u{1B}[24;80R",  // a late DSR cursor-position answer
+            "\u{1B}[?2026;2$y",  // a DECRPM answer to the synchronised-update query
+            "\u{1B}[I",  // focus-in
+        ] {
+            let (terminal, stage) = makeTerminal()
+            stage(Array(reply.utf8) + Array("q".utf8))
+            #expect(
+                terminal.readEvent() == .key(KeyEvent(character: "q")),
+                "the drain ended on \(reply.debugDescription)")
+        }
+    }
+
+    /// The same shape for the other sequence `finalize` drops on purpose: a
+    /// legacy mouse report that is recognisably one and malformed.
+    @Test("A real keypress behind a malformed legacy mouse report still arrives")
+    func keyAfterMalformedLegacyMouseArrives() {
+        let (terminal, stage) = makeTerminal()
+        // ESC [ M with coordinate bytes below the +32 bias `parseLegacy` needs.
+        stage([0x1B, 0x5B, 0x4D, 0x00, 0x00, 0x00] + Array("q".utf8))
+        #expect(terminal.readEvent() == .key(KeyEvent(character: "q")))
+    }
+
     /// A reply's `ESC` and its tail can land in different `read()`s — a laggy
     /// ssh hop needs only the two 25 ms polls that arm the deferred bare ESC.
     /// The re-attach then has to recognise the same introducers the rest of

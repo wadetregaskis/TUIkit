@@ -389,6 +389,74 @@ extension Terminal {
         !input.isEmpty || pendingBareEsc || pendingAltEsc || inPasteMode
     }
 
+    /// Peels sequences off the front of the buffer until one of them is
+    /// something the app can be told about, and returns it — `nil` once the
+    /// buffer runs out of complete sequences, or once paste mode opens.
+    ///
+    /// The LOOP is the point. ``finalize(bytes:)`` returns nil for sequences it
+    /// recognises and deliberately drops: a CSI whose final byte
+    /// `KeyEvent.parseCSISequence` does not model (a `ESC[?62;22c` device
+    /// answer, a late `ESC[24;80R`, xterm's `ESC[1;5P`), and a legacy mouse
+    /// report that is malformed. Returning that nil straight to the caller made
+    /// it indistinguishable from "the buffer is empty", so `App`'s
+    /// `while let input = terminal.readEvent()` ended the frame's drain with
+    /// the user's real keystrokes still buffered behind the dropped sequence —
+    /// and `appendDrain` had already emptied the kernel buffer, so no stdin
+    /// wake could arrive and they came out one per 25 ms poll.
+    ///
+    /// The string-terminated families already avoid this by recursing inside
+    /// ``tryExtractRegularEvent()``; the CSI drop happens inside `finalize`,
+    /// where it cannot, so the recovery belongs here.
+    private func extractDeliverableEvent() -> TerminalInput? {
+        while let bytes = tryExtractRegularEvent() {
+            staleFrames = 0
+            if let event = finalize(bytes: bytes) { return event }
+            // STOP, rather than go round again, when that was the paste-start
+            // marker and its content has not all arrived: the bytes behind it
+            // are the paste, not keystrokes.
+            if inPasteMode { return nil }
+        }
+        return nil
+    }
+
+    /// One `readEvent()` round while a bracketed paste is open: everything in
+    /// the buffer is paste content, so no key parsing happens here at all.
+    ///
+    /// Lifted out of ``readEvent()`` rather than left inline because it always
+    /// returns, so it is a whole branch rather than a step, and because
+    /// ``readEvent()`` was at its cyclomatic limit.
+    private func pumpPasteMode() -> TerminalInput? {
+        if let event = tryExtractPaste() {
+            staleFrames = 0
+            return event
+        }
+        // Paste content is still in flight. Give the kernel one
+        // chance to deliver more right now, but don't sleep —
+        // the main loop will spin again in ~24ms.
+        let added = appendDrain()
+        if added > 0, let event = tryExtractPaste() {
+            staleFrames = 0
+            return event
+        }
+        // A real paste arrives as a continuous stream, so a frame that
+        // brought NO bytes at all is the only thing that counts against
+        // it; a slow one simply keeps resetting the count. Total silence
+        // for a second means the end marker is not coming — a dropped
+        // `ESC[201~`, or a terminal that abandoned the paste — and paste
+        // mode must end, or every keystroke from here on is swallowed into
+        // the buffer and the app stops answering the keyboard entirely.
+        if added > 0 {
+            staleFrames = 0
+        } else {
+            staleFrames += 1
+            if staleFrames >= Self.stalledPasteStaleFrames {
+                staleFrames = 0
+                return abandonStalledPaste()
+            }
+        }
+        return nil
+    }
+
     /// Reads up to one complete event from the input stream.
     /// Returns `nil` when nothing is ready right now.
     ///
@@ -432,49 +500,20 @@ extension Terminal {
             }
         }
 
-        if inPasteMode {
-            if let event = tryExtractPaste() {
-                staleFrames = 0
-                return event
-            }
-            // Paste content is still in flight. Give the kernel one
-            // chance to deliver more right now, but don't sleep —
-            // the main loop will spin again in ~24ms.
-            let added = appendDrain()
-            if added > 0, let event = tryExtractPaste() {
-                staleFrames = 0
-                return event
-            }
-            // A real paste arrives as a continuous stream, so a frame that
-            // brought NO bytes at all is the only thing that counts against
-            // it; a slow one simply keeps resetting the count. Total silence
-            // for a second means the end marker is not coming — a dropped
-            // `ESC[201~`, or a terminal that abandoned the paste — and paste
-            // mode must end, or every keystroke from here on is swallowed into
-            // the buffer and the app stops answering the keyboard entirely.
-            if added > 0 {
-                staleFrames = 0
-            } else {
-                staleFrames += 1
-                if staleFrames >= Self.stalledPasteStaleFrames {
-                    staleFrames = 0
-                    return abandonStalledPaste()
-                }
-            }
-            return nil
-        }
+        if inPasteMode { return pumpPasteMode() }
 
-        if let bytes = tryExtractRegularEvent() {
-            staleFrames = 0
-            return finalize(bytes: bytes)
-        }
+        if let event = extractDeliverableEvent() { return event }
+        // `finalize` may have just opened paste mode with the content still in
+        // flight. Everything left in the buffer is that content, so leave it to
+        // the paste branch above on the next pump rather than parsing it here.
+        if inPasteMode { return nil }
 
         // No complete event yet. Try one more drain in case the
         // kernel has the missing bytes ready right now.
         let added = appendDrain()
-        if added > 0, let bytes = tryExtractRegularEvent() {
-            staleFrames = 0
-            return finalize(bytes: bytes)
+        if added > 0 {
+            if let event = extractDeliverableEvent() { return event }
+            if inPasteMode { return nil }
         }
 
         // Still nothing. If the buffer's empty there's no partial to
