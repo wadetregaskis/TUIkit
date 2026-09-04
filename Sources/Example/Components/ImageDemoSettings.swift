@@ -105,7 +105,19 @@ struct ImageDemoSettings: Equatable {
     var duotoneHighlight: Color = .rgb(255, 215, 130)
 
     /// ``Tone/channels``' three per-channel transfer functions.
-    var channelCurves: ASCIIToneCurve.Channels = .identity
+    ///
+    /// A gentle warm grade rather than the identity, for the same reason
+    /// ``lutStops`` is four colours and not two greys: the identity is what the
+    /// picture already looks like, so a demo that opens on it shows a control
+    /// that appears to do nothing until you find a point to drag. This lifts
+    /// the midtones on red, holds green, and lifts the shadows while pulling
+    /// the highlights on blue — which is visible, reversible from the editor's
+    /// own reset, and demonstrates the one thing a single tone curve cannot:
+    /// that the three channels are independent.
+    var channelCurves: ASCIIToneCurve.Channels = .init(
+        red: [(0, 0), (0.5, 0.58), (1, 1)],
+        green: [(0, 0), (0.5, 0.5), (1, 1)],
+        blue: [(0, 0.08), (0.5, 0.42), (1, 0.94)])
 
     /// ``Tone/lut``'s stops: each one a tone (`0` black … `1` white) and the
     /// colour it becomes, with everything between two of them interpolated.
