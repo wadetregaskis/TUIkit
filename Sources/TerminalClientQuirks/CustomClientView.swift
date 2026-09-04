@@ -254,27 +254,8 @@ struct CustomClientView: View {
             "",
             "# Workarounds found to be needed, by experiment:",
         ]
-        lines.append(swiftLiteral)
+        lines.append(quirks.swiftLiteral)
         return lines
-    }
-
-    /// The quirks as the Swift value that produced them.
-    private var swiftLiteral: String {
-        var parts: [String] = []
-        if quirks.vs16Pictographs { parts.append("vs16Pictographs: true") }
-        if quirks.barePictographs { parts.append("barePictographs: true") }
-        if quirks.vs15ChromeGlyphs { parts.append("vs15ChromeGlyphs: true") }
-        if quirks.loneRegionalIndicators { parts.append("loneRegionalIndicators: true") }
-        if quirks.flagPairs { parts.append("flagPairs: true") }
-        if quirks.keycaps != .correct { parts.append("keycaps: .\(quirks.keycaps.rawValue)") }
-        if quirks.planeSixteenPUA { parts.append("planeSixteenPUA: true") }
-        if quirks.preUnicode16WidthTable { parts.append("preUnicode16WidthTable: true") }
-        if quirks.skinTones != .keep { parts.append("skinTones: .\(quirks.skinTones.rawValue)") }
-        if quirks.mergesTonesOnTextBases { parts.append("mergesTonesOnTextBases: true") }
-        if quirks.erasesUnderGlyphs { parts.append("erasesUnderGlyphs: true") }
-        return parts.isEmpty
-            ? "TerminalQuirks()  # nothing needed — this terminal renders correctly"
-            : "TerminalQuirks(\(parts.joined(separator: ", ")))"
     }
 
     /// An escape sequence with ESC spelled out, so the report is readable and

@@ -256,6 +256,35 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
     /// Whether any workaround at all is selected.
     public var isEmpty: Bool { self == Self() }
 
+    /// The value as the Swift expression that produces it — every property
+    /// that differs from the default, by name.
+    ///
+    /// Derived HERE, beside the properties, and not spelled out by hand in the
+    /// explorer that writes reports: a hand-written list covered eleven of the
+    /// fourteen and dropped `zwjSequences`, `tagFlags` and
+    /// `storesWideComposites` from the report, so a session that needed only
+    /// one of those was written up as "nothing needed".
+    public var swiftLiteral: String {
+        var parts: [String] = []
+        if vs16Pictographs { parts.append("vs16Pictographs: true") }
+        if barePictographs { parts.append("barePictographs: true") }
+        if vs15ChromeGlyphs { parts.append("vs15ChromeGlyphs: true") }
+        if loneRegionalIndicators { parts.append("loneRegionalIndicators: true") }
+        if flagPairs { parts.append("flagPairs: true") }
+        if keycaps != .correct { parts.append("keycaps: .\(keycaps.rawValue)") }
+        if planeSixteenPUA { parts.append("planeSixteenPUA: true") }
+        if preUnicode16WidthTable { parts.append("preUnicode16WidthTable: true") }
+        if zwjSequences { parts.append("zwjSequences: true") }
+        if tagFlags { parts.append("tagFlags: true") }
+        if storesWideComposites { parts.append("storesWideComposites: true") }
+        if skinTones != .keep { parts.append("skinTones: .\(skinTones.rawValue)") }
+        if mergesTonesOnTextBases { parts.append("mergesTonesOnTextBases: true") }
+        if erasesUnderGlyphs { parts.append("erasesUnderGlyphs: true") }
+        return parts.isEmpty
+            ? "TerminalQuirks()  # nothing needed — this terminal renders correctly"
+            : "TerminalQuirks(\(parts.joined(separator: ", ")))"
+    }
+
     /// How far a terminal with these quirks moves the cursor over `cluster`.
     ///
     /// The same question ``Swift/Character/terminalAppCursorAdvance`` and its
