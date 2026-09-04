@@ -54,6 +54,18 @@ extension MouseSupportModifier: Renderable {
         if !context.isMeasuring,
             let dispatcher = context.environment.mouseEventDispatcher
         {
+            // Declare the registration to any value-memoizing ancestor, exactly
+            // as `.statusBarItems` does. The override is cleared every render
+            // pass (`MouseEventDispatcher.beginRenderPass()`), so a subtree
+            // served from the cache never reinstalls it and the scene base
+            // comes back — mouse capture returns and starts swallowing the
+            // selection drags this modifier was yielding, while
+            // `.mouseSupport(.disabled)` is still on screen. Nothing in the
+            // buffer reveals it: this modifier adds no hit region and reads no
+            // volatile value, which is exactly why its mouse siblings
+            // (`onHover`, `onMouseEvent`, `.contextMenu`) are safe without it
+            // and this one is not.
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
             dispatcher.setConfigOverride(support)
         }
         return TUIkit.renderToBuffer(content, context: context)

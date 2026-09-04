@@ -300,6 +300,58 @@ struct MouseHitTestPropagationTests {
         _ = renderToBuffer(plain, context: context)
         #expect(dispatcher.effectiveSupport(baseConfig: .standard) == .standard)
     }
+
+    /// One live-loop-shaped frame through a REUSED context, returning what the
+    /// runner would apply to the terminal. The render cache's own pass bracket
+    /// is what makes the second frame a cache hit.
+    private func renderMouseFrame<V: View>(_ view: V, tuiContext: TUIContext) -> MouseSupport {
+        var environment = EnvironmentValues()
+        environment.focusManager = FocusManager()
+        environment.applyRuntimeServices(from: tuiContext)
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 10,
+            environment: environment, tuiContext: tuiContext)
+
+        tuiContext.mouseEventDispatcher.beginRenderPass()
+        tuiContext.stateStorage.beginRenderPass()
+        tuiContext.renderCache.beginRenderPass()
+        _ = renderToBuffer(view, context: context)
+        tuiContext.stateStorage.endRenderPass()
+        tuiContext.renderCache.removeInactive()
+        return tuiContext.mouseEventDispatcher.effectiveSupport(baseConfig: .standard)
+    }
+
+    @Test("A memoized row's .mouseSupport override survives a cache-hit frame")
+    func overrideSurvivesRowMemo() {
+        let tuiContext = TUIContext()
+        // An `Equatable` element auto-wires `_MemoizedRow`, and a `Text` carries
+        // no hit region — so the row is stored, and the second frame never
+        // re-enters the subtree that installs the override.
+        let view = VStack {
+            ForEach(["row"], id: \.self) { name in
+                Text(name).mouseSupport(.disabled)
+            }
+        }
+
+        #expect(renderMouseFrame(view, tuiContext: tuiContext) == .disabled)
+        #expect(
+            renderMouseFrame(view, tuiContext: tuiContext) == .disabled,
+            "the cache-hit frame dropped the row's mouse-support override")
+    }
+
+    @Test("An .equatable() subtree's .mouseSupport override survives a cache-hit frame")
+    func overrideSurvivesEquatableView() {
+        struct Panel: View, Equatable {
+            var body: some View { Text("panel").mouseSupport(.disabled) }
+        }
+        let tuiContext = TUIContext()
+        let view = VStack { Panel().equatable() }
+
+        #expect(renderMouseFrame(view, tuiContext: tuiContext) == .disabled)
+        #expect(
+            renderMouseFrame(view, tuiContext: tuiContext) == .disabled,
+            "the cache-hit frame dropped the subtree's mouse-support override")
+    }
 }
 
 // MARK: - HitTestRegion

@@ -80,6 +80,12 @@ extension AppHeaderModifier: Renderable {
             0,
             (appHeader.renderWidth ?? context.availableWidth)
                 - appHeader.style.contentWidthInset)
+        // Declared for the same reason `.mouseSupport` and `.statusBarItems`
+        // declare theirs: `contentBuffer` is cleared every render pass and a
+        // memoized ancestor would leave it nil, which draws no header at all.
+        // No realistic tree puts `.appHeader` under a memo — it is applied at
+        // the root, above every row — but the omission is the same one.
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
         let headerBuffer = TUIkit.renderToBuffer(header, context: headerContext)
         appHeader.contentBuffer = headerBuffer
 
