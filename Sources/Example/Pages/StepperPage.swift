@@ -53,18 +53,21 @@ struct StepperPage: View {
     @ViewBuilder
     private var callbacksSection: some View {
         DemoSection("page.stepper.callbacksSection") {
-            HStack(spacing: 1) {
-                Stepper(
-                    "page.stepper.color",
-                    onIncrement: {
-                        colorIndex = (colorIndex + 1) % colors.count
-                    },
-                    onDecrement: {
-                        colorIndex = (colorIndex - 1 + colors.count) % colors.count
-                    }
-                )
-                Text(colors[colorIndex]).foregroundStyle(.palette.accent)
-            }
+            // The colour goes WHERE THE VALUE WOULD BE. This stepper's steps are
+            // not arithmetic on a number, so there is no value to format — and
+            // the name beside the arrows, which is what this used to be, reads
+            // as a separate label rather than as the thing the arrows change.
+            Stepper(
+                "page.stepper.color",
+                onIncrement: {
+                    colorIndex = (colorIndex + 1) % colors.count
+                },
+                onDecrement: {
+                    colorIndex = (colorIndex - 1 + colors.count) % colors.count
+                }
+            )
+            .stepperValueText(colors[colorIndex])
+            .stepperTextStyle { $0.foreground = .palette.accent }
         }
     }
 
