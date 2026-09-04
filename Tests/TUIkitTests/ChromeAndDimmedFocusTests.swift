@@ -16,7 +16,18 @@ import Testing
 @Suite("Chrome and dimmed content are not in the focus ring")
 struct ChromeAndDimmedFocusTests {
 
-    private func reachable(_ view: some View) -> [String] {
+    /// Renders `view` through fully bracketed render passes and reports both
+    /// halves this suite asks about: what ended up in the focus ring, and what
+    /// was drawn.
+    ///
+    /// The `beginRenderPass`/`endRenderPass` pairs are not ceremony. The prune
+    /// in `StateStorage.endRenderPass` is exactly how an isolated subtree loses
+    /// its `@State` — a single unbracketed render can never show it — so a test
+    /// of state survival has to drive at least two passes with the ends run.
+    /// Built by hand rather than through `makeRenderContext`, which isolates
+    /// the render cache and so diverges from `@State`-driven invalidation.
+    private func render(_ view: some View, passes: Int) -> (buffer: FrameBuffer, focusIDs: [String])
+    {
         let tui = TUIContext()
         let focusManager = FocusManager()
         var environment = EnvironmentValues()
@@ -28,16 +39,21 @@ struct ChromeAndDimmedFocusTests {
         let context = RenderContext(
             availableWidth: 40, availableHeight: 12,
             environment: environment, tuiContext: tui)
-        for _ in 0..<2 {
+        var buffer = FrameBuffer()
+        for _ in 0..<passes {
             tui.mouseEventDispatcher.beginRenderPass()
             tui.stateStorage.beginRenderPass()
             tui.renderCache.beginRenderPass()
             focusManager.beginRenderPass()
-            _ = renderToBuffer(view, context: context)
+            buffer = renderToBuffer(view, context: context)
             focusManager.endRenderPass()
             tui.stateStorage.endRenderPass()
         }
-        return focusManager.registeredFocusIDsInActiveSection()
+        return (buffer, focusManager.registeredFocusIDsInActiveSection())
+    }
+
+    private func reachable(_ view: some View) -> [String] {
+        render(view, passes: 2).focusIDs
     }
 
     @Test("A dimmed subtree is not reachable by Tab")
@@ -55,15 +71,23 @@ struct ChromeAndDimmedFocusTests {
     func dimmedKeepsState() {
         // Isolating focus must not isolate `@State` — a dimmed page that is
         // later undimmed has to come back as it was, scroll position and all.
-        let buffer = renderToBuffer(
-            StatefulProbe().dimmed(),
-            context: makeRenderContext(width: 20, height: 3))
-        #expect(!buffer.lines.isEmpty)
+        // The probe MOVES its value off the declared default, which is the
+        // whole detection: a subtree handed a fresh `StateStorage` (or pruned
+        // by `endRenderPass` because the dimmed render did not claim it) draws
+        // the default back, and a probe that only ever renders its default
+        // cannot tell the two apart.
+        let text = render(StatefulProbe().dimmed(), passes: 3)
+            .buffer.lines.joined(separator: "\n").stripped
+        #expect(text.contains("count-7"), ".dimmed() lost its subtree's @State")
+        #expect(!text.contains("count-0"), ".dimmed() re-hydrated its subtree from defaults")
     }
 
+    /// Mutates its `@State` once, on appearing — `recordAppear` runs the action
+    /// inline during the render, so pass 1 writes the box and passes 2 and 3
+    /// read it back.
     private struct StatefulProbe: View {
-        @State private var count = 7
-        var body: some View { Text("n=\(count)") }
+        @State private var count = 0
+        var body: some View { Text("count-\(count)").onAppear { count = 7 } }
     }
 
     @Test("An app-header control is chrome, not a Tab stop")
