@@ -174,6 +174,32 @@ struct TerminalIdentityQueryTests {
         #expect(ProcessInfo.processInfo.environment[key] == "Apple_Terminal")
     }
 
+    /// `wasAsked` used to be the fence flag, so a host that was asked and never
+    /// answered read as "not asked" — and the explorer then hid the replies it
+    /// was holding behind that. Asked is whether the exchange ran; answered
+    /// is whether the fence came back.
+    @MainActor
+    @Test("Asked is not answered")
+    func askedIsNotAnswered() {
+        let saved = TerminalHost.startupIdentity
+        defer { TerminalHost.startupIdentity = saved }
+
+        TerminalHost.startupIdentity = nil
+        #expect(!TerminalClient.current.wasAsked)
+        #expect(!TerminalClient.current.answered)
+
+        // Asked, and the deadline passed with DA1 in hand but no fence.
+        TerminalHost.startupIdentity = Self.parse("\u{1B}[?1;2c")
+        #expect(TerminalClient.current.wasAsked)
+        #expect(!TerminalClient.current.answered)
+        #expect(TerminalClient.current.primaryDeviceAttributes == "\u{1B}[?1;2c")
+
+        // Asked and answered.
+        TerminalHost.startupIdentity = Self.parse("\u{1B}[?1;2c\u{1B}[1;1R")
+        #expect(TerminalClient.current.wasAsked)
+        #expect(TerminalClient.current.answered)
+    }
+
     /// Apple Terminal's CSI parser leaks a sequence's final byte onto the
     /// screen when the sequence carries BOTH a `?` private-parameter marker
     /// and an ECMA-48 intermediate byte (0x20…0x2F) — measured 2026-08-26 on

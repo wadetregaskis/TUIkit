@@ -121,7 +121,18 @@ public struct TerminalClient: Sendable, Equatable {
 
     /// Whether the terminal was asked at all. `false` when the environment had
     /// already named it, when running under tmux, or when there is no terminal.
+    ///
+    /// Asked is not answered — see ``answered``. This used to be the fence
+    /// flag, so a slow or silent host read as "not asked", pointing every
+    /// diagnosis away from the timeout that had actually happened.
     public let wasAsked: Bool
+
+    /// Whether the exchange completed: the DSR fence, sent last, came back.
+    /// `true` means every earlier query either answered or declined to;
+    /// `false` with ``wasAsked`` means the deadline passed first — a laggy
+    /// hop, or a host that answers no DSR — and any device-attribute reply
+    /// held here arrived before it did.
+    public let answered: Bool
 
     /// The terminal hosting this process.
     @MainActor
@@ -172,7 +183,8 @@ public struct TerminalClient: Sendable, Equatable {
             primaryDeviceAttributes: identity?.primaryAttributes,
             secondaryDeviceAttributes: identity?.secondaryAttributes,
             answeredVersionQuery: identity?.answeredVersion ?? false,
-            wasAsked: identity?.sawFence ?? false)
+            wasAsked: identity != nil,
+            answered: identity?.sawFence ?? false)
     }
 
     // MARK: - Rendering as another client

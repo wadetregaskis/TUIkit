@@ -80,8 +80,8 @@ struct IdentificationView: View {
             }
             HStack(spacing: 1) {
                 Text(pad("Device Attributes", 22)).foregroundStyle(.palette.foregroundSecondary)
-                Text(pad(client.wasAsked ? "asked" : "not asked", 22))
-                    .foregroundStyle(client.wasAsked ? .palette.foreground : .palette.foregroundTertiary)
+                Text(pad(client.wasAsked ? (client.answered ? "asked" : "asked — no reply") : "not asked", 22))
+                    .foregroundStyle(client.answered ? .palette.foreground : .palette.foregroundTertiary)
                 Text("survives any number of ssh hops").foregroundStyle(.palette.foregroundTertiary)
             }
         }
@@ -112,6 +112,13 @@ struct IdentificationView: View {
                 reply(
                     "XTVERSION (ESC[>0q)",
                     client.answeredVersionQuery ? "answered" : nil)
+                if !client.answered {
+                    Text(
+                        "The DSR fence never came back: the deadline passed first. A laggy hop, "
+                            + "or a host that answers no DSR — whatever is above arrived before it did."
+                    )
+                    .foregroundStyle(.palette.foregroundTertiary)
+                }
                 Text(
                     "Apple Terminal is the one measured host that answers no XTVERSION, so its "
                         + "Device Attributes are what identify it remotely."
