@@ -194,8 +194,10 @@ enum DropdownMenu {
                 height: maxVisible, extent: rows.count, viewport: maxVisible,
                 offset: scrollOffset, arrows: context.environment.scrollbarArrows,
                 proportional: context.environment.scrollbarProportionalThumb,
+                // `track(in:)`, like every other bar — the raw quaternary
+                // fails the groove floors on six palettes (5f63de4c).
                 colors: ScrollbarColors(
-                    thumb: palette.foregroundSecondary, track: palette.foregroundQuaternary,
+                    thumb: palette.foregroundSecondary, track: ScrollbarColors.track(in: palette),
                     arrow: palette.foregroundTertiary))
             : nil
 
