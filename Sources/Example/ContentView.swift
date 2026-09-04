@@ -179,7 +179,14 @@ struct ContentView: View {
                     // Load the next built-in preset into the app palette. Function
                     // keys are used (not a letter) so the shortcut works on EVERY
                     // page without colliding with TextField / SecureField input.
-                    presetIndex = (presetIndex + 1) % PaletteRegistry.all.count
+                    // From the palette on SCREEN, not from this view's own
+                    // cursor: the Theme page's picker changes the palette
+                    // without touching `presetIndex`, after which F2 advanced
+                    // from a stale cursor — a visible no-op, or a jump back.
+                    // A customised palette matches no preset; then the cursor
+                    // is the best answer left.
+                    let current = PaletteRegistry.all.firstIndex { $0.id == palette.id } ?? presetIndex
+                    presetIndex = (current + 1) % PaletteRegistry.all.count
                     palette = CustomizablePalette(from: PaletteRegistry.all[presetIndex])
                     return true
                 case .f3:
