@@ -272,19 +272,55 @@ struct FrameDiffWriterTerminalGatingTests {
         #expect(line.contains(underAdvancer))    // the emoji passes through verbatim
     }
 
-    @Test("Apple Terminal detection keys off TERM_PROGRAM, deterministically")
-    func detectionMatchesTermProgram() {
+    /// Every signal spelled out in the argument, none read from the ambient
+    /// shell — `detectAppleTerminal(environment:)` is pure over the dictionary
+    /// precisely so both answers are reachable from any terminal, on any
+    /// platform.
+    @Test("Apple Terminal detection reads the documented signals, in the documented order")
+    func detectionFollowsDocumentedPrecedence() {
+        // `TERM_PROGRAM`, the local answer.
         #expect(TerminalHost.detectAppleTerminal(environment: ["TERM_PROGRAM": "Apple_Terminal"]))
         #expect(!TerminalHost.detectAppleTerminal(environment: ["TERM_PROGRAM": "iTerm.app"]))
         #expect(!TerminalHost.detectAppleTerminal(environment: [:]))
-        // Whatever runs the suite, the cached answer must equal the live check
-        // (and is compile-time false on non-macOS).
-        #if os(macOS)
-        let expected = ProcessInfo.processInfo.environment["TERM_PROGRAM"] == "Apple_Terminal"
-        #else
-        let expected = false
-        #endif
-        #expect(TerminalHost.isAppleTerminal == expected)
+
+        // `TUIKIT_TERM_PROGRAM` outranks it, in BOTH directions. This is the
+        // case the variable exists for (Terminal-compatibility.md): Terminal.app
+        // sets no forwarded signal and answers no XTVERSION, so across an ssh
+        // hop the explicit override is the only thing that names it.
+        #expect(
+            TerminalHost.detectAppleTerminal(
+                environment: [
+                    "TERM_PROGRAM": "iTerm.app", "TUIKIT_TERM_PROGRAM": "Apple_Terminal",
+                ]))
+        #expect(
+            !TerminalHost.detectAppleTerminal(
+                environment: [
+                    "TERM_PROGRAM": "Apple_Terminal", "TUIKIT_TERM_PROGRAM": "iTerm.app",
+                ]))
+
+        // The two weaker signals name other terminals only, so they answer a
+        // definite false rather than falling through to a guess.
+        #expect(!TerminalHost.detectAppleTerminal(environment: ["LC_TERMINAL": "iTerm2"]))
+        #expect(!TerminalHost.detectAppleTerminal(environment: ["TERM": "xterm-ghostty"]))
+    }
+
+    /// What is left to pin about the cached `static let`, and all that can be:
+    /// that it IS the detector's answer over the process environment.
+    ///
+    /// Not re-derived from `TERM_PROGRAM` — the earlier version of this test
+    /// did that, and so failed on a defect-free build for anyone who had
+    /// followed the documentation's own `export TUIKIT_TERM_PROGRAM=…`
+    /// instruction, since the override wins in `hostProgram` and the
+    /// expectation never saw it. And deliberately not under `#if os(macOS)`:
+    /// `isAppleTerminal` is not platform-gated, because over ssh a Mac running
+    /// Terminal.app routinely hosts the process on Linux (`TerminalHost`
+    /// records the compile-time-false model as the bug it was).
+    @Test("The cached answer is the detector's answer, on every platform")
+    func cachedDetectionMatchesTheDetector() {
+        #expect(
+            TerminalHost.isAppleTerminal
+                == TerminalHost.detectAppleTerminal(
+                    environment: ProcessInfo.processInfo.environment))
     }
 }
 
