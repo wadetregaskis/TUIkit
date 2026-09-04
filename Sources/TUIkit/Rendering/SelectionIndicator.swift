@@ -4,6 +4,8 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
+
 import TUIkitStyling
 
 // MARK: - Style
@@ -165,8 +167,28 @@ public struct SelectionEmphasis: Equatable, Sendable {
     static func pulseRamp(dim: Color, bright: Color) -> [Color]? {
         let depth = ColorDepth.current
         guard depth < .truecolor else { return nil }
+        rampBuildsLock.withLock { rampBuildsCount += 1 }
         return Color.pulseRamp(from: dim, to: bright, depth: depth)
     }
+
+    /// How many ramps ``pulseRamp(dim:bright:)`` has built, process-wide.
+    ///
+    /// Instrumentation, and the only way this is observable at all: a ramp is a
+    /// pure function of its two endpoints and the terminal's depth, so building
+    /// one per cycle and building one per FRAME produce byte-identical output
+    /// and differ only in how much work was done. Counting is therefore what
+    /// the test that pins ``SelectionEmphasisCycle``'s hoist asserts on — a
+    /// timing test would assert the same thing far less reliably. Nothing in
+    /// the framework reads it.
+    ///
+    /// One lock acquisition per ramp, against the ~514 that building one takes
+    /// inside the quantiser, so it is free at the scale it measures.
+    static var rampBuilds: Int {
+        rampBuildsLock.withLock { rampBuildsCount }
+    }
+
+    private static let rampBuildsLock = NSLock()
+    nonisolated(unsafe) private static var rampBuildsCount = 0
 
     /// The pulse position, snapped to the shades this terminal can actually
     /// show.
@@ -247,12 +269,33 @@ public struct SelectionEmphasisCycle: Sendable {
     /// `isFocused ? colorNow(dim:bright:) : <their own resting colour>`.
     public var isFocused: Bool { frames[0].isFocused }
 
+    /// The ramp every frame of this cycle is coloured from, or `nil` when none
+    /// is needed.
+    ///
+    /// Built once per CYCLE, which is the whole reason it is a method here and
+    /// not an argument each frame fetches for itself: it depends on the two
+    /// endpoints and the terminal's depth, never on which frame is being
+    /// coloured, and building one walks a couple of hundred candidate shades
+    /// through the quantiser.
+    ///
+    /// Nil for anything but a focused pulse — that is the only case
+    /// ``SelectionEmphasis/color(dim:bright:ramp:)`` reads it in, since a blink
+    /// and a still cycle both sit on an endpoint. Both are properties of the
+    /// CYCLE rather than of a frame (``SelectionEmphasisClock/cycle(_:)`` gives
+    /// every frame the same focus state and animation), so the first frame
+    /// answers for all of them — the same reasoning ``isFocused`` uses.
+    @MainActor
+    private func pulseRamp(dim: Color, bright: Color) -> [Color]? {
+        guard let first = frames.first, first.isFocused, first.animation == .pulse else {
+            return nil
+        }
+        return SelectionEmphasis.pulseRamp(dim: dim, bright: bright)
+    }
+
     /// The colour at each frame, for an element with these two endpoints.
     @MainActor
     public func colors(dim: Color, bright: Color) -> [Color] {
-        // One ramp for the whole cycle: it depends on the endpoints and the
-        // terminal's depth, not on which frame is being coloured.
-        let ramp = SelectionEmphasis.pulseRamp(dim: dim, bright: bright)
+        let ramp = pulseRamp(dim: dim, bright: bright)
         return frames.map { $0.color(dim: dim, bright: bright, ramp: ramp) }
     }
 
@@ -263,7 +306,8 @@ public struct SelectionEmphasisCycle: Sendable {
     /// cycle's length.
     @MainActor
     public func colorNow(dim: Color, bright: Color) -> Color {
-        frames[step % frames.count].color(dim: dim, bright: bright)
+        frames[step % frames.count].color(
+            dim: dim, bright: bright, ramp: pulseRamp(dim: dim, bright: bright))
     }
 
     /// A run that breathes a single glyph at `(offsetX, offsetY)`, or `nil`
@@ -298,7 +342,19 @@ public struct SelectionEmphasisCycle: Sendable {
     public func run(
         dim: Color, bright: Color, offsetX: Int, offsetY: Int, draw: (Color) -> String
     ) -> AnimatedCellRun? {
-        run(offsetX: offsetX, offsetY: offsetY) { draw($0.color(dim: dim, bright: bright)) }
+        // Asked BEFORE the ramp is built, not left to the overload below: a
+        // still cycle earns no run, and a ramp built for one would be thrown
+        // away with it.
+        guard isAnimating else { return nil }
+        // The ramp-building `color(dim:bright:)` used to be called from inside
+        // the per-frame closure, which rebuilt the identical ramp once per
+        // frame of the cycle — sixteen times for a regular pulse, and twice
+        // that for a focused button's two caps, on every terminal below
+        // truecolor. Same colours either way; ~8,200 quantiser samples fewer.
+        let ramp = pulseRamp(dim: dim, bright: bright)
+        return run(offsetX: offsetX, offsetY: offsetY) {
+            draw($0.color(dim: dim, bright: bright, ramp: ramp))
+        }
     }
 
     /// A run for an element whose appearance is not one colour between two
