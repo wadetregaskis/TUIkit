@@ -21,8 +21,13 @@ import TUIkitCore
 /// `StateStorage` property indices for `_VStackCore` (file-scope: a generic
 /// type cannot hold static storage).
 private enum VStackStateIndex {
-    /// The `UniformWindowState` hypothesis box.
-    static let uniformWindow = 0
+    /// The `UniformWindowState` hypothesis box. Negative: the box lives at the
+    /// stack's OWN identity, and a lone non-`ChildViewProvider` child (one
+    /// composite view, `someView.padding()`, an `if` without `else`, an
+    /// `AnyView`) is TRANSPARENT — it pushes no child identity, so its first
+    /// `@State` would bind that very key. Range -70, claimed in
+    /// ``StateStorage/StateKey``'s table.
+    static let uniformWindow = -70
 }
 
 /// The windowed stack's persisted window state: the uniformity

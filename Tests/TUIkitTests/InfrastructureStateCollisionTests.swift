@@ -161,4 +161,15 @@ struct InfrastructureStateCollisionTests {
             Gauge(value: 0.5) { StatefulProbe() } currentValueLabel: { SecondStatefulProbe() },
             "Gauge's labels shared one @State box")
     }
+
+    @Test("A windowed LazyVStack's lone composite child")
+    func lazyStackWindowState() {
+        expectStateSurvives(
+            // Inside a ScrollView, so the stack has a window to consume and
+            // takes the true-windowing path that persists its hypothesis box;
+            // and a LONE non-ForEach child, which is transparent (no child
+            // identity), so it lands on the stack's own identity.
+            ScrollView { LazyVStack(alignment: .leading, spacing: 0) { StatefulProbe() } },
+            "LazyVStack's window state clobbered its lone child's @State")
+    }
 }
