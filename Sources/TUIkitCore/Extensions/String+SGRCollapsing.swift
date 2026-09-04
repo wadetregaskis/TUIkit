@@ -152,7 +152,18 @@ extension String {
                         + String(String.UnicodeScalarView(scalars.prefix(1)))
                 }
                 defer {
-                    if !fusedContent.isEmpty { result += fusedContent }
+                    if !fusedContent.isEmpty {
+                        // A fused scalar that OCCUPIES cells — a lone
+                        // Fitzpatrick modifier is a 2-cell swatch — is
+                        // content, and must pass the same gate as any
+                        // printable character, or it is painted in whatever
+                        // state the previous fragment left and the escape it
+                        // followed lands after it. A zero-width mark binds to
+                        // the glyph before it whatever sits between, and
+                        // stays where it was.
+                        if fusedContent.strippedLength > 0 { reconcile() }
+                        result += fusedContent
+                    }
                 }
                 if sequence.hasSuffix("m") {
                     if sawReset {

@@ -87,6 +87,36 @@ struct SGRCollapsingTests {
         #expect(line.collapsingAdjacentSGR().unicodeScalars.contains("\u{0301}"))
     }
 
+    /// U+1F3FD is GCB=Extend, so Swift fuses `m` + swatch into one Character
+    /// and the walker peels the swatch back off as content. Unlike a
+    /// combining mark it is TWO CELLS, so its position relative to the styling
+    /// IS part of the contract — and it was written before the escape it
+    /// followed, painted in whatever the previous fragment left in force.
+    @Test("A standalone skin-tone swatch fused to the terminator keeps the styling that covers it")
+    func fusedSwatchIsStyledByTheEscapeItFollowed() {
+        let line = "\(esc)[0m\(esc)[48;5;16m\(esc)[38;5;196m\u{1F3FD}x\(esc)[0m"
+        check(line, expectSaving: false)
+        let collapsed = line.collapsingAdjacentSGR()
+        let styling = try? #require(collapsed.range(of: "38;5;196"))
+        let swatch = try? #require(collapsed.firstIndex(of: "\u{1F3FD}"))
+        if let styling, let swatch {
+            #expect(styling.upperBound < swatch, "the swatch must come after the styling: \(collapsed.debugDescription)")
+        }
+    }
+
+    /// `@` (0x40) is an ECMA-48 final byte but not a letter. A walker that
+    /// ran on to the next letter took `ESC[1@main` for one sequence ending in
+    /// `m`, and merged the red into it: `ESC[31;1@main` — an ICH of 31 cells,
+    /// and no red at all.
+    @Test("A CSI whose final byte is not a letter is a barrier, not an SGR")
+    func nonLetterCSIFinalByteIsABarrier() {
+        let line = "\(esc)[31m\(esc)[1@main"
+        let collapsed = line.collapsingAdjacentSGR()
+        #expect(collapsed.contains("\(esc)[1@"), "the ICH survives as its own sequence: \(collapsed.debugDescription)")
+        #expect(collapsed.contains("\(esc)[31m"), "the red is still an SGR of its own: \(collapsed.debugDescription)")
+        #expect(collapsed == line, "nothing here may be merged")
+    }
+
     @Test("The shape the diff writer actually emits: reset, then re-establish")
     func resetThenBackground() {
         check("\(esc)[0m\(esc)[48;5;16mhello\(esc)[0m\(esc)[48;5;16m world")
