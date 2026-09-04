@@ -413,7 +413,7 @@ extension View {
     /// dragged — there is nowhere for it to go.
     ///
     /// Content smaller than that area is CENTRED in it, as SwiftUI centres it —
-    /// unlike a bare ``SwiftUI/View/frame(width:height:alignment:)``, which is
+    /// unlike a bare ``View/frame(width:height:alignment:)``, which is
     /// top-leading by default here. Add your own `Spacer`s or `frame` alignment
     /// if you want the content pinned to an edge instead.
     ///

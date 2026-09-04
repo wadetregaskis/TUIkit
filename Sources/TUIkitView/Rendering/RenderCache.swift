@@ -286,7 +286,7 @@ public final class RenderCache: @unchecked Sendable {
     ///
     /// The claim is part of what a measurement means, so memos taken under one
     /// host's traits are wrong under another's. See
-    /// ``TUIkitCore/TerminalWidthTraits/generation`` and ``beginRenderPass()``.
+    /// ``TerminalWidthTraits/generation`` and ``beginRenderPass()``.
     private var measuredUnderWidthGeneration = TerminalWidthTraits.generation
 
     /// Identities seen during the current render pass (for garbage collection).

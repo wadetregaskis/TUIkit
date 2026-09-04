@@ -29,7 +29,7 @@ extension ASCIIConverter {
     /// ## The two deliberate differences from the glyph path
     ///
     /// - **The colour mode is honoured as asked, not capped by
-    ///   ``TUIkitStyling/ColorDepth``.** That ladder exists because SGR cannot
+    ///   ``ColorDepth``.** That ladder exists because SGR cannot
     ///   express more than the terminal has; a transmitted image is not SGR,
     ///   so a 256-colour terminal that draws images draws them in full colour.
     ///   Asking for ``ASCIIColorMode/ansi256`` still gets 256 — it is a look,

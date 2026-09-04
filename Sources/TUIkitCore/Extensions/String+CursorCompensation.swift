@@ -268,7 +268,7 @@ extension String {
     ///   short. `ECH(2)` to paint the claimed cells in the current background,
     ///   the glyph, then `CUF(1)`. Unchanged for years and measured clean.
     /// - **Skin tones on an emoji-presentation base** (🤙🏽 ✊🏿 👍🏽), when
-    ///   ``TUIkitCore/TerminalWidthTraits`` claims the separated width:
+    ///   ``TerminalWidthTraits`` claims the separated width:
     ///   rewritten as base + ZWNJ + modifier
     ///   (``Swift/Character/separatedSkinToneEmission``) and emitted with no
     ///   moves at all — the host renders base, one blank column (the ZWNJ's

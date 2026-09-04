@@ -104,14 +104,14 @@ public struct OverlayLayer: Sendable, Equatable {
     /// The distinction three modifiers turn on, and it deserves a name because
     /// each of them got it wrong once by not having one:
     ///
-    /// - ``SwiftUICore/View/hidden()`` drops a layer that is this view's own
+    /// - ``View/hidden()`` drops a layer that is this view's own
     ///   drawing and isolates the subtree so a screen-level one is never
     ///   presented in the first place;
-    /// - ``SwiftUICore/View/allowsHitTesting(_:)`` disarms an anchored pop-up,
+    /// - ``View/allowsHitTesting(_:)`` disarms an anchored pop-up,
     ///   because leaving one clickable under a view that just said it was not
     ///   is the bug it exists to prevent — and leaves a presented dialog's own
     ///   buttons alone, because that dialog is not this view's hit area;
-    /// - ``SwiftUICore/View/opacity(_:)`` fades an anchored layer with the
+    /// - ``View/opacity(_:)`` fades an anchored layer with the
     ///   subtree it belongs to, and does not fade a dialog the subtree merely
     ///   opened.
     ///

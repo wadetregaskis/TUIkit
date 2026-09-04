@@ -41,7 +41,7 @@
 /// ## Reading and setting
 ///
 /// Detected once at startup from the identified host and read from the render
-/// path, exactly as ``TUIkitStyling/ColorDepth`` is. Use
+/// path, exactly as ``ColorDepth`` is. Use
 /// ``withTraits(_:operation:)`` for a scoped pin — a test, or a diagnostic
 /// rendering as another client — because a plain global mutate-and-restore
 /// bleeds across Swift Testing's parallel runner.
@@ -138,7 +138,7 @@ extension TerminalWidthTraits {
     /// The process-wide traits, before any task-local pin.
     ///
     /// `nonisolated(unsafe)` is intentional and matches
-    /// ``TUIkitStyling/ColorDepth``: the value is set once at startup, from a
+    /// ``ColorDepth``: the value is set once at startup, from a
     /// host identification that cannot change for the life of the process, and
     /// is then read from the render path with no further writes.
     nonisolated(unsafe) private static var processCurrent: Self = .composing

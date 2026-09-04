@@ -226,7 +226,7 @@ public struct TerminalClient: Sendable, Equatable {
     ///
     /// Outranks ``simulated``, and exists for the case that type cannot serve:
     /// a terminal TUIkit has no model for. Toggling the switches in
-    /// ``TUIkitCore/TerminalQuirks`` and watching the screen is how a new
+    /// ``TerminalQuirks`` and watching the screen is how a new
     /// terminal's model gets discovered in the first place — see the Custom
     /// screen of the `TerminalClientQuirks` app, which does exactly that and
     /// exports the result.
@@ -259,7 +259,7 @@ public struct TerminalClient: Sendable, Equatable {
     ///
     /// The claim follows the host so that the layout can allocate what a
     /// cluster really occupies, instead of the cluster being cut down to fit a
-    /// claim — see ``TUIkitCore/TerminalWidthTraits`` for why that trade was
+    /// claim — see ``TerminalWidthTraits`` for why that trade was
     /// worth reversing.
     ///
     /// Measured on the alternate screen, 2026-08-26. Every entry is a
@@ -347,7 +347,7 @@ public struct TerminalClient: Sendable, Equatable {
     // MARK: - The models
 
     /// How many cells `cluster` actually moves the cursor on `program`, which
-    /// is not always the ``TUIkitCore/Swift/Character/terminalWidth`` it is
+    /// is not always the ``Swift/Character/terminalWidth`` it is
     /// laid out as.
     ///
     /// The gap between the two is the whole subject of
@@ -355,7 +355,7 @@ public struct TerminalClient: Sendable, Equatable {
     /// wide that advances the cursor one drags everything after it on the row a
     /// cell to the left.
     ///
-    /// ``Program/unidentified`` answers ``TUIkitCore/Swift/Character/terminalWidth``,
+    /// ``Program/unidentified`` answers ``Swift/Character/terminalWidth``,
     /// because a terminal we have no measurements for is assumed to advance the
     /// way it paints.
     public static func cursorAdvance(of cluster: Character, on program: Program) -> Int {
@@ -374,7 +374,7 @@ public struct TerminalClient: Sendable, Equatable {
     ///
     /// The strip exists because a detached modifier over-advances past a 2-cell
     /// claim and drags the rest of the row left. Once
-    /// ``TUIkitCore/TerminalWidthTraits`` gives the cluster the cells it really
+    /// ``TerminalWidthTraits`` gives the cluster the cells it really
     /// occupies, there is nothing to over-advance past and the modifier can
     /// stay — which matters, because stripping it is not a rendering compromise
     /// but a change to what the user wrote.
@@ -404,7 +404,7 @@ public struct TerminalClient: Sendable, Equatable {
     ///   - tmuxSkinTones: which skin-tone bases to strip under tmux. tmux
     ///     merges 70 of the 134 modifier bases into exactly the two cells we
     ///     claim and detaches the rest (a per-codepoint fact — see
-    ///     ``TUIkitCore/Swift/Character/tmuxMergedToneBases``), so whether the
+    ///     ``Swift/Character/tmuxMergedToneBases``), so whether the
     ///     merged ones can be KEPT depends on which clients are attached.
     public static func compensating(
         _ text: String,

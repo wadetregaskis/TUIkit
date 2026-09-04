@@ -93,7 +93,7 @@ extension String {
     /// Styling is compared by what it PAINTS, not by what it says: a cell
     /// holding a space shows its background and whatever draws ink on an empty
     /// cell, and nothing else — see
-    /// ``TUIkitCore/SGRState/paintsBlankCellsIdentically(to:)``. Most of a
+    /// ``SGRState/paintsBlankCellsIdentically(to:)``. Most of a
     /// terminal UI is blank cells, and comparing them strictly reports a row
     /// dirty for a foreground colour nobody can see.
     ///

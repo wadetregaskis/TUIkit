@@ -82,7 +82,7 @@ extension View {
     /// popover, an `.offset` child) — which is this view's drawing, displaced,
     /// and has nothing left to hang off.
     ///
-    /// > Note: This is not ``SwiftUICore/View/dimmed()``. That one makes a
+    /// > Note: This is not ``View/dimmed()``. That one makes a
     /// > subtree genuinely inert — no focus, no keys, no shortcuts, no
     /// > presentation — because it exists to make content recede. `.hidden()`
     /// > only stops it being drawn.

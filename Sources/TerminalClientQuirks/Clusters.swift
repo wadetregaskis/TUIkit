@@ -9,7 +9,7 @@ import TUIkitCore
 
 /// One grapheme cluster worth showing, and why it is worth showing.
 ///
-/// The list IS ``TUIkitCore/TerminalWidthCorpus`` — the same 69 clusters the
+/// The list IS ``TerminalWidthCorpus`` — the same 69 clusters the
 /// probes in `Tools/TerminalProbes/` measure on real terminals, pinned
 /// identical to their JSON by `WidthCorpusParityTests`. The app deliberately
 /// shows every entry rather than a summary battery: a hand-picked battery only

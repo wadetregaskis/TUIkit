@@ -66,7 +66,7 @@ public struct ModalPresentationModifier<Content: View, Modal: View>: View {
     /// Flipping the binding is deliberately the same act the ESC status-bar
     /// item performs, so the two routes out of a presentation cannot drift:
     /// `onDismiss` fires off the binding's presented → dismissed transition
-    /// (see ``SwiftUICore/View/modal(isPresented:onDismiss:content:)``), so it
+    /// (see ``View/modal(isPresented:onDismiss:content:)``), so it
     /// runs for `dismiss()` exactly as it does for ESC.
     func dismissAction() -> DismissAction {
         let isPresented = self.isPresented

@@ -30,7 +30,7 @@ public enum LinkDisplay: Sendable, Equatable, CaseIterable {
     /// The OSC 8 escape is emitted alongside it wherever the host honours one,
     /// so on those terminals the destination is also a hover or a ⌘-click
     /// away — but that is not this mode's doing and no mode turns it off (see
-    /// ``SwiftUICore/View/terminalHyperlinks(_:)`` for that). The popover is
+    /// ``View/terminalHyperlinks(_:)`` for that). The popover is
     /// what serves the keyboard, which no terminal gesture reaches.
     ///
     /// There WAS an `automatic` case that resolved to this one on a host
@@ -67,7 +67,7 @@ private struct LinkDisplayKey: EnvironmentKey {
 
 extension EnvironmentValues {
     /// How a ``Link`` reveals its destination — see
-    /// ``SwiftUICore/View/linkDisplay(_:)``.
+    /// ``View/linkDisplay(_:)``.
     public var linkDisplay: LinkDisplay {
         get { self[LinkDisplayKey.self] }
         set { self[LinkDisplayKey.self] = newValue }

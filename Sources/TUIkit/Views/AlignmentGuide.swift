@@ -59,7 +59,7 @@ public struct _AlignmentGuideView<Content: View>: View {
 
     /// Static witness used by the child-layout path to detect a guide wrapper
     /// without a runtime `as? AlignmentGuideProviding` cast. See
-    /// ``TUIkitView/View/_providesAlignmentGuide``.
+    /// `_providesAlignmentGuide`.
     public static var _providesAlignmentGuide: Bool { true }
 }
 

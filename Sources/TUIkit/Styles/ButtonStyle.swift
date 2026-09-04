@@ -259,7 +259,7 @@ extension ButtonStyle where Self == PlainButtonStyle {
 /// of it.
 ///
 /// Internal on purpose. The public way to choose between the two affordances is
-/// ``SwiftUICore/View/linkFocusIndicator(_:)``, and SwiftUI has no `.link`
+/// ``View/linkFocusIndicator(_:)``, and SwiftUI has no `.link`
 /// button style to be source-compatible with — adding one would be a public
 /// name this framework would then owe forever for the sake of an internal
 /// wiring detail.

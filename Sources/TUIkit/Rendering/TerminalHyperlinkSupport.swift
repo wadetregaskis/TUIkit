@@ -17,7 +17,7 @@ extension TerminalClient {
     ///
     /// ## This is a capability, not a quirk — and the difference decides the default
     ///
-    /// Everything in ``TUIkitCore/TerminalQuirks`` is a measured *defect*, so
+    /// Everything in ``TerminalQuirks`` is a measured *defect*, so
     /// the governing rule there is "absent evidence otherwise, a terminal
     /// renders correctly": applying a workaround to a host that does not need
     /// it breaks output that was fine. A capability inverts that. Emitting a
@@ -105,7 +105,7 @@ extension TerminalClient {
     }
 
     /// Publishes ``hyperlinksSupported`` to
-    /// ``TUIkitCore/TerminalHyperlink/isSupported``, which is what the render
+    /// ``TerminalHyperlink/isSupported``, which is what the render
     /// path actually reads.
     ///
     /// The twin of ``applyWidthTraits()``, and for the same reason: the

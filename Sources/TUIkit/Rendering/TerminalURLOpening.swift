@@ -13,7 +13,7 @@ import TUIkitCore
 ///
 /// The render path and the activation path are not main-actor isolated and
 /// cannot go asking a terminal anything, so the answer is published here and
-/// read from there — the same shape as ``TUIkitCore/TerminalHyperlink/isSupported``.
+/// read from there — the same shape as ``TerminalHyperlink/isSupported``.
 enum TerminalURLOpening {
     /// `false` unless something turned it on. See ``TerminalClient/urlOpeningSupport``.
     ///

@@ -4,7 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
-/// Carries ``SwiftUICore/View/listRowSeparator(_:edges:)``'s arguments and
+/// Carries ``View/listRowSeparator(_:edges:)``'s arguments and
 /// renders its content unchanged.
 ///
 /// Inert by construction: a TUIkit `List` draws no row separators, so there is

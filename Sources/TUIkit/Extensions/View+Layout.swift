@@ -155,8 +155,8 @@ extension View {
     /// > centre a dialog on the screen, capture focus into a section of its
     /// > own, publish ESC to dismiss, or stop a sibling elsewhere in the tree
     /// > from being reached. Present a ``Dialog`` or an ``Alert`` through
-    /// > ``SwiftUICore/View/modal(isPresented:onDismiss:content:)`` or
-    /// > ``SwiftUICore/View/alert(_:isPresented:actions:message:)``, which do
+    /// > ``View/modal(isPresented:onDismiss:content:)`` or
+    /// > ``View/alert(_:isPresented:actions:message:)``, which do
     /// > all of that; `.dimmed()` is for content you want recessive in place.
     ///
     /// It also **drops** anything the content floated: a presentation, a
