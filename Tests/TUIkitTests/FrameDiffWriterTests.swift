@@ -33,6 +33,32 @@ struct BuildOutputLinesTests {
         #expect(lines.count == 5)
     }
 
+    /// A built row states its BACKGROUND, not a reset. After `invalidate()`
+    /// the writer's belief about the terminal's styling is `nil`, and the
+    /// whole-line arm's guard was spelled `== false`, which `nil` fails — so
+    /// the first row after a resize inherited the previous pass's underline.
+    @Test("A whole-line write after an invalidation closes the styling chain first")
+    func wholeLineAfterInvalidationResets() {
+        let writer = FrameDiffWriter()
+        let terminal = MockTerminal()
+        let bg = "\u{1B}[48;5;236m"
+        let reset = "\u{1B}[0m"
+        func row(_ text: String) -> String { bg + "\u{1B}[2K" + text + reset + bg + String(repeating: " ", count: 20 - text.strippedLength) + reset }
+        let frameA = [row("hello"), row("world")]
+        writer.writeContentDiff(newLines: frameA, terminal: terminal, startRow: 1, terminalWidth: 20, bgCode: bg, reset: reset)
+        // Frame B differs in the middle of row 1 only, and the differing run
+        // is styled — so the span pass ends with that style in force.
+        let frameB = [row("hello"), row("wo" + "\u{1B}[4;31m" + "RL" + reset + "d")]
+        writer.writeContentDiff(newLines: frameB, terminal: terminal, startRow: 1, terminalWidth: 20, bgCode: bg, reset: reset)
+        terminal.reset()
+        writer.invalidate()
+        writer.writeContentDiff(newLines: frameB, terminal: terminal, startRow: 1, terminalWidth: 20, bgCode: bg, reset: reset)
+        let output = terminal.allOutput
+        let firstErase = output.range(of: "\u{1B}[2K")
+        let head = firstErase.map { String(output[..<$0.lowerBound]) } ?? output
+        #expect(head.contains(reset), "the first whole row was written under the previous pass's SGR: \(head.debugDescription)")
+    }
+
     @Test("Content lines include background and padding")
     func contentLinesHaveBgAndPadding() {
         let writer = FrameDiffWriter()

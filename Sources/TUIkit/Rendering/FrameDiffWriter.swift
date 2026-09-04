@@ -739,10 +739,11 @@ extension FrameDiffWriter {
         contentCells = CellCache()
         statusBarCells = CellCache()
         appHeaderCells = CellCache()
-        // The cached frames are gone, so the next pass writes whole lines —
-        // which state their own styling — but the belief is dropped anyway:
-        // an invalidation is exactly the moment something outside this writer
-        // may have happened to the screen.
+        // The cached frames are gone, so the next pass writes whole lines.
+        // A built row states its BACKGROUND, not a reset, so the belief is
+        // dropped rather than reset: `nil` makes the whole-line arm close the
+        // chain first, which is what an invalidation — the moment something
+        // outside this writer may have happened to the screen — needs.
         terminalStyle = nil
     }
 
@@ -836,7 +837,13 @@ extension FrameDiffWriter {
                 // so anything else this pass carried in — a bold, an underline,
                 // a reverse — would still be in force, and the `ESC[2K` the row
                 // opens with would erase under it. Close the chain first.
-                if emitted?.isDefault == false { terminal.write("\u{1B}[0m") }
+                // `!= true`, not `== false`: `nil` is "not known" — after
+                // `invalidate()`, a one-off render, or the right-edge repaint —
+                // and an unknown state is exactly the one that has to be
+                // closed. Spelled `== false` this skipped the reset, and the
+                // first whole row after a resize kept the previous pass's
+                // underline or reverse across its erase and its glyphs.
+                if emitted?.isDefault != true { terminal.write("\u{1B}[0m") }
                 terminal.write(newLines[row])
                 emitted = SGRState()  // every built row ends with a reset
             }
@@ -853,7 +860,7 @@ extension FrameDiffWriter {
         // erases nothing hands its styling to the next one, which is the whole
         // saving (see ``terminalStyle``).
         if previousLines.count > newLines.count {
-            if emitted?.isDefault == false {
+            if emitted?.isDefault != true {
                 terminal.write("\u{1B}[0m")
                 emitted = SGRState()
             }
