@@ -25,6 +25,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Testing
 import TUIkitCore
 
@@ -287,6 +288,31 @@ struct ContainerPayloadAudit {
         // Inside the box's wall and below its top rule.
         #expect(header.opacityRegions.first?.offsetX == 1)
         #expect(header.opacityRegions.first?.offsetY == 1)
+    }
+
+    /// The two plain view-label paths assembled their buffers from the label's
+    /// LINES. The breathing one — every `Link` at the default focus indicator
+    /// — kept nothing else; the bullet one re-attached runs and opacity
+    /// regions and forgot overlays and hit regions. A `.modal` presented from
+    /// a link's label took the keyboard and never painted.
+    @Test("A plain button's view label keeps every payload, on both label paths")
+    func plainLabelPathsCarryEveryPayload() {
+        let url = URL(string: "https://example.com")!
+        // The breathing path: a Link, default indicator, no prefix.
+        let fadedLink = render(Link(destination: url) { faded() })
+        #expect(fadedLink.opacityRegions.count == 1)
+        #expect(fadedLink.opacityRegions.first?.offsetX == 0, "nothing sits in front of a breathing label")
+        #expect(!render(Link(destination: url) { presenter() }).overlays.isEmpty)
+        #expect(
+            render(Link(destination: url) { blinker() }).animatedCells.contains { $0.frames == ["a", "b"] },
+            "the label's own run rides along beside the breath")
+        let inertLink = render(Link(destination: url) { inert() }).hitTestRegions.count
+        #expect(render(Link(destination: url) { clickable() }).hitTestRegions.count > inertLink)
+        // The bullet path: a plain button, and a Link that asked for the bullet.
+        #expect(!render(Button(action: {}, label: { presenter() }).buttonStyle(.plain)).overlays.isEmpty)
+        let inertButton = render(Button(action: {}, label: { inert() }).buttonStyle(.plain)).hitTestRegions.count
+        #expect(render(Button(action: {}, label: { clickable() }).buttonStyle(.plain)).hitTestRegions.count > inertButton)
+        #expect(!render(Link(destination: url) { presenter() }.linkFocusIndicator(.bullet)).overlays.isEmpty)
     }
 
     @Test("A disabled container still lets a presentation float to the root")
