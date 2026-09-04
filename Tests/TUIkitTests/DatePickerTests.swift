@@ -82,6 +82,49 @@ struct DatePickerTests {
         #expect(handler.activeIndex == 2)  // advanced to the day after two digits
     }
 
+    /// The digit gate accepted any character `isWholeNumber` admits, but the
+    /// conversion was `Int(digitBuffer)`, which parses ASCII only. So an
+    /// Arabic-Indic or Devanagari digit — what a user with that keyboard layout
+    /// types — was consumed (so it could not fall through to a shortcut either)
+    /// and read as 0, which clamps to the component's lower bound. The buffer
+    /// then held a character no later parse could read, so the NEXT digit
+    /// re-clamped instead of appending.
+    @Test(
+        "A digit from any script edits the component, not a clamp to its floor",
+        arguments: [
+            ("١", "٢"),  // Arabic-Indic
+            ("१", "२"),  // Devanagari
+            ("１", "２"),  // fullwidth
+        ])
+    func nonASCIIDigitEntry(first: Character, second: Character) {
+        let sink = DateSink(date(2026, 3, 5))
+        let handler = handler(sink, .date)
+        handler.activeIndex = 2  // day
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .character(first))))
+        #expect(calendar.component(.day, from: sink.value) == 1, "\(first) did not mean 1")
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .character(second))))
+        #expect(calendar.component(.day, from: sink.value) == 12, "\(first)\(second) did not mean 12")
+        #expect(handler.activeIndex == 2, "the day is the last component, so nothing to advance to")
+    }
+
+    /// The other half of the same gate. `isWholeNumber` is true for numerals
+    /// that are not positional digits — a Roman numeral, a circled digit, a CJK
+    /// myriad — so the control ATE them (returning true, so no shortcut or
+    /// focus move could see them) and set the field to its floor.
+    @Test(
+        "Numerals that are not positional digits propagate instead of being typed",
+        arguments: ["Ⅷ", "③", "万"] as [Character])
+    func nonDigitNumeralsPropagate(character: Character) {
+        let sink = DateSink(date(2026, 3, 5))
+        let handler = handler(sink, .date)
+        handler.activeIndex = 2  // day
+
+        #expect(!handler.handleKeyEvent(KeyEvent(key: .character(character))))
+        #expect(calendar.component(.day, from: sink.value) == 5, "\(character) edited the field")
+    }
+
     /// Page Up/Down is Up/Down's coarse sibling: a decade, a quarter, a week —
     /// and it wraps within its own field exactly as the fine step does, so Page
     /// Up from December lands on March rather than rolling the year over.

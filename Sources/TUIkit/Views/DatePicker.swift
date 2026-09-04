@@ -28,7 +28,9 @@ public struct DatePickerComponents: OptionSet, Sendable {
 /// or time components requested. When focused, Left/Right move between the
 /// components, Up/Down adjust the active one, Page Up/Down move it by a coarse
 /// step (a decade, a quarter, a week — see `DateFieldModel.pageStep(_:)`),
-/// Home/End send it to the ends of its own range, and typing digits sets it:
+/// Home/End send it to the ends of its own range, and typing digits sets it —
+/// digits from any script, though the field's own presentation stays ASCII on
+/// purpose (see `DateFieldModel`):
 ///
 /// ```swift
 /// @State private var when = Date()
