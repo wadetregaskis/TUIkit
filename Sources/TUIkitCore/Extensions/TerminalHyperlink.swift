@@ -129,10 +129,11 @@ public struct TerminalHyperlink: Sendable, Equatable {
                 // destination that already contained "%41" must reach the host
                 // as "%41" and not as "A".
                 //
-                // Hand-rolled rather than `String(format:)`, which is
-                // Foundation — and this module deliberately has no Foundation
-                // dependency, so that one import would be paid by every
-                // platform TUIkitCore builds for.
+                // Hand-rolled rather than `String(format:)`: this runs for
+                // every byte of every link emitted, and a format call parses
+                // its format and allocates a String each time. (NOT because
+                // the module avoids Foundation — TUIkitCore imports it in
+                // five files, and did when this comment first said otherwise.)
                 result.unicodeScalars.append("%")
                 result.unicodeScalars.append(Self.hexDigits[Int(byte >> 4)])
                 result.unicodeScalars.append(Self.hexDigits[Int(byte & 0x0F)])
