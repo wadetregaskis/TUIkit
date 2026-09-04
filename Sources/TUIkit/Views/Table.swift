@@ -2726,7 +2726,10 @@ where Value.ID: Hashable {
         // published bands instead — `.live` feedback moves the rows out from
         // under this copy as the drag goes. Same split as `_ListCore`.
         let drawnBands = state.drawnBands
-        let rowIDs = data.map(\.id)
+        // `data` itself, not `data.map(\.id)`: this closure is rebuilt every
+        // render pass, and materialising every row's id each time cost O(rows)
+        // per frame for a lookup that is made once per click.
+        let rows = data
         let capturedPrimaryAction = primaryAction
         let dragSession = context.environment.dragAndDropSession
         // Where inside the grabbed row the press landed — the cell a `.cursor`
@@ -2867,12 +2870,12 @@ where Value.ID: Hashable {
                     // see ItemListHandler.handleClickSelection.
                     if captureHandler.completesMultiClick(on: index, clickCount: event.clickCount),
                         let action = capturedPrimaryAction,
-                        index >= 0, index < rowIDs.count
+                        index >= 0, index < rows.count
                     {
                         captureHandler.focusedIndex = index
                         // Spent — see the twin in `_ListCore`.
                         dispatcher.endMultiClickSequence()
-                        action(rowIDs[index])
+                        action(rows[index].id)
                     } else {
                         captureHandler.handleClickSelection(at: index, event: event)
                     }
