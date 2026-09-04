@@ -34,6 +34,30 @@ struct OpacityResolutionTests {
         color.backgroundCodes().joined(separator: ";")
     }
 
+    /// Opacity resolution collapses the rows it rebuilds, so a faded span
+    /// begins with the FUSED reset `ESC[0;…m`. The persistent-style wrappers
+    /// re-stated their style after the literal `ESC[0m` only, so a dimmed row
+    /// un-dimmed from its fade onward and a container background stopped at
+    /// the same point.
+    @Test("A persistent background and dim survive a collapsed reset")
+    func persistentStylesSurviveACollapsedReset() {
+        let fused = "\u{1B}[0;38;5;46mx"
+        let filled = ANSIRenderer.applyPersistentBackground(fused, color: .rgb(20, 20, 200))
+        let blue = backgroundCodes(.rgb(20, 20, 200))
+        #expect(filled.range(of: blue).map { filled[$0.upperBound...].contains("x") } == true, "\(filled.debugDescription)")
+        #expect(filled.components(separatedBy: blue).count >= 3, "restated after the fused reset: \(filled.debugDescription)")
+        let dimmed = ANSIRenderer.applyPersistentDim(fused)
+        #expect(dimmed.components(separatedBy: ANSIRenderer.dim).count >= 3, "\(dimmed.debugDescription)")
+        // …and end-to-end: a resolved fade, then the background wrapper.
+        var source = FrameBuffer(lines: ["faded" + ANSIRenderer.colorize("plain", foreground: .rgb(40, 200, 40))])
+        source.opacityRegions = [OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 0.5)]
+        let resolved = source.resolvingOpacity(
+            over: FrameBuffer(lines: [String(repeating: " ", count: 10)]), at: (x: 0, y: 0),
+            surface: .black, palette: palette())
+        let row = ANSIRenderer.applyPersistentBackground(resolved.lines[0], color: .rgb(20, 20, 200)) + ANSIRenderer.reset
+        #expect(!row.ansiSGRStateAt(visibleColumn: 5).renderedBackground.isEmpty, "the container background is in force under 'p': \(row.debugDescription)")
+    }
+
     /// A one-line buffer carrying one region over the whole of it.
     private func faded(_ line: String, _ alpha: Double, width: Int) -> FrameBuffer {
         var buffer = FrameBuffer(lines: [line])

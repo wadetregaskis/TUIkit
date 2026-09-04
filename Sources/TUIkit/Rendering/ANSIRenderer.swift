@@ -122,8 +122,10 @@ extension ANSIRenderer {
 
     /// Wraps a string in a background color that persists across ANSI resets.
     ///
-    /// Every occurrence of the reset code inside `string` is replaced with
-    /// `reset + bgCode`, so the background "survives" foreground-color resets.
+    /// Every occurrence of the reset code inside `string` — the collapsed
+    /// spelling `ESC[0;…m` included, see ``splittingCollapsedResets(_:)`` —
+    /// is replaced with `reset + bgCode`, so the background "survives"
+    /// foreground-color resets.
     /// This is necessary for container backgrounds where inner content contains
     /// its own ANSI reset sequences.
     ///
@@ -133,11 +135,7 @@ extension ANSIRenderer {
     /// - Returns: The string with persistent background applied.
     static func applyPersistentBackground(_ string: String, color: Color) -> String {
         let bgCode = backgroundCode(for: color)
-        let stringWithPersistentBg = string.replacing(
-            reset,
-            with: reset + bgCode
-        )
-        return bgCode + stringWithPersistentBg
+        return bgCode + splittingCollapsedResets(string).replacing(reset, with: reset + bgCode)
     }
 
     /// Wraps a string in faint (SGR 2) that persists across ANSI resets.
@@ -152,7 +150,21 @@ extension ANSIRenderer {
     /// - Parameter string: The text to draw faint.
     /// - Returns: The string with persistent dim applied.
     static func applyPersistentDim(_ string: String) -> String {
-        dim + string.replacing(reset, with: reset + dim) + reset
+        dim + splittingCollapsedResets(string).replacing(reset, with: reset + dim) + reset
+    }
+
+    /// `ESC[0;<params>m` spelled as `ESC[0m ESC[<params>m`, so that a
+    /// re-injection keyed on the literal reset sees every reset.
+    ///
+    /// `collapsingAdjacentSGR` nets a reset and the styling after it into one
+    /// escape, and opacity resolution collapses the rows it rebuilds — so a
+    /// row that has been through a fade begins its faded span with the fused
+    /// spelling. The persistent-style wrappers above re-state their style
+    /// after each `ESC[0m`; keyed on the literal alone they missed the fused
+    /// one, and a dimmed row un-dimmed from the fade onward. One splitter,
+    /// used by both wrappers and by the replay's background restoration.
+    static func splittingCollapsedResets(_ string: String) -> String {
+        string.replacing("\u{1B}[0;", with: reset + "\u{1B}[")
     }
 
     /// Moves the cursor to the specified position.

@@ -392,13 +392,6 @@ extension FrameDiffWriter {
         return lines
     }
 
-    /// A reset fused with the styling that follows it — the spelling
-    /// ``String/collapsingAdjacentSGR()`` gives a line's first absolute run.
-    private static let collapsedReset = "\u{1B}[0;"
-
-    /// What is left of a collapsed reset once its `ESC[0m` has been split off.
-    private static let sgrIntroducer = "\u{1B}["
-
     /// `styled` with the row's background put back after every reset.
     ///
     /// A reset returns the terminal to ITS default, which on Apple Terminal's
@@ -424,9 +417,7 @@ extension FrameDiffWriter {
 
     static func restoringBackground(in styled: String, bgCode: String, reset: String) -> String {
         guard !bgCode.isEmpty else { return styled }
-        return styled
-            .replacing(collapsedReset, with: reset + sgrIntroducer)
-            .replacing(reset, with: reset + bgCode)
+        return ANSIRenderer.splittingCollapsedResets(styled).replacing(reset, with: reset + bgCode)
     }
 
     /// Builds one terminal-ready output line from a raw buffer line (`nil` marks
