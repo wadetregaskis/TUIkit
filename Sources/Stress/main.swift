@@ -40,6 +40,9 @@ func flagValue(_ name: String) -> String? {
     return rawArgs[i + 1]
 }
 
+// From the registry, not a literal: the literal listed twelve of twenty ids
+// and said the interactive menu shows the rest, which shows titles only.
+let scenarioIDs = await MainActor.run { Scenarios.all.map(\.id).joined(separator: ", ") }
 let usageText = """
     Stress — a performance stress harness for TUIkit.
 
@@ -47,9 +50,8 @@ let usageText = """
     Self-check:   Stress --selfcheck [--scale N]
     Benchmark:    Stress --bench --scenario <id> [--iterations N] [--cols C] [--rows R] [--cold]
 
-    Scenarios are listed in the interactive menu; ids: megalist, scrollfollow, table, deep,
-    fanout, modifiers, textwall, anyview, dashboard, framedcolumns, churn,
-    kitchensink.
+    Scenario ids (the interactive menu shows titles, not ids):
+    \(scenarioIDs)
     """
 
 if rawArgs.contains("--help") || rawArgs.contains("-h") {
