@@ -188,11 +188,12 @@ struct ListRowAnchorHoldTests {
             "row \(anchored) moved: was line \(before), now \(after)")
     }
 
-    /// The contrast: with no bound row anchor, the List does NOT hold — the
-    /// same insert shifts the row. Guards that the hold is what does the work
-    /// (and that an un-anchored List is unaffected by the new machinery).
+    /// The contrast: with no bound row anchor, the List does NOT hold — it
+    /// keeps its OFFSET, so the rows on screen shift down by the number
+    /// inserted above them. Guards that the hold is what does the work (and
+    /// that an un-anchored List is unaffected by the new machinery).
     @Test("Without a bound anchor the same insert DOES move the row")
-    func withoutAnchorTheRowMoves() {
+    func withoutAnchorTheRowMoves() throws {
         let tui = TUIContext()
         let fm = FocusManager()
         var items = Array(0..<30)
@@ -201,12 +202,26 @@ struct ListRowAnchorHoldTests {
         // anchor: the comparison needs the row on screen to begin with.
         _ = settle(items: items, anchored: 20, tui: tui, fm: fm)
         let before = renderFrame(items: items, anchored: nil, tui: tui, fm: fm)
-        let lineBefore = screenLine(of: 20, in: before)
+
+        // Watch the row at the TOP of the viewport, not the row 20 the
+        // anchored tests watch. Holding the offset pushes row 20 five rows
+        // past the bottom of the six-row viewport, so `screenLine` answers nil
+        // for it — and `nil != Optional(6)` is true no matter what happened,
+        // including a viewport that jumped somewhere else entirely. A control
+        // that only ever compares against nil is not a control; this one
+        // compares two real lines, and `#require` is what keeps it that way.
+        let watched = 15
+        let lineBefore = try #require(
+            screenLine(of: watched, in: before),
+            "row \(watched) was not on screen to begin with: \(before)")
 
         items.insert(contentsOf: 100..<105, at: 5)
         let after = renderFrame(items: items, anchored: nil, tui: tui, fm: fm)
+        let lineAfter = try #require(
+            screenLine(of: watched, in: after),
+            "row \(watched) left the screen entirely: \(after)")
         #expect(
-            screenLine(of: 20, in: after) != lineBefore,
-            "an un-anchored List holds the position, so the row shifts: \(before) → \(after)")
+            lineAfter == lineBefore + 5,
+            "an un-anchored List holds the offset, so the row shifts down by the five inserted rows: \(before) → \(after)")
     }
 }
