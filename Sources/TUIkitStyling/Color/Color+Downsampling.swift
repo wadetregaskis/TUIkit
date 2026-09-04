@@ -258,9 +258,11 @@ extension Color {
         let mustKeepHue = (target.a * target.a + target.b * target.b).squareRoot() >= Self.hueFloor
         var bestIndex: UInt8 = 16
         var bestDistance = Double.infinity
+        let targetChroma = (target.a * target.a + target.b * target.b).squareRoot()
         for index in candidates.sorted() {
             if mustKeepHue && !Self.keepsItsHue[Int(index) - 16] { continue }
-            let distance = hueWeightedDistanceSquared(target, palette256Lab[Int(index) - 16])
+            let distance = hueWeightedDistanceSquared(
+                target, chroma: targetChroma, palette256Lab[Int(index) - 16])
             if distance < bestDistance {
                 bestDistance = distance
                 bestIndex = index
@@ -312,19 +314,30 @@ extension Color {
         if let cached { return cached }
 
         let target = oklab(red: red, green: green, blue: blue)
+        let targetChroma = (target.a * target.a + target.b * target.b).squareRoot()
         // A colour that HAS a hue may only quantise to something that has one
         // too — or to black. See `keepsItsHue`.
-        let mustKeepHue = (target.a * target.a + target.b * target.b).squareRoot() >= Self.hueFloor
+        let mustKeepHue = targetChroma >= Self.hueFloor
         var bestIndex = 16
         var bestDistance = Double.infinity
-        // Deliberate linear scan: n=240, memoised below, and OKLab distance has no ordering to exploit — don't "optimise".
-        for index in 16...255 {
-            if mustKeepHue && !Self.keepsItsHue[index - 16] { continue }
-            let candidate = palette256Lab[index - 16]
-            let distance = hueWeightedDistanceSquared(target, candidate)
-            if distance < bestDistance {
-                bestDistance = distance
-                bestIndex = index
+        // Deliberate linear scan: n=240, and OKLab distance has no ordering to
+        // exploit — don't "optimise" it into a tree. The buffer pointers are
+        // not that optimisation: they are the same walk with the two static
+        // arrays bound once instead of re-checked on each of 240 iterations,
+        // which matters because the memo below stopped covering this. A picture
+        // asks per CELL, thousands of distinct colours at a time, and every one
+        // of them is a miss.
+        Self.keepsItsHue.withUnsafeBufferPointer { keepsItsHue in
+            palette256Lab.withUnsafeBufferPointer { candidates in
+                for offset in 0..<candidates.count {
+                    if mustKeepHue && !keepsItsHue[offset] { continue }
+                    let distance = hueWeightedDistanceSquared(
+                        target, chroma: targetChroma, candidates[offset])
+                    if distance < bestDistance {
+                        bestDistance = distance
+                        bestIndex = offset + 16
+                    }
+                }
             }
         }
 
@@ -335,11 +348,20 @@ extension Color {
         return UInt8(bestIndex)
     }
 
-    /// OKLab coordinates for palette indices 16...255, in index order.
-    private static let palette256Lab: [(l: Double, a: Double, b: Double)] = (16...255).map {
-        let rgb = palette256ToRGB(UInt8($0))
-        return oklab(red: rgb.red, green: rgb.green, blue: rgb.blue)
-    }
+    /// OKLab coordinates for palette indices 16...255, in index order, each
+    /// with the chroma it implies.
+    ///
+    /// The chroma is STORED rather than derived at comparison time because
+    /// ``hueWeightedDistanceSquared`` needs `sqrt(a² + b²)` for the candidate on
+    /// every single comparison — the same square root of the same fixed number,
+    /// 240 times per query. Storing it changes no answer: it is the same
+    /// expression over the same values, evaluated once.
+    private static let palette256Lab: [(l: Double, a: Double, b: Double, chroma: Double)] =
+        (16...255).map {
+            let rgb = palette256ToRGB(UInt8($0))
+            let lab = oklab(red: rgb.red, green: rgb.green, blue: rgb.blue)
+            return (lab.l, lab.a, lab.b, (lab.a * lab.a + lab.b * lab.b).squareRoot())
+        }
 
     private static let quantiseCacheLock = NSLock()
     nonisolated(unsafe) private static var quantiseCache: [UInt32: UInt8] = [:]
@@ -458,13 +480,14 @@ extension Color {
     /// smooth ramp. Charging chroma loss removes all four and leaves an even
     /// `FF8700×3 FFAF00×4 FFD700×5 FFFF00×4`. Gaining chroma is charged as
     /// before, and a neutral target has none to lose, so greys are untouched.
+    @inline(__always)
     private static func hueWeightedDistanceSquared(
         _ lhs: (l: Double, a: Double, b: Double),
-        _ rhs: (l: Double, a: Double, b: Double)
+        chroma chromaL: Double,
+        _ rhs: (l: Double, a: Double, b: Double, chroma: Double)
     ) -> Double {
         let deltaL = lhs.l - rhs.l
-        let chromaL = (lhs.a * lhs.a + lhs.b * lhs.b).squareRoot()
-        let chromaR = (rhs.a * rhs.a + rhs.b * rhs.b).squareRoot()
+        let chromaR = rhs.chroma
         let deltaC = chromaL - chromaR
         let deltaA = lhs.a - rhs.a
         let deltaB = lhs.b - rhs.b

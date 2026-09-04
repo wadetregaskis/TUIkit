@@ -153,10 +153,10 @@ extension ASCIIPalette {
     /// cell.
     ///
     /// Two departures from every other palette's table, both forced by the same
-    /// number: `Color`'s answer costs about 480 ns in a release build, where a
+    /// number: `Color`'s answer costs about 450 ns in a release build, where a
     /// sixteen-entry OKLab search costs about 40.
     ///
-    /// - **Built once**, not per conversion. 32,768 answers at 480 ns is 16 ms,
+    /// - **Built once**, not per conversion. 32,768 answers at 450 ns is 15 ms,
     ///   which is more than converting a whole picture costs and would be paid
     ///   again for the next one. It is the same table every time — these 240
     ///   colours are the terminal's, not the app's — so it is a constant, and
@@ -165,7 +165,7 @@ extension ASCIIPalette {
     ///   straddling two entries is looked up exactly instead of guessed, and it
     ///   works because a sixteen-colour palette has few such cells. Measured for
     ///   these 240: only 33% of cells have six agreeing neighbours, so the
-    ///   fallback would fire for 75% of PIXELS at 480 ns each — 0.36 s for a
+    ///   fallback would fire for 75% of PIXELS at 450 ns each — 0.34 s for a
     ///   megapixel, where the whole conversion costs 11 ms. So the table answers
     ///   everywhere, and what that costs in accuracy is measured and pinned in
     ///   `PaletteTableFidelityTests` like every other palette's.

@@ -135,7 +135,7 @@ struct PaletteTableFidelityTests {
     ///
     /// `ASCIIPalette.terminalQuantisationTable` has no boundary fallback: with
     /// 240 entries only 33% of cells have six agreeing neighbours, so falling
-    /// back would fire for three pixels in four at 480 ns each, which is over a third
+    /// back would fire for three pixels in four at 450 ns each, which is a third
     /// of a second for a megapixel. The table answers everywhere instead, and
     /// this is what that costs.
     ///

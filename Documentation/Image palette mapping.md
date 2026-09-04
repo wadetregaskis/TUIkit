@@ -348,18 +348,18 @@ a 180×75 photograph, M-series):
 
 | path | asks | before | after |
 |---|---|---|---|
-| glyph (`convert`, 120×50 cells) | twice per cell | 0.75 ms | 7.0 ms |
+| glyph (`convert`, 120×50 cells) | twice per cell | 0.75 ms | 6.1 ms |
 | pixel (`recoloured`, 960×850) | once per pixel | 11.7 ms | 9.3 ms |
 
 The per-cell path pays for exactness — `Color`'s answer is a 240-entry scan at
-about 480 ns, against a few nanoseconds of arithmetic — and gets it: the index
+about 450 ns, against a few nanoseconds of arithmetic — and gets it: the index
 in a glyph's `38;5;n` is now bit-identical to the one the UI beside it is
 painted with. That conversion is cached in `StateStorage` per view, so it is
 paid when the picture, the size or the settings change, and `.trueColor` on the
 same picture costs 4.4 ms for comparison.
 
-The per-pixel path cannot pay for exactness — 800,000 pixels × 480 ns is
-two fifths of a second — so it takes the same table every other searched palette
+The per-pixel path cannot pay for exactness — 800,000 pixels × 450 ns is
+over a third of a second — so it takes the same table every other searched palette
 takes, built once for the process because these 240 colours never change. It
 comes out **faster** than the arithmetic it replaced, because a table lookup is
 cheaper than three roundings and a branch. What the table costs in accuracy is
