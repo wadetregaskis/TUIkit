@@ -79,6 +79,17 @@ struct InputSplitInvarianceTests {
             ("meta-shift-tab", esc + esc + Array("[Z".utf8)),
             ("meta-up", esc + esc + Array("[A".utf8)),
             ("meta-shift-tab-then-text", esc + esc + Array("[Z".utf8) + Array("x".utf8)),
+            // Replies the terminal volunteered. They are string-terminated
+            // rather than final-byte-terminated, so every place that has to
+            // decide "is this ESC an introducer?" has to know about them —
+            // including the deferred-ESC re-attach, which once knew only
+            // `[` and `O` and spelled a split reply out as typing.
+            ("apc-ack", esc + Array("_Gi=1;OK".utf8) + esc + Array("\\".utf8)),
+            ("osc-bg", esc + Array("]11;rgb:0000/0000/0000\u{07}".utf8)),
+            ("apc-ack-then-text", esc + Array("_Gi=1;OK".utf8) + esc + Array("\\x".utf8)),
+            // A device-attributes answer: a CSI longer than any keystroke,
+            // which is the shape that used to be truncated at 32 bytes.
+            ("da1", esc + Array("[?63;1;2;4;6;9;15;16;18;21;22;28;29c".utf8)),
         ]
 
         var reports: [String] = []

@@ -130,13 +130,16 @@ final class Terminal: TerminalProtocol {
     ///
     /// A `0x1B` at the front is ambiguous: it can be the Escape key, OR the
     /// introducer of a CSI/SS3 sequence (arrow key, mouse report, focus event,
-    /// …) whose remaining bytes were split into a later `read()`. Committing it
-    /// as Escape too early strands the sequence's `[` / `O` to be parsed as a
-    /// literal keystroke on the next pass — which is how an arrow key could
-    /// momentarily register as `[` (e.g. jumping `Example` to its `[` =
+    /// …) or of a terminal reply (a graphics acknowledgement, an OSC colour
+    /// answer) whose remaining bytes were split into a later `read()`.
+    /// Committing it as Escape too early strands that introducer to be parsed
+    /// as a literal keystroke on the next pass — which is how an arrow key
+    /// could momentarily register as `[` (e.g. jumping `Example` to its `[` =
     /// Sliders page). So instead we hold the decision one round: the next
-    /// ``readEvent()`` re-attaches the `ESC` if a `[`/`O` arrived (parsing the
-    /// real sequence, no Escape emitted), and otherwise commits the Escape.
+    /// ``readEvent()`` re-attaches the `ESC` if an introducer arrived (parsing
+    /// the real sequence, no Escape emitted), and otherwise commits the
+    /// Escape. `Terminal+Input.swift`'s `continuesEscapeSequence(_:)` is the
+    /// one place that says which bytes those are.
     var pendingBareEsc: Bool = false
 
     /// The `ESC ESC` twin of ``pendingBareEsc``: both ESCs have left the buffer

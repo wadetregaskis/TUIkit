@@ -483,6 +483,50 @@ struct TerminalReplySwallowingTests {
         #expect(seen.allSatisfy { $0 == nil })
     }
 
+    /// A reply's `ESC` and its tail can land in different `read()`s — a laggy
+    /// ssh hop needs only the two 25 ms polls that arm the deferred bare ESC.
+    /// The re-attach then has to recognise the same introducers the rest of
+    /// the parser does; it listed only `[` and `O`, so an `ESC` whose tail was
+    /// a reply committed as the Escape key and the payload was spelled out
+    /// after it (`=` being the zoom shortcut on the image pages).
+    @Test("A reply whose ESC arrived in an earlier read is still swallowed")
+    func splitReplyIsSwallowed() {
+        for tail in ["_Gi=7;OK\u{1B}\\", "]11;rgb:1e1e/1e1e/1e1e\u{07}", "P1+r5375=31\u{1B}\\"] {
+            let (terminal, stage) = makeTerminal()
+            stage([0x1B])
+            // bareEscStaleFrames == 2: two silent pumps arm the deferral.
+            #expect(terminal.readEvent() == nil)
+            #expect(terminal.readEvent() == nil)
+
+            stage(Array(tail.utf8) + Array("z".utf8))
+            #expect(
+                terminal.readEvent() == .key(KeyEvent(character: "z")),
+                "leaked out of a split \(tail.debugDescription)")
+        }
+    }
+
+    /// The `pendingAltEsc` twin of the above: `ESC ESC` deferred, then a reply.
+    /// Same rule, same one copy of it — what matters is that no character of
+    /// the reply is delivered as typing.
+    @Test("A deferred ESC ESC does not spell out a reply that follows it")
+    func splitDoubledEscapeDoesNotLeakAReply() {
+        let (terminal, stage) = makeTerminal()
+        stage([0x1B, 0x1B])
+        #expect(terminal.readEvent() == nil)
+        #expect(terminal.readEvent() == nil)
+
+        stage(Array("_Gi=7;OK\u{1B}\\".utf8))
+        var seen: [TerminalInput] = []
+        for _ in 0..<16 {
+            if let event = terminal.readEvent() { seen.append(event) }
+        }
+        let leaked = seen.contains { event in
+            guard case .key(let key) = event, case .character = key.key else { return false }
+            return true
+        }
+        #expect(!leaked, "the reply was typed out: \(seen)")
+    }
+
     /// And the sequence that INTERRUPTS a reply still parses, rather than
     /// being eaten with it — the rule the CSI walk already follows.
     @Test("A keypress interrupting a reply is not lost with it")

@@ -36,6 +36,22 @@ extension Terminal {
     /// terminal and discarded so it can't pin memory forever.
     private static let maxPasteBytes = 1 << 20  // 1 MiB
 
+    /// Whether `byte` turns a preceding `ESC` into the introducer of a
+    /// sequence, rather than leaving that `ESC` standing as the Escape key:
+    /// CSI `[`, SS3 `O`, or one of the string-terminated families' introducers
+    /// (`] P X ^ _`).
+    ///
+    /// One copy of the rule because three places have to ask it — the two
+    /// deferred-`ESC` re-attaches in ``readEvent()`` and the stale-partial arm
+    /// in ``resolveStuckPartial()``. The re-attaches used to list only `[` and
+    /// `O`, so a reply split across two `read()`s — its `ESC` in the first,
+    /// `_Gi=1;OK ESC \` in the second — committed the Escape key and then
+    /// typed the payload out, which is exactly what the string-family branch
+    /// of ``tryExtractRegularEvent()`` exists to prevent.
+    private static func continuesEscapeSequence(_ byte: UInt8) -> Bool {
+        byte == 0x5B || byte == 0x4F || String.isStringFamilyIntroducer(UInt32(byte))
+    }
+
     /// Stale frames before a lone `ESC` is committed (the Escape-vs-sequence
     /// timeout). Short, so Escape stays responsive.
     private static let bareEscStaleFrames = 2
@@ -378,15 +394,15 @@ extension Terminal {
             appendDrain()
         }
 
-        // Resolve a deferred bare ESC (armed by `resolveStuckPartial`). If a CSI
-        // `[` or SS3 `O` introducer is now at the front, the earlier `ESC` was
-        // this sequence's introducer, split into a later read — re-attach it and
+        // Resolve a deferred bare ESC (armed by `resolveStuckPartial`). If a
+        // sequence introducer is now at the front, the earlier `ESC` was that
+        // sequence's introducer, split into a later read — re-attach it and
         // parse the real sequence (no Escape emitted, no `[` leaked as a literal
         // page shortcut). Otherwise the `ESC` really was the Escape key: commit
         // it now (the next byte, if any, is handled on the following call).
         if pendingBareEsc {
             pendingBareEsc = false
-            if !input.isEmpty, input[0] == 0x5B || input[0] == 0x4F {
+            if !input.isEmpty, Self.continuesEscapeSequence(input[0]) {
                 input.insert(0x1B, at: 0)
             } else {
                 return finalize(bytes: [0x1B])
@@ -400,7 +416,7 @@ extension Terminal {
         // introducer turns up; otherwise the chord stands.
         if pendingAltEsc {
             pendingAltEsc = false
-            if !input.isEmpty, input[0] == 0x5B || input[0] == 0x4F {
+            if !input.isEmpty, Self.continuesEscapeSequence(input[0]) {
                 input.insert(copying: [0x1B, 0x1B], at: 0)
             } else {
                 return finalize(bytes: [0x1B, 0x1B])
@@ -481,9 +497,9 @@ extension Terminal {
     ///
     /// - A lone `ESC` is *deferred* (``pendingBareEsc``) after the short
     ///   ``bareEscStaleFrames`` timeout, not committed outright: its
-    ///   continuation may be a CSI/SS3 sequence split into a later read. The
-    ///   next ``readEvent()`` re-attaches it if a `[`/`O` arrived, else commits
-    ///   the Escape.
+    ///   continuation may be a CSI/SS3 sequence — or a terminal reply — split
+    ///   into a later read. The next ``readEvent()`` re-attaches it if an
+    ///   introducer arrived, else commits the Escape.
     /// - An incomplete `ESC [` / `ESC O` is unambiguously a control sequence, so
     ///   we KEEP WAITING for its terminator — a read-split sequence's tail
     ///   (arrow, mouse report, …) arrives on a later read and completes it.
@@ -507,9 +523,7 @@ extension Terminal {
                 }
                 return nil
             }
-            if input[1] == 0x5B || input[1] == 0x4F
-                || String.isStringFamilyIntroducer(UInt32(input[1]))
-            {
+            if Self.continuesEscapeSequence(input[1]) {
                 // Incomplete CSI/SS3, or a terminal reply whose terminator has
                 // not arrived: wait for it; drop only a long-dead sequence.
                 if staleFrames >= Self.deadSequenceStaleFrames {
