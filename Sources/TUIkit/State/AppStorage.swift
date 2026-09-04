@@ -200,18 +200,28 @@ extension JSONFileStorage {
     /// failures report through ``StorageDiagnostics``; see
     /// ``synchronize()`` for the flush that makes a pending write durable.
     public func setValue<T: Codable>(_ value: T, forKey key: String) {
+        let data: Data
+        do {
+            data = try JSONEncoder().encode(value)
+        } catch {
+            // Reported before the lock is taken at all, deliberately, rather
+            // than from a `catch` inside the critical section: ``report`` runs
+            // the app's handler synchronously on this thread, and `lock` is a
+            // plain `NSLock`. A handler that touches this backend — even just
+            // `value(forKey:)`, the coalescing ``StorageDiagnostics`` invites —
+            // re-entered it and hung the app for good. `flushToDisk` reports
+            // after its own unlock for the same reason.
+            StorageDiagnostics.report(
+                StorageFailure(operation: .encode, key: key, path: fileURL.path, underlying: error))
+            return
+        }
+
         lock.lock()
         defer { lock.unlock() }
 
-        do {
-            let data = try JSONEncoder().encode(value)
-            cache[key] = data
-            dirtyKeys.insert(key)
-            saveToDiskAsync()
-        } catch {
-            StorageDiagnostics.report(
-                StorageFailure(operation: .encode, key: key, path: fileURL.path, underlying: error))
-        }
+        cache[key] = data
+        dirtyKeys.insert(key)
+        saveToDiskAsync()
     }
 
     /// Removes any value stored for `key`, scheduling the write as

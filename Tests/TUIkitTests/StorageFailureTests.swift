@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Dispatch
 import Foundation
 import Testing
 
@@ -73,6 +74,42 @@ struct StorageFailureTests {
         // handler that localized deadlocked the switch.
         unwritable.setLanguage(.german)
         #expect(observed.withLock { $0 } == "Abbrechen")
+    }
+
+    @Test("A failure handler may read the backend that reported")
+    func handlerMayReadBackend() {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("tuikit-storage-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let storage = JSONFileStorage(fileURL: root.appendingPathComponent("settings.json"))
+        // Scoped to this test's own key: the parallel suites report here too.
+        let key = "doomed-\(UUID().uuidString)"
+
+        let previous = StorageDiagnostics.onFailure
+        StorageDiagnostics.onFailure = { failure in
+            guard failure.key == key else { return }
+            // The coalescing shape ``StorageDiagnostics`` invites: consult what
+            // was reported last before showing the same failure again.
+            _ = storage.value(forKey: "lastStorageError") as String?
+        }
+        defer { StorageDiagnostics.onFailure = previous }
+
+        // Not a plain call, and not a `Task`: `setValue` used to report the
+        // encode failure while still holding its lock, so the handler's read
+        // re-entered a non-recursive `NSLock` and never came back. On the test
+        // thread that hangs the whole suite instead of failing this one test,
+        // and a wedged cooperative-pool thread is one the suite never gets back.
+        let done = DispatchSemaphore(value: 0)
+        Thread.detachNewThread {
+            storage.setValue(Unencodable(), forKey: key)
+            done.signal()
+        }
+
+        #expect(
+            done.wait(timeout: .now() + 2) == .success,
+            "setValue reported the encode failure while still holding its lock")
     }
 
     @Test("A write to an unwritable path is reported, not dropped")
