@@ -34,12 +34,13 @@ struct TableRowAnchorHoldTests {
     private static let height = 12
 
     private func renderFrame(
-        ids: [Int], anchored: Int?, tui: TUIContext, fm: FocusManager
+        ids: [Int], anchored: Int?, tui: TUIContext, fm: FocusManager, hiddenIndicators: Bool = false
     ) -> [String] {
         let rows = ids.map { Row(id: $0) }
         let table = Table(rows, selection: .constant(Int?.none)) {
             TableColumn("Name", value: \Row.name)
         }
+        .scrollIndicators(hiddenIndicators ? .hidden : .automatic)
         .frame(height: Self.height)
 
         var env = EnvironmentValues()
@@ -64,6 +65,33 @@ struct TableRowAnchorHoldTests {
 
     private func screenLine(of row: Int, in lines: [String]) -> Int? {
         lines.firstIndex { $0.contains("row \(row)") && !$0.contains("row \(row)0") }
+    }
+
+    @Test("Anchoring the row already on the last line does not scroll the table")
+    func adoptingTheBottomRowLeavesTheOffsetAlone() {
+        // Under the default bar (spends no line) and with the indicators hidden
+        // (spends none either). The single-line fallback subtracted the
+        // reservation from a viewport that had ALREADY given the line up, so
+        // designating the row on the last line scrolled by one under a bar and
+        // by two with the indicators hidden. The "▲/▼ N more" style spends two
+        // lines and was right all along.
+        for hidden in [false, true] {
+            let tui = TUIContext()
+            let fm = FocusManager()
+            let ids = Array(0..<30)
+            let plain = renderFrame(ids: ids, anchored: nil, tui: tui, fm: fm, hiddenIndicators: hidden)
+            guard let bottom = ids.last(where: { screenLine(of: $0, in: plain) != nil }),
+                let before = screenLine(of: bottom, in: plain)
+            else {
+                Issue.record("no rows drawn (hidden=\(hidden))")
+                continue
+            }
+            let after = renderFrame(ids: ids, anchored: bottom, tui: tui, fm: fm, hiddenIndicators: hidden)
+            #expect(
+                screenLine(of: bottom, in: after) == before,
+                "hidden=\(hidden): row \(bottom) moved from line \(before) to \(String(describing: screenLine(of: bottom, in: after)))")
+            #expect(screenLine(of: 0, in: after) != nil, "hidden=\(hidden): the table scrolled")
+        }
     }
 
     private func settle(

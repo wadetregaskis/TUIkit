@@ -239,9 +239,7 @@ extension ItemListHandler {
     /// a single-line `Table` (where rows and lines are the same thing anyway)
     /// and the handler's own unit tests, which set no content height.
     private func lastHoldableRow(for ordinal: Int) -> Int {
-        guard let rowHeight, contentHeight != nil else {
-            return max(0, viewportHeight - (showsScrollbar ? 1 : 2))
-        }
+        guard let rowHeight, contentHeight != nil else { return lastHoldableLineRow }
         let budget = rowLineBudget
         var used = max(1, rowHeight(ordinal))
         var rows = 0
@@ -252,6 +250,25 @@ extension ItemListHandler {
             index -= 1
         }
         return rows
+    }
+
+    /// The single-line answer, for a `Table` whose rows are its lines.
+    ///
+    /// NOT `viewportHeight` minus the indicator reservation: on the single-line
+    /// `Table` path `viewportHeight` is still PROVISIONAL when the hold is
+    /// applied — `contentHeight - 1`, the 'above' line already taken out — so
+    /// subtracting the reservation from it again put the last holdable row one
+    /// line too high under a bar (a bar spends no line) and two too high with
+    /// the indicators hidden, and designating the row already on the last line
+    /// scrolled the table by that much. The capacity is what the chrome actually
+    /// spends: two lines for the "▲/▼ N more" pair, nothing otherwise.
+    private var lastHoldableLineRow: Int {
+        if let contentHeight {
+            return max(0, contentHeight - (reservesIndicatorLine ? 2 : 0) - 1)
+        }
+        // The handler's own unit tests set no content height; there
+        // `viewportHeight` is the real one.
+        return max(0, viewportHeight - (showsScrollbar ? 1 : 2))
     }
 
     /// The held anchor row's current ordinal, via an O(1) memo (the key usually
