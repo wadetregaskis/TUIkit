@@ -901,7 +901,24 @@ extension FrameBuffer {
         // phantom click target sitting wherever later siblings land. Trimmed
         // to the box, dropped when nothing remains.
         result.overlays = overlays
-        result.opacityRegions = opacityRegions
+        // Opacity regions are IN-FLOW, like hit regions — a rectangle over
+        // cells that are in this buffer — and are trimmed on the same rule.
+        // Carried verbatim, a region kept for clipped-away rows named
+        // whatever a later sibling put there: a TabView's filler rows and its
+        // bottom rule faded because a tab's content had been cut to the panel.
+        result.opacityRegions = opacityRegions.compactMap { region -> OpacityRegion? in
+            let left = max(0, region.offsetX)
+            let top = max(0, region.offsetY)
+            let right = min(region.offsetX + region.width, maxWidth)
+            let bottom = min(region.offsetY + region.height, maxHeight)
+            guard right > left, bottom > top else { return nil }
+            var trimmed = region
+            trimmed.offsetX = left
+            trimmed.offsetY = top
+            trimmed.width = right - left
+            trimmed.height = bottom - top
+            return trimmed
+        }
         result.hitTestRegions = hitTestRegions.compactMap { region -> HitTestRegion? in
             let width = min(region.offsetX + region.width, maxWidth) - max(0, region.offsetX)
             let height = min(region.offsetY + region.height, maxHeight) - max(0, region.offsetY)
