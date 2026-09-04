@@ -86,6 +86,36 @@ struct AlignmentGuideModifierTests {
         #expect(buffer.width == 4)
     }
 
+    @Test("A guide that is not a coordinate renders instead of trapping")
+    func nonCoordinateGuideRenders() {
+        // `{ d in Double(d.width) / Double(d.height) }` on a zero-height child
+        // is how an app reaches `∞` without writing it; `.infinity` is the
+        // blunt form of the same thing. Both used to trap inside the MEASURE
+        // pass — `_VStackCore.sizeThatFits` — so there was never a buffer to
+        // assert on, in this suite or in the app.
+        for guide in [Double.infinity, -.infinity, .nan, 1e300] {
+            let buffer = renderToBuffer(
+                VStack(alignment: .leading) {
+                    Text("•").alignmentGuide(.leading) { _ in guide }
+                    Text("item")
+                },
+                context: makeRenderContext(width: 30, height: 4))
+
+            #expect(buffer.lines.count == 2, "guide \(guide) -> \(buffer.lines)")
+            #expect(buffer.width <= 30, "guide \(guide) -> width \(buffer.width)")
+            #expect(indents(buffer).allSatisfy { $0 >= 0 })
+        }
+
+        // The vertical twin, through an HStack.
+        let horizontal = renderToBuffer(
+            HStack(alignment: .top) {
+                Text("a").alignmentGuide(.top) { _ in .infinity }
+                Text("b")
+            },
+            context: makeRenderContext(width: 30, height: 4))
+        #expect(!horizontal.lines.isEmpty)
+    }
+
     @Test("A guide on a lazy stack's row is not silently inert")
     func lazyStackHonoursTheGuide() {
         // The `.anchorPosition` trap, pinned: `LazyVStack` is a different render

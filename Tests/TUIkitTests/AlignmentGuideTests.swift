@@ -20,6 +20,24 @@ extension HorizontalAlignment {
     fileprivate static let oneThird = Self(OneThird.self)
 }
 
+/// A guide whose rule produces a value that is not a coordinate. Nobody writes
+/// `.infinity` on purpose; dividing by a dimension that is legitimately zero —
+/// `childOffset` measures on ONE axis, so the other is always zero — is how an
+/// app arrives at one by accident.
+private enum ZeroDivideID: AlignmentID {
+    static func defaultValue(in context: ViewDimensions) -> Double {
+        Double(context.width) / Double(context.height)
+    }
+}
+
+extension HorizontalAlignment {
+    fileprivate static let zeroDivide = Self(ZeroDivideID.self)
+}
+
+extension VerticalAlignment {
+    fileprivate static let zeroDivide = Self(ZeroDivideID.self)
+}
+
 /// `HorizontalAlignment` and `VerticalAlignment` are SwiftUI-shaped structs over
 /// ``AlignmentID`` rather than closed enums, so apps can define their own
 /// guides.
@@ -140,6 +158,56 @@ struct AlignmentGuideTests {
         let dimensions = ViewDimensions(width: 10, height: 5)
         #expect(dimensions[explicit: HorizontalAlignment.center] == nil)
         #expect(dimensions[explicit: VerticalAlignment.top] == nil)
+    }
+
+    // MARK: - Values that are not coordinates
+
+    /// A guide is caller arithmetic, so it can be anything a `Double` holds.
+    /// Resolving one used to reach `Int(_: Double)`, which traps on NaN, on
+    /// either infinity and on any magnitude past `Int`'s range — and it fired
+    /// on the child that SET the guide, whose own base is `merged - guide`,
+    /// i.e. `∞ - ∞`.
+    @Test(
+        "A guide that is not a coordinate resolves instead of trapping",
+        arguments: [
+            [Double.infinity, 0], [-.infinity, 0], [0, .infinity], [.nan, 0], [0, .nan],
+            [1e300, 0], [-1e300, 0],
+        ])
+    func nonCoordinateGuideResolves(resolved: [Double]) {
+        let run = AlignmentGuideRun.resolve(
+            resolved: resolved, sizes: [3, 3], fixedExtent: nil, minimumExtent: 0
+        ) { Double($0) / 2 }
+        #expect(run.offsets.count == 2)
+        // Bounded by the coordinate limit, NOT merely finite: the extent is
+        // what a container pads a buffer to, so an `Int.max` from a saturating
+        // conversion would trade the trap for an allocation.
+        #expect((0...1_100_000).contains(run.extent), "extent \(run.extent)")
+        #expect(
+            run.offsets.allSatisfy { (0...run.extent).contains($0) },
+            "offsets \(run.offsets) within 0...\(run.extent)")
+    }
+
+    @Test("The single-child placement path resolves one too")
+    func nonCoordinateGuidePlacement() {
+        // `.frame(alignment:)` / `.overlay(alignment:)`: one guide in a region
+        // whose extent is already decided. `merged` IS the guide there, so
+        // `merged - guide` is `∞ - ∞` for every non-finite value.
+        for guide in [Double.infinity, -.infinity, .nan, 1e300] {
+            let run = AlignmentGuideRun.resolve(
+                resolved: [guide], sizes: [4], fixedExtent: 10, minimumExtent: 10
+            ) { Double($0) / 2 }
+            #expect(run.extent == 10, "guide \(guide) must not move a fixed extent")
+            #expect((0...6).contains(run.offsets[0]), "guide \(guide) -> \(run.offsets[0])")
+        }
+    }
+
+    @Test("A custom AlignmentID that answers with NaN or infinity still places")
+    func nonCoordinateCustomAlignmentID() {
+        // No `.alignmentGuide` involved: `childOffset` subtracts two
+        // caller-supplied defaults and converted the difference the same way.
+        #expect((0...7).contains(HorizontalAlignment.zeroDivide.childOffset(childWidth: 3, in: 10)))
+        #expect((0...10).contains(HorizontalAlignment.zeroDivide.childOffset(childWidth: 0, in: 10)))
+        #expect((0...7).contains(VerticalAlignment.zeroDivide.childOffset(childHeight: 3, in: 10)))
     }
 
     @Test("An explicit guide overrides the default")

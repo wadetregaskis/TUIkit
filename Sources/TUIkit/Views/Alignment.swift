@@ -233,7 +233,12 @@ extension HorizontalAlignment {
     func childOffset(childWidth: Int, in totalWidth: Int) -> Int {
         let region = ViewDimensions(width: totalWidth, height: 0)
         let child = ViewDimensions(width: childWidth, height: 0)
-        let offset = Int((self[dimensions: region] - self[dimensions: child]).rounded(.down))
+        // `Int(clamping:)`, because both guides come from a caller-written
+        // ``AlignmentID/defaultValue(in:)``: this axis measures with the other
+        // one at zero, so a rule that divides by it answers `±∞` or NaN, and
+        // `Int(_:)` traps on all three. The clamp below pins the result to the
+        // region either way.
+        let offset = Int(clamping: (self[dimensions: region] - self[dimensions: child]).rounded(.down))
         return min(max(0, offset), max(0, totalWidth - childWidth))
     }
 
@@ -251,7 +256,8 @@ extension VerticalAlignment {
     func childOffset(childHeight: Int, in totalHeight: Int) -> Int {
         let region = ViewDimensions(width: 0, height: totalHeight)
         let child = ViewDimensions(width: 0, height: childHeight)
-        let offset = Int((self[dimensions: region] - self[dimensions: child]).rounded(.down))
+        // See the horizontal twin for why the conversion clamps.
+        let offset = Int(clamping: (self[dimensions: region] - self[dimensions: child]).rounded(.down))
         return min(max(0, offset), max(0, totalHeight - childHeight))
     }
 
