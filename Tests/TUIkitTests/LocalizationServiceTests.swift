@@ -27,6 +27,16 @@ final class LocalizationServiceTests {
         sut.setLanguage(.english)
     }
 
+    @Test("Registering app translations clears the render memo, not only the frame")
+    func registeringClearsTheMemo() {
+        // A memoized row's strings are outside its memo key, so a plain
+        // re-render served the pre-registration text for as long as the row's
+        // element compared equal.
+        _ = AppState.shared.consumeNeedsCacheClear()
+        sut.register(translations: ["en": ["greeting": "Hello"]])
+        #expect(AppState.shared.consumeNeedsCacheClear())
+    }
+
     deinit {
         try? FileManager.default.removeItem(atPath: configDir)
     }

@@ -149,7 +149,10 @@ public final class LocalizationService: @unchecked Sendable {
         for (code, table) in translations {
             appTranslations[code, default: [:]].merge(table) { _, new in new }
         }
-        AppState.shared.setNeedsRender()
+        // With a cache clear: a memoized row's strings are outside its memo
+        // key, so a re-render alone served the pre-registration text for as
+        // long as the row's element compared equal.
+        AppState.shared.setNeedsRenderWithCacheClear()
     }
 
     /// Resolves a localized string using a dot-notation key.
