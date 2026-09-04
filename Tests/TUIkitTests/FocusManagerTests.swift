@@ -463,4 +463,39 @@ struct EndOfRenderPassFocusNotificationTests {
         #expect(manager.currentFocusedID == "first")
         #expect(repaints == 0, "or the loop would re-render forever and never idle")
     }
+
+    /// The same invariant, for the one declaration that re-asserts itself on
+    /// EVERY pass: a `.userInitiated` `.defaultFocus`. When its target cannot
+    /// take the focus — `.disabled(true)`, or `.hidden()`, which registers the
+    /// `@FocusState` binding but no focusable behind it — the re-assertion
+    /// misses every pass, forever. A repaint request on that miss is a repaint
+    /// request per frame: the demand-driven loop runs at the frame cap over a
+    /// byte-identical screen, and the focus pulse's clock is re-zeroed before
+    /// it can advance, so the ring is stuck at its bright end.
+    @Test("A .userInitiated default whose target cannot be focused requests no repaint")
+    func userInitiatedDefaultOnUnfocusableTargetIsQuiet() {
+        let manager = FocusManager()
+        let row = MockFocusable(id: "row")
+        // What `Button("Go") {}.disabled(true).focused($f, equals: .go)` registers.
+        let unfocusable = MockFocusable(id: "focused-btn", canBeFocused: false)
+
+        func pass() {  // one frame, in the order the modifiers render
+            manager.beginRenderPass()
+            manager.registerSection(id: "page")
+            manager.setDefaultFocusValue(AnyHashable(1), priority: .userInitiated, forStore: "s")
+            manager.register(row, inSection: "page")
+            manager.registerFocusBinding(store: "s", value: AnyHashable(1), focusID: "focused-btn")
+            manager.register(unfocusable, inSection: "page")
+            manager.endRenderPass()
+        }
+
+        pass()  // settles: the default misses, the first focusable takes the focus
+        var repaints = 0
+        manager.onFocusChange = { repaints += 1 }
+        pass()
+        pass()
+
+        #expect(manager.currentFocusedID == "row")
+        #expect(repaints == 0, "or the loop re-renders forever and the pulse never advances")
+    }
 }

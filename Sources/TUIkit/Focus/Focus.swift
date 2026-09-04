@@ -465,10 +465,13 @@ extension FocusManager {
     /// most likely — becomes a durable pending intent (``pendingFocusID``)
     /// rather than a silent no-op: the next render routes to it (default,
     /// path-derived IDs), renders it so it registers, and focuses it. An ID
-    /// that matches nothing expires after a couple of passes.
+    /// that matches nothing expires after a couple of passes — unless a
+    /// standing declaration keeps re-stating it, which a `.userInitiated`
+    /// ``defaultFocus(_:_:priority:)`` does on every pass.
     ///
     /// - Parameter id: The focus ID of the element to focus.
     public func focus(id: String) {
+        let previousPending = pendingFocusID
         pendingFocusID = nil
         for section in sections {
             if let element = section.focusables.first(where: { $0.focusID == id && $0.canBeFocused }) {
@@ -482,7 +485,18 @@ extension FocusManager {
         }
         pendingFocusID = id
         pendingFocusPassesRemaining = Self.pendingFocusPassBudget
-        onFocusChange?()
+        // Announced only when the intent is NEW — not on every miss. The
+        // repaint a miss asks for is the routing render that will register the
+        // target, and re-stating an intent the manager already holds asks for
+        // nothing the last one did not. That matters because a `.userInitiated`
+        // default re-states its intent every pass: bound to a control that can
+        // never take the focus (`.disabled(true)`, or `.hidden()`, which
+        // registers the `@FocusState` binding but no focusable behind it), an
+        // unconditional notify here is a repaint request per frame forever —
+        // the same runaway `endRenderPass`'s own guarded notify exists to
+        // avoid, and it also re-zeroes the focus pulse's clock so the ring
+        // never breathes.
+        if previousPending != id { onFocusChange?() }
     }
 
     /// Clears focus entirely, firing the current element's `onFocusLost`.
@@ -1412,32 +1426,5 @@ extension FocusManager {
                 return
             }
         }
-    }
-}
-
-// MARK: - Focus Manager Environment Key
-
-/// Environment key for the focus manager.
-private struct FocusManagerKey: EnvironmentKey {
-    // No shared default instance — consistent with the other runtime services
-    // (lifecycle, keyEventDispatcher, mouseEventDispatcher are all nil-default
-    // Optionals). A single shared default would let every context that doesn't
-    // install its own focus manager register into the SAME manager, leaking
-    // focus state across isolated renders (and across parallel test contexts).
-    // The real app installs one via `RenderLoop.makeRenderContext`; a nil manager
-    // means "no focus system", so controls render unfocused and nothing
-    // auto-focuses.
-    static let defaultValue: FocusManager? = nil
-}
-
-extension EnvironmentValues {
-    /// The focus manager for managing keyboard focus, or `nil` when no focus
-    /// system is installed (an isolated/measure render, a dimmed backdrop, or a
-    /// test that doesn't exercise focus). The live app always installs one.
-    ///
-    /// Access via `context.environment.focusManager` in `renderToBuffer(context:)`.
-    public var focusManager: FocusManager? {
-        get { self[FocusManagerKey.self] }
-        set { self[FocusManagerKey.self] = newValue }
     }
 }
