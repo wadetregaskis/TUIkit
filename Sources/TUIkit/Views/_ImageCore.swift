@@ -751,8 +751,8 @@ extension _ImageCore {
         // placeholder each, and `KittyGraphics.placeholderRows` builds nothing
         // else. Saying so costs nothing and saves every consumer of this buffer
         // re-deriving it EVERY FRAME: measuring a row means walking its scalars
-        // through grapheme segmentation, and an image row is three scalars per
-        // cell with no ASCII fast path to take.
+        // through grapheme segmentation, and an image row is four scalars per
+        // cell (the placeholder and three marks) with no ASCII fast path to take.
         return FrameBuffer(
             lines: lines, width: target.width, uniformWidth: true,
             lineWidths: [Int](repeating: target.width, count: lines.count))

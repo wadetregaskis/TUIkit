@@ -29,14 +29,16 @@ extension KittyGraphics {
     /// ## Every cell names itself
     ///
     /// The protocol allows a run-length form — a cell with no diacritics
-    /// continues the previous one — and it works (measured: 67 bytes a row
-    /// instead of 111). TUIkit does not use it, deliberately.
+    /// continues the previous one — and it works: with today's encoder (24-bit
+    /// foreground, three marks) a 12-cell row is 73 bytes that way against the
+    /// 139 `KittyGraphicsDiacriticTests.rowByteCost` pins. TUIkit does not use
+    /// it, deliberately.
     ///
     /// A diffing writer does not write rows, it writes *runs*: the four cells
     /// that changed, after a cursor jump, in whatever order the diff produced.
     /// A cell that says "the one after the last one" means nothing when the
     /// last one was written a frame ago and somewhere else. Spelling row and
-    /// column into every cell costs a third of a row's bytes — a row that is
+    /// column into every cell costs about half of a row's bytes — a row that is
     /// only rewritten when it changes — and buys the property that an image
     /// cell is correct wherever it lands.
     /// ``Unicode/Scalar/terminalImagePlaceholder`` records the other half of
