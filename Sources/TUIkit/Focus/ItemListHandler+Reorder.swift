@@ -710,7 +710,7 @@ extension ItemListHandler {
         /// across frames at all. Both views satisfy it: `List` pre-slides its
         /// ranges (`_ListCore.slidRanges`) and adds the indicator's offset in
         /// `slideAndWrap`; `Table`'s three publishers sum the same two terms
-        /// (`Table.publishRowBands`, `Table.publishMultiLineRowBands`).
+        /// (`Table.publishRowBands`, `Table.multiLineRowBands`).
         var yStart: Int
         /// How many lines it occupies (a clipped row counts what is shown).
         var height: Int

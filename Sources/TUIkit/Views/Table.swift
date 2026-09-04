@@ -1217,12 +1217,7 @@ where Value.ID: Hashable {
         // an indicator would otherwise have announced — the rows are drawn
         // from ITS position, so the mouse mapping must measure from it too.
         let topClip = window.topClip
-        // …and so must the indicators. See ``ItemListHandler/drawnOffset``.
-        handler.drawnOffset = window.range.lowerBound
-        // The rows actually on screen — what a page moves by, and what the
-        // `List` and the single-line path publish. See the note above the
-        // window for what used to stand here.
-        handler.viewportHeight = max(1, window.range.count)
+        publishMultiLineWindow(handler: handler, range: window.range, context: context)
         // The bar is metered in LINES, like the `List`'s over multi-line rows:
         // its extent is the whole wrapped height and its offset the lines
         // above the window. That total is the one thing this path otherwise
@@ -1246,10 +1241,20 @@ where Value.ID: Hashable {
         // handler's `hasContentAbove`, which is false for a top clip inside
         // row 0 while the indicator is on screen.
         let indicatorLines = (window.showAbove && handler.drawsScrollIndicators) ? 1 : 0
-        let bands = publishMultiLineRowBands(
+        let bands = multiLineRowBands(
             handler: handler, range: window.range,
             heights: onScreenRowHeights(window.range, height: heightOf, topClip: topClip),
             indicatorLines: indicatorLines, lineCount: contentHeight)
+        // Built either way — the render state below carries them, and a measure
+        // pass's state is thrown away — but PUBLISHED only by the render, for
+        // the reason the gate above gives and one more: publishing runs
+        // ``ItemListHandler/retargetForAutoScroll()`` in a `defer`, which for a
+        // `.live` reorder calls `onMove` — the APP's data, moved from a measure
+        // pass, and moved to wherever the parent's proposal happened to put the
+        // rows. Two publishes a frame meant two crossings a tick, so an
+        // auto-scrolling drag inside a stack invoked `onMove` about twice as
+        // often as it moved a row.
+        if !context.isMeasuring { handler.publishRowBands(bands) }
         return (
             lines: composed.lines,
             runs: composed.runs,
@@ -2344,7 +2349,7 @@ where Value.ID: Hashable {
     /// instead, three hundred lines above, having been separated from its
     /// function by an edit that left two doc blocks touching. That is not a
     /// tidiness point: the rule it states — bands must include the slide — is
-    /// the one `publishMultiLineRowBands` does not follow, and it was added
+    /// the one `multiLineRowBands` does not follow, and it was added
     /// while the rule was sitting on someone else's function where nobody
     /// writing a second publisher would read it.
     @discardableResult
@@ -2423,20 +2428,57 @@ where Value.ID: Hashable {
         return heights
     }
 
+    /// The window the multi-line path just DREW, handed to the persistent
+    /// handler — the multi-line twin of `reserveIndicatorLines`' last two
+    /// statements, gated the same way and for the same reason.
+    ///
+    /// A MEASURE pass must not publish either of these, and this is the ONE
+    /// path that could, because it is the one that renders itself to measure:
+    /// `analyticMultiLineSize` declines for an overflowing table with no bar,
+    /// so `sizeThatFits` falls back to `renderToBuffer`. (The single-line paths
+    /// are never reached under `isMeasuring` at all, which is why their own
+    /// writes read as unguarded neighbours of a guard.)
+    ///
+    /// A measure pass is offered whatever height the PARENT proposed, not the
+    /// height the frame is drawn into: an eager `VStack` measures every child
+    /// at the stack's whole height and then renders each into its distributed
+    /// share, so a table sharing a stack with any sibling is measured a line
+    /// taller than it is drawn, every frame. Ungated, that measure published a
+    /// window belonging to a proposal — a `viewportHeight` counting rows
+    /// nothing drew, and a `drawnOffset` the indicators then counted from.
+    private func publishMultiLineWindow(
+        handler: ItemListHandler<Value.ID>, range: Range<Int>, context: RenderContext
+    ) {
+        guard !context.isMeasuring else { return }
+        // The window may have absorbed a top clip (or a whole first row) that an
+        // indicator would otherwise have announced, so the indicators must count
+        // from ITS position. See ``ItemListHandler/drawnOffset``.
+        handler.drawnOffset = range.lowerBound
+        // The rows actually on screen — what a page moves by, and what the
+        // `List` and the single-line path publish. See the note above
+        // `syncIndicatorChrome`'s call site for what used to stand here.
+        handler.viewportHeight = max(1, range.count)
+    }
+
     /// The multi-line path's bands: rows of different heights, no slot (that
     /// path forces ``RowReorderFeedback/live``, which moves the data instead of
     /// opening a gap).
     ///
-    /// It published nothing at all until now, which did not merely disable
-    /// drag-reorder there — it made the gesture swallow the click while doing
-    /// nothing, since `dropTarget` had no bands to hit-test against.
+    /// Nothing produced these at all until this function existed, which did not
+    /// merely disable drag-reorder there — it made the gesture swallow the click
+    /// while doing nothing, since `dropTarget` had no bands to hit-test against.
+    ///
+    /// Builds them; it does NOT publish them, unlike its single-line twin
+    /// `publishRowBands`. This is the path that renders itself to measure, and
+    /// handing a measure pass's bands to the handler both replaces the drawn
+    /// geometry and fires the auto-scroll retarget — so the caller publishes,
+    /// under `!context.isMeasuring`.
     ///
     /// `indicatorLines` must be the DRAWING condition `composeMultiLineRows`
     /// uses (`window.showAbove && drawsText`), not the handler's
     /// `hasContentAbove`: `showAbove` is also true for a line-granularity top
     /// clip inside row 0, where `hasContentAbove` is false.
-    @discardableResult
-    private func publishMultiLineRowBands(
+    private func multiLineRowBands(
         handler: ItemListHandler<Value.ID>,
         range: Range<Int>,
         heights: [Int],
@@ -2444,20 +2486,17 @@ where Value.ID: Hashable {
         lineCount: Int
     ) -> [ItemListHandler<Value.ID>.DrawnBand] {
         typealias Handler = ItemListHandler<Value.ID>
-        let bands =
-            Handler.drawnBands(
-                range.enumerated().map { offset, rowIndex in
-                    (.row(rowIndex), offset < heights.count ? max(1, heights[offset]) : 1)
-                },
-                // The terms this publisher never had. It emitted from `yStart =
-                // 0` with neither the indicator line it had just drawn nor the
-                // overscroll excursion, so a scrolled or overscrolling
-                // multi-line table hit-tested a drag against geometry its rows
-                // were not drawn at.
-                offset: indicatorLines - handler.overscrollState.excursion,
-                lineCount: lineCount)
-        handler.publishRowBands(bands)
-        return bands
+        return Handler.drawnBands(
+            range.enumerated().map { offset, rowIndex in
+                (.row(rowIndex), offset < heights.count ? max(1, heights[offset]) : 1)
+            },
+            // The terms this builder never had. It emitted from `yStart = 0`
+            // with neither the indicator line the frame had just drawn nor the
+            // overscroll excursion, so a scrolled or overscrolling multi-line
+            // table hit-tested a drag against geometry its rows were not drawn
+            // at.
+            offset: indicatorLines - handler.overscrollState.excursion,
+            lineCount: lineCount)
     }
 
     // MARK: - Mouse handler wiring
