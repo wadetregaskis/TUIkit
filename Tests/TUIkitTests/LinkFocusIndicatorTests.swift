@@ -202,6 +202,23 @@ struct LinkActivationRepeatTests {
             "five back-to-back activations should open once, opened \(counter.count) times")
     }
 
+    /// The window has to SLIDE with the hold. Anchored only at accepted
+    /// activations, it re-opened the URL every 700 ms for as long as the key
+    /// was held: five browser windows from a three-second press.
+    @Test("A held key is one activation however long it is held")
+    func heldKeyIsOneActivation() {
+        let gate = LinkActivationGate()
+        let ms: UInt64 = 1_000_000
+        var accepted = 0
+        var now: UInt64 = 5_000 * ms
+        while now < 8_000 * ms {
+            if gate.allows(nowNanos: now) { accepted += 1 }
+            now += 80 * ms  // a terminal's repeat cadence
+        }
+        #expect(accepted == 1, "a 3 s hold at 80 ms repeats was accepted \(accepted) times")
+        #expect(gate.allows(nowNanos: now + 700 * ms), "a press after the window is a new gesture")
+    }
+
     /// …and the window is the same one every other "is this one gesture or
     /// two?" decision in the framework uses. A link and a stepper arrow must
     /// not disagree about where one gesture ends.

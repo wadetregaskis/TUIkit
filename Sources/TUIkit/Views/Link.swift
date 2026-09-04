@@ -308,7 +308,7 @@ private struct TerminalHyperlinkModifier: ViewModifier {
 /// `@unchecked Sendable` for the reason `TerminalImageStore`'s is: written
 /// from a key handler and read from the next one, both on the run loop's own
 /// thread, one pass at a time.
-private final class LinkActivationGate: @unchecked Sendable {
+final class LinkActivationGate: @unchecked Sendable {
     private var lastNanos: UInt64 = 0
 
     /// Milliseconds within which a second activation is a key repeat rather
@@ -325,6 +325,12 @@ private final class LinkActivationGate: @unchecked Sendable {
             lastNanos = nowNanos
             return true
         }
+        // A swallowed repeat moves the anchor too, so the window SLIDES with
+        // the hold: a held key is one activation however long it is held, not
+        // one every 700 ms. (What that costs: a deliberate second press must
+        // come 700 ms after the last REPEAT rather than the last accepted
+        // press — which is what "one gesture" means everywhere else here.)
+        lastNanos = nowNanos
         return false
     }
 }
