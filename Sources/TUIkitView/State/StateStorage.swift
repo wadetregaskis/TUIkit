@@ -252,6 +252,12 @@ extension StateStorage {
     /// Each `OnChangeModifier` at a given identity calls this to get a unique
     /// index, ensuring chained `.onChange(of:)` modifiers don't collide.
     ///
+    /// Claim it BEFORE rendering content. The index is positional, so one
+    /// claimed afterwards is the count of claimants the CONTENT contributed at
+    /// the same identity — and an `if` without `else` (or an `AnyView`) changes
+    /// that from frame to frame, since both render at the parent identity. A
+    /// claim made first depends only on the chain above, which is body order.
+    ///
     /// - Parameter identity: The view identity requesting an index.
     /// - Returns: The next available index (starting at 0).
     public func nextOnChangeIndex(for identity: ViewIdentity) -> Int {

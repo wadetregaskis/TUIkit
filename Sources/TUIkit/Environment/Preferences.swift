@@ -81,6 +81,16 @@ extension OnPreferenceChangeModifier: Renderable {
         // effects a cached buffer cannot reproduce — decline the memos.
         context.environment.volatileReadTracker?.recordRenderSideEffect()
 
+        // The baseline's slot, claimed BEFORE the content renders: the index is
+        // positional, so one claimed afterwards counts the claimants the
+        // CONTENT contributed at this same identity, and an `if` without `else`
+        // (or an `AnyView`) changes that between frames — both render at the
+        // parent identity. This observer would then land on a vanished
+        // sibling's slot and read its value as its own previous preference.
+        let storage = context.stateStorage!
+        let index = storage.nextOnChangeIndex(for: context.identity)
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: index)
+
         // Push a new preference context
         prefs.push()
 
@@ -101,9 +111,6 @@ extension OnPreferenceChangeModifier: Renderable {
         // This also replaced a per-publisher storage callback that delivered
         // RAW un-reduced values — the action now only ever sees the final
         // reduction, once, like SwiftUI.
-        let storage = context.stateStorage!
-        let index = storage.nextOnChangeIndex(for: context.identity)
-        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: index)
         let previous: K.Value? = storage.trackedValue(for: key)
         storage.setTrackedValue(value, for: key)
         storage.markActive(context.identity)

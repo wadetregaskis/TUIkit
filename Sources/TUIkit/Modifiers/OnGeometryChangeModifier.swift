@@ -89,11 +89,12 @@ struct OnGeometryChangeModifier<Content: View, T: Equatable>: View {
 
 extension OnGeometryChangeModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let buffer = TUIkit.renderToBuffer(content, context: context)
         // A measure pass must not fire the action — there are several per frame
         // and they are asking a question, not laying anything out. Same rule
         // (and the same reason) as `OnChangeModifier`.
-        guard !context.isMeasuring, let storage = context.stateStorage else { return buffer }
+        guard !context.isMeasuring, let storage = context.stateStorage else {
+            return TUIkit.renderToBuffer(content, context: context)
+        }
 
         // Declared as a render side effect for the reason `onChange` declares
         // one: the comparison is per-frame work a cached buffer cannot
@@ -101,21 +102,27 @@ extension OnGeometryChangeModifier: Renderable {
         // once and then never notice another change.
         context.environment.volatileReadTracker?.recordRenderSideEffect()
 
-        // The view's OWN size — what its content actually came out at, not what
-        // was offered. That is the whole difference from `GeometryReader`.
-        let value = transform(GeometryProxy(width: buffer.width, height: buffer.height))
         // Allocated, not fixed: the tracked-value dictionary is shared with
-        // onChange, onPreferenceChange and transaction(value:) at this same
-        // identity, and they claim indices from the per-identity counter. A
-        // fixed 0 here landed on the first sibling's slot; the per-frame
-        // overwrite read back as "no previous value" on their side, so a real
-        // change fired nothing. Allocation order is body order, which is the
-        // same every frame — the counter resets each pass. (The claim happens
-        // AFTER the content render above, so siblings inside the subtree
-        // claim first; that too is the same every frame.)
+        // onChange and onPreferenceChange at this same identity, and they claim
+        // indices from the per-identity counter. A fixed 0 here landed on the
+        // first sibling's slot; the per-frame overwrite read back as "no
+        // previous value" on their side, so a real change fired nothing.
+        //
+        // Claimed BEFORE the content renders, not after: an index claimed after
+        // is the count of claimants the CONTENT contributed at this same
+        // identity, and an `if` without `else` (or an `AnyView`) changes that
+        // between frames — both render at the parent identity. The observer
+        // then moved onto a vanished sibling's slot and read its value as its
+        // own previous geometry. Claiming first makes the index depend only on
+        // the chain above, which is body order and the same every frame.
         let key = StateStorage.StateKey(
             identity: context.identity,
             propertyIndex: storage.nextOnChangeIndex(for: context.identity))
+
+        let buffer = TUIkit.renderToBuffer(content, context: context)
+        // The view's OWN size — what its content actually came out at, not what
+        // was offered. That is the whole difference from `GeometryReader`.
+        let value = transform(GeometryProxy(width: buffer.width, height: buffer.height))
         let previous: T? = storage.trackedValue(for: key)
         storage.setTrackedValue(value, for: key)
         // Manual tracked values are pruned unless the identity is marked — see

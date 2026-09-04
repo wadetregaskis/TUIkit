@@ -163,4 +163,43 @@ struct OnGeometryChangeTests {
             })
         #expect(count == 1, "one report per frame, not one per pass: \(count)")
     }
+
+    /// A claimant that comes and goes INSIDE the content must not move the
+    /// slot of the observer wrapped around it.
+    @ViewBuilder
+    private func conditionalObserver(_ expanded: Bool, _ selection: Int, _ fired: Counter)
+        -> some View
+    {
+        // `buildOptional` yields an `Optional`, which renders its `.some` at the
+        // PARENT identity — so this `.onChange` claims from the same
+        // per-identity counter as the `.onGeometryChange` wrapped around it,
+        // and stops claiming when `expanded` goes false.
+        if expanded {
+            Text("xxxx").onChange(of: selection) { _, _ in fired.value += 1 }
+        }
+    }
+
+    /// A box so the `@ViewBuilder` helper above can report back.
+    @MainActor
+    private final class Counter {
+        var value = 0
+    }
+
+    @Test("A claimant that vanishes from the content must not shift the slot")
+    func slotSurvivesConditionalContent() {
+        let fixture = Fixture()
+        let fired = Counter()
+        let selection = 999  // never changes across the three frames
+
+        func view(_ expanded: Bool) -> some View {
+            conditionalObserver(expanded, selection, fired)
+                .onGeometryChange(for: Int.self) { $0.size.width } action: { _ in }
+        }
+
+        fixture.frame(view(true))  // onChange claims 0 (stores 999); geometry claims 1
+        fixture.frame(view(false))  // content gone: geometry must not take slot 0
+        fixture.frame(view(true))  // onChange reads slot 0 again
+
+        #expect(fired.value == 0, "onChange fired though its value never changed")
+    }
 }
