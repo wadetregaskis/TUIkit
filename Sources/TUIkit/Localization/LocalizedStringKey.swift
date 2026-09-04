@@ -255,8 +255,12 @@ public struct LocalizedStringKey: Equatable, Hashable, Sendable {
             let argumentIndex = position.map { $0 - 1 } ?? next
             if argumentIndex >= 0, argumentIndex < arguments.count {
                 var value = arguments[argumentIndex]
-                if let width, value.count < width {
-                    let pad = String(repeating: " ", count: width - value.count)
+                // A width is a COLUMN count — every other padding site here
+                // measures cells — so a CJK or emoji argument is padded by
+                // what it occupies, not by its grapheme count.
+                let cells = value.strippedLength
+                if let width, cells < width {
+                    let pad = String(repeating: " ", count: width - cells)
                     value = leftAligned ? value + pad : pad + value
                 }
                 result += value

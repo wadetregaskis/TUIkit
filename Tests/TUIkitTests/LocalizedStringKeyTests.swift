@@ -214,4 +214,24 @@ struct LocalizedStringKeyTests {
         #expect(one != two)
         #expect(one == LocalizedStringKey(key: "Rows: %@", arguments: ["1"]))
     }
+
+    @Test("A width counts cells, not graphemes")
+    func widthIsCells() {
+        // Two CJK graphemes occupy four cells: no padding at `%4@`, two at `%6@`.
+        #expect(LocalizedStringKey.substituting(["日本"], into: "[%4@]") == "[日本]")
+        #expect(LocalizedStringKey.substituting(["日本"], into: "[%6@]") == "[  日本]")
+        #expect(LocalizedStringKey.substituting(["a", "b"], into: "%@%@") == "ab")
+        // A position may repeat; the implicit cursor is not advanced by one.
+        #expect(LocalizedStringKey.substituting(["a", "b"], into: "%1$@%1$@") == "aa")
+        // Missing arguments leave the placeholder empty rather than trapping.
+        #expect(LocalizedStringKey.substituting(["a"], into: "%@%@") == "a")
+        // A trailing lone percent is emitted, not dropped.
+        #expect(LocalizedStringKey.substituting(["a"], into: "%@ 100%") == "a 100%")
+        // A WIDTH pads the value and, crucially, still consumes its argument:
+        // the old scan rewound onto the digits, emitted %3d verbatim, and
+        // delivered the first argument to the SECOND placeholder.
+        #expect(LocalizedStringKey.substituting(["2", "10"], into: "Zeile %3d von %d") == "Zeile   2 von 10")
+        #expect(LocalizedStringKey.substituting(["ab"], into: "[%-4d]") == "[ab  ]")
+        #expect(LocalizedStringKey.substituting(["3.14"], into: "%.2f rad") == "3.14 rad")
+    }
 }
