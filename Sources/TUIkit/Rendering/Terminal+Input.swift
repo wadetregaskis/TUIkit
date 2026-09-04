@@ -36,11 +36,6 @@ extension Terminal {
     /// terminal and discarded so it can't pin memory forever.
     private static let maxPasteBytes = 1 << 20  // 1 MiB
 
-    /// Hard cap on bytes per regular event sequence — enough for
-    /// the longest realistic CSI / SGR mouse report (three-digit
-    /// coords).
-    private static let maxEventBytes = 32
-
     /// Stale frames before a lone `ESC` is committed (the Escape-vs-sequence
     /// timeout). Short, so Escape stays responsive.
     private static let bareEscStaleFrames = 2
@@ -247,8 +242,16 @@ extension Terminal {
         }
 
         // Scan forward for a real terminator (letter or `~`).
+        //
+        // Bounded by ``maxReplyBytes``, NOT by a keystroke-sized budget: a CSI
+        // is not only a key. DA, DSR and DECRPM answers are CSIs too, and a
+        // real xterm-class `ESC[?63;1;2;4;6;9;15;16;18;21;22;28;29c` is 37
+        // bytes. The old 32-byte cap truncated it and RETURNED the prefix,
+        // which the key parser then discarded — stranding `8;29c` at the head
+        // of the buffer with no `ESC` in front of it, to be typed out as five
+        // keystrokes.
         var i = 3
-        let cap = min(input.count, Self.maxEventBytes)
+        let cap = min(input.count, Self.maxReplyBytes)
 
         while i < cap {
             let b = input[i]
@@ -271,17 +274,17 @@ extension Terminal {
             i += 1
         }
 
-        if i >= Self.maxEventBytes {
-            // Maxed out without a terminator. Treat as malformed —
-            // consume the truncated prefix and move on.
-            var bytes = [UInt8]()
-            bytes.reserveCapacity(Self.maxEventBytes)
-            for j in 0..<Self.maxEventBytes { bytes.append(input[j]) }
-            consume(Self.maxEventBytes)
-            return bytes
-        }
+        // Past the cap with no terminator: not a control sequence any more,
+        // whatever it started as. DROP the prefix rather than returning it —
+        // returning is what leaked the tail, because the caller only ever
+        // discards bytes it cannot parse, while `consume` has already moved
+        // the buffer past them.
+        if input.count >= Self.maxReplyBytes { consume(Self.maxReplyBytes) }
 
-        // Buffer simply doesn't have the terminator yet.
+        // Otherwise the buffer simply doesn't have the terminator yet. (The
+        // wait is bounded by `deadSequenceStaleFrames`, not by the cap: the cap
+        // only catches a terminal that keeps sending, since bytes arriving keep
+        // resetting the stale count.)
         return nil
     }
 

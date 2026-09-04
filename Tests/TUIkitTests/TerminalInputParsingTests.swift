@@ -215,6 +215,31 @@ struct TerminalInputParsingTests {
         #expect(mouseEvents.count == 1, "the split report should complete as one mouse event")
     }
 
+    /// A device-attributes answer is a CSI, and a real one runs past what used
+    /// to be the per-event byte budget. The walk gave up at 32 bytes and
+    /// RETURNED the truncated prefix, so `KeyEvent.parse` discarded it (index
+    /// 31 can never be a final byte) while the tail — `8;29c` — was left at
+    /// the head of the buffer with no `ESC` in front of it, and the next pass
+    /// typed it out one character at a time. In `Example`, four of those five
+    /// are page shortcuts.
+    @Test("A CSI longer than the event budget is dropped whole, not spelled out")
+    func overlongCSIDoesNotLeakItsTail() {
+        let (terminal, stage) = makeTerminal()
+
+        // What an xterm-class terminal answers `ESC[c` with: 37 bytes.
+        stage(Array("\u{1B}[?63;1;2;4;6;9;15;16;18;21;22;28;29c".utf8))
+
+        // Deliberately NOT "pump until nil": the truncated prefix made the
+        // first call return nil while the tail was still buffered, which is
+        // exactly the shape a quiet-limited drain would have tolerated.
+        var events: [TerminalInput] = []
+        for _ in 0..<12 {
+            if let event = terminal.readEvent() { events.append(event) }
+        }
+
+        #expect(events.isEmpty, "an over-long CSI leaked its tail as keystrokes: \(events)")
+    }
+
     @Test("A new sequence after a truncated one is parsed cleanly, no leak")
     func newSequenceAfterTruncatedOneDoesNotLeak() {
         let (terminal, stage) = makeTerminal()

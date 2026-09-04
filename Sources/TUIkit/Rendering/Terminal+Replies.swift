@@ -52,10 +52,16 @@ extension Terminal {
     /// Hard cap on a terminal reply, past which the bytes are dropped rather
     /// than buffered forever.
     ///
-    /// Far larger than ``maxEventBytes`` because these are not events: a
-    /// graphics error names itself in words (Warp's is sixty characters), and
-    /// an OSC reply can carry a payload. Generous enough that no real reply is
+    /// Far larger than a keystroke because these are not keystrokes: a graphics
+    /// error names itself in words (Warp's is sixty characters), and an OSC
+    /// reply can carry a payload. Generous enough that no real reply is
     /// truncated, bounded so a terminal that starts a sequence and never ends
     /// it cannot pin the buffer.
+    ///
+    /// Both walks are bounded by it — this file's, and ``tryExtractCSI()`` in
+    /// `Terminal+Input.swift`. A CSI is not only a key: DA, DSR and DECRPM
+    /// answers arrive as CSIs, and the CSI walk's own 32-byte budget used to
+    /// truncate a 37-byte device-attributes reply mid-sequence and leak its
+    /// tail as typing.
     static let maxReplyBytes = 4096
 }
