@@ -383,14 +383,17 @@ struct MousePage: View {
     }
 
     /// Visible interior dimensions of the tap target — used to clamp
-    /// reported tap coordinates. Width = label width plus the box's
-    /// 2-column horizontal padding on each side, plus the two border
-    /// characters. Height = 1 row of content plus the two border rows.
-    private var tapBoxWidth: Int { L("page.mouse.clickMe").count + 4 + 2 }
+    /// reported tap coordinates. Width = label width in CELLS (`strippedLength`,
+    /// not `count`: the ja/zh labels are six cells wider than their character
+    /// count, and a Character count crushed every click in the box's
+    /// right-hand columns onto one number) plus the box's 2-column horizontal
+    /// padding on each side, plus the two border characters. Height = 1 row
+    /// of content plus the two border rows.
+    private var tapBoxWidth: Int { L("page.mouse.clickMe").strippedLength + 4 + 2 }
     private var tapBoxHeight: Int { 3 }
 
     /// Visible interior dimensions of the drag target.
-    private var dragBoxWidth: Int { L("page.mouse.dragArea").count + 4 + 2 }
+    private var dragBoxWidth: Int { L("page.mouse.dragArea").strippedLength + 4 + 2 }
     private var dragBoxHeight: Int { 3 }
 
     /// Horizontal width of the 2-D scroll field, in cells.
