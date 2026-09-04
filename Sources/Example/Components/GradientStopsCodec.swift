@@ -35,7 +35,10 @@ enum GradientStopsCodec {
         var stops: [Gradient.Stop] = []
         for (index, field) in fields.enumerated() {
             let parts = field.split(separator: "@", maxSplits: 1)
-            guard let colour = Color.hex(String(parts[0])) else { continue }
+            // `first`, not `[0]`: `split` drops empty pieces, so a field that
+            // is only separators ("@") yields NO parts, and indexing trapped
+            // on a persisted value every other malformed input tolerates.
+            guard let first = parts.first, let colour = Color.hex(String(first)) else { continue }
             // A lone stop has nowhere to sit, and `index / (count − 1)` would
             // be 0/0 for it.
             let even = fields.count > 1 ? Double(index) / Double(fields.count - 1) : 0
