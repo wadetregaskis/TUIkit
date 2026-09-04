@@ -182,7 +182,20 @@ extension String {
     ///   - visibleCount: How many visible columns to include.
     public func ansiAwareSlice(visibleStart: Int, visibleCount: Int) -> String {
         guard visibleCount > 0 else { return "" }
-        guard visibleStart > 0 else { return ansiAwarePrefix(visibleCount: visibleCount) }
+        guard visibleStart > 0 else {
+            // Not `ansiAwarePrefix`, whose documented contract EXCLUDES a wide
+            // glyph straddling its right edge. This function's is that the
+            // straddler's in-window cells are blanked — the same rule the
+            // walk below applies at both edges for every other window — so
+            // the slice is always the width it says. A gradient background
+            // cuts a row into runs and concatenates the slices unpadded, and
+            // the first run starts at column 0: one cell short there shifted
+            // every later run a column left.
+            let width = strippedLength
+            if width <= visibleCount { return self }
+            let (prefix, got) = exactAnsiAwarePrefixWithWidth(visibleCount: visibleCount)
+            return got < visibleCount ? prefix + String(repeating: " ", count: visibleCount - got) : prefix
+        }
 
         let end = visibleStart + visibleCount
         var carriedStyle = ""  // SGR history replayed so the slice starts correctly styled

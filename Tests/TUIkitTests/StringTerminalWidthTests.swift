@@ -1015,4 +1015,19 @@ struct AnsiAwareSliceTests {
         // Whole-glyph windows are untouched.
         #expect("ab漢cdef".ansiAwareSlice(visibleStart: 2, visibleCount: 2) == "漢")
     }
+
+    /// Same glyph, same right edge, only the window origin differs — and the
+    /// column-0 window was routed to the prefix walk, whose contract EXCLUDES
+    /// the straddler. A gradient background concatenates its first run's
+    /// slice (always from column 0) unpadded, so the row came out a cell
+    /// short and every later run a column left.
+    @Test("A right-edge straddle blanks its columns at offset 0 too")
+    func wideStraddleAtColumnZero() {
+        #expect("ab漢cdef".ansiAwareSlice(visibleStart: 1, visibleCount: 2) == "b ")
+        #expect("ab漢cdef".ansiAwareSlice(visibleStart: 0, visibleCount: 3) == "ab ")
+        #expect("ab漢cdef".ansiAwareSlice(visibleStart: 0, visibleCount: 3).strippedLength == 3)
+        // Whole glyphs, and a short string, are untouched.
+        #expect("ab漢cdef".ansiAwareSlice(visibleStart: 0, visibleCount: 4) == "ab漢")
+        #expect("ab".ansiAwareSlice(visibleStart: 0, visibleCount: 4) == "ab")
+    }
 }
