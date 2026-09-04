@@ -52,7 +52,7 @@ extension View {
     /// and a disagreement here shifts a colour rather than a layout).
     ///
     /// Every container that places children participates: the stacks and their
-    /// lazy twins, `ZStack`, `ScrollView`, `Form`, `List`, `OutlineGroup`,
+    /// lazy twins, `ScrollView`, `Form`, `List`, `OutlineGroup`,
     /// `Grid`, and — through one shared placement — the lazy grids and any
     /// ``Layout`` an app writes for itself — and `Table`, which gets there
     /// differently: its columns yield strings rather than views, so it paints
