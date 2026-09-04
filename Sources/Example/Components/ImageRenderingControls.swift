@@ -268,27 +268,28 @@ struct ImageRenderingControls: View {
                     counted("component.imageControls.levels", value: $settings.greyLevels, in: 2...256)
                 }
                 // The three counted palettes, in order of how much they know
-                // about the picture: nothing, its histogram, its error. They
-                // share one count so switching between them changes one thing.
+                // about the picture: nothing, its histogram, its error. A count
+                // each — they are on screen together, so one shared count made
+                // two sliders move when you dragged the third.
                 RadioButtonItem(
                     ImageDemoSettings.ColourMode.spread, "component.imageControls.spread"
                 ) {
                     counted(
-                        "component.imageControls.colours", value: $settings.paletteColours,
+                        "component.imageControls.colours", value: $settings.spreadColours,
                         in: 2...256)
                 }
                 RadioButtonItem(
                     ImageDemoSettings.ColourMode.mostUsed, "component.imageControls.mostUsed"
                 ) {
                     counted(
-                        "component.imageControls.colours", value: $settings.paletteColours,
+                        "component.imageControls.colours", value: $settings.mostUsedColours,
                         in: 2...256)
                 }
                 RadioButtonItem(
                     ImageDemoSettings.ColourMode.leastError, "component.imageControls.leastError"
                 ) {
                     counted(
-                        "component.imageControls.colours", value: $settings.paletteColours,
+                        "component.imageControls.colours", value: $settings.leastErrorColours,
                         in: 2...256)
                 }
                 RadioButtonItem(

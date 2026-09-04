@@ -79,13 +79,17 @@ struct ImageDemoSettings: Equatable {
     /// How many greys ``ColourMode/greys`` uses.
     var greyLevels = 4
 
-    /// How many colours the three counted palette modes ask for — ``ColourMode/spread``,
-    /// ``ColourMode/mostUsed`` and ``ColourMode/leastError``.
+    /// How many colours each of the three counted palette modes asks for.
     ///
-    /// One setting for all three on purpose: the interesting comparison is what
-    /// the SAME count buys you under each rule, and a separate count per mode
-    /// would make switching between them change two things at once.
-    var paletteColours = 8
+    /// One apiece, not one shared. A shared count was the first draft, on the
+    /// argument that the interesting comparison is what the same N buys under
+    /// each rule — but the three sliders are on screen TOGETHER, so a shared
+    /// count made two of them move when you dragged the third, which reads as a
+    /// bug however good the argument behind it is. Comparing at equal N is
+    /// still a drag away; a control that moves on its own is not recoverable.
+    var spreadColours = 8
+    var mostUsedColours = 8
+    var leastErrorColours = 8
 
     /// Which of ``ImageDemoHelpers/customPalettes`` ``ColourMode/customPalette``
     /// draws in.
@@ -219,9 +223,9 @@ struct ImageDemoSettings: Equatable {
             }
             return .mono
         case .greys: return .palette(.shades(greyLevels))
-        case .spread: return .palette(.spread(paletteColours))
-        case .mostUsed: return .palette(.adaptive(paletteColours, by: .popularity))
-        case .leastError: return .palette(.adaptive(paletteColours, by: .leastError))
+        case .spread: return .palette(.spread(spreadColours))
+        case .mostUsed: return .palette(.adaptive(mostUsedColours, by: .popularity))
+        case .leastError: return .palette(.adaptive(leastErrorColours, by: .leastError))
         case .customPalette:
             return .palette(ImageDemoHelpers.customPalettes[
                 min(customPaletteIndex, ImageDemoHelpers.customPalettes.count - 1)].palette)
@@ -284,7 +288,9 @@ struct ImageDemoSettings: Equatable {
         unicodeGlyphs = min(
             unicodeGlyphs, ImageDemoHelpers.maximumGlyphs(.unicode, shapeAware: shapeAware))
         greyLevels = min(256, max(2, greyLevels))
-        paletteColours = min(256, max(2, paletteColours))
+        spreadColours = min(256, max(2, spreadColours))
+        mostUsedColours = min(256, max(2, mostUsedColours))
+        leastErrorColours = min(256, max(2, leastErrorColours))
         customPaletteIndex = min(
             ImageDemoHelpers.customPalettes.count - 1, max(0, customPaletteIndex))
         // A one-stop LUT is not a mapping; the editor can delete down to one,
@@ -302,9 +308,9 @@ struct ImageDemoSettings: Equatable {
         case .grayscale: return "color:gray"
         case .mono: return "color:mono"
         case .greys: return "color:\(greyLevels) greys"
-        case .spread: return "color:\(paletteColours) spread"
-        case .mostUsed: return "color:\(paletteColours) most-used"
-        case .leastError: return "color:\(paletteColours) least-error"
+        case .spread: return "color:\(spreadColours) spread"
+        case .mostUsed: return "color:\(mostUsedColours) most-used"
+        case .leastError: return "color:\(leastErrorColours) least-error"
         case .customPalette:
             let index = min(customPaletteIndex, ImageDemoHelpers.customPalettes.count - 1)
             return "color:custom \(ImageDemoHelpers.customPalettes[index].name)"
