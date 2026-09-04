@@ -20,6 +20,38 @@ struct StringANSITests {
         #expect(styled.stripped == "Hello")
     }
 
+    /// `escapeBodyScan` ends a string-family sequence at BEL, `ESC \\` or an
+    /// 8-bit ST; the scalar walker behind `ansiSegments()` knew only the first
+    /// two, so for an OSC closed by U+009C the measure said 3 cells and the
+    /// segment walk said the whole line was one unterminated escape — and a
+    /// clamp then neither clipped the line nor reported its width.
+    @Test("An OSC closed by an 8-bit ST measures the same in both walkers")
+    func eightBitSTAgreesAcrossWalkers() {
+        let line = "\u{1B}]8;;u\u{9C}abc"
+        #expect(line.strippedLength == 3)
+        #expect(line.stripped == "abc")
+        let visible = line.ansiSegments().filter { if case .visible = $0 { true } else { false } }
+        #expect(visible.count == 3)
+        let walk = line.exactAnsiAwarePrefixWithWidth(visibleCount: 3)
+        let fast = line.ansiAwarePrefixWithWidth(visibleCount: 3)
+        #expect(walk.visibleWidth == fast.visibleWidth)
+    }
+
+    /// `ESC ( B` designates a character set and paints nothing. The measurers
+    /// consumed it; the segment walkers stopped after the ESC and counted the
+    /// `(` and the `B` as two cells.
+    @Test("An nF escape is zero cells in both walkers")
+    func nFEscapeIsZeroWidthEverywhere() {
+        let line = "\u{1B}(Bhello"
+        #expect(line.strippedLength == 5)
+        let width = line.ansiSegments().reduce(0) { total, segment in
+            if case .visible(let character) = segment { return total + character.terminalWidth }
+            return total
+        }
+        #expect(width == 5)
+        #expect(line.exactAnsiAwarePrefixWithWidth(visibleCount: 3).prefix == "\u{1B}(Bhel")
+    }
+
     @Test("stripped on plain text returns unchanged")
     func strippedPlainText() {
         #expect("Hello World".stripped == "Hello World")

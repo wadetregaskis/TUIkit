@@ -139,6 +139,9 @@ struct StrippedLengthFastPathTests {
             // Malformed / truncated escapes.
             "\u{1B}", "\u{1B}[", "\u{1B}[31", "\u{1B}X", "\u{1B}\u{1B}[31mx",
             "\u{1B}[31\u{1B}[0mx", "a\u{1B}[\u{07}b",
+            // The nF family (intermediates, then a final) and an 8-bit ST,
+            // which the measurers consumed and the segment walkers did not.
+            "\u{1B}(Bhello", "\u{1B}%Gx", "a\u{1B} b", "\u{1B}]8;;u\u{9C}abc",
         ])
     func matchesOracle(text: String) {
         #expect(text.strippedLength == oracle(text))

@@ -1198,12 +1198,25 @@ extension String {
             return (scalars.index(after: cursor), isSGR)
         }
 
+        // `ESC ( B` and its family: intermediates, then one final — the same
+        // shape `escapeIntroducerScan`/`escapeBodyScan` consume as zero
+        // cells. This walker never had the arm, so the measurers said 0 and
+        // the segment walkers said 2 for the same bytes.
+        if (0x20...0x2F).contains(introducer) {
+            cursor = scalars.index(after: cursor)
+            while cursor < scalars.endIndex, (0x20...0x2F).contains(scalars[cursor].value) {
+                cursor = scalars.index(after: cursor)
+            }
+            if cursor < scalars.endIndex { cursor = scalars.index(after: cursor) }
+            return (cursor, false)
+        }
+
         guard isStringFamilyIntroducer(introducer) else { return (cursor, false) }
         cursor = scalars.index(after: cursor)
         while cursor < scalars.endIndex {
             let value = scalars[cursor].value
             cursor = scalars.index(after: cursor)
-            if value == 0x07 { return (cursor, false) }  // BEL terminates
+            if value == 0x07 || value == 0x9C { return (cursor, false) }  // BEL, or 8-bit ST
             if value == 0x1B, cursor < scalars.endIndex, scalars[cursor].value == 0x5C {
                 return (scalars.index(after: cursor), false)  // ESC \ — ST
             }
@@ -1247,12 +1260,19 @@ extension String {
             while cursor < endIndex {
                 let character = self[cursor]
                 cursor = self.index(after: cursor)
-                if character == "\u{07}" { return cursor }  // BEL terminates
+                if character == "\u{07}" || character == "\u{9C}" { return cursor }  // BEL, or 8-bit ST
                 if character == "\u{1B}", cursor < endIndex, self[cursor] == "\\" {
                     return self.index(after: cursor)  // ESC \ — ST
                 }
             }
             return cursor  // unterminated: the payload runs to the end
+        }
+        // The nF family (`ESC ( B`): intermediates, then one final. See the
+        // scalar walker above; the rule is the measurers'.
+        if classify({ (0x20...0x2F).contains($0) }) {
+            while classify({ (0x20...0x2F).contains($0) }) { cursor = self.index(after: cursor) }
+            if cursor < endIndex { cursor = self.index(after: cursor) }
+            return cursor
         }
         guard self[cursor] == "[" else { return cursor }
         cursor = self.index(after: cursor)

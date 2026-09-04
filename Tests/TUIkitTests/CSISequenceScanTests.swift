@@ -43,8 +43,18 @@ struct CSISequenceScanTests {
     func notACSI() {
         #expect(end(of: "\u{1B}") == 1)
         #expect(end(of: "\u{1B}x") == 1)
-        // `ESC(B` — a charset selection, not a CSI.
-        #expect(end(of: "\u{1B}(B") == 1)
+    }
+
+    /// `ESC ( B` is a charset designation: intermediates (0x20…0x2F), then
+    /// one final. The measurers always consumed it as zero cells; this walker
+    /// stopped after the ESC and left `(B` to be counted as two — a pin that
+    /// used to read `== 1` here was pinning that disagreement.
+    @Test("An nF escape — intermediates then a final — is consumed whole")
+    func nFEscape() {
+        #expect(end(of: "\u{1B}(B") == 3)
+        #expect(end(of: "\u{1B}%G") == 3)
+        #expect(end(of: "\u{1B} F") == 3)
+        #expect(end(of: "\u{1B}(") == 2, "unterminated: stops at the end")
     }
 
     @Test("An unterminated sequence stops at the end rather than running off it")

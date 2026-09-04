@@ -249,7 +249,7 @@ extension String {
             while index < endIndex {
                 let character = self[index]
                 index = self.index(after: index)
-                if character == "\u{07}" { return index }  // BEL terminates
+                if character == "\u{07}" || character == "\u{9C}" { return index }  // BEL, or 8-bit ST
                 if character == "\u{1B}", index < endIndex, self[index] == "\\" {
                     return self.index(after: index)  // ESC \ — ST
                 }
