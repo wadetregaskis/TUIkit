@@ -730,6 +730,53 @@ struct OpacityForeignRunTests {
         #expect(faded?.clock == .cursor)
     }
 
+    /// A frame from `colorize(glyph, foreground:)` states no background: the
+    /// splice gives it the LINE's. Blended against what is behind the layer
+    /// alone it took the destination's field unblended — or the bare surface
+    /// — and then stated it, so a run on a backgrounded row inside `.opacity`
+    /// repainted the wrong field on every tick.
+    @Test("A faded run keeps the LINE's field, not the destination's")
+    func fadedRunKeepsTheLinesField() throws {
+        var buffer = FrameBuffer(lines: [
+            ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0), background: .rgb(0, 0, 255))
+        ])
+        buffer.animatedCells = [
+            AnimatedCellRun(
+                offsetX: 0, offsetY: 0, width: 5,
+                frames: [
+                    ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)),
+                    ANSIRenderer.colorize("HELLO", foreground: .rgb(0, 200, 0)),
+                ],
+                clock: .cursor)
+        ]
+        buffer.opacityRegions = [OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 0.5)]
+        let behind = FrameBuffer(lines: [
+            ANSIRenderer.colorize("xxxxx", foreground: .rgb(255, 255, 255), background: .rgb(255, 0, 0))
+        ])
+        let resolved = buffer.resolvingOpacity(over: behind, at: (x: 0, y: 0), surface: .black, palette: palette())
+        let frame = try #require(resolved.animatedCells.first?.frames.first)
+        let lineField = Color.rgb(0, 0, 255).compositing(0.5, over: .rgb(255, 0, 0))
+        #expect(frame.contains(backgroundCodes(lineField)), "frame: \(frame.debugDescription)")
+        #expect(!frame.contains(backgroundCodes(.rgb(255, 0, 0))), "the destination's field, unblended")
+    }
+
+    /// A region is stamped as wide as its buffer — the longest line — over
+    /// lines that may be shorter. `blendedSpan` could not tell "past the end
+    /// of the line" from "the continuation of a wide glyph", manufactured
+    /// cells there wearing the last real cell's field, and grew the row.
+    @Test("A region wider than its line fades the line, not the space past it")
+    func regionPastTheLineEndAddsNoCells() {
+        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("ab", background: .blue)])
+        buffer.opacityRegions = [OpacityRegion(offsetX: 0, offsetY: 0, width: 6, height: 1, opacity: 0.5)]
+        let resolved = buffer.resolvingOpacity(surface: .black, palette: palette())
+        #expect(resolved.lines[0].strippedLength == 2, "\(resolved.lines[0].debugDescription)")
+        // …and a region entirely past a short line is a no-op for it.
+        var two = FrameBuffer(lines: [ANSIRenderer.colorize("abcdef", background: .blue), "ab"])
+        two.opacityRegions = [OpacityRegion(offsetX: 3, offsetY: 0, width: 3, height: 2, opacity: 0.5)]
+        let second = two.resolvingOpacity(surface: .black, palette: palette())
+        #expect(second.lines[1] == "ab")
+    }
+
     @Test("A repeating fade still yields a foreign run — two clocks, one cell")
     func aCyclingFadeStillDropsForeignRuns() {
         // The fade's phases and the run's frames tick independently, and

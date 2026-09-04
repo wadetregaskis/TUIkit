@@ -132,7 +132,15 @@ extension FrameBuffer {
             // of the image is cells.
             guard !line.unicodeScalars.contains(.terminalImagePlaceholder) else { return nil }
             let first = covering.map(\.offsetX).min() ?? 0
-            let last = covering.map { $0.offsetX + $0.width }.max() ?? 0
+            // No further than the LINE reaches. A region is stamped as wide as
+            // its buffer — the longest line — over lines that may be shorter,
+            // and `blendedSpan` cannot tell "past the end of the line" from
+            // "the continuation of a wide glyph": it manufactured cells there
+            // wearing the last real cell's field, and the row grew to the
+            // region's edge. There is nothing of the source to fade past its
+            // end; what is behind shows through, as it does for any cell the
+            // source does not have.
+            let last = min(covering.map { $0.offsetX + $0.width }.max() ?? 0, line.strippedLength)
             let start = max(0, first)
             guard last > start else { return nil }
 
