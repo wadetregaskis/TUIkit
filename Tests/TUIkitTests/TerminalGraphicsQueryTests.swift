@@ -28,6 +28,20 @@ struct TerminalGraphicsQueryTests {
         #expect(request.hasSuffix("\u{1B}[6n"), "fenced, so silence is an answer")
     }
 
+    /// The fence test used to look at the LAST byte only: a keystroke landing
+    /// behind the reply held the read open for the whole timeout, and a bare
+    /// `ESC R` typed before the reply ended it early with pictures off. One
+    /// scan now, shared with the mode query.
+    @Test("The fence is found wherever it lands, and a bare ESC R is not one")
+    func fenceIsScanned() {
+        #expect(TerminalGraphicsQuery.sawFence(Array("\u{1B}[1;1R".utf8)))
+        #expect(TerminalGraphicsQuery.sawFence(Array("\u{1B}[1;1Rx".utf8)), "a byte behind the reply")
+        #expect(TerminalGraphicsQuery.sawFence(Array("\u{1B}_Gi=1;OK\u{1B}\\\u{1B}[24;80R".utf8)))
+        #expect(!TerminalGraphicsQuery.sawFence(Array("\u{1B}R".utf8)), "not a CSI")
+        #expect(!TerminalGraphicsQuery.sawFence(Array("\u{1B}_Gi=1;OK\u{1B}\\".utf8)), "no fence yet")
+        #expect(TerminalGraphicsQuery.sawFence(Array("\u{1B}[1;1Rx".utf8)) == TerminalModeQuery.sawFence(Array("\u{1B}[1;1Rx".utf8)))
+    }
+
     /// Apple Terminal prints an APC payload instead of consuming it, and it is
     /// not necessarily the only terminal that does. The request cleans up
     /// after itself so an unmeasured host with the same parser gap does not

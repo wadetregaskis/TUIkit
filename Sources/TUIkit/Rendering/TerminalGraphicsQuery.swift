@@ -108,9 +108,13 @@ enum TerminalGraphicsQuery {
     }
 
     /// Whether the DSR fence has come back, which ends the read.
+    ///
+    /// `TerminalModeQuery`'s scan, not a second spelling: this one used to
+    /// test only the LAST byte, so a keystroke landing behind the reply held
+    /// the read open for the whole timeout, and a bare `ESC R` typed before
+    /// the reply ended it early with pictures off for the session.
     static func sawFence(_ bytes: [UInt8]) -> Bool {
-        guard let last = bytes.last, last == 0x52 else { return false }  // 'R'
-        return bytes.contains(0x1B)
+        TerminalModeQuery.sawFence(bytes)
     }
 }
 
