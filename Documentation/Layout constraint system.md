@@ -59,7 +59,7 @@ The current `isWidthFlexible: Bool` flag is binary — a view either takes extra
 Some content's height depends on its width — wrapping text being the canonical example. SwiftUI's layout pass handles this transparently because each view sees a `ProposedSize` and can reply with a derived `ViewSize`. TUIkit's `ProposedSize` does support this, but the public-facing `.frame(...)` surface doesn't make it discoverable how to thread an intrinsic relationship through. A "give me what fits in width W" idiom is needed for text-heavy layouts.
 
 **8. Alignment under shrink.**
-When content is larger than the proposal, alignment of the truncated view matters (leading vs trailing vs center clipping). `_HStackCore` / `_VStackCore` handle this internally but there's no exposed `.layoutPriority(_:)` for the case where two siblings can't both fit. SwiftUI's `.layoutPriority(_:)` is a small but well-targeted concept.
+When content is larger than the proposal, alignment of the truncated view matters (leading vs trailing vs center clipping). `_HStackCore` / `_VStackCore` handle this internally and `.layoutPriority(_:)` has since shipped — for custom `Layout`s, read as `LayoutSubview.priority`; TUIkit's own stacks deliberately do not consult it, distributing by the flexibility each child reports instead (the API doc says so). What is still not expressible is a priority the *stacks* honour.
 
 ## Proposed direction
 
@@ -69,7 +69,7 @@ In ranking these by impact, the ones I'd build first are the ones that show up i
 
 2. **Fractional / relative frames** — `.frame(width: .fraction(0.3), height: .fraction(0.5))`. Adds a `FrameSize` enum (`.fixed(Int) | .fraction(Double) | .infinity`) and threads it through `FrameModifier`. Layouts that currently hard-code 30 cells or 40 cells become resolution-independent.
 
-3. **`.layoutPriority(_:)`** — a small `Double` priority threaded through the environment and inspected by stacks when there isn't enough room to satisfy every child's ideal size. Already a known SwiftUI surface, ~20 lines per stack.
+3. **`.layoutPriority(_:)`** — *shipped in the narrower form*: the modifier and `LayoutSubview.priority` exist for custom layouts; the stacks were deliberately left to distribute by reported flexibility.
 
 4. **Weighted distribution in stacks** — `.frame(width: .weighted(2))` on stack children. The stack collects weights from flexible children, divides remaining space by weight sum, and gives each child its share. The shape is more invasive than the others (it needs reasoning in `_HStackCore` / `_VStackCore` about what "weighted" means for non-flexible children), and `Grid` would benefit too.
 
@@ -90,7 +90,7 @@ If the direction here is approved, I'd file:
 
 1. Add `AspectRatioModifier` and `.aspectRatio(_:contentMode:)`.
 2. Introduce `FrameSize`, deprecate `FrameDimension`, add `.fraction` and `.fixed` variants, thread through `.frame(...)`.
-3. Add `.layoutPriority(_:)` and have `_VStackCore` / `_HStackCore` consult it on shrink.
+3. ~~Add `.layoutPriority(_:)`~~ — shipped for custom layouts; having `_VStackCore` / `_HStackCore` consult it was declined (see item 8).
 4. Add `.weighted` to `FrameSize` and update stack distribution to honour it.
 5. Add `.constraint(...)` as a low-disruption external min/max wrapper.
 6. (Stretch) `.debugLayout()` modifier for diagnostics.
