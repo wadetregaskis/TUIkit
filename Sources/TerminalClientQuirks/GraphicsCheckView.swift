@@ -71,11 +71,16 @@ struct GraphicsCheckView: View {
 
     /// The number an image is resampled to. Wrong here costs sharpness rather
     /// than shape — a virtual placement declares its size in CELLS and the
-    /// terminal scales the picture to fill them — which is why a terminal that
+    /// terminal fits the picture into them — which is why a terminal that
     /// reports nothing still gets a picture.
+    ///
+    /// From the RENDER environment, where the run loop publishes what the
+    /// terminal reported. A fresh `EnvironmentValues()` has only the key's
+    /// default, and this screen printed 8×16 on every host.
+    @Environment(\.imageCellPixels) private var cells
+
     private var geometry: some View {
-        let cells = EnvironmentValues().imageCellPixels
-        return HStack(spacing: 1) {
+        HStack(spacing: 1) {
             Text("Cell size:").foregroundStyle(.palette.foregroundSecondary)
             Text("\(cells.width)×\(cells.height) px").bold()
             Text("— what an image is resampled to before it is sent")
