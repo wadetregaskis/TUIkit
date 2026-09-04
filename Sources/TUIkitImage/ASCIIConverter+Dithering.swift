@@ -26,8 +26,12 @@ extension ASCIIConverter {
             return codeForANSI16(pixel, background: false)
 
         case .grayscale:
-            let gray = Int(pixel.luminance / 255.0 * 23.0)
-            let index = 232 + min(max(gray, 0), 23)
+            // By `count`, not `count - 1`, then clamped — the rule the
+            // character ramp already uses. Scaling by 23 and truncating gave
+            // levels 0…22 an 11-value band each and the top grey (#eeeeee)
+            // exactly one input, pure white: every highlight clipped a step
+            // dark, and "24 shades" delivered 23 usable ones.
+            let index = 232 + min(Int(pixel.luminance / 255.0 * 24.0), 23)
             return "\(ANSIEscape.csi)38;5;\(index)m"
 
         case .mono:
@@ -57,8 +61,7 @@ extension ASCIIConverter {
             return codeForANSI16(pixel, background: true)
 
         case .grayscale:
-            let gray = Int(pixel.luminance / 255.0 * 23.0)
-            let index = 232 + min(max(gray, 0), 23)
+            let index = 232 + min(Int(pixel.luminance / 255.0 * 24.0), 23)  // as above
             return "\(ANSIEscape.csi)48;5;\(index)m"
 
         case .mono:
