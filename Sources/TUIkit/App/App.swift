@@ -477,7 +477,7 @@ extension AppRunner {
         scheduler: AnimationScheduler
     ) -> FramePacer.Frame {
         scheduler.beginFrame()
-        let frameNow = Int64(bitPattern: DispatchTime.now().uptimeNanoseconds)
+        let frameNow = FrameClock.nowNanos
         let activity = renderer.render(
             pulsePhase: cursorTimer.breathPhase,
             cursorTimer: cursorTimer,

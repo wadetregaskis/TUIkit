@@ -7,6 +7,21 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
+
+/// The clock a frame is stamped with: an absolute monotonic reading, the
+/// same one every call site uses.
+///
+/// `render(frameNowNanos:)` once defaulted this to `0`. The parameter is an
+/// ABSOLUTE uptime, and the two callers that took the default — the frame
+/// rendered before a Ctrl-Z suspend, and the debug frame dump — anchored
+/// every drag flight and the auto-scroll timer at process-uptime zero; the
+/// next real frame then measured a lift as having run for the whole uptime.
+/// The default is the clock now, and the frame pacer reads the same one.
+enum FrameClock {
+    static var nowNanos: Int64 { Int64(bitPattern: DispatchTime.now().uptimeNanoseconds) }
+}
+
 // MARK: - Environment Snapshot
 
 /// A snapshot of environment values that affect rendered output.
@@ -352,7 +367,7 @@ extension RenderLoop {
         pulsePhase: Double = 0,
         cursorTimer: CursorTimer? = nil,
         animationScheduler: AnimationScheduler? = nil,
-        frameNowNanos: Int64 = 0
+        frameNowNanos: Int64 = FrameClock.nowNanos
     ) -> RenderActivity {
         // Drag auto-scroll: drive ONE tick against the PREVIOUS frame's zones
         // and region rects — before `beginRenderPass()` clears the dispatcher's
