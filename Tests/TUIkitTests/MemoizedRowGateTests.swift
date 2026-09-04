@@ -41,8 +41,10 @@ private struct IdentityProbe: View, Renderable {
 @Suite("MemoizedRow gate", .serialized)
 struct MemoizedRowGateTests {
 
-    // A fresh RenderCache per test — TUIContext().renderCache is the shared
-    // singleton, so reusing it would leak entries between serialized tests.
+    // The cache is passed in, not taken from the context, because every
+    // assertion below is an absolute count on ONE object (`cache.count == 1`,
+    // `cache.isEmpty`); `TUIContext()` already builds its own `RenderCache` —
+    // there has been no shared one since 33b5f4d0 — so this is not isolation.
     private func makeContext(cache: RenderCache, width: Int = 80, height: Int = 24) -> RenderContext {
         let tui = TUIContext()
         var env = EnvironmentValues()
