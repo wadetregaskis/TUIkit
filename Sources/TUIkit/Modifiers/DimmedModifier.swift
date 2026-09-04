@@ -113,6 +113,9 @@ extension FrameBuffer {
         let width = self.width
         let wrap = Flattening(foreground: foreground, background: background)
         var result = FrameBuffer(lines: lines.map { wrap($0, toWidth: width) })
+        // Pending layers ride through: a backdrop is dimmed under a modal,
+        // and anything still waiting to be drawn above it must not vanish.
+        result.overlays = overlays
         result.animatedCells = animatedCells.compactMap { run in
             let dimmed = AnimatedCellRun(
                 offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,

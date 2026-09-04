@@ -18,8 +18,9 @@ extension FrameBuffer {
     /// flat, inert backdrop (using `palette` for the colours) — so a screen-level
     /// modal reads as modal over the whole screen no matter where it was attached.
     ///
-    /// Layers that a composited layer itself emits are drained in further passes,
-    /// bounded by a small cap against a pathological re-emitting layer.
+    /// Layers that a composited layer itself emits join the same ordered queue
+    /// and take their place by level, bounded by a cap against a pathological
+    /// re-emitting layer.
     ///
     /// This is exactly what `RenderLoop` runs at the screen root; it's public so
     /// tests can reproduce the composited result a headless `renderToBuffer`
@@ -33,25 +34,33 @@ extension FrameBuffer {
         // over it, the region would go on naming those cells and the LAYER's
         // cells would be faded at the root instead of the page's.
         var result = resolvingOpacity(surface: palette.background, palette: palette)
-        // A small pass cap guards against a pathological layer that somehow keeps
-        // re-emitting itself; 16 levels of nesting is far beyond real use.
-        var passesRemaining = 16
-        while !result.overlays.isEmpty && passesRemaining > 0 {
-            passesRemaining -= 1
-            let layers = result.overlays
-            result.overlays = []
-
-            let ordered = layers.enumerated().sorted { lhs, rhs in
-                if lhs.element.level != rhs.element.level {
-                    return lhs.element.level < rhs.element.level
+        // ONE queue, re-sorted every time a layer is drawn. A layer nested in
+        // another layer's content — an alert presented from inside a sheet —
+        // is lifted into `overlays` only when its host composites, and a pass
+        // that sorted its snapshot and drained it would draw the newcomer
+        // after everything in that pass: a `.notification` toast, declared
+        // topmost, was buried by the nested alert's dimming. Lifted layers
+        // join the queue behind what is still pending and take their place by
+        // level; a drawn host is drawn, so its own nested layers land above it
+        // whatever their level. A cap guards against a pathological layer that
+        // keeps re-emitting itself; 256 is far beyond real use.
+        var queue = result.overlays.enumerated().map { (order: $0.offset, layer: $0.element) }
+        result.overlays = []
+        var nextOrder = queue.count
+        var drawsRemaining = 256
+        while !queue.isEmpty && drawsRemaining > 0 {
+            drawsRemaining -= 1
+            queue.sort { lhs, rhs in
+                if lhs.layer.level != rhs.layer.level {
+                    return lhs.layer.level < rhs.layer.level
                 }
-                if lhs.element.zIndex != rhs.element.zIndex {
-                    return lhs.element.zIndex < rhs.element.zIndex
+                if lhs.layer.zIndex != rhs.layer.zIndex {
+                    return lhs.layer.zIndex < rhs.layer.zIndex
                 }
-                return lhs.offset < rhs.offset
-            }.map(\.element)
-
-            for layer in ordered {
+                return lhs.order < rhs.order
+            }
+            let layer = queue.removeFirst().layer
+            do {
                 // A modal/alert layer dims everything beneath it first.
                 if layer.dimsBackground {
                     // Expand to the full area first, so the backdrop dims the whole
@@ -92,6 +101,13 @@ extension FrameBuffer {
                 result = result.compositedResolvingOpacity(
                     with: content, at: (x: placed.x, y: placed.y), palette: palette)
             }
+            // What this layer's content carried, lifted by the composite: into
+            // the queue, not the next pass.
+            for lifted in result.overlays {
+                queue.append((order: nextOrder, layer: lifted))
+                nextOrder += 1
+            }
+            result.overlays = []
         }
         return result
     }

@@ -78,6 +78,36 @@ struct FloatingLayerOpacityTests {
         return (buffer, composited)
     }
 
+    /// A layer nested in another layer's content is lifted only when its host
+    /// composites. Drawn a PASS later, it came after everything already on
+    /// screen — so an alert raised from inside a sheet dimmed a `.notification`
+    /// toast that the level order declares topmost.
+    @Test("A layer lifted from inside another layer still respects the level order")
+    func nestedLayerKeepsTheLevelOrder() {
+        let palette = SystemPalette.green
+        var page = FrameBuffer(lines: Array(repeating: String(repeating: " ", count: 20), count: 6))
+        var sheet = FrameBuffer(lines: ["SHEET"])
+        sheet.overlays = [
+            OverlayLayer(
+                offsetX: 0, offsetY: 0, content: FrameBuffer(lines: ["ALERT"]),
+                level: .alert, dimsBackground: true)
+        ]
+        page.overlays = [
+            OverlayLayer(offsetX: 0, offsetY: 2, content: sheet, level: .modal, dimsBackground: true),
+            OverlayLayer(
+                offsetX: 10, offsetY: 0,
+                content: FrameBuffer(lines: [ANSIRenderer.colorize("TOAST", foreground: .rgb(1, 2, 3))]),
+                level: .notification),
+        ]
+        let composited = page.compositingOverlays(maxWidth: 20, maxHeight: 6, palette: palette)
+        let toastRow = composited.lines[0]
+        #expect(toastRow.stripped.contains("TOAST"))
+        #expect(
+            toastRow.contains("38;2;1;2;3"),
+            "the toast was dimmed by a layer lifted after it: \(toastRow.debugDescription)")
+        #expect(composited.lines.joined().stripped.contains("ALERT"), "the nested alert is drawn")
+    }
+
     // MARK: - Reading a composited line back
 
     /// The background each visible cell of `line` is painted with — `nil` where
