@@ -192,25 +192,24 @@ extension StepperHandler {
             if let onIncrement {
                 onIncrement()
             } else if let bounds {
-                // Choose the candidate WITHOUT overshooting the bound, then
-                // clamp. Computing `advanced(by: step)` unconditionally first
-                // (then clamping the result, as this did) traps on integer
-                // overflow when the value sits within `step` of the type's
-                // representable maximum — reachable with a bound at/near that
-                // maximum (e.g. `Stepper(value:in: 0...Int.max)` held at the
-                // top). The final `min`/`max` still pins the bound and
-                // neutralises a NaN value the way it always did.
-                let candidate: V
-                if value.wrappedValue >= bounds.upperBound
-                    || value.wrappedValue > bounds.upperBound.advanced(by: V.Stride.zero - step)
-                {
-                    candidate = bounds.upperBound  // at the bound, or a full step would overshoot
-                } else {
-                    candidate = value.wrappedValue.advanced(by: step)
-                }
+                // Saturate, then clamp — this does NOT test for overshoot
+                // first, as it used to. That guard pivoted off the BOUND
+                // (`upperBound - step`), which is trapping arithmetic in its
+                // own right: it underflowed whenever the ceiling sat within
+                // `step` of the type's MINIMUM, and on an unsigned value type
+                // an ordinary `0...2` with `step: 5` was enough. Saturating
+                // costs nothing here because a sum that saturated is past
+                // every representable bound, so it and the true
+                // (unrepresentable) sum clamp to the same answer. The final
+                // `min`/`max` still pins the bound and neutralises a NaN value
+                // the way it always did.
+                let candidate = value.wrappedValue.advancedSaturating(by: step)
                 value.wrappedValue = max(bounds.lowerBound, min(bounds.upperBound, candidate))
             } else {
-                value.wrappedValue = value.wrappedValue.advanced(by: step)
+                // Unbounded, so there is no clamp to fall back on: saturating
+                // is the whole answer, and pins a value already at the type's
+                // extreme instead of trapping on the press.
+                value.wrappedValue = value.wrappedValue.advancedSaturating(by: step)
             }
         }
     }
@@ -222,22 +221,15 @@ extension StepperHandler {
             if let onDecrement {
                 onDecrement()
             } else if let bounds {
-                // Mirror of `increment`: choose a candidate that never
-                // undershoots the lower bound (so a value within `step` of the
-                // type's minimum can't underflow), then clamp — the final
-                // `min`/`max` also pulls an out-of-range-high value back into
-                // bounds and neutralises NaN, exactly as before.
-                let candidate: V
-                if value.wrappedValue <= bounds.lowerBound
-                    || value.wrappedValue < bounds.lowerBound.advanced(by: step)
-                {
-                    candidate = bounds.lowerBound
-                } else {
-                    candidate = value.wrappedValue.advanced(by: negativeStep)
-                }
+                // Mirror of `increment`: a step that runs off the bottom of
+                // the type saturates at the type's minimum, which is at or
+                // below `lowerBound`, so the clamp lands on the floor. The
+                // final `min`/`max` also pulls an out-of-range-high value back
+                // into bounds and neutralises NaN, exactly as before.
+                let candidate = value.wrappedValue.advancedSaturating(by: negativeStep)
                 value.wrappedValue = min(bounds.upperBound, max(bounds.lowerBound, candidate))
             } else {
-                value.wrappedValue = value.wrappedValue.advanced(by: negativeStep)
+                value.wrappedValue = value.wrappedValue.advancedSaturating(by: negativeStep)
             }
         }
     }
@@ -262,6 +254,53 @@ extension StepperHandler {
         } else if value.wrappedValue > bounds.upperBound {
             value.wrappedValue = bounds.upperBound
         }
+    }
+}
+
+// MARK: - Overflow-Safe Stepping
+
+extension Strideable where Stride: SignedNumeric {
+    /// `advanced(by:)` with the value type's own extremes as a floor and
+    /// ceiling instead of a trap.
+    ///
+    /// This is NOT the stepper's bounds clamp — the caller still pins the
+    /// result to its `bounds`; this is the arithmetic underneath that clamp.
+    /// `advanced(by:)` on a fixed-width integer is ordinary trapping addition,
+    /// so a sum landing past the type's maximum kills the process before there
+    /// is a number left to clamp. Saturating first loses nothing: a sum that
+    /// saturated is past every representable bound, so it and the true
+    /// (unrepresentable) sum clamp to the same answer.
+    ///
+    /// The runtime cast is what finds the trapping types, and a `where` clause
+    /// could not: the stepper's value type is only known to be `Strideable`,
+    /// and Swift picks between protocol-extension overloads at compile time,
+    /// so a `where Self: FixedWidthInteger` twin would never be the one that
+    /// generic context calls. Types whose arithmetic cannot trap (`Double`,
+    /// `Date`, …) take the plain `advanced(by:)` — as does a fixed-width
+    /// integer with a custom `Stride`, which no standard integer type has.
+    ///
+    /// - Parameter n: How far to advance, as for `advanced(by:)`.
+    /// - Returns: The advanced value, or the nearer of the type's extremes
+    ///   when that value is not representable.
+    fileprivate func advancedSaturating(by n: Stride) -> Self {
+        guard let integer = self as? any FixedWidthInteger, let step = n as? Int,
+            let saturated = integer.addingSaturating(step) as? Self
+        else { return advanced(by: n) }
+        return saturated
+    }
+}
+
+extension FixedWidthInteger {
+    /// `self + n` with this type's extremes as a floor and ceiling.
+    ///
+    /// A step too large for the type to even hold (an `Int8` stepped by 1000)
+    /// saturates for the same reason an overflowing sum does: the true result
+    /// is past the extreme the step points at.
+    fileprivate func addingSaturating(_ n: Int) -> Self {
+        guard let delta = Self(exactly: n) else { return n > 0 ? .max : .min }
+        let (sum, overflow) = addingReportingOverflow(delta)
+        guard overflow else { return sum }
+        return n > 0 ? .max : .min
     }
 }
 
