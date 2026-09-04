@@ -701,9 +701,10 @@ extension FrameBuffer {
         // popup would repaint itself THROUGH the popup within one tick. The
         // modal and alert presenters cleared base runs by hand for exactly
         // this; every other overlap — popovers, menus, toasts, ZStack
-        // siblings — went uncovered. A partially covered run is dropped
-        // whole: half a spinner frozen beats half a spinner drawn over a
-        // menu, and slicing frames is machinery nothing yet needs.
+        // siblings — went uncovered. A partly covered run is CUT to the cells
+        // still showing, not dropped whole — `FrameBuffer+Punching.swift` has
+        // the reasoning (688a9aa7; it used to be dropped, and a spinner half
+        // under a popover froze). The in-place twin below defers here.
         composited.animatedCells =
             animatedCellsPunched(by: overlay, at: position)
             + overlay.shiftedAnimatedCells(byX: position.x, y: position.y)
