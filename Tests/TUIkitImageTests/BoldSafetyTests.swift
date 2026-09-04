@@ -60,10 +60,11 @@ struct BoldSafetyTests {
         #expect(!ASCIIColorMode.ansi16.foregroundSurvivesBold)
     }
 
-    /// `.ansi256`'s safety rests on `quantizeToANSI256` never returning one of
-    /// the sixteen — the grey ramp starts at 232 and the colour cube at 16, and
-    /// near-black lands on 16 rather than 0. Swept rather than argued, because
-    /// a single index below 16 would put bold back over a name.
+    /// `.ansi256`'s safety rests on its palette never OFFERING one of the
+    /// sixteen: `ASCIIPalette.ansi256` holds indices 16…255 and nothing below,
+    /// and `Color`'s own search over the same entries starts at 16 too. Swept
+    /// rather than argued, because a single index below 16 would put bold back
+    /// over a name.
     @Test("The 256-colour quantiser never lands on one of the sixteen")
     func quantiserAvoidsTheSixteen() {
         let converter = ASCIIConverter(colorMode: .ansi256)

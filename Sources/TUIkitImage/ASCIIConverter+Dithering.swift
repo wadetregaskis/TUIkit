@@ -19,11 +19,10 @@ extension ASCIIConverter {
             return "\(ANSIEscape.csi)38;2;\(pixel.r);\(pixel.g);\(pixel.b)m"
 
         case .ansi256:
-            let index = quantizeToANSI256(pixel)
-            return "\(ANSIEscape.csi)38;5;\(index)m"
+            return code(for: pixel, in: .ansi256, background: false)
 
         case .ansi16:
-            return codeForANSI16(pixel, background: false)
+            return code(for: pixel, in: .ansi16, background: false)
 
         case .grayscale:
             // By `count`, not `count - 1`, then clamped — the rule the
@@ -38,8 +37,7 @@ extension ASCIIConverter {
             return ""
 
         case .palette(let palette):
-            let index = palette.nearestIndex(to: pixel)
-            return "\(ANSIEscape.csi)\(palette.sgrParameters(at: index, background: false))m"
+            return code(for: pixel, in: palette, background: false)
         }
     }
 
@@ -54,11 +52,10 @@ extension ASCIIConverter {
             return "\(ANSIEscape.csi)48;2;\(pixel.r);\(pixel.g);\(pixel.b)m"
 
         case .ansi256:
-            let index = quantizeToANSI256(pixel)
-            return "\(ANSIEscape.csi)48;5;\(index)m"
+            return code(for: pixel, in: .ansi256, background: true)
 
         case .ansi16:
-            return codeForANSI16(pixel, background: true)
+            return code(for: pixel, in: .ansi16, background: true)
 
         case .grayscale:
             let index = 232 + min(Int(pixel.luminance / 255.0 * 24.0), 23)  // as above
@@ -68,49 +65,26 @@ extension ASCIIConverter {
             return ""
 
         case .palette(let palette):
-            let index = palette.nearestIndex(to: pixel)
-            return "\(ANSIEscape.csi)\(palette.sgrParameters(at: index, background: true))m"
+            return code(for: pixel, in: palette, background: true)
         }
     }
 
-    /// The SGR that selects the nearest of the terminal's sixteen.
+    /// The SGR that selects the nearest entry of `palette`, spelled in whatever
+    /// form that entry's colour takes — `30`–`37`/`90`–`97` for one of the
+    /// terminal's sixteen, `38;5;n` for one of its 256, a triple for a colour
+    /// of the app's own.
     ///
-    /// Through ``ASCIIPalette/ansi16`` rather than through a table of its own:
-    /// the palette already holds the sixteen as `.standard`/`.bright` colours,
-    /// already maps a pixel to the nearest of them in OKLab — the metric every
-    /// other image mapping uses — and already knows that such a colour is
-    /// spelled `30 + n` / `90 + n` rather than as an index or a triple.
-    private func codeForANSI16(_ pixel: RGBA, background: Bool) -> String {
-        let sixteen = ASCIIPalette.ansi16
-        let parameters = sixteen.sgrParameters(
-            at: sixteen.nearestIndex(to: pixel), background: background)
+    /// One function for all three modes that name colours, because they ask one
+    /// question. ``ASCIIColorMode/ansi16`` and ``ASCIIColorMode/ansi256`` are
+    /// not quantisers of their own: they are the terminal's two palettes, and a
+    /// palette already knows how to be searched and how to be said. `.ansi256`
+    /// was the holdout — a 6×6×6 cube indexed by dividing each channel by 51 —
+    /// and that arithmetic disagreed with the way the UI beside it was
+    /// quantised for 85% of colours. See ``ASCIIPalette/ansi256``.
+    private func code(for pixel: RGBA, in palette: ASCIIPalette, background: Bool) -> String {
+        let parameters = palette.sgrParameters(
+            at: palette.nearestIndex(to: pixel), background: background)
         return "\(ANSIEscape.csi)\(parameters)m"
-    }
-
-    /// Quantizes an RGB pixel to the nearest ANSI 256-color index.
-    private func quantizeToANSI256(_ pixel: RGBA) -> UInt8 {
-        // Check for near-grayscale
-        let rDiff = abs(Int(pixel.r) - Int(pixel.g))
-        let gDiff = abs(Int(pixel.g) - Int(pixel.b))
-        if rDiff < 10, gDiff < 10 {
-            // The NEAREST ramp entry, by luminance. The entries sit ten apart
-            // (8, 18, … 238), and `(gray - 8) / 10` floored, so every level in
-            // the upper half of a step came out an entry too dark — exact
-            // entries included; and `< 8 → black` sent 5…7 to (0,0,0) with
-            // (8,8,8) three away. Black and white are the cube's corners (16
-            // and 231) and take over only where they are closer than the
-            // ramp's ends.
-            let level = pixel.luminance
-            if level < 4 { return 16 }
-            if level > 246.5 { return 231 }
-            return UInt8(232 + min(23, max(0, Int(((level - 8) / 10).rounded()))))
-        }
-
-        // 6x6x6 color cube (indices 16-231)
-        let r = UInt8((Double(pixel.r) / 255.0 * 5.0).rounded())
-        let g = UInt8((Double(pixel.g) / 255.0 * 5.0).rounded())
-        let b = UInt8((Double(pixel.b) / 255.0 * 5.0).rounded())
-        return 16 + 36 * r + 6 * g + b
     }
 }
 
@@ -207,16 +181,10 @@ extension ASCIIConverter {
             return pixel
 
         case .ansi256:
-            let index = quantizeToANSI256(pixel)
-            var quantized = ansi256ToRGB(index)
-            quantized.a = pixel.a
-            return quantized
+            return Self.quantized(pixel, in: .ansi256, table: table)
 
         case .ansi16:
-            let sixteen = ASCIIPalette.ansi16
-            var quantized = sixteen.rgba(at: Self.index(of: pixel, in: sixteen, table: table))
-            quantized.a = pixel.a
-            return quantized
+            return Self.quantized(pixel, in: .ansi16, table: table)
 
         case .grayscale:
             let gray = UInt8(clamping: Int(pixel.luminance))
@@ -229,13 +197,19 @@ extension ASCIIConverter {
             return RGBA(r: val, g: val, b: val, a: pixel.a)
 
         case .palette(let palette):
-            // The entry this pixel will actually be drawn as — so the error
-            // diffused is the error the palette makes, which is what turns a
-            // three-colour render from three flat regions into a gradient.
-            var quantized = palette.rgba(at: Self.index(of: pixel, in: palette, table: table))
-            quantized.a = pixel.a
-            return quantized
+            return Self.quantized(pixel, in: palette, table: table)
         }
+    }
+
+    /// The entry `pixel` will actually be drawn as, keeping its alpha — so the
+    /// error the dither diffuses is the error the palette makes, which is what
+    /// turns a three-colour render from three flat regions into a gradient.
+    private static func quantized(
+        _ pixel: RGBA, in palette: ASCIIPalette, table: ASCIIPalette.QuantisationTable?
+    ) -> RGBA {
+        var quantized = palette.rgba(at: index(of: pixel, in: palette, table: table))
+        quantized.a = pixel.a
+        return quantized
     }
 
     /// The palette entry for `pixel`: through `table` when the caller built one
@@ -248,36 +222,5 @@ extension ASCIIConverter {
         let cell = ASCIIPalette.quantisationCell(for: pixel)
         guard table.trusted[cell] else { return palette.nearestIndex(to: pixel) }
         return Int(table.answers[cell])
-    }
-
-    /// Converts an ANSI 256-color index back to approximate RGB.
-    private func ansi256ToRGB(_ index: UInt8) -> RGBA {
-        let idx = Int(index)
-        if idx < 16 {
-            // Standard colors (approximate)
-            let table: [(UInt8, UInt8, UInt8)] = [
-                (0, 0, 0), (128, 0, 0), (0, 128, 0), (128, 128, 0),
-                (0, 0, 128), (128, 0, 128), (0, 128, 128), (192, 192, 192),
-                (128, 128, 128), (255, 0, 0), (0, 255, 0), (255, 255, 0),
-                (0, 0, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255),
-            ]
-            let (r, g, b) = table[idx]
-            return RGBA(r: r, g: g, b: b)
-        } else if idx < 232 {
-            // 6x6x6 color cube
-            let offset = idx - 16
-            let r = offset / 36
-            let g = (offset % 36) / 6
-            let b = offset % 6
-            return RGBA(
-                r: r == 0 ? 0 : UInt8(55 + r * 40),
-                g: g == 0 ? 0 : UInt8(55 + g * 40),
-                b: b == 0 ? 0 : UInt8(55 + b * 40)
-            )
-        } else {
-            // Grayscale ramp
-            let gray = UInt8(8 + (idx - 232) * 10)
-            return RGBA(r: gray, g: gray, b: gray)
-        }
     }
 }

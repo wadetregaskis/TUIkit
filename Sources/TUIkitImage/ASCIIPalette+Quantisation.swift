@@ -92,20 +92,10 @@ extension ASCIIPalette {
     ///
     /// The character renderer never consults this.
     func quantisationTable() -> QuantisationTable? {
+        if followsColorQuantiser { return Self.terminalQuantisationTable }
         guard entries.count <= 256 else { return nil }
-        var answers = [UInt8](repeating: 0, count: Self.quantisationCells)
+        let answers = quantisationAnswers()
         let span = 1 << Self.quantisationBits
-        for red in 0..<span {
-            for green in 0..<span {
-                for blue in 0..<span {
-                    let pixel = RGBA(
-                        r: Self.quantisationRepresentative[red],
-                        g: Self.quantisationRepresentative[green],
-                        b: Self.quantisationRepresentative[blue])
-                    answers[Self.cell(red, green, blue)] = UInt8(nearestIndex(to: pixel))
-                }
-            }
-        }
 
         // Which cells can be TRUSTED. A cell whose six face-neighbours all
         // answer as it does lies in the interior of one palette entry's
@@ -141,6 +131,52 @@ extension ASCIIPalette {
         return QuantisationTable(answers: answers, trusted: trusted)
     }
 
+    /// This palette's exact answer at the representative point of every cell.
+    private func quantisationAnswers() -> [UInt8] {
+        var answers = [UInt8](repeating: 0, count: Self.quantisationCells)
+        let span = 1 << Self.quantisationBits
+        for red in 0..<span {
+            for green in 0..<span {
+                for blue in 0..<span {
+                    let pixel = RGBA(
+                        r: Self.quantisationRepresentative[red],
+                        g: Self.quantisationRepresentative[green],
+                        b: Self.quantisationRepresentative[blue])
+                    answers[Self.cell(red, green, blue)] = UInt8(nearestIndex(to: pixel))
+                }
+            }
+        }
+        return answers
+    }
+
+    /// ``ansi256``'s table — built once for the process, and trusted in every
+    /// cell.
+    ///
+    /// Two departures from every other palette's table, both forced by the same
+    /// number: `Color`'s answer costs about 480 ns in a release build, where a
+    /// sixteen-entry OKLab search costs about 40.
+    ///
+    /// - **Built once**, not per conversion. 32,768 answers at 480 ns is 16 ms,
+    ///   which is more than converting a whole picture costs and would be paid
+    ///   again for the next one. It is the same table every time — these 240
+    ///   colours are the terminal's, not the app's — so it is a constant, and
+    ///   the first image pays for it once.
+    /// - **No boundary fallback.** The `trusted` mask exists so a cell
+    ///   straddling two entries is looked up exactly instead of guessed, and it
+    ///   works because a sixteen-colour palette has few such cells. Measured for
+    ///   these 240: only 33% of cells have six agreeing neighbours, so the
+    ///   fallback would fire for 75% of PIXELS at 480 ns each — 0.36 s for a
+    ///   megapixel, where the whole conversion costs 11 ms. So the table answers
+    ///   everywhere, and what that costs in accuracy is measured and pinned in
+    ///   `PaletteTableFidelityTests` like every other palette's.
+    ///
+    /// This is the pixel renderer's copy. The character renderer passes no
+    /// table and takes the exact answer, which is what makes a glyph's `38;5;n`
+    /// identical to the one the UI beside it is painted with.
+    static let terminalQuantisationTable = QuantisationTable(
+        answers: ansi256.quantisationAnswers(),
+        trusted: [Bool](repeating: true, count: quantisationCells))
+
     private static let faceNeighbours = [
         (-1, 0, 0), (1, 0, 0), (0, -1, 0), (0, 1, 0), (0, 0, -1), (0, 0, 1),
     ]
@@ -171,14 +207,20 @@ extension ASCIIColorMode {
     /// The palette this mode searches for every pixel, or `nil` for one that
     /// answers by arithmetic.
     ///
-    /// ``ansi256`` is absent deliberately: it indexes a colour cube by
-    /// division rather than searching, which is why it costs a fifth of what
-    /// ``ansi16`` costs despite naming sixteen times as many colours.
+    /// ``ansi256`` used to be absent, and the reason given was cost: it indexed
+    /// the colour cube by division rather than searching, so it cost a fifth of
+    /// what ``ansi16`` cost despite naming sixteen times as many colours. What
+    /// that bought was a second quantiser — one screen answering the same RGB
+    /// two ways, the picture by division and the UI beside it by
+    /// `Color.downsampledToPalette256()`. It is a searched palette now; see
+    /// ``ASCIIPalette/ansi256`` for the rule and
+    /// ``ASCIIPalette/terminalQuantisationTable`` for what it costs.
     var searchedPalette: ASCIIPalette? {
         switch self {
         case .ansi16: ASCIIPalette.ansi16
+        case .ansi256: ASCIIPalette.ansi256
         case .palette(let palette): palette
-        case .trueColor, .grayscale, .mono, .ansi256: nil
+        case .trueColor, .grayscale, .mono: nil
         }
     }
 }

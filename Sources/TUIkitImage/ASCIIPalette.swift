@@ -103,6 +103,21 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// carrying an unresolved semantic colour is equal to itself.
     let entries: [Entry]
 
+    /// Whether ``nearestIndex(to:)`` defers to `Color`'s quantiser instead of
+    /// searching these entries itself.
+    ///
+    /// Not a case of ``ASCIIPaletteMapping``, and not something a caller can
+    /// ask for, because it is meaningful for exactly one palette: ``ansi256``,
+    /// whose entries ARE the terminal's 256 colours — the same colours the UI
+    /// is painted in, through `Color.downsampledToPalette256()`. Any other
+    /// palette asking to be mapped by that function would be asking to be
+    /// mapped to entries it does not contain. See ``ansi256``.
+    ///
+    /// Part of ``Equatable`` — unlike ``entries``, it is not a function of
+    /// ``colors``, so two palettes of the same colours that answer differently
+    /// are not the same palette.
+    let followsColorQuantiser: Bool
+
     struct Entry: Sendable {
         let rgba: RGBA
         let lightness: Double
@@ -119,20 +134,32 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// An empty list is not a palette; it degrades to black and white, which is
     /// the one answer that always renders something.
     public init(_ colors: [Color], mapping: ASCIIPaletteMapping = .nearestColor) {
+        self.init(colors, mapping: mapping, followsColorQuantiser: false)
+    }
+
+    private init(
+        _ colors: [Color], mapping: ASCIIPaletteMapping, followsColorQuantiser: Bool
+    ) {
         let colors = colors.isEmpty ? [.black, .white] : colors
         let entries = colors.map(Self.entry(for:))
         self.colors = colors
         self.mapping = mapping
         self.entries = entries
         self.byTone = entries.indices.sorted { entries[$0].tone < entries[$1].tone }
+        self.followsColorQuantiser = followsColorQuantiser
     }
 
     /// This palette, spent as a tonal ramp instead of as a set of candidates.
     /// See ``ASCIIPaletteMapping/toneRamp``.
+    ///
+    /// Deliberately drops the one palette-level exception to that mapping —
+    /// see `ASCIIPalette.ansi256` — because asking for a tone ramp is asking
+    /// for a different rule, and `Color`'s quantiser is not one.
     public func asToneRamp() -> Self { Self(colors, mapping: .toneRamp) }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.colors == rhs.colors && lhs.mapping == rhs.mapping
+            && lhs.followsColorQuantiser == rhs.followsColorQuantiser
     }
 
     /// `count` greys from black to white, evenly spaced in PERCEIVED
@@ -174,6 +201,29 @@ public struct ASCIIPalette: Sendable, Equatable {
         .brightBlack, .brightRed, .brightGreen, .brightYellow,
         .brightBlue, .brightMagenta, .brightCyan, .brightWhite,
     ])
+
+    /// The terminal's own 256 — the 6×6×6 cube and the 24-step grey ramp,
+    /// indices 16…255. What ``ASCIIColorMode/ansi256`` maps through.
+    ///
+    /// ## Why this one palette does not use ``nearestIndex(to:)``'s own metric
+    ///
+    /// Every other palette here is a set of colours chosen by the app, and
+    /// plain OKLab is the right way to spend it. This one is not chosen: it IS
+    /// the terminal's, and the UI standing beside the picture is quantised to
+    /// the very same 240 entries by `Color.downsampledToPalette256()`. Two
+    /// rules for one screen is the bug — a warm cream #F2DEC9 came out pink
+    /// (255,215,215) in the picture and warm (255,215,175) in the background
+    /// behind it — so this palette answers with `Color`'s answer and there is
+    /// one rule. Measured against it, plain OKLab over these 240 entries
+    /// disagrees for 31% of colours and the 6×6×6 cube arithmetic this
+    /// replaced for 85%.
+    ///
+    /// The sixteen named colours are deliberately absent, as they are from
+    /// `Color`'s search: an index below 16 is a NAME, which bold may repaint
+    /// in its bright twin. See ``ASCIIColorMode/foregroundSurvivesBold``.
+    static let ansi256 = Self(
+        (16...255).map { .palette(UInt8($0)) }, mapping: .nearestColor,
+        followsColorQuantiser: true)
 
     /// `count` colours spread as far apart as they can be, taken from the
     /// terminal's own 256-colour repertoire.
@@ -223,7 +273,12 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// theme — so a palette carrying one must be resolved before it can map
     /// anything. Callers that render do this once per conversion.
     public func resolved(with palette: any Palette) -> Self {
-        Self(colors.map { $0.resolve(with: palette) }, mapping: mapping)
+        // `followsColorQuantiser` survives, because resolving changes what a
+        // colour IS and not which colours the palette holds — and ``ansi256``
+        // holds none that can resolve to anything else.
+        Self(
+            colors.map { $0.resolve(with: palette) }, mapping: mapping,
+            followsColorQuantiser: followsColorQuantiser)
     }
 
     // MARK: - Mapping
@@ -246,6 +301,10 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// two entries is what makes a boundary read as a gradient instead of a
     /// step. See ``DitheringMode``.
     func nearestIndex(to pixel: RGBA) -> Int {
+        // ``ansi256`` first, before the mapping is even consulted: it is the
+        // terminal's own palette, and the answer for it is the one the UI is
+        // painted with. See `followsColorQuantiser`.
+        if followsColorQuantiser { return Self.terminalIndex(for: pixel) }
         guard mapping == .nearestColor else { return toneRampIndex(for: pixel) }
         let target = Color.oklab(red: pixel.r, green: pixel.g, blue: pixel.b)
         var best = 0
@@ -271,6 +330,23 @@ public struct ASCIIPalette: Sendable, Equatable {
             }
         }
         return best
+    }
+
+    /// ``ansi256``'s entry for `pixel` — the index `Color` would quantise the
+    /// same RGB to, less the sixteen this palette does not carry.
+    ///
+    /// Through the public `downsampledToPalette256()` rather than through any
+    /// private part of the quantiser: `Color.oklab` is shared with this module,
+    /// but `hueWeightedDistanceSquared` deliberately is not — it is load-bearing
+    /// for palette derivation and must not acquire callers outside its file. So
+    /// this asks the whole question and takes the whole answer, which is also
+    /// the only way the two are guaranteed to stay in step.
+    private static func terminalIndex(for pixel: RGBA) -> Int {
+        guard case .palette256(let index) =
+            Color.rgb(pixel.r, pixel.g, pixel.b).downsampledToPalette256().value
+        else { return 0 }
+        // The quantiser searches 16…255 and this palette starts at 16.
+        return max(0, Int(index) - 16)
     }
 
     /// The entry `pixel` reaches by TONAL RANK: the entries in dark-to-light
@@ -354,8 +430,16 @@ public struct ASCIIPalette: Sendable, Equatable {
     public func downsampled(to depth: ColorDepth) -> Self {
         switch depth {
         case .truecolor, .noColor: return self
-        case .palette256: return Self(colors.map { $0.downsampledToPalette256() }, mapping: mapping)
-        case .basic16: return Self(colors.map { $0.downsampledToANSI16() }, mapping: mapping)
+        case .palette256:
+            // Still the same colours — a `.palette256` entry downsamples to
+            // itself — so ``ansi256`` stays itself here, quantiser and all.
+            return Self(
+                colors.map { $0.downsampledToPalette256() }, mapping: mapping,
+                followsColorQuantiser: followsColorQuantiser)
+        case .basic16:
+            // Not there: these are sixteen NAMED colours now, and `Color`'s
+            // 256-colour quantiser cannot answer with one of them.
+            return Self(colors.map { $0.downsampledToANSI16() }, mapping: mapping)
         }
     }
 

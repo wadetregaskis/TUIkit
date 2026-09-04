@@ -316,6 +316,79 @@ The remaining recommendation: **a 3-D LUT only ever as a `.cube` loader, never
 as an editor**, and only if someone actually wants to apply a grade authored
 elsewhere.
 
+## `.ansi256` became one of these too
+
+**Status: shipped 2026-09-04.** The ladder above described `.ansi256` as
+"256 colours", and the way it reached them was the one thing in this module
+that was not a palette search: each channel divided by 51 and rounded onto the
+6×6×6 cube, with a near-grey short-circuit onto the 24-step ramp. It was the
+cheapest mode by a distance, and the reason it was cheap was that it guessed.
+
+What that bought was **a second quantiser on one screen**. `.effective(for:)`
+sends every `.trueColor` image to `.ansi256` on a 256-colour terminal, and the
+page the picture sits on is quantised to those very same 240 entries by
+`Color.downsampledToPalette256()` — an OKLab search with hue weighted. The two
+disagreed for **85%** of colours, and visibly: the framework's own warm cream
+`#F2DEC9` came out `(255,215,215)`, a pink, in the picture and `(255,215,175)`,
+warm, in the background behind it. The near-grey test compared red against green
+and green against blue but never red against blue, so a pale blue `#C8D0D8` was
+declared neutral and drawn as flat grey where the page beside it kept its tint.
+
+`.ansi256` is now `ASCIIPalette.ansi256`, a palette of those 240 entries, and
+`ASCIIColorMode.searchedPalette` returns it like any other. One palette answers
+by `Color`'s rule rather than by this module's plain OKLab, which is the only
+place in TUIkitImage that happens and is stated at the line: these colours are
+not the app's, they are the terminal's, and the UI is already painted in them.
+Measured against `Color`'s answer, plain OKLab over the same 240 entries would
+still disagree for 31% of colours, so borrowing the rule — rather than
+re-deriving a similar one — is the whole point.
+
+**What it costs, measured in a release build** (`Tools/Profiling/ImageHarness`,
+a 180×75 photograph, M-series):
+
+| path | asks | before | after |
+|---|---|---|---|
+| glyph (`convert`, 120×50 cells) | twice per cell | 0.75 ms | 7.0 ms |
+| pixel (`recoloured`, 960×850) | once per pixel | 11.7 ms | 9.3 ms |
+
+The per-cell path pays for exactness — `Color`'s answer is a 240-entry scan at
+about 480 ns, against a few nanoseconds of arithmetic — and gets it: the index
+in a glyph's `38;5;n` is now bit-identical to the one the UI beside it is
+painted with. That conversion is cached in `StateStorage` per view, so it is
+paid when the picture, the size or the settings change, and `.trueColor` on the
+same picture costs 4.4 ms for comparison.
+
+The per-pixel path cannot pay for exactness — 800,000 pixels × 480 ns is
+two fifths of a second — so it takes the same table every other searched palette
+takes, built once for the process because these 240 colours never change. It
+comes out **faster** than the arithmetic it replaced, because a table lookup is
+cheaper than three roundings and a branch. What the table costs in accuracy is
+measured in `PaletteTableFidelityTests`, and it is still an order of magnitude
+closer than the arithmetic was:
+
+| | differs from the exact answer | mean excess distance | worst |
+|---|---|---|---|
+| the old cube arithmetic | 85.0% | 0.0447 | 0.157 |
+| the table (pixel path) | 13.6% | 0.0044 | 0.142 |
+| the exact search (glyph path) | 0% | 0 | 0 |
+
+("Excess" is how much further the chosen entry sits from the pixel than the
+exact answer does, in OKLab; two adjacent cube levels are about 0.13 apart.)
+
+The table has no boundary fallback, which every other palette's does. That is
+not an oversight: with 240 entries only 33% of cells have six agreeing
+neighbours, so the fallback would fire for three pixels in four and cost more
+than the search it was meant to avoid.
+
+**A grey answers differently now, and better.** The old near-grey branch matched
+against the 24-step ramp alone. The cube has six greys of its own — 0, 95, 135,
+175, 215, 255 — and four of them fall between ramp steps, so `(92,92,92)` is
+three units from the cube's `(95,95,95)` and four from the ramp's `(88,88,88)`.
+Searching the whole 256 finds them. `(2,2,2)` moved too, from black to
+`(8,8,8)`: sRGB's transfer function is steep in the shadows, so in perceived
+lightness it is nearer the ramp's first rung than it is black, however the byte
+values read.
+
 ## Still open
 
 - **Should `.grayscale` become `.palette(.shades(24))` internally?** It is 24

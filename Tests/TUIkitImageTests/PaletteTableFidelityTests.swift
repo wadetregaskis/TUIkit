@@ -24,6 +24,12 @@ import Testing
 ///     shades(16)          0.131%        1
 ///     3-stop tone ramp    0.017%        1
 ///
+/// ``ASCIIPalette/ansi256`` is measured separately and on a different scale —
+/// 13.6%, because 240 entries in the same 32,768 cells leaves most cells
+/// straddling a boundary, and because its table has no exact fallback to rescue
+/// them. See `terminalPaletteTableIsHonest` for why that is the right trade
+/// there and nowhere else.
+///
 /// The plain table — before cells were spaced by lightness and before the
 /// boundary cells were excluded from it — disagreed for **4.6%** of colours
 /// and sometimes chose the FOURTH-nearest entry. Both numbers are in this
@@ -121,6 +127,63 @@ struct PaletteTableFidelityTests {
             print(String(format: "  shades(%d) disagreement %.3f%%  worst rank %d",
                          count, rate * 100, worstRank))
         }
+    }
+
+    /// The terminal's own 256, whose table is a different trade from every
+    /// other palette's — and the only one where the number is large enough that
+    /// it has to be said rather than assumed.
+    ///
+    /// `ASCIIPalette.terminalQuantisationTable` has no boundary fallback: with
+    /// 240 entries only 33% of cells have six agreeing neighbours, so falling
+    /// back would fire for three pixels in four at 480 ns each, which is over a third
+    /// of a second for a megapixel. The table answers everywhere instead, and
+    /// this is what that costs.
+    ///
+    /// Measured 2026-09-04: **13.6%** of colours take a different entry than the
+    /// exact search, landing on average 0.0044 further from the pixel in OKLab
+    /// — 3% of the 0.13 that separates two adjacent cube levels — and 0.14
+    /// further in the worst case, which is one whole step. The arithmetic this
+    /// replaced differed for 85.0% and landed 0.0447 further on average, so the
+    /// approximation is an order of magnitude closer than what it approximates
+    /// used to be.
+    ///
+    /// This is the pixel renderer only. The character renderer passes no table
+    /// and takes the exact answer, so a glyph's `38;5;n` is identical to the one
+    /// the UI beside it is painted with — see `ImageQuantiserParityTests`.
+    @Test("The terminal's 256: the table's misses are all near ties")
+    func terminalPaletteTableIsHonest() {
+        let palette = ASCIIPalette.ansi256
+        let table = ASCIIPalette.terminalQuantisationTable
+        let samples = sampleColours(20_000)
+        var differed = 0
+        var worstExcess = 0.0
+        var totalExcess = 0.0
+        for pixel in samples {
+            let exact = palette.nearestIndex(to: pixel)
+            let approximate = Int(table.answers[ASCIIPalette.quantisationCell(for: pixel)])
+            guard approximate != exact else { continue }
+            differed += 1
+            // How much further the table's entry sits from the pixel than the
+            // exact one — the honest measure of a miss, and the one that says
+            // "between two entries" rather than "wrong".
+            let target = Color.oklab(red: pixel.r, green: pixel.g, blue: pixel.b)
+            func distance(_ entry: Int) -> Double {
+                ASCIIPalette.distanceSquared(
+                    target,
+                    (l: palette.entries[entry].lightness, a: palette.entries[entry].a,
+                     b: palette.entries[entry].b)).squareRoot()
+            }
+            let excess = distance(approximate) - distance(exact)
+            totalExcess += excess
+            worstExcess = max(worstExcess, excess)
+        }
+        let rate = Double(differed) / Double(samples.count)
+        let meanExcess = differed > 0 ? totalExcess / Double(differed) : 0
+        print(String(format: "  ansi256  disagreement %.1f%%  excess mean %.4f worst %.4f OKLab",
+                     rate * 100, meanExcess, worstExcess))
+        #expect(rate < 0.16, "\(rate * 100)% of colours took a different entry")
+        #expect(meanExcess < 0.02, "the average miss lands \(meanExcess) further away")
+        #expect(worstExcess < 0.2, "the worst miss lands \(worstExcess) further away")
     }
 
     /// A palette the table cannot index declines it, rather than truncating an

@@ -198,7 +198,16 @@ public enum ASCIIColorMode: Sendable, Equatable {
     /// 24-bit RGB using `\e[38;2;R;G;B` sequences. Best quality.
     case trueColor
 
-    /// 256-color ANSI palette. Good terminal compatibility.
+    /// The terminal's own 256 — the 6×6×6 colour cube and the 24-step grey
+    /// ramp, emitted as `38;5;n` with `n` never below 16.
+    ///
+    /// Where a `.trueColor` image LANDS on a 256-colour terminal, which is why
+    /// it maps by exactly the rule the rest of the app is quantised by:
+    /// `Color.downsampledToPalette256()`, an OKLab search with hue weighted.
+    /// It used to divide each channel by 51 onto the cube instead, which is
+    /// cheaper and disagreed with that rule for 85% of colours — a picture and
+    /// a background of the same cream, drawn pink and warm side by side. See
+    /// `ASCIIPalette.ansi256`.
     case ansi256
 
     /// The terminal's own sixteen: the 8 standard ANSI colours and their 8
@@ -256,9 +265,11 @@ public enum ASCIIColorMode: Sendable, Equatable {
     /// bright twin to be swapped for:
     /// - ``trueColor`` is `38;2;r;g;b`, a triple and not a name.
     /// - ``ansi256`` and ``grayscale`` are `38;5;n`, and **n is never below
-    ///   16**: `quantizeToANSI256` returns 16…231 from the colour cube and
-    ///   232…255 from the grey ramp, never one of the sixteen. That is what
-    ///   makes them safe, so it is load-bearing rather than incidental.
+    ///   16**: ``ASCIIPalette/ansi256`` holds exactly the cube (16…231) and the
+    ///   grey ramp (232…255) and none of the sixteen, and `.grayscale` indexes
+    ///   the ramp directly. That is what makes them safe, so it is load-bearing
+    ///   rather than incidental — and it is why `Color`'s own search starts at
+    ///   16 as well.
     /// - ``mono`` states no colour at all.
     /// - ``ansi16`` is `30`–`37` / `90`–`97`: the very names bold reinterprets.
     /// - ``palette(_:)`` is safe only if no entry of it is one of the sixteen,
