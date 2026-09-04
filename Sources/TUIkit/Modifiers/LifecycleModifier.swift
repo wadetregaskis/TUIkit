@@ -6,8 +6,31 @@
 
 // MARK: - Lifecycle Tokens
 
-/// Derives the stable lifecycle token for a view's `.onAppear` / `.onDisappear`
-/// / `.task` from its **structural identity**, not a per-construction `UUID`.
+/// The place ONE lifecycle modifier instance occupies, one step below the
+/// identity it renders its content at.
+///
+/// NOT `context.identity`, which is shared: these modifiers are `Renderable`
+/// and render content under the unchanged context, so two of a kind chained on
+/// one view sit at a single identity. Sharing a token there meant only the
+/// first `.onAppear` fired, the second `.onDisappear` registration simply
+/// replaced the first in the callback table, and two `.task(id:)`s traded one
+/// generation box and restarted each other every frame.
+///
+/// The step is the modifier's own generic type, which distinguishes them
+/// because chaining strictly nests it: `OnAppearModifier<OnAppearModifier<Text>>`
+/// wraps `OnAppearModifier<Text>`. Deliberately not a positionally claimed
+/// counter, the way the `onChange` family disambiguates: a counter is stable
+/// only while every pass claims in the same order, and a token that churns
+/// re-fires an action or restarts a task rather than merely mis-slotting a
+/// value. A key built from what the code says is the same under any walk.
+private func lifecycleIdentity<Owner>(
+    _ owner: Owner.Type, _ context: RenderContext
+) -> ViewIdentity {
+    context.identity.child(type: owner)
+}
+
+/// Derives the stable lifecycle token for one `.onAppear` / `.onDisappear` /
+/// `.task` from its **structural identity**, not a per-construction `UUID`.
 ///
 /// This matters because a modifier value is rebuilt every time its parent's
 /// `body` is evaluated — i.e. on every frame. A `UUID()` baked in at
@@ -22,14 +45,12 @@
 /// This mirrors how `Spinner`, `ProgressView`, and `_ImageCore` already key
 /// their lifecycle/animation tasks (`"spinner-\(context.identity.path)"` etc.).
 ///
-/// - Note: Two `.onAppear`s (or two `.onDisappear`s) chained on a single view
-///   share an identity path and therefore a token, so only the first fires.
-///   That is vanishingly rare — distinct kinds use distinct prefixes and never
-///   collide. `.task` is the exception: it keys on a per-instance identity of
-///   its own (see ``TaskModifier``), because there a collision cost more than a
-///   missed call.
-private func lifecycleToken(_ prefix: String, _ context: RenderContext) -> String {
-    "\(prefix)-\(context.identity.path)"
+/// - Parameters:
+///   - prefix: The kind of lifecycle event, so different kinds on one view
+///     never collide.
+///   - identity: This instance's own place — see ``lifecycleIdentity(_:_:)``.
+private func lifecycleToken(_ prefix: String, _ identity: ViewIdentity) -> String {
+    "\(prefix)-\(identity.path)"
 }
 
 // MARK: - OnAppear Modifier
@@ -58,7 +79,7 @@ extension OnAppearModifier: Renderable {
             // so endRenderPass fires the disappear machinery for a row that is
             // still on screen. Declare the side effect so the memos decline.
             context.environment.volatileReadTracker?.recordRenderSideEffect()
-            let token = lifecycleToken("appear", context)
+            let token = lifecycleToken("appear", lifecycleIdentity(Self.self, context))
             _ = context.environment.lifecycle!.recordAppear(token: token, action: action)
         }
         return TUIkit.renderToBuffer(content, context: context)
@@ -86,7 +107,7 @@ extension OnDisappearModifier: Renderable {
             // See OnAppearModifier: presence must be re-recorded every frame,
             // or the row "disappears" (firing the action) while still visible.
             context.environment.volatileReadTracker?.recordRenderSideEffect()
-            let token = lifecycleToken("disappear", context)
+            let token = lifecycleToken("disappear", lifecycleIdentity(Self.self, context))
             // Register the disappear callback…
             context.environment.lifecycle!.registerDisappear(token: token, action: action)
             // …and mark the view visible this render so it only "disappears"
@@ -149,8 +170,8 @@ extension TaskModifier: Renderable {
             // still on screen (and restarting it on the next cache miss).
             context.environment.volatileReadTracker?.recordRenderSideEffect()
             let lifecycle = context.environment.lifecycle!
-            let identity = instanceIdentity(context)
-            var token = "task-\(identity.path)"
+            let identity = lifecycleIdentity(Self.self, context)
+            var token = lifecycleToken("task", identity)
             if let id {
                 token += "-gen\(generation(for: id, identity: identity, context: context))"
             }
@@ -168,28 +189,6 @@ extension TaskModifier: Renderable {
             }
         }
         return TUIkit.renderToBuffer(content, context: context)
-    }
-
-    /// This modifier instance's own place, one step below the identity it
-    /// renders its content at.
-    ///
-    /// NOT `context.identity`, which is shared: `TaskModifier` is `Renderable`
-    /// and renders content under the unchanged context, so
-    /// `Text("x").task(id: a) { … }.task(id: b) { … }` puts both modifiers at
-    /// one identity — one token and one generation box between them. Each then
-    /// found the OTHER's id in the box on every pass, bumped the generation,
-    /// and so minted a fresh token every frame: both tasks were cancelled and
-    /// restarted for the life of the view, and neither could outlive a frame.
-    ///
-    /// The step is this modifier's own generic type, which distinguishes the
-    /// two because chaining strictly nests them (`TaskModifier<TaskModifier<Text>>`
-    /// wraps `TaskModifier<Text>`). Deliberately not a positionally claimed
-    /// counter, the way the `onChange` family disambiguates: a counter is
-    /// stable only while every pass claims in the same order, and a token that
-    /// churns restarts a task rather than merely mis-slotting a value. A key
-    /// built from what the code says is the same under any walk.
-    private func instanceIdentity(_ context: RenderContext) -> ViewIdentity {
-        context.identity.child(type: Self.self)
     }
 
     /// A counter that advances every time `id` stops being `==` to the value

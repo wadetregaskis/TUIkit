@@ -126,6 +126,26 @@ struct LifecycleModifierTests {
         #expect(counter.value == 1, "onAppear fired \(counter.value)x")
     }
 
+    @Test("two chained .onAppears each fire once")
+    func chainedOnAppearsEachFire() async {
+        let first = Counter(), second = Counter()
+        struct TwoAppears: View {
+            let first: Counter, second: Counter
+            var body: some View {
+                // Nothing between them pushes a child identity — these are
+                // `Renderable` and render content under the unchanged context —
+                // so both key on ONE `context.identity`.
+                Text("x")
+                    .onAppear { first.bump() }
+                    .onAppear { second.bump() }
+            }
+        }
+        await renderFrames(
+            TwoAppears(first: first, second: second), frames: 4, context: makeContext())
+        #expect(first.value == 1, "the inner onAppear fired \(first.value)x")
+        #expect(second.value == 1, "the outer onAppear fired \(second.value)x")
+    }
+
     // MARK: - .onDisappear
 
     @Test("onDisappear does not fire while the view stays present")
@@ -157,6 +177,34 @@ struct LifecycleModifierTests {
         #expect(counter.value == 0, "should not fire while present")
         await renderFrames(ConditionalView(show: false, counter: counter), frames: 1, context: ctx)
         #expect(counter.value == 1, "onDisappear should fire once on removal, got \(counter.value)")
+    }
+
+    @Test("two chained .onDisappears each fire on removal")
+    func chainedOnDisappearsEachFire() async {
+        let ctx = makeContext()
+        let first = Counter(), second = Counter()
+        struct TwoDisappears: View {
+            let show: Bool
+            let first: Counter, second: Counter
+            var body: some View {
+                VStack {
+                    if show {
+                        // One token between them meant the second registration
+                        // simply replaced the first in `disappearCallbacks`.
+                        Text("here")
+                            .onDisappear { first.bump() }
+                            .onDisappear { second.bump() }
+                    }
+                }
+            }
+        }
+        await renderFrames(
+            TwoDisappears(show: true, first: first, second: second), frames: 2, context: ctx)
+        #expect(first.value == 0 && second.value == 0, "should not fire while present")
+        await renderFrames(
+            TwoDisappears(show: false, first: first, second: second), frames: 1, context: ctx)
+        #expect(first.value == 1, "the inner onDisappear fired \(first.value)x")
+        #expect(second.value == 1, "the outer onDisappear fired \(second.value)x")
     }
 
     // MARK: - .task isolation
