@@ -74,8 +74,14 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             context: context
         )
         FocusRegistration.register(context: context, handler: handler)
-        let isFocused = FocusRegistration.isFocused(
-            context: context, focusID: persistedFocusID)
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. Return still
+        // opens the menu, and the arrows still move within it; the accent
+        // value, the bold and the breathing caps are the advertisement, and
+        // they are all this flag reaches. The status-bar activation label goes
+        // with them, as `_ToggleCore`'s does: it names the focused control, so
+        // it is another way of saying where you are.
+        let isFocused = context.indicatesFocus(
+            FocusRegistration.isFocused(context: context, focusID: persistedFocusID))
 
         let hoverBox = resolveHoverBox(
             stateStorage: stateStorage, context: context)

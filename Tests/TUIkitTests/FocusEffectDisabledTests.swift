@@ -191,6 +191,19 @@ struct FocusEffectDisabledTests {
         expectIndistinguishable(tabs, "TabView")
     }
 
+    /// A menu-style `Picker` — the default style — draws its collapsed value in
+    /// the accent, bold, between breathing caps when focused. All three are
+    /// announcements of focus.
+    @Test("Picker")
+    func picker() {
+        let picker = Picker("Theme", selection: .constant("dark")) {
+            Text("Light").tag("light")
+            Text("Dark").tag("dark")
+        }
+        expectDistinguishable(picker, "Picker")
+        expectIndistinguishable(picker, "Picker")
+    }
+
     /// A `TextField` is the documented exception, and the exception is
     /// specific: the CARET survives, because it is the insertion point rather
     /// than an announcement of focus — which is what SwiftUI keeps too. So
