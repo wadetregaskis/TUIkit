@@ -121,6 +121,89 @@ struct GroupRenderTests {
         #expect(buffer.lines.map { $0.stripped } == ["x", "y"])
     }
 
+    // MARK: - Transparent Child Resolution (the metadata channel)
+    //
+    // Everything above travels the two-pass `childViews` path, which is what
+    // the stacks use. `childInfos` is the OTHER channel — the single-pass one
+    // `TupleView` splices through for row extraction — and it was unexecuted
+    // for `Group` while `Section`'s twin was covered. It is also the channel
+    // per-child metadata rides on, so a `Group` that returned one opaque info
+    // for the whole group would compile, render plausibly, and quietly eat
+    // every child's spacer flag and z-index.
+
+    @Test("Group.childInfos splices its children rather than wrapping them in one")
+    func childInfosSplicesChildren() {
+        let infos = Group {
+            Text("A")
+            Text("B")
+        }
+        .childInfos(context: ctx())
+
+        #expect(infos.count == 2, "one info per grouped child, not one for the Group")
+        #expect(infos[0].buffer?.lines.first?.stripped == "A")
+        #expect(infos[1].buffer?.lines.first?.stripped == "B")
+    }
+
+    @Test("A Spacer inside a Group keeps its spacer flag through childInfos")
+    func childInfosPreservesSpacerMetadata() {
+        let infos = Group {
+            Spacer()
+            Text("tail")
+        }
+        .childInfos(context: ctx())
+
+        #expect(infos.count == 2)
+        #expect(infos[0].isSpacer, "an opaque wrapper would render the spacer to a buffer instead")
+        #expect(infos[0].buffer == nil)
+        #expect(!infos[1].isSpacer)
+    }
+
+    @Test("A z-index inside a Group survives childInfos")
+    func childInfosPreservesZIndex() {
+        let infos = Group {
+            Text("under")
+            Text("over").zIndex(3)
+        }
+        .childInfos(context: ctx())
+
+        #expect(infos.count == 2)
+        #expect(infos[0].zIndex == 0)
+        #expect(infos[1].zIndex == 3, "an opaque wrapper would report the group's own z-index, 0")
+    }
+
+    /// The path a real tree takes to `Group.childInfos`: `TupleView` splices
+    /// any child that is a `ChildInfoProvider`, so a nested `Group` is asked
+    /// for its own children rather than rendered whole.
+    @Test("A Group nested in a Group is spliced by the enclosing TupleView")
+    func nestedGroupIsSpliced() {
+        let infos = Group {
+            Group {
+                Text("A")
+                Text("B")
+            }
+            Text("C")
+        }
+        .childInfos(context: ctx())
+
+        #expect(infos.count == 3, "the inner Group contributes two siblings, not one")
+        #expect(infos.compactMap { $0.buffer?.lines.first?.stripped } == ["A", "B", "C"])
+    }
+
+    // MARK: - Equatable
+
+    @Test("Group equality is its content's equality")
+    func equality() {
+        // Bound to `let`s rather than written inline: two literally identical
+        // expressions trip SwiftLint's identical_operands, which exists for
+        // exactly the case this test is deliberately making.
+        let group = Group { Text("same") }
+        let twin = Group { Text("same") }
+        let other = Group { Text("different") }
+
+        #expect(group == twin)
+        #expect(group != other)
+    }
+
     // MARK: - Exceeding the ViewBuilder limit
 
     @Test("Group renders all children when used to exceed the 10-view limit")
