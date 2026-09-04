@@ -138,4 +138,45 @@ struct FocusLifecycleCallbackTests {
         #expect(element.focusReceivedCount == 1, "no re-arrivals on steady frames")
         #expect(element.focusLostCount == 0, "no losses on steady frames")
     }
+    /// `unregister` is the app-facing teardown — the framework's own is the
+    /// per-frame ring — and it owed the departing element the same
+    /// notification every other clearing path gives it. `onFocusLost()` is
+    /// documented as where a pending edit is committed and a caret stops
+    /// blinking, so skipping it leaves that state live forever.
+    @Test("Unregistering the focused element fires its onFocusLost")
+    func unregisterFiresFocusLost() {
+        let manager = FocusManager()
+        let first = MockFocusable(id: "first")
+        let second = MockFocusable(id: "second")
+
+        manager.register(first)  // the first registrant auto-focuses
+        manager.register(second)
+        #expect(manager.currentFocusedID == "first", "sanity: the departing element is focused")
+
+        manager.unregister(first)
+
+        #expect(first.focusLostCount == 1, "the departing element's focus session ends")
+        #expect(manager.currentFocusedID == "second", "focus moves on")
+        #expect(second.focusReceivedCount == 1, "and the successor is told it arrived")
+    }
+
+    /// …and when the unregistered element was the LAST focusable, nothing
+    /// moves in after it, so the focus goes nil with no move to announce it —
+    /// the same repaint `relinquishFocus()` asks for, for the same reason: the
+    /// frame on screen still shows a focus indicator that is now a lie.
+    @Test("Unregistering the only focusable asks for the repaint")
+    func unregisteringTheLastFocusableRepaints() {
+        let manager = FocusManager()
+        let only = MockFocusable(id: "only")
+        manager.register(only)
+        #expect(manager.currentFocusedID == "only", "sanity: it holds the focus")
+
+        var repaints = 0
+        manager.onFocusChange = { repaints += 1 }
+        manager.unregister(only)
+
+        #expect(only.focusLostCount == 1, "it is still told, with nothing to hand focus to")
+        #expect(manager.currentFocusedID == nil)
+        #expect(repaints == 1, "or the indicator that just went away stays on screen")
+    }
 }

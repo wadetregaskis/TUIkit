@@ -381,16 +381,33 @@ extension FocusManager {
 
     /// Unregisters a focusable element from all sections.
     ///
+    /// A focused element is told it lost the focus on its way out — the same
+    /// promise ``relinquishFocus()`` and the end-of-pass drops make, and the
+    /// one ``Focusable/onFocusLost()`` is documented on: whatever the focus
+    /// began (an edit to commit, a dropdown to close, a caret to stop) has to
+    /// end with it.
+    ///
     /// - Parameter element: The element to unregister.
     public func unregister(_ element: Focusable) {
+        // Told BEFORE it leaves the ring, not after: `notifyFocusLost()` finds
+        // the element by searching the sections, so removing it first would
+        // leave only the `previousSections` fallback — empty outside a render
+        // pass, which is exactly when an app calls this.
+        let wasFocused = focusedID == element.focusID
+        if wasFocused { notifyFocusLost() }
+
         for section in sections {
             section.unregister(element)
         }
 
         // If the removed element was focused, focus the next available
-        if focusedID == element.focusID {
+        if wasFocused {
             focusedID = nil
-            focusNextInSection()
+            // The move announces itself. A section with nothing left to focus
+            // does not move, and a focus that just went nil is as invisible as
+            // one that moved — the frame on screen still draws the departed
+            // element's indicator — so that case owes the repaint itself.
+            if !moveFocusInSection(direction: .forward, wrap: false) { onFocusChange?() }
         }
     }
 
