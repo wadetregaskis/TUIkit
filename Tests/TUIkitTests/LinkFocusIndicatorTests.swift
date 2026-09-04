@@ -201,6 +201,38 @@ struct LinkFocusIndicatorTests {
         }
     }
 
+    /// The focus SECTION's ● is the third breath drawn over a tab body — the
+    /// one `AnimatedColor.activeSection` makes for a bordered container inside
+    /// an active section. Same rule, same surface.
+    @Test("A focus section's ● never sinks into the tab body behind it")
+    func theSectionIndicatorStepsOffTheSurface() throws {
+        let homebrew = try #require(PaletteRegistry.all.first { $0.name == "Homebrew" })
+        try withColorDepth(.truecolor) {
+            let (tui, context) = harness(palette: homebrew)
+            let manager = try #require(context.environment.focusManager)
+            let view = TabView(selection: .constant(0)) {
+                Tab("Tab", value: 0) { Panel("Section") { link }.focusSection() }
+            }
+            let first = render(view, tui: tui, context: context)
+            // The link registers in the SECTION, which is not the active one on
+            // the first frame — so its id is read off the hit regions, and
+            // focusing it activates the section.
+            let id = try #require(
+                first.hitTestRegions.compactMap(\.focusID).first { $0.hasPrefix("button-") },
+                "the link inside the section should have registered a focusID")
+            manager.focus(id: id)
+            let runs = render(view, tui: tui, context: context).animatedCells
+            let indicator = try #require(
+                runs.first { $0.frames.contains { $0.contains(String(BorderRenderer.focusIndicator)) } },
+                "the active section's border should breathe a ●; runs: \(runs.count)")
+            let drawn = try indicator.frames.map(drawnForeground(of:))
+            let surface = homebrew.liftedBackground.resolve(with: homebrew)
+            #expect(drawn.contains(.rgb(33, 83, 33)), "the ●'s trough is the accent at 20% over the tab body")
+            let worst = drawn.map { $0.contrastRatio(against: surface) }.min() ?? 0
+            #expect(worst >= ViewConstants.chromeSeparationFloor, "the ● comes within \(worst):1 of the tab body")
+        }
+    }
+
     /// The 24-bit foreground a frame paints its text in.
     ///
     /// Read out of the escape directly rather than through `SGRState`, which

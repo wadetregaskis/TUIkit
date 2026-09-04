@@ -26,9 +26,12 @@ extension AnimatedColor {
     static func activeSection(_ isActive: Bool, in environment: EnvironmentValues) -> Self? {
         guard isActive else { return nil }
         let accent = environment.palette.accent
+        // Over the surface the section's border is drawn on, not the page:
+        // inside a tab the page blend put the trough at the tab body's own
+        // luminance (Homebrew: 1.009:1), the defect the button breath had.
         return environment.selectionEmphasis.animatedColor(
             true,
-            dim: accent.opacity(ViewConstants.focusBorderDim, over: environment.palette.background),
+            dim: accent.opacity(ViewConstants.focusBorderDim, over: environment.enclosingSurface),
             bright: accent)
     }
 
