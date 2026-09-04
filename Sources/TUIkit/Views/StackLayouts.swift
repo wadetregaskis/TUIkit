@@ -17,6 +17,24 @@
 import TUIkitCore
 import TUIkitView
 
+// MARK: - Cross-Axis Flexibility
+
+/// Whether any subview but a `Spacer` is flexible on the stack's cross axis.
+///
+/// The one rule both stacks need and neither can read off `sizes` alone:
+/// ``Spacer`` reports BOTH axes flexible because it has no axis input, so the
+/// stack it is in has to discount the axis that is not its own. Shared rather
+/// than written twice — these two values have drifted apart from each other,
+/// and from `_VStackCore`/`_HStackCore`, once already.
+@MainActor
+private func isFlexibleAcross(
+    _ subviews: LayoutSubviews, _ sizes: [ViewSize], _ axis: KeyPath<ViewSize, Bool>
+) -> Bool {
+    zip(subviews, sizes).contains { subview, size in
+        !subview.child.isSpacer && size[keyPath: axis]
+    }
+}
+
 // MARK: - VStackLayout
 
 /// The vertical stack's arrangement, as a value.
@@ -77,7 +95,14 @@ public struct VStackLayout: Layout, Sendable, Equatable {
         return ViewSize(
             width: sizes.map(\.width).max() ?? 0,
             height: height,
-            isWidthFlexible: sizes.contains { $0.isWidthFlexible },
+            // Spacers excluded from the CROSS axis, not from both: a Spacer
+            // "expands along the major axis of its containing stack layout",
+            // and it has no axis input, so it reports both flexible and each
+            // stack has to drop the one that is not its own. `_VStackCore`
+            // does the same at its `!child.isSpacer` guard; the value spelling
+            // reported width-flexible instead and took a share of its row's
+            // slack away from a sibling that genuinely wanted it.
+            isWidthFlexible: isFlexibleAcross(subviews, sizes, \.isWidthFlexible),
             isHeightFlexible: flexible)
     }
 
@@ -164,7 +189,10 @@ public struct HStackLayout: Layout, Sendable, Equatable {
             width: width,
             height: sizes.map(\.height).max() ?? 0,
             isWidthFlexible: flexible,
-            isHeightFlexible: sizes.contains { $0.isHeightFlexible })
+            // See `VStackLayout.sizeThatFits` — same exclusion, other axis.
+            // `_HStackCore` makes it by handling spacers in a branch that
+            // never touches its `fillsHeight`.
+            isHeightFlexible: isFlexibleAcross(subviews, sizes, \.isHeightFlexible))
     }
 
     public func placeSubviews(

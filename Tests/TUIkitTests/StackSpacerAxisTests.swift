@@ -9,6 +9,12 @@
 //  did not — so a column with a Spacer in it advertised itself as
 //  WIDTH-flexible and swallowed its row's whole slack.
 //
+//  The stacks as `Layout` VALUES then shipped with the same hole and neither
+//  guard: `VStackLayout`/`HStackLayout` passed the subviews' own reports
+//  through, so a Spacer made them flexible on BOTH axes. Their cases here
+//  assert against the view spellings, which is the invariant that matters —
+//  the two must place and report identically.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -56,6 +62,43 @@ struct StackSpacerAxisTests {
         #expect(
             lines[0].trimmingCharacters(in: .whitespaces) == "hi RIGHT",
             "the column hugs its content: \(lines[0].debugDescription)")
+    }
+
+    @Test("The layout values report the same axes their view spellings do")
+    func layoutValuesAgreeWithTheirViews() {
+        // `VStackLayout`/`HStackLayout` place subviews exactly as `VStack` and
+        // `HStack` do, so they have to report the same flexibility: they read
+        // the subviews' own `ViewSize`s, and `Spacer` says BOTH axes without
+        // knowing which stack it is in.
+        let column = measure(VStackLayout(spacing: 0) { Text("hi"); Spacer() })
+        #expect(column.isHeightFlexible, "the Spacer's own axis still expands")
+        #expect(!column.isWidthFlexible, "the column does not become width-flexible")
+        #expect(column.isWidthFlexible == measure(VStack { Text("hi"); Spacer() }).isWidthFlexible)
+
+        let row = measure(HStackLayout { Text("a"); Spacer(); Text("b") })
+        #expect(row.isWidthFlexible, "a row with a Spacer still fills its width")
+        #expect(!row.isHeightFlexible, "the row does not become height-flexible")
+        #expect(
+            row.isHeightFlexible
+                == measure(HStack { Text("a"); Spacer(); Text("b") }).isHeightFlexible)
+    }
+
+    @Test("A layout-value row with a Spacer does not steal its column's slack")
+    func layoutRowDoesNotStealSlack() {
+        // What the wrong flag costs, visibly. The row said height-flexible, so
+        // the column split its eight rows between the row and the real Spacer
+        // — and the row paints one line whatever it is given, so its share
+        // evaporated and the footer sat halfway up the screen instead of at
+        // the bottom.
+        let lines = render(
+            VStack(spacing: 0) {
+                HStackLayout { Text("a"); Spacer(); Text("b") }
+                Spacer()
+                Text("bottom")
+            }, width: 12, height: 8)
+
+        #expect(lines.count == 8, "the column fills its height: \(lines)")
+        #expect(lines.last?.contains("bottom") == true, "the Spacer took it all: \(lines)")
     }
 
     @Test("A Spacer still expands a row horizontally")
