@@ -590,7 +590,8 @@ extension FrameDiffWriter {
     /// painted correctly on the frame that rendered it and then shifted
     /// everything after the emoji one cell left on every tick of its pulse,
     /// which is precisely what an uncompensated emission measures as
-    /// (`Tools/TerminalProbes/row_probe.py`; see
+    /// (`row_probe.py`, retired 2026-08-28 — `Tools/TerminalProbes/README.md`
+    /// says what asks its question now; the record is in
     /// `Documentation/Terminal-compatibility.md`).
     ///
     /// The compensation cannot move a cell — it erases, draws and steps, and
