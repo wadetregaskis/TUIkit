@@ -73,6 +73,18 @@ extension StressStrings {
         "stress.scenario.modifiers.stresses": "ModifiedView-/Umgebungsmodifikator-Schichtung · Mess-Overhead pro Knoten",
         "stress.scenario.modifiers.heading": "Modifikatorketten — {0} stark modifizierte Zeilen",
 
+        // MARK: preferences
+        "stress.scenario.preferences.title": "Preference-Zeilen",
+        "stress.scenario.preferences.blurb": "N Zeilen, die je eine Preference an einen Sammler melden.",
+        "stress.scenario.preferences.stresses": "Preference-Seiteneffekte · Aushebeln des Wert-Memos · Neuvermessung pro Zeile",
+        "stress.scenario.preferences.heading": "{0} Zeilen · {1} gemeldet",
+
+        // MARK: customlayout
+        "stress.scenario.customlayout.title": "Eigenes Layout",
+        "stress.scenario.customlayout.blurb": "N Subviews, angeordnet von einer Layout-Konformität hinter AnyLayout.",
+        "stress.scenario.customlayout.stresses": "Aufrufmuster des Layout-Protokolls · wiederholte Subview-Vermessung · AnyLayout-Typlöschung",
+        "stress.scenario.customlayout.heading": "{0} Chips in einem eigenen Layout",
+
         // MARK: textwall
         "stress.scenario.textwall.title": "Textwand",
         "stress.scenario.textwall.blurb": "N lange umbrechende Absätze synthetisierter Prosa.",

@@ -54,7 +54,7 @@ private struct PreferenceRowsView: View {
     var body: some View {
         let count = config.sized(400)
         VStack(alignment: .leading, spacing: 0) {
-            Text("\(count) rows · \(collected) published").bold()
+            Text(Lf("stress.scenario.preferences.heading", count, collected)).bold()
             Divider()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {

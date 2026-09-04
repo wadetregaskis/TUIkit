@@ -71,6 +71,18 @@ extension StressStrings {
         "stress.scenario.modifiers.stresses": "ModifiedView/环境修饰符分层 · 逐节点测量开销",
         "stress.scenario.modifiers.heading": "修饰符链 — {0} 个深度修饰的行",
 
+        // MARK: preferences
+        "stress.scenario.preferences.title": "偏好行",
+        "stress.scenario.preferences.blurb": "N 行，每行向一个收集器发布一个偏好。",
+        "stress.scenario.preferences.stresses": "偏好副作用声明 · 值备忘失效 · 逐行重新测量",
+        "stress.scenario.preferences.heading": "{0} 行 · 已发布 {1}",
+
+        // MARK: customlayout
+        "stress.scenario.customlayout.title": "自定义布局",
+        "stress.scenario.customlayout.blurb": "N 个子视图由 AnyLayout 背后的 Layout 遵循排列。",
+        "stress.scenario.customlayout.stresses": "Layout 协议调用模式 · 重复的子视图测量 · AnyLayout 类型擦除",
+        "stress.scenario.customlayout.heading": "自定义 Layout 中的 {0} 个芯片",
+
         // MARK: textwall
         "stress.scenario.textwall.title": "文本墙",
         "stress.scenario.textwall.blurb": "N 段合成散文的长换行段落。",

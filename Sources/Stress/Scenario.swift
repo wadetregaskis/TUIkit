@@ -32,11 +32,16 @@ struct Scenario {
     /// Builds the scenario's view for the given configuration.
     let make: @MainActor (StressConfig) -> AnyView
 
-    /// The menu title for the current language (falls back to ``title``).
+    /// The menu title for the current language.
+    ///
+    /// There is no fallback to ``title``: a table without the key shows the KEY
+    /// (`L` returns what it was given), which is what the source-parity test
+    /// over the string tables exists to catch. The English fields on this
+    /// struct are the source text the tables are written from.
     var localizedTitle: String { L("stress.scenario.\(id).title") }
-    /// The one-line description for the current language (falls back to ``blurb``).
+    /// The one-line description for the current language; see ``localizedTitle``.
     var localizedBlurb: String { L("stress.scenario.\(id).blurb") }
-    /// The "stresses" summary for the current language (falls back to ``stresses``).
+    /// The "stresses" summary for the current language; see ``localizedTitle``.
     var localizedStresses: String { L("stress.scenario.\(id).stresses") }
 }
 

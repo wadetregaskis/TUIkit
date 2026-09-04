@@ -84,7 +84,7 @@ private struct CustomLayoutView: View {
     var body: some View {
         let count = config.sized(20)
         VStack(alignment: .leading, spacing: 0) {
-            Text("\(count) chips in a custom Layout").bold()
+            Text(Lf("stress.scenario.customlayout.heading", count)).bold()
             Divider()
             AnyLayout(Flow()) {
                 ForEach(0..<count, id: \.self) { index in

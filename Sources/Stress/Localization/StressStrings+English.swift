@@ -84,6 +84,18 @@ extension StressStrings {
         "stress.scenario.modifiers.stresses": "ModifiedView/environment-modifier layering · per-node measure overhead",
         "stress.scenario.modifiers.heading": "Modifier Chains — {0} deeply-modified rows",
 
+        // MARK: preferences
+        "stress.scenario.preferences.title": "Preference Rows",
+        "stress.scenario.preferences.blurb": "N rows, each publishing a preference to one collector.",
+        "stress.scenario.preferences.stresses": "preference side-effect declaration · value-memo defeat · per-row re-measure",
+        "stress.scenario.preferences.heading": "{0} rows · {1} published",
+
+        // MARK: customlayout
+        "stress.scenario.customlayout.title": "Custom Layout",
+        "stress.scenario.customlayout.blurb": "N subviews arranged by a Layout conformance behind AnyLayout.",
+        "stress.scenario.customlayout.stresses": "Layout protocol call pattern · repeated subview measurement · AnyLayout erasure",
+        "stress.scenario.customlayout.heading": "{0} chips in a custom Layout",
+
         // MARK: textwall
         "stress.scenario.textwall.title": "Text Wall",
         "stress.scenario.textwall.blurb": "N long wrapping paragraphs of synthesised prose.",

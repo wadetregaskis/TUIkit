@@ -73,6 +73,18 @@ extension StressStrings {
         "stress.scenario.modifiers.stresses": "Estratificación ModifiedView/modificador de entorno · sobrecarga de medición por nodo",
         "stress.scenario.modifiers.heading": "Cadenas de modificadores — {0} filas muy modificadas",
 
+        // MARK: preferences
+        "stress.scenario.preferences.title": "Filas con preferencias",
+        "stress.scenario.preferences.blurb": "N filas, cada una publica una preferencia a un recolector.",
+        "stress.scenario.preferences.stresses": "declaración del efecto secundario de preferencia · anulación del memo de valores · re-medición por fila",
+        "stress.scenario.preferences.heading": "{0} filas · {1} publicadas",
+
+        // MARK: customlayout
+        "stress.scenario.customlayout.title": "Layout personalizado",
+        "stress.scenario.customlayout.blurb": "N subvistas dispuestas por una conformidad Layout tras AnyLayout.",
+        "stress.scenario.customlayout.stresses": "patrón de llamadas del protocolo Layout · medición repetida de subvistas · borrado de tipo AnyLayout",
+        "stress.scenario.customlayout.heading": "{0} fichas en un Layout personalizado",
+
         // MARK: textwall
         "stress.scenario.textwall.title": "Muro de texto",
         "stress.scenario.textwall.blurb": "N párrafos largos con ajuste de línea de prosa sintetizada.",

@@ -71,6 +71,18 @@ extension StressStrings {
         "stress.scenario.modifiers.stresses": "ModifiedView/環境モディファイアの階層化 · ノードごとの計測オーバーヘッド",
         "stress.scenario.modifiers.heading": "モディファイアチェーン — {0} 個の高度に修飾された行",
 
+        // MARK: preferences
+        "stress.scenario.preferences.title": "プリファレンス行",
+        "stress.scenario.preferences.blurb": "N 行、各行が 1 つのコレクターにプリファレンスを発行。",
+        "stress.scenario.preferences.stresses": "プリファレンス副作用の宣言 · 値メモの無効化 · 行ごとの再測定",
+        "stress.scenario.preferences.heading": "{0} 行 · {1} 件発行",
+
+        // MARK: customlayout
+        "stress.scenario.customlayout.title": "カスタムレイアウト",
+        "stress.scenario.customlayout.blurb": "AnyLayout の背後にある Layout 準拠で配置された N 個のサブビュー。",
+        "stress.scenario.customlayout.stresses": "Layout プロトコルの呼び出しパターン · サブビューの繰り返し測定 · AnyLayout の型消去",
+        "stress.scenario.customlayout.heading": "カスタム Layout 内の {0} 個のチップ",
+
         // MARK: textwall
         "stress.scenario.textwall.title": "テキストウォール",
         "stress.scenario.textwall.blurb": "合成された散文の長い折り返し段落が N 個。",
