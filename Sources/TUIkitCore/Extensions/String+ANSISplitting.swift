@@ -423,7 +423,22 @@ extension String {
                 if inSuffix {
                     suffix.append(character)
                 } else {
-                    visible += character.terminalWidth
+                    let width = character.terminalWidth
+                    if visible + width > visibleOffset {
+                        // A wide glyph straddling the offset. Skipping it
+                        // silently started the suffix one column LATE, and
+                        // the caller — which positions the cursor at the
+                        // offset — wrote everything after it a cell left
+                        // (a border shifted, the last column blank). Its
+                        // in-window cells are blanked instead, as
+                        // `ansiAwareSlice` blanks a straddler, so the suffix
+                        // begins where the caller believes it does. The
+                        // glyph itself is lost from those cells; repainting
+                        // it whole would mean starting the window at its
+                        // own column, which this function cannot say.
+                        suffix += String(repeating: " ", count: visible + width - visibleOffset)
+                    }
+                    visible += width
                 }
             }
         }

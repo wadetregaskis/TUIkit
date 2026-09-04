@@ -536,6 +536,17 @@ struct AnsiSGRContextAndCleanSuffixTests {
         #expect(result == "DE")
     }
 
+    /// A 2-cell glyph beginning one column before the offset was counted into
+    /// the context half and dropped, so the suffix silently began a column
+    /// LATE — and the right-edge repaint, which writes it at the offset,
+    /// shifted the row's border left and left the last column blank.
+    @Test("A wide glyph straddling the offset is blanked so the suffix starts at the offset")
+    func wideStraddleAtTheOffset() {
+        #expect("ab本x".ansiSGRContextAndCleanSuffix(from: 3) == " x")
+        #expect("ab本x".ansiSGRContextAndCleanSuffix(from: 2) == "本x", "a whole glyph is kept")
+        #expect("ab本x".ansiSGRContextAndCleanSuffix(from: 4) == "x")
+    }
+
     @Test("Plain string: offset 0 returns entire string")
     func offsetZeroReturnsAll() {
         let s = "ABCDE"
@@ -893,6 +904,29 @@ struct RepaintRightEdgeColumnTests {
             #expect(!pass2Content.contains(cuf),
                 "Pass-2 suffix must not contain CUF")
         }
+    }
+
+    /// The row ends `本x` at width 6 and carries a VS-16 emoji, so the
+    /// Terminal.app right-edge repaint runs: the split at offset 4 falls
+    /// inside 本. Pass 2 must write two cells at the repaint column — a blank
+    /// for the bisected glyph and then `x` — not `x` alone one column early.
+    @Test("Pass-2 suffix starts at the repaint column when a wide glyph straddles it")
+    func pass2SuffixAlignedAcrossAStraddle() {
+        let writer = FrameDiffWriter(isAppleTerminal: true)
+        let terminal = MockTerminal()
+        let terminalWidth = 6
+        let bgCode = "\u{1B}[48;5;17m"
+        let reset = "\u{1B}[0m"
+        let line = makePaddedLine(text: "⚙️ 本x", terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
+        writer.writeContentDiff(
+            newLines: [line], terminal: terminal, startRow: 1,
+            terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
+        let allOutput = terminal.allOutput
+        let repaintCursorSeq = ANSIRenderer.moveCursor(toRow: 1, column: terminalWidth - 1)
+        let range1 = try? #require(allOutput.range(of: repaintCursorSeq))
+        let range2 = range1.flatMap { allOutput[$0.upperBound...].range(of: repaintCursorSeq) }
+        let pass2 = range2.map { String(allOutput[$0.upperBound...]).stripped } ?? "<no pass 2>"
+        #expect(pass2 == " x", "pass 2 wrote \(pass2.debugDescription)")
     }
 
     @Test("Repaint only applies to changed rows")
