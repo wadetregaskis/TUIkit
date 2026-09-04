@@ -10,6 +10,8 @@ import Foundation
     import Darwin
 #elseif canImport(Glibc)
     import Glibc
+#elseif canImport(Musl)
+    import Musl
 #endif
 
 /// The system clipboard, reached through the platform's helper binaries
@@ -183,10 +185,17 @@ enum SystemClipboard {
         var offset = 0
         while offset < data.count {
             let written = data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> Int in
+                // Module-qualified, because Foundation's overlay exposes an
+                // instance method also called `write` and the bare name is
+                // ambiguous on Darwin; one arm per libc the import ladder
+                // above admits — the musl arm was missing, so that toolchain
+                // could not compile this file.
                 #if canImport(Darwin)
                     Darwin.write(fd, buffer.baseAddress! + offset, data.count - offset)
-                #else
+                #elseif canImport(Glibc)
                     Glibc.write(fd, buffer.baseAddress! + offset, data.count - offset)
+                #else
+                    Musl.write(fd, buffer.baseAddress! + offset, data.count - offset)
                 #endif
             }
             if written > 0 {
@@ -215,8 +224,10 @@ enum SystemClipboard {
             let count = buffer.withUnsafeMutableBytes { raw in
                 #if canImport(Darwin)
                     Darwin.read(fd, raw.baseAddress, raw.count)
-                #else
+                #elseif canImport(Glibc)
                     Glibc.read(fd, raw.baseAddress, raw.count)
+                #else
+                    Musl.read(fd, raw.baseAddress, raw.count)  // see `write` above
                 #endif
             }
             if count > 0 {
