@@ -170,7 +170,9 @@ struct TerminalLedgerConformanceTests {
     ///     -o data/<terminal>-<version>-alternate-landing.json
     /// ```
     ///
-    /// run inside each host.
+    /// run inside each host. Until then ``ComplexScriptWidthTests`` records
+    /// what each of the two width rules claims about these rows, and which of
+    /// them disagree — the disagreements are what a measurement settles.
     static let awaitingLandingMeasurement: Set<String> = [
         "fullwidth_latin_a", "combining_stack",
         "conjunct_deva_ksha", "conjunct_deva_stra", "conjunct_deva_shtra",
