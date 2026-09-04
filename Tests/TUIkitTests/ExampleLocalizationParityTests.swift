@@ -27,53 +27,15 @@ struct ExampleLocalizationParityTests {
 
     /// `[language: [key: value]]` parsed from the generated fragments.
     ///
-    /// Parsing source text rather than importing it is the trade the target
-    /// graph forces; the format is machine-generated and uniform, so it is a
-    /// stable thing to parse. `filesRead` guards the vacuous pass: if the path
-    /// resolution ever breaks, the suite fails instead of finding nothing and
-    /// declaring victory.
+    /// Both places the Example keeps tables: the generated fragments and the
+    /// hand-maintained `ExampleStrings+Languages.swift`, which the older
+    /// version of this suite never read — so a key missing from the latter
+    /// was invisible to it.
     private static func loadTables() -> (tables: [String: [String: String]], filesRead: Int) {
-        let root = (FileManager.default.currentDirectoryPath as NSString)
-            .appendingPathComponent("Sources/Example/Localization/Generated")
-        guard let names = try? FileManager.default.contentsOfDirectory(atPath: root) else {
-            return ([:], 0)
-        }
-
-        var tables: [String: [String: String]] = [:]
-        var filesRead = 0
-        for name in names.sorted() where name.hasSuffix(".swift") {
-            let path = (root as NSString).appendingPathComponent(name)
-            guard let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
-            filesRead += 1
-            var language: String?
-            for line in source.split(separator: "\n", omittingEmptySubsequences: false) {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                if let code = languageHeader(trimmed) {
-                    language = code
-                } else if let language, let (key, value) = entry(trimmed) {
-                    tables[language, default: [:]][key] = value
-                }
-            }
-        }
-        return (tables, filesRead)
-    }
-
-    /// `"de": [` → `de`.
-    private static func languageHeader(_ line: String) -> String? {
-        guard line.hasSuffix("\": ["), line.hasPrefix("\"") else { return nil }
-        let code = line.dropFirst().dropLast(4)
-        guard code.count == 2, code.allSatisfy(\.isLowercase) else { return nil }
-        return String(code)
-    }
-
-    /// `"some.key": "some value",` → `(some.key, some value)`.
-    private static func entry(_ line: String) -> (String, String)? {
-        guard line.hasPrefix("\""), let separator = line.range(of: "\": \"") else { return nil }
-        let key = String(line[line.index(after: line.startIndex)..<separator.lowerBound])
-        var value = String(line[separator.upperBound...])
-        if value.hasSuffix(",") { value.removeLast() }
-        if value.hasSuffix("\"") { value.removeLast() }
-        return (key, value)
+        LocalizationSourceTables.load(under: [
+            "Sources/Example/Localization",
+            "Sources/Example/Localization/Generated",
+        ])
     }
 
     @Test("Every Example language has exactly the English key set")
