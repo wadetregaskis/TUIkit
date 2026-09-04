@@ -208,14 +208,19 @@ extension IndeterminateRenderer {
         let head = Int(phase * Double(width))
         let fill = Array(configuration.fill)
         let unlit = Array(configuration.empty)
-        let gradient = ramp(configuration, dim: empty, bright: accent)
+        // Sampled as a RAMP, not cell by cell: `Color.quantisedRamp` is what
+        // keeps a 256-colour host from banding, and the determinate track goes
+        // through it too (`TrackRenderer`). `segment + 1` entries, so that entry
+        // `segment - behind` is the same `1 - behind / segment` the trail has
+        // always sampled at.
+        let trail = Color.quantisedRamp(
+            ramp(configuration, dim: empty, bright: accent), count: segment + 1, depth: ColorDepth.current)
         return laid(width: width) { column in
             let behind = (column - head + width) % width
             guard behind < segment else {
                 return (glyph(unlit, at: column), empty)
             }
-            let intensity = 1.0 - Double(behind) / Double(segment)
-            return (glyph(fill, at: column), gradient.color(at: intensity))
+            return (glyph(fill, at: column), trail[segment - behind])
         }
     }
 }
@@ -282,7 +287,9 @@ extension IndeterminateRenderer {
         let direction = raw < 0.5 ? 1 : -1
         let fill = Array(configuration.fill)
         let unlit = Array(configuration.empty)
-        let gradient = ramp(configuration, dim: empty, bright: accent)
+        // The ramp, quantised as one — see `renderSweep`.
+        let trail = Color.quantisedRamp(
+            ramp(configuration, dim: empty, bright: accent), count: segment + 1, depth: ColorDepth.current)
         return laid(width: width) { column in
             // The trail extends *behind* the head — i.e. in the
             // opposite direction of motion — so the leading edge stays
@@ -291,8 +298,7 @@ extension IndeterminateRenderer {
             guard offset >= 0, offset < segment else {
                 return (glyph(unlit, at: column), empty)
             }
-            let intensity = 1.0 - Double(offset) / Double(segment)
-            return (glyph(fill, at: column), gradient.color(at: intensity))
+            return (glyph(fill, at: column), trail[segment - offset])
         }
     }
 }
@@ -315,6 +321,13 @@ extension IndeterminateRenderer {
         let ramp = cyclic(configuration.gradient)
         let phase = phase(elapsed: elapsed, period: configuration.period)
         let fill = Array(configuration.fill)
+        // The ramp, sampled once as a whole — four entries per cell, so the
+        // motion still slides in quarter-cell steps — and quantised through
+        // `Color.quantisedRamp`, which is what keeps a 256-colour host from
+        // banding. Sampling `ramp.color(at:)` per cell went to the cube one
+        // cell at a time and reversed four times across a 40-cell track.
+        let steps = samplesPerCell * max(1, width)
+        let samples = Color.quantisedRamp(ramp, count: steps + 1, depth: ColorDepth.current)
         return laid(width: width) { column in
             // Each cell samples at its own offset in the ramp, minus a
             // global time-dependent shift so the pattern scrolls
@@ -323,7 +336,7 @@ extension IndeterminateRenderer {
             // `truncatingRemainder` keeps the sign of the dividend).
             let raw = (Double(column) / Double(max(1, width)) - phase + 1.0)
                 .truncatingRemainder(dividingBy: 1.0)
-            return (glyph(fill, at: column), ramp.color(at: raw))
+            return (glyph(fill, at: column), samples[min(steps, Int((raw * Double(steps)).rounded()))])
         }
     }
 
@@ -357,7 +370,11 @@ extension IndeterminateRenderer {
     /// - Parameter requested: The caller's stops, or `nil` for the built-in
     ///   rainbow.
     /// - Returns: A gradient spanning `0...1` whose ends are the same colour.
-    private static func cyclic(_ requested: Gradient?) -> Gradient {
+    /// How finely `renderGradient` samples its ramp per cell. Internal, like
+    /// ``cyclic(_:)``, so the banding test can rebuild the exact sample set.
+    static let samplesPerCell = 4
+
+    static func cyclic(_ requested: Gradient?) -> Gradient {
         // Stops need resolvable RGB (a semantic colour has none until a
         // palette is applied); anything unresolvable is skipped, and fewer
         // than two usable stops falls back to the built-in rainbow.

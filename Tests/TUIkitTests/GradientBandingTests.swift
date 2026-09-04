@@ -156,6 +156,51 @@ struct GradientBandingTests {
             """)
     }
 
+    /// The indeterminate bar's ramped motions — the fourth site that was not
+    /// going through the repair. `.gradient` is the one asserted: its ramp is
+    /// sampled once as a whole (`samplesPerCell` entries per cell) and the row
+    /// must be those samples, cell for cell, at the phase `elapsed: 0` gives.
+    @Test("The indeterminate gradient motion is drawn as a ramp")
+    func indeterminateGradientIsSmooth() {
+        let stops: [Color] = [.rgb(0xFF, 0x50, 0x50), .rgb(0xFF, 0xC8, 0x50), .rgb(0x50, 0xDC, 0x78)]
+        let width = 40
+        let row = ColorDepth.withCurrent(.palette256) {
+            IndeterminateRenderer.render(
+                width: width, style: .gradient(Gradient(colors: stops)), filledColor: .white,
+                emptyColor: .black, accentColor: .white, elapsed: 0, palette: SystemPalette.green)
+        }
+        let steps = IndeterminateRenderer.samplesPerCell * width
+        let ramp = IndeterminateRenderer.cyclic(Gradient(colors: stops))
+        let samples = Color.quantisedRamp(ramp, count: steps + 1, depth: .palette256)
+        let expected = (0..<width).map { column -> UInt8? in
+            let index = min(steps, Int((Double(column) / Double(width) * Double(steps)).rounded()))
+            if case .palette256(let entry) = samples[index].value { return entry }
+            return nil
+        }
+        #expect(!expected.contains(nil), "the ramp did not quantise")
+        #expect(perCellForegrounds(row) == expected.compactMap { $0 })
+    }
+
+    /// The 256-colour foreground index under each CELL of a rendered row —
+    /// `palette256Foregrounds` gives one per run, and a run spans the cells of
+    /// the same colour.
+    private func perCellForegrounds(_ row: String) -> [UInt8] {
+        var cells: [UInt8] = []
+        var current: UInt8?
+        for chunk in row.split(separator: "\u{1B}", omittingEmptySubsequences: true) {
+            guard chunk.hasPrefix("["), let end = chunk.firstIndex(of: "m") else { continue }
+            let params = chunk[chunk.index(after: chunk.startIndex)..<end]
+            let text = chunk[chunk.index(after: end)...]
+            if params.hasPrefix("38;5;") {
+                current = UInt8(params.dropFirst(5))
+            } else if params == "0" || params == "39" {
+                current = nil
+            }
+            if let current { cells += Array(repeating: current, count: text.count) }
+        }
+        return cells
+    }
+
     /// Whether `sequence` appears contiguously in `line`.
     private func contains(_ line: [UInt8], _ sequence: [UInt8]) -> Bool {
         guard !sequence.isEmpty, line.count >= sequence.count else { return false }
