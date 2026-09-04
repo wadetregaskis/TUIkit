@@ -52,6 +52,59 @@ struct LinkHyperlinkTests {
         #expect(with.lines.map(\.stripped) == without.lines.map(\.stripped))
     }
 
+    /// A disabled link is skipped by Tab, registers no region and never runs
+    /// its action — and a terminal that honours OSC 8 opens a linked cell on
+    /// its OWN gesture, past all of that. iTerm2 opens on every click.
+    @Test("A disabled link carries no hyperlink for the terminal to open")
+    func disabledLinkHasNoHyperlink() {
+        let disabled = TerminalHyperlink.withSupport(true) {
+            render(Link("swift.org", destination: url).disabled(true))
+        }
+        #expect(!disabled.lines.joined().contains("\u{1B}]8;"), "\(disabled.lines)")
+        let enabled = TerminalHyperlink.withSupport(true) { render(Link("swift.org", destination: url)) }
+        #expect(enabled.lines.joined().contains("\u{1B}]8;"), "the rule is about disabled, not about support")
+    }
+
+    /// Renders `view` in a pass that lets the link register and take the
+    /// focus, then again — so the second buffer is the FOCUSED one, breath
+    /// runs and all.
+    private func focusedRender(_ view: some View) -> FrameBuffer {
+        let tui = TUIContext()
+        var environment = EnvironmentValues()
+        environment.focusManager = FocusManager()
+        environment.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 6, environment: environment, tuiContext: tui)
+        var buffer = FrameBuffer()
+        for _ in 0..<2 {
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            environment.focusManager?.beginRenderPass()
+            buffer = renderToBuffer(view, context: context)
+            environment.focusManager?.endRenderPass()
+            tui.stateStorage.endRenderPass()
+        }
+        return buffer
+    }
+
+    /// A focused link breathes by REPLACING its cells with pre-rendered
+    /// frames, and the splice closes any open link at the cut. Frames without
+    /// their own pair stripped the hyperlink from the one link the user had
+    /// selected, on the first tick.
+    @Test("A focused link's breath frames carry the hyperlink too")
+    func breathFramesKeepTheLink() {
+        let buffer = TerminalHyperlink.withSupport(true) {
+            focusedRender(Link("swift.org", destination: url))
+        }
+        #expect(!buffer.animatedCells.isEmpty, "a focused link breathes")
+        for run in buffer.animatedCells {
+            for frame in run.frames {
+                #expect(frame.contains("\u{1B}]8;;https://"), "a frame without the link: \(frame.debugDescription)")
+                #expect(!leavesLinkOpen(frame))
+            }
+        }
+    }
+
     /// A terminal-owned ⌘-click goes to the system opener over the top of
     /// ``OpenURLAction``, so an app that intercepts its own scheme needs a way
     /// to keep every URL for itself.

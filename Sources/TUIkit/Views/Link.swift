@@ -247,12 +247,18 @@ private struct TerminalHyperlinkModifier: ViewModifier {
     let enabled: Bool
 
     func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
-        guard enabled, TerminalHyperlink.isSupported, !buffer.lines.isEmpty else { return buffer }
+        // `isEnabled` too: a disabled link is skipped by Tab, registers no hit
+        // region and never runs its action — and a terminal that honours OSC 8
+        // opens a linked cell on its OWN gesture, past every one of those. The
+        // dimmed label must carry no destination for it to open.
+        guard enabled, context.environment.isEnabled, TerminalHyperlink.isSupported,
+            !buffer.lines.isEmpty
+        else { return buffer }
         let link = TerminalHyperlink(
             destination: destination.absoluteString,
             id: buffer.lines.count > 1 ? context.identity.path : nil)
         let opening = link.opening
-        let lines = buffer.lines.map { line in
+        func linked(_ line: String) -> String {
             // An empty row has no cells to carry the link, so it gets no
             // sequences: they would be bytes on every frame saying nothing.
             line.isEmpty ? line : opening + line + TerminalHyperlink.closing
@@ -260,9 +266,21 @@ private struct TerminalHyperlinkModifier: ViewModifier {
         // The widths are unchanged by construction — every scan in this
         // framework counts an escape as the zero cells it paints — so they are
         // carried across rather than re-measured.
-        return buffer.replacingLines(
-            lines, width: buffer.width, uniformWidth: buffer.linesAreUniformWidth,
-            lineWidths: buffer.lineWidths)
+        var result = buffer.replacingLines(
+            buffer.lines.map(linked), width: buffer.width,
+            uniformWidth: buffer.linesAreUniformWidth, lineWidths: buffer.lineWidths)
+        // The run frames too, not only the lines. A focused link breathes by
+        // REPLACING its cells with pre-rendered frames, and the splice closes
+        // whatever link is open at the cut — so a frame without its own pair
+        // stripped the hyperlink from exactly the link the user had selected,
+        // on the first tick, until focus moved away and a full render repainted
+        // the row.
+        result.animatedCells = result.animatedCells.map { run in
+            AnimatedCellRun(
+                offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
+                frames: run.frames.map(linked), frameDuration: run.frameDuration, clock: run.clock)
+        }
+        return result
     }
 }
 
