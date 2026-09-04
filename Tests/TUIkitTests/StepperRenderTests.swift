@@ -44,6 +44,37 @@ struct StepperRenderTests {
         #expect(out.hasPrefix("◀"), "got: \(out)")
     }
 
+    @Test("A callbacks stepper draws no value, because it has none")
+    func callbacksStepperShowsNoValue() {
+        // SwiftUI's `Stepper(_:onIncrement:onDecrement:)` has no value at all.
+        // TUIkit's draws one, and this init used to fabricate a `0` from a
+        // throwaway binding the callbacks never touch — a read-out that stayed
+        // at 0 however many times you pressed. The slot collapses instead.
+        let out = line(Stepper("Color", onIncrement: {}, onDecrement: {}))
+        #expect(out.hasPrefix("Color"), "got: \(out)")
+        #expect(out.contains("◀▶"), "the arrows did not close up: \(out)")
+        #expect(!out.contains("0"), "a value was drawn where there is none: \(out)")
+    }
+
+    @Test("A callbacks stepper says what it is on when told to")
+    func callbacksStepperShowsGivenText() {
+        // The case the slot exists for: a stepper whose steps are not arithmetic
+        // on a number still has something to name — a colour, a font, an enum
+        // case — and nothing else can format it.
+        let out = line(Stepper("Color", onIncrement: {}, onDecrement: {}).stepperValueText("Green"))
+        #expect(out.contains("◀ Green ▶"), "got: \(out)")
+    }
+
+    @Test("A value stepper's read-out can be overridden too")
+    func valueStepperTextOverridden() {
+        // Not restricted to the callbacks init: the modifier replaces whatever
+        // the stepper would have formatted, which is how a value that indexes
+        // something says what it indexes.
+        let out = line(Stepper("Pick", value: .constant(2)).stepperValueText("Blue"))
+        #expect(out.contains("◀ Blue ▶"), "got: \(out)")
+        #expect(!out.contains("2"), "the raw value survived the override: \(out)")
+    }
+
     @Test("A range stepper still renders its label")
     func rangeLabel() {
         let out = line(Stepper("Rating", value: .constant(3), in: 1...5))

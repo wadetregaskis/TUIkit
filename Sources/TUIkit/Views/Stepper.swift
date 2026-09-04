@@ -59,7 +59,12 @@ public struct Stepper<Label: View>: View {
     /// The current value rendered for display, with the value type erased.
     /// SwiftUI's `Stepper<Label>` never shows the value, so it can erase `V`
     /// outright; TUIkit *does* show it, so it captures a formatter here.
-    let display: () -> String
+    ///
+    /// An empty answer means there is no value to show and the slot between the
+    /// arrows collapses — which is what a callbacks-only stepper has, and what
+    /// ``stepperValueText(_:)`` fills in when the caller's value is not a number
+    /// this could format.
+    var display: () -> String
 
     /// Builds the (value-type-erased) focus handler from a focusID and whether
     /// it may take focus. Captures the value binding, bounds, and step in `V`.
@@ -289,12 +294,20 @@ extension Stepper where Label == Text {
         onDecrement: (() -> Void)?,
         onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) {
+        // The handler still needs a value to drive its auto-repeat and its
+        // bounds arithmetic, and there is none — so it drives a throwaway. What
+        // it must NOT do is DISPLAY that throwaway: SwiftUI's callbacks stepper
+        // has no value at all, and showing a `0` that never moves however many
+        // times you press is a read-out that lies. The slot collapses instead;
+        // `stepperValueText(_:)` fills it when the caller has something to put
+        // there, which for this init — a stepper over colours, fonts, enum
+        // cases — it usually does.
         var dummy = 0
         let value = Binding(get: { dummy }, set: { dummy = $0 })
         let erased = eraseStepperValue(value: value, bounds: nil, step: 1)
         self.init(
             label: Text(String(title)),
-            display: erased.display, makeHandler: erased.makeHandler, syncValue: erased.syncValue,
+            display: { "" }, makeHandler: erased.makeHandler, syncValue: erased.syncValue,
             onIncrement: onIncrement, onDecrement: onDecrement, onEditingChanged: onEditingChanged)
     }
 }
@@ -357,12 +370,13 @@ extension Stepper {
         onDecrement: (() -> Void)?,
         onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) {
+        // No value to show — see the `LocalizedStringKey` overload above.
         var dummy = 0
         let value = Binding(get: { dummy }, set: { dummy = $0 })
         let erased = eraseStepperValue(value: value, bounds: nil, step: 1)
         self.init(
             label: label(),
-            display: erased.display, makeHandler: erased.makeHandler, syncValue: erased.syncValue,
+            display: { "" }, makeHandler: erased.makeHandler, syncValue: erased.syncValue,
             onIncrement: onIncrement, onDecrement: onDecrement, onEditingChanged: onEditingChanged)
     }
 }
@@ -387,6 +401,34 @@ extension Stepper {
     public func focusID(_ id: String) -> Stepper {
         var copy = self
         copy.focusID = id
+        return copy
+    }
+
+    /// What this stepper shows between its arrows, instead of its value.
+    ///
+    /// TUI-specific, and there is no SwiftUI spelling because there is nothing
+    /// to spell: SwiftUI's stepper draws no value, so a value it could not
+    /// format never arises. TUIkit's does draw one, which makes the
+    /// `onIncrement:`/`onDecrement:` stepper — the one whose steps are not
+    /// arithmetic on a number — the case with a slot and nothing to put in it.
+    /// This is that: a stepper over colours, fonts, or enum cases says what it
+    /// is on, and the arrows say it can be changed.
+    ///
+    /// A plain `String` rather than a closure: a view is rebuilt every frame, so
+    /// what is written here is re-evaluated every frame like any other body
+    /// expression.
+    ///
+    /// ```swift
+    /// Stepper("Color", onIncrement: next, onDecrement: previous)
+    ///     .stepperValueText(colors[index])
+    /// ```
+    ///
+    /// - Parameter text: The read-out. Empty collapses the slot, which is what a
+    ///   callbacks stepper does by default.
+    /// - Returns: A stepper showing `text` where its value would go.
+    public func stepperValueText(_ text: String) -> Stepper {
+        var copy = self
+        copy.display = { text }
         return copy
     }
 }
@@ -792,10 +834,18 @@ private struct _StepperCore: View, Renderable, Layoutable {
 
         // Build value display — its colour/weight inherit the stepper's scoped
         // style cascade (`.stepperTextStyle { … }`) as soft overrides.
+        //
+        // No value, no cells: an empty read-out collapses the slot to `◀▶`
+        // rather than drawing two blanks between the arrows. A callbacks-only
+        // stepper has nothing to show unless `.stepperValueText(_:)` gives it
+        // something, and two dead cells there are a click target that does
+        // nothing and a gap that looks like a missing value.
+        let shown = display()
+        guard !shown.isEmpty else { return "\(leftArrow)\(rightArrow)" }
         let effectiveValueColor =
             isDisabled ? valueColor : (valueStyle.foreground?.resolve(with: palette) ?? valueColor)
         let valueText = ANSIRenderer.colorize(
-            " \(display()) ",
+            " \(shown) ",
             foreground: effectiveValueColor,
             bold: !isDisabled && (valueStyle.bold ?? false),
             underline: !isDisabled && (valueStyle.underline ?? false))
