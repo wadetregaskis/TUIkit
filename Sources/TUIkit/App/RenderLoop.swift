@@ -171,6 +171,25 @@ struct RenderActivity {
     func canReplay(_ clock: AnimationClock) -> Bool {
         animatedClocks.contains(clock) && !usesPulse && !usesCursor
     }
+
+    /// Which of the clocks that just ticked can be advanced by replaying the
+    /// frame on screen. Empty means the tick has to be served by a render.
+    ///
+    /// A ticked clock this frame left no runs for is NOT a reason to render:
+    /// nothing on screen moves with it, so advancing it owes no frame at all.
+    /// That distinction is the whole point of asking per clock, because the
+    /// timer posts EVERY clock on every wake (see `CursorTimer.start`) — so
+    /// demanding that all of them be replayable meant a page whose only
+    /// animation was the caret (`animatedClocks == [.cursor]`) failed the test
+    /// on `.content` and walked the entire view tree twenty times a second to
+    /// blink one cell.
+    ///
+    /// A view that read a phase WHILE rendering is the other case, and it is
+    /// unchanged: `canReplay` refuses every clock while `usesPulse` or
+    /// `usesCursor` is set, so this comes back empty and the caller renders.
+    func replayableClocks(among ticked: some Sequence<AnimationClock>) -> Set<AnimationClock> {
+        Set(ticked.lazy.filter(canReplay))
+    }
 }
 
 /// The height of the content area: whatever the terminal has left after the

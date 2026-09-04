@@ -19,13 +19,16 @@ Several sources cause `RenderLoop` to produce a new frame. Most converge on two 
 
 A clock tick is deliberately not a render request. It names the clock
 (`AnimationClock.cursor`, and so on) and the loop then asks whether the frame
-already on screen can be brought up to date without re-rendering: if every
-clock that ticked drives only pre-rendered animated cell runs, `replayAnimations`
-splices the new cells into the existing frame and no render happens at all. It
-falls back to a full render the moment some view builds its appearance from a
-phase as it renders, which is the behaviour this replaced — so the fallback is
-always safe. A frame that renders for any other reason drops the pending ticks:
-it supersedes them.
+already on screen can be brought up to date without re-rendering: the clocks
+that drive pre-rendered animated cell runs are advanced by `replayAnimations`,
+which splices the new cells into the existing frame, and no render happens at
+all. The question is per clock because the timer posts every clock on each
+wake — a ticked clock the frame left no runs for is not a reason to render,
+since nothing on screen moves with it. It falls back to a full render when some
+view builds its appearance from a phase as it renders (which disqualifies every
+clock at once), or when no clock that ticked has runs to advance; that is the
+behaviour this replaced, so the fallback is always safe. A frame that renders
+for any other reason drops the pending ticks: it supersedes them.
 
 The rest converge on boolean flags that the main loop checks each iteration. The actual rendering always happens on the main thread: signal handlers never render directly.
 

@@ -434,23 +434,27 @@ extension AppRunner {
         return !serveAnimationTicks(renderer: renderer, cursorTimer: cursorTimer)
     }
 
-    /// Advances any clocks that ticked, without rendering, when every one of
-    /// them can be served from the frame already on screen.
+    /// Advances the clocks that ticked, without rendering, by replaying the
+    /// runs the frame on screen left for them.
     ///
-    /// - Returns: `false` if a full render is needed instead — either some view
-    ///   still builds its appearance from a phase as it renders, or there is no
-    ///   frame to patch yet. That is the behaviour this replaces, so falling
-    ///   back is always safe.
+    /// - Returns: `false` if a full render is needed instead — some view still
+    ///   builds its appearance from a phase as it renders, there is no frame to
+    ///   patch yet, or nothing on screen animates on any clock that ticked.
+    ///   That is the behaviour this replaces, so falling back is always safe.
     fileprivate func serveAnimationTicks(
         renderer: RenderLoop<A>, cursorTimer: CursorTimer
     ) -> Bool {
         let ticked = appState.consumePendingAnimationClocks()
         guard !ticked.isEmpty else { return true }  // nothing ticked; nothing owed
+        // The clocks worth advancing, not all of the ones that ticked: the
+        // timer posts both on every wake, and a clock this frame left no runs
+        // for has nothing to advance. See `replayableClocks(among:)`.
+        let replayable = renderer.lastActivity.replayableClocks(among: ticked)
+        guard !replayable.isEmpty else { return false }
         var elapsed: [AnimationClock: Double] = [:]
-        for clock in ticked where renderer.lastActivity.canReplay(clock) {
+        for clock in replayable {
             elapsed[clock] = cursorTimer.elapsed(for: clock)
         }
-        guard elapsed.count == ticked.count else { return false }
         let served = renderer.replayAnimations(elapsed: elapsed)
         if served {
             // The runs are unchanged, but the time is not: recompute how long

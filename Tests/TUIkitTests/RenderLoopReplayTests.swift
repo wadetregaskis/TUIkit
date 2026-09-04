@@ -219,4 +219,40 @@ struct RenderLoopReplayTests {
             loop.timeUntilNextChange(elapsed: { _ in 0 }) == AnimationClock.cursor.tickInterval,
             "a one-second run does not license a one-second sleep here")
     }
+
+    // MARK: - Which ticked clocks a frame owes a picture to
+
+    /// `CursorTimer` posts EVERY clock on every wake, so a frame whose only
+    /// animation is the caret is asked about `.content` too. The rule that
+    /// decides is `replayableClocks(among:)`; it used to be spelled inside
+    /// `AppRunner.serveAnimationTicks` as "every ticked clock must be
+    /// replayable", which this frame fails — and failing it meant a full walk
+    /// of the view tree, twenty times a second, to blink one cell.
+    @Test("A frame animating one clock is still served when both clocks tick")
+    func oneClockFrameStillReplays() {
+        let ticked = Set(AnimationClock.allCases)
+        let caretOnly = RenderActivity(
+            usesPulse: false, usesCursor: false, animatedClocks: [.cursor])
+
+        let replayable = caretOnly.replayableClocks(among: ticked)
+
+        #expect(replayable == [.cursor], "the clock with runs, and only it")
+        #expect(replayable.count != ticked.count, "the old rule's test, which it fails")
+    }
+
+    @Test("A frame that read a phase owes a render on every clock")
+    func phaseReaderReplaysNothing() {
+        let ticked = Set(AnimationClock.allCases)
+        let reader = RenderActivity(
+            usesPulse: true, usesCursor: false, animatedClocks: [.cursor, .content])
+
+        #expect(reader.replayableClocks(among: ticked).isEmpty)
+    }
+
+    @Test("A frame with no runs at all owes a render too")
+    func stillFrameReplaysNothing() {
+        let still = RenderActivity(usesPulse: false, usesCursor: false, animatedClocks: [])
+
+        #expect(still.replayableClocks(among: Set(AnimationClock.allCases)).isEmpty)
+    }
 }
