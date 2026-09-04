@@ -195,13 +195,10 @@ struct CustomClientView: View {
     private var strip: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Does it line up?").bold()
-            Text("│" + String(repeating: "─", count: 2) + "│  (target)")
+            Text("│" + String(repeating: "─", count: Clusters.field) + "│  (target)")
                 .foregroundStyle(.palette.foregroundTertiary)
             ForEach(Clusters.all.filter(isContentious)) { cluster in
-                Text(
-                    "│\(cluster.text)"
-                        + String(repeating: " ", count: max(0, 2 - cluster.character.terminalWidth))
-                        + "│  \(cluster.name)")
+                Text(cluster.card)
             }
         }
     }

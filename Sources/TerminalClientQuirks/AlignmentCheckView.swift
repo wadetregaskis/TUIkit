@@ -19,10 +19,6 @@ import TUIkit
 struct AlignmentCheckView: View {
     let client: TerminalClient
 
-    /// The column every closing bar should sit in: the widest cluster claim
-    /// (2), so a one-cell cluster is padded by one.
-    private static let field = 2
-
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             explanation
@@ -50,22 +46,11 @@ struct AlignmentCheckView: View {
     }
 
     private var ruler: some View {
-        Text("│" + String(repeating: "─", count: Self.field) + "│  (target)")
+        Text("│" + String(repeating: "─", count: Clusters.field) + "│  (target)")
             .foregroundStyle(.palette.foregroundTertiary)
     }
 
-    /// One row: bars around the cluster, padded to the shared field width by
-    /// the SAME measurement the layout engine uses, then the class name.
-    ///
-    /// Deliberately one `Text` rather than an `HStack` of three: a stack would
-    /// let the layout place each piece by its own measurement, which would hide
-    /// exactly the disagreement this screen exists to expose. One string means
-    /// the terminal, not TUIkit, decides where the closing bar lands.
-    private func card(for cluster: Cluster) -> String {
-        let width = cluster.character.terminalWidth
-        let padding = String(repeating: " ", count: max(0, Self.field - width))
-        return "│\(cluster.text)\(padding)│  \(cluster.name)"
-    }
+    private func card(for cluster: Cluster) -> String { cluster.card }
 
     private var reporting: some View {
         VStack(alignment: .leading, spacing: 0) {

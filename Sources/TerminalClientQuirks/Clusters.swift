@@ -16,6 +16,16 @@ import TUIkitCore
 /// contains what somebody already thought to doubt, and the whole point of
 /// this app is meeting the terminal nobody measured yet.
 struct Cluster: Identifiable {
+    /// One row of an alignment strip: bars around the cluster, padded to the
+    /// shared field by the SAME measurement the layout engine uses, then the
+    /// class name. One `Text`, not an `HStack` of three: a stack would place
+    /// each piece by its own measurement and hide exactly the disagreement
+    /// the strip exists to expose. One rule, for both screens that draw one.
+    var card: String {
+        let padding = String(repeating: " ", count: max(0, Clusters.field - character.terminalWidth))
+        return "│\(text)\(padding)│  \(name)"
+    }
+
     var id: String { name }
 
     /// What to call this cluster — the corpus id, which is also the key a
@@ -47,6 +57,17 @@ struct Cluster: Identifiable {
 enum Clusters {
 
     /// Every corpus cluster, in corpus order.
+    /// The column every closing bar should sit in: the WIDEST claim in the
+    /// corpus under the traits in force — recomputed per read, because the
+    /// "Render as" and "Custom" screens change the traits mid-run. A constant
+    /// 2 here stopped being the widest claim the day widening shipped: under
+    /// Apple Terminal's traits a family ZWJ sequence claims 8 and a skin-tone
+    /// cluster 5, and every one of those rows then closed its bar columns to
+    /// the right of the ruler while TUIkit's claim matched the host exactly.
+    static var field: Int {
+        all.map { $0.character.terminalWidth }.max() ?? 2
+    }
+
     static let all: [Cluster] = TerminalWidthCorpus.all.map { entry in
         Cluster(
             name: entry.id,
