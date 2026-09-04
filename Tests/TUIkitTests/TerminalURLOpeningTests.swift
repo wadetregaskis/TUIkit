@@ -49,6 +49,39 @@ struct TerminalURLOpeningTests {
         withOverride(false) { #expect(!TerminalClient.urlOpeningEnabled) }
     }
 
+    /// Sets the variable for `body` and puts it back — process-wide, like the
+    /// override, and for the same reason.
+    private func withEnvironment(_ value: String?, _ body: () -> Void) {
+        let name = "TUIKIT_OPEN_URLS"
+        let saved = ProcessInfo.processInfo.environment[name]
+        if let value { setenv(name, value, 1) } else { unsetenv(name) }
+        defer {
+            if let saved { setenv(name, saved, 1) } else { unsetenv(name) }
+        }
+        body()
+    }
+
+    /// The doc promised this and the code could not deliver it: the `"0"`
+    /// arm sat behind the override, where nothing ever reached it.
+    @Test("TUIKIT_OPEN_URLS=0 is a kill switch, even against an app that turned it on")
+    func environmentZeroWins() {
+        withEnvironment("0") {
+            withOverride(true) { #expect(!TerminalClient.urlOpeningEnabled) }
+            withOverride(nil) { #expect(!TerminalClient.urlOpeningEnabled) }
+        }
+    }
+
+    @Test("TUIKIT_OPEN_URLS=1 answers for the user only where the app has not answered")
+    func environmentOneIsAnOptIn() {
+        withEnvironment("1") {
+            withOverride(nil) { #expect(TerminalClient.urlOpeningEnabled) }
+            withOverride(false) { #expect(!TerminalClient.urlOpeningEnabled) }
+        }
+        withEnvironment(nil) {
+            withOverride(nil) { #expect(!TerminalClient.urlOpeningEnabled) }
+        }
+    }
+
     /// The published flag is what the activation path actually reads — it is
     /// `nonisolated`, because that path has no actor — so setting the override
     /// and not publishing it would change nothing where it counts.

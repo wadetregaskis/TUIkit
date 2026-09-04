@@ -76,14 +76,20 @@ extension TerminalClient {
     }
 
     /// Whether a URL handed to the system opener would actually be launched —
-    /// the override, then the environment, then `false`.
+    /// the environment's kill switch, then the override, then the environment's
+    /// opt-in, then `false`.
     @MainActor public static var urlOpeningEnabled: Bool {
+        let environment = ProcessInfo.processInfo.environment["TUIKIT_OPEN_URLS"]
+        // `=0` FIRST, ahead of the app's own answer. A user who exported it is
+        // saying "not on this machine", and the app cannot know better: it is
+        // the one party here that does not know where it is running. (This
+        // arm used to sit BEHIND the override, where it could never fire.)
+        if environment == "0" { return false }
         if let urlOpeningSupport { return urlOpeningSupport }
-        switch ProcessInfo.processInfo.environment["TUIKIT_OPEN_URLS"] {
-        case "1": return true
-        case "0": return false
-        default: return false
-        }
+        // `=1` answers for the user only where the app has not answered: an
+        // app that said `false` had a reason, and opening a browser is the
+        // one direction to err away from.
+        return environment == "1"
     }
 
     /// Publishes ``urlOpeningEnabled`` to the flag the activation path reads.
