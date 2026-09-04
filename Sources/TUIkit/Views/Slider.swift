@@ -609,6 +609,17 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         /// `right - left`.
         let width: Int
 
+        /// The column the `"◀"` glyph occupies — the whole of the left arrow,
+        /// not everything before the track: `left - 1` is the space between
+        /// them, which is chrome and adjusts nothing.
+        var leftArrow: Int { left - 2 }
+
+        /// The column the `"▶"` glyph occupies. `right` itself is the space
+        /// before it, and `rightArrow + 1` onwards is the space and the value
+        /// read-out — six cells that are NOT the arrow, which is why the zone
+        /// is this one column rather than everything from `right` on.
+        var rightArrow: Int { right + 1 }
+
         init(left: Int, width: Int) {
             self.left = left
             self.width = width
@@ -696,11 +707,13 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         }
     }
 
-    /// Dispatches a `.left`-button mouse event among the three
-    /// regions Slider supports: the left arrow, the right arrow,
-    /// and the track in between. Static so it doesn't capture
-    /// `self`, avoiding a reference cycle through the parent
-    /// closure.
+    /// Dispatches a `.left`-button mouse event among the zones
+    /// Slider supports: the left arrow's cell, the right arrow's
+    /// cell, the track in between, and the chrome around them
+    /// (the spaces beside each arrow and the value read-out),
+    /// which focuses but adjusts nothing. Static so it doesn't
+    /// capture `self`, avoiding a reference cycle through the
+    /// parent closure.
     private static func handleLeftButton( // swiftlint:disable:this function_parameter_count
         event: MouseEvent,
         handler: SliderHandler<Double>,
@@ -718,14 +731,24 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     ) -> Bool {
         switch event.phase {
         case .pressed, .dragged:
-            // The gesture `onEditingChanged` was designed around — SwiftUI:
-            // "editing begins when the user starts to drag the thumb along the
-            // slider's track". `.dragged` as well as `.pressed` because a drag
-            // can arrive here having begun outside the track; the guard inside
-            // makes the second and later reports free.
-            handler.beginEditingIfNeeded()
-            if event.x < track.left {
-                // Left arrow.
+            // Each zone is the cells it DRAWS, not the half-plane on its side
+            // of the track: the arrows are one glyph each, and the spaces
+            // around them plus the value read-out belong to neither. Splitting
+            // on `< track.left` / `>= track.right` handed the right arrow the
+            // six cells after the track, so a click on the read-out — the
+            // natural place to click a slider to focus it — incremented the
+            // value and a hold there auto-repeated. `Stepper` bounds its arrows
+            // to one cell each for the same reason (see `attachMouseHandlers`
+            // there); this does it inside one region because the slider's track
+            // drag has to stay continuous across all three zones.
+            switch event.x {
+            case track.leftArrow:
+                // The gesture `onEditingChanged` was designed around — SwiftUI:
+                // "editing begins when the user starts to drag the thumb along
+                // the slider's track". `.dragged` as well as `.pressed` because
+                // a drag can arrive here having begun outside the track; the
+                // guard inside makes the second and later reports free.
+                handler.beginEditingIfNeeded()
                 if event.phase == .pressed {
                     stopArrowTimers()
                     leftArrowTimer.start(action: decrementOnce)
@@ -735,15 +758,16 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                     // the auto-repeat.
                     stopArrowTimers()
                 }
-            } else if event.x >= track.right {
-                // Right arrow.
+            case track.rightArrow:
+                handler.beginEditingIfNeeded()
                 if event.phase == .pressed {
                     stopArrowTimers()
                     rightArrowTimer.start(action: incrementOnce)
                 } else {
                     stopArrowTimers()
                 }
-            } else {
+            case track.left..<track.right:
+                handler.beginEditingIfNeeded()
                 stopArrowTimers()
                 applyTrackValue(
                     eventX: event.x,
@@ -752,6 +776,13 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                     step: step,
                     track: track
                 )
+            default:
+                // Chrome: the gaps beside the arrows and the value read-out.
+                // The click is still claimed and still focuses the slider (it
+                // is the slider's own row), but it adjusts nothing — and it
+                // reports no edit either, because `onEditingChanged` describes
+                // a drag of the thumb and no value is about to move.
+                stopArrowTimers()
             }
             focusManager?.focus(id: focusID)
             return true

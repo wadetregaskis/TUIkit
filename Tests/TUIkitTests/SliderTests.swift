@@ -296,3 +296,82 @@ struct SliderTrackStyleTests {
         #expect(value < 0.5, "wheel up should decrease the value, got \(value)")
     }
 }
+
+/// The slider's three click zones. The arrows are GLYPHS, one cell each — not
+/// the half-planes either side of the track, which is what the handler used to
+/// test: everything from the track's right edge onwards (the two spaces and all
+/// four cells of the `"42%"` read-out) counted as a press on `▶`, so clicking
+/// the read-out to focus the control incremented the value and holding there
+/// auto-repeated it.
+@MainActor
+@Suite("Slider arrow click zones", .serialized)
+struct SliderArrowZoneTests {
+
+    /// Long enough for `AutoRepeatTimer`'s task to fire its immediate action —
+    /// without it the assertions pass vacuously, because nothing has run yet.
+    private static func settle() async {
+        try? await Task.sleep(nanoseconds: 5_000_000)
+    }
+
+    /// Chrome is a constant 9 columns with the value shown (`"◀ "`, `" ▶ "`,
+    /// and the 4-cell value field), so the geometry is derivable from the
+    /// buffer width alone — see `_SliderCore.chromeWidth(showsValue:)`.
+    private static let chromeWidth = 9
+
+    @Test("Only the ▶ cell is the right arrow — the value read-out is not")
+    func valueReadOutIsNotTheRightArrow() async {
+        var value = 42.0
+        let binding = Binding(get: { value }, set: { value = $0 })
+        let context = makeRenderContext(width: 30, height: 1)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.full)
+
+        let buffer = renderToBuffer(
+            Slider(value: binding, in: 0...100, step: 1), context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        let trackRight = 2 + (buffer.width - Self.chromeWidth)
+        let arrow = trackRight + 1
+
+        for x in trackRight..<buffer.width where x != arrow {
+            value = 42
+            let claimed = dispatcher.dispatch(
+                MouseEvent(button: .left, phase: .pressed, x: x, y: 0))
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: 0))
+            await Self.settle()
+            #expect(claimed, "x=\(x) is the slider's own row, so the press is claimed")
+            #expect(value == 42, "x=\(x) is chrome or read-out, not ▶ — value moved to \(value)")
+        }
+
+        value = 42
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: arrow, y: 0))
+        await Self.settle()
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: arrow, y: 0))
+        #expect(value == 43, "the ▶ cell itself still increments, got \(value)")
+    }
+
+    @Test("Only the ◀ cell is the left arrow — the space beside it is not")
+    func spaceBesideLeftArrowIsNotTheArrow() async {
+        var value = 42.0
+        let binding = Binding(get: { value }, set: { value = $0 })
+        let context = makeRenderContext(width: 30, height: 1)
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.full)
+
+        let buffer = renderToBuffer(
+            Slider(value: binding, in: 0...100, step: 1), context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+
+        // x == 1 is the space between `◀` and the track's first column.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 1, y: 0))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 1, y: 0))
+        await Self.settle()
+        #expect(value == 42, "x=1 is the gap, not ◀ — value moved to \(value)")
+
+        value = 42
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 0, y: 0))
+        await Self.settle()
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 0, y: 0))
+        #expect(value == 41, "the ◀ cell itself still decrements, got \(value)")
+    }
+}
