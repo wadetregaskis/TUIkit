@@ -50,13 +50,14 @@ public final class LocalizationService: @unchecked Sendable {
     /// The shared localization service instance.
     public static let shared = LocalizationService()
 
-    /// Currently active language
-    public private(set) var currentLanguage: Language {
-        didSet {
-            saveLanguagePreference(currentLanguage)
-            AppState.shared.setNeedsRender()
-        }
-    }
+    /// Currently active language.
+    ///
+    /// No `didSet` doing work: the persistence and the re-render belong to
+    /// ``setLanguage(_:)``, OUTSIDE its lock. Run from an observer they ran
+    /// inside the critical section, and a storage failure there reports
+    /// synchronously to the app's handler — a handler that localizes its own
+    /// message re-entered `string(for:)`, and the lock is not recursive.
+    public private(set) var currentLanguage: Language
 
     /// Cached translations: [languageCode: [dotPath: localizedString]]
     private var translationCache: [String: [String: String]] = [:]
@@ -121,8 +122,11 @@ public final class LocalizationService: @unchecked Sendable {
     /// - Parameter language: The new language to activate.
     public func setLanguage(_ language: Language) {
         lock.lock()
-        defer { lock.unlock() }
         currentLanguage = language
+        lock.unlock()
+        // After the lock, deliberately — see `currentLanguage`.
+        saveLanguagePreference(language)
+        AppState.shared.setNeedsRender()
     }
 
     /// Registers additional translations supplied by the host application.

@@ -59,6 +59,22 @@ struct StorageFailureTests {
         return box.withLock { $0 }
     }
 
+    @Test("A failure handler may localize its own message")
+    func handlerMayLocalize() {
+        let unwritable = LocalizationService(configDirectoryPath: "/dev/null/tuikit-unwritable")
+        let observed = Lock(initialState: String?.none)
+        let previous = StorageDiagnostics.onFailure
+        StorageDiagnostics.onFailure = { _ in
+            observed.withLock { $0 = unwritable.string(for: LocalizationKey.Button.cancel) }
+        }
+        defer { StorageDiagnostics.onFailure = previous }
+        // The report is synchronous, from inside the language switch. It used
+        // to run under the service's lock — which is not recursive — so a
+        // handler that localized deadlocked the switch.
+        unwritable.setLanguage(.german)
+        #expect(observed.withLock { $0 } == "Abbrechen")
+    }
+
     @Test("A write to an unwritable path is reported, not dropped")
     func unwritablePathReportsSave() {
         let failures = capturingFailures { root in
