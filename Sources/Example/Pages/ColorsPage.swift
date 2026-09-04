@@ -247,7 +247,10 @@ extension String {
     /// `width` visible cells. Used to align the gradient labels into a
     /// neat column without reaching for a stack of `Spacer`s.
     fileprivate func padded(to width: Int) -> String {
-        let visible = self.count
+        // Cells, not Characters: a CJK label is up to six cells wider than
+        // its character count, and padding by the count ragged-edged the
+        // strips in Japanese and Chinese.
+        let visible = self.strippedLength
         guard visible < width else { return self }
         return self + String(repeating: " ", count: width - visible)
     }
