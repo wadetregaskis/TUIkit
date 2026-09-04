@@ -163,7 +163,7 @@ refusal from an acceptance that drew nothing — the exact distinction it
 existed to make. And **the control host is not optional**: four blanks with no
 Ghostty run indicts the probe, not the terminal.
 
-### 2.2 What they do when you send one — and the headline finding
+### 2.3 What they do when you send one — and the headline finding
 
 Each payload was printed between two brackets on a cleared row and the cursor
 asked where it had landed, against the brackets alone. Columns are the delta
@@ -200,7 +200,7 @@ from the row's start.
 > elsewhere in this project: `probe_stamp.py` skips DECRQM on Apple Terminal
 > because it prints that query's final byte.)
 
-### 2.3 tmux is the mirror image
+### 2.4 tmux is the mirror image
 
 tmux advertises Sixel in DA1 and drew the band into its own grid; it answers
 nothing for Kitty and swallowed both other payloads. So under tmux, Sixel is
@@ -216,16 +216,17 @@ trap, as the hyperlink measurement in `Terminal-compatibility.md`).
 
 | Protocol | Native hosts that render it | Detected by |
 |---|---|---|
-| **Kitty** | Ghostty, iTerm2, Warp — **3 of 4** | handshake, per feature |
+| **Kitty** | Ghostty, iTerm2 — **2 of 4**; Warp answers the handshake and refuses the placeholder by name (§2.1) | handshake, per feature |
 | Sixel | iTerm2; tmux, forwarding to iTerm2 | DA1 parameter |
 | iTerm2 | iTerm2, Warp | nothing — a host table |
 
-Kitty covers strictly more hosts than the iTerm2 protocol *and* is the only one
-with a per-feature handshake. Sixel's only unique host is tmux, and tmux's
+Kitty covers as many hosts as the iTerm2 protocol — Ghostty where the other
+has Warp — *and* is the only one with a per-feature handshake. Sixel's only unique host is tmux, and tmux's
 Sixel is useful only when the outer client also has it, which today means
 iTerm2 — a host Kitty already covers.
 
-Supporting more than one protocol therefore buys **no additional host**. It
+Supporting a second protocol therefore buys **at most one more host** — Warp,
+through the iTerm2 protocol, and only because it refuses the placeholder. It
 buys a second encoder, a second placement model, a second lifetime model, a
 second fallback path, and a second set of failure modes — and, on Apple
 Terminal, a second way to spray base64 across somebody's screen.
@@ -297,7 +298,7 @@ spec:
 
 - **Cell pixel geometry** — already solved. `environment.imageCellAspect` is
   plumbed through `_ImageCore`, measured by `cell_aspect_probe.py` from
-  `TIOCGWINSZ` and `CSI 14t`/`16t`. Sizing an image to C×R cells needs the same
+  `TIOCGWINSZ`, or `CSI 14t` over `CSI 18t` (pixels over cells — what `cell_aspect_probe.py` asks). Sizing an image to C×R cells needs the same
   numbers.
 - **Encoding** — `ImageLoader` already produces `RGBAImage`, which is Kitty's
   `f=32` format verbatim. No re-encode; optionally `o=z` (zlib) to cut the wire
@@ -413,9 +414,11 @@ had to be measured host by host and re-measured on every release.
   path.
 - **Whether anything actually appeared.** Every table above is escape-sequence
   evidence. The probe prints a card of one small square per protocol for a human
-  to look at, and the `rendered` field of every record still says
-  `unmeasured`. Filling it in is the difference between "the terminal consumed
-  the bytes" and "the picture is there".
+  to look at, and the `rendered` field of each record is filled in by hand:
+  Ghostty's says a person confirmed the picture, three say why none can appear
+  (Apple Terminal and tmux have no APC parser; Warp refuses by name), and four
+  still read `unmeasured`. Filling those in is the difference between "the
+  terminal consumed the bytes" and "the picture is there".
 - **Sixel under tmux, end to end.** tmux drew the band into its grid; whether it
   reaches an attached iTerm2 client, and how it survives a pane resize, was not
   followed through — it only matters if Sixel is ever built, which is not the
@@ -568,7 +571,7 @@ The same round found two more, both of which the codepoint bug was hiding:
 |---|---|
 | A full-screen image, 49×17 cells | 1.8 MB of base64, transmitted and acknowledged in **43 ms** |
 | A 12×4-cell image | 104 KB, **2 ms** |
-| One placeholder row, 12 cells | 139 bytes for id 42, of which 24 are the id's high-byte mark — §2.2. Pinned by `KittyGraphicsTests.rowByteCost`. |
+| One placeholder row, 12 cells | 139 bytes for id 42, of which 24 are the id's high-byte mark — §2.2. Pinned by `KittyGraphicsPlaceholderTests.rowByteCost`. |
 
 One-time per image and per size, not per frame: the image is *retained* by the
 terminal under an id, and `TerminalImageStore` re-transmits only when the
