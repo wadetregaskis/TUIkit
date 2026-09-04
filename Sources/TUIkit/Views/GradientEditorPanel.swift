@@ -714,7 +714,11 @@ extension GradientEditorPanel {
                 let parts = field.split(separator: "@", maxSplits: 1)
                 guard let colour = Color.hex(String(parts[0])) else { continue }
                 let even = Double(index) / Double(fields.count - 1)
-                let location = parts.count > 1 ? Double(parts[1]) ?? even : even
+                // `Double("nan")` parses, and a NaN location is a stop the
+                // ramp can never reach (every comparison is false) and a
+                // cache key that never equals itself.
+                let parsed = parts.count > 1 ? Double(parts[1]) : nil
+                let location = parsed.map { $0.isFinite ? $0 : even } ?? even
                 stops.append(Gradient.Stop(color: colour, location: location))
             }
             // `Gradient(stops:)` is right HERE and nowhere else in this file:
