@@ -116,43 +116,12 @@ private struct ProbeHeader: View {
 @Suite("Render-pass scope: one walk's worth of registrations", .serialized)
 struct RenderPassScopeTests {
 
-    /// Everything `RenderLoop` needs, assembled the way `AppRunner` does.
-    @MainActor
-    private final class Harness {
-        let terminal = MockTerminal()
-        let statusBar: StatusBarState
-        let appHeader = AppHeaderState()
-        let focusManager = FocusManager()
-        let tuiContext = TUIContext()
-        let paletteManager: ThemeManager
-        let appearanceManager: ThemeManager
-
-        init() {
-            let appState = AppState()
-            self.statusBar = StatusBarState(appState: appState)
-            self.paletteManager = ThemeManager(items: PaletteRegistry.all, renderTrigger: {})
-            self.appearanceManager = ThemeManager(items: AppearanceRegistry.all, renderTrigger: {})
-        }
-
-        func loop<A: App>(_ app: A) -> RenderLoop<A> {
-            RenderLoop(
-                app: app,
-                terminal: terminal,
-                statusBar: statusBar,
-                appHeader: appHeader,
-                focusManager: focusManager,
-                paletteManager: paletteManager,
-                appearanceManager: appearanceManager,
-                tuiContext: tuiContext)
-        }
-    }
-
     /// The first frame always walks the scene twice — once to discover the header
     /// height, once for real. Both walks used to register into the same tables.
     @Test("The first frame registers one walk's worth of handlers and fires onChange once")
     func firstFrameRegistersOnce() {
         ProbeState.shared.reset()
-        let harness = Harness()
+        let harness = RenderLoopHarness()
         let loop = harness.loop(ProbeApp())
 
         _ = loop.render()
@@ -177,7 +146,7 @@ struct RenderPassScopeTests {
     @Test("A header-height correction re-render does not double-register")
     func correctedFrameRegistersOnce() {
         ProbeState.shared.reset()
-        let harness = Harness()
+        let harness = RenderLoopHarness()
         let loop = harness.loop(ProbeApp())
 
         _ = loop.render()
@@ -220,7 +189,7 @@ struct RenderPassScopeTests {
     @Test("The first-frame header measurement is a measure pass")
     func firstFrameMeasurementWalkIsMarkedMeasuring() {
         ProbeState.shared.reset()
-        let harness = Harness()
+        let harness = RenderLoopHarness()
         let loop = harness.loop(PhaseProbeApp())
 
         _ = loop.render()
@@ -263,7 +232,7 @@ struct RenderPassScopeTests {
     @Test("KNOWN GAP: a header correction re-render still walks twice as a render")
     func correctionRerenderLeaksEffects() {
         ProbeState.shared.reset()
-        let harness = Harness()
+        let harness = RenderLoopHarness()
         let loop = harness.loop(PhaseProbeApp())
 
         _ = loop.render()
