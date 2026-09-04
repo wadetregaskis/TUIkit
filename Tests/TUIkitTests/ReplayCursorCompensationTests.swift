@@ -96,7 +96,7 @@ struct ReplayCursorCompensationTests {
         for index in run.frames.indices {
             let patched = writer.patchingAnimatedRun(
                 in: built, with: run.frame(atIndex: index), atColumn: run.offsetX,
-                width: run.width, terminalWidth: 40, bgCode: "")
+                width: run.width, bgCode: "")
             #expect(
                 patched.contains(Self.cursorForward),
                 "frame \(index) reached the terminal with the cluster uncompensated")
@@ -187,11 +187,11 @@ struct ReplayBackgroundTests {
         let frame = "\u{1B}[0;38;5;34m" + "bb" + ANSIRenderer.reset
 
         let bare = writer.patchingAnimatedRun(
-            in: row, with: frame, atColumn: 1, width: 2, terminalWidth: 20, bgCode: "")
+            in: row, with: frame, atColumn: 1, width: 2, bgCode: "")
         #expect(!bare.contains("48;5;16m\u{1B}[38;5;34"), "nothing to restore without a bgCode")
 
         let patched = writer.patchingAnimatedRun(
-            in: row, with: frame, atColumn: 1, width: 2, terminalWidth: 20, bgCode: background)
+            in: row, with: frame, atColumn: 1, width: 2, bgCode: background)
         // The run's OWN cells are painted with the page's background: the
         // collapsed reset the frame opens with is split apart, the background
         // put between the halves, and the two collapsed together again.
@@ -213,7 +213,7 @@ struct ReplayBackgroundTests {
         let row = background + "\u{1B}[2K" + "aaaaa" + ANSIRenderer.reset
         let frame = "\u{1B}[38;5;34m" + "bb" + ANSIRenderer.reset
         let patched = writer.patchingAnimatedRun(
-            in: row, with: frame, atColumn: 1, width: 2, terminalWidth: 20, bgCode: background)
+            in: row, with: frame, atColumn: 1, width: 2, bgCode: background)
         guard let end = patched.range(of: "bb") else {
             Issue.record("the run is not in the row: \(patched.debugDescription)")
             return

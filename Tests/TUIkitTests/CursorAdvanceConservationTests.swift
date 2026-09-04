@@ -55,9 +55,11 @@ struct CursorAdvanceConservationTests {
         arguments: TerminalClient.Program.allCases, WidthCorpus.clusters)
     func followedByContent(program: TerminalClient.Program, entry: WidthCorpus.Entry) {
         TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: program)) {
-            // The bracket is what makes this the interesting case: Apple
-            // Terminal's walk asks whether anything follows the cluster, and
-            // takes a different branch when something does.
+            // The bracket is what makes this the interesting case: it is the
+            // content that LANDS after the cluster, so a compensation that is
+            // a column off shows up as the bracket in the wrong place. (The
+            // walks are position-independent now — no host branches on
+            // whether anything follows — which is exactly what this pins.)
             let row = entry.text + "]"
             let claim = row.strippedLength
             let emitted = TerminalClient.compensating(row, for: program)
@@ -214,7 +216,7 @@ struct CursorAdvanceConservationTests {
             // colour, which is what a focus pulse is.
             let frame = "\u{1B}[38;5;35m" + glyph + "\u{1B}[0m"
             let patched = writer.patchingAnimatedRun(
-                in: rendered, with: frame, atColumn: 1, width: width, terminalWidth: 40, bgCode: "")
+                in: rendered, with: frame, atColumn: 1, width: width, bgCode: "")
 
             let claim = landing(rendered, on: program)
             #expect(

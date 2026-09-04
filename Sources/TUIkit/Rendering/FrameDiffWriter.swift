@@ -281,7 +281,6 @@ extension FrameDiffWriter {
     ///
     /// - Parameters:
     ///   - buffer: The rendered frame buffer.
-    ///   - terminalWidth: The terminal width in characters.
     ///   - terminalHeight: The number of rows to fill.
     ///   - bgCode: The ANSI background color code.
     ///   - reset: The ANSI reset code.
@@ -606,8 +605,7 @@ extension FrameDiffWriter {
     ///   - terminalWidth: The row's full width, which is what says whether the
     ///     row continues past the run — see `compensatingCursorAdvance`.
     func patchingAnimatedRun(
-        in line: String, with frame: String, atColumn column: Int, width: Int,
-        terminalWidth: Int, bgCode: String
+        in line: String, with frame: String, atColumn column: Int, width: Int, bgCode: String
     ) -> String {
         // The row's background put back FIRST, then the compensation: the frame
         // arrives from the view having been through neither, and the splice
