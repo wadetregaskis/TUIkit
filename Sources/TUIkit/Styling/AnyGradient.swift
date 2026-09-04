@@ -24,10 +24,12 @@ import TUIkitStyling
 /// ```
 ///
 /// > Note: A gradient needs room to run. A one-line ``Text`` is one cell tall,
-///   so a top-to-bottom ramp across it resolves at `t = 0` — the ramp's start,
-///   which for ``Color/gradient`` is the lighter end. Give it height (a
-///   multi-line block, or a ``View/gradientExtent(_:)`` spanning several rows)
-///   and the ramp appears.
+///   so a top-to-bottom ramp across it is sampled once, at the cell's centre —
+///   `t = 0.5`, which for ``Color/gradient``'s two-entry ramp rounds to the
+///   LAST entry: the base colour itself, so the text looks exactly as it would
+///   without the gradient. (Not the lighter end, which an earlier version of
+///   this note claimed.) Give it height (a multi-line block, or a
+///   ``View/gradientExtent(_:)`` spanning several rows) and the ramp appears.
 public struct AnyGradient: ShapeStyle, Hashable, Sendable {
     /// Stops given outright, or a colour to derive them from when the palette
     /// is known.
