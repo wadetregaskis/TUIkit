@@ -348,6 +348,34 @@ struct TerminalInputParsingTests {
         #expect(terminal.readEvent() == .key(KeyEvent(character: "x")))
     }
 
+    /// Paste mode with an EMPTY buffer is the one parser state whose only way
+    /// out is a timeout, and `stalledPasteStaleFrames` only advances inside
+    /// `readEvent()` — so the parser has to ask the loop for those wakes, or
+    /// the escape hatch never ticks. A terminal that emits `ESC[200~` and then
+    /// loses the paste (an interrupted paste, a dropped `ESC[201~` on a lossy
+    /// link) leaves exactly this state.
+    @Test("An empty-buffered paste mode keeps the loop polling")
+    func pasteModeWithEmptyBufferKeepsLoopAwake() {
+        let (terminal, stage) = makeTerminal()
+
+        // The start marker arrives alone; its content never does.
+        stage(Array("\u{1B}[200~".utf8))
+        #expect(terminal.readEvent() == nil, "the marker is consumed, paste mode is on")
+
+        #expect(
+            terminal.hasPendingInput,
+            "paste mode must keep the loop polling or its stall timeout never ticks")
+
+        // And it stops asking once the stall timeout has fired: an idle screen
+        // still blocks with no wakeups.
+        var pumps = 0
+        while terminal.hasPendingInput, pumps < 200 {
+            _ = terminal.readEvent()
+            pumps += 1
+        }
+        #expect(!terminal.hasPendingInput, "once the stalled paste is abandoned the loop can idle")
+    }
+
     /// The timeout must not cut a real paste in half: a stream that keeps
     /// delivering bytes keeps resetting the silence count, however long it
     /// takes in total.

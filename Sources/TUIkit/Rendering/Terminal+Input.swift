@@ -368,16 +368,25 @@ extension Terminal {
 
     /// Whether the parser is holding something that needs another
     /// ``readEvent()`` soon to resolve, even if no new bytes arrive: a lone
-    /// `ESC` mid Escape-vs-sequence disambiguation, a deferred bare `ESC`, or an
-    /// incomplete escape sequence awaiting its terminator.
+    /// `ESC` mid Escape-vs-sequence disambiguation, a deferred bare `ESC`, an
+    /// incomplete escape sequence awaiting its terminator, or an open paste.
     ///
     /// The run loop reads this to schedule a bounded wake while it's true, so
     /// these resolve on a wall-clock deadline (a prompt Escape, a dropped dead
     /// sequence) instead of waiting for unrelated input or animation to tick the
     /// loop. It's `false` the rest of the time, so a genuinely idle screen still
     /// blocks with zero wakeups.
+    ///
+    /// ``inPasteMode`` is here even though it is not "bytes we are holding":
+    /// paste mode with an EMPTY buffer is the one state whose only exit is a
+    /// timeout, and ``stalledPasteStaleFrames`` advances only inside
+    /// ``readEvent()``. Leaving it out meant a terminal that emitted `ESC[200~`
+    /// and then lost the paste wedged the parser — the loop blocked, so the
+    /// timeout that exists precisely to escape that state never ticked, and the
+    /// user's next keystroke was swallowed as paste content instead of being
+    /// dispatched.
     var hasPendingInput: Bool {
-        !input.isEmpty || pendingBareEsc || pendingAltEsc
+        !input.isEmpty || pendingBareEsc || pendingAltEsc || inPasteMode
     }
 
     /// Reads up to one complete event from the input stream.
