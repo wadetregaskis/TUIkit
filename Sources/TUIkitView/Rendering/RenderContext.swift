@@ -106,9 +106,9 @@ public struct RenderContext {
     /// compared, so memoized subtrees below it served stale buffers. The
     /// depth is structural, so it is the same on the measure and render walks
     /// and stable across frames. Bumped by whoever injects an environment
-    /// value AND notes it (`EnvironmentModifier`,
-    /// `_AnimatableForegroundStyleView`); plain `setting()` writes do not
-    /// note, so they have no slot to disambiguate.
+    /// value AND notes it (`EnvironmentModifier`, `_StyleEnvironmentView`,
+    /// `TintModifier`); plain `setting()` writes do not note, so they have
+    /// no slot to disambiguate.
     public var environmentApplicationDepth: Int = 0
 
     /// The rectangle a `.gradientExtent(.subtree)` gradient spans, and where

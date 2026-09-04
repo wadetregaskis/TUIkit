@@ -48,6 +48,16 @@ private func nestedMemoizedRow(_ title: String) -> some View {
         })
 }
 
+/// A leaf whose colour comes from the *palette accent* rather than from a
+/// literal, so `.tint(_:)` applied above it changes what it renders.
+private struct AccentLeaf: View, Equatable {
+    let text: String
+
+    var body: some View {
+        Text(text).foregroundStyle(.palette.accent)
+    }
+}
+
 /// A value with no `Equatable` conformance, so a change under it is
 /// undetectable by construction.
 private struct Incomparable {
@@ -239,6 +249,45 @@ struct RenderCacheContractTests {
 
         #expect(served.lines == blueTruth.lines, "the new style must be rendered")
         #expect(served.lines != redTruth.lines, "not the buffer from the old one")
+    }
+
+    /// `.tint(_:)` swaps the environment palette for a `TintedPalette`, which is
+    /// an environment application like any other: a memoized subtree below it
+    /// keys on the view value, which does not change when the tint above it
+    /// does. Same mechanism as `.foregroundStyle` above, different modifier.
+    @Test("A scoped .tint change above an .equatable() re-renders it")
+    func scopedTintChangeIsNotServedStale() {
+        let base = context()
+
+        let redTruth = frame(
+            base.isolatingRenderCache(), AccentLeaf(text: "hi").equatable().tint(.red))
+        let blueTruth = frame(
+            base.isolatingRenderCache(), AccentLeaf(text: "hi").equatable().tint(.blue))
+        #expect(
+            redTruth.lines != blueTruth.lines,
+            "precondition: .tint must change the rendered output"
+        )
+
+        let shared = context()
+        frame(shared, AccentLeaf(text: "hi").equatable().tint(.red))
+        let served = frame(shared, AccentLeaf(text: "hi").equatable().tint(.blue))
+
+        #expect(served.lines == blueTruth.lines, "the new tint must be rendered")
+        #expect(served.lines != redTruth.lines, "not the buffer from the old one")
+    }
+
+    @Test("An unchanged tint still memoizes")
+    func unchangedTintStillHits() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+
+        frame(shared, AccentLeaf(text: "hi").equatable().tint(.red))
+        let before = cache.stats
+        frame(shared, AccentLeaf(text: "hi").equatable().tint(.red))
+
+        // Noticing the *change* rather than keying the cache on the palette: a
+        // stable tint must still cost a comparison, not a miss.
+        #expect(cache.stats.delta(since: before).hits >= 1)
     }
 
     /// Two modifiers injecting the SAME key path share one identity (a

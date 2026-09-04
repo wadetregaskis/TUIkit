@@ -87,10 +87,36 @@ public struct TintModifier<Content: View>: View {
 
     private func modifiedContext(_ context: RenderContext) -> RenderContext {
         guard let tint else { return context }
+
+        // The same bookkeeping `EnvironmentModifier` and `_StyleEnvironmentView`
+        // do, and it is not optional here either: this is NOT a plain
+        // `setting()` write that only the subtree reads. The render memo keys on
+        // identity + view value + size and deliberately carries no environment,
+        // so a memoized view below an `.tint(…)` that changed serves the buffer
+        // painted in the OLD accent — wrong pixels, not merely stale work. The
+        // `@State`-driven case is covered by accident (the declaring view is an
+        // ancestor, so its own invalidation reaches the row); a tint bound to
+        // anything else — `@AppStorage`, a cousin's state, a plain box — is not.
+        //
+        // The TINT is what is noted, not the `TintedPalette`: a palette is an
+        // existential with no `Equatable` conformance, so noting it would answer
+        // `.incomparable` and refuse every memo store in the subtree, and the
+        // palette is a pure function of (base, tint) anyway — whoever swaps the
+        // base palette notes that themselves.
+        if let cache = context.renderCache,
+            case .changed = cache.noteAppliedEnvironment(
+                tint, identity: context.identity, keyPath: \EnvironmentValues.tint,
+                depth: context.environmentApplicationDepth)
+        {
+            cache.clearAffected(by: context.identity)
+        }
+
         var environment = context.environment
         environment.tint = tint
         environment.palette = TintedPalette(base: environment.palette, tint: tint)
-        return context.withEnvironment(environment)
+        var modified = context.withEnvironment(environment)
+        modified.environmentApplicationDepth += 1
+        return modified
     }
 }
 
