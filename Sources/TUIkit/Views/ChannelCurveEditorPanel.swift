@@ -115,8 +115,19 @@ public struct ChannelCurveEditorPanel: View {
     }
 
     /// The plot's width in cells, and its height in rows.
-    static let plotWidth = 36
-    static let plotHeight = 8
+    ///
+    /// Twice what it was. A curve editor is read by eye and dragged by hand,
+    /// and at 36×8 both were cramped: a control point moved one cell in `x`
+    /// jumped nearly 3% of the input range, and eight rows of nine fill states
+    /// resolve 72 levels of output where sixteen resolve 144.
+    ///
+    /// The dialog that results is 78×29 at its natural size, which fits an
+    /// 80-column terminal — but only while it does not also have to scroll,
+    /// since a vertical scrollbar takes a column from the content and the plot
+    /// is then elided by one at the right edge. Wider or 29 rows tall, whichever
+    /// it gets, and it draws in full.
+    static let plotWidth = 72
+    static let plotHeight = 16
 
     /// Eight sub-levels of fill plus empty — one cell resolves nine states, so
     /// the eight rows resolve 64.
