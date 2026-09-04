@@ -47,6 +47,17 @@ extension Color {
     ) -> [Color] {
         guard depth < .truecolor else { return [dim, bright] }
 
+        // Memoised by its four inputs. A ramp is a pure function of them, and a
+        // pulse asks for the SAME one every frame it runs — sixteen times a
+        // breath, for as long as the control is focused — so building it walks
+        // 256 candidates through the quantiser each time unless the answer is
+        // kept. A caller that hoists (``SelectionEmphasisCycle`` builds one per
+        // cycle) never gets here twice; one that does not pays a dictionary
+        // hit rather than the walk, which is what lets the hoist be an
+        // optimisation and not a correctness requirement.
+        let key = PulseRampKey(dim: dim, bright: bright, depth: depth, samples: samples)
+        if let cached = pulseRampCacheLock.withLock({ pulseRampCache[key] }) { return cached }
+
         // An achromatic step is only a defect when the fade itself is meant to
         // have colour — a grey accent (the White / Pro / Silver Aerogel
         // palettes) is *supposed* to render grey.
@@ -73,8 +84,26 @@ extension Color {
         }
         // Dropping the greys can empty a ramp whose whole span was off-hue.
         // A steady bright beats a grey flicker.
-        return ramp.isEmpty ? [bright] : ramp
+        let answer = ramp.isEmpty ? [bright] : ramp
+        pulseRampCacheLock.withLock {
+            // A backstop against unbounded growth, not a working-set estimate:
+            // a real app has a handful of accents at a handful of depths. Same
+            // shape as `ScrollbarColors.track`'s cap.
+            if pulseRampCache.count > 128 { pulseRampCache.removeAll(keepingCapacity: true) }
+            pulseRampCache[key] = answer
+        }
+        return answer
     }
+
+    private struct PulseRampKey: Hashable {
+        let dim: Color
+        let bright: Color
+        let depth: ColorDepth
+        let samples: Int
+    }
+
+    private static let pulseRampCacheLock = NSLock()
+    nonisolated(unsafe) private static var pulseRampCache: [PulseRampKey: [Color]] = [:]
 
     /// This colour as the terminal will actually draw it at `depth`.
     func rendered(at depth: ColorDepth) -> Color {

@@ -172,31 +172,17 @@ public struct SelectionEmphasis: Equatable, Sendable {
 
     /// The shades this terminal can actually show between the two endpoints, or
     /// `nil` where the colour space is continuous and no ramp is needed.
+    ///
+    /// ``Color/pulseRamp(from:to:depth:samples:)`` memoises the result, so this
+    /// costs a full quantiser walk once per `(dim, bright, depth)` and a
+    /// dictionary hit every time after — which is why a caller that fails to
+    /// hoist wastes a lookup, not the walk. ``SelectionEmphasisCycle`` hoists
+    /// it to once per cycle regardless.
     static func pulseRamp(dim: Color, bright: Color) -> [Color]? {
         let depth = ColorDepth.current
         guard depth < .truecolor else { return nil }
-        rampBuildsLock.withLock { rampBuildsCount += 1 }
         return Color.pulseRamp(from: dim, to: bright, depth: depth)
     }
-
-    /// How many ramps ``pulseRamp(dim:bright:)`` has built, process-wide.
-    ///
-    /// Instrumentation, and the only way this is observable at all: a ramp is a
-    /// pure function of its two endpoints and the terminal's depth, so building
-    /// one per cycle and building one per FRAME produce byte-identical output
-    /// and differ only in how much work was done. Counting is therefore what
-    /// the test that pins ``SelectionEmphasisCycle``'s hoist asserts on — a
-    /// timing test would assert the same thing far less reliably. Nothing in
-    /// the framework reads it.
-    ///
-    /// One lock acquisition per ramp, against the ~514 that building one takes
-    /// inside the quantiser, so it is free at the scale it measures.
-    static var rampBuilds: Int {
-        rampBuildsLock.withLock { rampBuildsCount }
-    }
-
-    private static let rampBuildsLock = NSLock()
-    nonisolated(unsafe) private static var rampBuildsCount = 0
 
     /// The pulse position, snapped to the shades this terminal can actually
     /// show.
