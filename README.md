@@ -309,7 +309,7 @@ Sources/
 ├── Example/        Example app (executable target)
 └── Stress/         Performance stress harness, also a complex-TUI demo (executable)
 
-Tests/                    ~5,000 tests across ~695 suites in 512 files
+Tests/                    ~5,800 tests across ~815 suites in ~600 files
 ├── TUIkitTests/          The umbrella module's suite (incl. i18n consistency,
 │                         localization & golden-snapshot tests)
 ├── TUIkitCoreTests/      One suite per library module, so a module's tests
