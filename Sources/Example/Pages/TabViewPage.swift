@@ -170,7 +170,12 @@ struct TabViewPage: View {
                                 // Taller the further right you go (1…6 lines), to
                                 // make the content-sizing toggle's effect visible.
                                 VStack(alignment: .leading, spacing: 0) {
-                                    Text("\(L("page.tabView.sectionDetailsPrefix")) \(name) \(L("page.tabView.sectionDetailsSuffix"))")
+                                    // The name sits INSIDE the phrase, as `%@`, so a
+                                    // language that wants it first (zh, ja) can put it
+                                    // there — the prefix/suffix pair this replaced left
+                                    // those two with an empty prefix and the whole
+                                    // sentence in the suffix.
+                                    Text("page.tabView.sectionDetails \(name)")
                                     ForEach(0..<index, id: \.self) { line in
                                         Text("• \(name) \(line + 1)")
                                             .foregroundStyle(.palette.foregroundSecondary)

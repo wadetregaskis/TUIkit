@@ -143,9 +143,9 @@ struct EmojiPage: View {
     /// `Table` having no title of its own.
     private var emojiTable: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim:
-                "\(filteredEmoji.count) \(L("page.emoji.ofCount")) \(Self.allEmoji.count) "
-                    + L("page.emoji.emojiCountSuffix"))
+            // Both counts sit inside one phrase, as `%1$@`/`%2$@`, so a language
+            // can order them its own way (zh and ja put the total first).
+            Text("page.emoji.emojiCount \(filteredEmoji.count) \(Self.allEmoji.count)")
                 .foregroundStyle(.palette.foregroundSecondary)
             Table(sortedEmoji, selection: $selectedID, sortOrder: $emojiSort) {
                 // Two cells: every entry here has emoji presentation, which is
@@ -180,10 +180,7 @@ struct EmojiPage: View {
     @ViewBuilder private var symbolTable: some View {
         if SFSymbol.isFontAvailable {
             VStack(alignment: .leading, spacing: 0) {
-                Text(verbatim:
-                    "\(filteredSymbols.count) \(L("page.emoji.ofCount")) "
-                        + "\(Self.allSymbols.count) "
-                        + L("page.emoji.sfSymbolsCountSuffix"))
+                Text("page.emoji.sfSymbolsCount \(filteredSymbols.count) \(Self.allSymbols.count)")
                     .foregroundStyle(.palette.foregroundSecondary)
                 Table(
                     sortedSymbols, selection: $selectedSymbolID, sortOrder: $symbolSort,

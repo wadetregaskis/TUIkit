@@ -27,7 +27,9 @@ struct TextInputPage: View {
     @State private var password: String = ""
     @State private var confirmPassword: String = ""
     @State private var apiKey: String = ""
-    @State private var submittedPassword: String = ""
+    /// The count, not a sentence: the sentence is built where it is shown, from
+    /// a key that carries the count as `%@`, so a translation may place it.
+    @State private var submittedLength: Int?
 
     // TextEditor state
     @State private var notes: String = L("page.newControls.editorSample")
@@ -188,15 +190,12 @@ struct TextInputPage: View {
                     HStack(spacing: 1) {
                         Text("\(L("page.secureField.apiKey")):").foregroundStyle(.palette.foregroundSecondary)
                         SecureField("page.secureField.apiKey", text: $apiKey)
-                            .onSubmit {
-                                submittedPassword =
-                                    "\(L("page.secureField.submittedPrefix")) \(apiKey.count) \(L("page.secureField.characters"))"
-                            }
+                            .onSubmit { submittedLength = apiKey.count }
                     }
-                    if !submittedPassword.isEmpty {
+                    if let submittedLength {
                         HStack(spacing: 1) {
                             Text("\(L("page.secureField.status")):").foregroundStyle(.palette.foregroundSecondary)
-                            Text(submittedPassword).foregroundStyle(.palette.success)
+                            Text("page.secureField.submitted \(submittedLength)").foregroundStyle(.palette.success)
                         }
                     }
                     HStack(spacing: 1) {
