@@ -1,0 +1,78 @@
+{
+  "probe": "placement_probe",
+  "measured": "2026-09-04T10:54:37-07:00",
+  "screen": "primary",
+  "os": "macOS 15.7.9",
+  "machine": "arm64",
+  "env": {
+    "TERM": "xterm-256color",
+    "TERM_PROGRAM": "iTerm.app",
+    "TERM_PROGRAM_VERSION": "3.6.11",
+    "COLORTERM": "truecolor",
+    "TERM_SESSION_ID": "w0t0p0:A7FECEB6-EDBA-42C9-BE07-7F82CC8B37CA",
+    "ITERM_SESSION_ID": "w0t0p0:A7FECEB6-EDBA-42C9-BE07-7F82CC8B37CA",
+    "ITERM_PROFILE": "Default",
+    "LC_TERMINAL": "iTerm2",
+    "LC_TERMINAL_VERSION": "3.6.11",
+    "COLORFGBG": "0;15",
+    "TERMINFO_DIRS": "/Applications/iTerm.app/Contents/Resources/terminfo:/usr/share/terminfo",
+    "__CFBundleIdentifier": "com.googlecode.iterm2"
+  },
+  "mode_2027_grapheme_clustering": "permanently reset",
+  "method": "DSR cursor report \u2014 confirm any disagreement with visual_card.py",
+  "cell_pixels": {
+    "width": 14,
+    "height": 34,
+    "reported": true
+  },
+  "advertised": {
+    "kitty_answered_query": true,
+    "virtual_placement_ok": true,
+    "replies": {
+      "KITTY_QUERY": "<ESC>_Gi=1;OK<ESC>\\",
+      "PROBE_TRANSMIT": "<ESC>_Gi=9;OK<ESC>\\",
+      "VIRTUAL_PLACEMENT": "<ESC>_Gi=9;OK<ESC>\\",
+      "TRANSMIT_SMALL": "OK",
+      "PLACE_SMALL": "<ESC>_Gi=31;OK<ESC>\\",
+      "TRANSMIT_LARGE": "OK",
+      "PLACE_LARGE": "<ESC>_Gi=48879;OK<ESC>\\",
+      "DELETE": "<silent>",
+      "PLACE_AFTER_DELETE": "<ESC>_Gi=31;ENOENT:Put command refers to non-existent image with id: 31 and number: 0<ESC>\\"
+    }
+  },
+  "measurements": {
+    "plain_text_control": {
+      "expected": 12,
+      "advance": 12,
+      "row_delta": 0
+    },
+    "placeholder_row_explicit": {
+      "expected": 12,
+      "advance": 12,
+      "row_delta": 0
+    },
+    "placeholder_row_elided": {
+      "expected": 12,
+      "advance": 12,
+      "row_delta": 0
+    },
+    "single_placeholder": {
+      "expected": 1,
+      "advance": 1,
+      "row_delta": 0
+    }
+  },
+  "bytes": {
+    "image": 68544,
+    "transmitted_base64": 91392,
+    "row_explicit": 135,
+    "row_elided": 69,
+    "full_screen_base64": 19702592
+  },
+  "transmit_seconds": {
+    "card_image": 0.035053042000000006,
+    "full_screen": 3.2298159999999996,
+    "full_screen_cells": "199x52"
+  },
+  "rendered": "CONFIRMED 2026-09-04 by a person: the card draws, hue L->R and fade T->B, in the right place, 12x4 \u2014 with all three diacritics per cell. iTerm2 decodes in specification order and advances one cell per placeholder; its only defect is that it treats the spec-optional third diacritic as required (see the desktop bug report). The shipped encoder writes all three marks, so TUIkit draws."
+}
