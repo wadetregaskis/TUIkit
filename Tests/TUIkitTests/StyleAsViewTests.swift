@@ -146,6 +146,37 @@ struct StyleAsViewTests {
         #expect(middle[4] == "255;0;0", "the centre is the ramp's start")
     }
 
+    /// The two gradients-as-views that had no test at all. An elliptical
+    /// gradient's radii are FRACTIONS of the box, so its ramp reaches the last
+    /// stop at the middle of each edge whatever the proportions.
+    @Test("An elliptical gradient view fills the box with its own ellipse")
+    func ellipticalFills() {
+        let lines = render(
+            EllipticalGradient(colors: [red, blue]), width: 9, height: 3)
+        #expect(lines.count == 3)
+        let middle = backgrounds(lines[1])
+        #expect(middle.count == 9)
+        #expect(middle == middle.reversed(), "not symmetric about the centre: \(middle)")
+        #expect(middle[4] == "255;0;0", "the centre is the ramp's start")
+        #expect(middle[0] != middle[4], "the ramp went somewhere: \(middle)")
+    }
+
+    @Test("An angular gradient view sweeps around its centre")
+    func angularFills() {
+        let lines = render(
+            AngularGradient(colors: [red, blue], center: .center, angle: .zero),
+            width: 9, height: 3)
+        #expect(lines.count == 3)
+        let top = backgrounds(lines[0])
+        let bottom = backgrounds(lines[2])
+        #expect(top.count == 9 && bottom.count == 9)
+        // A sweep, not a ring: the rows above and below the centre are on
+        // opposite sides of the turn, so they cannot agree the way a radial
+        // gradient's mirrored rows do.
+        #expect(top != bottom, "the sweep collapsed to something symmetric: \(top)")
+        #expect(Set(top.compactMap { $0 }).count > 1, "one flat colour: \(top)")
+    }
+
     // MARK: - Layering
 
     /// A flat fill and `.background(_:)` over the same rectangle must produce

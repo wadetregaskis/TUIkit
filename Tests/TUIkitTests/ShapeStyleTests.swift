@@ -78,6 +78,119 @@ struct ShapeStyleTests {
         #expect(byMember == byInit)
     }
 
+    // MARK: - The other twelve static members
+    //
+    // `.foregroundStyle(.conicGradient(colors: […]))` is the spelling an app
+    // writes; the explicit initializer is the spelling the geometry tests use.
+    // Between them sits a one-line forward per member, and a forward to the
+    // WRONG initializer of the same type still compiles: `.conicGradient`
+    // reaching `init(gradient:center:startAngle:endAngle:)` instead of the
+    // full-turn `init(gradient:center:angle:)` gives a degenerate zero-width
+    // sweep — a flat colour where a colour wheel was asked for. Each of these
+    // pins the member against the initializer it claims to spell, including
+    // the defaults that are not obvious (`endRadiusFraction: 0.5`, and a conic
+    // gradient's `endAngle` of a whole turn past its start).
+
+    private static let ramp: [Color] = [.rgb(255, 0, 0), .rgb(0, 0, 255)]
+    private static var stops: [Gradient.Stop] { Gradient(colors: ramp).stops }
+
+    @Test("The three angular members spell the sweep initializers")
+    func angularMembers() {
+        let sweep = Angle(radians: 1)
+        let end = Angle(radians: 2)
+        let gradient = Gradient(colors: Self.ramp)
+
+        let byInit = AngularGradient(
+            gradient: gradient, center: .center, startAngle: sweep, endAngle: end)
+        let fromGradient: AngularGradient = .angularGradient(
+            gradient, startAngle: sweep, endAngle: end)
+        let fromColors: AngularGradient = .angularGradient(
+            colors: Self.ramp, startAngle: sweep, endAngle: end)
+        let fromStops: AngularGradient = .angularGradient(
+            stops: Self.stops, startAngle: sweep, endAngle: end)
+
+        #expect(fromGradient == byInit, "the member's default centre is .center")
+        #expect(fromColors == byInit)
+        #expect(fromStops == byInit)
+    }
+
+    @Test("The three conic members spell the FULL-TURN initializer, not the sweep one")
+    func conicMembers() {
+        let angle = Angle(radians: 0.25)
+        let gradient = Gradient(colors: Self.ramp)
+
+        let byInit = AngularGradient(gradient: gradient, center: .center, angle: angle)
+        let fromGradient: AngularGradient = .conicGradient(gradient, angle: angle)
+        let fromColors: AngularGradient = .conicGradient(colors: Self.ramp, angle: angle)
+        let fromStops: AngularGradient = .conicGradient(stops: Self.stops, angle: angle)
+
+        #expect(fromGradient == byInit)
+        #expect(fromColors == byInit)
+        #expect(fromStops == byInit)
+        // The distinguishing fact: a whole turn, not the `.zero` end angle the
+        // sweep initializer would have left. Without this the three assertions
+        // above pass just as well against the degenerate forward.
+        #expect(fromColors.startAngle == angle)
+        #expect(fromColors.endAngle.radians == angle.radians + 2 * .pi)
+    }
+
+    @Test("The three elliptical members spell the initializer, defaults included")
+    func ellipticalMembers() {
+        let gradient = Gradient(colors: Self.ramp)
+        let byInit = EllipticalGradient(gradient: gradient)
+        let fromGradient: EllipticalGradient = .ellipticalGradient(gradient)
+        let fromColors: EllipticalGradient = .ellipticalGradient(colors: Self.ramp)
+        let fromStops: EllipticalGradient = .ellipticalGradient(stops: Self.stops)
+
+        #expect(fromGradient == byInit)
+        #expect(fromColors == byInit)
+        #expect(fromStops == byInit)
+        #expect(fromColors.startRadiusFraction == 0)
+        #expect(fromColors.endRadiusFraction == 0.5, "the middle of each edge")
+        #expect(fromColors.center == .center)
+    }
+
+    @Test("The three radial members spell the initializer")
+    func radialMembers() {
+        let gradient = Gradient(colors: Self.ramp)
+        let byInit = RadialGradient(
+            gradient: gradient, center: .center, startRadius: 1, endRadius: 5)
+        let fromGradient: RadialGradient = .radialGradient(
+            gradient, startRadius: 1, endRadius: 5)
+        let fromColors: RadialGradient = .radialGradient(
+            colors: Self.ramp, startRadius: 1, endRadius: 5)
+        let fromStops: RadialGradient = .radialGradient(
+            stops: Self.stops, startRadius: 1, endRadius: 5)
+
+        #expect(fromGradient == byInit)
+        #expect(fromColors == byInit)
+        #expect(fromStops == byInit)
+    }
+
+    /// The `colors:` / `stops:` convenience initializers the members forward
+    /// through: each must build the same stop list the `gradient:` one is given.
+    @Test("The colors: and stops: initializers agree with the gradient: one")
+    func convenienceInitializers() {
+        let gradient = Gradient(colors: Self.ramp)
+
+        #expect(
+            AngularGradient(colors: Self.ramp, center: .center)
+                == AngularGradient(gradient: gradient, center: .center))
+        #expect(
+            AngularGradient(stops: Self.stops, center: .center, angle: .zero)
+                == AngularGradient(gradient: gradient, center: .center, angle: .zero))
+        #expect(EllipticalGradient(colors: Self.ramp) == EllipticalGradient(gradient: gradient))
+        #expect(EllipticalGradient(stops: Self.stops) == EllipticalGradient(gradient: gradient))
+        #expect(
+            RadialGradient(colors: Self.ramp, center: .center, startRadius: 0, endRadius: 3)
+                == RadialGradient(
+                    gradient: gradient, center: .center, startRadius: 0, endRadius: 3))
+        #expect(
+            RadialGradient(stops: Self.stops, center: .center, startRadius: 0, endRadius: 3)
+                == RadialGradient(
+                    gradient: gradient, center: .center, startRadius: 0, endRadius: 3))
+    }
+
     // MARK: - Resolution
 
     /// The SwiftUI way to write a custom style: implement `resolve(in:)` and
