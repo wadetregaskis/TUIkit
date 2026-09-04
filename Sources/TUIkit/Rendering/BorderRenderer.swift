@@ -27,8 +27,32 @@ enum BorderRenderer {
 // MARK: - Focus Indicator
 
 extension BorderRenderer {
-    /// The two ends the focus indicator breathes between: the accent dimmed to
-    /// ``ViewConstants/focusBorderDim`` over the page, and the full accent.
+    /// The two ends a focus affordance breathes between, given the colour it
+    /// rests at: that colour dimmed to ``ViewConstants/focusBorderDim`` over
+    /// the surface it is DRAWN ON, and the colour itself.
+    ///
+    /// **Both ends come from the affordance's OWN colour**, and that is the
+    /// whole of the fix for the first version of a `Link`'s breath: it breathed
+    /// between the label's resting colour and `palette.accent`, and a `Link`
+    /// rests AT the accent, so the two ends were the same colour and a focused
+    /// link did not move. It appeared to work under the pointer only because
+    /// hover lifts the resting colour away from the accent, which accidentally
+    /// gave the breath somewhere to go.
+    ///
+    /// The bright end is where the affordance already is, so the peak of the
+    /// breath looks exactly like an unfocused one and the signal is the MOTION.
+    ///
+    /// **`surface` is what is behind the ink, not the page.** They are the same
+    /// colour until a container paints one, and then they are not:
+    /// ``EnvironmentValues/enclosingSurface`` is the caller's answer. Dimming
+    /// over the page inside a `TabView` body put a focused link's quiet end at
+    /// the exact luminance of the tab it sat on — 1.01:1 on Homebrew, where
+    /// compositing over the tab's own colour gives 1.61:1.
+    static func breathEnds(from resting: Color, on surface: Color) -> (dim: Color, bright: Color) {
+        (dim: resting.opacity(ViewConstants.focusBorderDim, over: surface), bright: resting)
+    }
+
+    /// ``breathEnds(from:on:)`` for the ● — the accent's breath.
     ///
     /// Handed to `SelectionEmphasisCycle.colors(dim:bright:)` by a caller
     /// drawing the WHOLE cycle, which is every caller there is. Separate from
@@ -42,9 +66,10 @@ extension BorderRenderer {
     /// clock's 0.8 s), so a plain button visibly lagged every list cursor and
     /// menu row on the same screen, and `.selectionIndicatorStyle(.none/.blink)`
     /// never reached it at all.
-    static func focusIndicatorEnds(palette: any Palette) -> (dim: Color, bright: Color) {
-        (dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
-            bright: palette.accent)
+    static func focusIndicatorEnds(
+        palette: any Palette, on surface: Color
+    ) -> (dim: Color, bright: Color) {
+        breathEnds(from: palette.accent, on: surface)
     }
 
     /// Renders a pulsing focus indicator for inline focusable elements, at one
@@ -56,7 +81,7 @@ extension BorderRenderer {
     /// - Parameters:
     ///   - isFocused: Whether the element is currently focused.
     ///   - color: This frame's colour, from
-    ///     ``focusIndicatorEnds(palette:)`` through the cycle.
+    ///     ``focusIndicatorEnds(palette:on:)`` through the cycle.
     /// - Returns: A 2-character string: `"● "` (colored) when focused, `"  "` when not.
     static func focusIndicatorPrefix(isFocused: Bool, color: Color) -> String {
         guard isFocused else {

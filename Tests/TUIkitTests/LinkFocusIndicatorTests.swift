@@ -25,10 +25,13 @@ import TUIkitCore
 @Suite("Link focus indication")
 struct LinkFocusIndicatorTests {
 
-    private func harness(width: Int = 40) -> (TUIContext, RenderContext) {
+    private func harness(
+        width: Int = 40, palette: (any Palette)? = nil
+    ) -> (TUIContext, RenderContext) {
         let tui = TUIContext()
         var environment = EnvironmentValues()
         environment.focusManager = FocusManager()
+        if let palette { environment.palette = palette }
         environment.applyRuntimeServices(from: tui)
         return (
             tui,
@@ -133,6 +136,84 @@ struct LinkFocusIndicatorTests {
         #expect(
             Set(run.frames).count > 1,
             "every frame is identical — the breath has nowhere to go, so nothing moves")
+    }
+
+    /// The quiet end of the breath is a fifth of the label's colour over WHAT
+    /// IS BEHIND IT, and both ends were composited over `palette.background`
+    /// regardless — which is the page, and a `TabView` body is not on the page.
+    /// It is painted on the strip's own surface, one plane step off it
+    /// (`TabView.surfaceColor`), and `Color.opacity(_:over:)` says in as many
+    /// words to "pass the surface the colour actually draws on".
+    ///
+    /// Homebrew is the palette that makes the difference visible rather than
+    /// merely wrong: a black page, a stated chrome tone 16 L\* above it, and a
+    /// `(0, 249, 0)` accent. Dimmed over the page the trough came out
+    /// `(0, 50, 0)` — luminance 0.0228 against the tab body's 0.0222, a ratio
+    /// of **1.01:1** — so a focused link went the colour of the tab it sat in,
+    /// once per breath. Over the body it is `(33, 83, 33)`, and 1.61:1.
+    ///
+    /// ``ViewConstants/chromeSeparationFloor`` is the floor for exactly this
+    /// failure ("a thumb that fades to its track's colour on the way past"),
+    /// and Homebrew clears it by a hair — 1.610 against 1.6 — which is the
+    /// other reason to pin this palette rather than a comfortable one.
+    ///
+    /// Both affordances, because the two ends helpers carried the same page
+    /// blend separately: `.text` breathes the label and `.bullet` the ●.
+    ///
+    /// Measured on the raw 24-bit colours, NOT through
+    /// ``Color/downsampledToPalette256()`` as the chrome floors elsewhere are.
+    /// Those measure a colour being *derived*, and want the answer a
+    /// 256-colour terminal would also get. This measures a colour being
+    /// *painted*, on a terminal that paints exactly these bytes — and the cube
+    /// would hide it, snapping `(0, 50, 0)` up to `(0, 95, 0)` at nearly twice
+    /// the luminance actually emitted.
+    @Test(
+        "A focused link's breath never sinks into the tab body behind it",
+        arguments: [LinkFocusIndicator.text, .bullet])
+    func theBreathStepsOffTheSurfaceItIsDrawnOn(indicator: LinkFocusIndicator) throws {
+        let homebrew = try #require(PaletteRegistry.all.first { $0.name == "Homebrew" })
+        try withColorDepth(.truecolor) {
+            let (tui, context) = harness(palette: homebrew)
+            let manager = try #require(context.environment.focusManager)
+            let view = TabView(selection: .constant(0)) {
+                Tab("Tab", value: 0) { link.linkFocusIndicator(indicator) }
+            }
+            _ = render(view, tui: tui, context: context)
+            // By name, not by auto-focus: the `TabView` registers a focusID of
+            // its own for arrow-key tab switching, and it registers first.
+            let id = try #require(
+                manager.registeredFocusIDsInActiveSection().first { $0.hasPrefix("button-") },
+                "the link inside the tab should have registered a focusID")
+            manager.focus(id: id)
+            let run = try #require(render(view, tui: tui, context: context).animatedCells.first)
+            let drawn = try run.frames.map(drawnForeground(of:))
+
+            let surface = homebrew.liftedBackground.resolve(with: homebrew)
+            // (33, 83, 33) is the accent at `focusBorderDim` over the tab
+            // body; blended over the page instead it is (0, 50, 0).
+            #expect(
+                drawn.contains(.rgb(33, 83, 33)),
+                "the trough is not the accent at 20% over the tab body")
+            let worst = drawn.map { $0.contrastRatio(against: surface) }.min() ?? 0
+            #expect(
+                worst >= ViewConstants.chromeSeparationFloor,
+                "the breath comes within \(worst):1 of the tab body it is drawn on")
+        }
+    }
+
+    /// The 24-bit foreground a frame paints its text in.
+    ///
+    /// Read out of the escape directly rather than through `SGRState`, which
+    /// nets the parameters into a state and does not hand them back.
+    private func drawnForeground(of frame: String) throws -> Color {
+        let marker = try #require(
+            frame.range(of: "38;2;"), "no 24-bit foreground in \(frame.debugDescription)")
+        let channels = frame[marker.upperBound...]
+            .prefix { $0.isNumber || $0 == ";" }
+            .split(separator: ";")
+            .compactMap { UInt8($0) }
+        try #require(channels.count >= 3, "truncated foreground in \(frame.debugDescription)")
+        return .rgb(channels[0], channels[1], channels[2])
     }
 
     /// …and it must do that WITHOUT the pointer, which is the case that was

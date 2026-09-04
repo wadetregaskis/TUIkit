@@ -88,8 +88,34 @@ extension EnvironmentValues {
     ///
     /// `package` rather than `internal` since this moved down a module: the
     /// controls that read it are the umbrella module's.
+    ///
+    /// A control deriving a well of its own reads it through
+    /// ``Palette/fieldBackground(on:)``, so that derivation stays in one place.
+    /// A control compositing translucent ink wants ``enclosingSurface``
+    /// instead, which is this with the page substituted for `nil`.
     package var surfaceBackground: Color? {
         get { self[SurfaceBackgroundKey.self] }
         set { self[SurfaceBackgroundKey.self] = newValue }
+    }
+
+    /// The colour ink drawn here actually lands on — ``surfaceBackground``
+    /// where a container painted one, and the page where none did.
+    ///
+    /// NOT a convenience spelling of the Optional: the two answer different
+    /// questions and the `nil` is load-bearing in the other one. A control
+    /// deriving a *well* must know that nothing was painted, because on the
+    /// page it takes the palette's own stated tone and anywhere else it steps
+    /// off what it finds (``Palette/fieldBackground(on:)``). A caller
+    /// compositing translucent ink has no such distinction: it needs whatever
+    /// is behind it, and "the page" is a perfectly good answer.
+    ///
+    /// This is the surface ``Color/opacity(_:over:)`` asks for — "the surface
+    /// the colour actually draws on". Passing `palette.background` where a
+    /// container painted a surface composites the ink over a colour that is
+    /// not there, and the result is not the requested opacity of anything: a
+    /// focused `Link`'s quiet end, 20% of the accent, came out at the exact
+    /// luminance of the `TabView` body it sat on.
+    package var enclosingSurface: Color {
+        surfaceBackground ?? palette.background.resolve(with: palette)
     }
 }

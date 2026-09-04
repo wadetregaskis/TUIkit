@@ -279,24 +279,6 @@ struct _LinkButtonStyle: ButtonStyle {
 // MARK: - Focus in the label
 
 extension _ButtonStyleBody {
-    /// The two ends of a label's breath, given the colour it rests at.
-    ///
-    /// **Both ends come from the label's OWN colour**, and that is the whole of
-    /// the fix for the first version of this: it breathed between the resting
-    /// colour and `palette.accent`, and a `Link` rests AT the accent
-    /// (`.buttonTextStyle { $0.foreground = .palette.accent }`), so the two ends
-    /// were the same colour and a focused link did not move. It appeared to
-    /// work under the pointer only because hover lifts the resting colour away
-    /// from the accent, which accidentally gave the breath somewhere to go.
-    ///
-    /// The bright end is where the label already is, so the peak of the breath
-    /// looks exactly like an unfocused link and the signal is the MOTION — the
-    /// same bargain `BorderRenderer.focusIndicatorPrefix` makes with the
-    /// accent, and the same `focusBorderDim` at the quiet end.
-    static func breathEnds(from resting: Color, palette: any Palette) -> (dim: Color, bright: Color) {
-        (resting.opacity(ViewConstants.focusBorderDim, over: palette.background), resting)
-    }
-
     /// A one-line label that breathes between `ends` instead of growing a
     /// bullet beside it — see ``_ButtonAppearance/indicatesFocusInLabel``.
     @MainActor
@@ -491,6 +473,9 @@ private struct _ButtonStyleBody: View, Renderable {
         }
 
         let palette = context.environment.palette
+        // What the ink lands on, which is the page only until a container
+        // paints something — a `TabView` body is on the strip's own surface.
+        let surface = context.environment.enclosingSurface
         let isDisabled = !configuration.isEnabled
         let isFocused = configuration.isFocused
         // Focus and hover are two different questions — where the KEYBOARD
@@ -572,14 +557,14 @@ private struct _ButtonStyleBody: View, Renderable {
             if appearance.indicatesFocusInLabel {
                 return Self.breathingLabel(
                     paddedLabel, style: textStyle,
-                    ends: Self.breathEnds(from: foregroundColor, palette: palette),
+                    ends: BorderRenderer.breathEnds(from: foregroundColor, on: surface),
                     cycle: cycle, indicating: indicating, isMeasuring: context.isMeasuring)
             }
 
             // One ramp for the cycle, not one per frame: `focusIndicatorPrefix`
             // used to resolve its own colour from a `SelectionEmphasis`, so
             // drawing sixteen frames rebuilt the identical ramp sixteen times.
-            let ends = BorderRenderer.focusIndicatorEnds(palette: palette)
+            let ends = BorderRenderer.focusIndicatorEnds(palette: palette, on: surface)
             let prefixes = cycle.colors(dim: ends.dim, bright: ends.bright).map {
                 BorderRenderer.focusIndicatorPrefix(isFocused: indicating, color: $0)
             }
@@ -682,6 +667,8 @@ private struct _ButtonStyleBody: View, Renderable {
     /// The procedural string path above is left untouched for string labels.
     private func renderViewLabel(_ labelView: AnyView, context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
+        // …as in the string path: what the ink lands on, not the page.
+        let surface = context.environment.enclosingSurface
         let isDisabled = !configuration.isEnabled
         let isFocused = configuration.isFocused
         // Both, for the reason given in the string path above.
@@ -744,7 +731,7 @@ private struct _ButtonStyleBody: View, Renderable {
             // focus, on the passes where it re-renders.
             if appearance.indicatesFocusInLabel {
                 return Self.breathingLabel(
-                    ends: Self.breathEnds(from: labelFg, palette: palette),
+                    ends: BorderRenderer.breathEnds(from: labelFg, on: surface),
                     cycle: cycle, indicating: indicating, isMeasuring: context.isMeasuring
                 ) { colour in
                     TUIkit.renderToBuffer(
@@ -757,7 +744,7 @@ private struct _ButtonStyleBody: View, Renderable {
             // One ramp for the cycle, not one per frame: `focusIndicatorPrefix`
             // used to resolve its own colour from a `SelectionEmphasis`, so
             // drawing sixteen frames rebuilt the identical ramp sixteen times.
-            let ends = BorderRenderer.focusIndicatorEnds(palette: palette)
+            let ends = BorderRenderer.focusIndicatorEnds(palette: palette, on: surface)
             let prefixes = cycle.colors(dim: ends.dim, bright: ends.bright).map {
                 BorderRenderer.focusIndicatorPrefix(isFocused: indicating, color: $0)
             }

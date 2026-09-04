@@ -271,7 +271,7 @@ struct BorderRendererFocusIndicatorTests {
         let palette = SystemPalette(.green)
         let result = BorderRenderer.focusIndicatorPrefix(
             isFocused: true,
-            color: BorderRenderer.focusIndicatorEnds(palette: palette).bright
+            color: BorderRenderer.focusIndicatorEnds(palette: palette, on: palette.background).bright
         )
         #expect(
             result.strippedLength == BorderRenderer.focusIndicatorWidth,
@@ -285,7 +285,7 @@ struct BorderRendererFocusIndicatorTests {
         let palette = SystemPalette(.green)
         let result = BorderRenderer.focusIndicatorPrefix(
             isFocused: false,
-            color: BorderRenderer.focusIndicatorEnds(palette: palette).bright
+            color: BorderRenderer.focusIndicatorEnds(palette: palette, on: palette.background).bright
         )
         #expect(
             result.strippedLength == BorderRenderer.focusIndicatorWidth,
@@ -297,7 +297,7 @@ struct BorderRendererFocusIndicatorTests {
     @Test("focusIndicatorPrefix has consistent width between focused and unfocused")
     func focusIndicatorPrefixConsistentWidth() {
         let palette = SystemPalette(.green)
-        let ends = BorderRenderer.focusIndicatorEnds(palette: palette)
+        let ends = BorderRenderer.focusIndicatorEnds(palette: palette, on: palette.background)
         let focused = BorderRenderer.focusIndicatorPrefix(isFocused: true, color: ends.bright)
         let unfocused = BorderRenderer.focusIndicatorPrefix(isFocused: false, color: ends.bright)
         #expect(
