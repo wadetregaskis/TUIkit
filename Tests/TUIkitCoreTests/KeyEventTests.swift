@@ -317,10 +317,18 @@ struct KeyEventParseTests {
         #expect(event == nil)
     }
 
-    @Test("Parse bare escape sequence returns escape")
-    func parseBareEscape() {
-        let event = KeyEvent.parse([0x1B])
+    /// NOT a second copy of `parseEscape` above: a lone ESC never reaches
+    /// `parseEscapeSequence` at all — `parse` routes a one-byte input to
+    /// `parseSingleByte` — so the escape-PREFIXED fallback is a different
+    /// path with no other test on it. NUL is the probe because it is outside
+    /// every range `parseSingleByte` recognises, so the Alt-chord branch
+    /// declines it and the sequence falls out the bottom as a plain escape
+    /// rather than as nil.
+    @Test("An escape-prefixed byte that names no key decodes as a bare escape")
+    func parseEscapePrefixedNonKey() {
+        let event = KeyEvent.parse([0x1B, 0x00])
         #expect(event?.key == .escape)
+        #expect(event?.alt == false)
     }
 
     // MARK: - Modifier Keys (CSI with modifiers)
