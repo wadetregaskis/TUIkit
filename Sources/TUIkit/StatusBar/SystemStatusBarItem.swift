@@ -106,11 +106,20 @@ public enum SystemStatusBarItem {
 extension SystemStatusBarItem {
     /// Creates system items with custom actions.
     ///
+    /// Quit is always in the result; appearance and theme are included only
+    /// when given an action, since an entry for a key that does nothing is
+    /// worse than no entry.
+    ///
     /// - Parameters:
-    ///   - onQuit: Action for quit (default: exits app).
-    ///   - onAppearance: Action for appearance cycling (optional).
-    ///   - onTheme: Action for theme cycling (optional).
-    /// - Returns: Array of configured system items.
+    ///   - onQuit: Action for the quit item, or `nil` for one that only
+    ///     displays. There is NO default action, despite what this said
+    ///     before: quitting is dispatched by the run loop against
+    ///     ``StatusBarState/quitShortcut``, never through an item's action,
+    ///     which is why the framework's own quit entry
+    ///     (``StatusBarState/currentSystemItems``) carries none either.
+    ///   - onAppearance: Action for appearance cycling. `nil` omits the item.
+    ///   - onTheme: Action for theme cycling. `nil` omits the item.
+    /// - Returns: Array of configured system items, in display order.
     public static func items(
         onQuit: (@Sendable () -> Void)? = nil,
         onAppearance: (@Sendable () -> Void)? = nil,
