@@ -397,6 +397,36 @@ struct RefreshableTests {
             "row: \(row.debugDescription)")
     }
 
+    @Test("A running refresh renders its content once")
+    func runningRefreshDoesNotDoubleRenderContent() async {
+        // The spinner is an OVERLAY on the content, and an overlay renders its
+        // base — so building it out of `content` a second time walked the whole
+        // subtree twice within one pass. Every render-pass side effect below a
+        // running `.refreshable` then ran twice: `.onChange` claims its slot by
+        // POSITION (`nextOnChangeIndex`, reset per pass and not per render), so
+        // the second walk claimed a fresh, empty slot and fired the `initial`
+        // call again for a value that never changed.
+        let harness = Harness()
+        let gate = Latch()
+        nonisolated(unsafe) var fires = 0
+        // `_, _ in` rather than a bare `{ }`: both `onChange` overloads accept
+        // a closure literal, and only the arity disambiguates them.
+        let view = Text("abcdefghij")
+            .onChange(of: 0, initial: true) { _, _ in fires += 1 }
+            .refreshable { while gate.isClosed { await Task.yield() } }
+
+        _ = harness.frame(view)
+        #expect(fires == 1, "the `initial` call, once")
+
+        harness.press(.character("r"), ctrl: true)
+        await settle()
+        _ = harness.frame(view)
+        gate.release()
+        await settle()
+
+        #expect(fires == 1, "nothing changed, so the running frame must add no calls")
+    }
+
     @Test("A render-to-measure pass registers no handler of its own")
     func measurePassDoesNotDuplicate() async {
         // A view that cannot be measured analytically is RENDERED to measure

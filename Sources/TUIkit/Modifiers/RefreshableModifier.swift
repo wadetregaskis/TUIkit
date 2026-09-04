@@ -241,14 +241,24 @@ extension RefreshableModifier: Renderable {
         guard action.isRunning, buffer.width >= 1 else { return buffer }
         let indicator = context.environment.refreshIndicator
         // Composed, not hand-composited: `.overlay` already lays a view over
-        // another without disturbing what is underneath it.
+        // another without disturbing what is underneath it — placement,
+        // alignment guides and opacity resolution included.
+        //
+        // The base is the buffer already rendered above, NOT `content` again.
+        // An overlay renders its base, so overlaying `content` walked the whole
+        // subtree a SECOND time at the same identities within one pass, and
+        // every render-pass side effect below a running refresh ran twice:
+        // `.onChange` claims its slot by position (`nextOnChangeIndex`, reset
+        // per pass, not per render) so the second walk claimed a fresh slot and
+        // fired for a value that never changed, and an `.onKeyPress` handler
+        // that returns `false` was dispatched twice per keystroke.
         //
         // A blank cell either side, so the indicator reads as a badge sitting
         // ON the content rather than as a glyph that has crashed into the word
         // beside it — an overlay paints over what it covers, and a lone spinner
         // butted up against text is hard to tell from part of the text.
         return TUIkitView.renderToBuffer(
-            content.overlay(alignment: .top) {
+            BufferView(buffer: buffer).overlay(alignment: .top) {
                 Spinner(style: indicator.style, color: indicator.color)
                     .padding(.horizontal, 1)
             },
