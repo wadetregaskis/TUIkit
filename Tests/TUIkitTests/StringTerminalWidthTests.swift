@@ -929,6 +929,41 @@ struct RepaintRightEdgeColumnTests {
         #expect(pass2 == " x", "pass 2 wrote \(pass2.debugDescription)")
     }
 
+    /// Spans never close the chain, so the pass that just ended can leave an
+    /// attribute in force — and the erase's `bgCode` sets a background and
+    /// clears nothing. Its documented fallback ("land on the app's background
+    /// if step 2 fails") painted the two cells reversed instead.
+    @Test("Right-edge erase closes the styling chain before ESC[K")
+    func repaintErasesFromDefaultState() {
+        let writer = FrameDiffWriter(isAppleTerminal: true)
+        let terminal = MockTerminal()
+        let w = 20
+        let bg = "\u{1B}[48;2;5;9;5m"
+        let reset = "\u{1B}[0m"
+        // Row 0 is the quirk row; row 1 is HIGHER-indexed so its style is what
+        // the pass leaves in force (a whole-line write would reset it).
+        let quirkA = makePaddedLine(text: "Hello 🖥️ World", terminalWidth: w, bgCode: bg, reset: reset)
+        let plainA = bg + "\u{1B}[2K" + "aaaabbbbbb" + reset + bg + String(repeating: " ", count: w - 10) + reset
+        writer.writeContentDiff(
+            newLines: [quirkA, plainA], terminal: terminal, startRow: 1, terminalWidth: w, bgCode: bg, reset: reset)
+        terminal.reset()
+        // Frame 2: row 0 changes (the repaint fires); row 1's SAME glyphs gain
+        // SGR 7, so only those cells differ — one span, ending inside reverse.
+        let quirkB = makePaddedLine(text: "Hellp 🖥️ World", terminalWidth: w, bgCode: bg, reset: reset)
+        let plainB = bg + "\u{1B}[2K" + "aaaa" + "\u{1B}[7m" + "bbbbbb" + reset + bg
+            + String(repeating: " ", count: w - 10) + reset
+        writer.writeContentDiff(
+            newLines: [quirkB, plainB], terminal: terminal, startRow: 1, terminalWidth: w, bgCode: bg, reset: reset)
+        let output = terminal.allOutput
+        let repaintCursor = ANSIRenderer.moveCursor(toRow: 1, column: w - 1)
+        guard let at = output.range(of: repaintCursor) else {
+            Issue.record("no right-edge repaint in \(output.debugDescription)")
+            return
+        }
+        let erase = String(output[at.upperBound...]).prefix { $0 != "K" }
+        #expect(erase.contains(reset), "the erase ran with the previous span's attributes in force: \(erase.debugDescription)")
+    }
+
     @Test("Repaint only applies to changed rows")
     func repaintOnlyForChangedRows() {
         let writer = FrameDiffWriter(isAppleTerminal: true)

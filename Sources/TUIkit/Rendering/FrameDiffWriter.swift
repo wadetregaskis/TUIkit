@@ -951,8 +951,13 @@ extension FrameDiffWriter {
         for row in changedRows where row < lines.count {
             guard lines[row].containsTerminalAppCursorAdvanceQuirk else { continue }
 
-            // Pass 1: erase with bg to unlock any phantom cells.
+            // Pass 1: erase with bg to unlock any phantom cells. The chain is
+            // closed first — `bgCode` sets a background and clears nothing,
+            // and the pass that just ended leaves its last cell's attributes
+            // in force (spans never close), so a reverse or an underline
+            // carried in would be what the erase painted the two cells with.
             terminal.moveCursor(toRow: startRow + row, column: repaintCol)
+            if terminalStyle?.isDefault != true { terminal.write(reset) }
             terminal.write(bgCode + "\u{1B}[K" + reset)
 
             // Pass 2: re-write the correct content now that the cells are unlocked.
