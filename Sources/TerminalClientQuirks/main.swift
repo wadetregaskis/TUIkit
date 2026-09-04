@@ -12,15 +12,19 @@ import TUIkit
 /// Terminal Client Quirks — what TUIkit thinks your terminal is, why, and what
 /// it is doing differently as a result.
 ///
-/// Three screens, in the order the questions arise:
+/// Five screens, in the order the questions arise:
 ///
 /// 1. **Identity** — which terminal, and which signal named it. Over ssh this
 ///    is usually the whole story: `TERM_PROGRAM` does not survive the hop, so a
 ///    terminal that is perfectly well known locally arrives anonymous, and an
 ///    anonymous terminal is (correctly) left alone.
-/// 2. **Quirks** — the measured advance model for that terminal, cluster class
+/// 2. **Render as** — pick a known client and see the app as it would be
+///    drawn for that terminal, whatever this one is.
+/// 3. **Quirks** — the measured advance model for that terminal, cluster class
 ///    by cluster class, and the workaround applied to each divergence.
-/// 3. **Alignment** — the check that does not take any of the above on trust.
+/// 4. **Alignment** — the check that does not take any of the above on trust.
+/// 5. **Custom** — a quirks record edited by hand, with the Swift literal that
+///    would ship it.
 struct TerminalClientQuirksApp: App {
     var body: some Scene {
         WindowGroup {
@@ -31,7 +35,7 @@ struct TerminalClientQuirksApp: App {
 
 /// The tab host. `TerminalClient.current` is read once here rather than in each
 /// screen: it cannot change while the app runs (the identification happens
-/// before the first frame), and reading it once means the three screens cannot
+/// before the first frame), and reading it once means the five screens cannot
 /// disagree about what they are describing.
 struct QuirksContentView: View {
     @State private var tab = 0
