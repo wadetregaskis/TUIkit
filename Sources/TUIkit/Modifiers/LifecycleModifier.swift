@@ -22,10 +22,12 @@
 /// This mirrors how `Spinner`, `ProgressView`, and `_ImageCore` already key
 /// their lifecycle/animation tasks (`"spinner-\(context.identity.path)"` etc.).
 ///
-/// - Note: Two lifecycle modifiers of the *same* kind chained on a single view
-///   (`Text().task { a }.task { b }`) share an identity path and therefore a
-///   token, so only the first fires. That is vanishingly rare — distinct kinds
-///   (`.onAppear` + `.task`) use distinct prefixes and never collide.
+/// - Note: Two `.onAppear`s (or two `.onDisappear`s) chained on a single view
+///   share an identity path and therefore a token, so only the first fires.
+///   That is vanishingly rare — distinct kinds use distinct prefixes and never
+///   collide. `.task` is the exception: it keys on a per-instance identity of
+///   its own (see ``TaskModifier``), because there a collision cost more than a
+///   missed call.
 private func lifecycleToken(_ prefix: String, _ context: RenderContext) -> String {
     "\(prefix)-\(context.identity.path)"
 }
@@ -147,8 +149,11 @@ extension TaskModifier: Renderable {
             // still on screen (and restarting it on the next cache miss).
             context.environment.volatileReadTracker?.recordRenderSideEffect()
             let lifecycle = context.environment.lifecycle!
-            var token = lifecycleToken("task", context)
-            if let id { token += "-gen\(generation(for: id, context: context))" }
+            let identity = instanceIdentity(context)
+            var token = "task-\(identity.path)"
+            if let id {
+                token += "-gen\(generation(for: id, identity: identity, context: context))"
+            }
 
             // Start the task only on the first appearance for this identity.
             let isFirstAppear = !lifecycle.hasAppeared(token: token)
@@ -165,29 +170,53 @@ extension TaskModifier: Renderable {
         return TUIkit.renderToBuffer(content, context: context)
     }
 
+    /// This modifier instance's own place, one step below the identity it
+    /// renders its content at.
+    ///
+    /// NOT `context.identity`, which is shared: `TaskModifier` is `Renderable`
+    /// and renders content under the unchanged context, so
+    /// `Text("x").task(id: a) { … }.task(id: b) { … }` puts both modifiers at
+    /// one identity — one token and one generation box between them. Each then
+    /// found the OTHER's id in the box on every pass, bumped the generation,
+    /// and so minted a fresh token every frame: both tasks were cancelled and
+    /// restarted for the life of the view, and neither could outlive a frame.
+    ///
+    /// The step is this modifier's own generic type, which distinguishes the
+    /// two because chaining strictly nests them (`TaskModifier<TaskModifier<Text>>`
+    /// wraps `TaskModifier<Text>`). Deliberately not a positionally claimed
+    /// counter, the way the `onChange` family disambiguates: a counter is
+    /// stable only while every pass claims in the same order, and a token that
+    /// churns restarts a task rather than merely mis-slotting a value. A key
+    /// built from what the code says is the same under any walk.
+    private func instanceIdentity(_ context: RenderContext) -> ViewIdentity {
+        context.identity.child(type: Self.self)
+    }
+
     /// A counter that advances every time `id` stops being `==` to the value
-    /// this identity last saw.
+    /// this instance last saw.
     ///
     /// The lifecycle machinery keys on a token and a token is a string, so the
     /// id's identity *as a value* has to become one somehow. A counter does it
     /// without ever rendering the value: the id itself is persisted beside it
     /// and compared with `==`, which is the whole point.
     ///
-    /// A reserved NEGATIVE slot, because this modifier persists state at the
-    /// same identity as the content it renders — index 0 belongs to that
-    /// content's first `@State`. See ``StateStorage/StateKey``.
-    private func generation(for id: AnyEquatableBox, context: RenderContext) -> Int {
+    /// A reserved NEGATIVE slot, because the box sits at an identity a
+    /// composite view could also occupy — index 0 belongs to such a view's
+    /// first `@State`. See ``StateStorage/StateKey``.
+    private func generation(
+        for id: AnyEquatableBox, identity: ViewIdentity, context: RenderContext
+    ) -> Int {
         guard let stateStorage = context.stateStorage else { return 0 }
         let box: StateBox<TaskIDGeneration> = stateStorage.storage(
             for: StateStorage.StateKey(
-                identity: context.identity, propertyIndex: TaskStateIndex.idGeneration),
+                identity: identity, propertyIndex: TaskStateIndex.idGeneration),
             default: TaskIDGeneration(id: id, generation: 0))
         if box.value.id != id {
             box.value = TaskIDGeneration(id: id, generation: box.value.generation + 1)
         }
         // The box must survive the per-frame StateStorage GC, or the generation
         // resets to 0 every render and a task restarts forever.
-        stateStorage.markActive(context.identity)
+        stateStorage.markActive(identity)
         return box.value.generation
     }
 }
