@@ -22,6 +22,12 @@ private struct Unencodable: Codable {
     init(from decoder: any Decoder) throws { self.init() }
 }
 
+/// An error whose printed form is fixed, so the assertions on
+/// ``StorageFailure/description`` can name the exact string a user would read.
+private struct Boom: Error, CustomStringConvertible {
+    var description: String { "boom" }
+}
+
 /// `@AppStorage`'s file backend used to drop every failure at its `catch`, so an
 /// app reported "Saved" for a write that never reached the disk. These pin each
 /// reporting path — and each one fails on the pre-fix code, where nothing at all
@@ -180,6 +186,77 @@ struct StorageFailureTests {
         // "nil", which a concurrent suite's report would falsify.
         StorageDiagnostics.reset()
         #expect(StorageDiagnostics.lastFailure?.key != key)
+    }
+
+    // MARK: - The reported string
+
+    // `description` is the entire user-facing output of this subsystem — what
+    // an app prints when `@AppStorage` cannot write, and the one report a user
+    // can send back. Every branch of it was unexecuted: the existing cases all
+    // read `lastFailure`'s FIELDS and never its rendering, so dropping the
+    // `key` clause (or renaming `operation.rawValue`) would leave "storage
+    // failed" with no indication of which key or which file, and nothing would
+    // have failed.
+
+    @Test("The description names the operation, and only what it has")
+    func descriptionWithNothingElse() {
+        #expect(StorageFailure(operation: .save).description == "storage save failed")
+        #expect(StorageFailure(operation: .load).description == "storage load failed")
+        #expect(StorageFailure(operation: .encode).description == "storage encode failed")
+        #expect(
+            StorageFailure(operation: .createDirectory).description
+                == "storage createDirectory failed")
+    }
+
+    @Test("Each optional field adds its own clause")
+    func descriptionClauses() {
+        #expect(
+            StorageFailure(operation: .encode, key: "answer").description
+                == #"storage encode failed for key "answer""#)
+        #expect(
+            StorageFailure(operation: .load, path: "/tmp/settings.json").description
+                == "storage load failed at /tmp/settings.json")
+        #expect(
+            StorageFailure(operation: .save, underlying: Boom()).description
+                == "storage save failed: boom")
+    }
+
+    @Test("All three clauses appear together, in that order")
+    func descriptionWithEverything() {
+        let failure = StorageFailure(
+            operation: .save, key: "answer", path: "/tmp/settings.json", underlying: Boom())
+
+        #expect(
+            failure.description
+                == #"storage save failed for key "answer" at /tmp/settings.json: boom"#)
+        // Through `CustomStringConvertible`, which is how the doc comment's own
+        // example reaches it: `.error("Couldn't save settings: \(failure)")`.
+        #expect("\(failure)" == failure.description)
+    }
+
+    // MARK: - The counter
+
+    @Test("failureCount rises with every report and reset() clears it")
+    func failureCountTracksReports() {
+        // The counter is process-wide and other suites report into it while
+        // this one runs (`.serialized` orders this suite internally, not
+        // against the others). So the assertions are on the DELTA, and only in
+        // the direction nothing else can move: a report only ever raises the
+        // count, so anything concurrent can only push it further past the
+        // bound. `report(_:)` is used directly rather than provoking a real
+        // failure, which keeps the window between the reads as small as it can
+        // be.
+        let before = StorageDiagnostics.failureCount
+        StorageDiagnostics.report(StorageFailure(operation: .save, key: "counted-1"))
+        StorageDiagnostics.report(StorageFailure(operation: .load, path: "/counted-2"))
+
+        #expect(StorageDiagnostics.failureCount >= before + 2)
+        #expect(StorageDiagnostics.lastFailure?.path == "/counted-2", "the latest wins")
+
+        StorageDiagnostics.reset()
+        #expect(
+            StorageDiagnostics.failureCount < before + 2,
+            "reset() left the count where it was")
     }
 
     @Test("Reading back an undecodable value stays silent")
