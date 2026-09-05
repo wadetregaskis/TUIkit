@@ -158,20 +158,35 @@ struct ScrollViewPage: View {
                     Text("page.scrollView.scrollbarBody")
                     .foregroundStyle(.palette.foregroundSecondary)
 
-                    // Few enough lines (18) in a tall enough viewport (10) that the
-                    // proportional thumb is several cells — clearly larger than the
-                    // fixed one-cell thumb when the toggle below is turned off. With
-                    // the full 60-line body the proportional thumb would round down
-                    // to the one-cell minimum and look identical.
+                    // Few enough lines (18) that the proportional thumb is several
+                    // cells at the viewports the box can be dragged to — clearly
+                    // larger than the fixed one-cell thumb when the toggle below
+                    // is turned off. With the full 60-line body the proportional
+                    // thumb would round down to the one-cell minimum and look
+                    // identical.
+                    //
+                    // Every fourth line is a button: the "Follow margin" picker
+                    // below decides how early a focused control is scrolled into
+                    // view, and a body of plain text has nothing to focus, so the
+                    // setting had nothing to show.
                     ScrollView {
                         VStack(alignment: .leading) {
-                            ForEach(Array(loremLines.prefix(18)), id: \.self) { line in
-                                Text(line)
+                            ForEach(Array(loremLines.prefix(18).enumerated()), id: \.offset) { index, line in
+                                if (index + 3).isMultiple(of: 4) {
+                                    Button(line) {}.buttonStyle(.plain)
+                                } else {
+                                    Text(line)
+                                }
                             }
                         }
                     }
-                    .frame(height: 10)
                     .border(.palette.border)
+                    // Resizable, because `.automatic` needs a box the lines FIT in
+                    // to have anything to say: it hides the bar exactly then. The
+                    // box starts at its ceiling, where the 18 lines fit with room
+                    // to spare; drag its bottom edge up (or focus it and press ↑)
+                    // and the bar arrives as the lines stop fitting.
+                    .userResizable(height: 6...24)
                     .scrollIndicators(barVisibility)
                     .scrollIndicatorStyle(indicatorStyle)
                     .scrollbarArrows(barArrows)
@@ -191,6 +206,8 @@ struct ScrollViewPage: View {
                         top: overscroll.allowance, bottom: overscroll.allowance)
 
                     Text("page.scrollView.scrollbarInteractive")
+                    .foregroundStyle(.palette.foregroundSecondary)
+                    Text("page.scrollView.resizeHint")
                     .foregroundStyle(.palette.foregroundSecondary)
 
                     Picker("page.scrollView.visibility", selection: $barVisibility) {
