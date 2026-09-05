@@ -95,6 +95,26 @@ cleverer metric**: `quantizePixel` gained a `.palette` case, so the error
 diffused between two entries is what makes a boundary read as a gradient
 instead of a step.
 
+*The trap inside the answer (2026-09-05).* Error diffusion hands each pixel's
+shortfall to its neighbours on the assumption that they can make it up, and
+a palette that lacks a hue cannot. A dark blue through greys leaves a
+blue-channel error of +75; the neighbour takes it and is bluer still, and so
+on along the row until the channel pins at 255 and the pixel is a saturated
+blue whose *lightness* is far above the original's — so every grey chosen
+from there on is too light. Measured on the demo photograph through 134
+greys: +4 levels on average, +41 where the drift peaked, a haze that read as a
+shadow beside every dark shape; through the demo's eight-entry "Ice" palette,
++33 on average and +102 at the peak. So a chosen palette (`.palette`) now
+carries its error in **OKLab**, the space the nearest search decides in, and
+clamps the carried colour per axis to the least and greatest its entries
+reach: lightness is carried in full, an axis the palette does not span stops
+at its edge. Greys read +0.02 after that, "Ice" −0.3. The terminal's own
+palettes (`.ansi256`, `.ansi16`) keep the sRGB carry byte-for-byte — they
+span the gamut, so there is no direction the error cannot go — and skip the
+OKLab round trip, which costs the chosen-palette dither about 12 ns a pixel
+on 256 greys and 58 on a 64-entry adaptive palette (`ImageHarness`, pixel
+path, release).
+
 **Failure 2 — the metric.** The instinct is to reach for a perceptual distance,
 and there is one to hand — `hueWeightedDistanceSquared`. Do not. It is
 load-bearing for `SystemPalette` derivation: `isVisiblySeparate` reads
