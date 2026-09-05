@@ -3347,3 +3347,29 @@ instead of identity marks) — indistinguishable on ten scenarios, because a
 non-lazy stack renders every row every frame and marks it anyway, and the
 windowed bands already mark what they sample. Recorded in the dead-ends
 memory; not retried without a scenario that measures rows it never draws.
+
+## 45. Ink is not layout, and a colour is not a parse (2026-09-05, later still)
+
+**A paint or tint change keeps the memoized sizes below it** (477e84d6).
+`clearAffected(by:)` dropped a subtree's sizes with its buffers; for the
+two paint slots and the tint that is half wasted, since ink moves no
+cell. `gradients` rotates its ramp every frame, so its four measure walks
+re-measured 400 rows a colour cannot resize. With `keepingSizes: true` at
+those three sites: gradients −7.6%, animating −0.7% — smaller than the
+44% the measure walks showed, because a hit per row per walk is what
+those walks cost now and the render walk is the cold half. The contract
+test that pinned "the measure memo sees the change too" pinned a
+mechanism on a premise no paint meets; it pins both halves now.
+
+**Blending a translucent cell states its colour** (b0eb4e9d).
+`SGRState.settingBackground` built the `ESC[…m` a colour would emit and
+parsed it back in — a split and an `Int` parse per code, per cell of
+every translucent overlay: 17.4% of the `translucent` frame in that one
+function. `setForeground(parameters:)`/`setBackground(parameters:)`
+store the parameter list outright, byte-for-byte what the parse stores,
+pinned equal for every colour kind and depth. translucent −20.1%.
+
+Landscape on HEAD after §43–45, cpu-per-frame µs (300 iterations,
+120×40, honest bench): gradients ≈42200, churn ≈15300, translucent
+≈13800, deep ≈10500, fanout ≈9500, animating ≈9300, modifiers ≈8100,
+kitchensink ≈2750, tables-scroll ≈2630, anyview ≈2450, textwall ≈1890.
