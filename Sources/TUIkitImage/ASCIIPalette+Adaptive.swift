@@ -118,28 +118,63 @@ extension ASCIIPalette {
             let lab: (l: Double, a: Double, b: Double)
         }
 
+        /// What one cell accumulates: how many pixels landed in it and the sum
+        /// of their channels, so the mean can be taken at the end.
+        ///
+        /// One array of these rather than four arrays of `Int` — the same
+        /// numbers, but one index computed per pixel instead of four, and the
+        /// four a pixel touches adjacent rather than a megabyte apart.
+        private struct Total {
+            var weight = 0
+            var red = 0
+            var green = 0
+            var blue = 0
+        }
+
         let buckets: [Bucket]
 
         init(of image: RGBAImage) {
-            let cells = ASCIIPalette.quantisationCells
-            var weight = [Int](repeating: 0, count: cells)
-            var red = [Int](repeating: 0, count: cells)
-            var green = [Int](repeating: 0, count: cells)
-            var blue = [Int](repeating: 0, count: cells)
-            for pixel in image.pixels {
-                let cell = ASCIIPalette.quantisationCell(for: pixel)
-                weight[cell] += 1
-                red[cell] += Int(pixel.r)
-                green[cell] += Int(pixel.g)
-                blue[cell] += Int(pixel.b)
+            var totals = [Total](repeating: Total(), count: ASCIIPalette.quantisationCells)
+            // Borrowed buffers and one accumulator per cell, for the reason
+            // `nearestIndex(to:)` borrows its entries: this walks every
+            // PIXEL — a megapixel for a graphics-protocol placement — and
+            // where no optimiser runs, `for pixel in image.pixels` is a
+            // protocol-witness call per pixel, every `Array` subscript is a
+            // bounds check, and every `+=` into one is a uniqueness check.
+            // Measured on a 960×850 picture, `.popularity` at 8, whole
+            // derivation: 106 ms as it stood, 90 ms with the four arrays folded
+            // into one and the checks gone, 27 ms once the walk was the
+            // buffer's own iterator instead of a `Range`'s — the same loop, but
+            // a `Range` is iterated through a protocol witness per step.
+            //
+            // The cell arithmetic is `ASCIIPalette.quantisationCell(for:)`'s,
+            // spelt out here against a borrowed table rather than called: the
+            // call is three accesses to a `static let` array per pixel, each
+            // with its one-time-initialisation check. It must stay in step with
+            // that function, which is why both name `quantisationBits`.
+            let bits = ASCIIPalette.quantisationBits
+            image.pixels.withUnsafeBufferPointer { pixels in
+                ASCIIPalette.quantisationBucket.withUnsafeBufferPointer { channelBucket in
+                    totals.withUnsafeMutableBufferPointer { totals in
+                        for pixel in pixels {
+                            let cell = (Int(channelBucket[Int(pixel.r)]) << (2 * bits))
+                                | (Int(channelBucket[Int(pixel.g)]) << bits)
+                                | Int(channelBucket[Int(pixel.b)])
+                            totals[cell].weight += 1
+                            totals[cell].red += Int(pixel.r)
+                            totals[cell].green += Int(pixel.g)
+                            totals[cell].blue += Int(pixel.b)
+                        }
+                    }
+                }
             }
             var populated: [Bucket] = []
-            for cell in 0..<cells where weight[cell] > 0 {
-                let count = weight[cell]
+            for total in totals where total.weight > 0 {
+                let count = total.weight
                 let rgba = RGBA(
-                    r: UInt8(clamping: red[cell] / count),
-                    g: UInt8(clamping: green[cell] / count),
-                    b: UInt8(clamping: blue[cell] / count))
+                    r: UInt8(clamping: total.red / count),
+                    g: UInt8(clamping: total.green / count),
+                    b: UInt8(clamping: total.blue / count))
                 populated.append(
                     Bucket(
                         weight: count, rgba: rgba,
@@ -196,21 +231,46 @@ extension ASCIIPalette {
             var sumA = [Double](repeating: 0, count: centres.count)
             var sumB = [Double](repeating: 0, count: centres.count)
             var weight = [Int](repeating: 0, count: centres.count)
-            for bucket in buckets {
-                var best = 0
-                var bestDistance = Double.infinity
-                for (index, centre) in centres.enumerated() {
-                    let distance = ASCIIPalette.distanceSquared(bucket.lab, centre)
-                    if distance < bestDistance {
-                        bestDistance = distance
-                        best = index
+            // The pass is `buckets × centres` distance evaluations — millions
+            // of them at 256 colours — so it is written the way
+            // `nearestIndex(to:)` is: over borrowed buffers, with the
+            // arithmetic spelt out instead of `enumerated()` and a call to
+            // `distanceSquared` per centre. Identical comparisons in an
+            // identical order, so the answer is identical.
+            //
+            // What that is worth is a -Onone story rather than an arithmetic
+            // one: `EnumeratedSequence.Iterator.next()` was 78% of this
+            // derivation's debug profile at 256 colours, nearly all of it
+            // runtime lookups of the centre tuple's metadata and the mallocs
+            // behind them. The counter is there because `for … in buffer` is
+            // markedly cheaper than `for index in 0..<buffer.count` at -Onone,
+            // measured on this file's other hot walk (the histogram, 90 ms to
+            // 27 ms): a `Range` is iterated through a protocol witness per
+            // step, where a buffer has a concrete iterator of its own.
+            buckets.withUnsafeBufferPointer { buckets in
+                centres.withUnsafeBufferPointer { centres in
+                    for bucket in buckets {
+                        var best = 0
+                        var bestDistance = Double.infinity
+                        var index = 0
+                        for centre in centres {
+                            let deltaL = bucket.lab.l - centre.l
+                            let deltaA = bucket.lab.a - centre.a
+                            let deltaB = bucket.lab.b - centre.b
+                            let distance = deltaL * deltaL + deltaA * deltaA + deltaB * deltaB
+                            if distance < bestDistance {
+                                bestDistance = distance
+                                best = index
+                            }
+                            index += 1
+                        }
+                        let w = Double(bucket.weight)
+                        sumL[best] += bucket.lab.l * w
+                        sumA[best] += bucket.lab.a * w
+                        sumB[best] += bucket.lab.b * w
+                        weight[best] += bucket.weight
                     }
                 }
-                let w = Double(bucket.weight)
-                sumL[best] += bucket.lab.l * w
-                sumA[best] += bucket.lab.a * w
-                sumB[best] += bucket.lab.b * w
-                weight[best] += bucket.weight
             }
             var moved = false
             for index in centres.indices where weight[index] > 0 {
@@ -246,14 +306,27 @@ extension ASCIIPalette {
 
             init(_ contents: [Bucket]) {
                 var weight = 0
-                var low = (Double.infinity, Double.infinity, Double.infinity)
-                var high = (-Double.infinity, -Double.infinity, -Double.infinity)
+                // Six scalars rather than two 3-tuples rebuilt per bucket. A
+                // bucket is walked here again every time the box holding it is
+                // split, so this is one of the two loops median cut spends
+                // itself in — and at -Onone rebuilding a tuple per bucket is a
+                // value copy where assigning a `Double` is a register.
+                var lowL = Double.infinity
+                var lowA = Double.infinity
+                var lowB = Double.infinity
+                var highL = -Double.infinity
+                var highA = -Double.infinity
+                var highB = -Double.infinity
                 for bucket in contents {
                     weight += bucket.weight
-                    low = (min(low.0, bucket.lab.l), min(low.1, bucket.lab.a), min(low.2, bucket.lab.b))
-                    high = (max(high.0, bucket.lab.l), max(high.1, bucket.lab.a), max(high.2, bucket.lab.b))
+                    lowL = min(lowL, bucket.lab.l)
+                    lowA = min(lowA, bucket.lab.a)
+                    lowB = min(lowB, bucket.lab.b)
+                    highL = max(highL, bucket.lab.l)
+                    highA = max(highA, bucket.lab.a)
+                    highB = max(highB, bucket.lab.b)
                 }
-                let spread = (high.0 - low.0, high.1 - low.1, high.2 - low.2)
+                let spread = (highL - lowL, highA - lowA, highB - lowB)
                 self.contents = contents
                 self.weight = weight
                 self.axis = spread.0 >= spread.1 && spread.0 >= spread.2
@@ -273,9 +346,15 @@ extension ASCIIPalette {
                     boxes[target].cost > 0
                 else { break }
                 let box = boxes[target]
-                let axis = box.axis
-                let sorted = box.contents.sorted {
-                    Self.coordinate($0, axis) < Self.coordinate($1, axis)
+                // The axis is chosen ONCE, here, rather than inside the
+                // comparison: `sorted(by:)` calls its closure n log n times,
+                // and one that has to ask which axis it is on pays a call and a
+                // switch for every one of them.
+                let sorted: [Bucket]
+                switch box.axis {
+                case 0: sorted = box.contents.sorted { $0.lab.l < $1.lab.l }
+                case 1: sorted = box.contents.sorted { $0.lab.a < $1.lab.a }
+                default: sorted = box.contents.sorted { $0.lab.b < $1.lab.b }
                 }
                 // The WEIGHTED median, not the middle element: half the pixels
                 // either side, which is what makes the two halves comparable
@@ -283,9 +362,13 @@ extension ASCIIPalette {
                 let half = box.weight / 2
                 var running = 0
                 var split = 0
-                for (index, bucket) in sorted.enumerated() {
+                var index = 0
+                // A counted walk rather than `enumerated()`: see `refine(_:)`
+                // for what that sequence costs at -Onone.
+                for bucket in sorted {
                     running += bucket.weight
                     if running >= half { split = index; break }
+                    index += 1
                 }
                 split = min(max(1, split), sorted.count - 1)
                 boxes[target] = Box(Array(sorted[..<split]))
@@ -294,22 +377,31 @@ extension ASCIIPalette {
             return boxes.map { Self.centre($0.contents) }
         }
 
-        private static func coordinate(_ bucket: Bucket, _ axis: Int) -> Double {
-            switch axis {
-            case 0: return bucket.lab.l
-            case 1: return bucket.lab.a
-            default: return bucket.lab.b
-            }
-        }
-
+        /// A box's weighted mean — the entry that serves it.
+        ///
+        /// One walk rather than four `reduce`s over the same array: they were
+        /// four passes and, at -Onone, four closure calls per bucket for
+        /// arithmetic that shares a single walk.
+        ///
+        /// The three lab sums are the same operations in the same order, so
+        /// those are bit-identical. The weight is NOT the same operation — it
+        /// was an `Int` sum converted once and is now accumulated as `Double` —
+        /// and is exact anyway: every partial sum is a pixel count, and the
+        /// first one a `Double` cannot hold exactly needs 2^53 pixels.
         private static func centre(_ box: [Bucket]) -> (l: Double, a: Double, b: Double) {
-            let weight = Double(box.reduce(0) { $0 + $1.weight })
+            var weight = 0.0
+            var sumL = 0.0
+            var sumA = 0.0
+            var sumB = 0.0
+            for bucket in box {
+                let w = Double(bucket.weight)
+                weight += w
+                sumL += bucket.lab.l * w
+                sumA += bucket.lab.a * w
+                sumB += bucket.lab.b * w
+            }
             guard weight > 0 else { return (0, 0, 0) }
-            return (
-                box.reduce(0) { $0 + $1.lab.l * Double($1.weight) } / weight,
-                box.reduce(0) { $0 + $1.lab.a * Double($1.weight) } / weight,
-                box.reduce(0) { $0 + $1.lab.b * Double($1.weight) } / weight
-            )
+            return (sumL / weight, sumA / weight, sumB / weight)
         }
 
         private static func srgb(_ lab: (l: Double, a: Double, b: Double)) -> RGBA {

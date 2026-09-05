@@ -158,6 +158,52 @@ struct AdaptivePaletteTests {
         #expect(cost > chosen, "forcing the red in was cheaper (\(cost) vs \(chosen))")
     }
 
+    // MARK: - The one thing in the derivation that is written twice
+
+    /// `Histogram` spells `ASCIIPalette.quantisationCell(for:)`'s arithmetic
+    /// out against a borrowed copy of the bucket table, because calling it is
+    /// three `static let` accesses per pixel and it runs once per pixel of a
+    /// megapixel. That is a copy of a rule, so this is the test that the copy
+    /// still says what the rule says — bucketed by hand, through the function
+    /// itself, and compared cell for cell.
+    ///
+    /// What it pins is the PARTITION — which pixels land together — and not the
+    /// index formula, which is the weaker claim and the true one. Measured: swap
+    /// the green and blue fields in the copy and this still passes, because a
+    /// field swap relabels the cells bijectively and the multiset of buckets is
+    /// unchanged (every derived palette is unchanged too, so nothing is hiding
+    /// behind it). Drop one bit of blue and it fails 96 times. The partition is
+    /// what decides the picture, so that is the thing worth pinning.
+    @Test("The histogram buckets exactly where the shared cell arithmetic says")
+    func histogramAgreesWithTheSharedCellArithmetic() {
+        // Deliberately not a round size, so no dimension divides the cell grid.
+        let image = Self.subject(width: 37, height: 23)
+        var reference: [Int: (count: Int, red: Int, green: Int, blue: Int)] = [:]
+        for pixel in image.pixels {
+            let cell = ASCIIPalette.quantisationCell(for: pixel)
+            var total = reference[cell] ?? (0, 0, 0, 0)
+            total.count += 1
+            total.red += Int(pixel.r)
+            total.green += Int(pixel.g)
+            total.blue += Int(pixel.b)
+            reference[cell] = total
+        }
+        let histogram = ASCIIPalette.Histogram(of: image)
+        #expect(histogram.buckets.count == reference.count)
+        // The buckets come out in cell order, so they walk against the
+        // reference's own keys in that order.
+        for (bucket, cell) in zip(histogram.buckets, reference.keys.sorted()) {
+            guard let total = reference[cell] else { continue }
+            #expect(bucket.weight == total.count)
+            #expect(
+                bucket.rgba
+                    == RGBA(
+                        r: UInt8(clamping: total.red / total.count),
+                        g: UInt8(clamping: total.green / total.count),
+                        b: UInt8(clamping: total.blue / total.count)))
+        }
+    }
+
     // MARK: - The dial does something at every step
 
     /// The complaint this feature answers: `.spread(_:)` has steps that change

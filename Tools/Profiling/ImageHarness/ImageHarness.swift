@@ -76,6 +76,11 @@ struct ImageHarness {
             return
         }
 
+        if path == "palette" {
+            measureDerivation(colorMode, iterations: iterations, cols: cols, rows: rows)
+            return
+        }
+
         // The output is the terminal's cell grid for the glyph path and the
         // pixel grid a graphics protocol would carry for the pixel path — the
         // cell being about 8×17 device pixels, which is where the ~200×
@@ -171,6 +176,57 @@ struct ImageHarness {
             """)
     }
 
+    /// An adaptive palette's DERIVATION on its own — the histogram, and then
+    /// the ranking, or the median cut and Lloyd's iteration over it.
+    ///
+    /// Separated for the same reason ``measureQuantiser`` is: in `--path glyph`
+    /// and `--path pixel` it is a small part of a large total (resampling,
+    /// glyph choice, the per-pixel quantisation and its table are most of what
+    /// a conversion costs), so a derivation that got four times dearer can hide
+    /// inside the noise of either. It is also the part whose cost depends on
+    /// two things at once — every pixel goes into the histogram, and everything
+    /// after walks the populated cells once per colour asked for — so `--cols`
+    /// and `--rows` here are the PICTURE the palette is derived from rather
+    /// than an output grid, and the figure is per pixel of it.
+    ///
+    /// A palette that was never a question — `shades8`, say — derives to
+    /// itself, so it measures what this loop's own scaffolding costs and
+    /// nothing else, which is the baseline the adaptive numbers stand against.
+    /// A mode carrying no palette at all has nothing to derive and says so.
+    private static func measureDerivation(
+        _ mode: ASCIIColorMode, iterations: Int, cols: Int, rows: Int
+    ) {
+        guard case .palette(let palette) = mode else {
+            FileHandle.standardError.write(Data("mode has no palette to derive\n".utf8))
+            return
+        }
+        let source = photograph(width: cols, height: rows)
+        // One untimed pass, as the other paths take: it pays for the
+        // process-wide tables the histogram's cell arithmetic reads.
+        var checksum = colourSum(palette.derived(from: source))
+        let clock = ContinuousClock()
+        let start = clock.now
+        for _ in 0..<iterations { checksum &+= colourSum(palette.derived(from: source)) }
+        let elapsed = clock.now - start
+        let seconds = Double(elapsed.components.seconds)
+            + Double(elapsed.components.attoseconds) / 1e18
+        let perIteration = seconds / Double(iterations)
+        print("""
+            path=palette src=\(source.width)x\(source.height) iterations=\(iterations)
+            \(String(format: "%.3f ms/derivation   %.2f ns/pixel   checksum=%d",
+                     perIteration * 1000, perIteration / Double(cols * rows) * 1e9, checksum))
+            """)
+    }
+
+    /// The derived colours as one number, so a change that moved one of them
+    /// cannot pass as a speed-up.
+    private static func colourSum(_ palette: ASCIIPalette) -> Int {
+        palette.colors.reduce(0) { sum, colour in
+            guard let rgb = colour.rgbComponents else { return sum }
+            return sum &+ (Int(rgb.red) << 16 | Int(rgb.green) << 8 | Int(rgb.blue))
+        }
+    }
+
     private static func colorMode(named name: String) -> ASCIIColorMode? {
         switch name {
         case "truecolor": .trueColor
@@ -222,7 +278,7 @@ struct ImageHarness {
 
     static let usage = """
         ImageHarness — image-pipeline profiling harness (no PTY, xctrace --launch safe).
-        Usage: ImageHarness [--path glyph|pixel|colour] [--mode truecolor|ansi256|ansi16|grayscale|mono|shades8]
+        Usage: ImageHarness [--path glyph|pixel|colour|palette] [--mode truecolor|ansi256|ansi16|grayscale|mono|shades8]
                             [--dither none|floyd] [--cols C] [--rows R] [--iterations N]
                             [--source-scale S]
         """

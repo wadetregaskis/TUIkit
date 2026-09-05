@@ -324,9 +324,21 @@ public struct ASCIIPalette: Sendable, Equatable {
         // the character renderer's few thousand), and there a tuple built and
         // a function called per entry per pixel is sixteen million of each.
         // Measured at 155 ms per palette entry in a debug build.
+        //
+        // The walk is `for entry in buffer` with a counter rather than the
+        // `for index in 0..<buffer.count` it reads more like, because a `Range`
+        // is iterated through `IndexingIterator` and a protocol witness per
+        // step where a buffer has a concrete iterator of its own — which costs
+        // nothing at -O and is most of this loop at -Onone. Measured for this
+        // swap alone, debug, 120×50 cells through a 256-colour palette: the
+        // glyph path 467 → 178 ms and the pixel path 21.4 → 4.0 s per
+        // conversion — a `.leastError` palette either way. Release is unchanged
+        // — every mode within ±2%, both signs, which is inside the noise floor
+        // a same-binary null test reads on the box that measured it — and so is
+        // every answer.
         entries.withUnsafeBufferPointer { buffer in
-            for index in 0..<buffer.count {
-                let entry = buffer[index]
+            var index = 0
+            for entry in buffer {
                 let deltaL = target.l - entry.lightness
                 let deltaA = target.a - entry.a
                 let deltaB = target.b - entry.b
@@ -335,6 +347,7 @@ public struct ASCIIPalette: Sendable, Equatable {
                     bestDistance = distance
                     best = index
                 }
+                index += 1
             }
         }
         return best
