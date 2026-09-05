@@ -439,7 +439,7 @@ extension FrameBuffer {
 
     /// Places another buffer to the right of this one with optional spacing.
     ///
-    /// An empty `other` contributes no width *and* no spacing slot
+    /// An `other` with no columns contributes no width *and* no spacing slot
     /// — the buffers join with the spacing they would have had if
     /// `other` were not in the list at all. This matches SwiftUI's
     /// `HStack` behaviour (and `appendVertically`'s mirror of the
@@ -454,12 +454,23 @@ extension FrameBuffer {
     /// - Parameters:
     ///   - other: The buffer to append to the right.
     ///   - spacing: Number of space characters between the two buffers.
-    ///     Ignored when `other` is empty, and when this buffer is still empty —
-    ///     a gap is charged only between two occupied column ranges.
+    ///     Ignored when `other` has no columns, and when this buffer is still
+    ///     empty — a gap is charged only between two occupied column ranges.
     public mutating func appendHorizontally(_ other: Self, spacing: Int = 0) {
         let priorWidth = width
 
-        guard !other.isEmpty else {
+        // Not `!other.isEmpty` alone. `isEmpty` asks whether the LINE STRINGS
+        // carry anything, and a buffer that declares columns while painting
+        // none of them answers yes to that — which is exactly what `.offset`
+        // and `.position` hand a stack (`OffsetView`: empty lines reserve the
+        // rows, the declared width reserves the columns, and the drawing floats
+        // as a layer so nothing is painted over what lies beneath). Sending one
+        // of those down the contributes-nothing path dropped its columns, and
+        // every later sibling closed up into the space it had been promised:
+        // `HStack { Text("AB").offset(y: 1); Text("CD") }` drew "CD" at column
+        // 0. `appendVertically`'s mirror asks `other.lines.isEmpty`, which is
+        // why the row was held and only the columns were lost.
+        guard !other.isEmpty || other.width > 0 else {
             // `other` contributes no visible columns and no spacing
             // slot (see doc comment above). It may still carry
             // overlay layers and hit-test regions that must be

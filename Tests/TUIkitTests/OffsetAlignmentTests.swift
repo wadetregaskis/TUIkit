@@ -106,4 +106,25 @@ struct OffsetAlignmentTests {
         #expect(buffer.height == 2)
         #expect(buffer.lines.last?.stripped == "second")
     }
+
+    @Test("The offset child still claims its columns in a horizontal stack")
+    func horizontalStackWidthIsUnchanged() {
+        // The twin of the row above, and it was NOT true: the placeholder's
+        // lines are empty strings, so `FrameBuffer.isEmpty` called the whole
+        // buffer empty despite its declared width and `appendHorizontally`
+        // took the contributes-nothing path — every later sibling closed up
+        // into the columns the offset child had been promised, and "CD" drew
+        // at column 0.
+        let buffer = renderToBuffer(
+            HStack(spacing: 0) {
+                Text(verbatim: "AB").offset(y: 1)
+                Text(verbatim: "CD")
+            },
+            context: context())
+        #expect(buffer.width == 4)
+        #expect(buffer.lines.first?.stripped == "  CD")
+        // The floated drawing is still anchored where the child sits.
+        #expect(buffer.overlays.first?.offsetX == 0)
+        #expect(buffer.overlays.first?.offsetY == 1)
+    }
 }
