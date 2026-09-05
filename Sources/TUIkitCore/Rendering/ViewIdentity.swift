@@ -358,6 +358,13 @@ final class IdentityNode: Sendable {
 
     init(parent: IdentityNode?, step: Step) {
         self.parent = parent
+        if let parent {
+            self.rootIsRaw = parent.rootIsRaw
+        } else if case .raw = step {
+            self.rootIsRaw = true
+        } else {
+            self.rootIsRaw = false
+        }
         self.step = step
         self.depth = (parent?.depth ?? -1) + 1
         var hasher = Hasher()
@@ -394,12 +401,12 @@ final class IdentityNode: Sendable {
     /// uses this to decide between the structural walk (structural chains) and the
     /// string-prefix fall-back (raw chains, whose `/` / `#` boundaries live inside
     /// the opaque string).
-    var rootIsRaw: Bool {
-        var cursor: IdentityNode = self
-        while let parent = cursor.parent { cursor = parent }
-        if case .raw = cursor.step { return true }
-        return false
-    }
+    /// Whether the chain's root is a raw path string. Stored at creation —
+    /// the root never changes — because `isAncestor(of:)` asks it of both
+    /// sides on every call, and walking to the root each time was 2.5% of a
+    /// live frame on its own (`clearAffected` and `isRetained` ask
+    /// `isAncestor` of every cached entry, every frame).
+    let rootIsRaw: Bool
 
     /// Renders the readable `"TypeA/TypeB.1/TypeC"` path. Iterative (root→leaf)
     /// so even a maximally deep chain cannot overflow the stack. A typed root
