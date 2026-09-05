@@ -83,3 +83,5 @@ treatment_card*.json
 Tools/Web/site/Example.wasm
 Tools/Web/site/manifest.json
 Tools/Web/site/resources/
+Tools/Web/site/probe-data/
+Tools/Web/site/glyph-probe.html

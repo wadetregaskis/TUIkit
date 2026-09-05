@@ -1,0 +1,317 @@
+<!doctype html>
+<!--
+  🖥️ TUIkit — Terminal UI Kit for Swift
+  glyph-probe.html — measures a browser terminal against the width corpus.
+
+  The Python probes in `Tools/TerminalProbes/` measure a real terminal by
+  writing a cluster, reading the cursor back with DSR, and photographing where
+  the next glyph lands. A browser terminal can be asked directly: its buffer IS
+  its model, so `cursorX` after a write is the advance, and the cell the next
+  character occupies is the landing. What cannot be asked directly is the ink —
+  how many cells the glyph is painted across — so this does not claim it.
+
+  It measures the same corpus (`Tools/TerminalProbes/data/width-corpus.json`)
+  under each candidate configuration, and writes a record in the same shape as
+  the other hosts' files so the ledger can compare them side by side.
+
+      Tools/Web/serve.py
+      open http://127.0.0.1:8000/glyph-probe.html
+
+  Then copy the JSON it prints into `Tools/TerminalProbes/data/`.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Browser terminal — width probe</title>
+    <link rel="stylesheet" crossorigin="anonymous" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/6.0.0/xterm.min.css" />
+    <style>
+      body { margin: 0; background: #16181d; color: #d7dae0; font: 13px ui-sans-serif, system-ui, sans-serif; padding: 16px; }
+      #stage { position: absolute; left: -9999px; top: 0; }
+      table { border-collapse: collapse; font: 12px ui-monospace, Menlo, monospace; margin-top: 12px; }
+      th, td { padding: 2px 8px; text-align: left; border-bottom: 1px solid #2b2f38; }
+      th { color: #7fd1b9; }
+      .bad { color: #ff9d9d; }
+      .good { color: #9ddfa0; }
+      #summary { font: 13px ui-sans-serif, system-ui, sans-serif; margin-top: 10px; }
+      pre { background: #1e2128; padding: 10px; border-radius: 6px; max-height: 320px; overflow: auto; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <h1 style="font-size:15px;margin:0">Browser terminal — width probe</h1>
+    <p id="summary">measuring…</p>
+    <div id="stage"></div>
+    <div id="results"></div>
+
+    <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/xterm/6.0.0/xterm.js"></script>
+    <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@xterm/addon-unicode11@0.9.0/lib/addon-unicode11.js"></script>
+    <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@xterm/addon-unicode-graphemes@0.5.0-beta.301/lib/addon-unicode-graphemes.js"></script>
+    <script type="module">
+      // Inputs, copied into the site by `Tools/Web/build.sh --probe-data`:
+      // the shared corpus, TUIkit's own width for each cluster, and the records
+      // the Python probes wrote for real terminals.
+      const data = (name) => fetch("./probe-data/" + name).then((r) => r.json());
+      const corpus = await data("width-corpus.json");
+
+      /** `terminal.write` is asynchronous — the parser runs on a callback, and
+       *  reading the buffer before it does reports the state before the write.
+       *  (The first version of this probe did exactly that and reported an
+       *  advance of zero for every cluster in the corpus.) */
+      const written = (terminal, data) => new Promise((resolve) => terminal.write(data, resolve));
+
+      /** One terminal, configured, measured, thrown away. */
+      async function measure(configure) {
+        const host = document.createElement("div");
+        document.getElementById("stage").appendChild(host);
+        const terminal = new Terminal({ cols: 40, rows: 8, allowProposedApi: true, scrollback: 0 });
+        terminal.open(host);
+        const activated = configure(terminal) ?? "default";
+
+        const results = {};
+        for (const cluster of corpus.clusters) {
+          // A fresh row per cluster, for the reason `landing_probe.py` gives:
+          // a cluster that advances further than anyone predicted would
+          // otherwise land in the next one's slot.
+          terminal.reset();
+          await written(terminal, "\u001b[H");
+          await written(terminal, cluster.text);
+          const line = terminal.buffer.active.getLine(0);
+          const advance = terminal.buffer.active.cursorX;
+
+          // The landing: write a marker and ask which cell holds it. In a
+          // browser terminal this must equal the advance — the buffer is the
+          // model — and it is measured rather than assumed, because that is
+          // the assumption the whole exercise is about.
+          await written(terminal, "M");
+          const after = terminal.buffer.active.getLine(0);
+          let landing = null;
+          for (let x = 0; x < 40; x++) {
+            const cell = after.getCell(x);
+            if (cell && cell.getChars() === "M") { landing = x; break; }
+          }
+
+          // What the first cell says about its own width, which is the number
+          // the emulator's Unicode tables produced.
+          const first = line.getCell(0);
+          results[cluster.id] = {
+            class: cluster.class,
+            advance,
+            landing,
+            cellWidth: first ? first.getWidth() : null,
+            cellChars: first ? first.getChars() : "",
+          };
+        }
+        terminal.dispose();
+        host.remove();
+        return { activated, results };
+      }
+
+      const configurations = {
+        "xterm 6.0.0 (default tables)": () => "default",
+        "+ addon-unicode11": (terminal) => {
+          const addon = new Unicode11Addon.Unicode11Addon();
+          terminal.loadAddon(addon);
+          terminal.unicode.activeVersion = "11";
+          return terminal.unicode.activeVersion;
+        },
+        "+ addon-unicode-graphemes": (terminal) => {
+          const addon = new UnicodeGraphemesAddon.UnicodeGraphemesAddon();
+          terminal.loadAddon(addon);
+          terminal.unicode.activeVersion = "15-graphemes";
+          return terminal.unicode.activeVersion;
+        },
+      };
+
+      const measured = {};
+      for (const [name, configure] of Object.entries(configurations)) {
+        try {
+          measured[name] = await measure(configure);
+        } catch (error) {
+          measured[name] = { activated: "FAILED: " + error, results: {} };
+        }
+      }
+
+      // The comparison is against TUIkit's OWN width for each cluster —
+      // `String.strippedLength`, dumped to `tuikit-widths.json` — not a table
+      // written here. A hand-written expectation is a second opinion about
+      // Unicode, and the only opinion that matters is the one the layout uses.
+      const oracle = (await data("tuikit-widths.json")).widths;
+
+      // The same question asked of the terminals this project has measured, on
+      // the clusters their probes covered — the only fair comparison, and the
+      // one that says whether a browser is in the same league as a terminal.
+      const nativeHosts = {
+        "Ghostty 1.3.1": "ghostty-1.3.1-alternate-landing.json",
+        "iTerm2 3.6.11": "iterm2-3.6.11-alternate-landing.json",
+        "Apple Terminal 455.1": "apple-terminal-455.1-alternate-landing.json",
+        "Warp 2026.08.26": "warpterminal-v0.2026.08.26.17.59.stable_01-alternate-landing.json",
+      };
+      const league = [];
+      let sharedSubset = null;
+      for (const [name, file] of Object.entries(nativeHosts)) {
+        try {
+          const record = (await data(file)).measurements;
+          const ids = Object.keys(record).filter((id) => id in oracle);
+          sharedSubset = sharedSubset ?? ids;
+          league.push([name, ids.filter((id) => record[id].advance === oracle[id]).length, ids.length]);
+        } catch (error) {
+          league.push([name, "—", "not copied"]);
+        }
+      }
+
+      const rows = [];
+      const summary = [];
+      for (const [name, record] of Object.entries(measured)) {
+        let agree = 0, total = 0, narrowEmoji = 0;
+        for (const [id, entry] of Object.entries(record.results)) {
+          const want = oracle[id];
+          if (want === undefined) continue;
+          total += 1;
+          if (entry.advance === want) agree += 1;
+          else if (want === 2 && entry.advance === 1) narrowEmoji += 1;
+        }
+        summary.push(`${name} — activeVersion ${record.activated}: ${agree}/${total} agree with TUIkit (${narrowEmoji} drawn one cell wide)`);
+        rows.push({ name, record });
+      }
+      if (sharedSubset) {
+        for (const [name, record] of Object.entries(measured)) {
+          const agree = sharedSubset.filter((id) => record.results[id]?.advance === oracle[id]).length;
+          league.push([`xterm.js — ${name}`, agree, sharedSubset.length]);
+        }
+        league.sort((a, b) => (b[1] || 0) - (a[1] || 0));
+        summary.push("");
+        summary.push(`<b>Against the terminals this project has measured</b>, on the ${sharedSubset.length} clusters their probes covered:`);
+        for (const [name, agree, total] of league) summary.push(`&nbsp;&nbsp;${name}: ${agree}/${total}`);
+      }
+      document.getElementById("summary").innerHTML = summary.join("<br>");
+
+      // ── Capabilities ───────────────────────────────────────────────────
+      // Widths are only half of what TUIkit needs from a terminal. The rest is
+      // asked the same way the framework asks at startup — write the query,
+      // read what comes back on the input channel — so the answers here are
+      // the terminal's own, not a reading of its documentation.
+      async function capabilities() {
+        const host = document.createElement("div");
+        document.getElementById("stage").appendChild(host);
+        const terminal = new Terminal({ cols: 40, rows: 8, allowProposedApi: true, scrollback: 0 });
+        terminal.open(host);
+        const addon = new UnicodeGraphemesAddon.UnicodeGraphemesAddon();
+        terminal.loadAddon(addon);
+        terminal.unicode.activeVersion = "15-graphemes";
+
+        let replies = "";
+        terminal.onData((data) => { replies += data; });
+        const ask = async (query) => {
+          replies = "";
+          await written(terminal, query);
+          await new Promise((r) => setTimeout(r, 60));
+          return replies;
+        };
+        const show = (text) => JSON.stringify(text).replace(/\\u001b/g, "ESC");
+
+        const answers = {};
+        answers["DA1 (CSI c)"] = show(await ask("\u001b[c"));
+        answers["DA2 (CSI > c)"] = show(await ask("\u001b[>c"));
+        answers["XTVERSION (CSI > 0 q)"] = show(await ask("\u001b[>0q"));
+        answers["DSR cursor (CSI 6 n)"] = show(await ask("\u001b[6n"));
+        for (const mode of [25, 1049, 2004, 1006, 1002, 2027]) {
+          answers[`DECRQM ?${mode}`] = show(await ask(`\u001b[?${mode}$p`));
+        }
+
+        // Truecolor: state a colour no palette has and read the cell back.
+        terminal.reset();
+        await written(terminal, "\u001b[38;2;10;20;30mX\u001b[0m");
+        const cell = terminal.buffer.active.getLine(0).getCell(0);
+        answers["truecolor SGR 38;2"] =
+          cell.isFgRGB() ? `RGB ${cell.getFgColor().toString(16)}` : "not RGB";
+
+        // The alternate screen, which every full-screen app lives on.
+        terminal.reset();
+        await written(terminal, "main\u001b[?1049h");
+        const onAlternate = terminal.buffer.active.type;
+        await written(terminal, "\u001b[?1049l");
+        answers["alternate screen ?1049"] =
+          `${onAlternate} → ${terminal.buffer.active.type}`;
+
+        // OSC 8: the cells must hold the text and none of the sequence.
+        terminal.reset();
+        await written(terminal, "\u001b]8;;https://example.com\u001b\\link\u001b]8;;\u001b\\");
+        answers["OSC 8 hyperlink"] =
+          JSON.stringify(terminal.buffer.active.getLine(0).translateToString(true));
+
+        // Mouse reporting: turn on SGR + button tracking and see what a click
+        // sends. The event is synthetic; what it produces is xterm's own.
+        await written(terminal, "\u001b[?1002h\u001b[?1006h");
+        replies = "";
+        const surface = host.querySelector(".xterm-screen") ?? host;
+        const box = surface.getBoundingClientRect();
+        for (const type of ["mousedown", "mouseup"]) {
+          surface.dispatchEvent(new MouseEvent(type, {
+            bubbles: true, cancelable: true, clientX: box.left + 20, clientY: box.top + 8, button: 0,
+          }));
+        }
+        await new Promise((r) => setTimeout(r, 60));
+        answers["SGR mouse ?1006 click"] = show(replies) || '"" (nothing)';
+
+        terminal.dispose();
+        host.remove();
+        return answers;
+      }
+
+      const capabilityAnswers = await capabilities();
+
+      // A table of the ones that disagree anywhere, which is the useful part.
+      const ids = Object.keys(measured[Object.keys(measured)[0]].results);
+      let html = "<table><tr><th>cluster</th><th>class</th>" +
+        rows.map((r) => `<th>${r.name}</th>`).join("") + "</tr>";
+      for (const id of ids) {
+        const cells = rows.map((r) => r.record.results[id]);
+        const want = oracle[id];
+        if (want !== undefined && cells.every((c) => c.advance === want)) continue;
+        html += `<tr><td>${id}</td><td>${cells[0].class} (want ${want})</td>` +
+          cells.map((c) => `<td class="${want && c.advance === want ? "good" : "bad"}">${c.advance}</td>`).join("") +
+          "</tr>";
+      }
+      html += "</table>";
+      html += "<h2 style='font-size:13px'>Capabilities</h2><table>" +
+        Object.entries(capabilityAnswers).map(([k, v]) => `<tr><td>${k}</td><td>${String(v).replace(/</g, "&lt;")}</td></tr>`).join("") +
+        "</table>";
+      // The record, in the same shape as the other hosts' files, so the
+      // ledger can compare a browser against a terminal. Printed rather than
+      // downloaded: reading it out of the page is one copy, and a probe that
+      // writes files is a dev server that accepts writes.
+      const configured = rows[rows.length - 1];
+      const record = {
+        measurements: Object.fromEntries(
+          Object.entries(configured.record.results).map(([id, entry]) => [
+            id, { advance: entry.advance, class: entry.class, landing: entry.landing },
+          ])),
+        capabilities: capabilityAnswers,
+        stamp: {
+          probe: "Tools/Web/glyph-probe.html",
+          host: configured.name,
+          activeVersion: configured.record.activated,
+          engine: navigator.userAgent,
+          method:
+            "xterm.js buffer: cursorX after the write is the advance, and the cell a following marker lands in is the landing. No ink: a browser terminal's buffer is its model, and no pixels were read.",
+        },
+      };
+      html += "<h2 style='font-size:13px' id='record-heading'>Record " +
+        "<button id='save'>save to Tools/TerminalProbes/data/</button></h2><pre id='record'>" +
+        JSON.stringify(record, null, 1).replace(/</g, "&lt;") + "</pre>";
+      document.getElementById("results").innerHTML = html;
+      document.getElementById("save").onclick = async () => {
+        const name = prompt("File name (without .json)", "xtermjs-6.0.0-graphemes-advance");
+        if (!name) return;
+        const response = await fetch("/save-probe", {
+          method: "POST",
+          headers: { "X-Probe-Name": name },
+          body: JSON.stringify(record),
+        });
+        document.getElementById("record-heading").append(" — " + (await response.text()).trim());
+      };
+
+      window.__probe = measured;
+      window.__capabilities = capabilityAnswers;
+    </script>
+  </body>
+</html>

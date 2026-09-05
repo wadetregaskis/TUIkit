@@ -124,6 +124,14 @@ with open(os.path.join(site, "manifest.json"), "w") as handle:
 print(f"   {len(files)} resource file(s)")
 PYTHON
 
+# The width probe's inputs: the shared corpus, TUIkit's own widths, and the
+# records the Python probes wrote for real terminals. Copied rather than
+# fetched from the repo because the demo server serves one directory.
+echo "── collecting probe data"
+mkdir -p "$SITE/probe-data"
+cp "$ROOT/Tools/TerminalProbes/data/"*.json "$SITE/probe-data/"
+cp "$ROOT/Tools/Web/glyph-probe.html" "$SITE/glyph-probe.html"
+
 SIZE=$(du -h "$SITE/Example.wasm" | cut -f1)
 echo "── done: $SITE/Example.wasm ($SIZE)"
 echo "   serve it with: Tools/Web/serve.py"

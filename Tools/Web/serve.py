@@ -17,11 +17,15 @@ the worker and the wasm module load under that policy.
 Only the standard library, like the rest of `Tools/`.
 """
 import http.server
+import json
 import os
+import re
 import sys
 from functools import partial
 
 SITE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
+DATA = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "TerminalProbes", "data")
 
 
 class IsolatedHandler(http.server.SimpleHTTPRequestHandler):
@@ -42,6 +46,45 @@ class IsolatedHandler(http.server.SimpleHTTPRequestHandler):
         # the previous build is a confusing way to spend an afternoon.
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
+
+    def do_POST(self):
+        """Saves a probe record into `Tools/TerminalProbes/data/`.
+
+        `glyph-probe.html` measures a browser terminal against the shared width
+        corpus, and the result belongs beside the records the Python probes
+        write for real terminals. Copying ten kilobytes of JSON out of a browser
+        by hand is how a measurement gets truncated, so the page posts it.
+
+        Deliberately narrow: one directory, one extension, a name that cannot
+        escape it, and a size limit. This is a probe's dev server, and it is
+        bound to the loopback address, but "write a file where the page says"
+        is still not a thing to leave general.
+        """
+        if self.path != "/save-probe":
+            self.send_error(404)
+            return
+        name = self.headers.get("X-Probe-Name", "")
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,80}", name) or name.startswith("."):
+            self.send_error(400, "bad probe name")
+            return
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0 or length > 4 * 1024 * 1024:
+            self.send_error(400, "bad length")
+            return
+        body = self.rfile.read(length)
+        try:
+            parsed = json.loads(body)
+        except ValueError:
+            self.send_error(400, "not JSON")
+            return
+        target = os.path.join(DATA, f"{name}.json")
+        with open(target, "w") as handle:
+            json.dump(parsed, handle, indent=1, ensure_ascii=False, sort_keys=True)
+            handle.write("\n")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(f"wrote {target}\n".encode())
 
     def log_message(self, format, *args):  # noqa: A002 - matching the base class
         # One line per request, without the date noise the base class prints.
