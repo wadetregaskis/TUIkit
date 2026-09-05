@@ -3373,3 +3373,32 @@ Landscape on HEAD after §43–45, cpu-per-frame µs (300 iterations,
 120×40, honest bench): gradients ≈42200, churn ≈15300, translucent
 ≈13800, deep ≈10500, fanout ≈9500, animating ≈9300, modifiers ≈8100,
 kitchensink ≈2750, tables-scroll ≈2630, anyview ≈2450, textwall ≈1890.
+
+## 46. The live frame, seen whole (2026-09-05, evening)
+
+`analyze_timeprofile.py --process` (4d0bc5b0) reads one process out of an
+`xctrace record --all-processes` recording, which is the only way to
+profile a PTY app on this machine — and so the first profile of the
+OUTPUT half of a frame. Dashboard under autopilot, 366 ms of process time
+over 8 s: the scene render was 38% of the frame; `appendVerticalScrollbar`
+15.6%; `writeFrame` 18%; `beginRenderPass` + `endRenderPass` 18%;
+animation-tick service 12%; `IdentityNode.rootIsRaw.getter` 2.5% self.
+
+**An identity node knows at birth whether its root is raw** (f8fedcd0).
+`isAncestor(of:)` asked `rootIsRaw` of both sides and `rootIsRaw` walked
+to the root; `clearAffected` and `isRetained` ask `isAncestor` of every
+entry, every frame. Stored at creation: bench kitchensink −40.2%,
+dashboard −24.0%; live kitchensink −35.1%, dashboard −13.0%. The biggest
+single win of the pass after the bench was made honest, from a two-line
+walk the old bench could not run.
+
+**A scroll view keeps its vertical scrollbar** (5f2bdc3c). A focused bar's
+pulse runs were one scrollbar render per pulse frame, every frame. Kept on
+the handler with every input they depend on: live dashboard −10.0%,
+textwall −2.8%, fanout −1.2%; the bench cannot see it (nothing is focused
+there).
+
+Method note: the two were measured together first, then split with a
+third binary carrying only the flag — the bench win was ALL the flag, the
+live scrollbar win only the memo. Measure each change alone before
+attributing either.
