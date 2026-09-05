@@ -11,9 +11,16 @@ import Testing
     import Darwin
 #elseif canImport(Glibc)
     import Glibc
+#elseif canImport(Musl)
+    import Musl
 #endif
 
 @testable import TUIkitImage
+
+// The tarpit is a BSD socket, so everything here needs a POSIX libc. Windows
+// has sockets too, spelled differently; it gets these tests when it has a
+// console layer for the rest of the package to be tested through.
+#if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
 
 // MARK: - Tarpit
 
@@ -294,3 +301,4 @@ struct URLImageDownloadTests {
         }
     }
 }
+#endif
