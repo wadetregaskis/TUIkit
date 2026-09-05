@@ -3730,3 +3730,48 @@ already small or window-bounded), `modifiers` gains little because a padded row
 never claims natural, and the environment leg of the key is unpinned. The next
 lever here is not a bigger memo: it is `_ScrollViewCore` asking for its content
 extent once instead of walking a ladder.
+
+
+## 54. A gradient row was cut one run at a time, and rescanned for each (2026-09-05, evening)
+
+With §53 in, `gradients` was still the largest scenario by a factor of two
+(20–24 ms/frame against 11 for the next). A `sample` of the bench put ~22% of it
+in `BackgroundModifier._modify`, and inside that, `String.ansiAwareSlice` and
+`String.ansiSegments` between them at 14% of the whole frame.
+
+The reason is the shape of the call, not the work. A ramp background cuts each
+row at the ramp's own colour boundaries and fills the pieces separately, and for
+a smooth truecolor ramp that is **one run per column** — 120 of them on a
+120-cell row. `ansiAwareSlice` rebuilds the row's entire segment list and
+rescans it from the first byte on every call, so the row was walked 120 times to
+be cut into 120 pieces, and 120 segment arrays were allocated to do it.
+
+`String.ansiAwareSlicedRuns(runCount:width:receive:)` cuts at every boundary in
+ONE pass. Each piece is still exactly what the slice function would return —
+`ANSIRunSlicingTests` states that as its property and checks it over a corpus of
+styled, hyperlinked, wide-glyph and short rows against every partition it can
+make of them, rather than restating the slicing rules. The three things a cut
+carries fall out of the walk's own order: the style in force at a piece is a
+snapshot of the SGR seen so far, what it owes an open hyperlink is the link
+scan's state as the walk leaves it, and a glyph straddling a cut blanks its
+in-window cells on both sides.
+
+Two details earned their place by measurement. The pieces are **handed over one
+at a time** rather than returned in an array, and the runs are described by a
+count and a width function rather than an array: the first cut of this returned
+`[String]` and read **+1.7% on `kitchensink`** (CI +0.1…+2.1), where rows have
+two or three runs and the six little arrays cost more than the rescans they
+saved. Streamed, the same scenario is indistinguishable and `dashboard` is
+0.9% faster.
+
+`ab_bench.py`, cpu-per-frame, 120×40, 15 reps, paired ratio with 95% CI:
+
+    scenario        old µs     new µs   change            95% CI
+    gradients      23960.2    20277.8   -15.2%   -15.8% … -14.0%   faster
+    dashboard         85.8       84.9    -0.9%    -1.4% … -0.2%    faster
+    kitchensink      592.2      590.7    -0.5%    -1.1% … +0.5%    indistinguishable
+    churn           9815.8     9745.4    -0.6%    -1.7% … +0.7%    indistinguishable
+    translucent    10880.8    10950.5    +0.6%    +0.1% … +1.1%    (re-run: +1.3%, -0.3 … +1.5, indistinguishable)
+
+Bench checksums identical on all 20 scenarios; 6,166 tests pass with 21 known
+issues; the PTY walk of `Example` reaches all 35 items.

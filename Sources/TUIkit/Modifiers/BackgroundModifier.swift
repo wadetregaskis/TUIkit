@@ -85,17 +85,23 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
                 return filled(padded, with: sampler.colour(row: row).resolve(with: palette))
             }
             // Otherwise the row is cut at the ramp's own boundaries and each
-            // piece filled. `ansiAwareSlice` carries the styling that was in
-            // force at the cut, so the content's own colours survive being
-            // divided; the pieces are joined and closed once at the end.
+            // piece filled. The cut carries the styling that was in force where
+            // it fell, so the content's own colours survive being divided; the
+            // pieces are joined and closed once at the end.
+            //
+            // All the cuts at once: a smooth ramp changes colour at nearly every
+            // column, and slicing one run at a time rebuilt this row's segment
+            // list and rescanned it from the first byte for each of them.
+            let runs = sampler.runs(row: row, cells: width)
             var result = ""
             result.reserveCapacity(padded.utf8.count * 2 + 16)
-            for run in sampler.runs(row: row, cells: width) {
-                let slice = padded.ansiAwareSlice(
-                    visibleStart: run.columns.lowerBound, visibleCount: run.columns.count)
-                result += ANSIRenderer.applyPersistentBackground(
-                    slice, color: run.colour.resolve(with: palette))
-            }
+            padded.ansiAwareSlicedRuns(
+                runCount: runs.count,
+                width: { runs[$0].columns.count },
+                receive: { index, slice in
+                    result += ANSIRenderer.applyPersistentBackground(
+                        slice, color: runs[index].colour.resolve(with: palette))
+                })
             return result + ANSIRenderer.reset
         }
 
