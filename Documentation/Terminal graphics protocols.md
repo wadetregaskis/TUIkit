@@ -698,6 +698,21 @@ records the owner as appeared and registers a disappear that releases every
 frame's picture, and declares a render side effect so the memo never serves
 a cached row naming an image that has been freed.
 
+**Measured through a PTY, 2026-09-04** — `Tools/Smoke/raw_probe.py` on the
+Example with `TUIKIT_GRAPHICS=1 TUIKIT_GRAPHICS_COMPRESSION=1` (so the
+handshake is skipped and the answer forced; the PTY reports no pixel size,
+so the cell is the 8×16 default), 120×40, 2.6 s of capture per page:
+
+| page | transmits | `o=z` | placements | deletes | placeholder cells | pictures |
+|---|---|---|---|---|---|---|
+| Colors (six gradient views) | 10 | 10 | 10 | 0 | 2,538 | 752×16, 1.2–2.6 KB each deflated (36 KB raw) |
+| ProgressView (block tracks, the 72-frame sweep, gauges, demo bars advancing) | 169 | 169 | 169 | 20 | 10,978 | 192–464×16; a flat track deflates to **48 bytes**, a gradient one to ~1 KB |
+
+The deletes are the demo bars' previous pictures going as their value
+advanced, on ids the store reused; the sweep's 72 frames are among the
+transmits, once. Everything that reached the wire was deflated, and no
+picture was sent twice.
+
 **Unmeasured, and said so.** No host has yet been run against
 `Tools/TerminalProbes/graphics_compression_probe.py`, so whether iTerm2 and
 Ghostty *acknowledge* `o=z` and whether they *draw* a deflated picture are
