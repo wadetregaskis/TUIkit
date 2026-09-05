@@ -214,22 +214,114 @@ trap, as the hyperlink measurement in `Terminal-compatibility.md`).
 
 ## 3. Coverage, which is the whole argument
 
+### 3.1 The four hosts this project has measured
+
 | Protocol | Native hosts that render it | Detected by |
 |---|---|---|
 | **Kitty** | Ghostty, iTerm2 — **2 of 4**; Warp answers the handshake and refuses the placeholder by name (§2.1) | handshake, per feature |
 | Sixel | iTerm2; tmux, forwarding to iTerm2 | DA1 parameter |
 | iTerm2 | iTerm2, Warp | nothing — a host table |
 
-Kitty covers as many hosts as the iTerm2 protocol — Ghostty where the other
-has Warp — *and* is the only one with a per-feature handshake. Sixel's only unique host is tmux, and tmux's
-Sixel is useful only when the outer client also has it, which today means
-iTerm2 — a host Kitty already covers.
+Within those four, Kitty covers as many hosts as the iTerm2 protocol — Ghostty
+where the other has Warp — *and* is the only one with a per-feature handshake.
+Sixel's only unique host is tmux, and tmux's Sixel is useful only when the outer
+client also has it, which today means iTerm2, a host Kitty already covers.
 
-Supporting a second protocol therefore buys **at most one more host** — Warp,
+**A second protocol therefore buys at most one more of these four** — Warp,
 through the iTerm2 protocol, and only because it refuses the placeholder. It
 buys a second encoder, a second placement model, a second lifetime model, a
 second fallback path, and a second set of failure modes — and, on Apple
 Terminal, a second way to spray base64 across somebody's screen.
+
+That sentence used to end this section without the words "of these four", which
+made a claim about four terminals read as a claim about the ecosystem. §3.2 is
+the ecosystem, and it does not say the same thing.
+
+### 3.2 The ecosystem — surveyed 2026-09-05
+
+Not measured here. Every row rests on the project's own documentation,
+changelog, issue tracker or source, read on 2026-09-05; where a row rests on
+something weaker it is marked ⚑ and the weakness is named in §3.3. **Y** yes,
+**N** no, **F** only behind a build flag, patch or non-default setting, **P**
+partial, **?** unknown.
+
+| Terminal | Sixel | iTerm2 `File=` | Kitty APC | U+10EEEE | Evidence |
+|---|---|---|---|---|---|
+| xterm | **Y** | N | N | N | on by default since patch #359 (2020-08-17); the changelog also says it *ignores* APC |
+| Apple Terminal ⚑ | N | N | N | N | absence of evidence only — see §3.3 |
+| iTerm2 | **Y** | **Y** | **Y** | **Y** | `iTermImage+Sixel.m`; its own docs; commit 4fe5b21 (2024-08-21) adds `createUnicodePlaceholder` and `0x10EEEE` |
+| kitty | **N** | N | **Y** | **Y** | zero "sixel" hits in the whole changelog; placeholders `versionadded 0.28.0` (2023-04-15) |
+| Ghostty | **N** | **N** | **Y** | **Y** | `osc/parsers/iterm2.zig` lists `File=` in the *unimplemented* branch; `kitty_virtual_placeholder: u21 = 0x10EEEE` |
+| WezTerm | **Y** | **Y** | **Y** | **N** | kitty images default-on since 20210814, animation absent; placeholders are PR #7924, still open |
+| foot | **Y** | **N** | **N** | N | README (1.2.0+); the kitty/iTerm2 issue #481 has been open since 2021-05-06 |
+| Contour ⚑ | **Y** | **Y** | **Y** | **N** | master's source has all three parsers; no `10EEEE` anywhere in `src` |
+| mintty | **Y** | **Y** | N | N | iTerm2 images in 3.1.0 (2019-11-23); kitty appears only for underline colours |
+| mlterm | **Y** | **Y** | N | N | sixel unconditional in `configure.in`; `SUPPORT_ITERM2_OSC1337` default-on since 2016-02-28; no kitty in 24k lines of ChangeLog |
+| Alacritty | N | N | N | N | none of the three anywhere; sixel rejected by the maintainers |
+| VTE (gnome-terminal, Tilix, Terminator, Ptyxis, Xfce, guake) | **F** | N | N | N | `meson_options.txt`: `option('sixel', value:false)` — a build option, off by default |
+| Black Box | **F** | N | N | N | needs a sixel-enabled VTE; on in the Flatpak builds only |
+| Konsole | **Y** | **Y** | **Y** | **N** | `Vt102Emulation.cpp` has all three; a full-tree grep for `10EEEE` returns nothing (26.08.0) |
+| Windows Terminal | **Y** | **N** | N | N | `SixelParser.cpp`, shipped in 1.22; `DoITerm2Action` handles marks only |
+| ConEmu | N | N | N | N | issue #807 open since 2016; has its own non-standard image sequences |
+| Rio | **Y** | **Y** | **Y** | **Y** | `place_virtual_graphic` (`a=p,U=1`) with tests, plus sixel and `File=` (v0.5.27) |
+| Warp ⚑ | **N** | **Y** | **Y** | **N** | closed source; kitty images in the 2025-03-26 changelog; placeholders are issue #6210, open |
+| Hyper ⚑ | **F** | **F** | N | N | pins `xterm-addon-image`, loaded only when `imageSupport` is set |
+| Terminology | **N** | N | N | N | its XTSMGRAPHICS handler is a `DBG(… TODO)` stub; uses its own OSC media protocol |
+| DomTerm | **Y** | **N** | N | N | `sixel-decode.js`; `case 1337:` is an empty `break` |
+| Yaft | **Y** | N | N | N | README: "sixel (experimental)" |
+| Zellij | **Y** | N | **Y** | **N** | sixel 0.31.0; kitty graphics 0.45.0 (2026-08-20); no `10EEEE` in the tree |
+| tmux | **F** | N | N | N | `--enable-sixel`, off by default; no kitty of its own — placeholders pass through |
+| GNU screen | N | N | N | N | nothing in the ChangeLog |
+| MobaXterm | N | N | N | N | nothing through 26.4 (2026-06-11) |
+| PuTTY | N | N | N | N | nothing in `changes.html` |
+| SecureCRT | N | N | N | N | nothing through 9.7.3 (2026-07-01) |
+| Tabby ⚑ | **Y** | **Y** | **N** | N | pins `@xterm/addon-image` at a version predating its kitty support; default state unverified |
+| Wave Terminal ⚑ | N | N | N | N | inferred from a missing dependency; its image features are the file previewer |
+| xterm.js + `addon-image` | **Y** | **Y** | **P** | **N** | 0.10.0-beta.301 says "partially Kitty"; placeholders are issue #5711, open. §"xterm.js" of `Terminal-compatibility.md` records what it did here |
+| VS Code terminal | **F** | **F** | N | N | `terminal.integrated.enableImages`, **off by default** |
+| st + patch | **F** | N | **F** | **F** | the st-graphics patch ships placeholders, and builds classic placements on top of them; sixel is a different patch |
+| Eat (Emacs) ⚑ | **Y** | N | N | N | one README phrase |
+| Zed | N | N | N | N | issue #20860 closed *not planned* (2024-11-19) |
+| JetBrains terminals | N | N | N | N | IJPL-196803 unresolved |
+| wayst ⚑ | **Y** | N | **Y** | **?** | one README line; placeholders not mentioned |
+| AbsoluteTelnet, Mobile SSH ⚑ | ? | ? | **Y** | **?** | listed only by kitty's own documentation |
+
+**The counts, and the one that matters:**
+
+| | |
+|---|---|
+| Sixel or iTerm2 images and **no** Kitty at all | **14** — 8 of them on by default, 5 behind a flag or patch, 1 unverified |
+| Kitty APC graphics | **14** — 12 read from source or project docs, 2 resting only on kitty's list |
+| …of which **Unicode placeholders**, which is all TUIkit emits | **5** — kitty, iTerm2, Ghostty, Rio, patched st |
+| …of which explicitly **not** placeholders | **6** — WezTerm, Contour, Konsole, Warp, Zellij, xterm.js |
+| …unknown | 3 — wayst, AbsoluteTelnet, Mobile SSH |
+| Placeholder hosts that *also* speak Sixel or iTerm2 | 2 — iTerm2 and Rio |
+
+So the ecosystem does not say what §3.1 says. **TUIkit's pictures reach five
+terminals**, and the largest single group of hosts it misses is not the Sixel
+crowd at all: it is the **six that implement the Kitty protocol and not the
+placeholder**. What that group needs is not a second protocol — it is a second
+*placement model* for the protocol already built. §12.
+
+### 3.3 Where this survey is weakest
+
+Carried rather than smoothed over, because a coverage table is the kind of
+document people quote:
+
+- **Apple Terminal** is an all-`N` row resting on absence of evidence.
+  `terminfo.dev` actively claims it supports Kitty graphics *and* placeholders,
+  which contradicts everything else here and which §2 measured the other way —
+  Apple Terminal has no APC parser and prints the payload. Read as a probe
+  artefact, and a reason not to use that table as a source: it also marks
+  WezTerm as having no Kitty support, which its changelog contradicts.
+- **Contour**'s three yeses come from reading master. Its own README advertises
+  only Sixel, so which *released* version shipped the other two is unknown.
+- **Warp** is closed source: changelog and issue tracker only.
+- **Tabby, Hyper, Wave Terminal** are inferred from `package.json` plus at most
+  one call site, not from product documentation.
+- **wayst, AbsoluteTelnet, Mobile SSH, Eat** each rest on a single line.
+- **mlterm's Sixel default** is inferred from the option having disappeared and
+  the code being unconditional, not from a statement.
 
 ---
 
