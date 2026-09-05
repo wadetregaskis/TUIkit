@@ -63,3 +63,21 @@ struct ScrollWindowWidthMetadataTests {
         #expect(uniform.lineWidths == nil)
     }
 }
+
+/// A stack of uniform rows at two widths knows every line's width; the merge
+/// used to forget them all because a uniform side carries no array.
+@Suite("Stacking uniform rows keeps their widths")
+struct StackedUniformRowsWidthTests {
+    @Test("Two uniform buffers of different widths merge to explicit widths")
+    func mergeKeepsWidths() {
+        var stack = FrameBuffer(lines: ["aaaa", "bbbb"], width: 4, uniformWidth: true)
+        stack.appendVertically(FrameBuffer(lines: ["cc"], width: 2, uniformWidth: true))
+        #expect(!stack.linesAreUniformWidth)
+        #expect(stack.lineWidths == [4, 4, 2])
+        stack.appendVertically(FrameBuffer(lines: ["dddddd"], width: 6, uniformWidth: true), spacing: 1)
+        #expect(stack.lineWidths == [4, 4, 2, 0, 6])
+        var uniform = FrameBuffer(lines: ["aa"], width: 2, uniformWidth: true)
+        uniform.appendVertically(FrameBuffer(lines: ["bb"], width: 2, uniformWidth: true))
+        #expect(uniform.linesAreUniformWidth && uniform.lineWidths == nil)
+    }
+}

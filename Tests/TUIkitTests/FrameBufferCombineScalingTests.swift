@@ -109,9 +109,18 @@ struct FrameBufferCombineScalingTests {
         joined.appendVertically(right, spacing: 1)
         #expect(joined.lineWidths == [2, 0, 2])
 
-        // One unknown side makes the result unknown, never stale.
+        // One unknown side makes the result unknown, never stale. A ragged
+        // buffer measured on the way in carries no widths and is not uniform,
+        // so it knows nothing to spell out.
         var unknown = left
-        unknown.appendVertically(FrameBuffer(lines: ["efg"]), spacing: 0)
+        unknown.appendVertically(FrameBuffer(lines: ["efg", "h"]), spacing: 0)
         #expect(unknown.lineWidths == nil)
+
+        // A uniform side with no array still KNOWS every width — one number —
+        // and spells it out for the merge rather than making the result
+        // unknown: a stack of uniform rows at two widths is every page.
+        var spelled = left
+        spelled.appendVertically(FrameBuffer(lines: ["efg"]), spacing: 0)
+        #expect(spelled.lineWidths == [2, 3])
     }
 }

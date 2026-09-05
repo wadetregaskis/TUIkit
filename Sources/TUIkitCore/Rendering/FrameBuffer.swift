@@ -414,13 +414,26 @@ extension FrameBuffer {
         // already know their widths; otherwise the result is "unknown" (nil).
         // When self was empty the result is simply `other`'s widths; the
         // inserted spacing blank lines ("") each have visible width 0.
+        // A uniform side carries no array ("uniform covers it"), but it KNOWS
+        // every width — so it is spelled out here rather than dropped, or a
+        // stack of uniform rows of two different widths would forget all of
+        // them and every consumer downstream (a scroll window, a scrollbar,
+        // the writer's pad) would scan the lines to learn them again.
         if selfWasEmpty {
             lineWidths = other.lineWidths
-        } else if lineWidths != nil, let otherWidths = other.lineWidths {
+        } else if resultUniform {
+            lineWidths = nil
+        } else if let mine = lineWidths ?? (linesAreUniformWidth ? Array(repeating: width, count: storage.count) : nil),
+            let theirs = other.lineWidths
+                ?? (other.linesAreUniformWidth ? Array(repeating: other.width, count: other.lines.count) : nil)
+        {
+            var merged = mine
+            merged.reserveCapacity(mine.count + spacing + theirs.count)
             if spacing > 0 {
-                lineWidths!.append(contentsOf: repeatElement(0, count: spacing))
+                merged.append(contentsOf: repeatElement(0, count: spacing))
             }
-            lineWidths!.append(contentsOf: otherWidths)
+            merged.append(contentsOf: theirs)
+            lineWidths = merged
         } else {
             lineWidths = nil
         }
