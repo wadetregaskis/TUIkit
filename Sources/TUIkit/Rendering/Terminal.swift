@@ -13,6 +13,8 @@ import Foundation
     import Musl
 #elseif canImport(Darwin)
     import Darwin
+#elseif canImport(WASILibc)
+    import WASILibc
 #endif
 
 /// Platform-specific type for `termios` flag fields.
@@ -176,8 +178,17 @@ final class Terminal: TerminalProtocol {
         }
     }
 
-    /// The original terminal settings.
-    private var originalTermios: termios?
+    /// The original terminal settings, on a platform that has them.
+    ///
+    /// WebAssembly's wasip1 has no `termios`: a wasm program is handed a stream
+    /// of bytes and has no line discipline to turn off, because there is none
+    /// in front of it. Everything else raw mode does — bracketed paste, the
+    /// modifier-key mode, mouse tracking — is escape sequences, and those are
+    /// the terminal's business rather than the kernel's, so they are sent on
+    /// every platform alike.
+    #if !canImport(WASILibc)
+        private var originalTermios: termios?
+    #endif
 
     /// Whether frame buffering is active.
     ///
@@ -228,17 +239,23 @@ extension Terminal {
     ///
     /// - Returns: A tuple with width and height in characters/lines.
     func getSize() -> (width: Int, height: Int) {
-        var windowSize = winsize()
+        // No `ioctl` on wasip1, and nothing to ask it: a wasm program has no
+        // controlling terminal to measure. The environment fallback below is
+        // the whole answer there, which is why a WebAssembly host has to put the
+        // size in `COLUMNS`/`LINES` — see `Documentation/WebAssembly.md`.
+        #if !canImport(WASILibc)
+            var windowSize = winsize()
 
-        #if canImport(Glibc) || canImport(Musl)
-            let result = ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &windowSize)
-        #else
-            let result = ioctl(STDOUT_FILENO, TIOCGWINSZ, &windowSize)
+            #if canImport(Glibc) || canImport(Musl)
+                let result = ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &windowSize)
+            #else
+                let result = ioctl(STDOUT_FILENO, TIOCGWINSZ, &windowSize)
+            #endif
+
+            if result == 0 && windowSize.ws_col > 0 && windowSize.ws_row > 0 {
+                return (Int(windowSize.ws_col), Int(windowSize.ws_row))
+            }
         #endif
-
-        if result == 0 && windowSize.ws_col > 0 && windowSize.ws_row > 0 {
-            return (Int(windowSize.ws_col), Int(windowSize.ws_row))
-        }
 
         // Fallback to environment variables.
         //
@@ -277,6 +294,12 @@ extension Terminal {
     /// default. This self-corrects for the terminal + font + line spacing on the
     /// terminals that do report it, without any escape-sequence round trip.
     func cellPixelAspect() -> Double? {
+        #if canImport(WASILibc)
+            // The pixel fields ride on the same `ioctl` the size does, so this
+            // is unavailable for the same reason; callers keep their default
+            // aspect, which is what they do on the terminals that report zero.
+            return nil
+        #else
         var windowSize = winsize()
         #if canImport(Glibc) || canImport(Musl)
             let result = ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &windowSize)
@@ -295,6 +318,7 @@ extension Terminal {
         // Guard against nonsense (a cell that's wider than tall, or absurdly
         // tall) so a misreporting terminal can't distort worse than the default.
         return (aspect >= 1.0 && aspect <= 4.0) ? aspect : nil
+        #endif
     }
 
     /// Enables raw mode for direct character handling.
@@ -306,24 +330,26 @@ extension Terminal {
     func enableRawMode() {
         guard !isRawMode else { return }
 
-        var raw = termios()
-        tcgetattr(STDIN_FILENO, &raw)
-        originalTermios = raw
+        #if !canImport(WASILibc)
+            var raw = termios()
+            tcgetattr(STDIN_FILENO, &raw)
+            originalTermios = raw
 
-        raw.c_lflag &= ~TermFlag(ECHO | ICANON | ISIG | IEXTEN)
-        raw.c_iflag &= ~TermFlag(IXON | ICRNL | BRKINT | INPCK | ISTRIP)
-        raw.c_oflag &= ~TermFlag(OPOST)
-        raw.c_cflag |= TermFlag(CS8)
+            raw.c_lflag &= ~TermFlag(ECHO | ICANON | ISIG | IEXTEN)
+            raw.c_iflag &= ~TermFlag(IXON | ICRNL | BRKINT | INPCK | ISTRIP)
+            raw.c_oflag &= ~TermFlag(OPOST)
+            raw.c_cflag |= TermFlag(CS8)
 
-        // Safe: termios.c_cc is a fixed-size array; rebinding to cc_t is valid.
-        withUnsafeMutablePointer(to: &raw.c_cc) { pointer in
-            pointer.withMemoryRebound(to: cc_t.self, capacity: Int(NCCS)) { buffer in
-                buffer[Int(VMIN)] = 0
-                buffer[Int(VTIME)] = 0
+            // Safe: termios.c_cc is a fixed-size array; rebinding to cc_t is valid.
+            withUnsafeMutablePointer(to: &raw.c_cc) { pointer in
+                pointer.withMemoryRebound(to: cc_t.self, capacity: Int(NCCS)) { buffer in
+                    buffer[Int(VMIN)] = 0
+                    buffer[Int(VTIME)] = 0
+                }
             }
-        }
 
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
+            tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
+        #endif
         isRawMode = true
 
         // Enable bracketed paste mode so that terminal paste operations
@@ -355,7 +381,11 @@ extension Terminal {
 
     /// Disables raw mode and restores normal terminal operation.
     func disableRawMode() {
-        guard isRawMode, var original = originalTermios else { return }
+        #if canImport(WASILibc)
+            guard isRawMode else { return }
+        #else
+            guard isRawMode, var original = originalTermios else { return }
+        #endif
 
         // Reset modifyCursorKeys back to the terminal's default before
         // restoring terminal state.
@@ -381,7 +411,9 @@ extension Terminal {
             pinnedGraphemeClustering = false
         }
 
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &original)
+        #if !canImport(WASILibc)
+            tcsetattr(STDIN_FILENO, TCSAFLUSH, &original)
+        #endif
         isRawMode = false
     }
 

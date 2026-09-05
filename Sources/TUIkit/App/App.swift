@@ -4,14 +4,14 @@
 //  Created by LAYERED.work
 //  License: MIT
 
-import Dispatch
-
 #if canImport(Glibc)
     import Glibc
 #elseif canImport(Musl)
     import Musl
 #elseif canImport(Darwin)
     import Darwin
+#elseif canImport(WASILibc)
+    import WASILibc
 #endif
 
 /// Whether the backtick frame-dump debug shortcut is armed — opt-in via
@@ -150,7 +150,13 @@ extension AppRunner {
             // re-raising the signal it would have been in cooked mode. The
             // SIGTSTP source observes it and the loop suspends between frames.
             onSuspend: {
-                kill(getpid(), SIGTSTP)
+                // Job control, so POSIX-only: wasip1 has no process to signal
+                // and no shell to hand the terminal back to. Ctrl-Z there is a
+                // keystroke like any other, and an app that wants it can bind
+                // it; what it must not be is a crash.
+                #if !canImport(WASILibc)
+                    kill(getpid(), SIGTSTP)
+                #endif
             }
         )
     }
@@ -294,7 +300,7 @@ extension AppRunner {
         // the loop blocks until woken, so a static screen does ZERO renders.
         var pacer = FramePacer(
             maxFrameRate: app.maxFrameRate,
-            startedAtNanos: DispatchTime.now().uptimeNanoseconds)
+            startedAtNanos: MonotonicClock.nowNanoseconds)
         let renderOneFrame = {
             self.renderFrame(
                 renderer: renderer,
@@ -373,7 +379,7 @@ extension AppRunner {
             // One monotonic reading drives every decision this iteration — the
             // animation-fired test, the render-now test, and the wait length all
             // share it, so none can disagree about whether a deadline has passed.
-            let now = DispatchTime.now().uptimeNanoseconds
+            let now = MonotonicClock.nowNanoseconds
 
             // Render if a frame is due — a state change, or an animation grid
             // whose deadline `now` has reached — AND the frame-rate cap has
@@ -519,7 +525,7 @@ extension AppRunner {
         terminal.applyMouseSupport(effective)
         tuiContext.mouseEventDispatcher.setActiveSupport(effective, isFrameFinal: true)
         return FramePacer.Frame(
-            renderedAtNanos: DispatchTime.now().uptimeNanoseconds,
+            renderedAtNanos: MonotonicClock.nowNanoseconds,
             animationDeadlineNanos: deadline)
     }
 
@@ -562,6 +568,11 @@ extension AppRunner {
         // finished — a consume here would run before the flag is ever set,
         // and the loop would double-repaint on the next iteration.
         signals.expectSelfResume()
+        // The stop itself, and the dance with the foreground process group that
+        // follows it, are job control — POSIX, and absent on wasip1. The whole
+        // path is unreachable there (nothing ever sets the suspend flag), but
+        // unreachable code still has to compile.
+        #if !canImport(WASILibc)
         kill(getpid(), SIGSTOP)
         // ── stopped; `fg` resumes here ──
         //
@@ -579,6 +590,7 @@ extension AppRunner {
             signals.expectSelfResume()
             kill(getpid(), SIGSTOP)
         }
+        #endif
         terminal.enterAlternateScreen()
         terminal.hideCursor()
         terminal.enableRawMode()

@@ -595,6 +595,12 @@ enum TerminalHost {
     /// exited, which cannot itself block because every command sent through here
     /// answers with at most a few lines, far under the pipe buffer.
     private static func runTmux(_ arguments: [String]) -> String? {
+        #if canImport(WASILibc)
+            // No subprocesses on wasip1, and nothing to ask: a wasm program in a
+            // browser is not inside tmux. `nil` is the same answer a machine
+            // without tmux on its PATH gives, and every caller already handles it.
+            return nil
+        #else
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["tmux"] + arguments
@@ -606,9 +612,9 @@ enum TerminalHost {
         } catch {
             return nil  // no tmux on PATH, or exec refused
         }
-        let deadline = DispatchTime.now() + .milliseconds(commandTimeoutMilliseconds)
+        let deadline = MonotonicClock.nowNanoseconds &+ UInt64(commandTimeoutMilliseconds) &* 1_000_000
         while process.isRunning {
-            if DispatchTime.now() >= deadline {
+            if MonotonicClock.nowNanoseconds >= deadline {
                 process.terminate()
                 return nil
             }
@@ -617,6 +623,7 @@ enum TerminalHost {
         guard process.terminationStatus == 0 else { return nil }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         return String(data: data, encoding: .utf8)
+        #endif
     }
 
     /// How long ``runTmux(_:)`` waits for tmux before giving up and failing

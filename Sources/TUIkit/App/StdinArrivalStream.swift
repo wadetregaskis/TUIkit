@@ -4,8 +4,15 @@
 //  Created by LAYERED.work
 //  License: MIT
 
-import Dispatch
 import Foundation
+
+// A readiness source is the POSIX half of this file. WebAssembly's wasip1 has
+// no libdispatch to hold one — but it does have `poll`, which answers the very
+// question this type exists to ask ("stdin, or the timeout, whichever is
+// first") in a single call. The arm at the bottom is that call.
+#if !canImport(WASILibc)
+
+import Dispatch
 
 #if canImport(Glibc)
     import Glibc
@@ -203,3 +210,85 @@ final class StdinArrivalNotifier {
         cont?.resume()
     }
 }
+
+#else  // canImport(WASILibc)
+
+import WASILibc
+
+// MARK: - WebAssembly
+
+/// The same waiter, built on `poll` instead of a dispatch source.
+///
+/// The POSIX arm above races a readiness source against a `Task.sleep`, because
+/// that is how you ask two questions at once when the answer arrives on another
+/// thread. wasip1 has one thread and one call — `poll_oneoff`, which wasi-libc
+/// spells `poll` — that takes both subscriptions and returns on whichever fires.
+/// So the race collapses into the wait itself, and the timeout task, the
+/// continuation and the source all go with it.
+///
+/// ## Blocking, on purpose
+///
+/// This blocks the only thread there is, which on any other platform would be a
+/// bug and here is the point: while the loop is waiting for input there is, by
+/// construction, nothing else to run — no other thread, no timer that is not
+/// already this call's timeout. In a browser the same call is what hands the
+/// tab back (the host's `poll_oneoff` sleeps the worker), so blocking here is
+/// how the page stays responsive rather than how it stops being.
+///
+/// The one real difference from the POSIX arm: a `wake()` cannot interrupt a
+/// wait in progress. It does not need to. Every caller of `wake()` is main-actor
+/// isolated, and the main actor is inside this call for the duration — so a wake
+/// can only land before the wait (caught by ``pendingWake``) or after it.
+@MainActor
+final class StdinArrivalNotifier {
+
+    /// A wake delivered while nobody was waiting, so the next wait returns at
+    /// once. Same contract as the POSIX arm's flag of the same name.
+    private var pendingWake = false
+
+    /// Nothing to install: `poll` is asked per wait, not armed in advance.
+    func start() {}
+
+    /// Nothing to tear down.
+    func stop() {}
+
+    /// Records a wake for the next wait. There is no waiter to resume — see the
+    /// type's doc for why that is sound here and not elsewhere.
+    func wake() {
+        pendingWake = true
+    }
+
+    /// Waits until stdin has bytes or the timeout elapses, whichever is first.
+    ///
+    /// - Parameter timeoutNanoseconds: The longest to wait, or `nil` to wait
+    ///   until stdin speaks. `poll` counts milliseconds, so a timeout shorter
+    ///   than one is rounded UP to one rather than down to zero: a zero would
+    ///   turn a demand-driven loop into a spin.
+    func waitForArrival(timeoutNanoseconds: UInt64?) async {
+        if pendingWake {
+            pendingWake = false
+            return
+        }
+        let milliseconds: Int32
+        if let timeoutNanoseconds {
+            let rounded = (timeoutNanoseconds + 999_999) / 1_000_000
+            milliseconds = Int32(clamping: rounded)
+        } else {
+            milliseconds = -1
+        }
+        var descriptor = pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0)
+        _ = withUnsafeMutablePointer(to: &descriptor) { poll($0, 1, milliseconds) }
+        // The wait above is synchronous, and this is what keeps that from
+        // eating the stack. On the single-threaded executor a resumption is a
+        // direct call rather than a return to a scheduler — so an `async`
+        // function with no suspension point inside it leaves the caller's frame
+        // in place, and a run loop awaiting one grows the stack by a few frames
+        // per frame drawn until wasm traps. (Measured: the Example ran for a
+        // few hundred frames, then `call stack exhausted`.) Yielding is a real
+        // suspension: the continuation is enqueued and the stack unwinds to the
+        // executor before it runs.
+        await Task.yield()
+    }
+}
+
+#endif

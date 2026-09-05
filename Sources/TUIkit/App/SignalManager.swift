@@ -4,6 +4,12 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+// Signals, and the sources that watch them, are POSIX. WebAssembly's wasip1
+// has neither — no `signal`, no libdispatch, and no process to send one — so
+// the file splits here rather than at a dozen call sites, and the arm at the
+// bottom answers the same questions with the only answers that platform has.
+#if !canImport(WASILibc)
+
 import Dispatch
 
 #if canImport(Glibc)
@@ -279,3 +285,48 @@ final class SignalManager {
         wake = nil
     }
 }
+
+#else  // canImport(WASILibc)
+
+// MARK: - WebAssembly
+
+/// The same manager, on a platform with no signals to manage.
+///
+/// wasip1 has no `signal`, no `kill`, and no notion of a process group, so
+/// every question this type answers has one honest answer there: nothing has
+/// happened. It is a stub, and deliberately a *whole* one — the run loop asks
+/// these questions on every frame, and the alternative to answering them here
+/// is conditionals around each of the six call sites in `App`.
+///
+/// What is lost with the signals is worth naming: there is no resize
+/// notification (a host that can resize has to say so some other way — see
+/// `Documentation/WebAssembly.md`), no Ctrl-C interrupt (the key reaches the
+/// app through stdin like any other, and the app's own bindings handle it),
+/// and no suspend/resume, which has no meaning in a browser tab.
+@MainActor
+final class SignalManager {
+
+    /// Never true: nothing outside the app can ask it to stop.
+    var shouldShutdown: Bool { false }
+
+    /// Never true — see the type's doc for how a resize would have to arrive.
+    func consumeResizeFlag() -> Bool { false }
+
+    /// Never true: wasip1 has no job control.
+    func consumeSuspendFlag() -> Bool { false }
+
+    /// Never true: nothing can send a continue where nothing can stop.
+    func consumeContinueFlag() -> Bool { false }
+
+    /// A no-op: the suspend path it guards cannot run here.
+    func expectSelfResume() {}
+
+    /// A no-op. `wake` is unused because nothing here can wake the loop; stdin
+    /// is the only event source, and the arrival notifier owns that.
+    func install(wake: @escaping @MainActor @Sendable () -> Void) async {}
+
+    /// A no-op, so the teardown path reads the same on every platform.
+    func stop() {}
+}
+
+#endif

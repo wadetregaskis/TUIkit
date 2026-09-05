@@ -11,6 +11,10 @@ import TUIkitCore
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
+#elseif canImport(WASILibc)
+import WASILibc
 #endif
 
 // MARK: - Asking whether pictures are possible
@@ -186,6 +190,12 @@ extension Terminal {
     /// plausible default rather than no picture (see
     /// ``EnvironmentValues/imageCellPixels``).
     func cellPixelSize() -> TerminalCellPixels? {
+        #if canImport(WASILibc)
+            // wasip1 has no `ioctl`, so the pixel geometry is unavailable and
+            // callers take the default cell — the same path a terminal that
+            // reports zeroes puts them on.
+            return nil
+        #else
         var windowSize = winsize()
         #if canImport(Glibc) || canImport(Musl)
             let result = ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &windowSize)
@@ -199,6 +209,7 @@ extension Terminal {
         return TerminalCellPixels(
             width: Int(windowSize.ws_xpixel) / Int(windowSize.ws_col),
             height: Int(windowSize.ws_ypixel) / Int(windowSize.ws_row))
+        #endif
     }
 
     /// Asks the terminal whether it will place an image in the cell grid.

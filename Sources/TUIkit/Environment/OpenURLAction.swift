@@ -156,6 +156,15 @@ public struct OpenURLAction: Sendable {
         // started it — so it declines and the destination is shown instead.
         // See ``TerminalClient/urlOpeningSupport`` and ``LinkDisplay``.
         guard TerminalURLOpening.isEnabled else { return }
+        // Launching anything is a subprocess, which wasip1 has no way to make.
+        // Nothing is lost that the user can act on: a `Link` under a host that
+        // cannot open URLs shows its destination instead (``LinkDisplay``), and
+        // a terminal that supports OSC 8 — including the one in the browser
+        // demo — turns the text itself into something clickable, opened by the
+        // terminal rather than by us.
+        #if canImport(WASILibc)
+            return
+        #else
         for opener in ["/usr/bin/open", "/usr/bin/xdg-open"]
         where FileManager.default.fileExists(atPath: opener) {
             let process = Process()
@@ -166,6 +175,7 @@ public struct OpenURLAction: Sendable {
             try? process.run()
             return
         }
+        #endif
     }
 }
 

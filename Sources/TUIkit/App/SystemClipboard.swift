@@ -38,6 +38,30 @@ import Foundation
 /// every I/O loop and the exit reap check a wall-clock deadline, and a child
 /// that outlives its deadline is terminated. On failure the operation reports
 /// cleanly (`false`/`nil`) instead of crashing or wedging.
+#if canImport(WASILibc)
+
+/// The clipboard, on a platform that cannot reach one.
+///
+/// Every route this type takes on other platforms is a subprocess — `pbcopy`,
+/// `xclip`, `wl-copy` — and wasip1 has no way to start one. A browser has a
+/// clipboard, but it is the *page's*, reachable only through JavaScript, and
+/// nothing in the WASI interface crosses that gap.
+///
+/// So copy does nothing and paste finds nothing, which is the same answer this
+/// type already gives on a Linux box with no helper installed. Text fields keep
+/// working: their editing is theirs, and only the system exchange is missing.
+/// A host that wants the real thing has an escape hatch that needs no clipboard
+/// at all — OSC 52, which the terminal itself acts on.
+enum SystemClipboard {
+    /// Discards the text: there is nowhere to put it.
+    static func copy(_ text: String) {}
+
+    /// Always `nil`: there is nowhere to read from.
+    static func paste() -> String? { nil }
+}
+
+#else
+
 enum SystemClipboard {
     /// One-time SIGPIPE suppression for processes that never ran an `App`
     /// (unit tests, harnesses). `SignalManager.install` also ignores SIGPIPE
@@ -145,7 +169,7 @@ enum SystemClipboard {
         } catch {
             return nil
         }
-        let limit = DispatchTime.now() + deadline
+        let limit = MonotonicClock.nowNanoseconds &+ UInt64(max(0, deadline) * 1_000_000_000)
 
         var wroteEverything = true
         if let input, let stdinPipe {
@@ -164,7 +188,7 @@ enum SystemClipboard {
         // Reap within the deadline; a child that outlives it is wedged — kill
         // it rather than leave a zombie holding the clipboard hostage.
         while process.isRunning {
-            if DispatchTime.now() >= limit {
+            if MonotonicClock.nowNanoseconds >= limit {
                 process.terminate()
                 return nil
             }
@@ -179,7 +203,7 @@ enum SystemClipboard {
     /// A plain blocking write cannot be bounded from outside: once the pipe
     /// buffer fills against a child that stopped reading, it parks the thread
     /// in the kernel and no amount of checking afterwards helps.
-    private static func write(_ data: Data, to handle: FileHandle, until limit: DispatchTime) -> Bool {
+    private static func write(_ data: Data, to handle: FileHandle, until limit: UInt64) -> Bool {
         let fd = handle.fileDescriptor
         guard makeNonBlocking(fd) else { return false }
         var offset = 0
@@ -201,7 +225,7 @@ enum SystemClipboard {
             if written > 0 {
                 offset += written
             } else if written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if DispatchTime.now() >= limit { return false }
+                if MonotonicClock.nowNanoseconds >= limit { return false }
                 Thread.sleep(forTimeInterval: 0.002)
             } else if written < 0 && errno == EINTR {
                 continue
@@ -216,7 +240,7 @@ enum SystemClipboard {
     /// polling. Same reasoning as the write side: `readDataToEndOfFile`
     /// blocks until the child closes its stdout, which a hung child never
     /// does.
-    private static func read(into output: inout Data, from handle: FileHandle, until limit: DispatchTime) -> Bool {
+    private static func read(into output: inout Data, from handle: FileHandle, until limit: UInt64) -> Bool {
         let fd = handle.fileDescriptor
         guard makeNonBlocking(fd) else { return false }
         var buffer = [UInt8](repeating: 0, count: 64 * 1024)
@@ -235,7 +259,7 @@ enum SystemClipboard {
             } else if count == 0 {
                 return true  // EOF — the child closed its end
             } else if errno == EAGAIN || errno == EWOULDBLOCK {
-                if DispatchTime.now() >= limit { return false }
+                if MonotonicClock.nowNanoseconds >= limit { return false }
                 Thread.sleep(forTimeInterval: 0.002)
             } else if errno == EINTR {
                 continue
@@ -251,3 +275,5 @@ enum SystemClipboard {
         return fcntl(fd, F_SETFL, flags | O_NONBLOCK) >= 0
     }
 }
+
+#endif

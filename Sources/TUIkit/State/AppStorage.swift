@@ -129,7 +129,15 @@ public final class JSONFileStorage: StorageBackend, @unchecked Sendable {
     /// `synchronize()` can flush *behind* any queued save with a plain
     /// `queue.sync`; and a slow disk never occupies a width-limited
     /// cooperative-pool thread.
-    private let saveQueue = DispatchQueue(label: "TUIkit.JSONFileStorage.save", qos: .utility)
+    ///
+    /// wasip1 has no threads, so it has no queue either, and the two properties
+    /// the queue was buying — ordering and coalescing — are already the
+    /// property of a single thread that does the write where it stands. The
+    /// arms below say so at each of the two hops rather than pretending to a
+    /// concurrency this platform does not have.
+    #if !canImport(WASILibc)
+        private let saveQueue = DispatchQueue(label: "TUIkit.JSONFileStorage.save", qos: .utility)
+    #endif
 
     /// Whether a save is already queued. Writes arrive in bursts (a slider
     /// bound to storage emits one per tick); one queued flush snapshots
@@ -243,9 +251,13 @@ extension JSONFileStorage {
         // A plain sync hop onto the serial save queue: any already-queued
         // asynchronous save runs first, then this flush writes whatever the
         // cache holds now — so "synchronize then exit" cannot lose a value.
-        saveQueue.sync {
-            self.flushToDisk()
-        }
+        #if canImport(WASILibc)
+            flushToDisk()
+        #else
+            saveQueue.sync {
+                self.flushToDisk()
+            }
+        #endif
     }
 }
 
@@ -279,9 +291,17 @@ extension JSONFileStorage {
     fileprivate func saveToDiskAsync() {
         guard !savePending else { return }
         savePending = true
-        saveQueue.async { [weak self] in
-            self?.flushToDisk()
-        }
+        #if canImport(WASILibc)
+            // Inline, and therefore synchronous: the burst-coalescing above still
+            // holds (`savePending` is cleared by the flush), and a write that
+            // cannot be deferred to another thread is better done now than not
+            // at all.
+            flushToDisk()
+        #else
+            saveQueue.async { [weak self] in
+                self?.flushToDisk()
+            }
+        #endif
     }
 
     /// Runs only on `saveQueue`. Snapshots the cache under the lock, then
@@ -313,7 +333,17 @@ extension JSONFileStorage {
 
         do {
             let data = try JSONSerialization.data(withJSONObject: serializable, options: .prettyPrinted)
-            try data.write(to: fileURL, options: .atomic)
+            // Atomically where the platform can: a half-written settings file
+            // is worse than a stale one. WASI's Foundation refuses the option
+            // outright — atomic writing goes through a temporary file and a
+            // rename, and wasip1 has no temporary directory to make one in — so
+            // there the write is direct, and a host that cares about the
+            // difference has to provide durability of its own.
+            #if canImport(WASILibc)
+                try data.write(to: fileURL)
+            #else
+                try data.write(to: fileURL, options: .atomic)
+            #endif
         } catch {
             // The write that just failed is the whole point of the API: without
             // this report the app shows a saved setting that will not survive
