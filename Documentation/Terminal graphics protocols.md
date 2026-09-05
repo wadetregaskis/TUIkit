@@ -723,3 +723,187 @@ the switch for a host that says yes and draws nothing. The gradient pictures
 themselves rest on mechanisms every drawing host HAS been measured to do
 (§8), so a host that draws `Image` draws them.
 
+
+---
+
+## 11. Working around the cursor-anchored protocols — assessment, 2026-09-05
+
+**Question:** §4 rejected Sixel and the iTerm2 protocol because they draw pixels
+at the cursor rather than into the cell grid. Can that be worked around?
+
+**Answer: yes, and by a smaller mechanism than the rejection implies — but the
+workaround does not make a second protocol cheap.** What follows is a design
+assessment. Nothing here is built, and the parts that would need measuring
+before it could be are named as such.
+
+### 11.1 Three losses, and only one of them is the interesting one
+
+"Not Kitty" is really three separate absences, and they do not cost the same:
+
+| Loss | Bites where |
+|---|---|
+| **No retained store** | every repair retransmits pixels — the cost, §11.5 |
+| **No in-grid placement** | the terminal does not know the picture occupies cells — what §4 called fatal |
+| **No capability query** (iTerm2 only) | detection could only be a host table — §11.6 |
+
+The second is the one §4 argued from, and it is the one that turns out to be
+addressable, because of *where* the substitution can happen.
+
+### 11.2 The mechanism: substitute at the writer, not at the renderer
+
+Keep the placeholder representation exactly as it is. `TerminalImageStore`
+still hands `_ImageCore` rows of cells; `strippedLength` still measures them,
+`clamped` still clips them, `composited(with:at:)` still overlays them,
+`ScrollView` still windows them, and `FrameDiffWriter` still decides which rows
+changed. Only at the last moment — where a row becomes bytes — does a row
+carrying placeholder cells stop being written as text. The writer finds each
+maximal run of cells naming one image at consecutive columns of one image row,
+and emits, in place of that run, a `CUP` to its first column plus a
+cursor-anchored image of exactly the sub-rectangle those cells cover.
+
+Two properties make that work, and both are already true of this code:
+
+- **The crop is read off the cells, not computed.** Every placeholder cell
+  carries its own image row and image column (`KittyGraphics.placeholderRows`
+  spells them into every cell rather than using the protocol's run-length form
+  — for the diffing reason recorded there). A run of surviving cells therefore
+  *names* the sub-rectangle it wants. Clipping, scrolling and compositing are
+  not re-implemented for pixels; they have already happened, and what is left
+  says what to send. A modal covering half a picture leaves half the cells, so
+  half the picture is emitted, with no z-order in the protocol and none needed.
+- **Every span is positioned absolutely, and nothing scrolls.** `writeDiff`
+  emits a `CUP` before every span and before every whole line, and the frame
+  builder emits no `IL`, `DL` or scroll region at all. So an image that leaves
+  the cursor somewhere implementation-defined damages nothing, because nothing
+  downstream reads the cursor. This is the single fact that makes the
+  substitution cheap.
+
+  Relative motion does exist, but only *inside* a span: the Plane-16 and
+  emoji compensations inject `ECH`+`CUF` into a built line, scoped after
+  clipping (§4.1, `withTerminalAppCursorCompensation`). A substitution
+  therefore has to split its span at the run's boundaries and give each
+  surviving piece its own `CUP` — which it must do regardless, since the
+  cursor after an image is the terminal's business. Both halves of that are
+  worth a test if this is ever built: a future optimisation that elided a
+  `CUP` by tracking the cursor would silently break images, and so would a
+  compensation that survived across a run boundary.
+
+Whole rectangles coalesce: where every row of an image survives intact, the
+runs are identical and stacked, and one image covering the whole rectangle can
+replace them. The per-row slice is the general case, not the common one.
+
+### 11.3 What still has to be built — the damage model
+
+This is the real work, and it is the thing placeholders give away for free.
+
+A placeholder picture is a pure function of the cells: rewrite the cell and the
+image comes back. A cursor-anchored picture is separate state that only the
+writer knows about, so the writer has to decide when to re-emit. The rule falls
+out of the diff — re-emit a run whenever its row is one the diff chose to write
+— and that covers content change, movement, and being uncovered. It does not
+cover damage the app did not cause: a resize, an alternate-screen switch,
+another process writing to the terminal. TUIkit already has whole-frame
+invalidation for those (`invalidate()`, `invalidateIfProgramChanged()`), and
+each of those paths would have to force every image run to re-emit rather than
+trusting `previousLines`.
+
+**And the cells underneath have to be erased, not merely skipped.** The text
+layer keeps whatever was last written into those cells. If the picture is lost
+before the next repaint, the terminal reveals stale glyphs rather than the
+page. So a run is written as spaces in the row's background first and the image
+drawn over it — which also fixes an ordering rule in place: within a row, erase
+then draw, and never write text into a cell an image is currently covering.
+Whether writing text over an image erases the pixels underneath is
+host-dependent and **is not measured here**; `graphics_probe.py` is where the
+answer would go.
+
+### 11.4 What still has to be built — two encoders, unequal
+
+**Sixel reuses more of this package than it looks like.** It is palette-indexed,
+and the palette machinery already exists: `ASCIIPalette+Adaptive` derives an
+adaptive palette by median cut in OKLab, and `ASCIIConverter+Dithering` already
+carries quantisation error through one. The one seam to open is that today's
+derivation re-fits its centres to the terminal's colour depth, and a Sixel
+colour register takes an arbitrary RGB triple — so it wants the centres from
+*before* that re-fit. How many registers is not a guess: xterm's XTSMGRAPHICS
+reads the current count with `CSI ? 1 ; 1 S` and the maximum with
+`CSI ? 1 ; 4 S`, and `CSI ? 2 ; 1 S` reports the largest Sixel geometry in
+pixels (xterm `ctlseqs`; not measured here). The encoder itself is small —
+bands of six pixel rows, a pass per colour, `!<n>` run-length — and a slice one
+cell tall is a partial band, which the format handles, because an unset bit
+paints nothing when the DCS's P2 parameter declares unset pixels transparent.
+
+**The iTerm2 protocol needs an encoder this package does not have**, because its
+payload is a real image file rather than pixels. PNG is the format every
+implementation reads, and a PNG can be written with deflate *stored* blocks —
+no compressor at all, only CRC-32 and Adler-32 — which keeps it independent of
+`SystemZlib`, whose whole point is that it is optional and dlopened; where a
+zlib is present the same encoder compresses properly. Sizing is in cells and is
+documented: a bare `width=N;height=N` means N character cells (`Npx` and `N%`
+are the other spellings), with `preserveAspectRatio=0` so the picture fills the
+rectangle exactly, which is what a crop needs. Nothing in the documented
+argument list controls whether the cursor moves afterwards.
+
+**The bottom row is a new hazard, of a familiar shape.** Both protocols advance
+the cursor past the image, and on the last row that scrolls the screen — the
+same family as the last-column problem `repaintRightEdge` exists for, but not
+the same problem and not covered by it. Sixel has a mode for it, DECSDM
+(`CSI ? 80 h`), and it is a trap rather than a solution: its sense was inverted
+in xterm for years relative to the VT382 manuals, corrected in xterm patch #369,
+and foot, mintty and contour each followed at a different release — so an app
+that sets it cannot know which of two opposite behaviours it just asked for
+without measuring the host. The cheap answer is to measure last-row behaviour
+per host and let the framework decline the substitution for an image that would
+land there, falling back to glyphs. That decline is a seam the renderer already
+has, but only at whole-image granularity (`placeholderRows` returning `nil`); a
+per-row decline would be new.
+
+### 11.5 What it costs
+
+Arithmetic over §8.6's measurements, not a new measurement. On Ghostty's
+16×34-pixel cells an opaque picture transmits at about **2,170 base64 bytes a
+cell** (1.8 MB for 49×17 cells; 104 KB for 12×4 — the two agree). A placeholder
+cell repairs for **11.6** (139 bytes for a 12-cell row, pinned by
+`KittyGraphicsTests.rowByteCost`).
+
+| | Kitty placeholders | Cursor-anchored |
+|---|---|---|
+| First draw of a picture | pixels once | pixels once |
+| Picture undisturbed, per frame | nothing | nothing |
+| **Repairing one cell of it** | **~12 bytes** | **~2,170 bytes** (Retina cell) |
+
+So the steady state is identical — an image nothing touches is transmitted once
+either way, because the diff writes no rows — and the price of *disturbance*
+rises by about **190×** on a Retina cell, nearer 45× on a non-Retina 8×17 one,
+and better than either on flat content that run-lengths or deflates well. What
+that buys or costs in practice is decided by how often something moves next to a
+picture: a menu opening over its corner, a spinner ticking on the row beside it,
+a selection travelling through a list of thumbnails. Those are nearly free today
+and would not be.
+
+### 11.6 Detection is still asymmetric
+
+Unchanged from §1, and it decides how far this could go. Sixel is detectable and
+reliable about it: DA1 parameter `4`, plus XTSMGRAPHICS to size the palette
+before encoding for it. The iTerm2 protocol has no query at all, so support for
+it could only ever be a host table — which §6 rejected on evidence rather than
+taste: Warp is a host that answers a protocol query `OK` and then refuses the
+feature, and a table written from feature lists would have got it wrong.
+
+### 11.7 Verdict
+
+The limitations are workable, and the reason is narrower than "Sixel turned out
+to be better than §4 said". It is that the substitution happens *after* every
+cell-defined operation has run, so clipping, compositing, scrolling and the row
+diff never learn that pixels exist — exactly the property §4 wanted, arrived at
+from the other end. §4's reasoning stands; its conclusion has one more option
+under it than it knew.
+
+What the workaround does not do is make a second protocol cheap. It costs an
+encoder per protocol, a damage model with three invalidation paths, an
+erase-then-draw ordering rule, a per-host last-row measurement, a host table for
+the half of it that cannot be detected, and repairs one-to-two orders of
+magnitude more expensive than today's. **The recommendation in §6 does not
+change on this analysis alone.** What could change it is coverage — how many
+hosts draw one of these and no Kitty placement — and that is §3's question, not
+this section's.
