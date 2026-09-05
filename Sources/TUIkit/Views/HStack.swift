@@ -77,6 +77,31 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         fatalError("_HStackCore renders via Renderable")
     }
 
+    /// What `resolvedLayout` decided for a row: the widths to render at, the
+    /// row's own size and flexibility, and — per child — the height each was
+    /// measured at and whether it fills its height. Both passes read the same
+    /// answer, which is what keeps them from disagreeing.
+    private struct ResolvedRowLayout {
+        let widths: [Int]
+        let totalWidth: Int
+        let height: Int
+        let fills: Bool
+        let fillsHeight: Bool
+        let childHeights: [Int]
+        /// Bit `i` set when child `i` fills its height. A mask rather than a
+        /// `[Bool]`: this routine runs once per row per walk, and one more
+        /// array per call measured +1.9% on the `churn` stress page, where no
+        /// row has a ramp and the answer is never read. A row of more than 64
+        /// children reports every further child as filling, which only costs
+        /// it a measure. See `fillsHeight(ofChildAt:)`.
+        let childFillsHeightMask: UInt64
+        let guideRun: AlignmentGuideRun?
+
+        func fillsHeight(ofChildAt index: Int) -> Bool {
+            index >= UInt64.bitWidth || childFillsHeightMask & (1 << UInt64(index)) != 0
+        }
+    }
+
     /// The single sizing routine shared by `sizeThatFits` and `renderToBuffer`,
     /// so the two passes cannot disagree about widths or height — measuring each
     /// child once at its ideal, distributing, then re-measuring heights at the
@@ -86,10 +111,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
     /// taller than it rendered.)
     private func resolvedLayout(
         _ children: [ChildView], availableWidth: Int, context: RenderContext
-    ) -> (
-        widths: [Int], totalWidth: Int, height: Int, fills: Bool,
-        fillsHeight: Bool, guideRun: AlignmentGuideRun?
-    ) {
+    ) -> ResolvedRowLayout {
         let count = children.count
         let totalSpacing = max(0, count - 1) * spacing
 
@@ -104,6 +126,11 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // bordered box asked to grow) told its parent it was rigid, and the
         // parent then distributed vertical space as though nothing wanted any.
         var fillsHeight = false
+        // Per child as well as in aggregate: the render's ramp placement
+        // (below) reuses a child's measured height only when THAT child is
+        // rigid, and one flexible sibling must not send the whole row back to
+        // the measure it was avoiding.
+        var childFillsHeightMask: UInt64 = 0
         for (index, child) in children.enumerated() {
             if child.isSpacer {
                 ideal[index] = child.spacerMinLength ?? 0
@@ -117,7 +144,10 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 ideal[index] = size.width
                 idealHeight[index] = size.height
                 fills[index] = size.isWidthFlexible
-                if size.isHeightFlexible { fillsHeight = true }
+                if size.isHeightFlexible {
+                    fillsHeight = true
+                    if index < UInt64.bitWidth { childFillsHeightMask |= 1 << UInt64(index) }
+                }
             }
         }
 
@@ -159,10 +189,15 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
             minimumExtent: height)
 
         let totalWidth = widths.reduce(0, +) + totalSpacing
-        return (
-            widths, min(totalWidth, max(0, availableWidth)), guideRun?.extent ?? height,
-            fills.contains(true), fillsHeight, guideRun
-        )
+        return ResolvedRowLayout(
+            widths: widths,
+            totalWidth: min(totalWidth, max(0, availableWidth)),
+            height: guideRun?.extent ?? height,
+            fills: fills.contains(true),
+            fillsHeight: fillsHeight,
+            childHeights: finalHeight,
+            childFillsHeightMask: childFillsHeightMask,
+            guideRun: guideRun)
     }
 
     /// Measures the HStack without rendering.
@@ -316,11 +351,28 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         for (index, child) in children.enumerated() {
             if index > 0 { gradientX += spacing }
             var childContext = context
-            if gradientFrame != nil {
-                let measured = child.measure(
-                    proposal: ProposedSize(width: finalWidths[index], height: rowHeight),
-                    context: context)
-                let slack = max(0, rowHeight - measured.height)
+            // A spacer renders nothing and takes no ramp position: its context
+            // is never used, so nothing is measured or built for it.
+            if gradientFrame != nil, !child.isSpacer {
+                // The height the child will stand in the row at. For a rigid
+                // child it is the height `resolvedLayout` already measured —
+                // at the width the child is about to be rendered at — because
+                // a height proposal of `rowHeight` cannot change a rigid
+                // answer: `rowHeight` is at least every measured height unless
+                // the stack itself was clamped, and a clamped child reports
+                // `rowHeight` either way, leaving no slack in both readings.
+                // Only a child that FILLS its height answers a height proposal
+                // differently (it takes it), so only that child is asked
+                // again. Measuring every child here a second time was ~20% of
+                // the row's render on the `gradients` stress page.
+                let childHeight =
+                    layout.fillsHeight(ofChildAt: index)
+                    ? child.measure(
+                        proposal: ProposedSize(width: finalWidths[index], height: rowHeight),
+                        context: context
+                    ).height
+                    : layout.childHeights[index]
+                let slack = max(0, rowHeight - childHeight)
                 let y =
                     switch alignment {
                     case .top: 0

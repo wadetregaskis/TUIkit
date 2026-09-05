@@ -32,41 +32,16 @@ struct GradientExtentTests {
             tuiContext: tui)
     }
 
-    /// The truecolor ink of each visible cell of a line, `nil` where none.
-    private func inks(_ line: String) -> [String?] {
-        var out: [String?] = []
-        var current: String?
-        var rest = Substring(line)
-        while let escape = rest.firstIndex(of: "\u{1B}") {
-            for character in rest[rest.startIndex..<escape] {
-                out.append(contentsOf: repeatElement(current, count: character.terminalWidth))
-            }
-            rest = rest[escape...]
-            guard let end = rest.firstIndex(of: "m") else { break }
-            let body = rest[rest.index(rest.startIndex, offsetBy: 2)..<end]
-            if let range = body.range(of: "38;2;") {
-                current = body[range.upperBound...].split(separator: ";").prefix(3)
-                    .joined(separator: ";")
-            } else if body == "0" {
-                current = nil
-            }
-            rest = rest[rest.index(after: end)...]
-        }
-        for character in rest {
-            out.append(contentsOf: repeatElement(current, count: character.terminalWidth))
-        }
-        return out
-    }
+    /// The truecolor ink of each visible cell of a line, `nil` where none —
+    /// the shared `truecolorInks`, kept under its short name here.
+    private func inks(_ line: String) -> [String?] { truecolorInks(line) }
 
     private func firstInk(_ line: String) -> String? { inks(line).compactMap { $0 }.first }
 
-    /// The ink at a visible COLUMN. Counting cells rather than escape runs is
-    /// the whole point: a probe that took "the second run on the line" read a
-    /// `List`'s border and a `Table`'s selection gutter, and reported both
-    /// containers as ignoring `.foregroundStyle` when neither does.
+    /// The ink at a visible COLUMN — see `truecolorInk(_:atColumn:)` for why
+    /// cells are counted rather than escape runs.
     private func ink(_ line: String, atColumn wanted: Int) -> String? {
-        let cells = inks(line)
-        return wanted < cells.count ? cells[wanted] : nil
+        truecolorInk(line, atColumn: wanted)
     }
 
     private struct Row: Identifiable, Sendable {

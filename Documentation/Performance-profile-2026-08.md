@@ -3541,3 +3541,65 @@ fanout 12,801 → 9,448, translucent (from §48) 13,554 → 11,353. What
 remains is structural: the five walks a scroll stack makes per frame,
 rows that are cold by design (`gradients`, `churn`), the deep-nesting
 re-measure, and the writer's per-row netting.
+
+## 52. A row that measured twice to place a ramp once (2026-09-05, morning after)
+
+The structural levers §51 left were put to a panel of five investigators and
+ten refuters (two per proposal: is it byte-exact, and can the bench see it).
+The smallest survivor went first. Under a `.gradientExtent(.subtree)` frame,
+`_HStackCore.renderClip` measured every child a **second** time — at its
+final width and the row height — to learn how tall it would stand so the ramp
+could place it vertically. Its layout had just measured that child (at that
+width or wider, un-squeezed), and for a rigid child a height proposal of
+`rowHeight` cannot change the answer: `rowHeight` is at least every measured
+height unless the stack was clamped, and a clamped child reports `rowHeight`
+either way, so the slack is zero in both readings. The spacer was measured
+too, and handed a context nothing used. `resolvedLayout` now returns the
+per-child heights it already had, plus a bitmask of which children fill
+their height (the one case a height proposal changes an answer; those are
+still asked), and the ramp loop reads the height back.
+
+The first cut carried the per-child flexibility as a `[Bool]` and read
+**+1.9% on `churn`** (CI +0.5…+3.3) — one more array per row per walk, on a
+page with no ramp at all. A `UInt64` mask instead: same information, no
+allocation. Rendered bytes are unchanged (bench checksums identical on
+gradients, churn, fanout, dashboard); `.onRenderPass` now sees one
+`.measure` per rigid child of a ramp'd row instead of two.
+
+`ab_bench.py`, cpu-per-frame, 120×40, 8 reps, paired ratio with 95% CI:
+
+    scenario        old µs     new µs   change            95% CI
+    churn          15378.2    15292.2    -0.2%    -1.0% … +0.7%   indistinguishable
+    gradients      37174.8    35667.9    -3.9%    -5.1% … -3.0%   faster
+    dashboard         88.0       87.4    -0.9%    -1.6% … +0.6%   indistinguishable
+    fanout          9680.1     9708.9    +0.1%    -0.6% … +1.1%   indistinguishable
+
+The refuters' bound (a `Text` measure ≤ 0.8 µs, from the `churn` trace) put
+the prediction at −2…4% on `gradients`; the first cut read −2.3%, the mask
+−3.9%.
+
+**What the panel left standing, for next.** The larger lever both the `deep`
+and the cold-row investigations converged on is a per-pass measure memo that
+can serve a size measured under one height budget to a query under another:
+a `ViewSize` bit, default *dependent*, that a `sizeThatFits` clears only when
+it read no height budget and no clamp bit (Text, Spacer, Divider always;
+padding when its insets fit; `_VStackCore`/`_HStackCore`/`_ContainerViewCore`
+when every child's bit is clear and no clamp bit), with the memo keyed on
+identity + type + bytes + effective width + available width and a short
+per-key list of (proposal-width nil-ness, proposal height, available height,
+size) entries — exact match first, then an invariant entry whose height fits
+both the query's limit and its available height. The refuters' corrections
+that must go in with it: keep the proposal width's nil-ness out of the merged
+key only on the invariant path (ScrollView, TextField, Slider answer nil and
+specified widths differently and stay dependent); condition every rule on
+height alone (a width clamp cannot make an entry height-dependent, and the
+`deep` chain collapses its width to zero at level 20, which otherwise poisons
+every level above); migrate the container's empty-body early return; and a
+`TupleView` is measured by rendering and is never invariant. Expected: `deep`
+−50…70% (the render-side re-measure of each level's tail served from the
+scrollbar probe's entry), `churn`/`gradients` −20…30% (walk 4 served from
+walk 3 and walk 2 from walk 1). Declined from the same panel: a prior-frame
+scrollbar hint (it is a fixpoint in a different place for content that fits
+at full width and wraps one more line without it — hysteresis, not the same
+answer), and relaxing the uniform lazy stack's saturated report to the limit
+(a rendered-output change in its own right, worth its own decision).
