@@ -3188,3 +3188,124 @@ payload bound per iteration, a struct copied out of an optional — each of
 those was a bigger term than the colour maths, and each was invisible until
 a profile or a same-run A/B put a number beside it.
 
+
+## 43. The bench was measuring a different world (2026-09-05)
+
+Three findings from one afternoon, each one the reason the previous one had
+gone unseen. Every `cpu-per-frame` number in this document before this
+section was taken by a bench that differed from the app in two ways, and
+the app itself was throwing its render cache away every frame in any
+program whose model changes per frame.
+
+### 43.1 `Stress --bench` ran no per-pass lifecycle, and rooted at a string
+
+`Headless.bench` called `renderToBuffer` in a loop and nothing else. The
+live loop opens every pass with `StateStorage`/`RenderCache.beginRenderPass()`
+and closes it with `endRenderPass()`/`removeInactive()`; without those the
+cache was never pruned — an off-screen row's size entry was a hit in the
+bench and a miss in the app — and the per-pass measure memo, emptied only
+in `beginRenderPass`, grew by every miss forever: 2,400 entries a frame on
+`kitchensink`, millions over a profile, which put dictionary resizes and
+`tiny_free_detach_region` into profiles of code that allocates nothing of
+the kind. The measure-memo hit rates the bench printed (25% `fanout`, 63%
+`customlayout`) were CROSS-frame hits the app never gets; with the
+lifecycle they read 0–4% everywhere but `customlayout` (63%, genuinely
+intra-pass).
+
+Adding the lifecycle exposed the second divergence: `modifiers` read
+**290 ms** a frame, 94% of it in `StateStorage.isRetained` →
+`ViewIdentity.path.getter` → `renderPath()` → `String.+`. The bench's
+`RenderContext` took the initializer's default identity,
+`ViewIdentity(path: "")`, a RAW root — and for raw-rooted identities
+`isAncestor(of:)` has to render both full path strings and compare
+prefixes. The end-of-pass prune asks that of every retained root against
+every unvisited entry. `RenderLoop` roots at `ViewIdentity(rootType:)`,
+which takes the O(depth) pointer walk, so the app never paid it. The bench
+now roots at a type too. (The 104 headless tests built on the default
+initializer are raw-rooted as well; correct, but never profile through
+them.)
+
+Old bench → bench with lifecycle and a typed root, cpu-per-frame µs, 300
+iterations, 120×40:
+
+    megalist          503 →    508      dashboard        170 →    373
+    scrollfollow      488 →    553      framedcolumns    708 →    892
+    table             511 →    584      churn           1248 →   1834
+    table-multiline   526 →    526      kitchensink     5430 →   6744
+    tables-scroll    2646 →   2711      customlayout     389 →    422
+    tables-vstack    1041 →   1011      preferences      287 →    257
+    deep             2186 →  10547      gradients       3341 →  27314
+    fanout           7179 →  12801      animating       1094 →   1382
+    modifiers        1222 →   8908      translucent      547 →    760
+    textwall         2122 →   2240      anyview         1433 →   3100
+
+`deep` is ×4.8 and `gradients` ×8: they never had a warm cache in the app,
+and the old bench's was warm by accident. **Nothing above this section is
+comparable to anything below it.** The commits carry their own before/after
+pairs, measured the same way on both sides, and stand.
+
+### 43.2 The app cleared the whole render cache on every `@Observable` change
+
+The bench, honest, still read 2–25× under the app. `idle_cpu.py` on the
+live `Stress` binary under autopilot (30 Hz ticks, CPU% ÷ frame rate) put
+`dashboard` at 9 ms a frame against 0.37 warm — and against **7.0 ms
+`--bench --cold`**. Every scenario fitted "cold every frame plus a fixed
+overhead":
+
+    scenario     live CPU%   cold ms   warm ms
+    dashboard        27.3       7.0      0.37
+    modifiers        75.2      43.1      8.9
+    fanout           86.5     113.3     12.8
+    kitchensink      57.7      27.5      6.7
+    gradients        72.5      43.3     27.3
+    deep             31.5       9.5     10.5
+    megalist          4.3       1.2      0.5
+
+`TUIKIT_DEBUG_RENDER=1` on the live app said why: `CLEAR ALL (64 entries)`
+on 78 of 80 frames, hit rate 8%. `Renderable.swift` evaluated every
+composite body under `withObservationTracking`, and its `onChange` was
+`AppState.setNeedsRenderWithCacheClear()` → `clearAll()` at the next frame.
+RenderCycle.md listed that as the design. A model that changes every frame
+— a clock, a progress counter, a download's byte count — made every frame
+a cold render of the entire tree, and the memo machinery never served a
+buffer while it did.
+
+The tracking is per body, so the identity whose body read the value is
+known at the moment the change fires. The `onChange` now calls
+`renderCache.invalidateRender(for: identity)` — the same sink and scope as
+a `@State` write: the identity, its ancestors, and its descendants. The
+descendants are not optional: `churn`'s rows fold `tick` into their hash
+inside the row closure, keyed by index, and the old bench — which never
+consumed the clear flag at all — rendered a DIFFERENT checksum from the
+scoped build for `churn`, `animating` and `translucent`. It had been
+serving last frame's rows (§16's captured-data hole, in the harness's own
+scenarios). The scoped clear reaches them through the reader's subtree.
+
+### 43.3 The reader decides what a change costs
+
+Scoped or not, the live numbers did not move — the affected subtree was
+`StressApp/WindowGroup<RootView>`, because the shell's root body read
+`clock.tick` for its footer, and the root's subtree is everything. Moved
+the read into a leaf (`AutopilotStatus`), which is the rule the framework
+change makes available: **read a per-frame observable in the smallest view
+that needs it, never in a root or shell body.** Live, under autopilot:
+
+    scenario     before CPU%   after CPU%
+    dashboard        27.3         5.7
+    kitchensink      57.7        21.7
+    modifiers        75.2        31.8
+    fanout           86.5        50.7
+    megalist          4.3         3.0
+    gradients        72.5        72.2   (reads the tick: intended)
+    deep             31.5        32.0   (no memo to keep)
+
+`dashboard`'s cache reports `hits: 24, misses: 0, clears: 0` per frame and
+one `CLEAR AFFECTED by …/AutopilotStatus.1`. The bench moved the other way
+for the three tick-reading scenarios (`churn` 1834 → 15631, `animating`
+1382 → 9474, `translucent` 760 → 16978) because it now invalidates what the
+app invalidates and draws what the app draws; those are their honest
+costs, and the old ones were the cost of serving stale rows.
+
+The Example app's ordinary pages render two to four frames in five seconds
+idle — nothing ticks — so they never showed any of this. Any app with a
+live model did.

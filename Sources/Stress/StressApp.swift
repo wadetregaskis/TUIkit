@@ -93,31 +93,34 @@ private struct RootView: View {
             VStack(alignment: .leading, spacing: 0) {
                 view
                 Divider()
-                Text(footer(for: id)).foregroundStyle(.secondary)
+                // The clock is read in `AutopilotStatus`, a leaf, and NOT here.
+                // An `@Observable` change invalidates the identity whose body
+                // read it — together with everything below it, because a row
+                // may have captured a value that body derived. Read at the
+                // root, every tick threw away every scenario's memo, and every
+                // frame under autopilot cost its cold price: `fanout` 113 ms
+                // for 12.8 ms of work. Read in the footer, a tick re-renders
+                // the footer.
+                HStack(spacing: 0) {
+                    Text(footer(for: id)).foregroundStyle(.secondary)
+                    AutopilotStatus()
+                    Text("   [\(L("stress.shell.footer.hint"))]").foregroundStyle(.secondary)
+                }
             }
         } else {
             menu
         }
     }
 
-    /// Autopilot status string. Reading `clock.tick` here while autopilot is on
-    /// is **load-bearing**: it is what makes the tick *observed*, so each bump
-    /// (~30/s) actually invalidates and re-renders the tree. Without a live
-    /// reader on screen, autopilot would increment an unobserved counter and
-    /// generate no re-render load at all — i.e. do nothing visible. The live
-    /// frame number is also the user's signal that autopilot is running.
-    private var autopilotStatus: String {
-        clock.autopilot
-            ? "\(L("stress.shell.autopilot.on")) · \(L("stress.shell.autopilot.frame")) \(clock.tick)"
-            : L("stress.shell.autopilot.off")
-    }
-
     private var menu: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("stress.shell.menu.title").bold()
-            Text("\(L("stress.shell.label.scale")) \(scale) · \(L("stress.shell.label.seed")) \(config.seed) "
-                + "· \(L("stress.shell.label.autopilot")) \(autopilotStatus)")
-                .foregroundStyle(.secondary)
+            HStack(spacing: 0) {
+                Text("\(L("stress.shell.label.scale")) \(scale) · \(L("stress.shell.label.seed")) \(config.seed) "
+                    + "· \(L("stress.shell.label.autopilot")) ")
+                AutopilotStatus()
+            }
+            .foregroundStyle(.secondary)
             Divider()
             ForEach(0..<Scenarios.all.count, id: \.self) { index in
                 let scenario = Scenarios.all[index]
@@ -138,8 +141,7 @@ private struct RootView: View {
     private func footer(for id: String) -> String {
         let title = Scenarios.byID(id)?.localizedTitle ?? id
         return "\(title) · \(L("stress.shell.label.scale")) \(scale) "
-            + "· \(L("stress.shell.label.autopilot")) \(autopilotStatus)"
-            + "   [\(L("stress.shell.footer.hint"))]"
+            + "· \(L("stress.shell.label.autopilot")) "
     }
 
     // MARK: Navigation
@@ -203,5 +205,30 @@ private struct RootView: View {
             // esc on the menu falls through to the default quit handler.
             return false
         }
+    }
+}
+
+// MARK: - The one view that reads the clock
+
+/// The autopilot status — on, with the frame number, or off.
+///
+/// The only body in the shell that reads `clock.tick`, and deliberately a
+/// leaf: an `@Observable` change invalidates the view whose body read it and
+/// everything below, so the reader decides how much of the tree a tick costs.
+/// Reading `clock.tick` here while autopilot is on is **load-bearing**: it is
+/// what makes the tick *observed*, so each bump schedules a frame. Without a
+/// reader on screen, autopilot would increment an unobserved counter and
+/// nothing would render. The frame number is also the user's signal that
+/// autopilot is running.
+private struct AutopilotStatus: View {
+    @Environment(StressClock.self) private var clock
+
+    var body: some View {
+        Text(
+            clock.autopilot
+                ? "\(L("stress.shell.autopilot.on")) · \(L("stress.shell.autopilot.frame")) \(clock.tick)"
+                : L("stress.shell.autopilot.off")
+        )
+        .foregroundStyle(.secondary)
     }
 }
