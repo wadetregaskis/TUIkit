@@ -23,8 +23,14 @@ import TUIkitCore
 /// correctly.** Every compensation here works around a measured *defect*, so
 /// applying one to a terminal that has no such defect would break output that
 /// was fine. An unidentified client therefore gets ``Program/unidentified`` and
-/// nothing is done to its output — which is a deliberate answer, not a
+/// none of its output is repaired — which is a deliberate answer, not a
 /// failure.
+///
+/// The one thing still emitted for an unidentified host is the chrome-overhang
+/// push (`ChromeOverhang.swift`), and it is not an exception to that rule: it
+/// repairs no defect of the terminal's, it pays for a claim TUIkit widened
+/// above what every host advances. Omitting it would shear rows on the hosts
+/// that can never be measured.
 ///
 /// ```swift
 /// let client = TerminalClient.current
@@ -365,7 +371,7 @@ public struct TerminalClient: Sendable, Equatable {
         case .ghostty: cluster.ghosttyCursorAdvance
         case .warp: cluster.warpCursorAdvance
         case .tmux: cluster.tmuxCursorAdvance
-        case .unidentified: cluster.terminalWidth
+        case .unidentified: cluster.unidentifiedHostCursorAdvance
         }
     }
 
@@ -433,7 +439,13 @@ public struct TerminalClient: Sendable, Equatable {
             // needs a CUF for its lone-regional-indicator under-advance.
             return strippingSkinTonesIfUnclaimed(text).withWarpCursorCompensation()
         case .unidentified:
-            return text
+            // Not "no compensation" any more, but "no HOST compensation". An
+            // unidentified terminal is still assumed to have no defects of its
+            // own; the chrome-overhang class is not one of its defects but the
+            // price of a claim TUIkit widened for every host, so it is owed
+            // here too — see ``String/withChromeOverhangCompensation()``. With
+            // the table empty this returns `text` unchanged.
+            return text.withChromeOverhangCompensation()
         }
     }
 }

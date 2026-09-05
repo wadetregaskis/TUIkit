@@ -260,6 +260,78 @@ painted and how many cells it covers — which needs pixels rather than DSR, and
 is the half the `↵` report is about. They stay in
 `TerminalLedgerConformanceTests.awaitingLandingMeasurement` until then.
 
+#### The ink half: a mechanism, and no measurement yet
+
+The framework can now account for a chrome glyph that paints wider than it
+advances, in layout and in rendering both. The mechanism is
+`Sources/TUIkitCore/Extensions/ChromeOverhang.swift`, and **its table is
+empty**: nobody has measured the ink of any of these glyphs on any host. There
+is one user's observation of one glyph on one terminal, which is a report and
+not a measurement, and a table built from it would be a guess about the other
+twenty-eight rows and the other three hosts.
+
+**The measurement is `Tools/TerminalProbes/overhang_card.py`** — a user-read
+card, because the machine version (`landing_probe.py`) needs screenshots and
+those need a Screen Recording grant this project does not have. It draws each
+of the twenty-nine glyphs in ONE cell between two flanks of solid magenta: ink
+on a flank is overhang, and which flank says which way. Two calibration rows
+(`█`, which must meet both flanks, and `a`, which must clear them) say whether
+the card is legible on the host at all before any row under them is believed.
+A third block draws the reported shape — `↵ activate` beside `↵  activate` —
+so the remedy can be judged where the defect was seen.
+
+**Record the FONT and its size with the host and version.** Overhang is a font
+property at least as much as a host one, and a reading with no font named
+cannot be reproduced.
+
+**How the mechanism works, once a row is added.** A listed codepoint claims
+**two** cells on every host, every per-host advance model keeps reporting the
+measured **one**, and the existing `ECH(2)` + glyph + `CUF(1)` walk squares
+them — the same treatment SF Symbols, VS-15 chrome and lone regional indicators
+already take. The grid stays exactly where it is; the glyph simply gets a blank
+neighbour to overhang into.
+
+Three consequences are worth naming because none of them is obvious:
+
+- **The claim is host-independent, deliberately.** This is the rule stated for
+  Ghostty's SF Symbols below — a per-host claim buys a blank cell at the price
+  of a per-host layout difference — and it applies here in the same direction,
+  because the rule is about who pays rather than about which way the claim
+  moves: the claim covers the widest painter, and hosts that draw the glyph
+  narrow take one blank cell. The asymmetry is stronger here than there. An
+  over-claim wastes a cell; an under-claim puts one glyph's ink on top of
+  another's, which is the reported defect. And chrome is not a stray SF Symbol
+  in someone's data — making `↵`, `▶` and `●` measure differently per terminal
+  would make the framework's own column arithmetic host-dependent.
+- **The shortfall is ours, so it is owed everywhere.** It is not a terminal's
+  defect but the price of a claim TUIkit widened, so `TerminalQuirks` has no
+  switch to turn it off, the empty-quirk-set walk still emits it, and an
+  **unidentified** host — which otherwise receives no compensation at all —
+  gets `String.withChromeOverhangCompensation()`. Without that last one the
+  widened claim would shear rows on exactly the hosts that cannot be measured.
+  That walk compensates but does **not** normalize: the shared walk it borrows
+  also strips a redundant VS-16 off a tone cluster and decomposes ZWJ sequences,
+  and those are repairs calibrated against the four measured hosts. Handing them
+  to a terminal TUIkit could not name would rewrite its content — `☝️🏽` came
+  back as `☝🏽` — which is the one thing an unidentified client is documented
+  never to do. It is `normalizing: false`, and short-circuits to `self` while
+  the table is empty, because the walk's byte gate admits any row carrying an
+  emoji and "no row is listed" would otherwise not be enough to make the path a
+  no-op.
+- **Box Drawing and Block Elements (`─ │ █ ▌ ▐ ▒`) can never be listed**, and
+  the predicate refuses them rather than trusting whoever edits the table. For
+  a border glyph a two-cell claim is not a remedy but a second defect: every
+  row inside the border loses a column. If one of those is ever measured to
+  overhang, the fix is a different glyph — chrome glyph selection — not a wider
+  claim. The card still shows them, because the reading is worth having either
+  way.
+
+While the table is empty every one of those paths folds to the behaviour that
+shipped before it existed: the claim is unchanged, no model reports a
+shortfall, and the compensation gate admits exactly the bytes it always did.
+`ChromeOverhangTests` pins that, and fails the moment a row is added — which is
+the prompt to record the reading here in the same commit.
+
 ## Identifying the host terminal
 
 Every per-terminal model in this document is only as good as the answer to
@@ -1027,6 +1099,13 @@ is deliberately NOT applied here — it would discard a correct rendering.
   and there is a blank in the next one for it to overhang into. U+21B5 is East
   Asian Width *Neutral*, so no width table predicts this; it is a host or font
   rendering decision, and it does not disturb the grid.
+
+  The framework can now account for it — a widened claim plus the ordinary
+  `ECH`+`CUF`, see "The ink half" above — but **has not**, because this is
+  still a report rather than a reading. Run
+  `Tools/TerminalProbes/overhang_card.py` here, note the font and its size, and
+  add `0x21B5` to `chromeOverhangCodepoints` if the right-hand flank carries
+  ink.
 
 ### Input behaviour
 

@@ -8,6 +8,7 @@ import Foundation
 import Testing
 
 @testable import TUIkit
+@testable import TUIkitCore  // `isOverhangingChromeGlyph` — internal to the width layer
 
 /// The framework's own chrome, against what four terminals actually did with it.
 ///
@@ -87,15 +88,29 @@ struct ChromeGlyphAdvanceTests {
         }
     }
 
-    @Test("The framework claims what the terminals do")
-    func theClaimMatchesTheMeasurement() {
+    @Test("The framework claims what the terminals do, unless the ink says otherwise")
+    func theClaimCoversTheMeasurement() {
         for row in Self.chromeRows {
-            let claimed = Character(row.text).terminalWidth
+            let character = Character(row.text)
+            let claimed = character.terminalWidth
+            // A glyph in the overhang table (`ChromeOverhang.swift`) claims the
+            // two cells its INK covers while every host still advances it one,
+            // and the shortfall is what the ECH+CUF walk exists to close — so
+            // for those rows the claim legitimately EXCEEDS the advance, and
+            // `ChromeOverhangTests` is where that pair is checked. For every
+            // other row the two must still be equal: an unexplained gap is the
+            // shear this suite was written to catch.
+            let overhangs = character.isOverhangingChromeGlyph
             for host in Self.records {
                 guard let measured = host.advances[row.id] else { continue }
                 #expect(
-                    claimed == measured.advance,
+                    claimed >= measured.advance,
                     "\(row.id) \(row.text): claimed \(claimed), \(host.name) advanced \(measured.advance)")
+                if !overhangs {
+                    #expect(
+                        claimed == measured.advance,
+                        "\(row.id) \(row.text): claimed \(claimed), \(host.name) advanced \(measured.advance)")
+                }
             }
         }
     }

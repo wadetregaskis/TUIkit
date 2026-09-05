@@ -103,6 +103,13 @@ extension Character {
             return 1
         }
 
+        // Chrome whose ink overhangs its cell (`ChromeOverhang.swift`): the
+        // measured advance is 1 on every host, and the claim TUIkit widened to
+        // 2 is what owes the CUF. Ahead of the multi-scalar guard below, which
+        // would otherwise report the widened claim for these single scalars
+        // and emit nothing.
+        if isOverhangingChromeGlyph { return 1 }
+
         guard scalars.count > 1, let first = scalars.first else { return terminalWidth }
 
         // A keycap — base + U+20E3, with or without VS-16 — advances 2
@@ -494,7 +501,7 @@ extension Character {
             if scalars.contains(where: { $0.value == 0xFE0F }) { return 3 }
             if first.value > 0xFFFF { return 1 }
         }
-        if isVS16UnderAdvancer || isBarePictographUnderAdvancer {
+        if isVS16UnderAdvancer || isBarePictographUnderAdvancer || isOverhangingChromeGlyph {
             return 1
         }
         return terminalWidth
@@ -556,7 +563,7 @@ extension Character {
         {
             return 1
         }
-        if isVS15ChromeUnderAdvancer || isBarePictographUnderAdvancer {
+        if isVS15ChromeUnderAdvancer || isBarePictographUnderAdvancer || isOverhangingChromeGlyph {
             return 1
         }
         return terminalWidth
@@ -611,7 +618,7 @@ extension Character {
         {
             return 1
         }
-        if isLoneRegionalIndicator || isBarePictographUnderAdvancer {
+        if isLoneRegionalIndicator || isBarePictographUnderAdvancer || isOverhangingChromeGlyph {
             return 1
         }
         // Unicode 16.0's seven emoji singletons: Warp's width table is
@@ -746,6 +753,9 @@ extension Character {
         // a CUF here is exactly the set the predicate names.
         if isBarePictographUnderAdvancer { return 1 }
         if isLoneRegionalIndicator { return 1 }
+        // Chrome whose ink overhangs its cell — the claim is TUIkit's, so the
+        // CUF is owed inside a compositor's grid exactly as on a terminal.
+        if isOverhangingChromeGlyph { return 1 }
         // Fitzpatrick tones: 2 on a base tmux merges, 4 on one it detaches —
         // per codepoint, the full modifier-base sweep (2026-08-28). The
         // detaching ones are stripped before tmux ever sees them; this raw

@@ -297,13 +297,17 @@ package enum TerminalWidthCorpus {
                 + "measured any: half are East Asian AMBIGUOUS, which is a terminal "
                 + "SETTING rather than a property of the character, and ↵ (U+21B5, EAW "
                 + "Neutral, so 1 by every wcwidth) was reported painting 2 in Ghostty — "
-                + "which ate the space before the label beside it. UNMEASURED.",
+                + "which ate the space before the label beside it. ADVANCE measured "
+                + "2026-09-04: 1 on all four hosts, Ambiguous rows included. INK still "
+                + "unmeasured everywhere — `overhang_card.py`.",
         "chrome_glyph":
             "The drawing glyphs the framework's own controls are made of — borders, "
                 + "track fills, field caps, radio indicators, disclosure and stepper "
                 + "triangles. Same claim and the same gap as `chrome_key`, and a wider "
                 + "blast radius: a border glyph measured wrong moves every cell of every "
-                + "row inside it. Most are East Asian AMBIGUOUS. UNMEASURED.",
+                + "row inside it. Most are East Asian AMBIGUOUS. ADVANCE measured "
+                + "2026-09-04: 1 on all four hosts. INK still unmeasured everywhere — "
+                + "`overhang_card.py`, and for these a wide claim is never the remedy.",
         "combining":
             "Base + combining mark(s) (NFD é, and one with three stacked): one cell, "
                 + "agreed everywhere — the marks are Mn and advance nothing.",

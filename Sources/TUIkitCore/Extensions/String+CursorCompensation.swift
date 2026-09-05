@@ -66,6 +66,15 @@ extension String {
     /// Box drawing and block elements are `E2 94`–`E2 96`, and CJK is `E3`–
     /// `E9`; none of them match, which is the point.
     ///
+    /// The one exception is the chrome-overhang table (`ChromeOverhang.swift`),
+    /// whose glyphs ARE ordinary BMP chrome: widening their claim gives them a
+    /// shortfall to compensate, so the gate has to admit them or the walk never
+    /// sees them and the widened claim shears the row. Their second bytes come
+    /// from ``chromeOverhangGateMask``, derived from the table itself so the
+    /// two cannot drift, and that mask is **zero while the table is empty** —
+    /// which is the shipped state, so today this gate admits exactly what it
+    /// always did.
+    ///
     /// This is an over-approximation on purpose — `0xEF` admits all of
     /// U+F000–U+FFFF and the joiner pair admits U+2000–U+20FF — because a
     /// gate that is too eager only costs a walk that finds nothing, while one
@@ -79,15 +88,21 @@ extension String {
     /// found non-ASCII, and its per-byte work is a comparison where the walk's
     /// is grapheme breaking plus Unicode property lookups.
     var utf8MayNeedCompensation: Bool {
-        utf8.withContiguousStorageIfAvailable { buffer -> Bool in
+        // Hoisted out of the byte loop on purpose: reading a global costs a
+        // one-time-initialization check, and this loop runs per byte of every
+        // rebuilt row. Once, per row, it is free.
+        let overhangMask = chromeOverhangGateMask
+        return utf8.withContiguousStorageIfAvailable { buffer -> Bool in
             guard let base = buffer.baseAddress else { return true }
             let count = buffer.count
             var i = 0
             while i < count {
                 let byte = base[i]
                 if byte >= 0xEF { return true }
-                if byte == 0xE2, i + 1 < count, base[i + 1] == 0x80 || base[i + 1] == 0x83 {
-                    return true
+                if byte == 0xE2, i + 1 < count {
+                    let next = base[i + 1]
+                    if next == 0x80 || next == 0x83 { return true }
+                    if overhangMask & (1 &<< UInt64(next & 0x3F)) != 0 { return true }
                 }
                 i += 1
             }
@@ -613,6 +628,45 @@ extension String {
         withCursorForwardCompensation { $0.tmuxCursorAdvance }
     }
 
+    /// Returns a copy of this string with the chrome-overhang class — and
+    /// nothing else — compensated: the treatment an UNIDENTIFIED host gets.
+    ///
+    /// Every other class on this path is a host's own defect, and an
+    /// unidentified host is assumed to have none, which is why it is otherwise
+    /// emitted verbatim. This class is not a defect: TUIkit widened the claim
+    /// on these glyphs to the two cells their ink covers
+    /// (`ChromeOverhang.swift`), and every host measured still advances them
+    /// one — so the shortfall belongs to the claim, not to the terminal, and
+    /// is owed wherever the claim is in force. Without it the widened claim
+    /// would shear a row on the one kind of host that cannot be measured, and
+    /// chrome repeats many times per row.
+    ///
+    /// The erase rides along for the reason it does everywhere else: with
+    /// `CUF` alone the cell the cursor skips keeps the terminal's default
+    /// background, which was measured on all four native hosts (2026-08-28)
+    /// and read as a comb across a coloured run. It is `ECH`, not a space, so
+    /// nothing visible is added and every width measured afterwards still
+    /// counts the row correctly.
+    ///
+    /// It compensates and does NOT normalize (`normalizing: false`), which is
+    /// the difference from every other caller of the shared walk. The walk's
+    /// redundant-VS-16 strip and its ZWJ decomposition are repairs calibrated
+    /// against four measured hosts; running them here would silently rewrite an
+    /// unidentified host's content — `☝️🏽` came out as `☝🏽` — which is exactly
+    /// the thing this client is documented never to do.
+    ///
+    /// While the table is empty this is the identity function on every input,
+    /// and the first line is what makes that true rather than merely likely:
+    /// the walk's own gate admits any line carrying an emoji, so without the
+    /// short-circuit an unidentified host would still rebuild every such row to
+    /// produce the same bytes.
+    public func withChromeOverhangCompensation() -> String {
+        guard !chromeOverhangCodepoints.isEmpty else { return self }
+        return withCursorForwardCompensation(erasingUnderGlyph: true, normalizing: false) {
+            $0.unidentifiedHostCursorAdvance
+        }
+    }
+
     /// Shared CUF-injection walk: appends each character, then pushes the
     /// cursor forward by the shortfall whenever the host advances it less
     /// than the character's painted ``Character/terminalWidth``.
@@ -640,9 +694,18 @@ extension String {
     ///     the glyph's right half). It stays a parameter because tmux remains
     ///     unmeasured, and an unmeasured terminal is assumed to paint
     ///     correctly.
+    ///   - normalizing: Whether the walk may also REWRITE what it emits — the
+    ///     redundant-VS-16 strip on a tone cluster and the traits-driven ZWJ
+    ///     decomposition. Every identified host wants both, because both were
+    ///     calibrated against that host's own measurements. The chrome-overhang
+    ///     walk passes `false`: it serves a host TUIkit could not name, whose
+    ///     documented treatment is "change nothing", and a rewrite calibrated
+    ///     for four measured hosts is not something an unmeasured one consented
+    ///     to. Left `true` by default so no existing caller changes.
     ///   - advance: The host's cursor advance for a character.
     func withCursorForwardCompensation(
         erasingUnderGlyph: Bool = false,
+        normalizing: Bool = true,
         advance: (Character) -> Int
     ) -> String {
         // Fast path: every quirk cluster is non-ASCII (same reasoning and
@@ -663,7 +726,7 @@ extension String {
             // 4 cells against a 2-cell claim), iTerm2 and Warp render it in
             // exactly the bare-base + swatch cells the claim allocates. See
             // ``Character/withoutRedundantToneVS16`` for the per-host numbers.
-            let c = character.withoutRedundantToneVS16 ?? character
+            let c = normalizing ? (character.withoutRedundantToneVS16 ?? character) : character
             let claimed = c.terminalWidth
             let actual = advance(c)
             if claimed > actual, erasingUnderGlyph {
@@ -697,8 +760,9 @@ extension String {
             // components it draws anyway, and the dropped forms measured
             // aligned for sequential AND absolute followers), each segment is
             // emitted and compensated on its own. Hosts whose traits compose
-            // (iTerm2, Ghostty, tmux) never enter this branch.
-            if traits.zwjSequences == .decomposedDroppingJoiners,
+            // (iTerm2, Ghostty, tmux) never enter this branch — nor does the
+            // chrome-overhang walk, which rewrites nothing.
+            if normalizing, traits.zwjSequences == .decomposedDroppingJoiners,
                 let segments = c.emojiZWJSegments
             {
                 for segment in segments {

@@ -48,6 +48,20 @@ when unset), the visual/aspect probes print to the terminal.
   the mark for real DESTROYED the Image page, so `lrm+coloured` and `lrm+wide`
   were added for the two axes that block lacked. STILL OPEN — see
   Terminal-compatibility.md's "RTL characters as image PIXELS".
+- `overhang_card.py` — does a chrome glyph's INK stay inside its cell? Each of
+  the 29 `chrome_key`/`chrome_glyph` corpus rows is drawn in ONE cell between
+  two flanks of solid magenta; ink on a flank is overhang, and which flank says
+  which way. The alignment cards cannot ask this — they measure where the next
+  character lands, and an overhanging glyph moves nothing: the grid is intact
+  and only the ink is over the line, which is exactly the `↵ activate` →
+  `↵activate` report from Ghostty. Two calibration rows (`█` must meet both
+  flanks, `a` must clear them) say whether the card is legible on the host
+  before any row under them is believed, and a third block draws the reported
+  shape (`<glyph> label` beside `<glyph>  label`) so the remedy can be judged
+  where the defect was seen. **UNMEASURED on every host** — the mechanism it
+  feeds (`Sources/TUIkitCore/Extensions/ChromeOverhang.swift`) ships with an
+  empty table on purpose. Record the FONT and its size with the host: overhang
+  is a font property at least as much as a host one.
 - `visual_card.py` — static `|<c>|<c>|<c>|X` alignment card with a column
   ruler, for screenshot inspection of PAINTED width (which DSR can't see),
   merged-vs-split clusters, seams, and swatches. It answers exactly ONE of a

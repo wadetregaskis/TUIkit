@@ -531,6 +531,25 @@ extension Unicode.Scalar {
         // overhead for them.
         if (0x2500...0x259F).contains(scalarValue) { return 1 }
 
+        // Chrome whose INK overhangs the single cell every host advances it —
+        // claimed 2 so the neighbouring cell is left blank for the overhang to
+        // land in, with the per-host models reporting the measured 1 and the
+        // shared CUF closing the difference. See `ChromeOverhang.swift`; the
+        // table is empty until a card reading fills it, so this is a constant
+        // `false` today.
+        //
+        // Placed AFTER the Box Drawing / Block Elements fast path, which is
+        // both the cheap ordering and the safe one: those glyphs return above
+        // and so can never be widened, which is the rule the mechanism is
+        // bounded by. The window is spelled as literals rather than read from
+        // `chromeOverhangFloor`/`Ceiling` because this is a per-scalar path
+        // where a global's one-time-initialization check is not free; the two
+        // comparisons reject everything above (CJK starts at U+2E80) and
+        // `ChromeOverhangTests` pins the table inside them.
+        if scalarValue >= 0x2190, scalarValue <= 0x25EF, isChromeOverhangCodepoint(scalarValue) {
+            return 2
+        }
+
         // Single-scalar codepoints that default to colour emoji presentation
         // are painted as 2-cell glyphs by Terminal.app (and most modern
         // terminal emulators) regardless of whether they're in any of the

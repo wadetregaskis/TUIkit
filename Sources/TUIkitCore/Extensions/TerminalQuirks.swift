@@ -295,6 +295,14 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         let width = cluster.terminalWidth
         let scalars = cluster.unicodeScalars
 
+        // Chrome whose ink overhangs its cell (`ChromeOverhang.swift`) has NO
+        // switch, unlike everything else here, and that is deliberate: it is
+        // not one of this terminal's defects but the price of a claim TUIkit
+        // widened to two cells for every host. Every host measured advances
+        // these by one, so the shortfall — and the CUF that closes it — is
+        // owed unconditionally, and an unmeasured terminal explored through
+        // these switches must not be able to switch it off and shear its rows.
+        if cluster.isOverhangingChromeGlyph { return 1 }
         if let composed = composedAdvance(of: cluster, width: width) {
             return composed
         }
@@ -468,7 +476,13 @@ extension String {
             case .stripAll: withSkinToneFallback(scope: .all)
             case .stripTmuxDetached: withSkinToneFallback(scope: .keepingTmuxMerged)
             }
-        guard !quirks.isEmpty else { return stripped }
+        // `isEmpty` means "this terminal has no defects", and that stays true
+        // of a host whose chrome overhangs: that shortfall belongs to the claim
+        // TUIkit widened, not to the terminal (`ChromeOverhang.swift`), so it
+        // is owed even here. Skipping the walk on `isEmpty` alone sheared every
+        // row carrying a listed glyph — caught by the conservation sweep, which
+        // is what it is for.
+        guard !quirks.isEmpty || !chromeOverhangCodepoints.isEmpty else { return stripped }
 
         var result = ""
         result.reserveCapacity(stripped.count + 8)
