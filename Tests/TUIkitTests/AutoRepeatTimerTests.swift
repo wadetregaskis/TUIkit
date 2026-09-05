@@ -67,7 +67,10 @@ struct AutoRepeatTimerTests {
         var fires = 0
         let timer = Self.timer()
         timer.start { fires += 1 }
-        await Self.settle(ms: 5)
+        // The press acts on the next main-actor turn and the release is read
+        // on the one after — a yield, not a sleep, for the reason given in
+        // `slowFrameDoesNotDoubleATap`: a timed wake can lose to the timer's.
+        await Task.yield()
         timer.stop()
         await Self.settle(ms: Self.delayMs * 3)
         #expect(fires == 1, "the press acted, the release ended it before any repeat")
@@ -107,12 +110,31 @@ struct AutoRepeatTimerTests {
 
         // The first await after the frame — the run loop's own, where it waits
         // for stdin. Queued main-actor work runs here, the timer's included.
-        await Self.settle(ms: Self.intervalMs)
+        //
+        // A yield, not a sleep. The timer's wake has been queued on the main
+        // actor since the delay elapsed, so a yield re-queues this test BEHIND
+        // it and the actor runs the two in that order: the timer re-arms, then
+        // the test reads the release below. Whichever order they run in, the
+        // outcome is one fire — the timer either waits again or is cancelled
+        // mid-sleep — so nothing here depends on timing any more.
+        //
+        // It did. A `settle(intervalMs)` here read the release 10 ms into the
+        // timer's 40 ms re-arm, and that 30 ms was a race: a sleep's wake
+        // crosses the global pool before it reaches the main actor, so two
+        // wakes 30 ms apart can arrive in either order once the process is
+        // oversubscribed. The only way to a second fire is the timer's wake
+        // arriving first — its sleep then returns on time, passes the gate, and
+        // fires before the release is read — and on a CI runner saturated by
+        // the rest of the suite that is what one run in eight showed:
+        // `(fires → 2) == 1`. The gate was right; the test had entered a race
+        // it had no reason to enter.
+        await Task.yield()
+        #expect(fires == 1, "the timer woke late and waited again, rather than firing (\(fires) fires)")
 
         // Only NOW does the loop reach the release that has been sitting in the
         // input buffer since the click.
         timer.stop()
-        await Self.settle(ms: Self.delayMs)
+        await Self.settle(ms: Self.delayMs * 2)
         #expect(fires == 1, "still one step, not two (\(fires) fires)")
     }
 }
