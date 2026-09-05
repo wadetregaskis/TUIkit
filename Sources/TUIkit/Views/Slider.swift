@@ -956,8 +956,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             underline: !isDisabled && (valueStyle.underline ?? false)) + padding
 
         // What the track came back as, in CELLS — which is not always the
-        // `trackWidth` it was asked for. A multi-cell fill or unfilled glyph
-        // quantises the track, and `TrackRenderer.renderCoarsePattern` then
+        // `trackWidth` it was asked for. A multi-cell fill, unfilled or ramp
+        // glyph quantises the track, and `TrackRenderer.renderCoarsePattern` then
         // shrinks it to the largest whole multiple of that quantum that fits;
         // deliberately and permanently, so a bar's width cannot wobble with its
         // fill ratio. Everything drawn to the RIGHT of the track moves with it,

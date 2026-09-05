@@ -218,10 +218,14 @@ extension TrackRenderer {
 
         // Any multi-cell character forces the coarse quantized mode. (The
         // solid `.background` unfilled region is spaces, so only a patterned
-        // unfill constrains the quantum.)
+        // unfill constrains the quantum.) The ramp counts too: its glyph is
+        // drawn INTO the boundary cell, so a two-cell ramp glyph over a
+        // one-cell fill made the track a cell longer whenever a boundary cell
+        // was drawn — and the bar's length then followed its value.
         let quantum = max(
             fillChars.map(\.terminalWidth).max() ?? 1,
-            emptyChars.map(\.terminalWidth).max() ?? 1)
+            emptyChars.map(\.terminalWidth).max() ?? 1,
+            config.partialRamp?.map(\.terminalWidth).max() ?? 1)
         if quantum > 1 {
             return renderCoarsePattern(
                 fraction: fraction, width: width, quantum: quantum,

@@ -51,6 +51,21 @@ struct TrackPatternTests {
         #expect(render(1.0 / 6.0, width: 6, config: config) == "█oO.oO")
     }
 
+    /// The ramp is drawn INTO the boundary cell, so a two-cell ramp glyph
+    /// over a one-cell fill used to make the track one cell longer whenever a
+    /// boundary cell was drawn — a bar whose length followed its value. A wide
+    /// ramp glyph now coarsens the quantum exactly as a wide fill does.
+    @Test("A two-cell ramp glyph over a one-cell fill does not lengthen the track")
+    func emojiRampDoesNotLengthen() {
+        let config = TrackConfiguration(fill: "█", partialRamp: ["😀"], emptyStyle: .glyph("-"))
+        let widths = Set(stride(from: 0.0, through: 1.0, by: 0.05).map { fraction in
+            render(fraction, width: 10, config: config).strippedLength
+        })
+        #expect(widths == [10], "the track's width followed its value: \(widths.sorted())")
+        // And the ramp still draws: a value between two-cell steps shows it.
+        #expect(render(0.25, width: 10, config: config).contains("😀"))
+    }
+
     @Test("A two-cell emoji fill coarsens the resolution and shrinks the track")
     func emojiFillCoarsens() {
         let config = TrackConfiguration(fill: "😀", emptyStyle: .glyph("-"))
