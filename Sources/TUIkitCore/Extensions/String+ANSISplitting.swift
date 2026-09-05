@@ -712,7 +712,8 @@ extension String {
             suffixWidth: suffixWidth,
             styleBeforeSuffix: style.rendered,
             backgroundUnderOverlay: under?.renderedBackground ?? "",
-            totalWidth: total)
+            totalWidth: total,
+            suffixDropColumns: suffixDropColumns)
     }
 }
 
@@ -739,6 +740,10 @@ struct ANSIOverlaySplit {
     let backgroundUnderOverlay: String
     /// The line's whole visible width.
     let totalWidth: Int
+
+    /// The column the suffix was dropped from — the overlay's end, so a
+    /// caller holding the split need not measure the overlay again.
+    let suffixDropColumns: Int
 }
 
 // MARK: - Painting a line over a field it did not ask about

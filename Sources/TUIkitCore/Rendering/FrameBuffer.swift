@@ -1150,11 +1150,22 @@ extension FrameBuffer {
         // is where the story of the extra `CUF` is written down.
         let base = line.removingCursorCompensation(
             coveringColumns: column..<(column + width))
-        let background = base.ansiSGRStateAt(visibleColumn: column).renderedBackground
+        // One walk of the line. The split already knows the background in
+        // force where the run starts and the line's width, which used to be
+        // two more walks (`ansiSGRStateAt`, `strippedLength`) and a pad that
+        // walked a third time — per run, per tick, 11% of a live frame. A line
+        // shorter than the run's end is padded by the insert, not here.
+        let split = base.ansiOverlaySplit(
+            prefixColumns: column, suffixDropColumns: column + frame.strippedLength)
+        let background = split.backgroundUnderOverlay
         return insertOverlay(
-            base: base.padToVisibleWidth(max(base.strippedLength, column + width)),
+            split: split,
             overlay: background + restating(background, afterResetsIn: frame),
-            atColumn: column)
+            atColumn: column,
+            // The line used to be padded out to the run's END before the
+            // split, so a frame narrower than its run left the pad's spaces
+            // after it; the same spaces come from the suffix shortfall now.
+            minimumTotalWidth: column + width)
     }
 
     /// `line` with `span` spliced over it starting at `column`, the line's own
@@ -1168,8 +1179,10 @@ extension FrameBuffer {
     public static func splicing(_ span: String, into line: String, atColumn column: Int) -> String {
         let width = span.strippedLength
         guard width > 0 else { return line }
+        // As above: the split is the one walk; a short line is padded by the
+        // insert.
         return insertOverlay(
-            base: line.padToVisibleWidth(max(line.strippedLength, column + width)),
+            split: line.ansiOverlaySplit(prefixColumns: column, suffixDropColumns: column + width),
             overlay: span,
             atColumn: column)
     }
@@ -1291,12 +1304,24 @@ extension FrameBuffer {
         atColumn column: Int
     ) -> String {
         let overlayVisibleWidth = overlay.strippedLength
-        let afterOverlayColumn = column + overlayVisibleWidth
 
         // Split the base into prefix (before overlay) and suffix (after overlay),
         // preserving all ANSI codes in both segments.
         let split = base.ansiOverlaySplit(
-            prefixColumns: column, suffixDropColumns: afterOverlayColumn)
+            prefixColumns: column, suffixDropColumns: column + overlayVisibleWidth)
+        return insertOverlay(split: split, overlay: overlay, atColumn: column)
+    }
+
+    /// ``insertOverlay(base:overlay:atColumn:)`` for a caller that has already
+    /// split the base at the overlay's columns — the split carries the
+    /// overlay's end, so nothing is measured again.
+    fileprivate static func insertOverlay(
+        split: ANSIOverlaySplit,
+        overlay: String,
+        atColumn column: Int,
+        minimumTotalWidth: Int = 0
+    ) -> String {
+        let afterOverlayColumn = split.suffixDropColumns
 
         // Either split point can land in the MIDDLE of a wide character
         // (emoji, CJK): the split drops the straddling character whole, so
@@ -1313,6 +1338,14 @@ extension FrameBuffer {
         let suffixShortfall = expectedSuffixWidth - split.suffixWidth
         if suffixShortfall > 0 {
             suffix = String(repeating: " ", count: suffixShortfall) + suffix
+        }
+        // A caller that wants the line to reach a column past everything the
+        // base had (a run's end, when its frame is narrower than the run) gets
+        // the extra cells as plain spaces AFTER the suffix — where a pad of the
+        // base before the split would have put them.
+        let trailing = minimumTotalWidth - max(split.totalWidth, afterOverlayColumn)
+        if trailing > 0 {
+            suffix += String(repeating: " ", count: trailing)
         }
 
         // Restore the styling ACTIVE at the suffix's start column (not the line's
