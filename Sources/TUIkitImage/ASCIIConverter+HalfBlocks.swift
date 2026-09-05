@@ -90,43 +90,37 @@ extension ASCIIConverter {
         mode: ASCIIColorMode
     ) -> [String] {
         let lowerHalfBlock: Character = "▄"
-        let bold = mode.foregroundSurvivesBold ? "\(ANSIEscape.csi)1m" : ""
+        let bold = mode.foregroundSurvivesBold
 
         var lines = [String]()
         lines.reserveCapacity(height)
 
-        for cellY in 0..<height {
-            var line = ""
-            line.reserveCapacity(width * 32)  // foreground + background ANSI per cell
-            var lastFg = ""
-            var lastBg = ""
+        // Straight off the pixel buffer: `pixel(at:)` is three retains and
+        // three releases of the array per call in a debug build, twice a cell.
+        image.pixels.withUnsafeBufferPointer { pixels in
+            let stride = image.width
+            for cellY in 0..<height {
+                var row = ANSIRowBuilder(capacity: width * 32)  // foreground + background per cell
+                let top = 2 * cellY * stride
+                let bottom = top + stride
 
-            for cellX in 0..<width {
-                let topPixel = image.pixel(at: cellX, 2 * cellY)
-                let bottomPixel = image.pixel(at: cellX, 2 * cellY + 1)
-
-                let bgCode = backgroundColorCode(for: topPixel, mode: mode)
-                let bottomCode = backgroundColorCode(for: bottomPixel, mode: mode)
-                let uniform = bgCode == bottomCode
-                let fgCode = uniform ? "" : foregroundColorCode(for: bottomPixel, mode: mode)
-
-                if fgCode != lastFg || bgCode != lastBg {
-                    // The reset clears bold too, so re-assert it with each colour
-                    // run (bold persists across cells that reuse the same colours).
-                    // `bold` is empty in the modes that cannot afford it, and a
-                    // uniform cell draws no glyph for it to weigh.
-                    line += ANSIEscape.reset
-                    line += (uniform ? "" : bold) + fgCode + bgCode
-                    lastFg = fgCode
-                    lastBg = bgCode
+                for cellX in 0..<width {
+                    let background = cellColor(for: pixels[top + cellX], mode: mode)
+                    let below = cellColor(for: pixels[bottom + cellX], mode: mode)
+                    let uniform = background == below
+                    // A uniform cell is a space on the background; a split one is
+                    // a lower half-block in the bottom pixel's colour over the
+                    // top pixel's. The reset the builder writes before a change
+                    // clears bold too, so bold is re-asserted with each colour
+                    // run — where the mode can afford it, and only for a cell
+                    // that draws a glyph for it to weigh.
+                    row.setColors(
+                        foreground: uniform ? nil : below, background: background,
+                        bold: bold && !uniform, resetFirst: true)
+                    if uniform { row.append(ascii: 0x20) } else { row.append(lowerHalfBlock) }
                 }
-                line.append(uniform ? " " : lowerHalfBlock)
+                lines.append(row.finish())
             }
-
-            if !lastFg.isEmpty || !lastBg.isEmpty {
-                line += ANSIEscape.reset
-            }
-            lines.append(line)
         }
         return lines
     }

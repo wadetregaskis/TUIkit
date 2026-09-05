@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import TUIkitStyling
+
 // MARK: - Color Output
 
 extension ASCIIConverter {
@@ -14,77 +16,24 @@ extension ASCIIConverter {
     /// downsampled to one the terminal can actually render). See
     /// ``ASCIIColorMode/effective(for:)``.
     func foregroundColorCode(for pixel: RGBA, mode: ASCIIColorMode) -> String {
-        switch mode {
-        case .trueColor:
-            return "\(ANSIEscape.csi)38;2;\(pixel.r);\(pixel.g);\(pixel.b)m"
-
-        case .ansi256:
-            return code(for: pixel, in: .ansi256, background: false)
-
-        case .ansi16:
-            return code(for: pixel, in: .ansi16, background: false)
-
-        case .grayscale:
-            // By `count`, not `count - 1`, then clamped — the rule the
-            // character ramp already uses. Scaling by 23 and truncating gave
-            // levels 0…22 an 11-value band each and the top grey (#eeeeee)
-            // exactly one input, pure white: every highlight clipped a step
-            // dark, and "24 shades" delivered 23 usable ones.
-            let index = 232 + min(Int(pixel.luminance / 255.0 * 24.0), 23)
-            return "\(ANSIEscape.csi)38;5;\(index)m"
-
-        case .mono:
-            return ""
-
-        case .palette(let palette):
-            return code(for: pixel, in: palette, background: false)
-        }
+        Self.escape(for: cellColor(for: pixel, mode: mode), background: false)
     }
 
     /// Returns the ANSI background color escape code for a pixel.
-    ///
-    /// Mirrors ``foregroundColorCode(for:mode:)`` but emits SGR 48 (background)
-    /// instead of SGR 38 (foreground). Used by half-block rendering, where the
-    /// cell's two image pixels are split between foreground and background.
     func backgroundColorCode(for pixel: RGBA, mode: ASCIIColorMode) -> String {
-        switch mode {
-        case .trueColor:
-            return "\(ANSIEscape.csi)48;2;\(pixel.r);\(pixel.g);\(pixel.b)m"
-
-        case .ansi256:
-            return code(for: pixel, in: .ansi256, background: true)
-
-        case .ansi16:
-            return code(for: pixel, in: .ansi16, background: true)
-
-        case .grayscale:
-            let index = 232 + min(Int(pixel.luminance / 255.0 * 24.0), 23)  // as above
-            return "\(ANSIEscape.csi)48;5;\(index)m"
-
-        case .mono:
-            return ""
-
-        case .palette(let palette):
-            return code(for: pixel, in: palette, background: true)
-        }
+        Self.escape(for: cellColor(for: pixel, mode: mode), background: true)
     }
 
-    /// The SGR that selects the nearest entry of `palette`, spelled in whatever
-    /// form that entry's colour takes — `30`–`37`/`90`–`97` for one of the
-    /// terminal's sixteen, `38;5;n` for one of its 256, a triple for a colour
-    /// of the app's own.
-    ///
-    /// One function for all three modes that name colours, because they ask one
-    /// question. ``ASCIIColorMode/ansi16`` and ``ASCIIColorMode/ansi256`` are
-    /// not quantisers of their own: they are the terminal's two palettes, and a
-    /// palette already knows how to be searched and how to be said. `.ansi256`
-    /// was the holdout — a 6×6×6 cube indexed by dividing each channel by 51 —
-    /// and that arithmetic disagreed with the way the UI beside it was
-    /// quantised for 85% of colours. See ``ASCIIPalette/ansi256``.
-    private func code(for pixel: RGBA, in palette: ASCIIPalette, background: Bool) -> String {
-        let parameters = palette.sgrParameters(
-            at: palette.nearestIndex(to: pixel), background: background)
-        return "\(ANSIEscape.csi)\(parameters)m"
+    /// The escape for `color` as a string — the spelling ``ANSIRowBuilder``
+    /// writes as bytes, for the callers that want a `String`. Not on the
+    /// converters' path any more; they write bytes.
+    static func escape(for color: Color?, background: Bool) -> String {
+        guard let color else { return "" }
+        var builder = ANSIRowBuilder(capacity: 24)
+        builder.setColors(foreground: background ? nil : color, background: background ? color : nil)
+        // The builder closes with a reset; the string form never carried one.
+        let closed = builder.finish()
+        return String(closed.dropLast(ANSIEscape.reset.count))
     }
 }
 

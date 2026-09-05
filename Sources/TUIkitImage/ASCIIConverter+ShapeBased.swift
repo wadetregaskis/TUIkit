@@ -135,9 +135,7 @@ extension ASCIIConverter {
 
             for cellY in 0..<height {
                 let baseY = cellY * cellPixelHeight
-                var line = ""
-                line.reserveCapacity(width * 20)
-                var lastColor = ""
+                var row = ANSIRowBuilder(capacity: width * 20)
 
                 for cellX in 0..<width {
                     let baseX = cellX * cellPixelWidth
@@ -189,20 +187,10 @@ extension ASCIIConverter {
                         r: UInt8(clamping: Int((Double(sumR) * inverseAllSamples).rounded())),
                         g: UInt8(clamping: Int((Double(sumG) * inverseAllSamples).rounded())),
                         b: UInt8(clamping: Int((Double(sumB) * inverseAllSamples).rounded())))
-                    let colorCode = foregroundColorCode(for: averageColor, mode: mode)
-                    if colorCode != lastColor {
-                        if !lastColor.isEmpty {
-                            line += ANSIEscape.reset
-                        }
-                        line += colorCode
-                        lastColor = colorCode
-                    }
-                    line.append(character)
+                    row.setColors(foreground: cellColor(for: averageColor, mode: mode), background: nil)
+                    row.append(character)
                 }
-                if !lastColor.isEmpty {
-                    line += ANSIEscape.reset
-                }
-                lines.append(line)
+                lines.append(row.finish())
             }
             return lines
         }

@@ -68,9 +68,7 @@ extension ASCIIConverter {
             lines.reserveCapacity(height)
 
             for charY in 0..<height {
-                var line = ""
-                line.reserveCapacity(width * 20)
-                var lastColor = ""
+                var row = ANSIRowBuilder(capacity: width * 20)
                 let pixelY = charY * 4
 
                 for charX in 0..<width {
@@ -126,21 +124,10 @@ extension ASCIIConverter {
                         avgPixel = RGBA(r: 0, g: 0, b: 0)
                     }
 
-                    let colorCode = foregroundColorCode(for: avgPixel, mode: mode)
-                    if colorCode != lastColor {
-                        if !lastColor.isEmpty {
-                            line += ANSIEscape.reset
-                        }
-                        line += colorCode
-                        lastColor = colorCode
-                    }
-                    line.append(brailleChar)
+                    row.setColors(foreground: cellColor(for: avgPixel, mode: mode), background: nil)
+                    row.append(brailleChar)
                 }
-
-                if !lastColor.isEmpty {
-                    line += ANSIEscape.reset
-                }
-                lines.append(line)
+                lines.append(row.finish())
             }
 
             return lines

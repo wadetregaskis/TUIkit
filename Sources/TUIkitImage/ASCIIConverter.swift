@@ -744,50 +744,39 @@ extension ASCIIConverter {
         var lines = [String]()
         lines.reserveCapacity(height)
 
-        for y in 0..<height {
-            var line = ""
-            line.reserveCapacity(width * 20)  // Reserve for ANSI codes
-            var lastColor = ""
+        image.pixels.withUnsafeBufferPointer { pixels in
+            for y in 0..<height {
+                var row = ANSIRowBuilder(capacity: width * 20)
+                let base = y * image.width
 
-            for x in 0..<width {
-                let pixel = image.pixel(at: x, y)
+                for x in 0..<width {
+                    let pixel = pixels[base + x]
 
-                // Map luminance to character: equal bands, one per ramp
-                // level. Scaling by `count - 1` and truncating (as this
-                // did) made the TOP level reachable only at luminance
-                // exactly 255 — invisible on a 15-level ramp, but a 2-level
-                // ramp rendered virtually everything as its dark level
-                // (space), i.e. a blank image.
-                let charIndex = Int((pixel.luminance / 255.0) * Double(ramp.count))
-                let clampedIndex = min(max(charIndex, 0), ramp.count - 1)
-                // A strong directional edge overrides the luminance match with
-                // the orientation-matched line glyph, exactly as it overrides
-                // the coverage match in the shape renderer — same six slots,
-                // same formula, same threshold.
-                let char =
-                    darkness.flatMap { grid in
-                        Self.orientationGlyph(
-                            sampling: Self.neighbourhoodSampling(
-                                darkness: grid, width: width, height: height, x: x, y: y),
-                            edge: edge, threshold: edgeThreshold)
-                    } ?? ramp[clampedIndex]
+                    // Map luminance to character: equal bands, one per ramp
+                    // level. Scaling by `count - 1` and truncating (as this
+                    // did) made the TOP level reachable only at luminance
+                    // exactly 255 — invisible on a 15-level ramp, but a 2-level
+                    // ramp rendered virtually everything as its dark level
+                    // (space), i.e. a blank image.
+                    let charIndex = Int((pixel.luminance / 255.0) * Double(ramp.count))
+                    let clampedIndex = min(max(charIndex, 0), ramp.count - 1)
+                    // A strong directional edge overrides the luminance match with
+                    // the orientation-matched line glyph, exactly as it overrides
+                    // the coverage match in the shape renderer — same six slots,
+                    // same formula, same threshold.
+                    let char =
+                        darkness.flatMap { grid in
+                            Self.orientationGlyph(
+                                sampling: Self.neighbourhoodSampling(
+                                    darkness: grid, width: width, height: height, x: x, y: y),
+                                edge: edge, threshold: edgeThreshold)
+                        } ?? ramp[clampedIndex]
 
-                // Colorize
-                let colorCode = foregroundColorCode(for: pixel, mode: mode)
-                if colorCode != lastColor {
-                    if !lastColor.isEmpty {
-                        line += ANSIEscape.reset
-                    }
-                    line += colorCode
-                    lastColor = colorCode
+                    row.setColors(foreground: cellColor(for: pixel, mode: mode), background: nil)
+                    row.append(char)
                 }
-                line.append(char)
+                lines.append(row.finish())
             }
-
-            if !lastColor.isEmpty {
-                line += ANSIEscape.reset
-            }
-            lines.append(line)
         }
 
         return lines
@@ -812,34 +801,21 @@ extension ASCIIConverter {
     ) -> [String] {
         var lines = [String]()
         lines.reserveCapacity(height)
-
-        for y in 0..<height {
-            var line = ""
-            line.reserveCapacity(width * 12)  // background ANSI per colour run + a space per cell
-            var lastCode = ""
-
-            for x in 0..<width {
-                let pixel = image.pixel(at: x, y)
-
-                // No background colour to fill with — approximate with a solid
-                // block where the image is lit and a space where it is not.
-                // See ``isMonoInk(_:)`` for why bright is the ink.
-                if mode == .mono {
-                    line.append(Self.isMonoInk(pixel, threshold: monoThreshold) ? "█" : " ")
-                    continue
+        image.pixels.withUnsafeBufferPointer { pixels in
+            for y in 0..<height {
+                var row = ANSIRowBuilder(capacity: width * 12)  // a background per colour run + a space per cell
+                let base = y * image.width
+                for x in 0..<width {
+                    let pixel = pixels[base + x]
+                    if mode == .mono {
+                        row.append(Self.isMonoInk(pixel, threshold: monoThreshold) ? "█" : " ")
+                        continue
+                    }
+                    row.setColors(foreground: nil, background: cellColor(for: pixel, mode: mode))
+                    row.append(ascii: 0x20)
                 }
-
-                let code = backgroundColorCode(for: pixel, mode: mode)
-                if code != lastCode {
-                    if !lastCode.isEmpty { line += ANSIEscape.reset }
-                    line += code
-                    lastCode = code
-                }
-                line.append(" ")
+                lines.append(row.finish())
             }
-
-            if !lastCode.isEmpty { line += ANSIEscape.reset }
-            lines.append(line)
         }
         return lines
     }
