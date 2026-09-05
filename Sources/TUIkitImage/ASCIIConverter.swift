@@ -495,7 +495,8 @@ extension ASCIIConverter {
         // Downsample the requested color mode to one the terminal can
         // actually render. Otherwise a `.trueColor` request on a 256-color
         // terminal produces garbled output.
-        var effectiveMode = colorMode.effective(for: ColorDepth.current)
+        let depth = ColorDepth.current
+        var effectiveMode = colorMode.effective(for: depth)
 
         // Each rendering path has its own sub-cell pixel grid:
         //   luminance ramps        : 1×1  (one tone per cell)
@@ -577,7 +578,17 @@ extension ASCIIConverter {
         // An adaptive palette takes its colours from the picture HERE, for the
         // same reason the threshold below is measured here: this is the picture
         // that will be drawn. Inert for every other mode.
-        effectiveMode = effectiveMode.derived(from: scaled)
+        //
+        // …and then fitted to the terminal AGAIN. The fit above ran on the
+        // palette's stand-in greys; the colours chosen here are the picture's
+        // own, as RGB triples, and a triple is a spelling a 256-colour terminal
+        // does not have. Emitted as `38;2;r;g;b` there, Terminal.app read the
+        // five parameters as five SGR codes — a channel value of 5 is *blink*,
+        // 30–37 and 40–47 are the sixteen named colours — and drew "Most used"
+        // as blinking primaries. Every other palette was fitted once and stayed
+        // fitted; an adaptive one changes its colours after the fit, so it is
+        // fitted after the change.
+        effectiveMode = effectiveMode.derived(from: scaled).effective(for: depth)
 
         // The split between ink and background, measured from THIS image
         // rather than assumed to be mid-grey — see ``monoInkThreshold(for:)``.
