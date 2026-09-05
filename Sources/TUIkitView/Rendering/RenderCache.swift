@@ -768,7 +768,7 @@ extension RenderCache {
     /// is removed. Prevents memory leaks from permanently removed views.
     public func removeInactive() {
         var retainedChecks = 0
-        let retained = retainedIndex()
+        var retained = retainedIndex()
         func isLive(_ identity: ViewIdentity) -> Bool {
             if activeIdentities.contains(identity) { return true }
             retainedChecks += 1

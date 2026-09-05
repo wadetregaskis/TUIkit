@@ -555,6 +555,17 @@ public struct RetainedSubtreeIndex {
     private let hashes: Set<Int>
     private let shallowest: Int
     private let anyRootIsRaw: Bool
+    /// The verdict for every ancestor node already climbed through, by its
+    /// structural hash: the entries of one pass share most of their chains
+    /// (a page of a dozen cards has a few hundred distinct ancestors under
+    /// seven hundred entries), so a chain is climbed once and every later
+    /// entry that reaches a node already judged stops there. Keyed by hash
+    /// alone — a collision would only make two unrelated nodes share a
+    /// verdict, and the structural confirmation on a root hit still runs.
+    /// A dictionary rather than a stamp on the node: two more stored
+    /// properties on `IdentityNode` cost every deep-chain page that never
+    /// climbs at all (+9.5% on `modifiers`, allocation size), measured.
+    private var verdicts: [Int: Bool] = [:]
 
     /// - Parameter roots: The pass's retained subtree roots, in any order.
     public init(roots: [ViewIdentity]) {
@@ -568,22 +579,37 @@ public struct RetainedSubtreeIndex {
     public var isEmpty: Bool { roots.isEmpty }
 
     /// Whether some root is a strict ancestor of `identity`.
-    public func retains(_ identity: ViewIdentity) -> Bool {
+    ///
+    /// Mutating only to remember what it climbed through (see `verdicts`);
+    /// the answer for a given identity never changes within a pass.
+    public mutating func retains(_ identity: ViewIdentity) -> Bool {
         guard !roots.isEmpty else { return false }
         // A raw-rooted identity has no chain: ancestry is a path-string prefix
         // that only `isAncestor(of:)` can see, so it takes the walk.
         if anyRootIsRaw || identity.isRawRooted {
             return roots.contains { $0.isAncestor(of: identity) }
         }
+        // Climb until a root, a node already judged, or above the shallowest
+        // root; then write the verdict back on every node passed on the way.
         var cursor = identity.parent
+        var climbed: [Int] = []
+        var verdict = false
         while let candidate = cursor, candidate.depth >= shallowest {
-            if hashes.contains(candidate.structuralHash),
+            let hash = candidate.structuralHash
+            if let known = verdicts[hash] {
+                verdict = known
+                break
+            }
+            climbed.append(hash)
+            if hashes.contains(hash),
                 roots.contains(where: { $0.depth == candidate.depth && $0 == candidate })
             {
-                return true
+                verdict = true
+                break
             }
             cursor = candidate.parent
         }
-        return false
+        for hash in climbed { verdicts[hash] = verdict }
+        return verdict
     }
 }

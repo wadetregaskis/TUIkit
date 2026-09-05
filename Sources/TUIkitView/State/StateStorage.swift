@@ -315,7 +315,7 @@ extension StateStorage {
         // Indexed once for the pass: the prune asks of every unmarked box,
         // and a climb per root per box was most of a frame's end on a page
         // of memoised cards (see `RetainedSubtreeIndex`).
-        let retained = RetainedSubtreeIndex(roots: retainedSubtreeRoots)
+        var retained = RetainedSubtreeIndex(roots: retainedSubtreeRoots)
         let staleKeys = values.keys.filter {
             !activeIdentities.contains($0.identity) && !retained.retains($0.identity)
         }

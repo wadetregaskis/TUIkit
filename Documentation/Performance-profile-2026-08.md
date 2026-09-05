@@ -3470,3 +3470,25 @@ Bench translucent −6.0%; live translucent −8.0%, dashboard −6.7% (interval
 reaching 0). A first cut without the scan read kitchensink +1.5% on the
 bench — the byte copy on lines with escapes and no reset — which the scan
 removed.
+
+## 50. The verdicts shared chains already know (2026-09-05, night)
+
+`RetainedSubtreeIndex` (§47) climbed each unmarked entry's chain once; on
+the dashboard that was still 764 climbs of ten or twelve levels through
+the same few hundred nodes, 11% of the live frame. The index now
+remembers each ancestor's verdict by structural hash for the pass: bench
+dashboard −46.9%, kitchensink −10.9%; live dashboard −7.1%. Three forms
+were measured. A stamp on `IdentityNode` (no dictionary) cost `modifiers`
++9.5% with zero climbs — two more words on the node every deep chain
+allocates — and is a dead end recorded in memory. The dictionary bounded
+to the roots' depths halved the dashboard win. The plain dictionary
+reads modifiers +4.2%, where it never runs (the bench's new prune line
+says `retainedChecks: 0`); a never-called padding function in the same
+file moves modifiers by −1.1% on its own, so that is placement, and it is
+stated in the commit rather than smoothed over.
+
+`Stress --bench` prints its last prune's counts now, beside the measure
+memo line. The scalar-walk `collapsingAdjacentSGR` was also built and
+measured this session: translucent +2.4–2.9% slower in two forms, since
+Character iteration's ASCII path is already fast and the cost charged to
+the collapse is the netting's string building. Reverted, recorded.

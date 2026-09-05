@@ -42,21 +42,25 @@ struct RetainedSubtreeIndexTests {
         var generator = SplitMix(seed: 0x5EED)
         for _ in 0..<40 {
             let roots = forest.filter { _ in generator.next().isMultiple(of: 5) }
-            let index = RetainedSubtreeIndex(roots: roots)
+            var index = RetainedSubtreeIndex(roots: roots)
             for identity in forest {
                 let expected = roots.contains { $0.isAncestor(of: identity) }
-                #expect(index.retains(identity) == expected, "\(roots.map(\.path)) vs \(identity.path)")
+                let actual = index.retains(identity)
+                #expect(actual == expected, "\(roots.map(\.path)) vs \(identity.path)")
             }
         }
-        #expect(!RetainedSubtreeIndex(roots: []).retains(forest[3]))
+        var empty = RetainedSubtreeIndex(roots: [])
+        let emptyAnswer = empty.retains(forest[3])
+        #expect(!emptyAnswer)
 
         // Raw-rooted identities: ancestry is a path prefix, and the index
         // must answer as the walk does for them too.
         let raw = ["a", "a/b", "a/b/c", "a/bc", "x/b/c"].map { ViewIdentity(path: $0) }
         for root in raw {
-            let index = RetainedSubtreeIndex(roots: [root])
+            var index = RetainedSubtreeIndex(roots: [root])
             for identity in raw {
-                #expect(index.retains(identity) == root.isAncestor(of: identity), "\(root.path) vs \(identity.path)")
+                let actual = index.retains(identity)
+                #expect(actual == root.isAncestor(of: identity), "\(root.path) vs \(identity.path)")
             }
         }
         #expect(RetainedSubtreeIndex(roots: []).isEmpty)
