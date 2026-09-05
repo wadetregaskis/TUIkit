@@ -3309,3 +3309,41 @@ costs, and the old ones were the cost of serving stale rows.
 The Example app's ordinary pages render two to four frames in five seconds
 idle — nothing ticks — so they never showed any of this. Any app with a
 live model did.
+
+## 44. Five walks of one stack, and a hug that never changes (2026-09-05, later)
+
+With the bench honest (§43) the shape of every scroll-heavy frame was the
+same: the scroll content is walked about five times — the enclosing stack's
+natural-size ask, one scrollbar probe per width tried, the stack's own
+layout measure inside the render, and the render — and a memo lookup per
+row per walk is not free. Three changes, each measured alone against the
+commit before it (`ab_bench.py`, cpu-per-frame, 6 reps):
+
+**A stack resolves its ForEach children once per pass** (90a608df).
+`resolveChildViews` ran on every walk and built a `_MemoizedRow` per
+element each time: 25.8% of a `fanout` frame. `ChildViewProvider` gained
+`childViewsAreWorthMemoising` (ForEach: from 16 rows) and the resolved
+array is kept for the pass, keyed by identity + type + raw bytes like the
+measure memo. fanout −17.8%, anyview −16.9%, textwall −14.1%, modifiers
+−3.3%; dashboard +0.8% (the witness call on stacks below the threshold —
+3 µs of 370).
+
+**A memoised child carries its identity** (fef8a149). The array was shared
+but each walk still derived every child's identity — a namespaced key
+string and a node per child per walk. The memo key carries the parent
+identity, so the child's is resolved when the entry is stored. fanout
+−8.3%, anyview −4.9%, modifiers −3.9%, textwall −3.8%.
+
+**A hugging list remembers its widest row** (32b87838). §42's measured hug
+was still 62% of `kitchensink`: a content box, two closures, an identity
+node and a generic instantiation per row per frame, to look up sizes that
+had not changed. The answer is a size entry under the list's identity,
+compared against the rows' data (`listRowsSignature`, the collection boxed
+as `AnyEquatableBox`), which inherits the row memo's three invalidation
+rules for free. kitchensink −60.0%.
+
+**Measured and reverted:** size-memo entries living "by use" (a frame stamp
+instead of identity marks) — indistinguishable on ten scenarios, because a
+non-lazy stack renders every row every frame and marks it anyway, and the
+windowed bands already mark what they sample. Recorded in the dead-ends
+memory; not retried without a scenario that measures rows it never draws.
