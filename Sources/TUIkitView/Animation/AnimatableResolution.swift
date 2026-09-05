@@ -53,11 +53,19 @@ extension View where Self: Animatable {
         _ view: Self, context: RenderContext, isMeasuring: Bool
     ) -> Self? {
         guard let storage = context.stateStorage else { return nil }
-        let animation = context.environment.canAnimate
-            ? context.environment.transaction.effectiveAnimation : nil
         let key = AnimationStore.Key(
             identity: context.identity, owner: ObjectIdentifier(Self.self))
         let target = view.animatableData
+        // The common case first, and before the environment is read: a value
+        // the store already holds, unchanged, with nothing running. That is
+        // every padded, framed and offset view on every frame nothing is
+        // animating, and answering it here is what keeps making a modifier
+        // `Animatable` free for the views that never are — see
+        // ``AnimationStore/isSettled(_:at:isMeasuring:)`` for what it cost
+        // when it was not.
+        if storage.animations.isSettled(key, at: target, isMeasuring: isMeasuring) { return nil }
+        let animation = context.environment.canAnimate
+            ? context.environment.transaction.effectiveAnimation : nil
         let drawn = storage.animations.value(
             for: key, target: target, animation: animation,
             nowNanos: context.environment.frameNowNanos, isMeasuring: isMeasuring)

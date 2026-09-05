@@ -154,6 +154,9 @@ extension AnimationStore {
     public func value<D: VectorArithmetic>(
         for key: Key, target: D, animation: Animation?, nowNanos: Int64, isMeasuring: Bool
     ) -> D {
+        // The settled case is answered by ``isSettled(_:at:isMeasuring:)``
+        // before this is reached; what follows is the first sight, the
+        // change, and the animation in flight.
         guard var record = records[key],
             let from = record.from as? D,
             let recorded = record.target as? D
@@ -320,6 +323,40 @@ extension AnimationStore {
         for key in records.keys where records[key]?.servedByRuns == true {
             records[key]?.servedByRuns = false
         }
+    }
+
+    /// Whether `key` is settled at `target`: recorded, unchanged, and with
+    /// nothing running — so there is nothing to substitute and nothing to
+    /// store. One lookup, two casts, no environment read.
+    ///
+    /// This is the answer for every animatable view but the animating ones, on
+    /// every frame, which makes it the store's hot path: with `.padding`,
+    /// `.frame` and `.offset` animatable there is an entry per layout node,
+    /// asked once per render and once more per uncached measure.
+    /// ``value(for:target:animation:nowNanos:isMeasuring:)`` answered the same
+    /// question at the cost of two lookups — a copy out of the record and a
+    /// write back to stamp the pass, each hashing and structurally comparing
+    /// the identity — plus a cast of both halves and, before it was even
+    /// called, three environment probes for a transaction that is almost never
+    /// there. Measured on the menu render benchmark (500 renders, debug), the
+    /// frame the modifiers became animatable cost +25%: 0.356 → 0.451 s.
+    ///
+    /// A settled record presents `from`, not `target` (a retired even-count
+    /// autoreverse leaves the two apart — see `Record.from`), so BOTH must
+    /// equal `target` for there to be nothing to draw differently.
+    ///
+    /// Stamps the pass in place when rendering, so the record stays alive
+    /// without being copied out and written back.
+    public func isSettled<D: VectorArithmetic>(_ key: Key, at target: D, isMeasuring: Bool) -> Bool {
+        guard let index = records.index(forKey: key),
+            records.values[index].animation == nil,
+            let recorded = records.values[index].target as? D, recorded == target,
+            let from = records.values[index].from as? D, from == target
+        else { return false }
+        if !isMeasuring, records.values[index].lastPass != pass {
+            records.values[index].lastPass = pass
+        }
+        return true
     }
 
     /// Where the picture is now, under whatever is running.
