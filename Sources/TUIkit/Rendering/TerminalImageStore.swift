@@ -63,6 +63,29 @@ struct TerminalImageSignature: Equatable {
     var monoPaper: RGBA
 }
 
+// MARK: - Any signature at all
+
+/// A signature the store can compare without knowing what it signs.
+///
+/// A picture's signature (``TerminalImageSignature``) and a gradient's
+/// (`GradientImageSignature`) have nothing in common but the one thing the
+/// store needs — equality — so the store holds this and asks that. Erasing
+/// the type here, rather than making the store generic or the signatures an
+/// enum, keeps each caller's signature its own ordinary struct: every field
+/// that decides a picture is still a typed, `Equatable` field on a type that
+/// says what it is for.
+struct AnyImageSignature: Equatable {
+    private let value: Any
+    private let equals: (Any) -> Bool
+
+    init<S: Equatable>(_ value: S) {
+        self.value = value
+        self.equals = { ($0 as? S) == value }
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.equals(rhs.value) }
+}
+
 // MARK: - The images this app has put in the terminal
 
 /// Owns every image TUIkit has transmitted to the terminal, and is the only
@@ -87,6 +110,17 @@ struct TerminalImageSignature: Equatable {
 ///   escapes that have to reach it before the frame those cells are in.
 /// - **What can go?** ``release(token:)``, from the view's disappear handler.
 ///
+/// ## One picture, many views
+///
+/// Two views asking for the same picture in the same box get the same image:
+/// the store transmits once and hands both the same cells, and the terminal
+/// keeps the bytes until the LAST of them lets go. A list of one icon, or a
+/// column of progress bars sharing one gradient, costs one transmission
+/// rather than one per row. Sharing is by content — a signature and a cell
+/// box that compare equal — so it never depends on which view asked first,
+/// and a view that moves on to a different picture leaves the shared one for
+/// the others rather than deleting it under them.
+///
 /// ## Why the escapes are queued rather than written
 ///
 /// They are produced during the render pass, by a `Renderable` that has a
@@ -104,26 +138,33 @@ struct TerminalImageSignature: Equatable {
 /// to check; there is a compiler that cannot see that.
 final class TerminalImageStore: @unchecked Sendable {
 
-    /// One image in the terminal, and the cells that draw it.
-    private struct Entry {
-        var id: KittyGraphics.ImageID
-        var signature: TerminalImageSignature
-        /// The cell box currently declared to the terminal, so a box-only
-        /// change can be spotted and answered with a placement alone.
+    /// One image in the terminal, the cells that draw it, and who is drawing
+    /// them.
+    private struct Image {
+        let id: KittyGraphics.ImageID
+        let signature: AnyImageSignature
+        /// The cell box declared to the terminal, so a box-only change can be
+        /// spotted and answered with a placement alone.
         var columns: Int
         var rows: Int
         /// The placeholder cells, which are a function of the id and the box.
         var cells: [String]
+        /// The tokens currently drawing this image. Empty means nobody, and
+        /// nobody means deleted — an image is never kept on the chance that
+        /// someone comes back for it.
+        var holders: Set<String>
     }
 
-    private var entries: [String: Entry] = [:]
+    private var images: [Image] = []
+    /// Which image each token is drawing, by position in `images`.
+    private var entries: [String: KittyGraphics.ImageID] = [:]
     private var pending = ""
     private var nextID: KittyGraphics.ImageID = 1
 
     /// How many images this app currently has in the terminal. For tests and
     /// diagnostics — a number that only ever grows is the leak this type
     /// exists to prevent.
-    var imageCount: Int { entries.count }
+    var imageCount: Int { images.count }
 
     // MARK: - Drawing
 
@@ -133,54 +174,95 @@ final class TerminalImageStore: @unchecked Sendable {
     ///
     /// - Parameters:
     ///   - token: The owning view's identity. One image per token; a second
-    ///     call with a different `signature` replaces the first rather than
-    ///     adding to it, which is what stops a resize leaking an image a
-    ///     frame.
+    ///     call with a different `signature` moves the token to the new
+    ///     picture and frees the old one if nobody else is drawing it, which
+    ///     is what stops a resize leaking an image a frame.
     ///   - signature: Everything that decides the picture's content — and
     ///     deliberately nothing about where it goes, so a move or a resize
     ///     that resamples to the same resolution costs a placement rather
-    ///     than a re-transmission.
+    ///     than a re-transmission. Two tokens whose signatures compare equal
+    ///     share one image.
     ///   - columns: Width of the placement, in cells.
     ///   - rows: Height of the placement, in cells.
     ///   - pixels: 8-bit pixel bytes and their format, row-major, at the
-    ///     signature's `pixelWidth` × `pixelHeight`. **Only evaluated when the
-    ///     terminal does not already hold this picture** — it is a resample of
-    ///     the decoded image and megabytes of it, and the common case by a
-    ///     wide margin is that nothing has changed since last frame.
+    ///     resolution the signature names. **Only evaluated when the terminal
+    ///     does not already hold this picture** — it is a resample of the
+    ///     decoded image and megabytes of it, and the common case by a wide
+    ///     margin is that nothing has changed since last frame.
     /// - Returns: the rows, or `nil` for a request the protocol cannot express
     ///   — at which point the caller draws the picture out of glyphs, as it
     ///   always has.
-    func placeholderRows(
-        token: String, signature: TerminalImageSignature,
+    func placeholderRows<Signature: Equatable>(
+        token: String, signature: Signature,
         columns: Int, rows: Int,
-        pixels: () -> (bytes: [UInt8], format: KittyGraphics.PixelFormat)
+        pixels: () -> (bytes: [UInt8], format: KittyGraphics.PixelFormat, width: Int, height: Int)
     ) -> [String]? {
-        let pixelWidth = signature.pixelWidth
-        let pixelHeight = signature.pixelHeight
-        guard columns > 0, rows > 0, pixelWidth > 0, pixelHeight > 0,
+        guard columns > 0, rows > 0,
             columns <= KittyGraphics.maximumCellExtent,
             rows <= KittyGraphics.maximumCellExtent
         else { return nil }
+        let wanted = AnyImageSignature(signature)
 
-        // Three cases, not two, and the middle one is the point of splitting
-        // the signature. A picture the terminal already holds, asked for in a
-        // DIFFERENT box, needs no bytes: an `a=p` replaces the placement for
-        // that id, and the picture is refit to the new rectangle by the
-        // terminal. Without this case every step of a resize drag ran
-        // delete + transmit + place — megabytes, per step, to end up with the
-        // pixels already in the store.
-        if let existing = entries[token], existing.signature == signature {
-            if existing.columns == columns, existing.rows == rows { return existing.cells }
-            let cells = KittyGraphics.placeholderRows(id: existing.id, columns: columns, rows: rows)
-            guard !cells.isEmpty else { return nil }
-            pending += KittyGraphics.placement(id: existing.id, columns: columns, rows: rows)
-            entries[token] = Entry(
-                id: existing.id, signature: signature,
-                columns: columns, rows: rows, cells: cells)
-            return cells
+        // The token's own image, if it still is this picture.
+        if let id = entries[token], let index = images.firstIndex(where: { $0.id == id }),
+            images[index].signature == wanted
+        {
+            if images[index].columns == columns, images[index].rows == rows {
+                return images[index].cells
+            }
+            // The same picture in a DIFFERENT box. Alone on the image, this
+            // needs no bytes: an `a=p` replaces the placement for that id and
+            // the terminal refits the picture to the new rectangle. Without
+            // this case every step of a resize drag ran delete + transmit +
+            // place — megabytes, per step, to end up with the pixels already
+            // in the store. Shared, the box belongs to the others too, so the
+            // token moves on to an image of its own instead.
+            if images[index].holders == [token] {
+                let cells = KittyGraphics.placeholderRows(id: id, columns: columns, rows: rows)
+                guard !cells.isEmpty else { return nil }
+                pending += KittyGraphics.placement(id: id, columns: columns, rows: rows)
+                images[index].columns = columns
+                images[index].rows = rows
+                images[index].cells = cells
+                return cells
+            }
         }
 
-        let id = entries[token]?.id ?? claimID()
+        // Somebody else's image of exactly this picture in exactly this box:
+        // share it, and let go of whatever this token was drawing before.
+        if let index = images.firstIndex(where: {
+            $0.signature == wanted && $0.columns == columns && $0.rows == rows
+        }) {
+            let id = images[index].id
+            if entries[token] != id { release(token: token) }
+            // `release` may have removed an image BEFORE this one, so find it
+            // again rather than trusting the index.
+            guard let found = images.firstIndex(where: { $0.id == id }) else { return nil }
+            images[found].holders.insert(token)
+            entries[token] = id
+            return images[found].cells
+        }
+
+        // A picture the terminal does not have. The token's previous image is
+        // freed first if this was its only holder — reusing the id, so a view
+        // that changes picture every frame does not walk the id space.
+        var reusableID: KittyGraphics.ImageID?
+        if let previous = entries[token], let index = images.firstIndex(where: { $0.id == previous }) {
+            images[index].holders.remove(token)
+            if images[index].holders.isEmpty {
+                // Delete first, on the same id. Re-transmitting over a live id
+                // is documented to replace it, but "documented to replace it"
+                // is a claim about five terminals of which one has been
+                // measured, and the cost of being wrong is an image store that
+                // grows every time a window is resized. Twenty bytes buys not
+                // having to find out.
+                pending += KittyGraphics.delete(id: previous)
+                images.remove(at: index)
+                reusableID = previous
+            }
+            entries.removeValue(forKey: token)
+        }
+        let id = reusableID ?? claimID()
         let cells = KittyGraphics.placeholderRows(id: id, columns: columns, rows: rows)
         guard !cells.isEmpty else { return nil }
 
@@ -190,38 +272,39 @@ final class TerminalImageStore: @unchecked Sendable {
         // magnitude — and raw everywhere else. See ``KittyGraphics/isCompressionSupported``.
         let transmit = KittyGraphics.transmit(
             pixels: payload.bytes, format: payload.format,
-            width: pixelWidth, height: pixelHeight, id: id,
+            width: payload.width, height: payload.height, id: id,
             compressed: KittyGraphics.isCompressionSupported)
         guard !transmit.isEmpty else { return nil }
-
-        // Delete first, on the same id. Re-transmitting over a live id is
-        // documented to replace it, but "documented to replace it" is a claim
-        // about five terminals of which one has been measured, and the cost of
-        // being wrong is an image store that grows every time a window is
-        // resized. Twenty bytes buys not having to find out.
-        if entries[token] != nil { pending += KittyGraphics.delete(id: id) }
         pending += transmit
         pending += KittyGraphics.placement(id: id, columns: columns, rows: rows)
-        entries[token] = Entry(
-            id: id, signature: signature, columns: columns, rows: rows, cells: cells)
+        images.append(
+            Image(id: id, signature: wanted, columns: columns, rows: rows, cells: cells, holders: [token]))
+        entries[token] = id
         return cells
     }
 
     // MARK: - Owning
 
-    /// Gives back `token`'s image, if it has one.
+    /// Gives back `token`'s image — to the terminal, if nobody else is
+    /// drawing it.
     ///
     /// Called from the view's disappear handler, which is the only moment
     /// anything knows the picture is not coming back.
     func release(token: String) {
-        guard let entry = entries.removeValue(forKey: token) else { return }
-        pending += KittyGraphics.delete(id: entry.id)
+        guard let id = entries.removeValue(forKey: token),
+            let index = images.firstIndex(where: { $0.id == id })
+        else { return }
+        images[index].holders.remove(token)
+        guard images[index].holders.isEmpty else { return }
+        pending += KittyGraphics.delete(id: id)
+        images.remove(at: index)
     }
 
     /// Gives back every image, for a shutdown that wants to leave the terminal
     /// as it found it.
     func releaseAll() {
-        for entry in entries.values { pending += KittyGraphics.delete(id: entry.id) }
+        for image in images { pending += KittyGraphics.delete(id: image.id) }
+        images.removeAll()
         entries.removeAll()
     }
 
@@ -238,16 +321,17 @@ final class TerminalImageStore: @unchecked Sendable {
 
     /// The next id nothing is using.
     ///
-    /// Counts up and wraps, skipping ids in use and the one the startup
-    /// handshake borrows (``TerminalGraphicsQuery/probeID``, the top of the
-    /// range). Sixteen million ids and a handful of images means the wrap is
+    /// Counts up and wraps, skipping ids in use and the two the startup
+    /// handshake borrows (``TerminalGraphicsQuery/probeID`` and
+    /// ``TerminalGraphicsQuery/compressionProbeID``, the top of the range).
+    /// Sixteen million ids and a handful of images means the wrap is
     /// unreachable in practice; it is handled because "unreachable in
     /// practice" is how an id gets reused underneath a live picture.
     private func claimID() -> KittyGraphics.ImageID {
-        let live = Set(entries.values.map(\.id))
+        let live = Set(images.map(\.id))
         for _ in 0..<KittyGraphics.maximumImageID {
             let candidate = nextID
-            nextID = candidate >= KittyGraphics.maximumImageID - 1 ? 1 : candidate + 1
+            nextID = candidate >= KittyGraphics.maximumImageID - 2 ? 1 : candidate + 1
             if !live.contains(candidate) { return candidate }
         }
         return 1

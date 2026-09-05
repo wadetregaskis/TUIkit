@@ -38,7 +38,7 @@ struct TerminalImageStoreTests {
         let store = TerminalImageStore()
         let rows = store.placeholderRows(
             token: "a", signature: signature("one"), columns: 4, rows: 2,
-            pixels: { (pixels(64), .rgba) })
+            pixels: { (pixels(64), .rgba, 8, 8) })
         #expect(rows?.count == 2)
         #expect(rows?.first?.strippedLength == 4)
 
@@ -63,7 +63,7 @@ struct TerminalImageStoreTests {
                 token: "a", signature: signature("one"), columns: 4, rows: 2,
                 pixels: {
                     built += 1
-                    return (pixels(64), .rgba)
+                    return (pixels(64), .rgba, 8, 8)
                 })
         }
         _ = store.takePending()
@@ -81,12 +81,12 @@ struct TerminalImageStoreTests {
         let store = TerminalImageStore()
         _ = store.placeholderRows(
             token: "a", signature: signature("a"), columns: 4, rows: 2,
-            pixels: { (pixels(64), .rgba) })
+            pixels: { (pixels(64), .rgba, 8, 8) })
         _ = store.takePending()
 
         _ = store.placeholderRows(
             token: "a", signature: signature("a", pixelWidth: 16, pixelHeight: 16),
-            columns: 8, rows: 4, pixels: { (pixels(256), .rgba) })
+            columns: 8, rows: 4, pixels: { (pixels(256), .rgba, 16, 16) })
         let pending = store.takePending()
         #expect(pending.contains("a=d,d=I"), "the old bytes are freed")
         #expect(pending.contains("s=16,v=16"), "…and the new ones sent")
@@ -110,7 +110,7 @@ struct TerminalImageStoreTests {
         let store = TerminalImageStore()
         let first = store.placeholderRows(
             token: "a", signature: signature("a"), columns: 4, rows: 2,
-            pixels: { (pixels(64), .rgba) })
+            pixels: { (pixels(64), .rgba, 8, 8) })
         #expect(first?.count == 2)
         _ = store.takePending()
 
@@ -119,7 +119,7 @@ struct TerminalImageStoreTests {
             token: "a", signature: signature("a"), columns: 8, rows: 4,
             pixels: {
                 resampled = true
-                return (pixels(64), .rgba)
+                return (pixels(64), .rgba, 8, 8)
             })
 
         #expect(!resampled, "the megabyte-producing closure must not even be called")
@@ -142,7 +142,7 @@ struct TerminalImageStoreTests {
         let store = TerminalImageStore()
         _ = store.placeholderRows(
             token: "a", signature: signature("a"), columns: 4, rows: 2,
-            pixels: { (pixels(64), .rgba) })
+            pixels: { (pixels(64), .rgba, 8, 8) })
         _ = store.takePending()
 
         for _ in 0..<3 {
@@ -150,7 +150,7 @@ struct TerminalImageStoreTests {
                 token: "a", signature: signature("a"), columns: 4, rows: 2,
                 pixels: {
                     Issue.record("resampled a picture nothing asked to change")
-                    return (pixels(64), .rgba)
+                    return (pixels(64), .rgba, 8, 8)
                 })
         }
         #expect(store.takePending().isEmpty)
@@ -161,7 +161,7 @@ struct TerminalImageStoreTests {
         let store = TerminalImageStore()
         _ = store.placeholderRows(
             token: "a", signature: signature("one", pixelWidth: 4, pixelHeight: 4),
-            columns: 2, rows: 1, pixels: { (pixels(16), .rgba) })
+            columns: 2, rows: 1, pixels: { (pixels(16), .rgba, 4, 4) })
         _ = store.takePending()
 
         store.release(token: "a")
@@ -179,7 +179,7 @@ struct TerminalImageStoreTests {
         for token in ["a", "b"] {
             _ = store.placeholderRows(
                 token: token, signature: signature(token, pixelWidth: 4, pixelHeight: 4),
-                columns: 2, rows: 1, pixels: { (pixels(16), .rgba) })
+                columns: 2, rows: 1, pixels: { (pixels(16), .rgba, 4, 4) })
         }
         let pending = store.takePending()
         #expect(pending.contains("i=1"))
@@ -202,7 +202,7 @@ struct TerminalImageStoreTests {
         for index in 0..<8 {
             _ = store.placeholderRows(
                 token: "t\(index)", signature: signature("s", pixelWidth: 1, pixelHeight: 1),
-                columns: 1, rows: 1, pixels: { ([0, 0, 0, 255], .rgba) })
+                columns: 1, rows: 1, pixels: { ([0, 0, 0, 255], .rgba, 1, 1) })
         }
         let pending = store.takePending()
         #expect(!pending.contains("i=\(TerminalGraphicsQuery.probeID)"))
@@ -220,7 +220,7 @@ struct TerminalImageStoreTests {
                 let store = TerminalImageStore()
                 _ = store.placeholderRows(
                     token: "v", signature: signature("a", pixelWidth: 16, pixelHeight: 16),
-                    columns: 2, rows: 1, pixels: { (bytes, .rgba) })
+                    columns: 2, rows: 1, pixels: { (bytes, .rgba, 16, 16) })
                 return store.takePending()
             }
         }
@@ -229,6 +229,87 @@ struct TerminalImageStoreTests {
         #expect(!raw.contains("o=z"))
         #expect(deflated.contains("o=z"))
         #expect(deflated.count < raw.count / 4, "\(deflated.count) against \(raw.count)")
+    }
+
+    // MARK: - One picture, many views
+
+    @Test("Two views asking for the same picture in the same box share one image")
+    func identicalRequestsShareOneImage() {
+        let store = TerminalImageStore()
+        var built = 0
+        let first = store.placeholderRows(
+            token: "a", signature: signature("shared"), columns: 4, rows: 2,
+            pixels: {
+                built += 1
+                return (pixels(64), .rgba, 8, 8)
+            })
+        let second = store.placeholderRows(
+            token: "b", signature: signature("shared"), columns: 4, rows: 2,
+            pixels: {
+                built += 1
+                return (pixels(64), .rgba, 8, 8)
+            })
+        #expect(built == 1, "one resample, one transmission")
+        #expect(first == second, "the same cells, naming the same id")
+        #expect(store.imageCount == 1)
+        let pending = store.takePending()
+        #expect(pending.components(separatedBy: "a=t,").count - 1 == 1)
+        // The first to leave frees nothing; the last frees the image.
+        store.release(token: "a")
+        #expect(store.takePending().isEmpty, "b is still drawing it")
+        #expect(store.imageCount == 1)
+        store.release(token: "b")
+        #expect(store.takePending().contains("a=d,d=I"))
+        #expect(store.imageCount == 0)
+    }
+
+    @Test("A shared picture asked for in a new box gets its own image rather than moving everyone's")
+    func sharedImageIsNotReplacedUnderOthers() {
+        let store = TerminalImageStore()
+        for token in ["a", "b"] {
+            _ = store.placeholderRows(
+                token: token, signature: signature("shared"), columns: 4, rows: 2,
+                pixels: { (pixels(64), .rgba, 8, 8) })
+        }
+        _ = store.takePending()
+        let moved = store.placeholderRows(
+            token: "b", signature: signature("shared"), columns: 8, rows: 4,
+            pixels: { (pixels(64), .rgba, 8, 8) })
+        let pending = store.takePending()
+        #expect(moved?.count == 4)
+        #expect(pending.contains("a=t,"), "a second image, transmitted")
+        #expect(!pending.contains("a=d"), "a still draws the first; nothing is deleted")
+        #expect(store.imageCount == 2)
+        // And b's old holding is gone: releasing a now frees the first image.
+        store.release(token: "a")
+        #expect(store.takePending().contains("a=d,d=I"))
+        #expect(store.imageCount == 1)
+    }
+
+    @Test("A view that changes picture leaves a shared one for the others and frees an unshared one")
+    func changingPictureFreesOnlyWhatNobodyElseHolds() {
+        let store = TerminalImageStore()
+        for token in ["a", "b"] {
+            _ = store.placeholderRows(
+                token: token, signature: signature("shared"), columns: 4, rows: 2,
+                pixels: { (pixels(64), .rgba, 8, 8) })
+        }
+        _ = store.takePending()
+        _ = store.placeholderRows(
+            token: "b", signature: signature("other"), columns: 4, rows: 2,
+            pixels: { (pixels(64), .rgba, 8, 8) })
+        var pending = store.takePending()
+        #expect(!pending.contains("a=d"), "the shared picture stays for a")
+        #expect(pending.contains("a=t,"))
+        #expect(store.imageCount == 2)
+        // Now b is alone on "other": changing again frees it, on the same id.
+        _ = store.placeholderRows(
+            token: "b", signature: signature("third"), columns: 4, rows: 2,
+            pixels: { (pixels(64), .rgba, 8, 8) })
+        pending = store.takePending()
+        #expect(pending.contains("a=d,d=I,q=2,i=2"), "other is freed…")
+        #expect(pending.contains("i=2,"), "…and its id reused for third")
+        #expect(store.imageCount == 2)
     }
 
     @Test("An extent the protocol cannot address is declined, not truncated")
@@ -240,7 +321,7 @@ struct TerminalImageStoreTests {
             columns: KittyGraphics.maximumCellExtent + 1, rows: 1,
             pixels: {
                 built = true
-                return (pixels(16), .rgba)
+                return (pixels(16), .rgba, 4, 4)
             })
         #expect(rows == nil)
         #expect(!built, "and nothing was resampled for it")

@@ -740,10 +740,11 @@ extension _ImageCore {
                     let converter = ASCIIConverter(
                         colorMode: colorMode, dithering: dithering,
                         toneCurve: toneCurve, edgeContrast: edgeContrast)
-                    return Self.pixelBytes(
+                    let packed = Self.pixelBytes(
                         converter.recoloured(
                             rawImage, width: pixelWidth, height: pixelHeight,
                             monoInk: ink, monoPaper: paper))
+                    return (packed.bytes, packed.format, pixelWidth, pixelHeight)
                 })
         else { return nil }
 
