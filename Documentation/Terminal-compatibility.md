@@ -712,7 +712,15 @@ before the render loop is built.
 ### Output behaviour
 
 - **Colour:** no truecolor — 256-colour palette is the ceiling
-  (`ColorDepth` quantises). Framework-chosen label colours are floored
+  (`ColorDepth` quantises). **A `38;2;r;g;b` that reaches it anyway is not
+  skipped but read as five ordinary SGR parameters** (observed 2026-09-05,
+  macOS 15.7, via an adaptive image palette that derived RGB triples after
+  the depth fit): 38 and 2 do little, then a channel value of 5 is *blink*,
+  30–37 and 40–47 are the named foregrounds and backgrounds, 90–97 their
+  bright twins — a picture came out as blinking primaries in horizontal
+  streaks. Anything that changes a colour after `effective(for:)` has fitted
+  it must fit it again (`ASCIIConverter.convert`, the adaptive derivation).
+  Framework-chosen label colours are floored
   **through the cube**: `Color.ensuringRenderedContrast(atLeast:against:)`
   measures each candidate — and the face — after `downsampledToPalette256()`,
   so the ratio that is guaranteed is the one on screen. It has to be, because
