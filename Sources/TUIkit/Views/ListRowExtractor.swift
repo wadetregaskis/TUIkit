@@ -139,16 +139,30 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
         // enters the visible window (see ``LazyListRowContent``).
         return LazyListRowContent(
             identity: rowContext.identity,
-            // How tall this row is without rendering it — what an enclosing
-            // `List` asks its first row so it can place a ramp down all of
-            // them. Only ever called when one is in force, and the measure memo
-            // answers the render that follows for nothing.
+            carriesBadge: viewTypeCarriesBadge(Content.self),
+            // The row's size without rendering it — what a `List` placing a
+            // ramp asks its first row, and what a hugging `List` asks EVERY
+            // row, every frame. Through `_MemoizedRow` for an Equatable
+            // element, so the answer comes from the size memo keyed by the
+            // element from the second frame on; the entry is marked alive here
+            // because `_MemoizedRow.sizeThatFits` deliberately marks nothing
+            // (a giant eager tree measures rows it will never draw) and a hug
+            // over rows nobody draws would otherwise rebuild its answer every
+            // frame. Bounded by the rows the hug asks about, not the tree.
             measure: { [content] in
-                measureChild(
-                    content(element),
-                    proposal: ProposedSize(width: rowContext.availableWidth, height: nil),
-                    context: rowContext
-                ).height
+                let proposal = ProposedSize(width: rowContext.availableWidth, height: nil)
+                let size: ViewSize
+                if let equatableElement = element as? any Equatable {
+                    rowContext.renderCache?.markActive(rowContext.identity)
+                    size = measureChild(
+                        _MemoizedRow(
+                            element: AnyEquatableBox(equatableElement),
+                            source: element, build: content),
+                        proposal: proposal, context: rowContext)
+                } else {
+                    size = measureChild(content(element), proposal: proposal, context: rowContext)
+                }
+                return (size, rowContext.availableWidth)
             },
             render: { [content] placement in
                 // Where this row sits in a ramp spanning the whole list (`nil`

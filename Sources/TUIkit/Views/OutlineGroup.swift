@@ -435,13 +435,16 @@ extension OutlineGroup: ListRowExtractor {
                     id: rowID,
                     content: LazyListRowContent(
                         identity: rowContext.identity,
+                        carriesBadge: false,
                         measure: {
-                            measureChild(
-                                view,
-                                proposal: ProposedSize(
-                                    width: rowContext.availableWidth, height: nil),
-                                context: rowContext
-                            ).height
+                            (
+                                measureChild(
+                                    view,
+                                    proposal: ProposedSize(
+                                        width: rowContext.availableWidth, height: nil),
+                                    context: rowContext),
+                                rowContext.availableWidth
+                            )
                         },
                         render: { placement in
                             var rowContext = rowContext

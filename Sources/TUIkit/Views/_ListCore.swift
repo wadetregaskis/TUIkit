@@ -208,13 +208,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // overlay outside layout, but a terminal cell grid has no
             // overlay: sizing a column to "fit" its rows must mean fitting
             // their badges, or the widest row always loses its badge.
+            // Asked only of a row whose type can carry one — the rest say so
+            // without rendering — and the width is measured, not rendered:
+            // a `NavigationSplitView` asks its sidebar to hug on EVERY frame,
+            // and rendering two thousand rows to answer was 93% of a frame,
+            // in a measure pass the row memo cannot serve. The size memo can.
             let badgeCells: Int =
-                if let badge = row.badge, !badge.isHidden, row.isSelectable {
+                if let badge = row.badgeWithoutRendering, !badge.isHidden, row.isSelectable {
                     badge.displayText.strippedLength + 1
                 } else {
                     0
                 }
-            return row.buffer.width + badgeCells
+            return (row.widthWithoutRendering ?? row.buffer.width) + badgeCells
         }.max() ?? 0
         let titleWidth = title.map { $0.strippedLength + 2 } ?? 0
         let borderOverhead = context.environment.listStyle.showsBorder ? 2 : 0
@@ -2451,7 +2456,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         context: RenderContext
     ) -> Int {
         if context.environment.fixedSizeWidth {
-            return (0..<source.count).map { source.row(at: $0).buffer.width }.max() ?? 0
+            // Measured where a row can say, for the reason `allRowsContentWidth`
+            // gives — this is the same walk, on the render side.
+            return (0..<source.count).map { index in
+                let row = source.row(at: index)
+                return row.widthWithoutRendering ?? row.buffer.width
+            }.max() ?? 0
         }
         // Fill the interior: full available width when borderless (`.plain`),
         // minus the two border columns when bordered.

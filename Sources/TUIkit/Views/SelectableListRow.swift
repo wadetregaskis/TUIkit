@@ -91,12 +91,23 @@ final class LazyListRowContent {
     private var thunk: ((GradientFrame?) -> (buffer: FrameBuffer, badge: BadgeValue?))?
     private var cached: (buffer: FrameBuffer, badge: BadgeValue?)?
 
-    /// This row's height without rendering it, when the content can answer.
+    /// This row's size without rendering it, when the content can answer —
+    /// measured at the width the row would be rendered at, which comes back
+    /// beside the size so a flexible row can be read as the render would have
+    /// filled it. `nil` where nothing can answer but the render itself.
     ///
-    /// A list spanning a ramp across its rows has to know how tall a row is
-    /// before it can choose the colour to render that row in, which rules out
-    /// asking the render. `nil` where nothing can answer but the render itself.
-    private var measureHeight: (() -> Int)?
+    /// Two callers. A list spanning a ramp across its rows has to know how
+    /// tall a row is before it can choose the colour to render that row in.
+    /// And a list asked to hug its content — `.fixedSize(horizontal:)`, or a
+    /// `NavigationSplitView` sizing a sidebar — has to know how wide EVERY row
+    /// is, on every frame; rendering two thousand rows to learn that was 93%
+    /// of a split-view frame, and a measure through the size memo is a lookup.
+    private var measureSize: (() -> (size: ViewSize, availableWidth: Int))?
+
+    /// Whether the row's static type can carry a `.badge(_:)` at all — the
+    /// answer ``badge`` would give without building and rendering the row to
+    /// give it. `false` means `badge` is `nil` and need not be asked.
+    let carriesBadge: Bool
 
     /// The ramp this row is placed in, or `nil` when no
     /// `.gradientExtent(.subtree)` is in force — which is almost always.
@@ -130,11 +141,13 @@ final class LazyListRowContent {
     /// Defers rendering until the buffer (or badge) is first read.
     init(
         identity: ViewIdentity? = nil,
-        measure: (() -> Int)? = nil,
+        carriesBadge: Bool = true,
+        measure: (() -> (size: ViewSize, availableWidth: Int))? = nil,
         render: @escaping (GradientFrame?) -> (buffer: FrameBuffer, badge: BadgeValue?)
     ) {
         self.rowIdentity = identity
-        self.measureHeight = measure
+        self.carriesBadge = carriesBadge
+        self.measureSize = measure
         self.thunk = render
     }
 
@@ -147,6 +160,7 @@ final class LazyListRowContent {
     /// to the main actor — it only stores a `Sendable` tuple, runs no pipeline.
     nonisolated init(buffer: FrameBuffer, badge: BadgeValue?) {
         self.rowIdentity = nil
+        self.carriesBadge = badge != nil
         self.cached = (buffer, badge)
     }
 
@@ -164,8 +178,25 @@ final class LazyListRowContent {
     /// The row's height, rendering it only if there is no other way to ask.
     var heightWithoutRendering: Int {
         if let cached { return cached.buffer.height }
-        if let measureHeight { return measureHeight() }
+        if let measureSize { return measureSize().size.height }
         return buffer.height
+    }
+
+    /// The width the row's buffer would have, without rendering it — or `nil`
+    /// when only the render can say (chrome and the eager fallbacks, which
+    /// have already rendered and answer through ``buffer`` for nothing).
+    ///
+    /// Read as the render would have filled it: a row flexible in width
+    /// renders filled to the width it was offered, and a row wider than that
+    /// is clamped to it, so this is `buffer.width` by construction rather than
+    /// by coincidence — `ListTests` pins the hug to the widest of every row.
+    var widthWithoutRendering: Int? {
+        if let cached { return cached.buffer.width }
+        guard let measureSize else { return nil }
+        let measured = measureSize()
+        return measured.size.isWidthFlexible
+            ? measured.availableWidth
+            : min(measured.size.width, measured.availableWidth)
     }
 }
 
@@ -212,6 +243,14 @@ public struct SelectableListRow<SelectionValue: Hashable & Sendable>: Sendable {
 
     /// The badge value for this row (from environment). Forces the lazy render.
     @MainActor public var badge: BadgeValue? { content.badge }
+
+    /// ``badge``, without rendering the row to find there is none — see
+    /// ``LazyListRowContent/carriesBadge``.
+    @MainActor var badgeWithoutRendering: BadgeValue? { content.carriesBadge ? content.badge : nil }
+
+    /// ``buffer``'s width without rendering, where the content can answer —
+    /// see ``LazyListRowContent/widthWithoutRendering``.
+    @MainActor var widthWithoutRendering: Int? { content.widthWithoutRendering }
 
     /// The identity this row's content renders under, or `nil` for chrome and
     /// the eager fallbacks. Computed, not stored — see
