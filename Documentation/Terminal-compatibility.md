@@ -1437,21 +1437,32 @@ the released core throws). With both betas, measured:
 | `a=p,U=1` virtual placement, `q=0` | `ESC_Gi=31;OK ESC\` — **acknowledged** |
 | `a=q` query | `OK` |
 | any of the above | `addon.storageUsage` rises — the image really is decoded and kept |
-| U+10EEEE placeholder cells | left in the buffer **as text**; no image drawn, no canvas created |
+| U+10EEEE placeholder cells | left in the buffer **as text** |
 
-So the beta acknowledges the protocol and decodes the pixels, but does not yet
-place a virtual placement — which is the only kind TUIkit uses, because a
-placement that moves with the text is no use to a full-screen layout (see
-`Terminal graphics protocols.md` §4). Upstream agrees it is unfinished: the
-addon's README says "the kitty graphics support is still WIP", and
-xtermjs/xterm.js#6132, *Kitty graphics: Track placements independently from
-text cells*, was still open at the time of writing.
+So the beta acknowledges the protocol and decodes the pixels. Whether it
+*places* them, this bench cannot say, and the first version of this section
+claimed more than it had measured. On re-testing (2026-09-05, later the same
+day) the addon drew **nothing at all** here — not a kitty placement, not a
+cursor placement, not a SIXEL, not an iTerm2 inline image — with the DOM
+renderer and again with `@xterm/addon-webgl` loaded, while `storageUsage` rose
+every time, so every payload was decoded and stored. That is an instrument that
+answers questions about parsing and cannot answer questions about drawing.
+
+What can still be said with a source rather than a measurement: the addon's
+README calls the kitty support WIP, and xtermjs/xterm.js#6132, *Kitty graphics:
+Track placements independently from text cells*, was open at the time of
+writing and describes exactly the placement bookkeeping a virtual placement
+needs. TUIkit uses only virtual placements, because one that moves with the
+text is no use to a full-screen layout (see `Terminal graphics protocols.md`
+§4).
 
 **The trap this sets.** An `OK` to the placement query is exactly what TUIkit's
 handshake looks for, so a framework that trusted it would emit placeholder
 cells into a terminal that draws none. Forced on with `TUIKIT_GRAPHICS=1` and
 both betas loaded, the Example's Colors page emitted 444 placeholder cells
-across six gradient rows and drew **blank space** where the ramps belong. Left
+across six gradient rows and drew **blank space** where the ramps belong —
+which, given the paragraph above, says the page drew nothing rather than that
+placements specifically are unimplemented. Left
 to its own handshake the framework did not turn graphics on at all, which is
 the conservative answer and the right one — but it is conservative by
 accident here, not by design, and that is worth remembering if the beta's
