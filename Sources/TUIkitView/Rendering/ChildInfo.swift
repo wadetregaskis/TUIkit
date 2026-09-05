@@ -59,6 +59,10 @@ public struct ChildView {
     ///   number above is history, not a lever: do not re-derive it without a
     ///   clean-built A/B on both sides (§40.2 of the performance profile).
     private let providerSlot: Int32
+    /// The identity this child renders and measures under, when it has been
+    /// resolved ahead of use — see ``resolvingIdentity(under:)``. `nil` means
+    /// ``childContext(_:)`` derives it from the context it is given.
+    private let resolvedIdentity: ViewIdentity?
 
     /// Whether this child is a Spacer.
     public let isSpacer: Bool
@@ -121,6 +125,7 @@ public struct ChildView {
         self.childIndex = 0
         self.identityKey = nil
         self.providerSlot = -1
+        self.resolvedIdentity = nil
     }
 
     /// Creates a child view wrapper with an explicit child index for identity propagation.
@@ -141,6 +146,7 @@ public struct ChildView {
         self.childIndex = childIndex
         self.identityKey = nil
         self.providerSlot = -1
+        self.resolvedIdentity = nil
     }
 
     /// Full-field copy initializer backing ``reindexed(to:providerSlot:)``.
@@ -153,7 +159,8 @@ public struct ChildView {
         isSpacer: Bool,
         spacerMinLength: Int?,
         zIndex: Double,
-        providesAlignmentGuide: Bool
+        providesAlignmentGuide: Bool,
+        resolvedIdentity: ViewIdentity? = nil
     ) {
         self.view = view
         self.identityType = identityType
@@ -164,6 +171,26 @@ public struct ChildView {
         self.spacerMinLength = spacerMinLength
         self.zIndex = zIndex
         self.providesAlignmentGuide = providesAlignmentGuide
+        self.resolvedIdentity = resolvedIdentity
+    }
+
+    /// This child with its identity under `parent` worked out now, so the
+    /// walks that use it share one identity node instead of each deriving
+    /// its own — which, for a keyed row, was a namespaced key string and a
+    /// node allocation per child per walk, five times a frame for a stack
+    /// inside a scroll view. Only meaningful where every later use is under
+    /// the same parent, which is what the per-pass child memo guarantees:
+    /// its key carries the parent identity.
+    func resolvingIdentity(under parent: ViewIdentity) -> Self {
+        guard identityType != nil else { return self }
+        var probe = RenderContext(availableWidth: 0, availableHeight: 0)
+        probe.identity = parent
+        return Self(
+            view: view, identityType: identityType, childIndex: childIndex,
+            identityKey: identityKey, providerSlot: providerSlot, isSpacer: isSpacer,
+            spacerMinLength: spacerMinLength, zIndex: zIndex,
+            providesAlignmentGuide: providesAlignmentGuide,
+            resolvedIdentity: childContext(probe).identity)
     }
 
     /// A copy whose positional identity is rebased to `index`, and whose
@@ -231,6 +258,7 @@ public struct ChildView {
         self.childIndex = childIndex
         self.identityKey = nil
         self.providerSlot = -1
+        self.resolvedIdentity = nil
     }
 
     /// Creates a child wrapper whose per-child identity is keyed by a stable
@@ -247,6 +275,7 @@ public struct ChildView {
         self.childIndex = 0
         self.identityKey = key
         self.providerSlot = -1
+        self.resolvedIdentity = nil
     }
 
     /// The wrapped child view itself, for containers that need to inspect the
@@ -288,6 +317,11 @@ public struct ChildView {
     /// `identityType` is `nil` (the no-disambiguation initializer).
     private func childContext(_ context: RenderContext) -> RenderContext {
         guard let identityType else { return context }
+        if let resolvedIdentity {
+            var copy = context
+            copy.identity = resolvedIdentity
+            return copy
+        }
         if let identityKey {
             // The slot prefix is injective: the slot is the digits before the
             // first "#", so no two (slot, key) pairs concatenate to one
@@ -735,7 +769,11 @@ public func resolveChildViews<V: View>(from content: V, context: RenderContext) 
     let key = RenderCache.ChildViewsKey(
         identity: context.identity, viewType: ObjectIdentifier(V.self), valueHash: viewValueHash(content))
     if let remembered = cache.lookupChildViews(key: key) { return remembered }
-    let children = provider.childViews(context: context)
+    // Identities resolved once here, for the same reason the array is: every
+    // later use of this entry is under `context.identity` (it is in the key).
+    let children = provider.childViews(context: context).map {
+        $0.resolvingIdentity(under: context.identity)
+    }
     cache.storeChildViews(key: key, children: children)
     return children
 }
