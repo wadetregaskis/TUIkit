@@ -41,6 +41,10 @@ struct TrackStyleEditor: View {
     /// has, because it is the same question and the answer changes what a
     /// gradient MEANS — a scale, or a decoration.
     @AppStorage("trackEditor.gradientSpan") private var gradientSpansTrack = true
+    /// The same question for the unfilled half's ramp, answered on its own:
+    /// a fill that is a scale and a remainder that is a decoration is a
+    /// perfectly ordinary bar.
+    @AppStorage("trackEditor.emptyGradientSpan") private var emptyGradientSpansTrack = true
     /// Whether the unfilled half gets a colour of its own.
     @AppStorage("trackEditor.emptyTinted") private var emptyTinted = false
     /// Whether the unfilled half gets a gradient rather than a flat colour.
@@ -209,7 +213,7 @@ struct TrackStyleEditor: View {
                 Button("component.trackEditor.editGradient") { editingGradient = true }
                     .disabled(!gradientEnabled)
                 Toggle("component.trackEditor.gradientSpansTrack", isOn: $gradientSpansTrack)
-                    .disabled(!gradientEnabled && !emptyTinted)
+                    .disabled(!gradientEnabled)
             }
             HStack(spacing: 2) {
                 // One toggle, not two. There used to be a "…with a gradient"
@@ -224,6 +228,8 @@ struct TrackStyleEditor: View {
                 Toggle("component.trackEditor.emptyTinted", isOn: $emptyTinted)
                 Button("component.trackEditor.editEmptyGradient") { editingEmptyGradient = true }
                     .disabled(!emptyTinted)
+                Toggle("component.trackEditor.emptyGradientSpansTrack", isOn: $emptyGradientSpansTrack)
+                    .disabled(!emptyTinted)
             }
             Text("component.trackEditor.comboHint")
                 .foregroundStyle(.palette.foregroundSecondary)
@@ -237,12 +243,16 @@ struct TrackStyleEditor: View {
                 ProgressView(value: animatedFraction)
                     .progressViewStyle(.custom(configuration))
                     .frame(maxWidth: .infinity)
-                    .trackGradientScaling(gradientSpansTrack ? .track : .fill)
+                    .trackGradientScaling(
+                        fill: gradientSpansTrack ? .track : .fill,
+                        empty: emptyGradientSpansTrack ? .track : .fill)
             case .slider:
                 Slider(value: $sliderValue)
                     .trackStyle(.custom(configuration))
                     .frame(maxWidth: .infinity)
-                    .trackGradientScaling(gradientSpansTrack ? .track : .fill)
+                    .trackGradientScaling(
+                        fill: gradientSpansTrack ? .track : .fill,
+                        empty: emptyGradientSpansTrack ? .track : .fill)
             }
         }
         .modal(isPresented: $editingEmptyGradient) {

@@ -509,7 +509,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
                 for: [.all, .text, .control(.slider)]),
             isDisabled: isDisabled,
             showsValue: showsValue,
-            gradientScaling: context.environment.trackGradientScaling,
+            fillScaling: context.environment.trackGradientScaling,
+            emptyScaling: context.environment.trackEmptyGradientScaling,
             graphics: context.gradientGraphics(token: "track-\(context.identity.path)")
         )
 
@@ -887,7 +888,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         valueStyle: StyleAttributes,
         isDisabled: Bool,
         showsValue: Bool,
-        gradientScaling: TrackGradientScaling,
+        fillScaling: TrackGradientScaling,
+        emptyScaling: TrackGradientScaling,
         graphics: GradientGraphicsContext?
     ) -> (content: String, drawnTrackWidth: Int) {
         // Arrow colors:
@@ -931,7 +933,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             filledColor: forState(palette.foregroundSecondary),
             emptyColor: forState(palette.foregroundTertiary),
             accentColor: forState(palette.accent),
-            gradientScaling: gradientScaling,
+            fillScaling: fillScaling,
+            emptyScaling: emptyScaling,
             palette: palette,
             graphics: graphics
         )

@@ -34,8 +34,10 @@ enum TrackRenderer {
     ///   - filledColor: The color for filled portions.
     ///   - emptyColor: The color for empty portions.
     ///   - accentColor: The color for accent elements (e.g., dot head).
-    ///   - gradientScaling: What a fill gradient is measured across — the whole
+    ///   - fillScaling: What the fill's gradient is measured across — the whole
     ///     bar (the default) or only the lit part. See ``TrackGradientScaling``.
+    ///   - emptyScaling: The same question for the unfilled remainder's
+    ///     gradient — the bar, or only the cells the fill has not reached.
     ///   - palette: The palette the style's own colours are resolved against.
     ///     The three colours above arrive resolved; a style read from the
     ///     environment does not, and a palette role has no channels to emit.
@@ -51,7 +53,8 @@ enum TrackRenderer {
         filledColor: Color,
         emptyColor: Color,
         accentColor: Color,
-        gradientScaling: TrackGradientScaling = .track,
+        fillScaling: TrackGradientScaling = .track,
+        emptyScaling: TrackGradientScaling = .track,
         palette: any Palette,
         graphics: GradientGraphicsContext? = nil
     ) -> String {
@@ -76,14 +79,14 @@ enum TrackRenderer {
                 let row = renderPicture(
                     fraction: fraction, width: width, config: config,
                     filledColor: filledColor, emptyColor: emptyColor,
-                    gradientScaling: gradientScaling, graphics: graphics)
+                    fillScaling: fillScaling, emptyScaling: emptyScaling, graphics: graphics)
             {
                 return row
             }
             return renderConfigured(
                 fraction: fraction, width: width, config: config,
                 filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling, depth: depth)
+                fillScaling: fillScaling, emptyScaling: emptyScaling, depth: depth)
         }
 
         switch style {
@@ -139,7 +142,7 @@ enum TrackRenderer {
                 coloring: coloring,
                 filledColor: filledColor,
                 emptyColor: emptyColor,
-                gradientScaling: gradientScaling,
+                fillScaling: fillScaling,
                 depth: depth
             )
         }
@@ -174,17 +177,19 @@ enum TrackRenderer {
     private static func renderPicture(
         fraction: Double, width: Int, config: TrackConfiguration,
         filledColor: Color, emptyColor: Color,
-        gradientScaling: TrackGradientScaling, graphics: GradientGraphicsContext
+        fillScaling: TrackGradientScaling, emptyScaling: TrackGradientScaling,
+        graphics: GradientGraphicsContext
     ) -> String? {
         guard
             let picture = TrackRaster.picture(
                 fraction: fraction, width: width, config: config,
                 filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling, cellPixels: graphics.cellPixels)
+                fillScaling: fillScaling, emptyScaling: emptyScaling,
+                cellPixels: graphics.cellPixels)
         else { return nil }
         let signature = TrackImageSignature(
             config: config, filledColor: filledColor, emptyColor: emptyColor,
-            gradientScaling: gradientScaling,
+            fillScaling: fillScaling, emptyScaling: emptyScaling,
             width: picture.width, height: picture.height,
             lit: Int((fraction * Double(picture.width)).rounded()))
         return graphics.store.placeholderRows(
@@ -226,7 +231,8 @@ extension TrackRenderer {
         config: TrackConfiguration,
         filledColor: Color,
         emptyColor: Color,
-        gradientScaling: TrackGradientScaling,
+        fillScaling: TrackGradientScaling,
+        emptyScaling: TrackGradientScaling,
         depth: ColorDepth
     ) -> String {
         let fillChars = Array(config.fill.isEmpty ? "█" : config.fill)
@@ -256,7 +262,7 @@ extension TrackRenderer {
                 fraction: fraction, width: width, quantum: quantum,
                 fillChars: fillChars, emptyChars: emptyChars,
                 config: config, filledColor: filledColor, emptyColor: emptyColor,
-                paintsBackground: paintsBackground, gradientScaling: gradientScaling,
+                paintsBackground: paintsBackground, fillScaling: fillScaling,
                 depth: depth)
         }
 
@@ -293,7 +299,7 @@ extension TrackRenderer {
         // follows the fill. Compressing into the lit part is what this always
         // did, and it makes a gradient meant as a SCALE ("red past 80%") lie —
         // at 10% the bar's one lit cell is the last colour.
-        let gradientSpan = gradientScaling == .track ? width : litCellCount
+        let gradientSpan = fillScaling == .track ? width : litCellCount
         func fillColour(at index: Int) -> Color {
             guard let gradient = config.fillGradient, gradientSpan > 1 else {
                 return filledColor
@@ -315,12 +321,15 @@ extension TrackRenderer {
         //
         // With no boundary cell `fullCount == litCellCount` and this is the
         // run that was always drawn.
+        // Its own question, not the fill's: the two ramps are measured across
+        // what each paints, and a scale on one side says nothing about a
+        // decoration on the other.
         let emptyRegionStart = fullCount
-        let emptySpan = gradientScaling == .track ? width : width - emptyRegionStart
+        let emptySpan = emptyScaling == .track ? width : width - emptyRegionStart
         func emptyColour(at cell: Int) -> Color {
             guard let gradient = config.emptyGradient, emptySpan > 1 else { return emptyColor }
             return gradientColor(
-                gradient, index: gradientScaling == .track ? cell : cell - emptyRegionStart,
+                gradient, index: emptyScaling == .track ? cell : cell - emptyRegionStart,
                 span: emptySpan, fallback: emptyColor, depth: depth)
         }
 
@@ -395,7 +404,7 @@ extension TrackRenderer {
         filledColor: Color,
         emptyColor: Color,
         paintsBackground: Bool,
-        gradientScaling: TrackGradientScaling,
+        fillScaling: TrackGradientScaling,
         depth: ColorDepth
     ) -> String {
         // The style's own unfilled colour, if it named one — see the fine path.
@@ -417,7 +426,7 @@ extension TrackRenderer {
         let targetCells = litSteps * quantum
 
         // As in `renderConfigured`: the ramp spans the bar or the lit part.
-        let gradientSpan = gradientScaling == .track ? steps * quantum : targetCells
+        let gradientSpan = fillScaling == .track ? steps * quantum : targetCells
         func fillColour(atCell cell: Int) -> Color {
             guard let gradient = config.fillGradient, gradientSpan > 1 else {
                 return filledColor
@@ -521,7 +530,7 @@ extension TrackRenderer {
         coloring: SegmentColoring,
         filledColor: Color,
         emptyColor: Color,
-        gradientScaling: TrackGradientScaling,
+        fillScaling: TrackGradientScaling,
         depth: ColorDepth
     ) -> String {
         let leadingWidth = leading.strippedLength
@@ -534,7 +543,7 @@ extension TrackRenderer {
         // the setting entirely and always compress into the lit part, which
         // made a gradient meant as a SCALE lie — at 10% its one lit cell is the
         // last colour.
-        let gradientSpan = gradientScaling == .track ? width : filledCount
+        let gradientSpan = fillScaling == .track ? width : filledCount
 
         var result = ""
 
@@ -723,7 +732,8 @@ struct TrackImageSignature: Equatable {
     var config: TrackConfiguration
     var filledColor: Color
     var emptyColor: Color
-    var gradientScaling: TrackGradientScaling
+    var fillScaling: TrackGradientScaling
+    var emptyScaling: TrackGradientScaling
     var width: Int
     var height: Int
     var lit: Int

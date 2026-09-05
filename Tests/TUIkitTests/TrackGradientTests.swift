@@ -213,7 +213,7 @@ struct TrackEmptyStylingTests {
             filledColor: .rgb(1, 2, 3),
             emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7),
-            gradientScaling: scaling,
+            fillScaling: scaling, emptyScaling: scaling,
             palette: SystemPalette.green)
     }
 
@@ -282,7 +282,7 @@ struct TrackGradientScalingTests {
             filledColor: .rgb(1, 2, 3),
             emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7),
-            gradientScaling: scaling,
+            fillScaling: scaling,
             palette: SystemPalette.green)
     }
 
@@ -329,7 +329,7 @@ struct TrackGradientScalingTests {
                 filledColor: .rgb(1, 2, 3),
                 emptyColor: .rgb(9, 9, 9),
                 accentColor: .rgb(7, 7, 7),
-                gradientScaling: scaling,
+                fillScaling: scaling,
                 palette: SystemPalette.green)
         }
         let pinned = segments(0.5, .track)
@@ -348,6 +348,7 @@ struct TrackGradientScalingTests {
         // Both halves of the default: the environment value a view reads, and
         // the renderer's own parameter for callers that pass none.
         #expect(EnvironmentValues().trackGradientScaling == .track)
+        #expect(EnvironmentValues().trackEmptyGradientScaling == .track)
         let defaulted = TrackRenderer.render(
             fraction: 0.5, width: 10,
             style: .shadeRamp(gradient: Gradient(colors: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)])),
@@ -374,7 +375,7 @@ struct TrackGradientScalingTests {
                     fullGlyph: "█", partialRamp: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"],
                     emptyStyle: .background, emptyGradient: Self.fade)),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
-            accentColor: .rgb(7, 7, 7), gradientScaling: scaling,
+            accentColor: .rgb(7, 7, 7), fillScaling: scaling, emptyScaling: scaling,
             palette: SystemPalette.green)
     }
 
@@ -432,9 +433,72 @@ struct TrackGradientScalingTests {
                     fullGlyph: "█", partialRamp: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"],
                     emptyStyle: .background, emptyGradient: Self.fade)),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
-            accentColor: .rgb(7, 7, 7), gradientScaling: .fill,
+            accentColor: .rgb(7, 7, 7), fillScaling: .fill, emptyScaling: .fill,
             palette: SystemPalette.green)
         let ramp = Color.quantisedRamp(Self.fade, count: 5, depth: .truecolor)
         #expect(runs(in: output).suffix(5).map(\.background) == ramp.map { triple($0) })
+    }
+
+    // MARK: - The two ramps answer separately
+
+    /// A fill ramp and an unfilled ramp on one bar, each with its own scaling.
+    private func twoRamps(fill: TrackGradientScaling, empty: TrackGradientScaling) -> String {
+        TrackRenderer.render(
+            fraction: 0.5, width: 10,
+            style: .custom(
+                TrackConfiguration(
+                    fullGlyph: "█", emptyStyle: .background,
+                    fillGradient: Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)]),
+                    emptyGradient: Self.fade)),
+            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
+            accentColor: .rgb(7, 7, 7), fillScaling: fill, emptyScaling: empty,
+            palette: SystemPalette.green)
+    }
+
+    /// The fill's scaling decides only the fill; the unfilled ramp is the same
+    /// whichever way the fill is measured — and the other way round.
+    @Test("The fill's scaling leaves the unfilled ramp alone, and vice versa")
+    func scalingsAreIndependent() {
+        let unfilledPinned = runs(in: twoRamps(fill: .track, empty: .track)).suffix(5).map(\.background)
+        let unfilledPinnedUnderCompressedFill = runs(in: twoRamps(fill: .fill, empty: .track)).suffix(5).map(\.background)
+        #expect(unfilledPinned == unfilledPinnedUnderCompressedFill)
+        // Pinned to the bar the unfilled ramp's last cell is the ramp's end
+        // (white); compressed into its five cells it is too, but its FIRST cell
+        // is the ramp's start (black) rather than the bar's midpoint.
+        let compressedEmpty = runs(in: twoRamps(fill: .track, empty: .fill)).suffix(5).map(\.background)
+        #expect(compressedEmpty.first == triple(.rgb(0, 0, 0)), "\(compressedEmpty)")
+        #expect(unfilledPinned.first != triple(.rgb(0, 0, 0)), "\(unfilledPinned)")
+        #expect(compressedEmpty.last == unfilledPinned.last, "both reach the ramp's end")
+        // The fill, read the same way: pinned it stops halfway (no pure red),
+        // compressed it reaches red — whatever the unfilled side asks.
+        func hasForeground(_ output: String, _ code: String) -> Bool { output.contains("38;2;\(code)") }
+        #expect(!hasForeground(twoRamps(fill: .track, empty: .fill), "255;0;0"))
+        #expect(hasForeground(twoRamps(fill: .fill, empty: .track), "255;0;0"))
+    }
+
+    /// `trackGradientScaling(_:)` answers both halves at once; the two-argument
+    /// form answers each.
+    @Test("The one-argument modifier sets both halves; the two-argument form sets each")
+    func modifiersSetTheHalves() {
+        // Read back through a real render rather than the setter: the modifier
+        // is what callers write.
+        final class Seen { var scalings: (fill: TrackGradientScaling, empty: TrackGradientScaling)? }
+        let seen = Seen()
+        struct Probe: View, Renderable {
+            let seen: Seen
+            var body: Never { fatalError("renders via Renderable") }
+            func renderToBuffer(context: RenderContext) -> FrameBuffer {
+                seen.scalings = (
+                    context.environment.trackGradientScaling, context.environment.trackEmptyGradientScaling)
+                return FrameBuffer()
+            }
+        }
+        _ = renderToBuffer(
+            Probe(seen: seen).trackGradientScaling(.fill), context: makeRenderContext(width: 10, height: 1))
+        #expect(seen.scalings?.fill == .fill && seen.scalings?.empty == .fill)
+        _ = renderToBuffer(
+            Probe(seen: seen).trackGradientScaling(fill: .track, empty: .fill),
+            context: makeRenderContext(width: 10, height: 1))
+        #expect(seen.scalings?.fill == .track && seen.scalings?.empty == .fill)
     }
 }
