@@ -81,6 +81,27 @@ public struct SGRState: Sendable, Equatable {
     /// cursor or clear the screen, and neither is "styling in force".
     ///
     /// - Parameter sequence: A full escape, `ESC [ … m`.
+    /// Sets the foreground to a colour's SGR parameters — `["31"]`,
+    /// `["38", "5", "n"]`, `["38", "2", "r", "g", "b"]` — or to the terminal's
+    /// default for `nil` (what SGR 39 does).
+    ///
+    /// Byte-for-byte what ``apply(_:)`` stores for `ESC[<parameters>m`: a
+    /// named colour is kept as its one code and an extended one as its
+    /// complete parameter list, and 39 clears. The parse is the way to learn
+    /// a colour from text; this is the way to state one you already hold —
+    /// `apply` rebuilt and re-split the sequence per cell of a translucent
+    /// overlay, 17% of that page's frame.
+    ///
+    /// - Parameter parameters: A well-formed colour parameter list, or `nil`.
+    public mutating func setForeground(parameters: [String]?) {
+        foreground = parameters
+    }
+
+    /// The background twin of ``setForeground(parameters:)`` (SGR 49 for `nil`).
+    public mutating func setBackground(parameters: [String]?) {
+        background = parameters
+    }
+
     public mutating func apply(_ sequence: String) {
         guard sequence.hasSuffix("m") else { return }
         var parameters = sequence.dropFirst().drop(while: { $0 != "[" }).dropFirst().dropLast()

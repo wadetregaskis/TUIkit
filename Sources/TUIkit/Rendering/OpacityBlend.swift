@@ -407,25 +407,22 @@ extension SGRState {
     /// This state with its foreground replaced. `nil` is the terminal's
     /// default (SGR 39) — what a cell that named no colour of its own had.
     ///
-    /// Written as an `apply` of the sequence that would set it rather than as a
-    /// stored property, because `SGRState` deliberately keeps its colours as
-    /// SGR parameter lists: it lives a module below ``Color`` and cannot hold
-    /// one. Folding in the sequence is the same operation the parse performs,
-    /// so there is one code path for "what colour is in force".
+    /// `SGRState` keeps its colours as SGR parameter lists (it lives a module
+    /// below ``Color`` and cannot hold one), so the colour's own codes are
+    /// handed over as they are. This used to build the `ESC[…m` sequence and
+    /// `apply` it — a parse per cell of every translucent overlay, 17% of
+    /// that page's frame — for a result `setForeground(parameters:)` states
+    /// outright; `SGRStateColourSetterTests` pins the two equal.
     func settingForeground(_ color: Color?) -> Self {
         var result = self
-        result.apply(Self.sgr(color.map { $0.foregroundCodes() } ?? ["39"]))
+        result.setForeground(parameters: color.map { $0.foregroundCodes() })
         return result
     }
 
     /// This state with its background replaced. `nil` is SGR 49.
     func settingBackground(_ color: Color?) -> Self {
         var result = self
-        result.apply(Self.sgr(color.map { $0.backgroundCodes() } ?? ["49"]))
+        result.setBackground(parameters: color.map { $0.backgroundCodes() })
         return result
-    }
-
-    private static func sgr(_ codes: [String]) -> String {
-        "\u{1B}[" + codes.joined(separator: ";") + "m"
     }
 }
