@@ -90,8 +90,20 @@ enum Headless {
         // preference before, which is how it stayed missing.
         environment.preferenceStorage = PreferenceStorage()
         environment.volatileReadTracker = VolatileReadTracker()
-        return RenderContext(availableWidth: cols, availableHeight: rows, environment: environment)
+        // Rooted at a TYPE, as `RenderLoop` roots the app, not at the
+        // context's default raw path string. Every identity below a raw root
+        // is raw-rooted, and for those `ViewIdentity.isAncestor(of:)` has to
+        // render both full path strings and compare prefixes — so the end-of-
+        // pass prune, which asks that of every retained root against every
+        // unvisited entry, was 88–95% of a frame here and nothing in the app.
+        return RenderContext(
+            availableWidth: cols, availableHeight: rows, environment: environment,
+            identity: ViewIdentity(rootType: BenchRoot.self))
     }
+
+    /// The type the bench's identity tree is rooted at — a stand-in for the
+    /// `App` type `RenderLoop` roots a real tree at.
+    private enum BenchRoot {}
 
     /// Renders every scenario once at a fixed size; prints dimensions. Returns
     /// the number that produced an empty buffer (a failure).
@@ -170,7 +182,20 @@ enum Headless {
             clock.tick &+= 1
             let cpuStart = threadCPUNanoseconds()
             let frameStart = DispatchTime.now()
+            // The live loop's per-pass lifecycle, timed as part of the frame
+            // because it IS part of the frame: `RenderLoop` opens every pass
+            // with these and closes it by pruning whatever the pass did not
+            // mark alive. Without them this bench rendered into a cache that
+            // was never pruned and a measure memo that was never emptied — so
+            // an off-screen row's size was a hit here and a miss in the app,
+            // and the per-pass measure memo grew by every miss forever (2,400
+            // entries a frame on `kitchensink`; millions over a profile),
+            // which put dictionary resizes in profiles of code that has none.
+            warm.stateStorage?.beginRenderPass()
+            warm.renderCache?.beginRenderPass()
             let buffer = renderToBuffer(view, context: warm)
+            warm.stateStorage?.endRenderPass()
+            warm.renderCache?.removeInactive()
             ns &+= DispatchTime.now().uptimeNanoseconds - frameStart.uptimeNanoseconds
             if let cpuStart, let cpuEnd = threadCPUNanoseconds() {
                 cpuNs &+= cpuEnd &- cpuStart

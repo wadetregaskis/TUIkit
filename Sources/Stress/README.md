@@ -76,6 +76,18 @@ debugger attach**, so — like `Tools/Profiling/RenderHarness` — it can be
 profiled by having Instruments *launch* it (works in sandboxes/CI/VMs where
 `--attach` is denied):
 
+Each iteration runs the live loop's per-pass lifecycle around the render —
+`StateStorage`/`RenderCache.beginRenderPass()` before, `endRenderPass()` /
+`removeInactive()` after — and the identity tree is rooted at a type, as
+`RenderLoop` roots an app. Both matter: without the lifecycle the cache was
+never pruned and the per-pass measure memo never emptied, so an off-screen
+row's size was a hit here and a miss in the app, and a memo that grew by
+every miss forever put dictionary resizes into profiles of code that has
+none; with a raw-string root, every identity's ancestor test rendered path
+strings, and the end-of-pass prune was 88–95% of a frame that the app does
+not pay. `cpu-per-frame` numbers from before 2026-09-05 were taken without
+either and are not comparable.
+
 ```sh
 swift build -c release --product Stress -Xswiftc -g
 BIN="$(swift build -c release --product Stress --show-bin-path)/Stress"
