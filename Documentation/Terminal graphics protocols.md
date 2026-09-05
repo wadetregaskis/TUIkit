@@ -247,7 +247,7 @@ partial, **?** unknown.
 
 | Terminal | Sixel | iTerm2 `File=` | Kitty APC | U+10EEEE | Evidence |
 |---|---|---|---|---|---|
-| xterm | **Y** | N | N | N | on by default since patch #359 (2020-08-17); the changelog also says it *ignores* APC |
+| xterm | **F** | N | N | N | compiled in by default since patch #359 (2020-08-17), and gated shut at runtime — see §3.3. The changelog also says it *ignores* APC |
 | Apple Terminal ⚑ | N | N | N | N | absence of evidence only — see §3.3 |
 | iTerm2 | **Y** | **Y** | **Y** | **Y** | `iTermImage+Sixel.m`; its own docs; commit 4fe5b21 (2024-08-21) adds `createUnicodePlaceholder` and `0x10EEEE` |
 | kitty | **N** | N | **Y** | **Y** | zero "sixel" hits in the whole changelog; placeholders `versionadded 0.28.0` (2023-04-15) |
@@ -290,7 +290,7 @@ partial, **?** unknown.
 
 | | |
 |---|---|
-| Sixel or iTerm2 images and **no** Kitty at all | **14** — 8 of them on by default, 5 behind a flag or patch, 1 unverified |
+| Sixel or iTerm2 images and **no** Kitty at all | **14** — 7 of them on by default, 6 behind a flag, patch or terminal-ID setting, 1 unverified |
 | Kitty APC graphics | **14** — 12 read from source or project docs, 2 resting only on kitty's list |
 | …of which **Unicode placeholders**, which is all TUIkit emits | **5** — kitty, iTerm2, Ghostty, Rio, patched st |
 | …of which explicitly **not** placeholders | **6** — WezTerm, Contour, Konsole, Warp, Zellij, xterm.js |
@@ -308,6 +308,16 @@ placeholder**. What that group needs is not a second protocol — it is a second
 Carried rather than smoothed over, because a coverage table is the kind of
 document people quote:
 
+- **xterm's Sixel is compiled in and switched off**, which is a trap worth more
+  than a footnote because every community table this survey started from says
+  "yes". Read from xterm 411's own `ptyx.h`: `optSixelGraphics(screen)` is true
+  only when `GraphicsTermId(screen)` is 240, 241, 330, 340 or 382. That macro
+  reads `decGraphicsID`, whose default `"420"` `charproc.c` maps to 0, and then
+  falls back to `decTerminalID`, which also defaults to 420. So a stock xterm
+  answers no to DA1 parameter `4` and draws nothing until it is started as
+  `xterm -ti vt340` or given `decGraphicsID`. Detection is not affected — the
+  DA1 answer is honest either way — but the coverage count is, and the row is
+  `F`, not `Y`.
 - **Apple Terminal** is an all-`N` row resting on absence of evidence.
   `terminfo.dev` actively claims it supports Kitty graphics *and* placeholders,
   which contradicts everything else here and which §2 measured the other way —
