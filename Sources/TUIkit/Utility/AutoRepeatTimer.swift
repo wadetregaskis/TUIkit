@@ -4,8 +4,6 @@
 //  Created by LAYERED.work
 //  License: MIT
 
-import Dispatch
-
 // MARK: - Auto-Repeat Timer
 
 /// Fires an action once immediately, then again periodically
@@ -131,13 +129,13 @@ public final class AutoRepeatTimer {
             // repeat on a genuine hold — never an extra step on a click, which
             // is the one the user cannot take back.
             while true {
-                let startedAt = DispatchTime.now().uptimeNanoseconds
+                let startedAt = MonotonicClock.nowNanoseconds
                 do {
                     try await Task.sleep(nanoseconds: initialDelayNanos)
                 } catch {
                     return
                 }
-                let waited = DispatchTime.now().uptimeNanoseconds - startedAt
+                let waited = MonotonicClock.nowNanoseconds - startedAt
                 if waited <= initialDelayNanos + toleranceNanos { break }
             }
 

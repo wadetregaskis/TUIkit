@@ -19,7 +19,7 @@ import Foundation
 /// next real frame then measured a lift as having run for the whole uptime.
 /// The default is the clock now, and the frame pacer reads the same one.
 enum FrameClock {
-    static var nowNanos: Int64 { Int64(bitPattern: DispatchTime.now().uptimeNanoseconds) }
+    static var nowNanos: Int64 { Int64(bitPattern: MonotonicClock.nowNanoseconds) }
 }
 
 // MARK: - Environment Snapshot

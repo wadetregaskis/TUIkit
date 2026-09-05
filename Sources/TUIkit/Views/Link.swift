@@ -419,7 +419,7 @@ private struct _Link<Label: View>: View {
         return AnyView(
             Button(
                 action: {
-                    guard gate.allows(nowNanos: DispatchTime.now().uptimeNanoseconds) else { return }
+                    guard gate.allows(nowNanos: MonotonicClock.nowNanoseconds) else { return }
                     open(destination)
                     showing.wrappedValue = true
                 },

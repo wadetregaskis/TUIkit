@@ -4,8 +4,6 @@
 //  Created by LAYERED.work
 //  License: MIT
 
-import Dispatch
-
 // MARK: - ScrollableOffsetState
 
 /// The scroll-position arithmetic shared by
@@ -297,7 +295,7 @@ public struct WheelEdgeHold {
     var delayNanos: UInt64 = 500_000_000
 
     /// Monotonic clock, injectable for tests.
-    var nowNanos: () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }
+    var nowNanos: () -> UInt64 = { MonotonicClock.nowNanoseconds }
 
     /// A hold that has not yet seen a blocked tick, with the default grace.
     ///

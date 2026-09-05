@@ -4,7 +4,6 @@
 //  Created by LAYERED.work
 //  License: MIT
 
-import Dispatch
 import TUIkitCore
 
 // MARK: - Mouse Event Dispatcher
@@ -226,7 +225,7 @@ final class MouseEventDispatcher: @unchecked Sendable {
 
     /// Monotonic time source (nanoseconds), injectable for tests. Defaults to
     /// the same clock the run loop uses.
-    var nowNanos: () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }
+    var nowNanos: () -> UInt64 = { MonotonicClock.nowNanoseconds }
 
     init() {}
 }
