@@ -135,6 +135,23 @@ private func withTarpit<T>(_ body: (Tarpit) async throws -> T) async throws -> T
 /// not release anything until the request timed out on its own.
 @Suite("URL image download")
 struct URLImageDownloadTests {
+    /// How long "promptly" is allowed to take, for the two tests that time a
+    /// cancellation and an unrelated task against a stalled transfer.
+    ///
+    /// Twenty seconds, which looks absurd next to the 0.3 s either takes on
+    /// an idle machine, and is chosen by what the tests discriminate rather
+    /// than by what they usually measure. Both distinguish "finished now"
+    /// from "waited out the loader's 30 s request timeout" — a cancelled
+    /// download that was never abandoned, a pool that stayed blocked until a
+    /// transfer ended — so the only number the bound has to stay clear of is
+    /// thirty. Everything below that is scheduling latency, and under a full
+    /// test run that latency is the suite's, not the loader's: the process is
+    /// running hundreds of other tasks, and a task that yields a hundred
+    /// times waits its turn a hundred times. Measured on CI at one commit,
+    /// the pool test took 6.2 s on the Linux 6.3 lane and 10.2 s on Linux
+    /// 6.2 against a 5 s bound — and neither pool was blocked, because a
+    /// blocked one would have read thirty.
+    private static let promptly: Duration = .seconds(20)
 
     /// Cancelling the task must abandon the download promptly. The timeout is
     /// 30 s and the tarpit never replies, so pre-fix this could only finish by
@@ -170,15 +187,15 @@ struct URLImageDownloadTests {
             let elapsed = clock.now - begin
 
             #expect(cancelled, "a cancelled download reports cancellation, not a network failure")
-            // Five seconds, not one. What this test discriminates is "gave up
-            // now" from "waited out the 30 s timeout", and five is still an
-            // order of magnitude short of that. One second was a bound the
-            // tests never actually exercised (the tarpit was already closed,
-            // so nothing was ever in flight to cancel); against a real stalled
-            // transfer on a CI runner saturated by the rest of the suite, the
-            // cancel round-trip measured 2.8 s.
+            // What this test discriminates is "gave up now" from "waited out
+            // the 30 s timeout", so the bound only has to sit clear of both —
+            // see `Self.promptly`. One second was a bound the tests never
+            // actually exercised (the tarpit was already closed, so nothing
+            // was ever in flight to cancel); against a real stalled transfer
+            // on a CI runner saturated by the rest of the suite, the cancel
+            // round-trip measured 2.8 s, and 5.5 s on another day.
             #expect(
-                elapsed < .seconds(5),
+                elapsed < Self.promptly,
                 "cancelling must abandon the transfer, not wait out the 30 s timeout (took \(elapsed))"
             )
         }
@@ -221,8 +238,12 @@ struct URLImageDownloadTests {
             let elapsed = clock.now - begin
 
             #expect(total == 100)
+            // A starved pool frees only when a download ends, and the tarpit
+            // ends none before the 30 s request timeout — so "starved" reads
+            // as thirty seconds, and anything well short of that is a pool
+            // that was never blocked. See `Self.promptly`.
             #expect(
-                elapsed < .seconds(5),
+                elapsed < Self.promptly,
                 "ten stalled downloads must not starve the pool (took \(elapsed))")
         }
     }
