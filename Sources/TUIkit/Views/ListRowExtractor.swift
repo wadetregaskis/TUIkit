@@ -91,6 +91,11 @@ protocol WindowedListRowExtractor {
     /// Builds the deferred content for the row at `index` (0-based over the
     /// data). Only called for rows that are actually shown.
     func makeListRowContent(at index: Int, context: RenderContext) -> LazyListRowContent
+
+    /// The rows' data, boxed for comparison, when it can be compared — what
+    /// the hug memo checks the widest-row answer against (see
+    /// `_ListCore.widestRowWidth`). `nil` means the answer cannot be kept.
+    var listRowsSignature: AnyEquatableBox? { get }
 }
 
 // MARK: - ForEach Conformance
@@ -117,6 +122,12 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
     // probes row 0 and bails to the eager path when it's `nil`.
     func listRowID<RowID: Hashable>(at index: Int) -> RowID? {
         rowID(at: index)
+    }
+
+    /// The collection itself, when its elements can be compared: a `Range`,
+    /// or an `Array` of `Equatable` elements. Boxed without copying.
+    var listRowsSignature: AnyEquatableBox? {
+        (data as? any Equatable).map { AnyEquatableBox($0) }
     }
 
     func makeListRowContent(at index: Int, context: RenderContext) -> LazyListRowContent {

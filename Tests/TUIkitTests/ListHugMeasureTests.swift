@@ -98,4 +98,35 @@ struct ListHugMeasureTests {
         tui.stateStorage.endRenderPass()
         #expect(Counters.measures < 120, "the hug measured rows that the memo should have answered: \(Counters.measures)")
     }
+
+    @Test("Unchanged data: the third frame's hug walks no rows at all; changed data walks them again")
+    func hugIsMemoisedOnTheData() {
+        let items = (0..<150).map { Item(id: $0, width: 4 + $0 % 9) }
+        let tui = TUIContext()
+        let context = RenderContext(availableWidth: 60, availableHeight: 8, tuiContext: tui)
+        func frame(_ items: [Item]) -> FrameBuffer {
+            let list = List(items) { item in CountingCell(width: item.width) }.fixedSize(horizontal: true)
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            let buffer = renderToBuffer(list, context: context)
+            tui.renderCache.removeInactive()
+            tui.stateStorage.endRenderPass()
+            return buffer
+        }
+        _ = frame(items)
+        _ = frame(items)
+        Counters.reset()
+        let steady = frame(items)
+        // The rows on screen still draw (and measure by drawing); every row
+        // beyond them is answered by the list's own memo, not by a walk.
+        #expect(Counters.measures <= 10, "the hug was served from the list memo: \(Counters.measures)")
+        #expect(steady.width >= 12 && steady.width < 60)
+
+        var wider = items
+        wider[100] = Item(id: 100, width: 30)
+        Counters.reset()
+        let changed = frame(wider)
+        #expect(changed.width > steady.width, "a wider row widened the hug: \(changed.width) vs \(steady.width)")
+        #expect(Counters.measures >= 100, "changed data walked the rows again: \(Counters.measures)")
+    }
 }

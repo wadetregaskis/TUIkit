@@ -55,6 +55,11 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// Builds the deferred content box for a row index.
     private let make: (Int) -> LazyListRowContent
 
+    /// The rows' data, comparable, when the source can say what it is — the
+    /// hug memo's snapshot (``_ListCore/widestRowWidth(source:context:)``).
+    /// `nil` for the eager sources, whose rows are already built.
+    let signature: AnyEquatableBox?
+
     /// Per-frame memo so a row touched by both the overflow check and the visible
     /// window (or re-read by the compose pass) is built — and rendered — once.
     private var materialized: [Int: SelectableListRow<SelectionValue>] = [:]
@@ -71,11 +76,13 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     init(
         count: Int,
         allContent: Bool,
+        signature: AnyEquatableBox? = nil,
         typeAt: @escaping (Int) -> ListRowType<SelectionValue>,
         make: @escaping (Int) -> LazyListRowContent
     ) {
         self.count = count
         self.allContent = allContent
+        self.signature = signature
         self.typeAt = typeAt
         self.make = make
     }
@@ -200,6 +207,62 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var rowContext = context
         rowContext.environment.fixedSizeWidth = false
         let source = extractRows(from: content, context: rowContext)
+        let widest = widestRowWidth(source: source, context: rowContext)
+        let titleWidth = title.map { $0.strippedLength + 2 } ?? 0
+        let borderOverhead = context.environment.listStyle.showsBorder ? 2 : 0
+        // The widest row still gets its gutters when composed, so the hugged
+        // width must include them or the row's trailing cells are clipped.
+        return max(widest + listRowGutter, titleWidth) + borderOverhead
+    }
+
+    /// The widest row's cells, badge included — the answer a hug needs, from
+    /// every row, on every frame it hugs.
+    ///
+    /// Kept in the size memo under the list's own identity, checked against
+    /// the rows' DATA: a `NavigationSplitView` asks its sidebar to hug on
+    /// every frame, and walking two thousand rows to answer — a content box,
+    /// a closure pair and an identity node per row, then a memo lookup each
+    /// — was 62% of a frame whose rows had not changed. The data is the
+    /// snapshot because it is what the rows are a function of, which is the
+    /// assumption the row memo already makes (its "captured data" hole is
+    /// this one's too). The entry lives under the list's identity, so a
+    /// `@State` write in any row clears it (the list is the row's ancestor),
+    /// an environment change above the list clears it (the list is below the
+    /// modifier), and a row that read a per-frame value declines it — the
+    /// same three rules as a row's own memo. Sources that cannot say what
+    /// their data is (sections, eager fallbacks) walk every time.
+    private func widestRowWidth(source: RowSource<SelectionValue>, context: RenderContext) -> Int {
+        let key = RenderCache.SizeKey(
+            identity: context.identity,
+            proposalWidth: context.availableWidth, proposalHeight: nil,
+            // Height-independent on purpose: a row's width does not change
+            // with the height the list was offered, and the measure and
+            // render passes offer different ones.
+            availableWidth: context.availableWidth, availableHeight: 0,
+            hasExplicitWidth: context.hasExplicitWidth, hasExplicitHeight: context.hasExplicitHeight)
+        let memo: (cache: RenderCache, signature: AnyEquatableBox)? =
+            if let cache = context.renderCache, let signature = source.signature {
+                (cache, signature)
+            } else {
+                nil
+            }
+        if let memo {
+            // The list itself never marks: it is not a memoising view. Without
+            // this the entry would be pruned at the end of the pass it was
+            // stored in.
+            memo.cache.markActive(context.identity)
+            if let cached = memo.cache.lookupSize(key: key, view: memo.signature) {
+                return cached.width
+            }
+        }
+        let existingTracker = context.environment.volatileReadTracker
+        let tracker = existingTracker ?? VolatileReadTracker()
+        var walkContext = context
+        if existingTracker == nil {
+            walkContext = context.withEnvironment(
+                context.environment.setting(\.volatileReadTracker, to: tracker))
+        }
+        let unsafeBefore = tracker.cacheUnsafeCount
         let widest = (0..<source.count).map { index in
             let row = source.row(at: index)
             // A badge is composed OUTSIDE the row's own buffer
@@ -221,11 +284,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 }
             return (row.widthWithoutRendering ?? row.buffer.width) + badgeCells
         }.max() ?? 0
-        let titleWidth = title.map { $0.strippedLength + 2 } ?? 0
-        let borderOverhead = context.environment.listStyle.showsBorder ? 2 : 0
-        // The widest row still gets its gutters when composed, so the hugged
-        // width must include them or the row's trailing cells are clipped.
-        return max(widest + listRowGutter, titleWidth) + borderOverhead
+        if let memo, tracker.cacheUnsafeCount == unsafeBefore,
+            !walkContext.environment.hasUncomparableEnvironmentValue
+        {
+            memo.cache.storeSize(key: key, view: memo.signature, size: ViewSize.fixed(widest, 0))
+        }
+        return widest
     }
 
     /// Captures the populated-state values that the mouse-
@@ -2256,6 +2320,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 return RowSource(
                     count: count,
                     allContent: true,
+                    signature: windowed.listRowsSignature,
                     typeAt: { index in
                         // Force-unwrap is safe: row 0 resolved and the data is
                         // id-homogeneous, so every index resolves as SelectionValue.
@@ -2456,12 +2521,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         context: RenderContext
     ) -> Int {
         if context.environment.fixedSizeWidth {
-            // Measured where a row can say, for the reason `allRowsContentWidth`
-            // gives — this is the same walk, on the render side.
-            return (0..<source.count).map { index in
-                let row = source.row(at: index)
-                return row.widthWithoutRendering ?? row.buffer.width
-            }.max() ?? 0
+            // The same question `allRowsContentWidth` answers on the measure
+            // side, from the same memo; a badge's cells are outside the row
+            // buffer, which is what this width sizes.
+            return widestRowWidth(source: source, context: context)
         }
         // Fill the interior: full available width when borderless (`.plain`),
         // minus the two border columns when bordered.
