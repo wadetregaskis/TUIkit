@@ -243,7 +243,7 @@ public struct SelectionEmphasisClock {
 /// frame from `CursorTimer`'s static formula), which is exactly what makes the
 /// second route legal: nothing about this frame's appearance depends on *when*
 /// it was rendered, so it can be reproduced without rendering.
-public struct SelectionEmphasisCycle: Sendable {
+public struct SelectionEmphasisCycle: Sendable, Equatable {
     /// One emphasis per tick of a full cycle.
     public let frames: [SelectionEmphasis]
 

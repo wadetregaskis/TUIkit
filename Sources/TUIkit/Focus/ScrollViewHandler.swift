@@ -56,6 +56,18 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     /// measurable slice of the smallest scenarios' frames.
     var revealPursuitOffset: Int?
 
+    /// The vertical scrollbar drawn last time, with everything it was drawn
+    /// from — see `_ScrollViewCore.appendVerticalScrollbar`. A focused bar
+    /// pulses, and its animated runs are one scrollbar render PER PULSE FRAME,
+    /// on every frame: 15.6% of a live `dashboard` frame for a bar whose
+    /// inputs had not moved. Compared, not hashed, since one entry is all
+    /// there is.
+    var verticalScrollbarMemo: VerticalScrollbarMemo?
+
+    /// How many times ``verticalScrollbarMemo`` answered — for the test that
+    /// pins it answering.
+    var verticalScrollbarMemoHits = 0
+
     /// The unique focus identifier for this scroll view.
     public let focusID: String
 

@@ -135,22 +135,66 @@ extension _ScrollViewCore {
         let height = buffer.height
         guard height > 0 else { return buffer }
         let palette = context.environment.palette
-        let bar = ScrollbarRenderer.verticalScrollbar(
-            height: height,
-            extent: handler.contentHeight,
-            viewport: handler.viewportHeight,
-            offset: handler.scrollOffset,
-            arrows: context.environment.scrollbarArrows,
+        // The same hovered cell the draw lifts. The runs REPLACE those cells
+        // from the first tick, so a pulse that does not know about the
+        // pointer paints the lift away and it never returns while the pointer
+        // sits there.
+        let pulse = ScrollbarColors.focusPulse(
+            isFocused: isFocused, hoveredCell: handler.hoveredBarCell, context: context)
+        let key = VerticalScrollbarMemo.Key(
+            height: height, extent: handler.contentHeight, viewport: handler.viewportHeight,
+            offset: handler.scrollOffset, arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
+            isFocused: isFocused, isScrollEnabled: context.environment.isScrollEnabled,
+            hoveredCell: handler.hoveredBarCell, paletteID: palette.id,
+            depth: ColorDepth.current, cycle: pulse?.cycle)
+        let memo: VerticalScrollbarMemo
+        if let remembered = handler.verticalScrollbarMemo, remembered.key == key {
+            handler.verticalScrollbarMemoHits += 1
+            memo = remembered
+        } else {
             // The bar is the ScrollView's focus indicator: it pulses the
-            // accent while focused (see ScrollbarColors.focusIndicating).
-            colors: .focusIndicating(
-                isFocused: isFocused, hoveredCell: handler.hoveredBarCell, context: context))
+            // accent while focused (see ScrollbarColors.focusIndicating). The
+            // runs that pulse it are one scrollbar render PER PULSE FRAME,
+            // which is why the bar and its runs are kept with their inputs.
+            let bar = ScrollbarRenderer.verticalScrollbar(
+                height: height,
+                extent: handler.contentHeight,
+                viewport: handler.viewportHeight,
+                offset: handler.scrollOffset,
+                arrows: context.environment.scrollbarArrows,
+                proportional: context.environment.scrollbarProportionalThumb,
+                colors: .focusIndicating(
+                    isFocused: isFocused, hoveredCell: handler.hoveredBarCell, context: context))
+            let runs =
+                pulse.map { pulse in
+                    ScrollbarRenderer.verticalScrollbarRuns(
+                        height: height,
+                        extent: handler.contentHeight,
+                        viewport: handler.viewportHeight,
+                        offset: handler.scrollOffset,
+                        arrows: context.environment.scrollbarArrows,
+                        proportional: context.environment.scrollbarProportionalThumb,
+                        pulse: pulse)
+                } ?? []
+            memo = VerticalScrollbarMemo(key: key, bar: bar, runs: runs)
+            handler.verticalScrollbarMemo = memo
+        }
+        let bar = memo.bar
         let emptyCell = ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
         var lines = buffer.lines
+        // The pad is what the buffer already knows about its lines where it
+        // knows it; a scan of every line for the width it was just rendered
+        // at is the fallback, not the rule.
+        let uniformPad = buffer.linesAreUniformWidth ? max(0, contentWidth - buffer.width) : nil
+        let lineWidths = buffer.lineWidths
         for index in 0..<height {
             let content = index < lines.count ? lines[index] : ""
-            let pad = max(0, contentWidth - content.strippedLength)
+            let known: Int? =
+                index < lines.count
+                ? (uniformPad ?? lineWidths.map { max(0, contentWidth - $0[index]) })
+                : contentWidth
+            let pad = known ?? max(0, contentWidth - content.strippedLength)
             let cell = index < bar.count ? bar[index] : emptyCell
             lines[index] = content + String(repeating: " ", count: pad) + cell
         }
@@ -159,23 +203,8 @@ extension _ScrollViewCore {
         // one — the content was padded out to `contentWidth` above — and only
         // the rows that actually change earn a run, so a tall bar does not
         // repaint its whole length to move a two-cell thumb.
-        if !context.isMeasuring,
-            // The same hovered cell the draw above lifted. The runs REPLACE
-            // those cells from the first tick, so a pulse that does not know
-            // about the pointer paints the lift away and it never returns
-            // while the pointer sits there.
-            let pulse = ScrollbarColors.focusPulse(
-                isFocused: isFocused, hoveredCell: handler.hoveredBarCell, context: context)
-        {
-            result.animatedCells += ScrollbarRenderer.verticalScrollbarRuns(
-                height: height,
-                extent: handler.contentHeight,
-                viewport: handler.viewportHeight,
-                offset: handler.scrollOffset,
-                arrows: context.environment.scrollbarArrows,
-                proportional: context.environment.scrollbarProportionalThumb,
-                pulse: pulse
-            ).map { $0.shifted(byX: contentWidth, y: 0) }
+        if !context.isMeasuring, pulse != nil {
+            result.animatedCells += memo.runs.map { $0.shifted(byX: contentWidth, y: 0) }
         }
         return result
     }
@@ -224,3 +253,31 @@ extension _ScrollViewCore {
         }
         return result
     }}
+
+// MARK: - The bar drawn last time
+
+/// A vertical scrollbar and the animated runs that pulse it, with the inputs
+/// they were drawn from. See `ScrollViewHandler.verticalScrollbarMemo`.
+struct VerticalScrollbarMemo {
+    /// Everything the bar's cells and runs are a function of. The palette by
+    /// its id and the depth outright, since the cells carry resolved colours;
+    /// the pulse cycle whole, since the runs carry one render per frame of it.
+    struct Key: Equatable {
+        let height: Int
+        let extent: Int
+        let viewport: Int
+        let offset: Int
+        let arrows: ScrollbarArrows
+        let proportional: Bool
+        let isFocused: Bool
+        let isScrollEnabled: Bool
+        let hoveredCell: Int?
+        let paletteID: String
+        let depth: ColorDepth
+        let cycle: SelectionEmphasisCycle?
+    }
+
+    let key: Key
+    let bar: [String]
+    let runs: [AnimatedCellRun]
+}
