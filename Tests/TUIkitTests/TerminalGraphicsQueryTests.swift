@@ -53,13 +53,13 @@ struct TerminalGraphicsQueryTests {
         #expect(request.contains("\u{1B}[u\u{1B}[J"), "…restored, and the screen wiped from there")
         // Small enough that what a printing host shows fits in a row or two:
         // one pixel, not one image.
-        #expect(request.count < 200, "the payload is one pixel, and stays one pixel")
+        #expect(request.count < 300, "one pixel and twenty-six deflated bytes, and nothing that grows")
     }
 
     @Test("Only an acknowledged placement counts as support")
     func onlyOKCounts() {
         func answered(_ reply: String) -> Bool {
-            TerminalGraphicsQuery.parse(Array(reply.utf8))
+            TerminalGraphicsQuery.parse(Array(reply.utf8)).placement
         }
         #expect(answered("\u{1B}_Gi=16777215;OK\u{1B}\\"))
         // Ghostty's answer for an image it does not have — the terminal got as
@@ -81,8 +81,10 @@ struct TerminalGraphicsQueryTests {
     /// search would read it as success.
     @Test("An error that happens to spell OK is still an error")
     func okMustBeTheWholeBody() {
-        #expect(!TerminalGraphicsQuery.parse(Array("\u{1B}_Gi=1;ENOTOKEN\u{1B}\\".utf8)))
-        #expect(!TerminalGraphicsQuery.parse(Array("\u{1B}_Gi=1;OK is not what I said\u{1B}\\".utf8)))
+        #expect(TerminalGraphicsQuery.parse(Array("\u{1B}_Gi=16777215;ENOTOKEN\u{1B}\\".utf8)) == .init())
+        #expect(
+            TerminalGraphicsQuery.parse(Array("\u{1B}_Gi=16777215;OK is not what I said\u{1B}\\".utf8))
+                == .init())
     }
 
     /// A reply can arrive with the DSR fence, a stray keystroke, or both
@@ -91,8 +93,36 @@ struct TerminalGraphicsQueryTests {
     @Test("The answer is found among whatever else arrived")
     func answerIsFoundInASharedBuffer() {
         let buffer = "q\u{1B}_Gi=16777215;OK\u{1B}\\\u{1B}[24;1R"
-        #expect(TerminalGraphicsQuery.parse(Array(buffer.utf8)))
+        #expect(TerminalGraphicsQuery.parse(Array(buffer.utf8)).placement)
         #expect(TerminalGraphicsQuery.sawFence(Array(buffer.utf8)))
         #expect(!TerminalGraphicsQuery.sawFence(Array("\u{1B}_Gi=1;OK\u{1B}\\".utf8)))
+    }
+
+    // MARK: - The second question
+
+    @Test("The request also offers a deflated transmission, out loud, under its own id")
+    func compressionIsOfferedAndSpoken() {
+        let request = TerminalGraphicsQuery.request
+        let probe = "a=t,q=0,f=32,t=d,o=z,s=32,v=32,i=\(TerminalGraphicsQuery.compressionProbeID);"
+        #expect(request.contains(probe), "the transmission is the question, so it speaks")
+        #expect(request.contains("a=d,d=I,q=2,i=\(TerminalGraphicsQuery.compressionProbeID)"), "…and is freed")
+        #expect(TerminalGraphicsQuery.compressionProbeID == TerminalGraphicsQuery.probeID - 1)
+        #expect(request.count < 300, "twenty-six deflated bytes, base64")
+    }
+
+    @Test("Each OK is credited to the id that asked, and an unknown id to nobody")
+    func answersAreCreditedById() {
+        let placement = "\u{1B}_Gi=\(TerminalGraphicsQuery.probeID);OK\u{1B}\\"
+        let compression = "\u{1B}_Gi=\(TerminalGraphicsQuery.compressionProbeID);OK\u{1B}\\"
+        let stray = "\u{1B}_Gi=7;OK\u{1B}\\"
+        #expect(TerminalGraphicsQuery.parse(Array(placement.utf8)) == .init(placement: true, compression: false))
+        #expect(TerminalGraphicsQuery.parse(Array(compression.utf8)) == .init(placement: false, compression: true))
+        #expect(TerminalGraphicsQuery.parse(Array((placement + compression).utf8)) == .init(placement: true, compression: true))
+        #expect(TerminalGraphicsQuery.parse(Array((compression + placement).utf8)) == .init(placement: true, compression: true))
+        #expect(TerminalGraphicsQuery.parse(Array(stray.utf8)) == .init(), "an OK naming neither question answers neither")
+        // A host that draws placements and refuses `o=z`, which is the case
+        // the split exists for.
+        let refused = placement + "\u{1B}_Gi=\(TerminalGraphicsQuery.compressionProbeID);EINVAL:unsupported\u{1B}\\"
+        #expect(TerminalGraphicsQuery.parse(Array(refused.utf8)) == .init(placement: true, compression: false))
     }
 }

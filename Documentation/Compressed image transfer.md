@@ -1,18 +1,31 @@
-# Compressed image transfer — investigated 2026-09-02, DECLINED
+# Compressed image transfer — investigated 2026-09-02; `o=z` ADOPTED 2026-09-04, PNG passthrough still declined
 
-**Status: not doing this, for now.** The Kitty graphics protocol can take a
-picture as a PNG (`f=100`) or as a zlib-compressed payload (`o=z`), and TUIkit
-sends neither: it decodes an image, resamples it to the placement's pixel size,
-and transmits raw RGB/RGBA. This document records why that stays true, what was
-measured on the way to deciding, and what would make it worth reopening.
+**Status, revised.** The Kitty graphics protocol can take a picture as a PNG
+(`f=100`) or as a zlib-compressed payload (`o=z`). TUIkit now sends the
+second where the terminal says it can take it, and still not the first. The
+`o=z` half of this document is therefore history: what follows records the
+2026-09-02 reasoning as it stood, with the reversal marked where it lands.
+
+**What changed on 2026-09-04.** The owner asked for compression, with the
+shape that had been ruled out named explicitly — borrow the system's zlib at
+runtime, opportunistically. That is what `SystemZlib` does: `dlopen` of
+`libz`, two symbols (`compress2`, `compressBound`) resolved once, nothing
+linked and nothing vendored, and `nil` everywhere the library is absent. A
+startup probe (`TerminalGraphicsQuery.compressionProbeID`) asks the terminal
+whether it understands `o=z`, sized so that a terminal ignoring the key would
+have to refuse it, and `KittyGraphics.isCompressionSupported` is that answer
+ANDed with the library having been found. `TerminalImageStore` passes the flag
+on every transmit. The motivating payload is not a photograph: a gradient
+rendered as pixels is a stack of identical rows, and 16 KB of them deflate to
+1.1 KB (`Documentation/Terminal graphics protocols.md` §10).
 
 Two things were asked, and they have different answers.
 
 - **Implementing compression in TUIkit** — writing or vendoring a deflate
   encoder, or opening the system zlib opportunistically at runtime. Ruled out
-  by the project owner before it was costed. The framework has a reasonable
-  fallback (send it uncompressed) and this is not where its complexity budget
-  should go.
+  by the project owner before it was costed, on 2026-09-02; **reversed
+  2026-09-04** for the opportunistic form only, as above. The vendored and
+  hand-rolled forms stay ruled out.
 - **Passing through PNG bytes TUIkit was already given** — no encoder, no
   dependency, just not throwing away a compressed file the app handed us.
   Investigated properly. It works, the premise it rests on is sound, and it is
@@ -130,8 +143,10 @@ project's live-app smoke discipline.
   handshake does not imply PNG decoding — Ghostty's PNG decoder is a nullable
   function pointer that is null in library builds, with a source comment saying
   so. The existing probe transmits `f=32` and proves nothing about `f=100`, and
-  `TerminalGraphicsQuery.parse` returns on the first `OK` because the design
-  deliberately arranges for one speaker; a second probe means rewriting it.
+  `TerminalGraphicsQuery.parse` returned on the first `OK` because the design
+  deliberately arranged for one speaker; a second probe meant rewriting it.
+  (Rewritten 2026-09-04 for the `o=z` probe: it now credits each `OK` to the
+  id that asked, so a third question would be a third id, not a rewrite.)
 - **Colour management diverges between hosts.** Today's decode goes through
   `CGColorSpaceCreateDeviceRGB`. Passed through, kitty applies sRGB/gAMA/iCCP
   via lcms2 and Ghostty applies none. A tagged photo would look different the
@@ -278,9 +293,10 @@ matter.
 
 ## 8. Rejected outright, with reasons
 
-- **`o=z` zlib compression** — needs a deflate encoder, which is the thing
-  that was ruled out. Vendoring one, hand-rolling one, or `dlopen`-ing the
-  system zlib are all more machinery than this feature is worth.
+- **`o=z` zlib compression** — needed a deflate encoder, which was the thing
+  ruled out. Vendoring one and hand-rolling one still are; **`dlopen`-ing
+  the system zlib is what shipped on 2026-09-04** (see the top of this
+  document), once a payload appeared that it saves an order of magnitude on.
 - **`t=f` / `t=t` / `t=s` (file path, temp file, shared memory)** — the spec
   says outright that a client has no a-priori way to know it shares a
   filesystem with its terminal, so each needs its own startup probe, disabled

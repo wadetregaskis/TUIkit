@@ -24,6 +24,15 @@ extension TerminalClient {
     /// the answer is ``graphicsSupport``.
     @MainActor public private(set) static var detectedGraphics: Bool?
 
+    /// What the handshake said to its second question — whether a deflated
+    /// transmission (`o=z`) is understood — or `nil` if it never ran.
+    ///
+    /// Asked in the same exchange as ``detectedGraphics`` and kept apart
+    /// from it, because a host can draw placements and still not take them
+    /// compressed; the two are separate facts about a terminal, reported
+    /// separately.
+    @MainActor public private(set) static var detectedGraphicsCompression: Bool?
+
     /// Force the answer for the terminal in front of you, whatever was
     /// detected.
     ///
@@ -46,6 +55,21 @@ extension TerminalClient {
         }
     }
 
+    /// Force whether transmissions are deflated, whatever was detected.
+    ///
+    /// The same three-way ladder as ``graphicsSupport`` — this, then
+    /// `TUIKIT_GRAPHICS_COMPRESSION` (`1` or `0`), then the handshake — and
+    /// it can only ever turn compression ON where pictures are on at all and
+    /// a zlib was found: `true` on a host with no `libz` still sends raw
+    /// pixels, because there is nothing to deflate with. Off is the answer to
+    /// give a terminal that acknowledged the probe and then drew nothing.
+    @MainActor public static var graphicsCompressionSupport: Bool? {
+        didSet {
+            guard graphicsCompressionSupport != oldValue else { return }
+            applyGraphicsSupport()
+        }
+    }
+
     /// Publishes ``graphicsSupported`` to
     /// ``KittyGraphics/isSupported``, which is what the render path
     /// actually reads.
@@ -56,6 +80,7 @@ extension TerminalClient {
     @MainActor
     public static func applyGraphicsSupport() {
         KittyGraphics.isSupported = graphicsSupported
+        KittyGraphics.isCompressionSupported = graphicsCompressionSupported
     }
 
     /// Whether the terminal painting this app's output will place an image in
@@ -75,6 +100,19 @@ extension TerminalClient {
         }
     }
 
+    /// Whether transmissions to this terminal are deflated: pictures at all,
+    /// then the override, the environment, the handshake — and a zlib to do
+    /// it with, since ``SystemZlib`` is what deflates them.
+    @MainActor public static var graphicsCompressionSupported: Bool {
+        guard graphicsSupported, SystemZlib.isAvailable else { return false }
+        if let graphicsCompressionSupport { return graphicsCompressionSupport }
+        switch ProcessInfo.processInfo.environment["TUIKIT_GRAPHICS_COMPRESSION"] {
+        case "1": return true
+        case "0": return false
+        default: return detectedGraphicsCompression ?? false
+        }
+    }
+
     /// Runs the startup handshake, if its answer is not already known, and
     /// publishes the result.
     ///
@@ -91,6 +129,8 @@ extension TerminalClient {
         guard graphicsSupport == nil else { return }
         let forced = ProcessInfo.processInfo.environment["TUIKIT_GRAPHICS"]
         guard forced != "1", forced != "0" else { return }
-        detectedGraphics = terminal.queryGraphicsSupport()
+        let answers = terminal.queryGraphicsSupport()
+        detectedGraphics = answers.placement
+        detectedGraphicsCompression = answers.compression
     }
 }

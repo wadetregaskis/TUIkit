@@ -100,18 +100,35 @@ public enum KittyGraphics {
     /// escape omits `m` entirely — the protocol reads its absence as "not
     /// chunked", which is a different statement from "the last chunk of one".
     ///
+    /// - Parameters:
+    ///   - compressed: Whether to deflate the pixels first and say so with
+    ///     `o=z`. Only where the terminal answered the compression probe
+    ///     (``isCompressionSupported``) — a host that does not understand
+    ///     `o=z` draws nothing, silently, under `q=2`. The bytes go through
+    ///     ``SystemZlib``, so a host with no zlib sends them raw whatever is
+    ///     asked; so does a payload deflate makes no smaller. The chunking is
+    ///     the same either way: the protocol compresses BEFORE base64, and
+    ///     chunks after.
     /// - Returns: the escapes, or `""` for a request that cannot be honoured
     ///   (a non-positive size, or fewer pixels than the size claims).
     public static func transmit(
-        pixels: [UInt8], format: PixelFormat = .rgba, width: Int, height: Int, id: ImageID
+        pixels: [UInt8], format: PixelFormat = .rgba, width: Int, height: Int, id: ImageID,
+        compressed: Bool = false
     ) -> String {
         guard width > 0, height > 0, id > 0, id <= maximumImageID,
             pixels.count >= width * height * format.stride
         else { return "" }
 
+        var payload = pixels
+        var deflated = false
+        if compressed, let smaller = SystemZlib.compress(pixels), smaller.count < pixels.count {
+            payload = smaller
+            deflated = true
+        }
+
         var encoded: [UInt8] = []
-        encoded.reserveCapacity(4 * ((pixels.count + 2) / 3))
-        base64(pixels, into: &encoded)
+        encoded.reserveCapacity(4 * ((payload.count + 2) / 3))
+        base64(payload, into: &encoded)
 
         let chunks = (encoded.count + chunkSize - 1) / chunkSize
         var out: [UInt8] = []
@@ -125,7 +142,7 @@ public enum KittyGraphics {
             if index == 0 {
                 let chunked = chunks > 1 ? ",m=1" : ""
                 head = "a=t,q=2,f=\(format.rawValue),t=d,s=\(width),v=\(height),i=\(id)"
-                    + chunked
+                    + (deflated ? ",o=z" : "") + chunked
             } else {
                 // `q=2` on EVERY chunk, not just the first. The terminal's
                 // acknowledgement is emitted when the transmission COMPLETES,
@@ -204,7 +221,7 @@ public enum KittyGraphics {
     /// decoding to get wrong. Written this way rather than through a decoding
     /// initializer because an image's payload is megabytes and this is the one
     /// place it is copied.
-    static func ascii(_ bytes: [UInt8]) -> String {
+    package static func ascii(_ bytes: [UInt8]) -> String {
         String(unsafeUninitializedCapacity: bytes.count) { buffer in
             _ = buffer.initialize(fromContentsOf: bytes)
             return bytes.count
@@ -220,7 +237,7 @@ public enum KittyGraphics {
     /// import Foundation for it, an image is megabytes and every intermediate
     /// copy is one too many, and the whole thing is fifteen lines that a test
     /// can pin against known vectors.
-    static func base64(_ bytes: [UInt8], into out: inout [UInt8]) {
+    package static func base64(_ bytes: [UInt8], into out: inout [UInt8]) {
         let alphabet = base64Alphabet
         var index = 0
         while index + 2 < bytes.count {
@@ -279,10 +296,31 @@ extension KittyGraphics {
     /// read after.
     nonisolated(unsafe) private static var processSupported = false
 
-    /// A task-scoped pin, bound by ``withSupport(_:operation:)``.
+    /// A task-scoped pin, bound by ``withSupport(_:compression:operation:)``.
     @TaskLocal private static var taskSupported: Bool?
 
-    /// Runs `operation` with ``isSupported`` pinned on this task only.
+    /// Whether the terminal also takes a transmission deflated (`o=z`) — asked
+    /// at startup alongside the placement, and ANDed with ``SystemZlib``
+    /// having found a zlib to deflate with. Read by the callers of
+    /// ``transmit(pixels:format:width:height:id:compressed:)`` to decide what
+    /// to ask for; a transmission never compresses on its own.
+    ///
+    /// A separate answer from ``isSupported`` because it is a separate
+    /// question: every host that draws a placement takes raw pixels, and
+    /// nothing in the protocol says one that draws them takes them deflated.
+    /// Under `q=2` an unsupported `o=z` is a picture that never appears, so
+    /// this is `false` until the terminal said otherwise.
+    public static var isCompressionSupported: Bool {
+        get { taskCompressionSupported ?? processCompressionSupported }
+        set { processCompressionSupported = newValue }
+    }
+
+    nonisolated(unsafe) private static var processCompressionSupported = false
+
+    @TaskLocal private static var taskCompressionSupported: Bool?
+
+    /// Runs `operation` with ``isSupported`` — and, when given,
+    /// ``isCompressionSupported`` — pinned on this task only.
     ///
     /// Task-local rather than a mutate-and-restore global because Swift
     /// Testing runs suites in parallel, and a test that pinned the flag
@@ -290,8 +328,11 @@ extension KittyGraphics {
     /// where they would be invisible, because no terminal is drawing them.
     @discardableResult
     public static func withSupport<T>(
-        _ supported: Bool, operation: () throws -> T
+        _ supported: Bool, compression: Bool? = nil, operation: () throws -> T
     ) rethrows -> T {
-        try $taskSupported.withValue(supported, operation: operation)
+        try $taskSupported.withValue(supported) {
+            try $taskCompressionSupported.withValue(
+                compression ?? taskCompressionSupported, operation: operation)
+        }
     }
 }

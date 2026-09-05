@@ -185,9 +185,13 @@ final class TerminalImageStore: @unchecked Sendable {
         guard !cells.isEmpty else { return nil }
 
         let payload = pixels()
+        // Deflated where the terminal said it would take it — a photograph
+        // gains a little, a gradient rendered as pixels gains an order of
+        // magnitude — and raw everywhere else. See ``KittyGraphics/isCompressionSupported``.
         let transmit = KittyGraphics.transmit(
             pixels: payload.bytes, format: payload.format,
-            width: pixelWidth, height: pixelHeight, id: id)
+            width: pixelWidth, height: pixelHeight, id: id,
+            compressed: KittyGraphics.isCompressionSupported)
         guard !transmit.isEmpty else { return nil }
 
         // Delete first, on the same id. Re-transmitting over a live id is

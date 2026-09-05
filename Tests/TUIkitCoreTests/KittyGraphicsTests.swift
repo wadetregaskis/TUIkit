@@ -109,6 +109,48 @@ struct KittyGraphicsEscapeTests {
         #expect(KittyGraphics.placement(id: 0, columns: 2, rows: 2).isEmpty)
         #expect(KittyGraphics.delete(id: 0).isEmpty)
     }
+
+    // MARK: - Deflated
+
+    @Test("Asked to compress, a transmission says o=z and carries fewer bytes — where there is a zlib")
+    func compressedTransmitSaysSo() throws {
+        try #require(SystemZlib.isAvailable, "no libz here; the raw path is the only one")
+        // Sixty-four identical opaque pixels: what a gradient row looks like
+        // to deflate, and a payload that shrinks by an order of magnitude.
+        let pixels = [UInt8](repeating: 0x7F, count: 64 * 3)
+        let raw = KittyGraphics.transmit(pixels: pixels, format: .rgb, width: 8, height: 8, id: 5)
+        let deflated = KittyGraphics.transmit(
+            pixels: pixels, format: .rgb, width: 8, height: 8, id: 5, compressed: true)
+        #expect(!raw.contains("o=z"))
+        #expect(deflated.contains("a=t,q=2,f=24,t=d,s=8,v=8,i=5,o=z;"), "the key sits with the others")
+        #expect(deflated.count < raw.count / 3, "\(deflated.count) against \(raw.count) raw")
+    }
+
+    @Test("A payload deflate does not shrink is sent raw, even when compression was asked for")
+    func incompressibleStaysRaw() throws {
+        try #require(SystemZlib.isAvailable)
+        // Four bytes: any zlib container is longer than that.
+        let pixels: [UInt8] = [1, 2, 3, 4]
+        let asked = KittyGraphics.transmit(pixels: pixels, width: 1, height: 1, id: 5, compressed: true)
+        #expect(asked == KittyGraphics.transmit(pixels: pixels, width: 1, height: 1, id: 5))
+        #expect(!asked.contains("o=z"))
+    }
+
+    @Test("The compression flag is task-scoped like the support flag, and off by default")
+    func compressionFlagIsPinnedPerTask() {
+        #expect(!KittyGraphics.isCompressionSupported)
+        KittyGraphics.withSupport(true, compression: true) {
+            #expect(KittyGraphics.isSupported)
+            #expect(KittyGraphics.isCompressionSupported)
+            KittyGraphics.withSupport(true) {
+                #expect(KittyGraphics.isCompressionSupported, "unstated, the inner scope keeps the outer answer")
+            }
+            KittyGraphics.withSupport(true, compression: false) {
+                #expect(!KittyGraphics.isCompressionSupported)
+            }
+        }
+        #expect(!KittyGraphics.isCompressionSupported)
+    }
 }
 
 /// The half that becomes cells.

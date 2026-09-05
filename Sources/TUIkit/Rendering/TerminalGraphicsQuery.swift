@@ -57,34 +57,81 @@ enum TerminalGraphicsQuery {
     /// counts up from 1.
     static let probeID: KittyGraphics.ImageID = KittyGraphics.maximumImageID
 
+    /// The id the compression probe borrows — the one below the placement's,
+    /// and equally out of the store's reach.
+    static let compressionProbeID: KittyGraphics.ImageID = KittyGraphics.maximumImageID - 1
+
     /// One black pixel, RGBA.
     private static let onePixel: [UInt8] = [0, 0, 0, 0]
 
-    /// The exchange: transmit quietly, ask for a placement out loud, delete
-    /// quietly, tidy up, and fence with DSR so a silent terminal reports
-    /// silence instead of hanging.
+    /// A 32×32 black RGBA image, deflated: 4,096 bytes that any zlib inflates
+    /// from these twenty-six.
     ///
-    /// The transmit and the delete are `q=2` on purpose. If all three spoke,
-    /// three `OK`s would come back with the same `ESC _ G i=…;` shape and the
-    /// reply would have to be counted rather than read; with only the
-    /// placement speaking, the first APC reply IS the answer.
+    /// A constant rather than ``SystemZlib``'s output so the question is asked
+    /// the same way on every host, zlib or no zlib — and the SIZE is the
+    /// point. A terminal that ignores the `o=z` key would read these bytes as
+    /// raw pixels, and twenty-six bytes cannot be a 32×32 picture, so it
+    /// errors; one that honours the key inflates them to exactly the 4,096 it
+    /// expects and answers `OK`. A one-pixel probe could not tell those apart:
+    /// its twelve deflated bytes are MORE than the four a pixel needs, and a
+    /// terminal that ignored the key might have accepted them.
+    private static let deflatedBlock: [UInt8] = [
+        0x78, 0x9C, 0xED, 0xC1, 0x01, 0x0D, 0x00, 0x00, 0x00, 0xC2, 0xA0, 0xF7, 0x4F,
+        0x6D, 0x0F, 0x07, 0x14, 0x00, 0x00, 0x00, 0xF0, 0x6E, 0x10, 0x00, 0x00, 0x01,
+    ]
+
+    /// The exchange: transmit quietly, ask for a placement out loud, delete
+    /// quietly; then offer a deflated transmission out loud and delete that
+    /// too; tidy up, and fence with DSR so a silent terminal reports silence
+    /// instead of hanging.
+    ///
+    /// Two commands speak, and they are told apart by id — see ``parse(_:)``.
+    /// Everything else is `q=2`, so the reply holds exactly the two answers
+    /// and not a chorus of acknowledgements in the same `ESC _ G i=…;` shape.
     static var request: String {
         "\u{1B}[s"  // save the cursor, in case the payload is printed
             + KittyGraphics.transmit(pixels: onePixel, width: 1, height: 1, id: probeID)
             + "\u{1B}_Ga=p,U=1,q=0,i=\(probeID),c=1,r=1\u{1B}\\"
             + KittyGraphics.delete(id: probeID)
+            + compressionRequest
             + "\u{1B}[u\u{1B}[J"  // …and wipe it if it was
             + "\u{1B}[6n"
     }
 
-    /// Whether `bytes` carries a placement acknowledgement.
+    /// The compression half: the deflated block, transmitted with `o=z` and
+    /// `q=0` so the transmission itself is the thing acknowledged or refused.
+    /// No placement — nothing about a picture is in question here, only
+    /// whether the bytes were understood.
+    private static var compressionRequest: String {
+        var encoded: [UInt8] = []
+        KittyGraphics.base64(deflatedBlock, into: &encoded)
+        return "\u{1B}_Ga=t,q=0,f=32,t=d,o=z,s=32,v=32,i=\(compressionProbeID);"
+            + KittyGraphics.ascii(encoded) + "\u{1B}\\"
+            + KittyGraphics.delete(id: compressionProbeID)
+    }
+
+    /// What the terminal said to each of the two questions.
+    struct Answers: Equatable {
+        /// It drew — accepted — a virtual placement.
+        var placement = false
+        /// It accepted a deflated transmission.
+        var compression = false
+    }
+
+    /// The acknowledgements in `bytes`, each credited to the question that
+    /// asked it.
     ///
     /// Reads the APC reply's body rather than searching the buffer for `OK`:
     /// the body is `i=<id>;OK` on success and `i=<id>;<some error text>`
     /// otherwise, and at least one of those error texts
     /// (`UnicodePlaceholderUnsupported`) is a refusal that a substring search
-    /// for `OK` would not have distinguished from success on its own.
-    static func parse(_ bytes: [UInt8]) -> Bool {
+    /// for `OK` would not have distinguished from success on its own. The id
+    /// decides WHICH question was answered, which is what lets two of them
+    /// share one exchange: a placement `OK` carries ``probeID``, a compression
+    /// `OK` carries ``compressionProbeID``, and an `OK` naming neither — a
+    /// stray acknowledgement of something else — credits nothing.
+    static func parse(_ bytes: [UInt8]) -> Answers {
+        var answers = Answers()
         var index = bytes.startIndex
         while index + 2 < bytes.endIndex {
             guard bytes[index] == 0x1B, bytes[index + 1] == 0x5F, bytes[index + 2] == 0x47
@@ -100,11 +147,17 @@ enum TerminalGraphicsQuery {
             if let semicolon = body.firstIndex(of: ";"),
                 body[body.index(after: semicolon)...] == "OK"
             {
-                return true
+                let keys = body[..<semicolon].split(separator: ",")
+                let id = keys.lazy.compactMap { key -> KittyGraphics.ImageID? in
+                    guard key.hasPrefix("i=") else { return nil }
+                    return KittyGraphics.ImageID(key.dropFirst(2))
+                }.first
+                if id == probeID { answers.placement = true }
+                if id == compressionProbeID { answers.compression = true }
             }
             index = end
         }
-        return false
+        return answers
     }
 
     /// Whether the DSR fence has come back, which ends the read.
@@ -164,13 +217,13 @@ extension Terminal {
     /// - Returns: `true` only for a terminal that acknowledged the placement.
     ///   Silence, an error reply, no tty, and a host measured to print APC all
     ///   answer `false` — which costs the glyph renderer, and nothing else.
-    func queryGraphicsSupport(timeout: Double = 0.5) -> Bool {
-        guard isatty(STDIN_FILENO) == 1, isRawMode else { return false }
+    func queryGraphicsSupport(timeout: Double = 0.5) -> TerminalGraphicsQuery.Answers {
+        guard isatty(STDIN_FILENO) == 1, isRawMode else { return TerminalGraphicsQuery.Answers() }
         // The one host measured to PRINT an APC payload rather than consume
         // it. Everything else gets asked, including terminals nobody has
         // measured — that is the point of a handshake — with the request's own
         // erase as the guard for the ones that share the gap.
-        guard !TerminalHost.isAppleTerminal else { return false }
+        guard !TerminalHost.isAppleTerminal else { return TerminalGraphicsQuery.Answers() }
 
         writeImmediate(TerminalGraphicsQuery.request)
 

@@ -120,6 +120,16 @@ when unset), the visual/aspect probes print to the terminal.
   encodings (256-colour and direct), delete-by-id, and what a full-screen
   transmit costs in bytes and milliseconds. Skips the big transmit on a
   terminal that answered no Kitty query — Apple Terminal would print it.
+- `graphics_compression_probe.py` — does a **deflated** transmission (`o=z`,
+  RFC 1950 before base64) reach the screen? Asks TUIkit's own two handshake
+  questions — a virtual placement, then the 32×32 block sent as twenty-six
+  deflated bytes, sized so a terminal that ignored the key would have to
+  refuse it — and then draws the same hue ramp raw and deflated, one under
+  the other, for a person to compare. "Acknowledged" and "drawn" are
+  different facts about a terminal, and the JSON records the first and asks
+  for the second. Unmeasured on every host as of 2026-09-04; the rows in
+  `Documentation/Terminal-compatibility.md` ("Deflated transmissions") are
+  waiting on it.
 - `pixel_format_probe.py` — the question `OK` does not answer: which
   transmissions does a terminal actually **draw**? `placement_probe.py`
   established that iTerm2 acknowledges every graphics command — including a

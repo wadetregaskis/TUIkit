@@ -308,6 +308,9 @@ spec:
   will not carry. The investigation, the measured crossover for passing PNG
   bytes through untouched, and what would reopen it are in
   `Documentation/Compressed image transfer.md`.
+  **Revised 2026-09-04:** `o=z` IS adopted, through the host's own `libz`
+  borrowed at runtime (`SystemZlib`) and gated on a second handshake
+  question; `f=100` is not. See §10 and the top of that document.
 - **Lifetime** — images must be deleted by id when their view goes away, or the
   terminal's image store fills. This is the one genuinely new resource TUIkit
   would own, and it wants the same discipline `LifecycleManager` already applies

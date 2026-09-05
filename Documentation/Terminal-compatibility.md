@@ -2231,6 +2231,31 @@ it as supporting placements.
 present) while its DA1 advertises Sixel; Ghostty answers `DCS 1 + r 5375 ST` —
 a success flag with no value — while supporting no Sixel at all. Use DA1.
 
+### Deflated transmissions (`o=z`) — asked by the handshake, NOT YET MEASURED
+
+TUIkit's startup handshake asks a second question since 2026-09-04: whether a
+zlib-deflated transmission is understood. It transmits a 32×32 block as
+twenty-six deflated bytes with `o=z` and `q=0`, and credits an `OK` under that
+id (`TerminalGraphicsQuery.compressionProbeID`). The size is the honesty of
+the probe — twenty-six bytes cannot be a raw 32×32 picture, so a host that
+ignored the key would have to refuse it. Where it answers `OK` and the host
+has a `libz` to borrow (`SystemZlib`), every image is sent deflated; a
+gradient rendered as pixels shrinks by an order of magnitude, a photograph by
+a little.
+
+| Host | `o=z` acknowledged | deflated picture DRAWS |
+|---|---|---|
+| Apple Terminal | never asked (prints APC) | — |
+| iTerm2 | unmeasured | unmeasured |
+| Ghostty | unmeasured | unmeasured |
+| Warp | unmeasured | unmeasured (draws no placeholders anyway) |
+
+Run `Tools/TerminalProbes/graphics_compression_probe.py` inside each host: it
+asks both questions and prints the same ramp raw and deflated, one under the
+other, for a person to compare. Until a host has a row here, the answer TUIkit
+acts on is the host's own at startup — and `TUIKIT_GRAPHICS_COMPRESSION=0`
+turns it off for a host that acknowledges and then draws nothing.
+
 ### The image placeholder advances ONE cell, on every host — measured 2026-09-02, iTerm2 added 2026-09-04
 
 U+10EEEE, the Kitty protocol's Unicode image placeholder, sits inside the

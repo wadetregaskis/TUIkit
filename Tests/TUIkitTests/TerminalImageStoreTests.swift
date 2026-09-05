@@ -211,6 +211,26 @@ struct TerminalImageStoreTests {
     /// There is no combining mark for the 298th column, so an image that would
     /// need one is not drawn this way at all — the caller falls back to glyphs
     /// rather than drawing a truncated picture.
+    @Test("A store transmits deflated exactly when the terminal said it would take it")
+    func transmitsDeflatedOnlyWhereSupported() throws {
+        try #require(SystemZlib.isAvailable, "no libz here; there is no compressed path to take")
+        let bytes = [UInt8](repeating: 0x40, count: 16 * 16 * 4)
+        func pending(compression: Bool) -> String {
+            KittyGraphics.withSupport(true, compression: compression) {
+                let store = TerminalImageStore()
+                _ = store.placeholderRows(
+                    token: "v", signature: signature("a", pixelWidth: 16, pixelHeight: 16),
+                    columns: 2, rows: 1, pixels: { (bytes, .rgba) })
+                return store.takePending()
+            }
+        }
+        let raw = pending(compression: false)
+        let deflated = pending(compression: true)
+        #expect(!raw.contains("o=z"))
+        #expect(deflated.contains("o=z"))
+        #expect(deflated.count < raw.count / 4, "\(deflated.count) against \(raw.count)")
+    }
+
     @Test("An extent the protocol cannot address is declined, not truncated")
     func oversizeRequestsAreDeclined() {
         let store = TerminalImageStore()
