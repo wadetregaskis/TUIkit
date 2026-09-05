@@ -997,5 +997,108 @@ erase-then-draw ordering rule, a per-host last-row measurement, a host table for
 the half of it that cannot be detected, and repairs one-to-two orders of
 magnitude more expensive than today's. **The recommendation in §6 does not
 change on this analysis alone.** What could change it is coverage — how many
-hosts draw one of these and no Kitty placement — and that is §3's question, not
-this section's.
+hosts draw one of these and no Kitty placement — which is §3.2's question, and
+§3.2 answers it by pointing somewhere else entirely. The mechanism above is
+worth having; the protocol it should be pointed at first is not Sixel. **§12.**
+
+---
+
+## 12. The cheap half of §11: Kitty's *classic* placements — assessment, 2026-09-05
+
+§3.2 counted six terminals that implement the Kitty graphics protocol and
+explicitly not the Unicode placeholder: **WezTerm, Contour, Konsole, Warp,
+Zellij and xterm.js**. TUIkit emits only placeholders, so it draws nothing on
+any of them, and they are a larger group than any this framework currently
+reaches. They want no new protocol. They want the *other* placement of the
+protocol already built.
+
+Everything below is read from the protocol specification, not measured. §12.4
+says what would have to be.
+
+### 12.1 A classic placement is cursor-anchored, and §11 is the answer to that
+
+`a=p` without `U=1` renders the image "at the current cursor position, from the
+upper left corner of the current cell". That is exactly the property §4
+rejected Sixel and the iTerm2 protocol for — so §11's mechanism applies
+unchanged: keep the placeholder cells in the buffer, let clipping, compositing,
+scrolling and the diff run on them, and at the writer replace each surviving
+run with a `CUP` plus a placement.
+
+The difference is what a classic placement keeps that Sixel and the iTerm2
+protocol threw away. §11's costs were four, and this loses three of them:
+
+| §11's cost | With a classic Kitty placement |
+|---|---|
+| An encoder per protocol | **gone** — same `a=t` transmission, same `f=24`/`f=32`, same `o=z` |
+| Retransmitting pixels to repair | **gone** — the image is still retained by id; a repair is a placement command |
+| The bottom-row scroll hazard | **gone** — `C=1` sets the cursor movement policy to *no movement* |
+| Cropping | **free** — `x,y,w,h` select a source rectangle in pixels of the stored image |
+| The damage model (§11.3) | **stays** — the pixels are still not the cells |
+| Erase-then-draw (§11.3) | **stays**, for the same reason |
+
+Two more keys are there and are not needed: `z` places an image below text, and
+TUIkit resolves z-order in the buffer before the terminal sees anything; and a
+placement has its own id (`p`), so a picture can be *deleted* rather than
+overdrawn, which is a cleaner answer to a view disappearing than any Sixel has.
+
+### 12.2 What is reused verbatim
+
+Nearly all of it, which is the argument:
+
+- **The encoder and the wire format.** `KittyGraphics.transmit` is unchanged,
+  including the `f=24` opaque path and the `o=z` deflation and its second
+  handshake question (§10).
+- **`TerminalImageStore`.** Ids, content-keyed sharing between views, holder
+  sets, delete-on-last-release — a classic placement needs every one of those
+  and needs them for the same reasons. What it adds is a placement id beside
+  the image id.
+- **The handshake's shape.** The exchange already asks two questions and tells
+  the answers apart by id (`TerminalGraphicsQuery.parse`). A third — a classic
+  placement — is one more command and one more id. It has to *draw*, unlike the
+  virtual one, but the exchange already saves the cursor, wipes and restores
+  (`ESC[s` … `ESC[u ESC[J`) precisely because a payload might print.
+
+### 12.3 What it costs on the wire
+
+A placement command for one run is on the order of sixty bytes: the APC
+envelope, the image id, the placement id, four source-rectangle keys, `c`/`r`,
+`C=1`, `q=2`, and the `CUP` in front of it. A placeholder run costs 11.6 bytes a
+cell (§11.5). So a placement is *cheaper* than placeholders for a run longer
+than about five cells and dearer below it, and both are the same order — which
+is the whole point of the comparison with §11.5's 2,170 bytes a cell. Repair
+stops being the problem.
+
+### 12.4 What has to be measured before any of it
+
+None of the above is measured, and three of the claims are exactly the kind
+this project has been wrong about before:
+
+1. **Does each of the six draw a classic placement at all?** The survey read
+   "implements the Kitty graphics protocol" from changelogs and source. §2.2 is
+   the standing reminder that a host can implement a protocol, acknowledge
+   every command, and paint nothing.
+2. **Does each honour `C=1`?** If a host moves the cursor anyway the writer
+   does not care — every span is positioned absolutely (§11.2) — but a
+   placement on the last row would scroll the screen, which is fatal and is the
+   one hazard `C=1` was going to remove.
+3. **Does each honour the source rectangle `x,y,w,h`?** Clipping depends
+   entirely on it. A host that ignores those keys draws the whole picture where
+   a crop belonged, which is worse than drawing nothing.
+
+`graphics_probe.py` is where all three go, one command each, with the card a
+person looks at. Until they are answered this is a design and not a plan.
+
+### 12.5 Verdict
+
+**This is the cheapest coverage available, by a wide margin, and it should be
+measured before Sixel is reconsidered.** It roughly doubles the hosts TUIkit
+draws on — five to eleven — for one new placement model, one new handshake
+question, and §11's writer substitution and damage model, with the encoder, the
+compression, the image store and the lifetime discipline all reused as they
+stand.
+
+§6's "do not ship Sixel, do not ship the iTerm2 protocol" is untouched by this;
+if anything §3.2 strengthens it, because the fourteen Sixel-or-iTerm2 hosts cost
+two encoders and a host table to reach and these six cost neither. What §6 did
+not consider is that the protocol it *did* choose has two placement models and
+this framework only ever built one.
