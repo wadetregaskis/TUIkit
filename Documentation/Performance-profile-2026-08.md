@@ -3492,3 +3492,52 @@ memo line. The scalar-walk `collapsingAdjacentSGR` was also built and
 measured this session: translucent +2.4–2.9% slower in two forms, since
 Character iteration's ASCII path is already fast and the cost charged to
 the collapse is the netting's string building. Reverted, recorded.
+
+## 51. One walk per patched run, and where the pass stands (2026-09-05, closing)
+
+**Patching an animated run walks the line once** (4b66c123). Per run,
+per tick, the patch walked the line four times — the state under the
+run, the width, a pad to the run's end, and the insert's own split — for
+answers the split already had. `ANSIOverlaySplit` carries the column its
+suffix was dropped from, `insertOverlay` takes a split the caller made,
+and the run-end pad is reproduced as trailing spaces after the suffix.
+1,080 outputs pinned as hashes against the four-walk form. Live dashboard
+−2.8% — and only a 12 s emission window could say so: at 0.12 s of CPU
+per 4 s the ordinary window is twelve clock ticks wide.
+
+Two experiments were reverted this evening and are in the dead-ends
+memory: a scalar walk for `collapsingAdjacentSGR` (translucent +2–3%,
+Character iteration's ASCII path already fast) and a verdict stamp on
+`IdentityNode` (modifiers +9.5% with zero climbs — two words on every
+node a deep chain allocates).
+
+**Where the pass stands.** Landscape on HEAD, cpu-per-frame µs (300
+iterations, 120×40, honest bench):
+
+    megalist          507      dashboard         83
+    scrollfollow     1051      framedcolumns    901
+    table             570      churn          15283
+    table-multiline   532      kitchensink      595
+    tables-scroll    2506      customlayout     338
+    tables-vstack    1004      preferences      239
+    deep            10296      gradients      36840
+    fanout           9448      animating       8987
+    modifiers        2789      translucent    11353
+    textwall         1579      anyview         2461
+
+Live, `idle_cpu.py` under autopilot (30 Hz ticks, CPU% over 6 s):
+
+    dashboard      2.7%   (27.3% at §43)
+    kitchensink    3.7%   (57.7%)
+    modifiers     12.3%   (75.2%)
+    fanout        42.3%   (86.5%)
+    deep          31.2%   (31.5%)
+    gradients     70.0%   (72.5%, reads the tick by design)
+    megalist       2.8%   (4.3%)
+
+Against §43's first honest reading: dashboard 373 → 83 (and 27% → 2.7%
+of a core live), kitchensink 6,744 → 595, modifiers 8,908 → 2,789,
+fanout 12,801 → 9,448, translucent (from §48) 13,554 → 11,353. What
+remains is structural: the five walks a scroll stack makes per frame,
+rows that are cold by design (`gradients`, `churn`), the deep-nesting
+re-measure, and the writer's per-row netting.
