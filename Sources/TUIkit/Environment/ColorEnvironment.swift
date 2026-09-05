@@ -197,7 +197,10 @@ struct _StyleEnvironmentView<Content: View, S: ShapeStyle>: View {
                 paint, identity: context.identity, keyPath: slot,
                 depth: context.environmentApplicationDepth)
         {
-            cache.clearAffected(by: context.identity)
+            // A paint moves no cell, so the memoized sizes below stay: only
+            // the buffers, which hold the old ink, are dropped. A ramp that
+            // rotates every frame used to re-measure every row on every walk.
+            cache.clearAffected(by: context.identity, keepingSizes: true)
         }
         var childContext = context
         childContext.environment[keyPath: slot] = paint

@@ -429,7 +429,7 @@ Cache invalidation is **identity-scoped** where possible, with full clears as th
 | A `@State` change | `StateBox.value.didSet` calls `renderCache.clearAffected(by: identity)` — only the affected subtree's cached buffers are invalidated. `clearAll()` is the fallback when the box has no identity yet |
 | An `@Observable` change | The body that read the property was evaluated under `withObservationTracking` at its view's identity, so the change calls `renderCache.invalidateRender(for: identity)` — the same sink as a `@State` write, and the same scope. `AppState.setNeedsRenderWithCacheClear()` → `clearAll()` is the fallback only when the render has no cache to scope to |
 | A global environment change | `RenderLoop` compares an `EnvironmentSnapshot` (palette ID + appearance ID) each frame and clears on mismatch |
-| A **scoped** environment change | `EnvironmentModifier` compares the value it applied at its identity last pass; on a change it calls `clearAffected(by: identity)`, dropping the subtree below it |
+| A **scoped** environment change | `EnvironmentModifier` compares the value it applied at its identity last pass; on a change it calls `clearAffected(by: identity)`, dropping the subtree below it. A paint or tint change passes `keepingSizes: true` — ink moves no cell, so the memoized sizes below survive and only the buffers go |
 
 The scoped case is why the cache key carries no environment. A
 `.foregroundStyle(x)` applied *above* an `.equatable()` boundary leaves the view

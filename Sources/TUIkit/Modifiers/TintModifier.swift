@@ -121,7 +121,8 @@ public struct TintModifier<Content: View>: View {
                 tint, identity: context.identity, keyPath: \EnvironmentValues.tint,
                 depth: context.environmentApplicationDepth)
         {
-            cache.clearAffected(by: context.identity)
+            // A tint is ink; the sizes below it stay (see `_StyleEnvironmentView`).
+            cache.clearAffected(by: context.identity, keepingSizes: true)
         }
 
         var environment = context.environment

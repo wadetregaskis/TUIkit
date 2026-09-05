@@ -796,7 +796,18 @@ extension RenderCache {
     /// identity. Sibling subtrees retain their cached buffers.
     ///
     /// - Parameter identity: The identity of the view whose state changed.
-    public func clearAffected(by identity: ViewIdentity) {
+    ///
+    /// - Parameters:
+    ///   - identity: The identity whose ancestors, descendants and self are
+    ///     affected.
+    ///   - keepingSizes: `true` when the change cannot have moved a cell — a
+    ///     paint, a tint — so the memoized SIZES stay and only the buffers go.
+    ///     A ramp that rotates every frame re-inks four hundred rows, which is
+    ///     the render walk's business; it used to cost the four measure walks
+    ///     as well, re-measuring rows a colour cannot resize. `false` for
+    ///     anything that can affect layout, which is every other environment
+    ///     value and every `@State` write.
+    public func clearAffected(by identity: ViewIdentity, keepingSizes: Bool = false) {
         stats.subtreeClears += 1
         func affects(_ cached: ViewIdentity) -> Bool {
             cached == identity
@@ -807,8 +818,10 @@ extension RenderCache {
         for key in staleKeys {
             entries.removeValue(forKey: key)
         }
-        for key in sizeEntries.keys where affects(key.identity) {
-            sizeEntries.removeValue(forKey: key)
+        if !keepingSizes {
+            for key in sizeEntries.keys where affects(key.identity) {
+                sizeEntries.removeValue(forKey: key)
+            }
         }
         logDebug("CLEAR AFFECTED by \(identity.path): \(staleKeys.count) of \(entries.count + staleKeys.count) entries")
     }

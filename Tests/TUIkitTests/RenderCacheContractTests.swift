@@ -331,8 +331,8 @@ struct RenderCacheContractTests {
         #expect(cache.stats.delta(since: before).hits >= 1)
     }
 
-    @Test("The measure memo sees the change too")
-    func scopedStyleChangeClearsTheSizeMemo() {
+    @Test("A style change keeps the memoized sizes; any other environment change drops them")
+    func scopedStyleChangeKeepsTheSizeMemo() {
         let shared = context()
         let cache = shared.environment.renderCache!
         let proposal = ProposedSize(width: nil, height: nil)
@@ -353,9 +353,25 @@ struct RenderCacheContractTests {
             CacheLeaf(text: "hi").equatable().foregroundStyle(.blue),
             proposal: proposal, context: shared)
 
-        // Measurement runs before rendering, so if only the render walk noticed,
-        // a style that changed the *size* would already have been laid out wrong.
-        #expect(cache.stats.delta(since: before).hits == 0)
+        // A paint is ink: it moves no cell, so the size measured under red is
+        // the size under blue, and the measure walks keep serving it while
+        // the render walk re-inks. (A ramp that rotates every frame used to
+        // re-measure every row on every walk.)
+        #expect(cache.stats.delta(since: before).hits >= 1, "\(cache.stats.delta(since: before))")
+
+        // A value that CAN move cells still clears them: measurement runs
+        // before rendering, so if only the render walk noticed, a change that
+        // altered the size would already have been laid out wrong.
+        cache.beginRenderPass()
+        _ = measureChild(
+            CacheLeaf(text: "hi").equatable().environment(\.comparableProbe, "one"),
+            proposal: proposal, context: shared)
+        let beforeProbe = cache.stats
+        cache.beginRenderPass()
+        _ = measureChild(
+            CacheLeaf(text: "hi").equatable().environment(\.comparableProbe, "two"),
+            proposal: proposal, context: shared)
+        #expect(cache.stats.delta(since: beforeProbe).hits == 0, "\(cache.stats.delta(since: beforeProbe))")
     }
 
     @Test("A non-Equatable environment value declines caching rather than risking it")
