@@ -1,0 +1,752 @@
+{
+ "capabilities": {
+  "DA1 (CSI c)": "\"ESC[?1;2c\"",
+  "DA2 (CSI > c)": "\"ESC[>0;276;0c\"",
+  "DECRQM ?1002": "\"ESC[?1002;2$y\"",
+  "DECRQM ?1006": "\"ESC[?1006;2$y\"",
+  "DECRQM ?1049": "\"ESC[?1049;2$y\"",
+  "DECRQM ?2004": "\"ESC[?2004;2$y\"",
+  "DECRQM ?2027": "\"ESC[?2027;0$y\"",
+  "DECRQM ?25": "\"ESC[?25;1$y\"",
+  "DSR cursor (CSI 6 n)": "\"ESC[1;1R\"",
+  "OSC 8 hyperlink": "\"link\"",
+  "SGR mouse ?1006 click": "\"ESC[<0;3;1MESC[<0;3;1m\"",
+  "XTVERSION (CSI > 0 q)": "\"\"",
+  "alternate screen ?1049": "alternate → normal",
+  "truecolor SGR 38;2": "RGB a141e"
+ },
+ "measurements": {
+  "alarm": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "landing": 2
+  },
+  "arabic_harakat": {
+   "advance": 1,
+   "class": "arabic",
+   "landing": 1
+  },
+  "arabic_lam_alef": {
+   "advance": 1,
+   "class": "arabic",
+   "landing": 1
+  },
+  "arabic_shadda_harakat": {
+   "advance": 1,
+   "class": "arabic",
+   "landing": 1
+  },
+  "ascii_a": {
+   "advance": 1,
+   "class": "ascii",
+   "landing": 1
+  },
+  "ascii_bracket": {
+   "advance": 1,
+   "class": "ascii",
+   "landing": 1
+  },
+  "bare_desktop": {
+   "advance": 1,
+   "class": "bare_pictograph",
+   "landing": 1
+  },
+  "bare_joystick": {
+   "advance": 1,
+   "class": "bare_pictograph",
+   "landing": 1
+  },
+  "bare_shield": {
+   "advance": 1,
+   "class": "bare_pictograph",
+   "landing": 1
+  },
+  "bidi_lrm": {
+   "advance": 1,
+   "class": "format_control",
+   "landing": 1
+  },
+  "bidi_rlm": {
+   "advance": 1,
+   "class": "format_control",
+   "landing": 1
+  },
+  "call_me": {
+   "advance": 2,
+   "class": "default_emoji",
+   "landing": 2
+  },
+  "chillu_malayalam_atomic": {
+   "advance": 1,
+   "class": "chillu",
+   "landing": 1
+  },
+  "chillu_malayalam_zwj": {
+   "advance": 1,
+   "class": "chillu",
+   "landing": 1
+  },
+  "chrome_box_h": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_box_v": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_down_tri": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_full_block": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_left_half": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_left_tri": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_radio_dis": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_radio_off": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_radio_on": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_right_half": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_right_tri": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_shade": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "chrome_up_tri": {
+   "advance": 1,
+   "class": "chrome_glyph",
+   "landing": 1
+  },
+  "cjk_han": {
+   "advance": 2,
+   "class": "cjk",
+   "landing": 2
+  },
+  "combining_acute": {
+   "advance": 1,
+   "class": "combining",
+   "landing": 1
+  },
+  "combining_stack": {
+   "advance": 1,
+   "class": "combining",
+   "landing": 1
+  },
+  "conjunct_bengali_ksha": {
+   "advance": 2,
+   "class": "indic_conjunct",
+   "landing": 2
+  },
+  "conjunct_deva_ksha": {
+   "advance": 2,
+   "class": "indic_conjunct",
+   "landing": 2
+  },
+  "conjunct_deva_shtra": {
+   "advance": 3,
+   "class": "indic_conjunct",
+   "landing": 3
+  },
+  "conjunct_deva_stra": {
+   "advance": 3,
+   "class": "indic_conjunct",
+   "landing": 3
+  },
+  "conjunct_deva_stri": {
+   "advance": 3,
+   "class": "indic_conjunct",
+   "landing": 3
+  },
+  "conjunct_telugu_ksha": {
+   "advance": 2,
+   "class": "indic_conjunct",
+   "landing": 2
+  },
+  "crossing": {
+   "advance": 2,
+   "class": "default_emoji",
+   "landing": 2
+  },
+  "down_double": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "landing": 2
+  },
+  "face_bags": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "landing": 1
+  },
+  "fast_forward": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "landing": 2
+  },
+  "fingerprint": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "landing": 1
+  },
+  "fire": {
+   "advance": 2,
+   "class": "default_emoji",
+   "landing": 2
+  },
+  "flag_au": {
+   "advance": 2,
+   "class": "flag_pair",
+   "landing": 2
+  },
+  "flag_scotland": {
+   "advance": 2,
+   "class": "tag_flag",
+   "landing": 2
+  },
+  "flag_us": {
+   "advance": 2,
+   "class": "flag_pair",
+   "landing": 2
+  },
+  "flute": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "landing": 1
+  },
+  "fullwidth_latin_a": {
+   "advance": 2,
+   "class": "cjk",
+   "landing": 2
+  },
+  "grinning": {
+   "advance": 2,
+   "class": "default_emoji",
+   "landing": 2
+  },
+  "halfwidth_kana": {
+   "advance": 1,
+   "class": "cjk",
+   "landing": 1
+  },
+  "hangul": {
+   "advance": 2,
+   "class": "cjk",
+   "landing": 2
+  },
+  "hangul_jamo_lv": {
+   "advance": 2,
+   "class": "hangul_jamo",
+   "landing": 2
+  },
+  "hangul_jamo_lvt": {
+   "advance": 2,
+   "class": "hangul_jamo",
+   "landing": 2
+  },
+  "harp": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "landing": 1
+  },
+  "hebrew_dagesh_qamats": {
+   "advance": 1,
+   "class": "hebrew_points",
+   "landing": 1
+  },
+  "hebrew_hiriq": {
+   "advance": 1,
+   "class": "hebrew_points",
+   "landing": 1
+  },
+  "hourglass": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "landing": 2
+  },
+  "hourglass_flowing": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "landing": 2
+  },
+  "key_arrow_down": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_arrow_left": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_arrow_right": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_arrow_up": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_backspace": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_backtab": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_command": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_control": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_delete": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_escape": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_option": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_return": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_return_symbol": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_shift": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_space": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "key_tab": {
+   "advance": 1,
+   "class": "chrome_key",
+   "landing": 1
+  },
+  "keycap_bare": {
+   "advance": 1,
+   "class": "keycap_bare",
+   "landing": 1
+  },
+  "keycap_hash": {
+   "advance": 2,
+   "class": "keycap",
+   "landing": 2
+  },
+  "keycap_one": {
+   "advance": 2,
+   "class": "keycap",
+   "landing": 2
+  },
+  "lao_vowel_tone": {
+   "advance": 1,
+   "class": "thai_lao",
+   "landing": 1
+  },
+  "latin_zwj": {
+   "advance": 1,
+   "class": "format_control",
+   "landing": 1
+  },
+  "latin_zwnj": {
+   "advance": 1,
+   "class": "format_control",
+   "landing": 1
+  },
+  "leafless_tree": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "landing": 1
+  },
+  "lone_ri_a": {
+   "advance": 1,
+   "class": "regional_indicator",
+   "landing": 1
+  },
+  "matra_deva_au": {
+   "advance": 1,
+   "class": "spacing_vowel_sign",
+   "landing": 1
+  },
+  "matra_deva_i": {
+   "advance": 1,
+   "class": "spacing_vowel_sign",
+   "landing": 1
+  },
+  "matra_deva_i_anusvara": {
+   "advance": 1,
+   "class": "spacing_vowel_sign",
+   "landing": 1
+  },
+  "matra_deva_o": {
+   "advance": 1,
+   "class": "spacing_vowel_sign",
+   "landing": 1
+  },
+  "matra_khmer_aa": {
+   "advance": 1,
+   "class": "spacing_vowel_sign",
+   "landing": 1
+  },
+  "matra_tamil_aa": {
+   "advance": 1,
+   "class": "spacing_vowel_sign",
+   "landing": 1
+  },
+  "moose": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "landing": 1
+  },
+  "nukta_deva_qa": {
+   "advance": 1,
+   "class": "nukta",
+   "landing": 1
+  },
+  "nukta_deva_rra": {
+   "advance": 1,
+   "class": "nukta",
+   "landing": 1
+  },
+  "partying": {
+   "advance": 2,
+   "class": "default_emoji",
+   "landing": 2
+  },
+  "pink_heart": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "landing": 1
+  },
+  "rewind": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "landing": 2
+  },
+  "root_vegetable": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "landing": 1
+  },
+  "sf_symbol_high": {
+   "advance": 1,
+   "class": "pua16",
+   "landing": 1
+  },
+  "sf_symbol_low": {
+   "advance": 1,
+   "class": "pua16",
+   "landing": 1
+  },
+  "sf_symbol_mid": {
+   "advance": 1,
+   "class": "pua16",
+   "landing": 1
+  },
+  "shovel": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "landing": 1
+  },
+  "splatter": {
+   "advance": 1,
+   "class": "recent_emoji",
+   "landing": 1
+  },
+  "telephone": {
+   "advance": 2,
+   "class": "default_emoji",
+   "landing": 2
+  },
+  "thai_sara_am": {
+   "advance": 1,
+   "class": "thai_lao",
+   "landing": 1
+  },
+  "thai_tone": {
+   "advance": 1,
+   "class": "thai_lao",
+   "landing": 1
+  },
+  "thai_vowel_tone": {
+   "advance": 1,
+   "class": "thai_lao",
+   "landing": 1
+  },
+  "tibetan_subjoined": {
+   "advance": 1,
+   "class": "tibetan_stack",
+   "landing": 1
+  },
+  "tibetan_subjoined_vowel": {
+   "advance": 1,
+   "class": "tibetan_stack",
+   "landing": 1
+  },
+  "tone_basketball": {
+   "advance": 2,
+   "class": "skin_tone_bmp_wide",
+   "landing": 2
+  },
+  "tone_boy": {
+   "advance": 2,
+   "class": "skin_tone_smp",
+   "landing": 2
+  },
+  "tone_call_me": {
+   "advance": 2,
+   "class": "skin_tone_smp",
+   "landing": 2
+  },
+  "tone_fist": {
+   "advance": 2,
+   "class": "skin_tone_bmp_wide",
+   "landing": 2
+  },
+  "tone_lifter_vs16": {
+   "advance": 2,
+   "class": "skin_tone_vs16_smp",
+   "landing": 2
+  },
+  "tone_point_up": {
+   "advance": 2,
+   "class": "skin_tone_bmp_narrow",
+   "landing": 2
+  },
+  "tone_point_up_vs16": {
+   "advance": 2,
+   "class": "skin_tone_vs16_base",
+   "landing": 2
+  },
+  "tone_pray": {
+   "advance": 2,
+   "class": "skin_tone_smp",
+   "landing": 2
+  },
+  "tone_thumbsup": {
+   "advance": 2,
+   "class": "skin_tone_smp",
+   "landing": 2
+  },
+  "tone_victory": {
+   "advance": 2,
+   "class": "skin_tone_bmp_narrow",
+   "landing": 2
+  },
+  "tone_victory_vs16": {
+   "advance": 2,
+   "class": "skin_tone_vs16_base",
+   "landing": 2
+  },
+  "tone_wave": {
+   "advance": 2,
+   "class": "skin_tone_smp",
+   "landing": 2
+  },
+  "tone_writing": {
+   "advance": 2,
+   "class": "skin_tone_bmp_narrow",
+   "landing": 2
+  },
+  "up_double": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "landing": 2
+  },
+  "virama_kannada_ka": {
+   "advance": 1,
+   "class": "virama_final",
+   "landing": 1
+  },
+  "virama_khmer_ka": {
+   "advance": 1,
+   "class": "virama_final",
+   "landing": 1
+  },
+  "virama_tamil_sa": {
+   "advance": 1,
+   "class": "virama_final",
+   "landing": 1
+  },
+  "vs15_black_square": {
+   "advance": 2,
+   "class": "vs15_chrome",
+   "landing": 2
+  },
+  "vs15_white_square": {
+   "advance": 2,
+   "class": "vs15_chrome",
+   "landing": 2
+  },
+  "vs16_congrat": {
+   "advance": 2,
+   "class": "vs16_wide_exception",
+   "landing": 2
+  },
+  "vs16_desktop": {
+   "advance": 2,
+   "class": "vs16_pictograph",
+   "landing": 2
+  },
+  "vs16_gear": {
+   "advance": 2,
+   "class": "vs16_pictograph",
+   "landing": 2
+  },
+  "vs16_heart": {
+   "advance": 2,
+   "class": "vs16_pictograph",
+   "landing": 2
+  },
+  "vs16_part_alt": {
+   "advance": 2,
+   "class": "vs16_wide_exception",
+   "landing": 2
+  },
+  "vs16_pencil": {
+   "advance": 2,
+   "class": "vs16_pictograph",
+   "landing": 2
+  },
+  "vs16_secret": {
+   "advance": 2,
+   "class": "vs16_wide_exception",
+   "landing": 2
+  },
+  "vs16_shield": {
+   "advance": 2,
+   "class": "vs16_pictograph",
+   "landing": 2
+  },
+  "vs16_warning": {
+   "advance": 2,
+   "class": "vs16_pictograph",
+   "landing": 2
+  },
+  "vs16_wavy_dash": {
+   "advance": 2,
+   "class": "vs16_wide_exception",
+   "landing": 2
+  },
+  "watch": {
+   "advance": 2,
+   "class": "wide_symbol",
+   "landing": 2
+  },
+  "wave": {
+   "advance": 2,
+   "class": "default_emoji",
+   "landing": 2
+  },
+  "zwj_astronaut": {
+   "advance": 2,
+   "class": "zwj",
+   "landing": 2
+  },
+  "zwj_astronaut_tone": {
+   "advance": 2,
+   "class": "zwj_skin_tone",
+   "landing": 2
+  },
+  "zwj_broken_chain": {
+   "advance": 2,
+   "class": "zwj",
+   "landing": 2
+  },
+  "zwj_family4": {
+   "advance": 2,
+   "class": "zwj",
+   "landing": 2
+  },
+  "zwj_farmer": {
+   "advance": 2,
+   "class": "zwj",
+   "landing": 2
+  },
+  "zwj_heart_fire": {
+   "advance": 2,
+   "class": "zwj",
+   "landing": 2
+  },
+  "zwj_pirate_flag": {
+   "advance": 2,
+   "class": "zwj",
+   "landing": 2
+  },
+  "zwj_rainbow_flag": {
+   "advance": 2,
+   "class": "zwj",
+   "landing": 2
+  },
+  "zwj_red_hair": {
+   "advance": 2,
+   "class": "zwj",
+   "landing": 2
+  }
+ },
+ "stamp": {
+  "activeVersion": "15-graphemes",
+  "engine": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Claude/1.44121.4 Chrome/148.0.7778.280 Safari/537.36",
+  "host": "+ addon-unicode-graphemes",
+  "method": "xterm.js buffer: cursorX after the write is the advance, and the cell a following marker lands in is the landing. No ink: a browser terminal's buffer is its model, and no pixels were read.",
+  "probe": "Tools/Web/glyph-probe.html"
+ }
+}

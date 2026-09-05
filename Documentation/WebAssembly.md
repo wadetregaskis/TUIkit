@@ -124,6 +124,19 @@ Works: the whole Example — every page, the focus ring's pulse, animations,
 gradients, mouse-free navigation, `@AppStorage` within a session, all seven
 languages, and a clean exit on `q`.
 
+**Emoji need an addon, and this is not optional.** xterm.js ships Unicode 6
+width tables, under which an emoji is one cell: the glyph is drawn clipped and
+every character after it on the row sits one column left of where the app put
+it. The demo loads `@xterm/addon-unicode-graphemes` and sets
+`terminal.unicode.activeVersion = "15-graphemes"`, which replaces the tables
+and clusters by grapheme. Measured over the shared width corpus, that takes
+xterm.js from 33 of 78 clusters to 61 — second only to Ghostty's 63 among the
+terminals this project has measured, and ahead of iTerm2, Apple Terminal and
+Warp. `addon-unicode11`, the more obvious choice, is *worse than nothing* (31):
+it widens emoji but cannot cluster, so every ZWJ sequence counts as its parts.
+`Tools/Web/glyph-probe.html` is the measurement; §"xterm.js — the browser" in
+`Terminal-compatibility.md` is the record.
+
 Does not, and why:
 
 | | |
@@ -133,6 +146,8 @@ Does not, and why:
 | Clipboard | the page has one; the guest cannot reach it. OSC 52 would let the *terminal* do it and is not wired up. |
 | Opening links | no subprocess. OSC 8 hyperlinks still work, because the terminal opens those, not the app. |
 | Terminal graphics | the handshake gets no answer, so pictures fall back to cells. xterm.js does not implement the Kitty protocol. |
+| Some glyph widths | 29 of 145 corpus clusters still disagree with the framework even with the addon — newer emoji than its Unicode 15 tables, SF Symbols (private-use codepoints have no width anywhere), and Indic vowel signs. The SF Symbols page will shift; no terminal measured does better on that row. |
+| Grapheme-clustering mode | `DECRQM ?2027` answers "not recognised", so the framework keeps its own advance model rather than pinning the terminal's. |
 | Size on disk | ~50 MB of wasm, ~20 MB gzipped, almost all of it Foundation and ICU. |
 
 ## The build's shape

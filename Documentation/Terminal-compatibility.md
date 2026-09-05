@@ -1333,6 +1333,104 @@ contrast takes `open -na Ghostty.app --args -e <cmd>`.
 
 ---
 
+## xterm.js — the browser (measured 2026-09-05)
+
+**Tested:** xterm.js 6.0.0 in Chromium 148, via `Tools/Web/glyph-probe.html`,
+which measures the same corpus the Python probes measure and writes the same
+kind of record (`data/xtermjs-6.0.0-graphemes-advance.json`).
+
+A browser terminal is measured differently, and the difference is worth
+stating: there is no DSR-versus-paint gap to close, because the buffer *is* the
+model. `cursorX` after a write is the advance, the cell a following character
+occupies is the landing, and the two cannot disagree. What this record does NOT
+carry is `ink` — how many cells the glyph is painted across — because that
+would need pixels, and none were read.
+
+### It is a configuration, not an emulator, that gets emoji wrong
+
+xterm.js ships Unicode 6 width tables. Under them an emoji is one cell, so it
+is drawn clipped and everything after it on the row sits one column left of
+where the app put it — two emoji in a header, two columns of shift, and the
+box's right border lands inside the box. That was the WebAssembly demo's first
+appearance, and the fix is one script tag:
+`@xterm/addon-unicode-graphemes`, with `terminal.unicode.activeVersion` set to
+`15-graphemes`. It replaces the tables *and* clusters by grapheme, which is
+what makes 🖥️ (pictograph + VS16) two cells rather than one plus a stray.
+
+Measured against the framework's own widths (`data/tuikit-widths.json`), over
+the 78 clusters the native probes covered:
+
+| Host | advance agrees with TUIkit |
+|---|---|
+| Ghostty 1.3.1 | 63 / 78 |
+| **xterm.js 6.0.0 + unicode-graphemes** | **61 / 78** |
+| iTerm2 3.6.11 | 53 / 78 |
+| Apple Terminal 455.1 | 41 / 78 (landing 51) |
+| Warp 2026.08.26 | 35 / 78 |
+| xterm.js 6.0.0, default tables | 33 / 78 |
+| xterm.js 6.0.0 + unicode11 | 31 / 78 |
+
+Two readings matter here. The first is that a correctly configured browser
+terminal is not a poor relation: it sits second in a field of five, above two
+shipping native terminals. The second is that `addon-unicode11` — the obvious
+choice, and the one most projects load — is **worse than doing nothing**: it
+widens the emoji but has no grapheme clustering, so every ZWJ sequence and
+skin-tone modifier is counted as its parts (👩‍👩‍👧‍👦 advances 8) and the total
+agreement drops from 33 to 31.
+
+### Where it still disagrees, and with whom
+
+Over the full 145-cluster corpus, 29 rows disagree with TUIkit. They are not
+scattered:
+
+| Class | Rows | What happens | Also disagrees |
+|---|---|---|---|
+| `recent_emoji` | 10 | one cell — the addon's tables are Unicode 15 and these are newer | Warp (7 of the same rows) |
+| `spacing_vowel_sign`, `thai_lao` | 7 | one cell where TUIkit says two — a REGRESSION from the default tables, which say two | — |
+| `pua16` (SF Symbols) | 3 | one cell; private-use codepoints carry no width | every native terminal measured |
+| `bare_pictograph` | 3 | one cell, matching Ghostty's advance | Ghostty, iTerm2, Apple Terminal, Warp |
+| `indic_conjunct` | 3 | three cells where TUIkit says two | — |
+| `format_control`, `regional_indicator` | 3 | one cell where TUIkit says zero or two | — |
+
+The SF Symbols row is the one to remember for the demo: the Example's symbol
+page will shift, and no terminal can do better, because a private-use codepoint
+has no width to look up.
+
+### Capabilities — asked, not assumed
+
+Every answer below came back from the terminal itself during the probe:
+
+| Query | Answer |
+|---|---|
+| DA1 `CSI c` | `CSI ?1;2c` — identifies, so the framework's identity query completes |
+| DA2 `CSI > c` | `CSI >0;276;0c` |
+| XTVERSION `CSI > 0 q` | *nothing* — no name/version string |
+| DSR `CSI 6 n` | `CSI 1;1R` — cursor reporting works, so the advance probes do |
+| DECRQM `?1049` / `?2004` / `?1006` / `?1002` | `;2` (recognised, currently reset) |
+| DECRQM `?2027` | **`;0` — not recognised.** No grapheme-clustering mode, so the framework keeps its own advance model |
+| SGR 38;2 truecolor | the exact RGB written comes back on the cell |
+| Alternate screen `?1049` | enters and leaves |
+| OSC 8 hyperlink | the row holds the text and none of the sequence |
+| SGR mouse `?1006` | a click sends `CSI <0;3;1M` / `CSI <0;3;1m` |
+
+Not supported, and not worked around: the Kitty graphics protocol. Pictures
+fall back to cells, which is what the handshake is for.
+
+### Why not something else
+
+The browser-terminal field is smaller than it looks. Everything that ships a
+terminal on a web page — VS Code, ttyd, wetty, Codespaces, Jupyter — is
+xterm.js. `hterm` (Google's, inside libapps) is the only other complete VT
+emulator for the DOM; it is `wcwidth`-based with no grapheme clustering, which
+is the configuration measured at 33/78 above. The rest (jQuery Terminal,
+Termino.js, the canvas toys) are consoles, not emulators: no alternate screen,
+no SGR mouse, no DECRQM. There is no wasm port of a native terminal that
+renders to the DOM.
+
+So the answer to "is there something more capable" is that xterm.js configured
+correctly *is* the capable one, and the emoji problem was a missing addon
+rather than a missing emulator.
+
 ## tmux
 
 **Status: MEASURED — tmux 3.7b (Homebrew, arm64), 2026-07-15.** DSR-probed

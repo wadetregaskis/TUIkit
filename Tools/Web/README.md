@@ -17,7 +17,9 @@ is the map of the directory.
 | `site/index.html` | the page: an xterm.js terminal, the keystroke ring, and the worker |
 | `site/worker.js` | instantiates the module and runs it; owns stdout batching |
 | `site/wasi.js` | the WASI preview1 implementation — about 35 calls, the ones a Swift executable imports |
+| `glyph-probe.html` | measures the browser terminal against the shared width corpus and the records of real terminals, and asks it the capability questions the framework asks at startup. Open it after `build.sh` and press *save* to write a record into `Tools/TerminalProbes/data/` |
 | `site/manifest.json` | generated; maps each resource file to the guest path the binary looks for it at |
+| `site/probe-data/` | generated; copies of `Tools/TerminalProbes/data/` so the probe can read them |
 | `site/Example.wasm` | generated |
 
 `site/Example.wasm`, `site/resources/` and `site/manifest.json` are build
@@ -32,6 +34,14 @@ __tuikit.pending()      // keystroke bytes the guest has not taken yet
 __tuikit.indices()      // [wake sequence, write index, read index, spare]
 __tuikit.send("q")      // put bytes in without going through the keyboard
 ```
+
+## Emoji
+
+The demo loads `@xterm/addon-unicode-graphemes` deliberately. Without it
+xterm.js uses Unicode 6 widths, an emoji occupies one cell, and everything after
+it on the row shifts left — see `Documentation/WebAssembly.md` and the
+`xterm.js` section of `Documentation/Terminal-compatibility.md` for the
+measurements.
 
 If the terminal stays blank, check the status line under it: `fetching…` and
 `compiling…` come from the worker, and anything after `running` means the guest

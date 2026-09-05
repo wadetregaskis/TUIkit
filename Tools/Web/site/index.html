@@ -109,6 +109,16 @@
     <!-- `crossorigin` is required, not decoration: the page is cross-origin isolated
          (COEP: require-corp), and a script without it is refused. -->
     <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/xterm/6.0.0/xterm.js"></script>
+    <!-- Not optional. xterm.js ships Unicode 6 width tables, under which an
+         emoji is one cell wide: the glyph is drawn clipped and every character
+         after it on the row sits one column left of where the app put it. The
+         graphemes addon replaces the tables AND clusters by grapheme, which is
+         what makes 🖥️ (a pictograph plus VS16) two cells rather than one plus a
+         stray. Measured against the framework's own widths over the shared
+         corpus, it takes xterm.js from 33 of 78 clusters to 61 — second only to
+         Ghostty's 63 among the terminals this project has measured. See
+         `Tools/Web/glyph-probe.html`. -->
+    <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@xterm/addon-unicode-graphemes@0.5.0-beta.301/lib/addon-unicode-graphemes.js"></script>
     <script type="module">
       const status = document.getElementById("status");
       const COLUMNS = 100;
@@ -133,6 +143,9 @@
           convertEol: false,
           scrollback: 0,
         });
+        const graphemes = new UnicodeGraphemesAddon.UnicodeGraphemesAddon();
+        terminal.loadAddon(graphemes);
+        terminal.unicode.activeVersion = "15-graphemes";
         terminal.open(document.getElementById("terminal"));
         terminal.focus();
 
