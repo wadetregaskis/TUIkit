@@ -262,6 +262,26 @@ public final class RenderCache: @unchecked Sendable {
     /// repeat measurement of the same view at the same proposal is a repeat of
     /// work already done, not a guess about a different frame.
     private var measureEntries: [MeasureKey: ViewSize] = [:]
+
+    /// A stack's resolved children for the pass — see
+    /// `resolveChildViews(from:context:)`. Identity plus the content's type
+    /// and raw bytes, like ``MeasureKey`` without a proposal: which children a
+    /// content value has does not depend on the space it is offered.
+    public struct ChildViewsKey: Hashable {
+        public let identity: ViewIdentity
+        public let viewType: ObjectIdentifier
+        public let valueHash: Int
+
+        public init(identity: ViewIdentity, viewType: ObjectIdentifier, valueHash: Int) {
+            self.identity = identity
+            self.viewType = viewType
+            self.valueHash = valueHash
+        }
+    }
+
+    /// This pass's resolved children, per stack — scratch, like
+    /// ``measureEntries``; emptied by ``beginRenderPass()``.
+    private var childViewEntries: [ChildViewsKey: [ChildView]] = [:]
     /// Measure-memo hit/miss counts for this frame, reported by
     /// ``logFrameStats()``.
     ///
@@ -566,6 +586,17 @@ extension RenderCache {
         measureEntries[key] = size
     }
 
+    /// The children a stack resolved earlier this pass for the same content
+    /// value, or `nil`. See `resolveChildViews(from:context:)`.
+    public func lookupChildViews(key: ChildViewsKey) -> [ChildView]? {
+        childViewEntries[key]
+    }
+
+    /// Remembers a stack's resolved children for the rest of the pass.
+    public func storeChildViews(key: ChildViewsKey, children: [ChildView]) {
+        childViewEntries[key] = children
+    }
+
     /// Marks an identity as active during the current render pass.
     ///
     /// Identities not marked active by the end of the render pass
@@ -697,6 +728,7 @@ extension RenderCache {
         frameCounter &+= 1
         // The measure memo is this frame's scratch space and nothing more.
         measureEntries.removeAll(keepingCapacity: true)
+        childViewEntries.removeAll(keepingCapacity: true)
         measureHits = 0
         measureMisses = 0
     }

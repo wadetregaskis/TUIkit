@@ -374,6 +374,18 @@ public protocol ChildViewProvider {
     /// - Parameter context: The rendering context (for child identity).
     /// - Returns: An array of ``ChildView`` wrappers.
     func childViews(context: RenderContext) -> [ChildView]
+
+    /// Whether ``childViews(context:)`` is worth remembering for the rest of
+    /// the pass — see ``resolveChildViews(from:context:)``. `false` by
+    /// default: a tuple of three views resolves in less time than the memo
+    /// takes to look it up. `ForEach` answers `true` once it has enough rows
+    /// for the reverse to hold.
+    var childViewsAreWorthMemoising: Bool { get }
+}
+
+extension ChildViewProvider {
+    /// Not worth it, unless a provider says otherwise.
+    public var childViewsAreWorthMemoising: Bool { false }
 }
 
 /// Creates a ChildInfo for a single view.
@@ -707,8 +719,23 @@ public func resolveChildInfos<V: View>(from content: V, context: RenderContext) 
 /// - Returns: An array of ``ChildView``.
 @MainActor
 public func resolveChildViews<V: View>(from content: V, context: RenderContext) -> [ChildView] {
-    if let provider = content as? ChildViewProvider {
+    guard let provider = content as? ChildViewProvider else { return [ChildView(content)] }
+    // Once per PASS, not once per walk. A stack resolves its children in
+    // `sizeThatFits` and again in `renderToBuffer`, and a stack inside a
+    // `ScrollView` is measured for the enclosing stack's natural-size ask,
+    // for each scrollbar probe, and for the render's own layout — five
+    // resolutions of the same content value in one frame, each building a
+    // `_MemoizedRow` per element: 26% of a `fanout` frame. Keyed the way the
+    // measure memo is (identity, type, the content's raw bytes), and scratch
+    // for the pass like it, so a content value that changed is resolved
+    // afresh and nothing outlives the walk that could have made it stale.
+    guard provider.childViewsAreWorthMemoising, let cache = context.renderCache else {
         return provider.childViews(context: context)
     }
-    return [ChildView(content)]
+    let key = RenderCache.ChildViewsKey(
+        identity: context.identity, viewType: ObjectIdentifier(V.self), valueHash: viewValueHash(content))
+    if let remembered = cache.lookupChildViews(key: key) { return remembered }
+    let children = provider.childViews(context: context)
+    cache.storeChildViews(key: key, children: children)
+    return children
 }

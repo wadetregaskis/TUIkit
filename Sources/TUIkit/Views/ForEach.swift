@@ -177,6 +177,10 @@ extension ForEach: ChildViewProvider {
         data.map(makeChild(for:))
     }
 
+    /// Worth remembering for the pass from sixteen rows: below that the
+    /// memo's hash and lookup cost about what building the rows does.
+    public var childViewsAreWorthMemoising: Bool { data.count >= 16 }
+
     /// One element's `ChildView` — the single constructor behind both the
     /// eager array and the lazy collection, so the two cannot drift.
     ///
