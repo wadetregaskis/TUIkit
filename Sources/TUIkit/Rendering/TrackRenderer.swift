@@ -39,6 +39,10 @@ enum TrackRenderer {
     ///   - palette: The palette the style's own colours are resolved against.
     ///     The three colours above arrive resolved; a style read from the
     ///     environment does not, and a palette role has no channels to emit.
+    ///   - graphics: Where to keep the track as a PICTURE, for a style whose
+    ///     cells are colour and nothing else (`TrackConfiguration.isColourField`)
+    ///     on a terminal that draws pictures — `nil` draws cells, which every
+    ///     other style does regardless. See ``TrackRaster``.
     /// - Returns: An ANSI-styled string representing the track.
     static func render(
         fraction: Double,
@@ -48,7 +52,8 @@ enum TrackRenderer {
         emptyColor: Color,
         accentColor: Color,
         gradientScaling: TrackGradientScaling = .track,
-        palette: any Palette
+        palette: any Palette,
+        graphics: GradientGraphicsContext? = nil
     ) -> String {
         let style = style.resolvingColours(with: palette)
         // Read once per render, not once per cell. A gradient can only be
@@ -60,46 +65,35 @@ enum TrackRenderer {
         // Clamp fraction to [0, 1] to prevent track overflow
         let fraction = min(1.0, max(0.0, fraction))
 
-        switch style {
         // The "fill" family — a run of full cells, an optional fractional
         // boundary cell, then the unfilled remainder — is one parameterized
-        // renderer driven by a `TrackConfiguration`. The named cases are just
-        // presets; `.custom` carries a caller-supplied recipe.
-        case .block:
-            return renderConfigured(
-                fraction: fraction, width: width, config: .block,
-                filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling, depth: depth)
-        case .blockFine:
-            return renderConfigured(
-                fraction: fraction, width: width, config: .blockFine,
-                filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling, depth: depth)
-        case .shade:
-            return renderConfigured(
-                fraction: fraction, width: width, config: .shade,
-                filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling, depth: depth)
-        case .bar:
-            return renderConfigured(
-                fraction: fraction, width: width, config: .bar,
-                filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling, depth: depth)
-        case .braille:
-            return renderConfigured(
-                fraction: fraction, width: width, config: .braille,
-                filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling, depth: depth)
-        case .shadeRamp(let gradient):
-            return renderConfigured(
-                fraction: fraction, width: width, config: .shadeRamp(gradient: gradient),
-                filledColor: filledColor, emptyColor: emptyColor,
-                gradientScaling: gradientScaling, depth: depth)
-        case .custom(let config):
+        // renderer driven by a `TrackConfiguration`; as a picture where the
+        // cells would all be plain colour and the terminal draws pictures.
+        // The named cases are just presets; `.custom` carries a caller-supplied
+        // recipe.
+        func configured(_ config: TrackConfiguration) -> String {
+            if let graphics, config.isColourField,
+                let row = renderPicture(
+                    fraction: fraction, width: width, config: config,
+                    filledColor: filledColor, emptyColor: emptyColor,
+                    gradientScaling: gradientScaling, graphics: graphics)
+            {
+                return row
+            }
             return renderConfigured(
                 fraction: fraction, width: width, config: config,
                 filledColor: filledColor, emptyColor: emptyColor,
                 gradientScaling: gradientScaling, depth: depth)
+        }
+
+        switch style {
+        case .block: return configured(.block)
+        case .blockFine: return configured(.blockFine)
+        case .shade: return configured(.shade)
+        case .bar: return configured(.bar)
+        case .braille: return configured(.braille)
+        case .shadeRamp(let gradient): return configured(.shadeRamp(gradient: gradient))
+        case .custom(let config): return configured(config)
 
         // The head / marker / segment families are structurally distinct
         // (single indicator, no fractional fill ramp) and keep their own paths.
@@ -168,6 +162,37 @@ enum TrackRenderer {
     ///
     /// The ramp is memoised on `(gradient, span, depth)`, so asking cell by
     /// cell costs one dictionary hit each after the first.
+    /// The track as one row of placeholder cells naming a picture of it — or
+    /// `nil` when the protocol declines the box, at which point the cells are
+    /// drawn as they always were.
+    ///
+    /// The picture changes with the VALUE: every distinct boundary pixel is a
+    /// new image, and a slider being dragged transmits one per frame. That is
+    /// a row of pixels, deflated where the terminal takes it — about a
+    /// kilobyte — against the SGR-per-cell row it replaces, and the previous
+    /// one is freed as each arrives (`TerminalImageStore` reuses the id).
+    private static func renderPicture(
+        fraction: Double, width: Int, config: TrackConfiguration,
+        filledColor: Color, emptyColor: Color,
+        gradientScaling: TrackGradientScaling, graphics: GradientGraphicsContext
+    ) -> String? {
+        guard
+            let picture = TrackRaster.picture(
+                fraction: fraction, width: width, config: config,
+                filledColor: filledColor, emptyColor: emptyColor,
+                gradientScaling: gradientScaling, cellPixels: graphics.cellPixels)
+        else { return nil }
+        let signature = TrackImageSignature(
+            config: config, filledColor: filledColor, emptyColor: emptyColor,
+            gradientScaling: gradientScaling,
+            width: picture.width, height: picture.height,
+            lit: Int((fraction * Double(picture.width)).rounded()))
+        return graphics.store.placeholderRows(
+            token: graphics.token, signature: signature, columns: width, rows: 1,
+            pixels: { (picture.bytes, picture.format, picture.width, picture.height) }
+        )?.first
+    }
+
     static func gradientColor(
         _ gradient: Gradient, index: Int, span: Int, fallback: Color, depth: ColorDepth
     ) -> Color {
@@ -686,4 +711,20 @@ extension TrackRenderer {
         }
         return result
     }
+}
+
+// MARK: - What decides whether a track picture has changed
+
+/// Everything about a track picture that, if it changed, means the terminal
+/// is holding the wrong one. The value enters as `lit` — the boundary pixel —
+/// so two fractions that land on the same pixel are the same picture and cost
+/// nothing.
+struct TrackImageSignature: Equatable {
+    var config: TrackConfiguration
+    var filledColor: Color
+    var emptyColor: Color
+    var gradientScaling: TrackGradientScaling
+    var width: Int
+    var height: Int
+    var lit: Int
 }

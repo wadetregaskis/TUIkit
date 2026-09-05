@@ -71,6 +71,11 @@ struct ProgressViewPage: View {
     /// lit part (so it follows the fill). Watch `shadeRamp(g)` as it changes.
     @State private var gradientScaling = TrackGradientScaling.track
 
+    /// Whether ramps on this page go to the terminal as PICTURES where it
+    /// draws them — the block tracks, the indeterminate `gradient` motion —
+    /// or as cells. Greyed on a terminal with no graphics, where it is moot.
+    @State private var gradientGraphics = true
+
     /// Whether the gradient-editor dialog is up.
     @State private var editingGradient = false
 
@@ -227,6 +232,7 @@ struct ProgressViewPage: View {
 
             Spacer()
         }
+        .gradientGraphics(gradientGraphics)
         .scrollableDemoPage()
         .task {
             await runDemoProgress()
@@ -274,6 +280,8 @@ struct ProgressViewPage: View {
                     Text("page.progressView.gradientScalingTrack").tag(TrackGradientScaling.track)
                     Text("page.progressView.gradientScalingFill").tag(TrackGradientScaling.fill)
                 }
+                Toggle("page.progressView.gradientGraphics", isOn: $gradientGraphics)
+                    .disabled(!KittyGraphics.isSupported)
                 .pickerStyle(.inline)
                 HStack(spacing: 1) {
                     Text("Style        ").dim()

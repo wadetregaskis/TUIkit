@@ -395,14 +395,19 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let filled: Color
         let empty: Color
         let accent: Color
+        /// Whether the frames are pictures. A cycle of cells built for a
+        /// glyph terminal must not be served where pictures are drawn, nor
+        /// the other way round, so it is part of what the cache is keyed on.
+        let pictures: Bool
         let frames: [String]
         let run: AnimatedCellRun
 
         func matches(
-            width: Int, style: IndeterminateStyle, filled: Color, empty: Color, accent: Color
+            width: Int, style: IndeterminateStyle, filled: Color, empty: Color, accent: Color,
+            pictures: Bool
         ) -> Bool {
             self.width == width && self.style == style && self.filled == filled
-                && self.empty == empty && self.accent == accent
+                && self.empty == empty && self.accent == accent && self.pictures == pictures
         }
     }
 
@@ -413,14 +418,49 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let filled = palette.foregroundSecondary
         let empty = palette.foregroundTertiary
         let accent = palette.accent
+        let configuration = style.configuration.resolvingColours(with: palette)
+        // The `.gradient` motion over a solid fill is a colour field, and a
+        // colour field can be pictures where the terminal draws them — see
+        // ``IndeterminateRaster``. Asked for with the frame count it will
+        // own, so every frame's picture is released when the bar goes.
+        let frameCount = max(2, Int((IndeterminateRenderer.period(of: style) * 30).rounded()))
+        let graphics =
+            configuration.motion == .gradient && configuration.fill == "█"
+            ? context.gradientGraphics(token: "track-\(context.identity.path)", frames: frameCount)
+            : nil
 
         func build() -> CachedCycle {
+            if let graphics,
+                let pictures = IndeterminateRaster.frames(
+                    width: width, count: frameCount, configuration: configuration,
+                    cellPixels: graphics.cellPixels)
+            {
+                let rows = pictures.enumerated().compactMap { index, picture in
+                    graphics.store.placeholderRows(
+                        token: graphics.token(forFrame: index),
+                        signature: IndeterminateFrameSignature(
+                            configuration: configuration, width: picture.width,
+                            height: picture.height, frame: index, count: frameCount),
+                        columns: width, rows: 1,
+                        pixels: { (picture.bytes, picture.format, picture.width, picture.height) }
+                    )?.first
+                }
+                if rows.count == frameCount {
+                    return CachedCycle(
+                        width: width, style: style, filled: filled, empty: empty, accent: accent,
+                        pictures: true, frames: rows,
+                        run: AnimatedCellRun(
+                            offsetX: 0, offsetY: 0, width: width, frames: rows,
+                            frameDuration: IndeterminateRenderer.period(of: style) / Double(frameCount),
+                            clock: .content))
+                }
+            }
             let built = IndeterminateRenderer.cycle(
                 width: width, style: style, filledColor: filled,
                 emptyColor: empty, accentColor: accent, palette: palette)
             return CachedCycle(
                 width: width, style: style, filled: filled, empty: empty, accent: accent,
-                frames: built.frames,
+                pictures: false, frames: built.frames,
                 run: AnimatedCellRun(
                     offsetX: 0, offsetY: 0, width: width, frames: built.frames,
                     frameDuration: built.frameDuration, clock: .content))
@@ -436,7 +476,9 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                 identity: context.identity, propertyIndex: ProgressStateIndex.cycle),
             default: nil)
         if let cached = box.value,
-            cached.matches(width: width, style: style, filled: filled, empty: empty, accent: accent)
+            cached.matches(
+                width: width, style: style, filled: filled, empty: empty, accent: accent,
+                pictures: graphics != nil)
         {
             return cached
         }
@@ -522,7 +564,8 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
             emptyColor: palette.foregroundTertiary,
             accentColor: palette.accent,
             gradientScaling: context.environment.trackGradientScaling,
-            palette: palette
+            palette: palette,
+            graphics: context.gradientGraphics(token: "track-\(context.identity.path)")
         )
     }
 }

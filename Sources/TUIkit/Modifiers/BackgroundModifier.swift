@@ -44,6 +44,28 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         // means "not a ramp, or a degenerate one", and both mean paint flat.
         let extent =
             context.gradientFrame ?? GradientFrame(width: width, height: buffer.lines.count)
+
+        // A ramp behind NOTHING — blank cells, which is what a gradient used as
+        // a view, or `.background` on a spacer, puts in front of it — can be
+        // a picture where the terminal draws them: one colour a pixel instead
+        // of one a cell. Behind text it cannot, because a placeholder cell is
+        // the image and holds no character; those cells paint below.
+        if case .gradient = paint, buffer.animatedCells.isEmpty, buffer.isBlank,
+            let graphics = context.gradientGraphics(
+                token: "gradient-\(context.identity.path)-\(ObjectIdentifier(owner).hashValue)"),
+            let picture = GradientRaster.picture(
+                paint: paint, frame: extent, columns: width, rows: buffer.lines.count,
+                cellPixels: graphics.cellPixels),
+            let lines = graphics.store.placeholderRows(
+                token: graphics.token,
+                signature: GradientImageSignature(
+                    paint: paint, frame: extent, width: picture.width, height: picture.height),
+                columns: width, rows: buffer.lines.count,
+                pixels: { (picture.bytes, picture.format, picture.width, picture.height) })
+        {
+            return buffer.replacingLines(lines)
+        }
+
         guard
             let sampler = RampSampler(
                 paint: paint, extent: extent, depth: ColorDepth.current,

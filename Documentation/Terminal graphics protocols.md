@@ -610,3 +610,101 @@ cells — and measures the advance, the elision, both id encodings, delete-by-id
 and what a full-screen transmit costs. Each prints the card that asks the
 question no escape sequence can. Records belong in
 `Tools/TerminalProbes/data/<terminal>-<version>-{graphics,placement}.json`.
+
+---
+
+## 10. Gradients as pixels — built 2026-09-04
+
+§5 filed "gradients behind text" under *interesting, conditional*, and the
+condition is still real: a placeholder cell IS the image, and holds no
+character, so a ramp under type stays cells. What §5 did not consider is how
+often a ramp has nothing in front of it — a `LinearGradient` used as a view,
+a `.background` on a spacer, the fill of a progress bar or slider whose style
+is a solid block, the indeterminate `.gradient` sweep. Those cells are colour
+and nothing else, and colour is what a picture is.
+
+**What ships.** Where the terminal answered the handshake and
+`.gradientGraphics` (default `true`, ANDed with `.terminalGraphics`) has not
+turned it off, those four are drawn as pictures through the same
+`TerminalImageStore` and the same placeholder cells as `Image`:
+
+| Where | Cells | Picture |
+|---|---|---|
+| `BackgroundModifier` over a BLANK buffer (a gradient view, `.background` on a spacer) | one colour per cell | `GradientRaster` — one per pixel, any geometry, the `.gradientExtent(.subtree)` window honoured |
+| `TrackRenderer` for a `TrackConfiguration.isColourField` style (`.block`, `.blockFine`, a custom `█`-on-`.background`) | full cells + an eighths ramp | `TrackRaster` — the boundary on a PIXEL, the fill gradient sampled per pixel |
+| The indeterminate `.gradient` motion over a `█` fill | 4 samples a cell, re-coloured every frame | `IndeterminateRaster` — a picture per frame, transmitted once; a frame is a row of unchanged cells naming a different id |
+| everything with a glyph in it — shade, braille, dot, knob, text over a ramp | unchanged | — |
+
+**Three facts about the protocol decided the shape**, and two of them are
+the opposite of what one would guess:
+
+1. **A virtual placement never stretches.** The terminal fits the picture to
+   the cell box with its aspect preserved and centres it (`Compressed image
+   transfer.md` §1.1, from kitty's and Ghostty's sources). So the obvious
+   optimisation — send a horizontal ramp one pixel tall and let the terminal
+   stretch it — draws a hairline across the middle of the row. The picture
+   must carry the box's proportions, and the smallest one that does is the
+   box's pixel size over a common factor of its width and height.
+   `GradientRaster.resolution` picks the largest factor that keeps eight
+   pixels a cell in each direction; at a 16×34 cell that is 2, so a 40×1 box
+   is a 320×17 picture. The rows of a horizontal ramp are then identical,
+   which is what compression is for:
+
+   | picture | raw | deflated (zlib 6) | zlib 1 |
+   |---|---|---|---|
+   | 320×17 ramp | 16,320 B | **1,093 B** | 1,141 B |
+   | 640×34 | 65,280 B | **1,439 B** | 1,914 B |
+   | 1280×68 | 261,120 B | **2,726 B** | 8,631 B |
+
+   (python zlib on a synthetic three-channel ramp; the framework's numbers
+   come from whichever `libz` it borrows, and every zlib inflates them
+   identically.) So `o=z` is what makes the "one-pixel strip" affordable
+   after all — not by sending one row, but by sending seventeen rows that
+   cost one. This is why `SystemZlib` exists (`Compressed image transfer.md`).
+2. **A cell names an image, not a placement.** The protocol can crop a
+   placement to a source rectangle (`x=,y=,w=,h=`), which would let one
+   picture of the moving ramp serve every frame by sliding the window — the
+   design first sketched for the indeterminate bar. But a placeholder cell
+   addresses its image by id in the foreground colour, and choosing between
+   several placements of one image needs a placement id in the *underline*
+   colour, which no host has been measured to honour, and re-issuing one
+   placement per frame needs the terminal to repaint unchanged cells when
+   their placement changes, which no host has been measured to do either.
+   A picture per frame needs nothing beyond what every drawing host has been
+   measured to do: transmit by id, name by id. Forty-eight frames of a
+   forty-cell bar are forty-eight 320×17 pictures — about a kilobyte each
+   deflated, once — and thereafter a frame is one row of cells whose only
+   difference from the last frame is the id in its foreground. The cells'
+   own renderer rewrites forty SGR runs a frame; this rewrites forty
+   placeholder cells. Neither sends a pixel.
+3. **A boundary is a pixel now.** `.blockFine` had eight sub-cell steps from
+   the eighths ramp and `.block` had one; the picture has sixteen at a
+   16-pixel cell and the arithmetic is the same rounding the cells used, so
+   50% of an even width is exactly half in both. The picture changes with the
+   value — every distinct boundary pixel is a new transmission, a slider
+   being dragged sends one a frame — which is a row of pixels deflated to
+   about a kilobyte against the SGR-per-cell row it replaces, on an id the
+   store reuses.
+
+**One picture, many views.** `TerminalImageStore` now keys images by content
+(a signature and a cell box that compare equal) with a holder set per image,
+so a column of identical bars, or a list of one icon, transmits once and
+frees when the last holder goes. The signature is type-erased
+(`AnyImageSignature`) so a picture's, a ramp's, a track's and a frame's
+signatures each stay a typed struct of the fields that decide them.
+
+**Lifetime** is `Image`'s: `RenderContext.gradientGraphics(token:frames:)`
+records the owner as appeared and registers a disappear that releases every
+frame's picture, and declares a render side effect so the memo never serves
+a cached row naming an image that has been freed.
+
+**Unmeasured, and said so.** No host has yet been run against
+`Tools/TerminalProbes/graphics_compression_probe.py`, so whether iTerm2 and
+Ghostty *acknowledge* `o=z` and whether they *draw* a deflated picture are
+both open, and `Terminal-compatibility.md` carries the empty table. Until a
+row is filled in, the framework acts on the host's own answer at startup —
+which is what the handshake is for — and `TUIKIT_GRAPHICS_COMPRESSION=0` is
+the switch for a host that says yes and draws nothing. The gradient pictures
+themselves rest on mechanisms every drawing host HAS been measured to do
+(§8), so a host that draws `Image` draws them.
+

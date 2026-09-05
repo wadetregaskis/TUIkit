@@ -321,7 +321,8 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
             emptyColor: palette.foregroundTertiary,
             accentColor: palette.accent,
             gradientScaling: context.environment.trackGradientScaling,
-            palette: palette
+            palette: palette,
+            graphics: context.gradientGraphics(token: "track-\(context.identity.path)")
         )
         return minPart + bar + maxPart
     }

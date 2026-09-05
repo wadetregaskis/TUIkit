@@ -1398,3 +1398,29 @@ named, and on the host reported as slow the framework emits fewer bytes than on
 the host reported as fast. The answer turned out to be about the render memo
 and the build, which is why it lives in its own document rather than this
 one.
+
+## 23. A ramp with nothing in front of it is a picture — 2026-09-04
+
+§5's rule stands — a gradient is accepted where a colour is painted — and on
+a terminal that draws pictures it now has a second way to be painted. Where
+the cells a ramp fills hold nothing else, the ramp goes to the terminal as
+pixels through the same `TerminalImageStore` and placeholder cells `Image`
+uses: one colour per pixel instead of one per cell, no cube, no contrast
+floor, a boundary on a pixel. Four places qualify — a gradient used as a
+view, `.background` over a blank buffer, a `.block`/`.blockFine` track, and
+the indeterminate `.gradient` motion — and everything with a glyph in it
+keeps its glyphs, because a placeholder cell IS the image and holds no
+character. `.gradientGraphics(false)` opts a subtree out; it is ANDed with
+`.terminalGraphics`.
+
+What it took, and what it did not: the pixels come from the same
+`RampSampler` the cells use, built at pixel resolution over the same frame
+with `cellAspect: 1`, so a picture and the cells it replaces agree about
+every colour and every geometry, `.gradientExtent(.subtree)` windows
+included. A track's colours come from the same `Color.quantisedRamp` as
+`TrackRenderer.gradientColor`, at truecolor, so the two renderers share one
+ramp cache. Nothing in the paint pipeline changed; the picture is a third
+consumer of what §2–§4 built. The protocol facts that shaped it — a
+placement never stretches, a cell names an image and not a placement — and
+the byte measurements are in `Terminal graphics protocols.md` §10.
+

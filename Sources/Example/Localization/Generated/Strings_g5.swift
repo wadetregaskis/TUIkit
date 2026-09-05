@@ -18,6 +18,7 @@ extension ExampleStrings {
             "page.progressView.gradientScaling": "Gradient spans",
             "page.progressView.gradientScalingTrack": "The bar",
             "page.progressView.gradientScalingFill": "The fill",
+            "page.progressView.gradientGraphics": "Gradients as pixels",
             // Picker
             "page.picker.menuStyle": "Menu Style (Drop-down)",
             "page.picker.favouriteFruit": "Favourite Fruit",
@@ -244,6 +245,7 @@ extension ExampleStrings {
             "page.progressView.gradientScaling": "Verlauf erstreckt sich über",
             "page.progressView.gradientScalingTrack": "Den Balken",
             "page.progressView.gradientScalingFill": "Die Füllung",
+            "page.progressView.gradientGraphics": "Verläufe als Pixel",
             // Picker
             "page.picker.menuStyle": "Menüstil (Aufklappmenü)",
             "page.picker.favouriteFruit": "Lieblingsobst",
@@ -470,6 +472,7 @@ extension ExampleStrings {
             "page.progressView.gradientScaling": "Le dégradé couvre",
             "page.progressView.gradientScalingTrack": "La barre",
             "page.progressView.gradientScalingFill": "Le remplissage",
+            "page.progressView.gradientGraphics": "Dégradés en pixels",
             // Picker
             "page.picker.menuStyle": "Style menu (liste déroulante)",
             "page.picker.favouriteFruit": "Fruit préféré",
@@ -696,6 +699,7 @@ extension ExampleStrings {
             "page.progressView.gradientScaling": "Il gradiente copre",
             "page.progressView.gradientScalingTrack": "La barra",
             "page.progressView.gradientScalingFill": "Il riempimento",
+            "page.progressView.gradientGraphics": "Gradienti come pixel",
             // Picker
             "page.picker.menuStyle": "Stile menu (a discesa)",
             "page.picker.favouriteFruit": "Frutto preferito",
@@ -922,6 +926,7 @@ extension ExampleStrings {
             "page.progressView.gradientScaling": "El degradado abarca",
             "page.progressView.gradientScalingTrack": "La barra",
             "page.progressView.gradientScalingFill": "El relleno",
+            "page.progressView.gradientGraphics": "Degradados como píxeles",
             // Picker
             "page.picker.menuStyle": "Estilo menú (desplegable)",
             "page.picker.favouriteFruit": "Fruta favorita",
@@ -1148,6 +1153,7 @@ extension ExampleStrings {
             "page.progressView.gradientScaling": "渐变范围",
             "page.progressView.gradientScalingTrack": "整条进度条",
             "page.progressView.gradientScalingFill": "已填充部分",
+            "page.progressView.gradientGraphics": "渐变以像素绘制",
             // Picker
             "page.picker.menuStyle": "菜单样式（下拉）",
             "page.picker.favouriteFruit": "最爱的水果",
@@ -1374,6 +1380,7 @@ extension ExampleStrings {
             "page.progressView.gradientScaling": "グラデーションの範囲",
             "page.progressView.gradientScalingTrack": "バー全体",
             "page.progressView.gradientScalingFill": "塗りつぶし部分",
+            "page.progressView.gradientGraphics": "グラデーションをピクセルで描画",
             // Picker
             "page.picker.menuStyle": "メニュースタイル（ドロップダウン）",
             "page.picker.favouriteFruit": "好きな果物",
