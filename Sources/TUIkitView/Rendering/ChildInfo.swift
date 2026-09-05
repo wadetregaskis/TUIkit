@@ -488,22 +488,47 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
     if let cache = context.renderCache, let tracker = context.environment.volatileReadTracker {
         let key = RenderCache.MeasureKey(
             identityHash: context.identity.structuralHash,
-            proposalWidth: proposal.width,
-            proposalHeight: proposal.height,
+            effectiveWidth: proposal.width ?? context.availableWidth,
             availableWidth: context.availableWidth,
-            availableHeight: context.availableHeight,
             hasExplicitWidth: context.hasExplicitWidth,
             hasExplicitHeight: context.hasExplicitHeight,
             viewType: ObjectIdentifier(V.self),
             valueHash: viewValueHash(view))
-        if let cached = cache.lookupMeasure(key: key) { return cached }
+        let widthWasSpecified = proposal.width != nil
+        // What this query can accept without a clamp — the gate a stored
+        // ``ViewSize/isNaturalSize`` answer has to clear to serve it.
+        let verticalBudget = min(proposal.height ?? Int.max, context.availableHeight)
+        if let cached = cache.lookupMeasure(
+            key: key,
+            proposalWidthWasSpecified: widthWasSpecified,
+            proposalHeight: proposal.height,
+            availableHeight: context.availableHeight,
+            verticalBudget: verticalBudget)
+        {
+            if RenderCache.verifiesMeasureMemo {
+                let fresh = measureChildUncached(view, proposal: proposal, context: context)
+                if fresh != cached {
+                    cache.noteMeasureMemoMismatch(
+                        viewType: String(describing: V.self), served: cached, fresh: fresh,
+                        proposal: proposal, availableWidth: context.availableWidth,
+                        availableHeight: context.availableHeight,
+                        identity: context.identity.path)
+                }
+            }
+            return cached
+        }
         // The same gate `EquatableView`/`_MemoizedRow` use: a subtree that
         // declares a render side effect or reads a per-frame-volatile value is
         // measured, but not remembered.
         let unsafeBefore = tracker.cacheUnsafeCount
         let size = measureChildUncached(view, proposal: proposal, context: context)
         if tracker.cacheUnsafeCount == unsafeBefore {
-            cache.storeMeasure(key: key, size: size)
+            cache.storeMeasure(
+                key: key,
+                proposalWidthWasSpecified: widthWasSpecified,
+                proposalHeight: proposal.height,
+                availableHeight: context.availableHeight,
+                size: size)
         }
         return size
     }

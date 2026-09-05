@@ -124,12 +124,14 @@ extension Spacer: Renderable, Layoutable {
         // Spacer is fully flexible - it expands to fill available space.
         // The minLength is its minimum size requirement.
         let min = minLength ?? 0
+        // Natural: the answer is the minimum length and the two fill flags,
+        // whatever space was offered in either direction.
         return ViewSize(
             width: min,
             height: min,
             isWidthFlexible: true,
             isHeightFlexible: true
-        )
+        ).declaringNaturalSize()
     }
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -156,9 +158,12 @@ extension Divider: Renderable, Layoutable {
         // the row or column. In a row it must NOT be width-flexible: a
         // width-flexible child absorbs the row's whole slack, which pushed
         // the divider's siblings to the two ends.
-        isVertical(in: context)
+        // Natural: one cell across either way, and which way is an environment
+        // question (the enclosing stack's axis), not a question of budget.
+        (isVertical(in: context)
             ? ViewSize.flexibleHeight(width: 1, minHeight: 1)
-            : ViewSize.flexibleWidth(minWidth: 1, height: 1)
+            : ViewSize.flexibleWidth(minWidth: 1, height: 1))
+            .declaringNaturalSize()
     }
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {

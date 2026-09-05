@@ -105,8 +105,15 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         var guideSizes: [(width: Int, height: Int)] = []
         guideSizes.reserveCapacity(children.count)
 
+        // A column's size is its children's, so its claim to be natural is
+        // theirs — plus the clamp below, which is the one place a column reads
+        // the budget at all.
+        var childrenAreNatural = true
+        var tallestChild = 0
         for child in children {
             let size = child.measure(proposal: proposal, context: context)
+            if !size.isNaturalSize { childrenAreNatural = false }
+            tallestChild = max(tallestChild, size.height)
             guideSizes.append(
                 child.isSpacer ? (width: 0, height: 0) : (width: size.width, height: size.height))
             totalHeight += size.height
@@ -144,12 +151,26 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         {
             maxWidth = run.extent
         }
+        // Natural when the children are AND the height clamp did not bite: the
+        // column then reported the height it chose, which is the same height at
+        // any budget that could hold it. When the clamp DID bite the answer is
+        // the budget's, not the column's, and must not answer for another.
+        // (The width clamp needs no such test: its limit is the effective width,
+        // which the memo keys on.)
+        //
+        // The last term is the same rule the row states at length: a child's
+        // claim reaches down only to its own height, so a column may not offer
+        // itself below the tallest answer it consumed. A sum of non-negative
+        // heights is already at least its own maximum — the test earns its keep
+        // for a NEGATIVE `spacing`, which subtracts from the total and could
+        // otherwise report a column shorter than a child inside it.
         return ViewSize(
             width: min(maxWidth, max(0, widthLimit)),
             height: min(totalHeight, max(0, heightLimit)),
             isWidthFlexible: hasFlexibleWidth,
             isHeightFlexible: hasFlexibleHeight
-        )
+        ).declaringNaturalSize(
+            childrenAreNatural && totalHeight <= max(0, heightLimit) && tallestChild <= totalHeight)
     }
 
     /// `.window` size, computed analytically from the same width-aware slot

@@ -685,8 +685,13 @@ extension Text: Renderable, Layoutable {
         let height = LineSpacingRows.displayRows(
             forLines: drawnLines, spacing: resolvedLineSpacing(context: context))
 
-        // Text is never flexible - it has a fixed size
-        return ViewSize.fixed(width, height)
+        // Text is never flexible - it has a fixed size…
+        // …and it is a NATURAL size: everything above reads the effective width
+        // (`proposal.width ?? context.availableWidth`) and the environment, and
+        // nothing reads the vertical budget — a text does not shrink because the
+        // space it was offered is short, it overflows and the parent clips it.
+        // So the per-pass memo may answer a query under any budget from this.
+        return ViewSize.fixed(width, height).declaringNaturalSize()
     }
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {

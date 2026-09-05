@@ -211,35 +211,45 @@ public final class RenderCache: @unchecked Sendable {
     /// Memoized `EquatableView` measurements (see ``lookupSize`` / ``storeSize``).
     private var sizeEntries: [SizeKey: SizeEntry] = [:]
 
-    /// A `measureChild` memo key: a ``SizeKey`` plus the view's TYPE.
+    /// A `measureChild` memo key: what a measurement is *of*, with nothing in it
+    /// about the space it was offered vertically.
     ///
     /// The type is what an identity-only key was missing. Transparent wrappers
     /// descend under their parent's identity, so several distinct views share
     /// one identity within a pass; keying on identity alone returned one view's
     /// size for another (the abandoned cross-frame cache — it got Panel/Card/
     /// Dialog wrong, and the equivalence harness caught it).
+    ///
+    /// The two widths are both here and both matter. ``effectiveWidth`` is
+    /// `proposal.width ?? availableWidth`, the number a measure actually lays out
+    /// against; ``availableWidth`` stays beside it because a container measures
+    /// its children against the *available* extent while sizing itself against
+    /// the proposal, so two calls that share one and not the other are two
+    /// different questions. What is NOT here is the vertical budget or whether
+    /// the width arrived as a proposal — those live in ``MeasureEntry``, which is
+    /// where a ``ViewSize/isNaturalSize`` answer gets to ignore them.
     public struct MeasureKey: Hashable {
         /// The identity's structural hash, not the identity.
         ///
-        /// This memo is probed twice for every measured view in the tree, and a
-        /// `ViewIdentity` is a chain of class nodes: hashing it walks the chain,
-        /// comparing two *equal* ones walks it step for step (the `===` shortcut
-        /// misses, because the two walks that meet here built their chains
-        /// separately), and every copy of the key retains and releases it.
-        /// Reduced to the chain's own cached hash the whole key is plain data —
-        /// no ARC, no walk.
+        /// Two probes per measured view, and a `ViewIdentity` is a chain of
+        /// class nodes: hashing walks it, comparing two *equal* ones walks it
+        /// step for step (the `===` shortcut misses, because the two walks that
+        /// meet here built their chains separately), and every copy of the key
+        /// retains and releases it. Keyed by the chain's cached hash the whole
+        /// key is plain data — no ARC, no walk — which is what makes a memo
+        /// probed on every measured view affordable. (Measured: keying the
+        /// identity itself cost `deep` +45%, all of it in `structurallyEqual`
+        /// and retain/release.)
         ///
-        /// It is the same bargain ``valueHash`` already strikes below, with the
-        /// same shape of failure: a false hit needs two distinct identity paths
-        /// to hash identically *within one pass* AND to carry the same view
-        /// type, the same value bytes and the same proposal. It would show as
-        /// one frame sized from a twin, never as aliased state, because nothing
-        /// here outlives the pass.
+        /// This is the same bargain ``valueHash`` already strikes one field
+        /// down, with the same shape of failure: a collision would need two
+        /// distinct identity paths to hash identically *within one pass* AND to
+        /// carry the same view type, the same value bytes and the same two
+        /// widths — and it would show as one frame sized from a twin, never as
+        /// aliased state, because nothing here outlives the pass.
         let identityHash: Int
-        let proposalWidth: Int?
-        let proposalHeight: Int?
+        let effectiveWidth: Int
         let availableWidth: Int
-        let availableHeight: Int
         let hasExplicitWidth: Bool
         let hasExplicitHeight: Bool
         let viewType: ObjectIdentifier
@@ -270,25 +280,41 @@ public final class RenderCache: @unchecked Sendable {
 
         public init(
             identityHash: Int,
-            proposalWidth: Int?,
-            proposalHeight: Int?,
+            effectiveWidth: Int,
             availableWidth: Int,
-            availableHeight: Int,
             hasExplicitWidth: Bool,
             hasExplicitHeight: Bool,
             viewType: ObjectIdentifier,
             valueHash: Int
         ) {
             self.identityHash = identityHash
-            self.proposalWidth = proposalWidth
-            self.proposalHeight = proposalHeight
+            self.effectiveWidth = effectiveWidth
             self.availableWidth = availableWidth
-            self.availableHeight = availableHeight
             self.hasExplicitWidth = hasExplicitWidth
             self.hasExplicitHeight = hasExplicitHeight
             self.viewType = viewType
             self.valueHash = valueHash
         }
+    }
+
+    /// One measurement under one vertical budget: what ``MeasureKey`` leaves out.
+    ///
+    /// A key holds at most one of these. The pattern the memo exists for is a
+    /// pair of walks over the same subtree — the enclosing stack's natural-size
+    /// ask at (`proposal.width` nil, `availableHeight` the viewport) and the
+    /// ScrollView's content-extent walk at (the width proposed, `availableHeight`
+    /// the measuring canvas) — and one slot serves it: the first walk stores, the
+    /// second reads. A key queried under a third budget replaces the slot rather
+    /// than growing a list, except that a natural answer is never displaced by a
+    /// budget-shaped one (it is the entry that can still serve a later query).
+    struct MeasureEntry {
+        /// Whether the width arrived as `proposal.width` rather than inherited
+        /// from `context.availableWidth`. Only distinguishable when the two are
+        /// equal — which is exactly the pair of walks above.
+        let proposalWidthWasSpecified: Bool
+        let proposalHeight: Int?
+        let availableHeight: Int
+        let size: ViewSize
     }
 
     /// Memoized `measureChild` results — see ``lookupMeasure`` / ``storeMeasure``.
@@ -299,7 +325,12 @@ public final class RenderCache: @unchecked Sendable {
     /// within one pass the tree, the state and the environment are fixed, so a
     /// repeat measurement of the same view at the same proposal is a repeat of
     /// work already done, not a guess about a different frame.
-    private var measureEntries: [MeasureKey: ViewSize] = [:]
+    private var measureEntries: [MeasureKey: MeasureEntry] = [:]
+
+    /// What ``verifiesMeasureMemo`` found: one line per served size that a fresh
+    /// measurement disagreed with. Capped, because a broken memo produces them by
+    /// the thousand and the first few say everything.
+    public private(set) var measureMemoMismatches: [String] = []
 
     /// A stack's resolved children for the pass — see
     /// `resolveChildViews(from:context:)`. Identity plus the content's type
@@ -620,12 +651,99 @@ extension RenderCache {
         sizeEntries[key] = SizeEntry(viewSnapshot: view, size: size)
     }
 
+    /// Whether every memo hit is checked against a fresh measurement.
+    ///
+    /// Off by default and never on in an app: it measures the subtree the memo
+    /// just saved, so it costs more than the memo saves. It exists because the
+    /// memo's claim — that a size taken under one vertical budget answers a
+    /// query made under another — is a claim about every `sizeThatFits` beneath
+    /// it, and the only direct check of it is to make both measurements and
+    /// compare. Set by `TUIKIT_VERIFY_MEASURE_MEMO`, or assigned directly by a
+    /// test; ``measureMemoMismatches`` collects what it finds.
+    ///
+    /// A pixel-level guard alone is not enough, which is the reason this exists
+    /// as well as `MeasureMemoEquivalenceTests`: an unsound serve only changes
+    /// the picture when the wrong size reaches a place that draws differently
+    /// for it, so a corpus can miss a real one. This catches the serve itself.
+    @MainActor public static var verifiesMeasureMemo =
+        ProcessInfo.processInfo.environment["TUIKIT_VERIFY_MEASURE_MEMO"] != nil
+
+    /// What ``verifiesMeasureMemo`` found: one line per served size that a fresh
+    /// measurement disagreed with. Capped, because a broken memo produces them
+    /// by the thousand and the first few say everything.
+
+    /// Where ``verifiesMeasureMemo`` writes what it finds, when the environment
+    /// variable names a path rather than just switching the mode on.
+    ///
+    /// An app draws a screen; it has nowhere to print a diagnostic that would
+    /// not corrupt the very frame under test. So a live run — the Example app
+    /// walked through a PTY, which is the only place a real app's tree is
+    /// measured — says where to put the report instead.
+    @MainActor static let measureMemoMismatchLog: String? = {
+        guard let value = ProcessInfo.processInfo.environment["TUIKIT_VERIFY_MEASURE_MEMO"],
+            value.contains("/")
+        else { return nil }
+        return value
+    }()
+
+    /// Records a served size a fresh measurement did not agree with.
+    @MainActor public func noteMeasureMemoMismatch(
+        viewType: String, served: ViewSize, fresh: ViewSize, proposal: ProposedSize,
+        availableWidth: Int, availableHeight: Int, identity: String = ""
+    ) {
+        guard measureMemoMismatches.count < 20 else { return }
+        measureMemoMismatches.append(
+            "\(viewType): served \(served.width)x\(served.height)"
+                + "\(served.isNaturalSize ? " (natural)" : "")"
+                + " but a fresh measure at proposal "
+                + "(\(proposal.width.map(String.init) ?? "nil"), \(proposal.height.map(String.init) ?? "nil"))"
+                + " in \(availableWidth)x\(availableHeight) says \(fresh.width)x\(fresh.height)"
+                + (identity.isEmpty ? "" : " at \(identity)"))
+        if let path = Self.measureMemoMismatchLog, let last = measureMemoMismatches.last,
+            let data = (last + "\n").data(using: .utf8)
+        {
+            if let handle = FileHandle(forWritingAtPath: path) {
+                handle.seekToEndOfFile()
+                handle.write(data)
+                try? handle.close()
+            } else {
+                try? data.write(to: URL(fileURLWithPath: path))
+            }
+        }
+    }
+
     /// Looks up this pass's memoized `measureChild` result.
-    public func lookupMeasure(key: MeasureKey) -> ViewSize? {
-        if let hit = measureEntries[key] {
+    ///
+    /// Two ways to hit. The same question asked twice — same width form, same
+    /// vertical budget — is the memo's original job. The second is the point of
+    /// ``ViewSize/isNaturalSize``: a stored answer that no budget shaped may
+    /// answer a query under a *different* budget, provided that budget is at
+    /// least as tall as the answer, since a clamp that did not bite at the
+    /// stored height cannot bite at a budget above it either.
+    ///
+    /// - Parameters:
+    ///   - key: What is being measured, and at what width.
+    ///   - proposalWidthWasSpecified: Whether this query proposed the width.
+    ///   - proposalHeight: This query's proposed height, if any.
+    ///   - availableHeight: This query's available height.
+    ///   - verticalBudget: `min(proposalHeight ?? .max, availableHeight)` — the
+    ///     tallest answer this query could accept unclamped.
+    public func lookupMeasure(
+        key: MeasureKey,
+        proposalWidthWasSpecified: Bool,
+        proposalHeight: Int?,
+        availableHeight: Int,
+        verticalBudget: Int
+    ) -> ViewSize? {
+        if let entry = measureEntries[key],
+            (entry.size.isNaturalSize && entry.size.height <= verticalBudget)
+                || (entry.proposalWidthWasSpecified == proposalWidthWasSpecified
+                    && entry.proposalHeight == proposalHeight
+                    && entry.availableHeight == availableHeight)
+        {
             measureHits += 1
             measureMemoTotals.hits += 1
-            return hit
+            return entry.size
         }
         measureMisses += 1
         measureMemoTotals.misses += 1
@@ -633,8 +751,32 @@ extension RenderCache {
     }
 
     /// Stores a `measureChild` result for the rest of this pass.
-    public func storeMeasure(key: MeasureKey, size: ViewSize) {
-        measureEntries[key] = size
+    ///
+    /// A natural answer outranks a budget-shaped one for the slot: the shaped
+    /// one can only ever serve its own budget back, while the natural one still
+    /// serves every budget above its height. (Both are correct; this is about
+    /// which is worth keeping.)
+    public func storeMeasure(
+        key: MeasureKey,
+        proposalWidthWasSpecified: Bool,
+        proposalHeight: Int?,
+        availableHeight: Int,
+        size: ViewSize
+    ) {
+        let entry = MeasureEntry(
+            proposalWidthWasSpecified: proposalWidthWasSpecified,
+            proposalHeight: proposalHeight,
+            availableHeight: availableHeight,
+            size: size)
+        // `updateValue` so the common case is ONE dictionary access: the key
+        // carries a `ViewIdentity`, whose hashing and structural comparison are
+        // the most expensive thing here, and a read-then-write to decide the
+        // rare demotion below paid for them twice on every measured view.
+        if let previous = measureEntries.updateValue(entry, forKey: key),
+            previous.size.isNaturalSize, !size.isNaturalSize
+        {
+            measureEntries[key] = previous
+        }
     }
 
     /// The children a stack resolved earlier this pass for the same content

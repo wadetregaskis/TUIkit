@@ -3603,3 +3603,130 @@ scrollbar hint (it is a fixpoint in a different place for content that fits
 at full width and wraps one more line without it — hysteresis, not the same
 answer), and relaxing the uniform lazy stack's saturated report to the limit
 (a rendered-output change in its own right, worth its own decision).
+
+## 53. A size measured under one budget, answering under another (2026-09-05, afternoon)
+
+§52 left one lever standing: a measure memo that can serve a size taken under
+one vertical budget to a query made under another. It shipped, and it is the
+largest single win of the pass — but almost nothing about the prediction
+survived contact, so the record here is the measurement first.
+
+**What the memo was actually doing.** A temporary probe (not committed) counted,
+for every measurement stored in a pass, whether an earlier store shared its
+identity, type, value bytes and width but differed in the budget. The exact memo
+was serving **0–1%** of lookups on every scenario. The opportunity underneath it:
+
+    scenario   stores/pass   same key, different budget   with the width form merged
+    deep            6,642                  22.8%                        24.6%
+    churn           8,516                  18.4%                        25.8%
+    gradients      17,743                  28.6%                        38.9%
+    fanout         10,710                   2.2%                        47.6%
+
+and, decisively, the *pairs*: every one of them was a walk at
+`(proposal.width = nil, availableHeight = 40)` followed by a walk at
+`(proposal.width = 120, availableHeight = 4096)` — the enclosing column's
+natural-size ask and then the ScrollView's content-extent walk, at the same
+available width. So the key had to lose the vertical budget **and** the
+nil-ness of the proposed width, or it would gain nothing: merging the width
+form alone hit *zero* extra times on every scenario, and merging the budget
+alone left `fanout`'s rows (84,000 of its 214,210 stores) unserved.
+
+**The shape.** `MeasureKey` is now what a measurement is *of* — identity hash,
+type, value bytes, effective width, available width, the two explicit flags —
+and the budget moves into a one-slot `MeasureEntry` beside the size. A query
+hits either exactly (same width form, same budget) or through
+`ViewSize.isNaturalSize`: a flag a `sizeThatFits` sets on the size it returns to
+say *no budget shaped this*. It is set by `Text`, `Spacer`, `Divider`, and by
+`_HStackCore`/`_VStackCore` when every child answer they consumed set it and
+their own clamp did not bite. Everything else defaults to false and is measured
+as before, which is what makes the change safe by construction: `_ImageCore`'s
+zoom, `_ContainerViewCore`'s chrome, `ViewThatFits`, the lazy stacks' windowed
+arms and any `Layout` written outside the package all stay budget-shaped.
+
+**Three corrections from the refuter panel, all of them load-bearing.**
+
+1. *A container may not claim natural below the tallest answer it consumed.* A
+   child's claim only reaches budgets down to its own height. `_HStackCore`
+   re-measures a child squeezed narrower than its ideal and that answer can come
+   back **shorter**, so the row can end up shorter than an answer it was built
+   from — and would then offer itself at budgets where the child's claim had
+   lapsed. Both stacks now carry the tallest consumed height and test it. (For a
+   column the sum already dominates its own maximum, except at negative
+   `spacing`; the test is what makes that not need thinking about.)
+2. *Padding cannot be caught by a runtime test.* The first cut let a modifier
+   claim natural whenever it had not shrunk the vertical budget on *this* call.
+   `PaddingModifier.remaining` gives the last cell to its content, so at
+   `availableHeight <= 1` the whole inset vanishes and the test reads "no
+   vertical dependence" for a modifier that has plenty at any taller budget. One
+   call cannot see that, and the change bought nothing measurable, so
+   `ModifiedView` claims nothing.
+3. *The environment leg is not pinned.* The key holds no environment
+   discriminator — it never did — so two measurements of one identity under
+   different environments alias. Dropping the budget widens that: calls that
+   used to differ by budget can now meet. The guard is empirical (below), and a
+   digest remains the fix if one is ever needed.
+
+**The guard, and why the obvious one was not enough.**
+`MeasureMemoEquivalenceTests` draws a corpus twice — memo live, memo off — and
+diffs the pictures. On its own it is too weak: with `_VStackCore` deliberately
+claiming natural *through* its clamp, every case still passed, because a wrong
+size only redraws the screen where something draws differently for it. So the
+memo also has `RenderCache.verifiesMeasureMemo` (`TUIKIT_VERIFY_MEASURE_MEMO`,
+or a path to log to), which re-measures every hit and reports any the fresh
+measurement disagrees with. With that on, the same mutation is caught
+immediately and names itself: *served 40x10 (natural) but a fresh measure at
+proposal (40, nil) in 40x4096 says 40x24*. Run over all 20 stress scenarios and
+over a 35-item PTY walk of `Example`, the shipped code reports **zero**
+mismatches from the natural path.
+
+The walk did surface one mismatch, from the *exact* path, and it is
+pre-existing: a `LazyVStack`'s reported width changes between two measurements
+in one pass (5 then 4), because the uniform hypothesis it answers from is grown
+and broken by the render in between. Confirmed pre-existing by re-running the
+walk with the natural serve switched off — the same line appears. The width of
+a seeded lazy stack is documented as a heuristic whose only consumer discards
+it; it is noted here rather than fixed.
+
+`ab_bench.py`, cpu-per-frame, 120×40, 15 reps, paired ratio with 95% CI, over
+the POD-key commit that precedes it:
+
+    scenario        old µs     new µs   change            95% CI
+    churn          14846.4     9900.3   -33.2%   -33.9% … -32.9%   faster
+    gradients      34176.9    24049.1   -29.6%   -29.8% … -29.4%   faster
+    fanout          9152.8     6720.1   -26.7%   -26.9% … -26.5%   faster
+    textwall        1545.7     1240.7   -19.8%   -20.3% … -19.4%   faster
+    anyview         2390.6     2006.3   -16.1%   -16.5% … -15.7%   faster
+    deep            9849.7     9568.4    -2.9%    -3.3% … -2.1%    faster
+    modifiers       2727.6     2670.9    -2.5%    -3.8% … -1.6%    faster
+    dashboard         86.8       86.6    +0.1%    -1.1% … +0.7%    indistinguishable
+    megalist         496.7      498.5    +0.4%    -0.2% … +1.0%    indistinguishable
+
+Bench checksums identical on every scenario; the suite passes (6,164 tests, 21
+known issues); the PTY walk of `Example` reaches all 35 items.
+
+The bench is not the app, so the same pair was run live —
+`idle_cpu.py <binary> 2 6` with `TUIKIT_STRESS_AUTOPILOT=1`, each reading taken
+twice and identical to a tenth of a percent both times:
+
+    scenario     CPU before   CPU after   render bytes/s before → after
+    churn            51.5%       36.7%          50,500 →  51,300
+    gradients        66.5%       56.8%          27,700 →  36,800
+    textwall          8.0%        6.8%             470 →     470
+
+`churn` and `textwall` hold their frame rate and spend less: −27% and −15% of a
+core. `gradients` reads −15% of CPU while pushing **a third more rendered bytes
+through the same window** — the autopilot renders as fast as the frame allows,
+so there the win shows up as frames rather than as idle.
+
+**Where the prediction was wrong.** §52 expected `deep` −50…70% and
+`churn`/`gradients` −20…30%. The second half was right and the first was not:
+`deep` is a chain of clamping containers, and the probe shows its repeats
+*disagree* 62% of the time — its sizes really are budget-shaped, so no rule that
+preserves the pixels can serve them. What paid instead was the row-shaped
+scenarios, where a whole memoised row is served at the second walk.
+
+**Still standing.** `dashboard` and `megalist` gain nothing (their frames are
+already small or window-bounded), `modifiers` gains little because a padded row
+never claims natural, and the environment leg of the key is unpinned. The next
+lever here is not a bigger memo: it is `_ScrollViewCore` asking for its content
+extent once instead of walking a ladder.

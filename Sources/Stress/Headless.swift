@@ -221,6 +221,14 @@ enum Headless {
         let lookups = memo.hits + memo.misses
         print(String(format: "  measure memo: %d hits / %d lookups (%.1f%%)",
             memo.hits, lookups, lookups > 0 ? Double(memo.hits) / Double(lookups) * 100 : 0))
+        // `TUIKIT_VERIFY_MEASURE_MEMO=1` re-measures every memo hit and reports
+        // any the fresh measurement disagrees with — the direct check on the
+        // memo's cross-budget claim, run over whichever scenario is at hand.
+        let mismatches = warm.renderCache?.measureMemoMismatches ?? []
+        if !mismatches.isEmpty {
+            print("  MEASURE MEMO MISMATCHES (\(mismatches.count)):")
+            for line in mismatches { print("    \(line)") }
+        }
         if let prune = warm.renderCache?.lastPruneSummary {
             print("  prune (last frame): \(prune)")
         }

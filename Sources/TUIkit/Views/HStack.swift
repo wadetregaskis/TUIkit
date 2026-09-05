@@ -96,6 +96,15 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         /// it a measure. See `fillsHeight(ofChildAt:)`.
         let childFillsHeightMask: UInt64
         let guideRun: AlignmentGuideRun?
+        /// Whether every measured child reported a ``ViewSize/isNaturalSize``,
+        /// so this row's size may claim one too — see `clipSizeThatFits`.
+        let childrenAreNatural: Bool
+        /// The tallest child answer this layout was built FROM, which is not
+        /// always ``height``: a child squeezed narrower than its ideal is
+        /// re-measured and can come back shorter, and the row's height is the
+        /// max of the *final* heights. See `clipSizeThatFits` for why the
+        /// difference matters.
+        let tallestConsumedChild: Int
 
         func fillsHeight(ofChildAt index: Int) -> Bool {
             index >= UInt64.bitWidth || childFillsHeightMask & (1 << UInt64(index)) != 0
@@ -131,6 +140,11 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // rigid, and one flexible sibling must not send the whole row back to
         // the measure it was avoiding.
         var childFillsHeightMask: UInt64 = 0
+        // A row's size is its children's, so its claim to be natural is theirs.
+        // Spacers take no part: they are not measured, and what they contribute
+        // (a minimum length and a fill flag) is the same at any budget.
+        var childrenAreNatural = true
+        var tallestConsumedChild = 0
         for (index, child) in children.enumerated() {
             if child.isSpacer {
                 ideal[index] = child.spacerMinLength ?? 0
@@ -141,6 +155,8 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 // only that sizeThatFits now goes through this SAME routine, so
                 // measure and render can no longer disagree.
                 let size = child.measure(proposal: .unspecified, context: context)
+                if !size.isNaturalSize { childrenAreNatural = false }
+                tallestConsumedChild = max(tallestConsumedChild, size.height)
                 ideal[index] = size.width
                 idealHeight[index] = size.height
                 fills[index] = size.isWidthFlexible
@@ -171,6 +187,8 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 finalHeight[index] = idealHeight[index]
             } else {
                 let size = child.measure(proposal: ProposedSize(width: widths[index], height: nil), context: context)
+                if !size.isNaturalSize { childrenAreNatural = false }
+                tallestConsumedChild = max(tallestConsumedChild, size.height)
                 finalHeight[index] = size.height
             }
             height = max(height, finalHeight[index])
@@ -197,7 +215,9 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
             fillsHeight: fillsHeight,
             childHeights: finalHeight,
             childFillsHeightMask: childFillsHeightMask,
-            guideRun: guideRun)
+            guideRun: guideRun,
+            childrenAreNatural: childrenAreNatural,
+            tallestConsumedChild: tallestConsumedChild)
     }
 
     /// Measures the HStack without rendering.
@@ -216,12 +236,26 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         guard !children.isEmpty else { return ViewSize.fixed(0, 0) }
         let layout = resolvedLayout(
             children, availableWidth: proposal.width ?? context.availableWidth, context: context)
+        // Natural when its children are AND the row is at least as tall as the
+        // tallest answer it was built from. A row reads the vertical budget
+        // nowhere: it measures children at their ideal, distributes WIDTH, and
+        // reports the tallest — unclamped, so a row taller than the space it was
+        // given still says so. Its own width question is the effective width
+        // (`proposal.width ?? context.availableWidth`), and its children are
+        // measured against `context.availableWidth`; the memo keys on both.
+        //
+        // The height test is the part that is easy to miss. A child's natural
+        // claim only reaches budgets down to its OWN height, and a child squeezed
+        // narrower than its ideal is re-measured and can come back shorter — so
+        // the row can end up shorter than an answer it consumed, and claiming
+        // natural there would offer the row at budgets where one of the answers
+        // underneath it had already lapsed.
         return ViewSize(
             width: layout.totalWidth,
             height: layout.height,
             isWidthFlexible: layout.fills,
             isHeightFlexible: layout.fillsHeight
-        )
+        ).declaringNaturalSize(layout.childrenAreNatural && layout.tallestConsumedChild <= layout.height)
     }
 
     /// `.window` size, computed analytically from the same append-while-fits
