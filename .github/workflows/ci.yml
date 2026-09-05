@@ -562,6 +562,56 @@ jobs:
         timeout-minutes: 30
         run: swift run Stress --selfcheck
 
+  # ── WebAssembly ────────────────────────────────────────────────────────────
+  # A compile lane for `wasm32-unknown-wasip1`, and a ratchet like the Windows
+  # one: everything listed here builds today, so a step going red means someone
+  # reached for POSIX in a module that had stopped needing it.
+  #
+  # The container is pinned to an exact patch on purpose. A Swift SDK loads only
+  # under the toolchain version it was built for, so `swift:6.3-noble` — which
+  # moves — would eventually pair a 6.3.x toolchain with a 6.3.3 SDK and fail
+  # for a reason that has nothing to do with this package. Pinning makes the SDK
+  # URL below deterministic; raising both together is the intended maintenance.
+  #
+  # 6.3 rather than 6.2: on 6.2.4 the compiler asserts on `TupleView`'s
+  # pack-expansion conformance and `TUIkitView` cannot be built for wasm at all
+  # (the same assertion that blocks the Linux static-SDK check).
+  wasm:
+    name: "WebAssembly · wasm32-unknown-wasip1"
+    needs: lint
+    runs-on: ubuntu-24.04
+    container: swift:6.3.3-noble
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Trust the workspace
+        run: git config --global --add safe.directory '*'
+
+      - name: Install the WebAssembly SDK
+        run: |
+          set -eux
+          url="https://download.swift.org/swift-6.3.3-release/wasm-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_wasm.artifactbundle.tar.gz"
+          curl -fsSL "$url" -o wasm-sdk.tar.gz
+          echo "cabfa08b73bb8ac783927ecd15fa386e99d0c139c5f232445067bcf58379cae7  wasm-sdk.tar.gz" | sha256sum -c -
+          swift sdk install wasm-sdk.tar.gz
+          swift sdk list
+
+      # `--static-swift-stdlib` is what points the compiler at the SDK's
+      # `swift_static` resources; without it Foundation is missing from an SDK
+      # that contains it. The SDK is named by bundle id rather than by triple
+      # because the bundle also installs an embedded-Swift SDK under the same
+      # triple, and SwiftPM picks between them arbitrarily.
+      - name: Build every module for WebAssembly
+        run: |
+          swift build --swift-sdk swift-6.3.3-RELEASE_wasm --static-swift-stdlib \
+            --target TUIkitCore --target TUIkitStyling --target TUIkitView --target TUIkitImage
+
+      - name: Build the umbrella and the Example app
+        run: |
+          swift build --swift-sdk swift-6.3.3-RELEASE_wasm --static-swift-stdlib \
+            --product Example -Xlinker -z -Xlinker stack-size=16777216
+
   # ── DocC Documentation ─────────────────────────────────────────────────────
   # Building the docs is NOT optional-extra: it is the only check that the
   # reference still covers the whole package. The build asserts that pages
@@ -624,7 +674,7 @@ jobs:
   gate:
     name: CI
     if: always()
-    needs: [lint, parity, macos, linux, windows_container, windows_native, docs, consumer]
+    needs: [lint, parity, macos, linux, wasm, windows_container, windows_native, docs, consumer]
     runs-on: ubuntu-24.04
     steps:
       - name: Check required lanes
@@ -636,6 +686,7 @@ jobs:
           parity:${{ needs.parity.result }}
           macos:${{ needs.macos.result }}
           linux:${{ needs.linux.result }}
+          wasm:${{ needs.wasm.result }}
           docs:${{ needs.docs.result }}
           windows_container:${{ needs.windows_container.result }}
           windows_native:${{ needs.windows_native.result }}"

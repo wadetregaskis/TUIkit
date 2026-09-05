@@ -1,5 +1,5 @@
 <p align="center">
-    <img alt="Platforms" src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux-005c00">
+    <img alt="Platforms" src="https://img.shields.io/badge/Platforms-macOS%20%7C%20Linux%20%7C%20WebAssembly-005c00">
     <img alt="Swift 6.2" src="https://img.shields.io/badge/Swift-6.2-00b300?logo=swift&logoColor=white">
     <img alt="i18n" src="https://img.shields.io/badge/i18n-7%20Languages-00d900">
     <img alt="License" src="https://img.shields.io/badge/License-MIT-00b300?style=flat">
@@ -266,6 +266,7 @@ For complete documentation, see the [Localization Guide](https://github.com/wade
 - **No singletons for state**: application state flows through the Environment system
 - **Pure ANSI rendering**: no ncurses runtime dependency; the only C is the bundled `stb_image` decoder, and only as the fallback where AppKit's `NSImage` is unavailable (selected via `canImport(AppKit)`, not a hard-coded platform list)
 - **Linux compatible**: works on macOS and Linux (XDG paths supported)
+- **Runs in a browser**: builds for `wasm32-unknown-wasip1`; `Tools/Web/build.sh` compiles the Example app to WebAssembly and `Tools/Web/serve.py` serves it into a terminal made of DOM ([how it works](Documentation/WebAssembly.md))
 - **Value types**: views are structs, just like SwiftUI
 
 ### Package dependencies

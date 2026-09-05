@@ -7,7 +7,7 @@ TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure
 | Requirement | Details |
 |-------------|---------|
 | **Swift 6.2** | `swift-tools-version: 6.2`. Language features up to 6.2 are fair game; nothing newer. |
-| **Cross-platform** | Must build and run on macOS and Linux. Windows is a work in progress — see below. |
+| **Cross-platform** | Must build and run on macOS and Linux. WebAssembly builds and runs (see below); Windows is a work in progress. |
 | **CI must pass** | All tests and linting must pass before merge. |
 
 ### What CI covers
@@ -29,6 +29,10 @@ swift.org. Deliberately **not** from the Xcode 27 beta, even though it bundles
 6.4 — the beta's 6.4 is an older build than the current branch snapshot, so it
 gives weaker early warning of upcoming-compiler breakage, which is the whole
 reason to run a 6.4 lane before 6.4 ships.
+
+WebAssembly is built by its own lane, on a pinned 6.3.3 container plus the
+matching Swift SDK — pinned because a Swift SDK loads only under the toolchain
+version it was built for.
 
 Linux additionally runs Swift 6.3 on arm64, and lint runs on Linux only — it
 gates everything else, so a style slip fails in a minute rather than after
@@ -61,6 +65,31 @@ Requiring it rather than the individual jobs matters for two reasons:
   required directly and it got skipped — because `lint` failed, say — the PR
   would look mergeable having built nothing. The gate treats `skipped` as a
   failure, so that cannot happen.
+
+### WebAssembly
+
+TUIkit builds for `wasm32-unknown-wasip1`, and the Example app runs in a browser
+— `Tools/Web/build.sh` compiles it, `Tools/Web/serve.py` serves it. The CI lane
+builds every module and the Example for wasm and is **binding**: what compiles
+for WebAssembly today has to keep compiling.
+
+Three things about the toolchain are worth knowing before you try it locally,
+because each fails in a way that does not name its cause:
+
+* **Xcode's compiler cannot do it.** It is built without the WebAssembly LLVM
+  target and stops at `No available targets are compatible with triple
+  wasm32-unknown-wasip1`. Use a swift.org toolchain (`swiftly install 6.3.3`).
+* **6.2 cannot do it either.** The compiler asserts on `TupleView`'s
+  pack-expansion conformance, exactly as it does for the Linux static SDK, so
+  `TUIkitView` will not build. 6.3 is fine.
+* **`--static-swift-stdlib` is required**, and the SDK must be named by its
+  bundle id rather than by the triple. Without the first, Foundation is missing
+  from an SDK that contains it; without the second, SwiftPM may pick the
+  embedded-Swift SDK that ships in the same bundle and has no standard library.
+
+The port's shape — what needed a platform arm, what does not work in a browser,
+and the two latent bugs it turned up in platform-independent code — is in
+[`Documentation/WebAssembly.md`](Documentation/WebAssembly.md).
 
 ### Windows
 
