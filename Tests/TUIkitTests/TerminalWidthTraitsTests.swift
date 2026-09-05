@@ -18,7 +18,8 @@ import Testing
 struct TerminalWidthTraitsTests {
 
     private static let warp = TerminalWidthTraits(
-        zwjSequences: .decomposedDroppingJoiners, skinTone: .detached)
+        zwjSequences: .decomposedDroppingJoiners, skinTone: .detached,
+        chromeOverhang: .keyboardSymbols)
     /// The raw-cluster truth on Warp (and the explorer's option): each kept
     /// joiner costs a column. The SHIPPED Warp walk drops the joiners instead
     /// (2026-08-28), so `Self.warp` above mirrors `widthTraits(of: .warp)`
@@ -315,7 +316,7 @@ struct TerminalWidthTraitsTests {
         // The other three hosts advance it 1, exactly the claim: untouched.
         for (traits, program) in [
             (Self.iTerm, TerminalClient.Program.iTerm2),
-            (.composing, .ghostty),
+            (TerminalClient.widthTraits(of: .ghostty), .ghostty),
             (Self.warp, .warp),
         ] as [(TerminalWidthTraits, TerminalClient.Program)] {
             TerminalWidthTraits.withTraits(traits) {
@@ -353,10 +354,38 @@ struct TerminalWidthTraitsTests {
         }
     }
 
-    @Test("Ghostty is the composing host")
+    /// Ghostty composes every CLUSTER — and since 2026-09-04 it is no longer
+    /// `.composing` whole, because the card read its `↵` painting over the
+    /// cell beside it. The two questions are independent, so this asserts them
+    /// separately rather than comparing the whole value.
+    @Test("Ghostty is the composing host, apart from one glyph's ink")
     func ghosttyComposes() {
-        #expect(TerminalClient.widthTraits(of: .ghostty) == .composing)
+        let ghostty = TerminalClient.widthTraits(of: .ghostty)
+        #expect(ghostty.zwjSequences == .composed && ghostty.skinTone == .merged)
+        #expect(ghostty.chromeOverhang == .returnArrow)
         #expect(TerminalClient.widthTraits(of: .unidentified) == .composing)
+    }
+
+    /// The measured (host, overhang) pairs, which is the whole of what
+    /// 2026-09-04's card reading changed. Kept here rather than in
+    /// `ChromeOverhangTests` because this is where the program-to-traits table
+    /// lives; that suite pins what each set then does to a claim.
+    @Test(
+        "Each program carries the chrome overhang its card reading showed",
+        arguments: [
+            (TerminalClient.Program.appleTerminal, TerminalWidthTraits.ChromeOverhang.contained),
+            (.iTerm2, .contained),
+            (.ghostty, .returnArrow),
+            (.warp, .keyboardSymbols),
+            // Neither was read — the card was run in the four native hosts —
+            // and an unmeasured host is assumed to keep its ink in its cells.
+            (.tmux, .contained),
+            (.unidentified, .contained),
+        ] as [(TerminalClient.Program, TerminalWidthTraits.ChromeOverhang)])
+    func chromeOverhangFollowsTheCardReading(
+        program: TerminalClient.Program, overhang: TerminalWidthTraits.ChromeOverhang
+    ) {
+        #expect(TerminalClient.widthTraits(of: program).chromeOverhang == overhang)
     }
 
     // MARK: - What the claim buys
@@ -623,7 +652,12 @@ struct TerminalWidthTraitsProcessTests {
         TerminalClient.simulated = .warp
         #expect(TerminalWidthTraits.current.zwjSequences == .decomposedDroppingJoiners,
                 "the picker must move the claim, not just the compensation")
+        // The overhang set rides along, which is the point of it being a
+        // trait: simulating a host has to move every claim that host carries,
+        // not just the cluster ones.
+        #expect(TerminalWidthTraits.current.chromeOverhang == .keyboardSymbols)
         TerminalClient.simulated = .ghostty
-        #expect(TerminalWidthTraits.current == .composing)
+        #expect(TerminalWidthTraits.current == TerminalClient.widthTraits(of: .ghostty))
+        #expect(TerminalWidthTraits.current.chromeOverhang == .returnArrow)
     }
 }

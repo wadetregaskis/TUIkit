@@ -32,11 +32,22 @@
 ///
 /// ## What this does not cover
 ///
-/// Only the two classes where TUIkit was **substituting** — the ones that can
-/// change a message. Classes that merely shear (Warp's keycaps and 〰️ at 3
-/// cells against a claim of 2, its tag-sequence flags at 3) are unchanged and
-/// still documented as limitations: they misalign, which is a visual defect,
-/// not a semantic one. Each would need its own measured rule.
+/// The two classes where TUIkit was **substituting** — the ones that can
+/// change a message — plus, since 2026-09-04, ``ChromeOverhang``. Classes that
+/// merely shear (Warp's keycaps and 〰️ at 3 cells against a claim of 2, its
+/// tag-sequence flags at 3) are unchanged and still documented as limitations:
+/// they misalign, which is a visual defect, not a semantic one. Each would
+/// need its own measured rule.
+///
+/// Chrome overhang is the first class to get one. It is here rather than in a
+/// table of its own for three reasons that are all this type's doing: it is a
+/// CLAIM, so it must move with the rest of the claim; ``generation`` is what
+/// tells the measurement caches a claim has changed, and a second host-keyed
+/// global would either bump this counter or serve measurements taken under
+/// another host's claim; and ``withTraits(_:operation:)`` is the scoped pin
+/// its tests need, which a second global would have to reimplement task-local
+/// and all. The codepoints themselves stay in `ChromeOverhang.swift` — this
+/// type selects among measured sets, it does not enumerate them.
 ///
 /// ## Reading and setting
 ///
@@ -120,14 +131,26 @@ public struct TerminalWidthTraits: Sendable, Equatable {
     /// How this host lays out a skin-tone cluster.
     public var skinTone: SkinTone
 
-    public init(zwjSequences: ZWJSequences = .composed, skinTone: SkinTone = .merged) {
+    /// Which of the framework's own chrome glyphs this host paints across two
+    /// cells while advancing one — see ``ChromeOverhang``, whose measured sets
+    /// are DISJOINT between two of the four hosts, which is why this is a
+    /// trait and not one table.
+    public var chromeOverhang: ChromeOverhang
+
+    public init(
+        zwjSequences: ZWJSequences = .composed,
+        skinTone: SkinTone = .merged,
+        chromeOverhang: ChromeOverhang = .contained
+    ) {
         self.zwjSequences = zwjSequences
         self.skinTone = skinTone
+        self.chromeOverhang = chromeOverhang
     }
 
     /// A host that composes everything into the two cells the layout would
-    /// naturally claim — the correct answer for a terminal TUIkit has not
-    /// measured, and the behaviour every terminal got before this existed.
+    /// naturally claim, and whose chrome stays inside its cells — the correct
+    /// answer for a terminal TUIkit has not measured, and the behaviour every
+    /// terminal got before this existed.
     public static let composing = Self()
 }
 

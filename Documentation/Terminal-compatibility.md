@@ -236,7 +236,7 @@ the emoji-class clusters below unless noted.
 
 ---
 
-### The framework's own chrome — advance measured 2026-09-04
+### The framework's own chrome — advance and ink measured 2026-09-04
 
 Until 2026-09-04 the width corpus had 116 rows for every class of cluster
 someone's *data* might contain and none for a glyph TUIkit itself draws. Every
@@ -251,86 +251,118 @@ every cell of every row inside it.
 **Measured on all four hosts: every one of the twenty-nine advances exactly one
 cell.** Ghostty 1.3.1, iTerm2 3.6.11, Apple Terminal 455.1 and Warp
 v0.2026.09.02 agree with each other and with the claim, with no Ambiguous-width
-divergence anywhere. Records:
+divergence anywhere. (The *ink* is a separate question with a different answer —
+eight of the rows paint two cells while advancing one, and not the same eight on
+every host. See "The ink half" below.) Records:
 `Tools/TerminalProbes/data/{ghostty-1.3.1,iTerm2,Apple-Terminal,Warp}-advance.json`,
 asserted by `ChromeGlyphAdvanceTests`.
 
-What remains open for these rows is `landing`/`ink` — where the glyph is
-painted and how many cells it covers — which needs pixels rather than DSR, and
-is the half the `↵` report is about. They stay in
-`TerminalLedgerConformanceTests.awaitingLandingMeasurement` until then.
+What remains open for these rows is `landing` — where the glyph is painted
+relative to its neighbours — which needs pixels rather than DSR. They stay in
+`TerminalLedgerConformanceTests.awaitingLandingMeasurement` until then. The
+`ink` half is answered below.
 
-#### The ink half: a mechanism, and no measurement yet
+#### The ink half: card-read 2026-09-04, and it is PER HOST
 
-The framework can now account for a chrome glyph that paints wider than it
-advances, in layout and in rendering both. The mechanism is
-`Sources/TUIkitCore/Extensions/ChromeOverhang.swift`, and **its table is
-empty**: nobody has measured the ink of any of these glyphs on any host. There
-is one user's observation of one glyph on one terminal, which is a report and
-not a measurement, and a table built from it would be a guess about the other
-twenty-eight rows and the other three hosts.
+A chrome glyph can paint two cells while advancing one — the grid intact, the
+ink over the line — and that is what the `↵` report from Ghostty was: the
+status bar's `Shortcut.enter` swallowing the space before its label, so
+`↵ activate` reads as `↵activate`. DSR cannot see it, because nothing moved.
 
-**The measurement is `Tools/TerminalProbes/overhang_card.py`** — a user-read
-card, because the machine version (`landing_probe.py`) needs screenshots and
-those need a Screen Recording grant this project does not have. It draws each
-of the twenty-nine glyphs in ONE cell between two flanks of solid magenta: ink
-on a flank is overhang, and which flank says which way. Two calibration rows
-(`█`, which must meet both flanks, and `a`, which must clear them) say whether
-the card is legible on the host at all before any row under them is believed.
-A third block draws the reported shape — `↵ activate` beside `↵  activate` —
-so the remedy can be judged where the defect was seen.
+**Instrument:** `Tools/TerminalProbes/overhang_card.py`, run inside each host
+and **read by a person**. It draws each of the 29 `chrome_key`/`chrome_glyph`
+rows in ONE cell between two flanks of solid magenta; ink on a flank is
+overhang, and which flank says which way. Two calibration rows (`█` must meet
+both flanks, `a` must clear them) say whether the card is legible on the host
+before any row under it is believed. This is a **paint** measurement of the
+kind a screenshot would give, not a DSR reply — the machine version
+(`landing_probe.py`) needs a Screen Recording grant this project does not
+have — so it carries a person's judgement where the advance records carry a
+terminal's own number.
 
-**Record the FONT and its size with the host and version.** Overhang is a font
-property at least as much as a host one, and a reading with no font named
-cannot be reproduced.
+**Read 2026-09-04** on Apple Terminal 455.1, iTerm2 3.6.11, Ghostty 1.3.1 and
+Warp v0.2026.09.02:
 
-**How the mechanism works, once a row is added.** A listed codepoint claims
-**two** cells on every host, every per-host advance model keeps reporting the
-measured **one**, and the existing `ECH(2)` + glyph + `CUF(1)` walk squares
-them — the same treatment SF Symbols, VS-15 chrome and lone regional indicators
-already take. The grid stays exactly where it is; the glyph simply gets a blank
-neighbour to overhang into.
+| Glyph | Codepoint | Corpus row | Apple Terminal | iTerm2 | Ghostty | Warp |
+|---|---|---|---|---|---|---|
+| `↵` | U+21B5 | `key_return` | — | — | **overhangs** | — |
+| `⎋` | U+238B | `key_escape` | — | — | — | **overhangs** |
+| `⏎` | U+23CE | `key_return_symbol` | — | — | — | **overhangs** |
+| `⌫` | U+232B | `key_backspace` | — | — | — | **overhangs** |
+| `⌦` | U+2326 | `key_delete` | — | — | — | **overhangs** |
+| `␣` | U+2423 | `key_space` | — | — | — | **overhangs** |
+| `⌥` | U+2325 | `key_option` | — | — | — | **overhangs** |
+| `⌘` | U+2318 | `key_command` | — | — | — | **overhangs** |
 
-Three consequences are worth naming because none of them is obvious:
+Every other chrome row is contained on every host: `⇥ ⇤ ↑ ↓ ← → ⇧ ⌃`, and all
+thirteen drawing glyphs (`◀ ▶ ▼ ▲ ● ◯ ◌ █ ▌ ▐ ▒ ─ │`) — which is the answer
+that mattered most, because a wide claim is never the remedy for a border. The
+CJK control `漢` claims two cells and overhangs neither flank on any host, and
+the calibration rows read as described everywhere, so the readings under them
+stand.
 
-- **The claim is host-independent, deliberately.** This is the rule stated for
-  Ghostty's SF Symbols below — a per-host claim buys a blank cell at the price
-  of a per-host layout difference — and it applies here in the same direction,
-  because the rule is about who pays rather than about which way the claim
-  moves: the claim covers the widest painter, and hosts that draw the glyph
-  narrow take one blank cell. The asymmetry is stronger here than there. An
-  over-claim wastes a cell; an under-claim puts one glyph's ink on top of
-  another's, which is the reported defect. And chrome is not a stray SF Symbol
-  in someone's data — making `↵`, `▶` and `●` measure differently per terminal
-  would make the framework's own column arithmetic host-dependent.
-- **The shortfall is ours, so it is owed everywhere.** It is not a terminal's
-  defect but the price of a claim TUIkit widened, so `TerminalQuirks` has no
-  switch to turn it off, the empty-quirk-set walk still emits it, and an
-  **unidentified** host — which otherwise receives no compensation at all —
-  gets `String.withChromeOverhangCompensation()`. Without that last one the
-  widened claim would shear rows on exactly the hosts that cannot be measured.
-  That walk compensates but does **not** normalize: the shared walk it borrows
-  also strips a redundant VS-16 off a tone cluster and decomposes ZWJ sequences,
-  and those are repairs calibrated against the four measured hosts. Handing them
-  to a terminal TUIkit could not name would rewrite its content — `☝️🏽` came
-  back as `☝🏽` — which is the one thing an unidentified client is documented
-  never to do. It is `normalizing: false`, and short-circuits to `self` while
-  the table is empty, because the walk's byte gate admits any row carrying an
-  emoji and "no row is listed" would otherwise not be enough to make the path a
-  no-op.
+**Recorded caveat: the FONT was not captured with this reading.** Overhang is a
+font property at least as much as a host one, and the card's own instructions
+ask for the font and its size. What is recorded here is host + version + date,
+so a re-run under a different font may disagree — treat a contradicting reading
+as a font difference to be recorded, not as this one being wrong.
+
+**The claim follows the host, and that is a departure.** TUIkit's standing rule
+is that a claim is host-independent and covers the widest painter, with narrow
+painters taking a blank cell — the rule stated for Ghostty's SF Symbols below.
+Applied here it would give one table, the union of the eight codepoints above,
+and that union is **wrong for 24 of the 32 measured (host, glyph) pairs** —
+eight codepoints against four hosts, of which only eight cells of the table
+above say "overhangs". A stray blank cell after all eight glyphs on Apple
+Terminal and iTerm2 (16), after seven of them on Ghostty, and after `↵` on
+Warp. The two overhanging sets are
+**disjoint** — Ghostty's one glyph is not among Warp's seven — so no single
+claim can be right for both, whichever way it leans. This is the case the
+`TerminalWidthTraits` note anticipated when it said such a class "would need
+its own measured rule": it has one now, on all four hosts, so the set lives in
+`TerminalWidthTraits.chromeOverhang` alongside the other two host-dependent
+claims and moves with them (including the cache-invalidating `generation` bump
+and the `withTraits(_:)` scoped pin the tests need).
+
+**The mechanism.** A codepoint listed for the host in force claims **two**
+cells, every per-host advance model keeps reporting the measured **one**, and
+the existing `ECH(2)` + glyph + `CUF(1)` walk squares them — the same treatment
+SF Symbols, VS-15 chrome and lone regional indicators already take. The grid
+stays exactly where it is; the glyph simply gets a blank neighbour to overhang
+into. Four consequences are worth naming because none of them is obvious:
+
+- **An unmeasured host claims one.** tmux and `unidentified` take
+  `ChromeOverhang.contained` with every terminal nobody has run the card in.
+  Widening there would scatter a blank cell after every shortcut glyph in the
+  status bar for a defect nobody has seen on that host — and the two hosts that
+  do have it disagree about which glyphs, so there is no majority to guess with.
+- **The shortfall is ours, so it is owed by whoever emits under the claim.** It
+  is not a terminal's defect but the price of a claim TUIkit widened, so
+  `TerminalQuirks` has no switch to turn it off, the empty-quirk-set walk still
+  emits it, and an **unidentified** host — which otherwise receives no
+  compensation at all — gets `String.withChromeOverhangCompensation()`. Under
+  an unidentified host's own traits that walk is the identity; it does the work
+  when a diagnostic pinned a measured host's claims. That walk compensates but
+  does **not** normalize: the shared walk it borrows also strips a redundant
+  VS-16 off a tone cluster and decomposes ZWJ sequences, and those are repairs
+  calibrated against the four measured hosts. Handing them to a terminal TUIkit
+  could not name would rewrite its content — `☝️🏽` came back as `☝🏽` — which is
+  the one thing an unidentified client is documented never to do.
+- **The compensation gate stays the UNION of all four hosts.** It decides only
+  whether the per-`Character` walk runs, and the walk then asks the claim in
+  force per character. Admitting a row whose glyph this host draws contained
+  costs a walk that changes nothing; skipping one it smears shears the row. It
+  is derived from the tables rather than written beside them, so the two cannot
+  drift (`CompensationGateTests`).
 - **Box Drawing and Block Elements (`─ │ █ ▌ ▐ ▒`) can never be listed**, and
-  the predicate refuses them rather than trusting whoever edits the table. For
-  a border glyph a two-cell claim is not a remedy but a second defect: every
-  row inside the border loses a column. If one of those is ever measured to
-  overhang, the fix is a different glyph — chrome glyph selection — not a wider
-  claim. The card still shows them, because the reading is worth having either
-  way.
+  the predicate refuses them rather than trusting whoever edits a table. For a
+  border glyph a two-cell claim is not a remedy but a second defect: every row
+  inside the border loses a column. If one is ever measured to overhang, the fix
+  is a different glyph — chrome glyph selection — not a wider claim. The card
+  measured all six contained on all four hosts.
 
-While the table is empty every one of those paths folds to the behaviour that
-shipped before it existed: the claim is unchanged, no model reports a
-shortfall, and the compensation gate admits exactly the bytes it always did.
-`ChromeOverhangTests` pins that, and fails the moment a row is added — which is
-the prompt to record the reading here in the same commit.
+`ChromeOverhangTests` holds the matrix — four hosts against 29 rows — so a
+reading edited into one host's table cannot silently become every host's.
 
 ## Identifying the host terminal
 
@@ -819,6 +851,12 @@ before the render loop is built.
   other three hosts swallow them at zero width. This is why TUIkit does not
   wrap right-to-left runs in an override — see
   [Right-to-left text](#right-to-left-text--measured-2026-09-01-in-part).
+- **The framework's own chrome keeps its ink inside its cells** — card-read on
+  455.1, 2026-09-04 (`overhang_card.py`): not one of the 29 `chrome_key` /
+  `chrome_glyph` rows marks a flank, so nothing here takes the widened
+  chrome-overhang claim Ghostty's `↵` and Warp's seven keyboard symbols do. A
+  negative reading, recorded because a host-independent table would have put a
+  stray blank cell after seven glyphs of every status bar drawn here.
 
 ### Input behaviour
 
@@ -944,6 +982,10 @@ non-default setup.
   TALLER than the empty part here. So `TrackStyle.block` (and `.blockFine`)
   paint the empty run as a solid *background* instead of a `░` glyph,
   giving a uniform-height two-tone bar on every terminal.
+- **The framework's own chrome keeps its ink inside its cells** — card-read on
+  3.6.11, 2026-09-04 (`overhang_card.py`): none of the 29 chrome rows marks a
+  flank, the same negative reading Apple Terminal gives and the reason the
+  overhang claim is per host rather than the union of Ghostty's and Warp's.
 
 ### Input behaviour
 
@@ -1091,21 +1133,20 @@ is deliberately NOT applied here — it would discard a correct rendering.
   14t/18t, which agree within ~1.4% (ioctl **2.154**, CSI 2.125 — default
   font). Slightly taller than the 2.0 default; auto-detection handles it.
 - **`↵` (U+21B5) paints wider than it advances — advance measured 2026-09-04,
-  ink still unmeasured.** User-reported: the status bar's `Shortcut.enter`
-  swallows the space before the label beside it, so `↵ activate` reads as
-  `↵activate`. **The advance is 1**, here and on all three other hosts, so
-  nothing shifts and the framework's claim of one cell is right. Whatever
-  Ghostty is doing it is doing to the INK alone — the glyph overhangs its cell
-  and there is a blank in the next one for it to overhang into. U+21B5 is East
-  Asian Width *Neutral*, so no width table predicts this; it is a host or font
+  ink card-read the same day.** User-reported first: the status bar's
+  `Shortcut.enter` swallows the space before the label beside it, so
+  `↵ activate` reads as `↵activate`. **The advance is 1**, here and on all
+  three other hosts, so nothing shifts — what Ghostty does it does to the INK
+  alone. `overhang_card.py` confirmed it: `↵` marks the right-hand flank here,
+  and it is the ONLY one of the 29 chrome rows that does. U+21B5 is East Asian
+  Width *Neutral*, so no width table predicts this; it is a host or font
   rendering decision, and it does not disturb the grid.
 
-  The framework can now account for it — a widened claim plus the ordinary
-  `ECH`+`CUF`, see "The ink half" above — but **has not**, because this is
-  still a report rather than a reading. Run
-  `Tools/TerminalProbes/overhang_card.py` here, note the font and its size, and
-  add `0x21B5` to `chromeOverhangCodepoints` if the right-hand flank carries
-  ink.
+  Shipped since that reading: Ghostty's traits carry
+  `ChromeOverhang.returnArrow`, so `↵` claims two cells **on this host only**
+  and the ordinary `ECH(2)` + glyph + `CUF(1)` gives its ink the neighbouring
+  cell. Warp smears seven other glyphs and not this one, which is why the claim
+  is per host — see "The ink half" above.
 
 ### Input behaviour
 
@@ -1225,6 +1266,16 @@ named foreground it judges illegible; that banded every 16-colour image until
   `v0.2026.08.26.17.59.stable_01` (landing record, `ink` column) once Screen
   Recording came back on 2026-08-28: all four facts for all 69 previously
   measured rows reproduced with **zero drift**, this ink split included.
+- **Seven keyboard symbols paint two cells while advancing one** — `⎋` U+238B,
+  `⏎` U+23CE, `⌫` U+232B, `⌦` U+2326, `␣` U+2423, `⌥` U+2325, `⌘` U+2318.
+  Card-read on `v0.2026.09.02` (2026-09-04, `overhang_card.py`): each marks a
+  flank, while the advance battery the same day put all 29 chrome rows at
+  exactly 1 here. **`↵` U+21B5 is NOT among them** — the glyph the equivalent
+  Ghostty reading is entirely about — so the two hosts' overhanging sets are
+  disjoint and the claim had to follow the host. Warp's traits carry
+  `ChromeOverhang.keyboardSymbols`, so these seven claim two cells on this host
+  and take the ordinary `ECH(2)` + glyph + `CUF(1)`. See "The ink half" above
+  for the table and the reasoning; the font was not captured with the reading.
 - **OVER-advancers, unhandled** (no escape can pull a cursor back to a
   column the glyph has already painted over — the seven entries in
   `TerminalLedgerConformanceTests.knownAdvanceDivergences`, all Warp's):

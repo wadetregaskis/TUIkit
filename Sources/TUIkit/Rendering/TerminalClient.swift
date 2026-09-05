@@ -268,10 +268,17 @@ public struct TerminalClient: Sendable, Equatable {
     /// claim — see ``TerminalWidthTraits`` for why that trade was
     /// worth reversing.
     ///
-    /// Measured on the alternate screen, 2026-08-26. Every entry is a
-    /// self-consistent host behaviour, meaning paint equals advance, so a
+    /// Measured on the alternate screen, 2026-08-26. The two cluster classes
+    /// are self-consistent host behaviours, meaning paint equals advance, so a
     /// matching claim needs no compensation at all: the CUF machinery simply
-    /// stops firing for these classes.
+    /// stops firing for those classes.
+    ///
+    /// ``TerminalWidthTraits/chromeOverhang`` is the opposite kind of entry and
+    /// the reason that sentence is no longer about all of them: it names the
+    /// glyphs where paint and advance DIVERGE on this host (ink two cells,
+    /// cursor one — card-read 2026-09-04), so the claim it publishes is
+    /// deliberately wider than the advance and the ECH+CUF walk fires for
+    /// exactly those glyphs.
     public static func widthTraits(of program: Program) -> TerminalWidthTraits {
         switch program {
         case .appleTerminal:
@@ -297,14 +304,21 @@ public struct TerminalClient: Sendable, Equatable {
             // are the treatments with nothing measurably wrong — at the cost
             // of component glyphs instead of composed ones, and one blank
             // column inside a separated skin tone.
+            // Its chrome, in contrast, is contained: the overhang card read
+            // 2026-09-04 marked no flank on any of the 29 rows.
             TerminalWidthTraits(
                 zwjSequences: .decomposedDroppingJoiners,
                 skinTone: .separated)
         case .iTerm2:
+            // Chrome contained here too — same card, same date.
             TerminalWidthTraits(zwjSequences: .composed, skinTone: .detachedOnBMPBases)
         case .ghostty:
-            // The one host that composes everything.
-            .composing
+            // The one host that composes every cluster — and the one whose ↵
+            // (U+21B5) paints over its right-hand neighbour, which is a
+            // separate question from composition and the only row the overhang
+            // card marked here (2026-09-04). Warp smears seven OTHER glyphs
+            // and not this one, which is why the set follows the host.
+            TerminalWidthTraits(chromeOverhang: .returnArrow)
         case .warp:
             // Dropping rather than keeping the joiners (changed 2026-08-28):
             // Warp never composes a ZWJ sequence — it draws the components
@@ -314,7 +328,13 @@ public struct TerminalClient: Sendable, Equatable {
             // adjacent, nets exactly the segment sum (👨‍👩‍👧‍👦 8, 👩🏽‍🚀 6,
             // ❤️‍🔥 4, 🏳️‍🌈 4), and lands sequential AND absolute followers
             // true. The user judged the dropped forms strictly superior.
-            TerminalWidthTraits(zwjSequences: .decomposedDroppingJoiners, skinTone: .detached)
+            //
+            // Its chrome smears in the other direction from Ghostty's: ⎋ ⏎ ⌫
+            // ⌦ ␣ ⌥ ⌘ paint onto the flank, ↵ does not (card-read 2026-09-04).
+            TerminalWidthTraits(
+                zwjSequences: .decomposedDroppingJoiners,
+                skinTone: .detached,
+                chromeOverhang: .keyboardSymbols)
         case .tmux:
             // NOT widened, deliberately. Measured 2026-08-26, tmux 3.7b does
             // not split by base plane the way iTerm2 does: 👍🏽 🙏🏽 👋🏽 merge
@@ -329,10 +349,19 @@ public struct TerminalClient: Sendable, Equatable {
             // every attached client renders kept tones), and this enum stays
             // narrow: a widened claim would have to be wrong in one direction
             // or the other for half the set, and stripping aligns rows.
+            //
+            // Its chrome ink is unread — the overhang card was run on the four
+            // native hosts, not inside a compositor — so it takes `.contained`
+            // with every other unmeasured host.
             .composing
         case .unidentified:
             // A terminal with no measurements is assumed to compose, for the
-            // same reason it is assumed to render correctly.
+            // same reason it is assumed to render correctly — and its chrome
+            // is assumed CONTAINED, which is the same reasoning pointed at the
+            // one class where TUIkit's claim is deliberately wider than the
+            // advance. Widening here would scatter a blank cell after every
+            // shortcut glyph on a host where nobody has seen the defect, and
+            // the two hosts that do have it disagree about which glyphs.
             .composing
         }
     }
@@ -442,9 +471,11 @@ public struct TerminalClient: Sendable, Equatable {
             // Not "no compensation" any more, but "no HOST compensation". An
             // unidentified terminal is still assumed to have no defects of its
             // own; the chrome-overhang class is not one of its defects but the
-            // price of a claim TUIkit widened for every host, so it is owed
-            // here too — see ``String/withChromeOverhangCompensation()``. With
-            // the table empty this returns `text` unchanged.
+            // price of a claim TUIkit widened, so it is owed wherever that
+            // claim is in force — see
+            // ``String/withChromeOverhangCompensation()``. Under this host's
+            // own traits nothing is widened, so this returns `text` unchanged;
+            // it does the work when a diagnostic pinned another host's claims.
             return text.withChromeOverhangCompensation()
         }
     }

@@ -42,11 +42,18 @@ reads correctly, which the flanks cannot.
 
 **Overhang is a FONT property at least as much as a host one**, so record the
 font and its size next to the host and version — a reading with no font named
-is not reproducible. Put the reading in
-`Documentation/Terminal-compatibility.md`, and add one row per overhanging
-codepoint to `chromeOverhangCodepoints` in
+is not reproducible. (The 2026-09-04 reading recorded host, version and date
+and NOT the font, which is the one gap in it.)
+
+Put the reading in `Documentation/Terminal-compatibility.md`, and add one row
+per right-overhanging codepoint to THIS HOST's set in
 `Sources/TUIkitCore/Extensions/ChromeOverhang.swift`, which widens the claim to
-two cells and lets the existing ECH+CUF walk keep the grid where it is.
+two cells on that host and lets the existing ECH+CUF walk keep the grid where
+it is. The sets are per host because the 2026-09-04 reading came out that way:
+Ghostty smears `↵` and nothing else, Warp smears seven OTHER keyboard symbols
+and not `↵`, and Apple Terminal and iTerm2 smear nothing — disjoint answers, so
+a single table would be wrong for one host or the other. A host with no set of
+its own claims one cell for everything, which is what an unread host gets.
 
 Box Drawing and Block Elements (`─ │ █ ▌ ▐ ▒`) are shown here too, and they are
 the one group that must NOT be added to that table: a two-cell border is not a
@@ -153,9 +160,10 @@ def main():
     print("      <id>  <U+XXXX>  left | right | none")
     print()
     print("  Into Documentation/Terminal-compatibility.md, and one entry per")
-    print("  right-overhanging codepoint into `chromeOverhangCodepoints` in")
+    print("  right-overhanging codepoint into THIS HOST's set in")
     print("  Sources/TUIkitCore/Extensions/ChromeOverhang.swift — never from a")
-    print("  report, only from this card.")
+    print("  report, only from this card. A host with no set claims one cell")
+    print("  for every glyph; the four native hosts were read 2026-09-04.")
     print()
     print("  This terminal says: TERM=%s TERM_PROGRAM=%s %s"
           % (os.environ.get("TERM", "?"),

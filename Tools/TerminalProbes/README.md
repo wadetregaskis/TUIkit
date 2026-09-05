@@ -58,10 +58,15 @@ when unset), the visual/aspect probes print to the terminal.
   flanks, `a` must clear them) say whether the card is legible on the host
   before any row under them is believed, and a third block draws the reported
   shape (`<glyph> label` beside `<glyph>  label`) so the remedy can be judged
-  where the defect was seen. **UNMEASURED on every host** — the mechanism it
-  feeds (`Sources/TUIkitCore/Extensions/ChromeOverhang.swift`) ships with an
-  empty table on purpose. Record the FONT and its size with the host: overhang
-  is a font property at least as much as a host one.
+  where the defect was seen. **READ on all four hosts 2026-09-04**, and the
+  answer is per host: Ghostty smears `↵` alone, Warp smears `⎋ ⏎ ⌫ ⌦ ␣ ⌥ ⌘`
+  and NOT `↵`, Apple Terminal and iTerm2 smear nothing, and no drawing glyph
+  smears anywhere. The mechanism it feeds is
+  `TerminalWidthTraits.chromeOverhang` with the sets in
+  `Sources/TUIkitCore/Extensions/ChromeOverhang.swift`; the reading is written
+  up in Terminal-compatibility.md, "The ink half". Record the FONT and its size
+  with the host — overhang is a font property at least as much as a host one,
+  and the 2026-09-04 reading did NOT capture it, which is the one gap in it.
 - `visual_card.py` — static `|<c>|<c>|<c>|X` alignment card with a column
   ruler, for screenshot inspection of PAINTED width (which DSR can't see),
   merged-vs-split clusters, seams, and swatches. It answers exactly ONE of a

@@ -66,14 +66,17 @@ extension String {
     /// Box drawing and block elements are `E2 94`–`E2 96`, and CJK is `E3`–
     /// `E9`; none of them match, which is the point.
     ///
-    /// The one exception is the chrome-overhang table (`ChromeOverhang.swift`),
-    /// whose glyphs ARE ordinary BMP chrome: widening their claim gives them a
-    /// shortfall to compensate, so the gate has to admit them or the walk never
-    /// sees them and the widened claim shears the row. Their second bytes come
-    /// from ``chromeOverhangGateMask``, derived from the table itself so the
-    /// two cannot drift, and that mask is **zero while the table is empty** —
-    /// which is the shipped state, so today this gate admits exactly what it
-    /// always did.
+    /// The one exception is the chrome-overhang tables
+    /// (`ChromeOverhang.swift`), whose glyphs ARE ordinary BMP chrome:
+    /// widening their claim gives them a shortfall to compensate, so the gate
+    /// has to admit them or the walk never sees them and the widened claim
+    /// shears the row. Their second bytes come from
+    /// ``chromeOverhangGateMask``, derived from the tables themselves so the
+    /// two cannot drift, and it is the UNION of every host's set even though
+    /// the claim is per host: this gate decides only whether the walk runs, and
+    /// the walk asks the claim in force per character. Admitting a row whose
+    /// glyph does not overhang on THIS host costs a walk that changes nothing;
+    /// skipping one that does shears the row.
     ///
     /// This is an over-approximation on purpose — `0xEF` admits all of
     /// U+F000–U+FFFF and the joiner pair admits U+2000–U+20FF — because a
@@ -655,13 +658,18 @@ extension String {
     /// unidentified host's content — `☝️🏽` came out as `☝🏽` — which is exactly
     /// the thing this client is documented never to do.
     ///
-    /// While the table is empty this is the identity function on every input,
-    /// and the first line is what makes that true rather than merely likely:
-    /// the walk's own gate admits any line carrying an emoji, so without the
-    /// short-circuit an unidentified host would still rebuild every such row to
-    /// produce the same bytes.
+    /// An unidentified host's OWN traits widen nothing
+    /// (``TerminalWidthTraits/ChromeOverhang/contained``), so in an ordinary
+    /// unidentified process this is the identity function on every input — and
+    /// the first line is what makes that true rather than merely likely: the
+    /// walk's own gate admits any line carrying an emoji, so without the
+    /// short-circuit an unidentified host would still rebuild every such row
+    /// to produce the same bytes. It has work to do when the claim in force
+    /// came from somewhere else — a diagnostic pinning a measured host's
+    /// traits while emitting through this path — which is why the guard asks
+    /// the traits rather than assuming them.
     public func withChromeOverhangCompensation() -> String {
-        guard !chromeOverhangCodepoints.isEmpty else { return self }
+        guard !TerminalWidthTraits.current.chromeOverhang.codepoints.isEmpty else { return self }
         return withCursorForwardCompensation(erasingUnderGlyph: true, normalizing: false) {
             $0.unidentifiedHostCursorAdvance
         }

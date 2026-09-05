@@ -20,10 +20,12 @@ import Testing
 /// reported painting two cells in Ghostty despite being EAW *Neutral*, which no
 /// width table predicts.
 ///
-/// Measured: **all twenty-nine advance exactly one cell on all four hosts.** The
-/// claim is right and no row shifts anywhere. Whatever Ghostty does with `↵` it
-/// does to the INK alone, which is a different measurement (`landing`/`ink`,
-/// still outstanding — see `TerminalLedgerConformanceTests`).
+/// Measured: **all twenty-nine advance exactly one cell on all four hosts.** No
+/// row shifts anywhere. Whatever Ghostty does with `↵` it does to the INK
+/// alone, which is a different measurement — read from the overhang card on
+/// 2026-09-04 (`ChromeOverhangTests`), and the reason the claim asserted here
+/// is now the claim of the host whose record is being read rather than one
+/// number for all four.
 ///
 /// This reads the `advance_probe.py` records rather than restating their
 /// numbers, so re-running the probe on a new version of a host updates the test
@@ -39,14 +41,22 @@ struct ChromeGlyphAdvanceTests {
     /// richer landing records.
     private static let chromeClasses: Set<String> = ["chrome_key", "chrome_glyph"]
 
-    private static let hosts: [(name: String, file: String)] = [
-        ("Ghostty", "ghostty-1.3.1-advance.json"),
-        ("iTerm2", "iTerm2-advance.json"),
-        ("Apple Terminal", "Apple-Terminal-advance.json"),
-        ("Warp", "Warp-advance.json"),
+    /// The program is carried alongside the record because the CLAIM is per
+    /// host now: since 2026-09-04 the overhang card's reading widens `↵` on
+    /// Ghostty and seven other glyphs on Warp, so "what does the framework
+    /// claim for this row" cannot be asked without saying whose terminal.
+    private static let hosts: [(name: String, file: String, program: TerminalClient.Program)] = [
+        ("Ghostty", "ghostty-1.3.1-advance.json", .ghostty),
+        ("iTerm2", "iTerm2-advance.json", .iTerm2),
+        ("Apple Terminal", "Apple-Terminal-advance.json", .appleTerminal),
+        ("Warp", "Warp-advance.json", .warp),
     ]
 
-    private static let records: [(name: String, advances: [String: Advance])] = {
+    private typealias HostRecord = (
+        name: String, program: TerminalClient.Program, advances: [String: Advance]
+    )
+
+    private static let records: [HostRecord] = {
         let directory = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // TUIkitTests/
             .deletingLastPathComponent()  // Tests/
@@ -62,7 +72,7 @@ struct ChromeGlyphAdvanceTests {
                 // "measured and fine".
                 fatalError("Cannot read the advance record \(url.path)")
             }
-            return (host.name, record.advances)
+            return (host.name, host.program, record.advances)
         }
     }()
 
@@ -88,28 +98,34 @@ struct ChromeGlyphAdvanceTests {
         }
     }
 
-    @Test("The framework claims what the terminals do, unless the ink says otherwise")
+    @Test("The framework claims what the terminals do, unless that host's ink says otherwise")
     func theClaimCoversTheMeasurement() {
-        for row in Self.chromeRows {
-            let character = Character(row.text)
-            let claimed = character.terminalWidth
-            // A glyph in the overhang table (`ChromeOverhang.swift`) claims the
-            // two cells its INK covers while every host still advances it one,
-            // and the shortfall is what the ECH+CUF walk exists to close — so
-            // for those rows the claim legitimately EXCEEDS the advance, and
-            // `ChromeOverhangTests` is where that pair is checked. For every
-            // other row the two must still be equal: an unexplained gap is the
-            // shear this suite was written to catch.
-            let overhangs = character.isOverhangingChromeGlyph
-            for host in Self.records {
-                guard let measured = host.advances[row.id] else { continue }
-                #expect(
-                    claimed >= measured.advance,
-                    "\(row.id) \(row.text): claimed \(claimed), \(host.name) advanced \(measured.advance)")
-                if !overhangs {
+        for host in Self.records {
+            // Under THIS host's claims, because since 2026-09-04 they differ:
+            // a glyph in the overhang tables (`ChromeOverhang.swift`) claims
+            // the two cells its ink covers on the host that was measured to
+            // smear it, while every host still advances it one. Asking the
+            // question under the default traits — which is what this test did
+            // when the table was empty and host-independent — would assert the
+            // claim of a host that is not the one whose record it is reading.
+            TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: host.program)) {
+                for row in Self.chromeRows {
+                    let character = Character(row.text)
+                    let claimed = character.terminalWidth
+                    guard let measured = host.advances[row.id] else { continue }
+                    // The shortfall on a smeared row is what the ECH+CUF walk
+                    // exists to close, and `ChromeOverhangTests` is where that
+                    // pair is checked. For every other row the two must still
+                    // be equal: an unexplained gap is the shear this suite was
+                    // written to catch.
                     #expect(
-                        claimed == measured.advance,
+                        claimed >= measured.advance,
                         "\(row.id) \(row.text): claimed \(claimed), \(host.name) advanced \(measured.advance)")
+                    if !character.isOverhangingChromeGlyph {
+                        #expect(
+                            claimed == measured.advance,
+                            "\(row.id) \(row.text): claimed \(claimed), \(host.name) advanced \(measured.advance)")
+                    }
                 }
             }
         }

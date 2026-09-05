@@ -190,9 +190,12 @@ struct TerminalLedgerConformanceTests {
         "latin_zwj", "latin_zwnj", "bidi_lrm", "bidi_rlm",
         // The framework's own chrome, added 2026-09-04. Their ADVANCE is
         // measured — one cell on all four hosts, asserted by
-        // `ChromeGlyphAdvanceTests` — but `landing`/`ink` need pixels, and that
-        // is the half the `↵` report is about: a glyph can overhang its cell
-        // without disturbing the grid.
+        // `ChromeGlyphAdvanceTests` — and the ink question the `↵` report was
+        // about was answered the same day by `overhang_card.py`, a card a
+        // person reads (`ChromeOverhangTests`, and `TerminalWidthTraits`
+        // carries the per-host answer). What is still missing is this
+        // LEDGER's own landing/ink columns, which come from `landing_probe.py`
+        // and need the screenshots the card exists to do without.
         "key_escape", "key_return", "key_return_symbol", "key_tab", "key_backtab",
         "key_backspace", "key_delete", "key_space",
         "key_arrow_up", "key_arrow_down", "key_arrow_left", "key_arrow_right",

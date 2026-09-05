@@ -248,6 +248,11 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
             case .keepDetachedOnBMPBases: .detachedOnBMPBases
             case .keep, .stripAll, .stripTmuxDetached, .pullBack: .merged
             }
+        // `chromeOverhang` takes its default: a terminal being explored is by
+        // definition one whose INK nobody has read, and that reading is not
+        // something these switches can stand in for — the two hosts measured
+        // to overhang disagree about which glyphs do it. An explorer who wants
+        // a measured host's claim pins that host's traits directly.
         return TerminalWidthTraits(
             zwjSequences: zwjSequences ? .decomposedDroppingJoiners : .composed,
             skinTone: skinTone)
@@ -298,10 +303,11 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         // Chrome whose ink overhangs its cell (`ChromeOverhang.swift`) has NO
         // switch, unlike everything else here, and that is deliberate: it is
         // not one of this terminal's defects but the price of a claim TUIkit
-        // widened to two cells for every host. Every host measured advances
-        // these by one, so the shortfall — and the CUF that closes it — is
-        // owed unconditionally, and an unmeasured terminal explored through
-        // these switches must not be able to switch it off and shear its rows.
+        // widened to the two cells the ink covers. Which glyphs those are is
+        // per host, and it is the CLAIM IN FORCE that decides — not this
+        // switch set — so an explorer cannot turn the repair off and shear
+        // rows under a claim they pinned. Every host measured advances these
+        // by one, whichever host is painting.
         if cluster.isOverhangingChromeGlyph { return 1 }
         if let composed = composedAdvance(of: cluster, width: width) {
             return composed
@@ -481,8 +487,11 @@ extension String {
         // TUIkit widened, not to the terminal (`ChromeOverhang.swift`), so it
         // is owed even here. Skipping the walk on `isEmpty` alone sheared every
         // row carrying a listed glyph — caught by the conservation sweep, which
-        // is what it is for.
-        guard !quirks.isEmpty || !chromeOverhangCodepoints.isEmpty else { return stripped }
+        // is what it is for. The second clause asks the traits in force, which
+        // is where the widened claim lives, rather than a table: an explorer
+        // who pins a measured host's claims gets that host's repair.
+        guard !quirks.isEmpty || !TerminalWidthTraits.current.chromeOverhang.codepoints.isEmpty
+        else { return stripped }
 
         var result = ""
         result.reserveCapacity(stripped.count + 8)

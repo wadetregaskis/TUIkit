@@ -312,7 +312,14 @@ extension Character {
         }
         guard mayWiden else { return nil }
         let traits = TerminalWidthTraits.current
-        guard traits != .composing else { return nil }
+        // NOT `traits != .composing`, which is the whole value: the traits
+        // carry a third dimension — the chrome-overhang set — that no cluster
+        // reaching here can contain (it is single-scalar chrome, and this
+        // function only runs for a joiner or a Fitzpatrick modifier). Ghostty
+        // differs from `.composing` in exactly that dimension, so the whole-
+        // value test would send every ZWJ and tone cluster on that host down
+        // the decomposition path to be told `nil`.
+        guard traits.zwjSequences != .composed || traits.skinTone != .merged else { return nil }
         return decomposedWidth(scalars, traits: traits)
     }
 
@@ -534,9 +541,11 @@ extension Unicode.Scalar {
         // Chrome whose INK overhangs the single cell every host advances it —
         // claimed 2 so the neighbouring cell is left blank for the overhang to
         // land in, with the per-host models reporting the measured 1 and the
-        // shared CUF closing the difference. See `ChromeOverhang.swift`; the
-        // table is empty until a card reading fills it, so this is a constant
-        // `false` today.
+        // shared CUF closing the difference. See `ChromeOverhang.swift`. Which
+        // glyphs those are follows the HOST (Ghostty ↵; Warp ⎋ ⏎ ⌫ ⌦ ␣ ⌥ ⌘;
+        // nothing on Apple Terminal or iTerm2), so the call below reads the
+        // traits in force — and answers `false` outright under the default
+        // traits, which is every unmeasured host.
         //
         // Placed AFTER the Box Drawing / Block Elements fast path, which is
         // both the cheap ordering and the safe one: those glyphs return above
