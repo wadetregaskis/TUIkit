@@ -112,6 +112,11 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// become a photograph's own colours.
     let adaptive: Adaptive?
 
+    /// The exact-search index for a palette large enough to want one — see
+    /// ``SearchIndex``. A reference, so every copy shares one; not part of
+    /// ``Equatable``, which is about the colours.
+    let search = SearchIndexHandle()
+
     /// An unanswered ``adaptive(_:by:)`` request.
     public struct Adaptive: Sendable, Equatable {
         /// Which `count` colours — see ``Adaptation``.
@@ -314,6 +319,10 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// step. See ``DitheringMode``.
     func nearestIndex(to pixel: RGBA) -> Int {
         guard mapping == .nearestColor else { return toneRampIndex(for: pixel) }
+        // A large palette searches its index — the same answer, over the few
+        // entries that can be nearest anywhere in the pixel's cell rather than
+        // over every entry. See ``SearchIndex`` for why that is exact.
+        if entries.count > Self.indexedEntryThreshold { return searchIndex.nearestIndex(to: pixel) }
         let target = Color.oklab(red: pixel.r, green: pixel.g, blue: pixel.b)
         var best = 0
         var bestDistance = Double.infinity

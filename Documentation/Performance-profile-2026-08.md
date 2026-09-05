@@ -3096,3 +3096,95 @@ specific scenario making the claim, at the same rep count**, because the
 floor is per-scenario and per-day; and **check the change is actually the
 one being described** — this one had two accessors' worth of new work
 hiding inside "just make it smaller".
+
+## 42. The image paths — spelling, searching, copying (2026-09-04)
+
+A pass over `ImageHarness` (Mode A′, `Tools/Profiling/README.md`) after the
+image and gradient work of early September, in release and debug, base and
+new binaries run back to back on an idle machine. Every change is
+byte-identical by the harness checksum and the image suites. Four commits.
+
+**The glyph renderer spent its frame spelling colours.** Instruments on
+`--path glyph --mode truecolor` (120×50 cells, 1,500 iterations): 97.9% of
+the frame inside `convertHalfBlocksColor`, 59.9% of it in
+`foregroundColorCode` and 41.9% in `backgroundColorCode` — three escape
+strings interpolated per cell, compared, and mostly discarded. The leaves
+were `_StringGuts.append` 8.4% self, `_SmallString.init(appending:)` 4.5%,
+`_int64ToString` 3.6%, the tiny allocator's malloc/free 15% between them,
+and 9.1% inclusive in `__isPlatformVersionAtLeast`, String's availability
+checks on macOS. 790 ns a cell for a mode that searches no palette at all.
+`ANSIRowBuilder` decides each cell's colour as a `Color` through one
+resolver, compares enums, and writes a change as bytes with a three-digit
+formatter, one `String` per row.
+
+| glyph, ns/cell (release) | before | after |
+|---|---|---|
+| truecolor | 768 | 93 |
+| ansi16 | 142 | 65 |
+| grayscale | 120 | 38 |
+| shades8 | 495 | 63 |
+| ansi256 | 742 | 513 |
+| shades256 | 1,510 | 606 |
+
+**Then the search was the frame** for the two large palettes. The
+per-pixel path had long avoided the 240-entry walk with a quantisation
+table and paid in exactness (a percent of near-boundary pixels take a
+neighbour, §"Image palette mapping"); the per-cell path was built to be
+exact and walked. `ASCIIPalette.SearchIndex` lists, per cell of the same
+5-bit perceptual grid, the entries that can be nearest to some colour in it
+— a triangle-inequality bound off the cell's centre and radius — so the
+search is the walk over a few candidates and the answer is the walk's,
+tie-break included. Palettes over sixteen entries use it; the table's
+boundary fallback uses it too.
+
+| ns per unit (release) | before | after |
+|---|---|---|
+| glyph ansi256 | 749 | 112 |
+| glyph shades256 | 1,486 | 252 |
+| glyph adaptive 64 | 832 | 360 |
+| glyph adaptive 256 | 2,252 | 1,092 |
+| pixel adaptive 64 | 63 | 34 |
+
+Debug moved further, because the walk's cost there was an unspecialised
+call per entry: glyph ansi256 9,038 → 1,780 ns a cell.
+
+**The copy that had always been there.** Adding the index gave
+`ASCIIPalette` a fourth reference, and the `.ansi256` pixel path — which
+never searches — went from 14.0 to 18.8 ns a pixel. `quantizePixel`
+switched on the colour mode per pixel and `case .palette(let palette)`
+copied the palette out of the payload, every reference retained and
+released, a million times a picture. A first rewrite put the resolved
+pieces in an enum of their own and matched THAT per pixel: 2.7× slower
+still (three arrays and the palette bound per pixel). `PixelQuantiser`
+keeps its pieces as plain stored properties and runs both loops — the
+straight quantise and the error-diffusing dither — over the pixel buffer and
+the tables through pointers taken once, with the palette bound once outside
+the loop (a `guard let` inside it cost the dithered path +31% until it was
+hoisted). Cumulative on the pixel path, base against the final binary:
+
+| pixel, ns/pixel (release) | before | after |
+|---|---|---|
+| truecolor | 9.4 | 8.2 |
+| ansi256 | 12.7 | 10.5 |
+| ansi16 | 19.8 | 17.8 |
+| shades8 | 17.1 | 15.4 |
+| adaptive 64 | 62.9 | 34.3 |
+| ansi256 + Floyd–Steinberg | 21.4 | 19.8 |
+| ansi16 + Floyd–Steinberg | 39.0 | 38.6 |
+
+Debug, the same path: ansi256 561 → 420, ansi16 678 → 542, shades8 652 →
+519, ansi256 dithered 872 → 766.
+
+**And one bug the rewrite found.** `RGBAImage.addError` rebuilt every
+neighbour it spread error into with `RGBA(r:g:b:)`, whose alpha defaults to
+opaque, so a dithered picture with transparency came out solid everywhere
+the error reached — which was everywhere but the first pixel. The pixels a
+graphics terminal composites over the page are exactly the ones that go
+through it. Fixed at both sites, with three tests.
+
+The lesson this pass repeats from §32 and §41: in a per-pixel loop the
+arithmetic is never the cost; a `String` built to be compared, an enum
+payload bound per iteration, a struct copied out of an optional — each of
+those was a bigger term than the colour maths, and each was invisible until
+a profile or a same-run A/B put a number beside it.
+

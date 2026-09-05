@@ -453,6 +453,44 @@ from black to `(8,8,8)`: sRGB's transfer function is steep in the shadows, so in
 perceived lightness it is nearer the ramp's first rung than it is black, however
 the byte values read.
 
+### The per-cell search stops walking — 2026-09-04
+
+The table above answers the per-pixel path; the per-cell path kept its walk
+for exactness, and once the glyph renderer's colour SPELLING was fixed (the
+per-cell escape strings were 97% of a truecolor frame; `ANSIRowBuilder`) the
+walk was what remained: 513 ns a cell at `.ansi256`, 606 at `.shades(256)`.
+
+`ASCIIPalette.SearchIndex` keeps the exact answer and drops the walk. Over
+the same perceptually-spaced 5-bit grid as the table, each cell lists the
+entries that can be nearest to some colour inside it — everything within
+`|nearest(centre) − centre| + 2·radius` of the centre, the radius being the
+cell's farthest sRGB corner in OKLab, widened a tenth for the curvature
+between corners (widening only adds candidates). The bound is a triangle
+inequality and the tie-break is the walk's, so the answers are the walk's;
+`PaletteSearchIndexTests` says so at every corner of every populated cell
+and across a stride of the gamut, for four palettes. Palettes of more than
+sixteen entries use it; `ansi16` and smaller still walk, which is faster
+for them. One index per set of colours, cached process-wide and memoised
+per palette instance. The table's boundary fallback uses it too, so a
+palette the pixel path cannot trust everywhere no longer pays a walk on the
+cells it distrusts.
+
+`ImageHarness`, release, base and new binaries back to back:
+
+| | before | after |
+|---|---|---|
+| glyph `.ansi256` | 749 ns/cell | 112 |
+| glyph `.shades(256)` | 1,486 | 252 |
+| glyph adaptive 64 (least error) | 832 | 360 |
+| glyph adaptive 256 | 2,252 | 1,092 |
+| pixel adaptive 64 (table + fallback) | 63 ns/pixel | 34 |
+| pixel `.ansi256` (table, no fallback) | 12.7 | 10.5 |
+
+The `.ansi256` pixel path's own gain is not the index — that table trusts
+every cell and never searches — but the per-pixel loop no longer copying the
+palette out of an enum payload (`PixelQuantiser`); the day the palette gained
+its index reference, that copy measured +35% on a lookup nothing had changed.
+
 ## Still open
 
 - **Should `.grayscale` become `.palette(.shades(24))` internally?** It is 24
