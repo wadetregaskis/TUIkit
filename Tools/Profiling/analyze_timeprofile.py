@@ -56,14 +56,14 @@ def is_app(path: str) -> bool:
 
 
 def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: str,
-            callers_of=None):
+            callers_of=None, process_filter=None):
     xml = export_table(trace, run, "time-profile")
 
     # Global id -> value maps. Instruments shares ONE id namespace across
     # all element types, and a `ref` always re-appears as the same element
     # type it was defined as, so per-type maps keyed by the global id are
     # unambiguous.
-    weight_by_id, thread_by_id, state_by_id = {}, {}, {}
+    weight_by_id, thread_by_id, state_by_id, process_by_id = {}, {}, {}, {}
     frame_by_id = {}    # id -> (name, binary_name, binary_path)
     binary_by_id = {}   # id -> (binary_name, binary_path)
 
@@ -95,6 +95,18 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
         val = el.get("fmt", "")
         if el.get("id") is not None:
             thread_by_id[el.get("id")] = val
+        return val
+
+    def resolve_process(el):
+        # `--all-processes` recordings carry a <process> per row (the same
+        # id/ref scheme as <thread>); a --launch recording has one process and
+        # may omit it, in which case nothing is filtered out.
+        ref = el.get("ref")
+        if ref is not None:
+            return process_by_id.get(ref, "")
+        val = el.get("fmt", "")
+        if el.get("id") is not None:
+            process_by_id[el.get("id")] = val
         return val
 
     def resolve_state(el):
@@ -145,6 +157,15 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
         st_el = el.find("thread-state")
         state = resolve_state(st_el) if st_el is not None else ""
 
+        # A process is DEFINED (id + fmt) inside the <thread> of the first row
+        # that mentions it and only REFERENCED by the row's own <process>
+        # thereafter, so register every definition in the row before resolving.
+        for defined in el.iter("process"):
+            if defined.get("id") is not None:
+                process_by_id[defined.get("id")] = defined.get("fmt", "")
+        pr_el = el.find("process")
+        process = resolve_process(pr_el) if pr_el is not None else ""
+
         bt = el.find("backtrace")
         # Resolve every frame in document order (defs precede refs) so the
         # id maps stay correct even when we later .clear() the element.
@@ -154,6 +175,8 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
         if state_filter == "running" and state != "Running":
             continue
         if thread_filter == "main" and "Main Thread" not in thread:
+            continue
+        if process_filter is not None and process_filter not in process:
             continue
         if not frames:
             continue
@@ -224,6 +247,11 @@ def main():
                     help="restrict to the Main Thread (the render loop) or all threads")
     ap.add_argument("--state", choices=["running", "all"], default="running",
                     help="restrict to on-CPU samples (default) or include all")
+    ap.add_argument("--process", metavar="NAME", default=None,
+                    help="keep only samples whose process name contains NAME — for an "
+                         "`xctrace record --all-processes` recording of a PTY app that "
+                         "Instruments cannot launch or attach to (e.g. the live `Stress` "
+                         "under autopilot, emission included)")
     ap.add_argument("--callers", metavar="PATTERN", default=None,
                     help="also aggregate the immediate CALLERS of every frame whose "
                          "name contains PATTERN — answers 'who is invoking this hot "
@@ -234,7 +262,7 @@ def main():
         sys.exit(f"no such trace: {args.trace}")
 
     r = analyze(args.trace, args.run, args.top, args.thread, args.state,
-                callers_of=args.callers)
+                callers_of=args.callers, process_filter=args.process)
 
     print("=" * 78)
     print(f"Time Profiler analysis: {args.trace}")

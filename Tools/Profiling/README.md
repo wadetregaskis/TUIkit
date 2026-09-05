@@ -225,6 +225,16 @@ Keyboard input is raw terminal bytes (arrows = `ESC[A/B/C/D`, page jumps
 (`ESC[<button;col;row;M/m`). It quits the app with `q`.
 
 ### `analyze_timeprofile.py` — trace → hot functions
+
+**Profiling the live app, emission included.** Instruments cannot `--launch`
+a PTY app and `--attach` is denied here, but `xcrun xctrace record
+--all-processes --time-limit 8s` records everything on the machine while
+`idle_cpu.py` drives the app under autopilot; `--process <name>` then keeps
+only that process's samples. That is the only profile that shows the output
+half of a frame (`FrameDiffWriter`, the cell diff, `SGRState`), which
+`--bench` never runs. The recording is large and Instruments leaves an
+`instruments*.ktrace` of 100–900 MB in `$TMPDIR` after EVERY recording —
+delete both once analysed.
 Exports the trace's `time-profile` table via `xctrace export` and
 aggregates CPU time into five views:
 
@@ -237,6 +247,7 @@ aggregates CPU time into five views:
 python3 Tools/Profiling/analyze_timeprofile.py profiling-traces/emoji-….trace
 python3 Tools/Profiling/analyze_timeprofile.py TRACE --thread main --top 40
 python3 Tools/Profiling/analyze_timeprofile.py TRACE --state all   # include off-CPU
+python3 Tools/Profiling/analyze_timeprofile.py TRACE --process Stress  # one process of an --all-processes trace
 ```
 
 **Why a custom parser instead of DuckDB?** Instruments' XML dedups
