@@ -487,14 +487,13 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
     // measurement paths (and off the cost of minting one per call).
     if let cache = context.renderCache, let tracker = context.environment.volatileReadTracker {
         let key = RenderCache.MeasureKey(
-            size: RenderCache.SizeKey(
-                identity: context.identity,
-                proposalWidth: proposal.width,
-                proposalHeight: proposal.height,
-                availableWidth: context.availableWidth,
-                availableHeight: context.availableHeight,
-                hasExplicitWidth: context.hasExplicitWidth,
-                hasExplicitHeight: context.hasExplicitHeight),
+            identityHash: context.identity.structuralHash,
+            proposalWidth: proposal.width,
+            proposalHeight: proposal.height,
+            availableWidth: context.availableWidth,
+            availableHeight: context.availableHeight,
+            hasExplicitWidth: context.hasExplicitWidth,
+            hasExplicitHeight: context.hasExplicitHeight,
             viewType: ObjectIdentifier(V.self),
             valueHash: viewValueHash(view))
         if let cached = cache.lookupMeasure(key: key) { return cached }

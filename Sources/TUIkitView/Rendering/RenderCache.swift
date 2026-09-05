@@ -219,7 +219,29 @@ public final class RenderCache: @unchecked Sendable {
     /// size for another (the abandoned cross-frame cache — it got Panel/Card/
     /// Dialog wrong, and the equivalence harness caught it).
     public struct MeasureKey: Hashable {
-        let size: SizeKey
+        /// The identity's structural hash, not the identity.
+        ///
+        /// This memo is probed twice for every measured view in the tree, and a
+        /// `ViewIdentity` is a chain of class nodes: hashing it walks the chain,
+        /// comparing two *equal* ones walks it step for step (the `===` shortcut
+        /// misses, because the two walks that meet here built their chains
+        /// separately), and every copy of the key retains and releases it.
+        /// Reduced to the chain's own cached hash the whole key is plain data —
+        /// no ARC, no walk.
+        ///
+        /// It is the same bargain ``valueHash`` already strikes below, with the
+        /// same shape of failure: a false hit needs two distinct identity paths
+        /// to hash identically *within one pass* AND to carry the same view
+        /// type, the same value bytes and the same proposal. It would show as
+        /// one frame sized from a twin, never as aliased state, because nothing
+        /// here outlives the pass.
+        let identityHash: Int
+        let proposalWidth: Int?
+        let proposalHeight: Int?
+        let availableWidth: Int
+        let availableHeight: Int
+        let hasExplicitWidth: Bool
+        let hasExplicitHeight: Bool
         let viewType: ObjectIdentifier
         /// A hash of the view value's raw bytes — the discriminator that makes
         /// this memo sound.
@@ -246,8 +268,24 @@ public final class RenderCache: @unchecked Sendable {
         /// pass stores.
         let valueHash: Int
 
-        public init(size: SizeKey, viewType: ObjectIdentifier, valueHash: Int) {
-            self.size = size
+        public init(
+            identityHash: Int,
+            proposalWidth: Int?,
+            proposalHeight: Int?,
+            availableWidth: Int,
+            availableHeight: Int,
+            hasExplicitWidth: Bool,
+            hasExplicitHeight: Bool,
+            viewType: ObjectIdentifier,
+            valueHash: Int
+        ) {
+            self.identityHash = identityHash
+            self.proposalWidth = proposalWidth
+            self.proposalHeight = proposalHeight
+            self.availableWidth = availableWidth
+            self.availableHeight = availableHeight
+            self.hasExplicitWidth = hasExplicitWidth
+            self.hasExplicitHeight = hasExplicitHeight
             self.viewType = viewType
             self.valueHash = valueHash
         }
