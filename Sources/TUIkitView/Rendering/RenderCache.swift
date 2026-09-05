@@ -317,6 +317,14 @@ public final class RenderCache: @unchecked Sendable {
     /// walk is per entry NOT marked active and its cost is the count of those.
     private var lastPrune = (renderEntries: 0, sizeEntries: 0, retainedChecks: 0, prunedRender: 0, prunedSizes: 0)
 
+    /// What the last ``removeInactive()`` walked and dropped, for a harness
+    /// that reports it beside its timings (`Stress --bench` does).
+    public var lastPruneSummary: String {
+        "render: \(lastPrune.renderEntries) sizes: \(lastPrune.sizeEntries) "
+            + "retainedChecks: \(lastPrune.retainedChecks) "
+            + "dropped: \(lastPrune.prunedRender)+\(lastPrune.prunedSizes)"
+    }
+
     /// Subtree roots whose descendants must survive this pass's collection even
     /// though nothing below them was visited. See ``retainSubtree(_:)``.
     private var retainedSubtreeRoots: [ViewIdentity] = []

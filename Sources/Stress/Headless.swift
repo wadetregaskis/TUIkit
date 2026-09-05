@@ -221,6 +221,9 @@ enum Headless {
         let lookups = memo.hits + memo.misses
         print(String(format: "  measure memo: %d hits / %d lookups (%.1f%%)",
             memo.hits, lookups, lookups > 0 ? Double(memo.hits) / Double(lookups) * 100 : 0))
+        if let prune = warm.renderCache?.lastPruneSummary {
+            print("  prune (last frame): \(prune)")
+        }
 
         // A timing is only a measurement of the scenario if the scenario was
         // actually drawn. Reporting these as a failure rather than a note is
