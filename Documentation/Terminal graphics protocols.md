@@ -477,12 +477,18 @@ reps, order randomised:
     kitchensink      634.8    644.3    +1.0%  +0.3% +2.1%     slower
 
 Four scenarios outside the interval is a real regression, so the property was
-replaced by a binary search over `combiningMarkRanges` — **generated from that
-same property** by `Tools/GenerateCombiningMarks/generate.swift`, with a test
-that re-derives it over all 1,114,112 codepoints and fails if the two disagree.
-The table is an optimisation, so it is checked against the thing it optimises
-rather than trusted; a toolchain shipping a newer Unicode is caught rather than
-silently mis-measuring whatever script gained a mark.
+replaced by a binary search over `combiningMarkRanges` — generated from the
+**Unicode Character Database** by `Tools/GenerateCombiningMarks/generate.swift`,
+with a test that walks all 1,114,112 codepoints against the runtime's own
+property. The table is an optimisation, so it is checked against the thing it
+optimises rather than trusted — but not for equality: the runtime's Unicode
+lags the published data (macOS 15 answers Unicode 16 where macOS 26 answers
+17, under one Xcode), so the table follows the newest release and the test
+holds it to the one relation that survives a version gap. Every mark the
+runtime knows must be in the table, and anything the table adds must be a
+codepoint the runtime has not assigned at all. A toolchain shipping a newer
+Unicode than the table is caught rather than silently mis-measuring whatever
+script gained a mark; a table newer than the toolchain is what it should be.
 
 ### 8.4 What it looks like, and the one thing that surprises
 

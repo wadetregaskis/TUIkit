@@ -364,7 +364,7 @@ struct CombiningMarkWidthTests {
     }
 }
 
-/// The generated table against the source it was generated from.
+/// The generated table against the standard library it stands in for.
 ///
 /// `combiningMarkRanges` exists only because asking
 /// `Unicode.Scalar.Properties.generalCategory` on the width path cost a
@@ -373,7 +373,15 @@ struct CombiningMarkWidthTests {
 /// waiting for a toolchain update — Swift ships a new Unicode version and a
 /// newly-assigned mark starts measuring one cell in whatever script got it.
 ///
-/// So the table is not trusted: it is checked, against every codepoint.
+/// So the table is not trusted: it is checked, against every codepoint. But
+/// not for equality. The table is generated from the newest published Unicode
+/// data and the runtime's tables lag it — by a whole version between macOS 15
+/// and macOS 26 under the same Xcode — so the two legitimately differ, in
+/// exactly one direction: the table may know marks the runtime has not heard
+/// of. What must hold is that every mark the runtime knows is in the table,
+/// and that everything the table adds beyond that is a codepoint the runtime
+/// has not assigned at all. A codepoint the runtime assigns to anything OTHER
+/// than a mark while the table calls it one is a real disagreement, and fails.
 @Suite("Combining-mark table")
 struct CombiningMarkRangeTests {
 
@@ -385,19 +393,38 @@ struct CombiningMarkRangeTests {
         }
     }
 
-    @Test("agrees with the standard library for every codepoint")
-    func tableMatchesUnicode() {
-        var mismatches: [UInt32] = []
-        for value: UInt32 in 0...0x10FFFF where
-            Character.isNonAdvancingMark(value) != Self.isMark(value)
-        {
-            mismatches.append(value)
-            if mismatches.count >= 8 { break }
+    private static func listed(_ values: [UInt32]) -> [String] {
+        values.map { "U+" + String($0, radix: 16, uppercase: true) }
+    }
+
+    @Test("every mark the standard library knows is in the table")
+    func tableCoversTheStandardLibrary() {
+        var missing: [UInt32] = []
+        for value: UInt32 in 0...0x10FFFF where Self.isMark(value) && !Character.isNonAdvancingMark(value) {
+            missing.append(value)
+            if missing.count >= 8 { break }
         }
-        let listed = mismatches.map { "U+" + String($0, radix: 16, uppercase: true) }
         #expect(
-            mismatches.isEmpty,
-            "regenerate with Tools/GenerateCombiningMarks/generate.swift — \(listed)")
+            missing.isEmpty,
+            """
+            the runtime knows marks Unicode \(combiningMarkUnicodeVersion) does not: regenerate with \
+            Tools/GenerateCombiningMarks/generate.swift — \(Self.listed(missing))
+            """)
+    }
+
+    @Test("what the table adds beyond the standard library is unassigned there")
+    func tableOnlyRunsAhead() {
+        var contradicted: [UInt32] = []
+        for value: UInt32 in 0...0x10FFFF where Character.isNonAdvancingMark(value) && !Self.isMark(value) {
+            guard let scalar = Unicode.Scalar(value), scalar.properties.generalCategory != .unassigned else {
+                continue
+            }
+            contradicted.append(value)
+            if contradicted.count >= 8 { break }
+        }
+        #expect(
+            contradicted.isEmpty,
+            "the table calls these marks and the runtime calls them something else — \(Self.listed(contradicted))")
     }
 
     /// The two comparisons that take the common answer. If either bound were
