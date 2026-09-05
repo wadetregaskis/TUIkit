@@ -951,18 +951,7 @@ extension FrameBuffer {
             return trimmed
         }
         result.hitTestRegions = hitTestRegions.compactMap { region -> HitTestRegion? in
-            let width = min(region.offsetX + region.width, maxWidth) - max(0, region.offsetX)
-            let height = min(region.offsetY + region.height, maxHeight) - max(0, region.offsetY)
-            guard width > 0, height > 0 else { return nil }
-            var trimmed = HitTestRegion(
-                offsetX: region.offsetX, offsetY: region.offsetY,
-                width: width, height: height,
-                handlerID: region.handlerID, focusID: region.focusID)
-            trimmed.revealOutsetTop = region.revealOutsetTop
-            trimmed.revealOutsetBottom = region.revealOutsetBottom
-            trimmed.topClip = region.topClip
-            trimmed.leftClip = region.leftClip
-            return trimmed
+            region.clipped(toColumns: 0..<maxWidth, rows: 0..<maxHeight)
         }
         // Runs describe CELLS, so unlike the free-floating layers above they
         // follow the clip. A run whose ROW is clipped away is gone — scrolled
@@ -1093,12 +1082,7 @@ extension FrameBuffer {
     public func shiftedHitTestRegions(byX dx: Int, y dy: Int) -> [HitTestRegion] {
         guard !hitTestRegions.isEmpty else { return [] }
         guard dx != 0 || dy != 0 else { return hitTestRegions }
-        return hitTestRegions.map { region in
-            var shifted = region
-            shifted.offsetX += dx
-            shifted.offsetY += dy
-            return shifted
-        }
+        return hitTestRegions.map { $0.shifted(byX: dx, y: dy) }
     }
 
     /// `line` with `frame` redrawn over the `width` cells starting at `column`.

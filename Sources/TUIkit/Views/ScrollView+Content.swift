@@ -220,59 +220,44 @@ extension _ScrollViewCore {
             return shifted.clipped(toWidth: viewportWidth, height: viewportHeight)
         }
 
-        // Filter + shift hit-test regions, same logic — and TRIM them to the
-        // viewport, which the overlay filter above gets for free from
-        // `OverlayLayer.placed()`'s own clip but this one has to do itself.
-        //
-        // The viewport is as final a clip for a region as it is for a line: a
-        // control straddling the top edge kept its full height and shifted to a
-        // NEGATIVE offsetY, so the parent placed it over rows above the
-        // ScrollView, and one straddling the bottom kept rows past the last
-        // visible line. Since regions are hit-tested innermost-first, those
-        // phantom rows won — a click on a Button sitting above the scroller
-        // reached a half-scrolled-off row inside it instead.
+        // The same filter-and-shift the overlays got, and the same trim — which
+        // the overlay pass gets for free from `OverlayLayer.placed()`'s own clip
+        // and this one has to ask for.
         let visibleRegions = full.hitTestRegions.compactMap { region -> HitTestRegion? in
-            let topY = region.offsetY
-            let bottomY = region.offsetY + region.height
-            guard bottomY > viewportTop, topY < viewportBottom else { return nil }
-            let clippedTop = max(topY, viewportTop)
-            let clippedBottom = min(bottomY, viewportBottom)
-            // The X axis clips like the Y axis: a region scrolled part-way
-            // off the left kept its full width at a negative offsetX, and
-            // one straddling the right kept columns past the viewport —
-            // phantom cells that, innermost-first, won clicks meant for
-            // whatever actually sat there (the vertical scrollbar included).
-            let leftX = region.offsetX + dx
-            let rightX = leftX + region.width
-            guard rightX > 0, leftX < viewportWidth else { return nil }
-            let clippedLeft = max(0, leftX)
-            let clippedRight = min(viewportWidth, rightX)
-            var clipped = HitTestRegion(
-                offsetX: clippedLeft,
-                offsetY: clippedTop - scrollOffset,
-                width: clippedRight - clippedLeft,
-                height: clippedBottom - clippedTop,
-                handlerID: region.handlerID,
-                // MUST be carried: reveal-on-focus finds its target by
-                // focusID, so dropping it here (the parameter defaults to
-                // nil, so the omission was silent) made an ENCLOSING
-                // ScrollView unable to ever locate a focused control that
-                // lives inside THIS one — nested scroll views could not
-                // reveal. `OverlayLayer.placed()` carries it for the same
-                // reason.
-                focusID: region.focusID
-            )
-            // The clip above throws away where the region BEGINS, which is not
-            // the same question as where it can be clicked. A destination that
-            // wraps a scrolled page starts above the viewport, and a drop point
-            // localised against its clipped top came out short by exactly the
-            // scroll offset — the poof puff drawn that far up the screen.
-            // Accumulated, so nesting composes.
-            clipped.topClip = region.topClip + (clippedTop - topY)
-            clipped.leftClip = region.leftClip + (clippedLeft - leftX)
-            clipped.revealOutsetTop = region.revealOutsetTop
-            clipped.revealOutsetBottom = region.revealOutsetBottom
-            return clipped
+            // Into viewport coordinates first, then trimmed to the viewport —
+            // which is the SAME clip a region gets from any other clipping
+            // container, so it is the shared one rather than a second copy of
+            // its arithmetic. The order is safe because a translation records
+            // nothing: `topClip`/`leftClip` count cells CUT AWAY, and moving a
+            // rectangle cuts none, so `clip(shift(r))` and `shift(clip(r))`
+            // agree on both (see `HitTestRegion.shifted(byX:y:)`). This used to
+            // be written out here, clipping the Y axis in content coordinates
+            // and the X axis in viewport ones, which is why it read as two
+            // different pieces of arithmetic for one operation.
+            //
+            // `shifted` carries `focusID`, and it MUST: reveal-on-focus finds
+            // its target by that, and dropping it here — silently, since the
+            // initializer defaults it to nil — once made an ENCLOSING
+            // ScrollView unable to locate a focused control living inside this
+            // one, so nested scroll views could not reveal.
+            //
+            // And `clipped` accumulates rather than assigns, which is the other
+            // thing this has to keep. Where a region BEGINS is not where it can
+            // be clicked: a drop destination wrapping a scrolled page starts
+            // above the viewport, and a drop point localised against its
+            // clipped top came out short by exactly the scroll offset — the
+            // poof puff drawn that far up the screen.
+            //
+            // The trim itself is as final for a region as for a line. A control
+            // straddling the top kept its full height at a negative offsetY, so
+            // the parent placed it over rows above the ScrollView; one
+            // straddling the bottom kept rows past the last visible line. Since
+            // regions are hit-tested innermost-first, those phantom rows won —
+            // a click on a Button sitting above the scroller reached a
+            // half-scrolled-off row inside it instead. The X axis had the twin
+            // defect, and the vertical scrollbar was one of its victims.
+            region.shifted(byX: dx, y: -scrollOffset)
+                .clipped(toColumns: 0..<viewportWidth, rows: 0..<viewportHeight)
         }
 
         // Animated runs are a claim about single rows, so unlike a region they

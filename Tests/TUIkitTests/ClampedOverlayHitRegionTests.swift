@@ -25,6 +25,42 @@ struct ClampedOverlayHitRegionTests {
     /// The seam directly: a 20-row layer with a row-15 hit region, composited
     /// into an 8-row content area. The full-width content centres at x = 0, so
     /// region coordinates survive unshifted.
+    /// A region straddling the top-left corner survives at the corner, with
+    /// what was cut recorded — which it did not until the three copies of this
+    /// clip became one.
+    ///
+    /// `clamped(toWidth:height:)` used to compute the surviving SIZE and keep
+    /// the original ORIGIN, so a region at `(-2, -2)` 5×5 came back at
+    /// `(-2, -2)` 3×3: three cells of it, positioned three cells off the screen,
+    /// where nothing can ever click them. It also left `topClip`/`leftClip` at
+    /// zero, so a handler that did somehow receive a point would localise it two
+    /// cells short. Both are what `HitTestRegion.clipped(toColumns:rows:)` is
+    /// for, and it is now what runs here.
+    @Test("A region straddling the origin is clipped INTO view, not left outside it")
+    func straddlingRegionMovesToTheCorner() {
+        var buffer = FrameBuffer(lines: Array(repeating: "abcdef", count: 6))
+        var region = HitTestRegion(
+            offsetX: -2, offsetY: -2, width: 5, height: 5,
+            handlerID: HitTestRegion.HandlerID(1), focusID: "straddler")
+        region.revealOutsetTop = 1
+        buffer.hitTestRegions = [region]
+
+        let clipped = buffer.clamped(toWidth: 4, height: 4).hitTestRegions
+        #expect(clipped.count == 1, "the region was dropped entirely")
+        guard let trimmed = clipped.first else { return }
+        #expect(trimmed.offsetX == 0 && trimmed.offsetY == 0, "\(trimmed)")
+        #expect(trimmed.width == 3 && trimmed.height == 3, "\(trimmed)")
+        // What was cut, so a handler localises a point against where the region
+        // really begins rather than against its trimmed corner.
+        #expect(trimmed.leftClip == 2 && trimmed.topClip == 2, "\(trimmed)")
+        // The clip is not a new region: identity and the reveal outsets ride it.
+        #expect(trimmed.focusID == "straddler")
+        #expect(trimmed.revealOutsetTop == 1)
+        // And it is clickable where the cells actually are.
+        #expect(trimmed.contains(x: 0, y: 0) && trimmed.contains(x: 2, y: 2))
+        #expect(!trimmed.contains(x: 3, y: 3))
+    }
+
     @Test("A region below the overlay clip is inert after compositing")
     func clippedRegionIsInert() {
         let dispatcher = MouseEventDispatcher()

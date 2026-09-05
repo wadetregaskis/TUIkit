@@ -143,6 +143,23 @@ public struct HitTestRegion: Sendable, Equatable {
         x >= offsetX && x < offsetX + width && y >= offsetY && y < offsetY + height
     }
 
+    /// This region moved by `dx` × `dy`, with everything else — the accumulated
+    /// clips, the reveal outsets, the identity — carried.
+    ///
+    /// A translation is not a clip and records nothing: ``topClip`` and
+    /// ``leftClip`` say how much of the region was CUT AWAY, and moving a
+    /// rectangle cuts nothing. That is also what makes translate-then-clip
+    /// equal clip-then-translate for those two numbers, which is what lets a
+    /// container that does both spell it as two steps — see
+    /// ``clipped(toColumns:rows:)``.
+    public func shifted(byX dx: Int, y dy: Int) -> Self {
+        guard dx != 0 || dy != 0 else { return self }
+        var moved = self
+        moved.offsetX += dx
+        moved.offsetY += dy
+        return moved
+    }
+
     /// The part of this region inside `columns` × `rows`, or `nil` when none
     /// of it is.
     ///

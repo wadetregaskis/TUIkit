@@ -396,10 +396,16 @@ public struct OverlayLayer: Sendable, Equatable {
         if dropX > 0 || dropY > 0 {
             // Regions are clipped BEFORE the shift, against the surviving box
             // stated in the content's own coordinates, so every offset that
-            // comes out of the shift is already inside it. Clipping after would
-            // have to reason about negative offsets, which is where
-            // `FrameBuffer.clamped(toWidth:height:)` — correct for everything
-            // it is asked, all of which starts at the origin — would go wrong.
+            // comes out of the shift is already inside it — and the box below
+            // then has nothing left to do to them.
+            //
+            // This used to add that clipping after would go wrong because
+            // `FrameBuffer.clamped(toWidth:height:)` mishandled negative
+            // offsets. It did, and no longer does: all three copies of this
+            // clip are now `HitTestRegion.clipped(toColumns:rows:)`, which
+            // moves a straddling region to the surviving corner and records
+            // what it cut. The order here is kept because it is the clearer
+            // one, not because the alternative is broken.
             cut.hitTestRegions = content.hitTestRegions.compactMap {
                 $0.clipped(
                     toColumns: dropX..<(dropX + boxWidth), rows: dropY..<(dropY + boxHeight))
