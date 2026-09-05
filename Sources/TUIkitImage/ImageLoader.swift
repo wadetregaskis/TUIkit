@@ -466,6 +466,19 @@ extension PlatformImageLoader {
             return cached
         }
 
+        #if !canImport(FoundationNetworking) && !canImport(Darwin)
+            // No URL loading on this platform, and this is where that has to be
+            // said. `URLSession` is in Foundation on Apple platforms and in
+            // FoundationNetworking everywhere else that has it; WebAssembly's
+            // wasip1 has neither, and could not use one anyway — it has no
+            // sockets. Everything else about images works there: a file loads,
+            // an `RGBAImage` handed over directly renders, and the cache above
+            // still answers. Only the fetch is missing, so only the fetch says
+            // so, at the moment it is asked for rather than by being absent
+            // from the API and taking every caller's source with it.
+            throw ImageLoadError.downloadFailed(
+                "This platform has no URL loading, so images cannot be fetched over the network: \(urlString)")
+        #else
         guard let url = URL(string: urlString) else {
             throw ImageLoadError.downloadFailed("Invalid URL: \(urlString)")
         }
@@ -489,8 +502,10 @@ extension PlatformImageLoader {
         let image = try loadImage(from: data, maxPixelCount: maxPixelCount)
         cache.set(urlString, image: image)
         return image
+        #endif
     }
 
+    #if canImport(FoundationNetworking) || canImport(Darwin)
     /// Runs one request to completion, bridging `URLSession`'s callback API to
     /// `async` — and structured cancellation to `URLSessionTask.cancel()`.
     ///
@@ -522,9 +537,12 @@ extension PlatformImageLoader {
             handle.cancel()
         }
     }
+    #endif
 }
 
 // MARK: - Cancellation Bridge
+
+#if canImport(FoundationNetworking) || canImport(Darwin)
 
 /// Carries a `URLSessionDataTask` from the body of a
 /// `withTaskCancellationHandler` to its cancellation handler.
@@ -562,3 +580,4 @@ private final class URLTaskHandle: @unchecked Sendable {
         started?.cancel()
     }
 }
+#endif

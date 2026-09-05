@@ -111,6 +111,23 @@ public final class BodyMutationDiagnostic: @unchecked Sendable {
         }
     }
 
+    /// A token for the calling thread — the whole of what this diagnostic needs
+    /// to know about threads, which is only ever whether two moments are the
+    /// same one.
+    ///
+    /// Foundation's `Thread` is absent where the platform has no threads to
+    /// tell apart: WebAssembly's wasip1 is single-threaded, so the walk and the
+    /// write that interrupts it are necessarily on the same thread and a
+    /// constant answers every comparison correctly. Reading `Thread.current`
+    /// there would not be conservative, it would not compile.
+    private static var callingThread: ObjectIdentifier {
+        #if canImport(WASILibc)
+            ObjectIdentifier(BodyMutationDiagnostic.self)
+        #else
+            ObjectIdentifier(Thread.current)
+        #endif
+    }
+
     public init() {}
 
     /// Opens the window: writes from this thread now count as body mutations.
@@ -119,7 +136,7 @@ public final class BodyMutationDiagnostic: @unchecked Sendable {
     /// than once — so this is idempotent rather than balanced. ``endTraversal()``
     /// closes it whoever opened it.
     public func beginTraversal() {
-        let thread = ObjectIdentifier(Thread.current)
+        let thread = Self.callingThread
         lock.withLock {
             traversingThread = thread
         }
@@ -148,7 +165,7 @@ public final class BodyMutationDiagnostic: @unchecked Sendable {
         // locate is not a report.
         let key = identity.map { $0.path.isEmpty ? "<root>" : $0.path } ?? "<whole tree>"
         let report: Report? = lock.withLock {
-            guard traversingThread == ObjectIdentifier(Thread.current) else { return nil }
+            guard traversingThread == Self.callingThread else { return nil }
             guard reportedThisFrame.insert(key).inserted else { return nil }
             let report = Report(identity: key, frame: frameNumber)
             collected.append(report)

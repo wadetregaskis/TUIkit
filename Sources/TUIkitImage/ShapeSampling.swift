@@ -20,7 +20,8 @@
 // platform's C module — unlike `StackGuard`'s, where a missing arm is harmless
 // because every *use* sits behind the same conditions. Here the uses are
 // unconditional, so an unnamed platform gets no `cos` at all: that is why
-// `TUIkitImage` failed to build on Windows while `TUIkitCore` succeeded.
+// `TUIkitImage` failed to build on Windows while `TUIkitCore` succeeded, and
+// why WebAssembly needed its own arm for exactly the same reason.
 #if canImport(Glibc)
 import Glibc
 #elseif canImport(Darwin)
@@ -29,6 +30,8 @@ import Darwin
 import Musl
 #elseif canImport(ucrt)
 import ucrt
+#elseif canImport(WASILibc)
+import WASILibc
 #endif
 
 /// The six staggered "sampling circles" that make up a cell's 6-D shape
