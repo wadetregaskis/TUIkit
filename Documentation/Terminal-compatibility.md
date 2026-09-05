@@ -1413,8 +1413,53 @@ Every answer below came back from the terminal itself during the probe:
 | OSC 8 hyperlink | the row holds the text and none of the sequence |
 | SGR mouse `?1006` | a click sends `CSI <0;3;1M` / `CSI <0;3;1m` |
 
-Not supported, and not worked around: the Kitty graphics protocol. Pictures
-fall back to cells, which is what the handshake is for.
+### Graphics — measured 2026-09-05, and the answer has three parts
+
+**The released core has no graphics of any kind.** xterm.js 6.0.0 swallows a
+Kitty transmission, a SIXEL and an iTerm2 inline image alike: no reply, and
+nothing left in the cells. TUIkit's handshake therefore gets silence and falls
+back to cells, which is what it is for.
+
+**The released image addon does not do Kitty.** `@xterm/addon-image` 0.9.0
+supports SIXEL and iTerm2's IIP — its own README says so, and the word "kitty"
+does not appear in its source. TUIkit speaks neither: it emits the Kitty
+protocol only, so the addon buys the framework nothing today.
+
+**The beta does — partially, and not the part TUIkit needs.**
+`@xterm/addon-image` 0.10.0-beta.301 (2026-08-30) adds `kittySupport`, and needs
+`@xterm/xterm` 6.1.0-beta for it: the addon registers an APC handler, and
+`registerApcHandler` does not exist in the 6.0.0 core (loading the beta addon on
+the released core throws). With both betas, measured:
+
+| What was sent | What happened |
+|---|---|
+| `a=t` transmit, `q=0` | `ESC_Gi=31;OK ESC\` — accepted and acknowledged |
+| `a=p,U=1` virtual placement, `q=0` | `ESC_Gi=31;OK ESC\` — **acknowledged** |
+| `a=q` query | `OK` |
+| any of the above | `addon.storageUsage` rises — the image really is decoded and kept |
+| U+10EEEE placeholder cells | left in the buffer **as text**; no image drawn, no canvas created |
+
+So the beta acknowledges the protocol and decodes the pixels, but does not yet
+place a virtual placement — which is the only kind TUIkit uses, because a
+placement that moves with the text is no use to a full-screen layout (see
+`Terminal graphics protocols.md` §4). Upstream agrees it is unfinished: the
+addon's README says "the kitty graphics support is still WIP", and
+xtermjs/xterm.js#6132, *Kitty graphics: Track placements independently from
+text cells*, was still open at the time of writing.
+
+**The trap this sets.** An `OK` to the placement query is exactly what TUIkit's
+handshake looks for, so a framework that trusted it would emit placeholder
+cells into a terminal that draws none. Forced on with `TUIKIT_GRAPHICS=1` and
+both betas loaded, the Example's Colors page emitted 444 placeholder cells
+across six gradient rows and drew **blank space** where the ramps belong. Left
+to its own handshake the framework did not turn graphics on at all, which is
+the conservative answer and the right one — but it is conservative by
+accident here, not by design, and that is worth remembering if the beta's
+behaviour changes.
+
+Sixel and IIP are a different question, and an open one: the addon decodes both,
+and TUIkit implements neither. Nothing here recommends adding them — it only
+records that the browser could receive them.
 
 ### Why not something else
 

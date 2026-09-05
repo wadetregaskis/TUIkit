@@ -145,7 +145,7 @@ Does not, and why:
 | Remote images | no sockets. A file image works; `Image(url:)` reports that the platform has no URL loading. |
 | Clipboard | the page has one; the guest cannot reach it. OSC 52 would let the *terminal* do it and is not wired up. |
 | Opening links | no subprocess. OSC 8 hyperlinks still work, because the terminal opens those, not the app. |
-| Terminal graphics | the handshake gets no answer, so pictures fall back to cells. xterm.js does not implement the Kitty protocol. |
+| Terminal graphics | the released xterm.js implements no picture protocol at all, so the handshake gets silence and pictures fall back to cells. The beta image addon (with the beta core) *acknowledges* Kitty and decodes the pixels but does not place a virtual placement — the only kind TUIkit emits — so turning it on draws blank space where the ramps belong. Measured; see the xterm.js section of `Terminal-compatibility.md`. |
 | Some glyph widths | 29 of 145 corpus clusters still disagree with the framework even with the addon — newer emoji than its Unicode 15 tables, SF Symbols (private-use codepoints have no width anywhere), and Indic vowel signs. The SF Symbols page will shift; no terminal measured does better on that row. |
 | Grapheme-clustering mode | `DECRQM ?2027` answers "not recognised", so the framework keeps its own advance model rather than pinning the terminal's. |
 | Size on disk | ~50 MB of wasm, ~20 MB gzipped, almost all of it Foundation and ICU. |
