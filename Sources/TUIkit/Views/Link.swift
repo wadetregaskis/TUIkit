@@ -21,6 +21,15 @@ import Foundation
 /// — regardless of the label form. Turn the underline off for a subtree with
 /// ``View/linkUnderline(_:)``.
 ///
+/// That is the default ``LinkDisplay/popover`` mode. In the two modes that
+/// write the URL onto the row — ``LinkDisplay/urlOnly`` and
+/// ``LinkDisplay/urlInParentheses`` — the link is **not a control**: it takes
+/// no place in the Tab order and no click, because activation would have
+/// nothing left to do that the row does not already do. It is a tinted,
+/// underlined, hyperlinked label, and any interaction it should have is the
+/// caller's to add — `.focusable()`, `.onTapGesture`, `.onKeyPress` — the way
+/// it would be added to any other text.
+///
 /// ```swift
 /// Link("Documentation", destination: URL(string: "https://example.com")!)
 ///
@@ -389,37 +398,50 @@ private struct _Link<Label: View>: View {
         // the link went. It is raised whether or not `open` "worked" because
         // "did the browser open" is not a question this process can answer:
         // the child is not waited on, and on a headless box there is no child.
-        //
-        // But only in the `.popover` mode. The two URL modes already put the
-        // destination ON THE ROW, and a popover repeating it would take the
-        // keyboard — a presented popover grabs input until Escape — for the
-        // sake of a string the user is looking at.
-        let raisesPopover = display == .popover
-        return Button(
-            action: {
-                guard gate.allows(nowNanos: DispatchTime.now().uptimeNanoseconds) else { return }
-                open(destination)
-                if raisesPopover { showing.wrappedValue = true }
-            },
-            label: { resolvedLabel })
-        .buttonStyle(_LinkButtonStyle(indicator: focusIndicator))
-        .buttonTextStyle { $0.foreground = .palette.accent }
-        // Outermost, so the link covers everything the button style drew —
-        // its hover prefix included. The control IS the link; a hyperlink over
-        // only the letters would leave the cells beside them inert while
-        // looking identical.
-        .modifier(
-            TerminalHyperlinkModifier(destination: destination, enabled: terminalHyperlinks))
-        // The destination, where the user can read and copy it. Anchored to
-        // the link rather than shown in the status bar: a URL is long, the
-        // status bar is a row shared with every shortcut, and a destination
-        // that shoved those aside — or was truncated to fit, which would make
-        // it unusable — every time focus moved would be worse than not showing
-        // it at all.
-        .popover(isPresented: raisesPopover ? $showingDestination : .constant(false)) {
-            // `verbatim`, because a URL is content and not a lookup key.
-            Text(verbatim: destination.absoluteString)
+        // …and only in that mode is the link a control at all. With the URL on
+        // the row, activating would open a destination the user can already
+        // read and copy, on a machine that may not be theirs — so the two URL
+        // modes draw the label as text: tinted, underlined, hyperlinked for a
+        // host that honours OSC 8, and taking no focus and no click. A caller
+        // who wants one of those adds it the way they would to any text —
+        // `.focusable()`, `.onTapGesture`, `.onKeyPress` — and the wrapper,
+        // not the link, is what registers.
+        guard display == .popover else {
+            return AnyView(
+                resolvedLabel
+                    // Beneath the label's own colour, as the button style's tint
+                    // sits beneath it in the control form: a label that names
+                    // a colour keeps it either way.
+                    .foregroundStyle(.palette.accent)
+                    .modifier(
+                        TerminalHyperlinkModifier(destination: destination, enabled: terminalHyperlinks)))
         }
+        return AnyView(
+            Button(
+                action: {
+                    guard gate.allows(nowNanos: DispatchTime.now().uptimeNanoseconds) else { return }
+                    open(destination)
+                    showing.wrappedValue = true
+                },
+                label: { resolvedLabel })
+            .buttonStyle(_LinkButtonStyle(indicator: focusIndicator))
+            .buttonTextStyle { $0.foreground = .palette.accent }
+            // Outermost, so the link covers everything the button style drew —
+            // its hover prefix included. The control IS the link; a hyperlink over
+            // only the letters would leave the cells beside them inert while
+            // looking identical.
+            .modifier(
+                TerminalHyperlinkModifier(destination: destination, enabled: terminalHyperlinks))
+            // The destination, where the user can read and copy it. Anchored to
+            // the link rather than shown in the status bar: a URL is long, the
+            // status bar is a row shared with every shortcut, and a destination
+            // that shoved those aside — or was truncated to fit, which would make
+            // it unusable — every time focus moved would be worse than not showing
+            // it at all.
+            .popover(isPresented: $showingDestination) {
+                // `verbatim`, because a URL is content and not a lookup key.
+                Text(verbatim: destination.absoluteString)
+            })
     }
 
     /// The link's visible text, which the display mode decides.

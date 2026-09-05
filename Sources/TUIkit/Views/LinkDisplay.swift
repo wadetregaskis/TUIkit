@@ -46,16 +46,23 @@ public enum LinkDisplay: Sendable, Equatable, CaseIterable {
     /// For a page where the destination is part of what the reader is reading
     /// — a list of references, a diagnostic — and for terminals with their own
     /// URL detection, which linkify the visible text whether or not OSC 8 ever
-    /// arrives. Activation opens the URL where the app permits and raises no
-    /// popover: the destination is already on the row.
+    /// arrives.
+    ///
+    /// **Not a control.** With the destination on the row there is nothing
+    /// left for activation to do — the reader can copy it, and a terminal
+    /// that linkifies text or honours OSC 8 opens it on its own gesture — so
+    /// the link takes no place in the Tab order and no click. It is a tinted,
+    /// underlined, hyperlinked label; a page that wants it focusable or
+    /// clickable adds `.focusable()`, `.onTapGesture` or `.onKeyPress` to it,
+    /// exactly as it would to a `Text`.
     case urlInParentheses
 
     /// The URL alone, in place of the label.
     ///
     /// The densest form, and the one to reach for when the URL *is* the
     /// content: a log line, a list of endpoints, anything the reader will copy
-    /// rather than follow. As with ``urlInParentheses``, activation raises no
-    /// popover — the row already says everything a popover would.
+    /// rather than follow. Not a control, for the reason ``urlInParentheses``
+    /// gives — the row already says everything activation could.
     case urlOnly
 }
 

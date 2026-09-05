@@ -82,6 +82,76 @@ struct LinkDisplayTests {
         #expect(activated(link.linkDisplay(.urlInParentheses)).overlays.isEmpty)
     }
 
+    /// The focus stops one render of `view` registers, in ring order.
+    private func focusStops(_ view: some View) -> [String] {
+        let tui = TUIContext()
+        let manager = FocusManager()
+        var environment = EnvironmentValues()
+        environment.focusManager = manager
+        environment.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 70, availableHeight: 4, environment: environment, tuiContext: tui)
+        tui.stateStorage.beginRenderPass()
+        tui.renderCache.beginRenderPass()
+        manager.beginRenderPass()
+        defer {
+            tui.stateStorage.endRenderPass()
+            manager.endRenderPass()
+        }
+        _ = renderToBuffer(view, context: context)
+        return manager.focusableIDs
+    }
+
+    /// With the URL on the row a link has no action left, so it is not a
+    /// control: no Tab stop, nothing for Enter or a click to reach. The
+    /// popover mode, whose activation is what shows the destination, keeps
+    /// its stop.
+    @Test("The URL modes take no focus; the popover mode does")
+    func urlModesAreNotFocusable() {
+        #expect(focusStops(link(.popover)).count == 1)
+        #expect(focusStops(link(.urlOnly)).isEmpty)
+        #expect(focusStops(link(.urlInParentheses)).isEmpty)
+    }
+
+    /// The interaction a page wants back is added the way it is added to any
+    /// text: the wrapper registers, the link does not.
+    @Test("A URL-mode link made .focusable() is a Tab stop again")
+    func urlModeLinkCanBeMadeFocusable() {
+        #expect(focusStops(link(.urlOnly).focusable()).count == 1)
+        #expect(focusStops(link(.urlInParentheses).focusable()).count == 1)
+    }
+
+    /// Inert is not invisible: the URL modes still tint, underline and
+    /// hyperlink the row.
+    @Test("A URL-mode link keeps its tint and its hyperlink")
+    func urlModeKeepsTheLook() {
+        let line = renderedLine(link(.urlOnly).environment(\.terminalHyperlinks, true))
+        #expect(line.contains("\u{1B}[4m") || line.contains(";4m") || line.contains("[4;"), "underlined: \(line.debugDescription)")
+        // The escape is emitted only where the host is measured to honour it,
+        // which the test process may not be.
+        if TerminalHyperlink.isSupported {
+            #expect(line.contains("\u{1B}]8;"), "hyperlinked: \(line.debugDescription)")
+        }
+    }
+
+    /// One rendered line with its escapes, unlike `rendered`, which strips them.
+    private func renderedLine(_ view: some View) -> String {
+        let tui = TUIContext()
+        var environment = EnvironmentValues()
+        environment.focusManager = FocusManager()
+        environment.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 70, availableHeight: 4, environment: environment, tuiContext: tui)
+        tui.stateStorage.beginRenderPass()
+        tui.renderCache.beginRenderPass()
+        environment.focusManager?.beginRenderPass()
+        defer {
+            tui.stateStorage.endRenderPass()
+            environment.focusManager?.endRenderPass()
+        }
+        return renderToBuffer(view, context: context).lines.first ?? ""
+    }
+
     private func link(_ display: LinkDisplay) -> some View {
         Link("language guide", destination: url).linkDisplay(display)
     }
